@@ -34,5 +34,10 @@ echo "Running database migrations..."
 bundle exec rails db:chatwoot_prepare
 echo "Migrations ran successfully!"
 
+# Database status check
+echo "=== Database Status ==="
+bundle exec rails runner "puts \"Database: #{ActiveRecord::Base.connection.current_database}\"; puts \"Schema: #{ActiveRecord::Base.connection.execute('SELECT current_schema()').first['current_schema']}\"; puts \"Tables: #{ActiveRecord::Base.connection.tables.count}\""
+echo "======================="
+
 # Execute the main process of the container
 exec "$@"
