@@ -32,6 +32,7 @@ done
 
 echo "Running database migrations..."
 bundle exec rails db:chatwoot_prepare
-echo "Migrations"
+echo "Migrations ran successfully!"
+
 # Execute the main process of the container
 exec "$@"
