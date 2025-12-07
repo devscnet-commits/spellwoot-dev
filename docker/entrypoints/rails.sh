@@ -30,5 +30,8 @@ do
   sleep 2;
 done
 
+echo "Running database migrations..."
+bundle exec rails db:chatwoot_prepare
+echo "Migrations"
 # Execute the main process of the container
 exec "$@"

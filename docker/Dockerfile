@@ -145,6 +145,7 @@ COPY --from=pre-builder /gems/ /gems/
 COPY --from=pre-builder /app /app
 
 # Copy .git_sha file from pre-builder stage
+# Skipped because coolify does not import .git folder on build stage
 # COPY --from=pre-builder /app/.git_sha /app/.git_sha
 
 WORKDIR /app
