@@ -7,6 +7,8 @@ class DeviseOverrides::PasswordsController < Devise::PasswordsController
   def create
     @user = User.from_email(params[:email])
     if @user
+      # Set the account context for proper locale in the email
+      Current.account = @user.account_users.first&.account
       @user.send_reset_password_instructions
       build_response(I18n.t('messages.reset_password_success'), 200)
     else

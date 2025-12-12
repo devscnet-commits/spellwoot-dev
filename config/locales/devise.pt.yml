@@ -18,12 +18,30 @@ pt:
     mailer:
       confirmation_instructions:
         subject: "Instruções de confirmação"
+        greeting: "Olá %{name},"
+        invitation: "%{inviter}, da conta %{account}, convidou você para experimentar o %{brand}."
+        login_instruction: "Você pode fazer login na sua conta %{brand} através do link abaixo:"
+        welcome: "Bem-vindo ao %{brand}! Temos um conjunto de ferramentas poderosas prontas para você explorar. Antes disso, precisamos verificar rapidamente seu endereço de e-mail para saber que é realmente você."
+        instruction: "Por favor, clique no link abaixo para ativar sua conta."
+        action: "Confirmar minha conta"
+        login_action: "Entrar na minha conta"
       reset_password_instructions:
-        subject: "Resetar instruções de senha"
+        subject: "Instruções para redefinir senha"
+        greeting: "Olá %{email}!"
+        instruction: "Alguém solicitou um link para alterar sua senha. Você pode fazer isso através do link abaixo."
+        action: "Alterar minha senha"
+        ignore: "Se você não solicitou isso, por favor ignore este email."
+        no_changes: "Sua senha não será alterada até que você acesse o link acima e crie uma nova."
       unlock_instructions:
         subject: "Instruções de desbloqueio"
+        greeting: "Olá %{email}!"
+        message: "Sua conta foi bloqueada devido a um número excessivo de tentativas de login sem sucesso."
+        instruction: "Clique no link abaixo para desbloquear sua conta:"
+        action: "Desbloquear minha conta"
       password_change:
         subject: "Senha alterada"
+        greeting: "Olá %{email}!"
+        message: "Estamos entrando em contato para notificá-lo de que sua senha foi alterada."
     omniauth_callbacks:
       failure: "Não foi possível autenticá-lo a partir de %{kind} porque \"%{reason}\"."
       success: "Conta %{kind} autenticada com sucesso."
