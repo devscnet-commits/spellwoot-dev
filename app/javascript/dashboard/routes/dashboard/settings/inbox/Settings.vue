@@ -300,6 +300,15 @@ export default {
         this.healthData.throughput?.level === 'NOT_APPLICABLE'
       );
     },
+    isUazapiChannel() {
+      return this.inbox?.is_uazapi === true;
+    },
+    uazapiInstanceId() {
+      return this.inbox?.provider_config?.uazapi_instance_id || '';
+    },
+    uazapiInstanceToken() {
+      return this.inbox?.provider_config?.uazapi_instance_token || '';
+    },
   },
   watch: {
     $route(to) {
@@ -479,6 +488,14 @@ export default {
     toggleSenderNameType(key) {
       this.senderNameType = key;
     },
+    copyUazapiInstanceId() {
+      navigator.clipboard.writeText(this.uazapiInstanceId);
+      useAlert(this.$t('INBOX_MGMT.UAZAPI.INSTANCE_ID_COPIED'));
+    },
+    copyUazapiInstanceToken() {
+      navigator.clipboard.writeText(this.uazapiInstanceToken);
+      useAlert(this.$t('INBOX_MGMT.UAZAPI.INSTANCE_TOKEN_COPIED'));
+    },
     onClickShowBusinessNameInput() {
       this.showBusinessNameInput = !this.showBusinessNameInput;
       if (this.showBusinessNameInput) {
@@ -637,6 +654,46 @@ export default {
           <label v-if="isAWhatsAppChannel" class="pb-4">
             {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.LABEL') }}
             <input v-model="whatsAppAPIProviderName" type="text" disabled />
+          </label>
+
+          <label v-if="isUazapiChannel" class="pb-4">
+            {{ $t('INBOX_MGMT.UAZAPI.INSTANCE_ID_LABEL') }}
+            <div class="flex items-center gap-2">
+              <input
+                :value="uazapiInstanceId"
+                type="text"
+                disabled
+                class="mb-0 flex-1"
+              />
+              <NextButton
+                v-tooltip="$t('INBOX_MGMT.UAZAPI.COPY_INSTANCE_ID')"
+                icon="i-lucide-copy"
+                xs
+                slate
+                faded
+                @click="copyUazapiInstanceId"
+              />
+            </div>
+          </label>
+
+          <label v-if="isUazapiChannel" class="pb-4">
+            {{ $t('INBOX_MGMT.UAZAPI.INSTANCE_TOKEN_LABEL') }}
+            <div class="flex items-center gap-2">
+              <input
+                :value="uazapiInstanceToken"
+                type="text"
+                disabled
+                class="mb-0 flex-1"
+              />
+              <NextButton
+                v-tooltip="$t('INBOX_MGMT.UAZAPI.COPY_INSTANCE_TOKEN')"
+                icon="i-lucide-copy"
+                xs
+                slate
+                faded
+                @click="copyUazapiInstanceToken"
+              />
+            </div>
           </label>
 
           <label class="pb-4">

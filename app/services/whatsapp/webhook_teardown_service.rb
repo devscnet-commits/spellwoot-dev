@@ -4,14 +4,20 @@ class Whatsapp::WebhookTeardownService
   end
 
   def perform
-    return unless should_teardown_webhook?
-
-    teardown_webhook
+    if uazapi_provider?
+      teardown_uazapi_instance
+    elsif should_teardown_webhook?
+      teardown_webhook
+    end
   rescue StandardError => e
     handle_webhook_teardown_error(e)
   end
 
   private
+
+  def uazapi_provider?
+    @channel.provider == 'uazapi'
+  end
 
   def should_teardown_webhook?
     whatsapp_cloud_provider? && embedded_signup_source? && webhook_config_present?
@@ -37,6 +43,17 @@ class Whatsapp::WebhookTeardownService
 
     api_client.unsubscribe_waba_webhook(waba_id)
     Rails.logger.info "[WHATSAPP] Webhook unsubscribed successfully for channel #{@channel.id}"
+  end
+
+  def teardown_uazapi_instance
+    Rails.logger.info "[UAZAPI] Deleting UazAPI instance for channel #{@channel.id}"
+    provider_service = @channel.provider_service
+    result = provider_service.delete_instance
+    if result
+      Rails.logger.info "[UAZAPI] Instance deleted successfully for channel #{@channel.id}"
+    else
+      Rails.logger.warn "[UAZAPI] Failed to delete instance for channel #{@channel.id}"
+    end
   end
 
   def handle_webhook_teardown_error(error)

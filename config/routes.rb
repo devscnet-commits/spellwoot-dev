@@ -204,7 +204,12 @@ Rails.application.routes.draw do
             delete :avatar, on: :member
             post :sync_templates, on: :member
             get :health, on: :member
+            # UazAPI WhatsApp endpoints
+            get :uazapi_status, on: :member
+            post :uazapi_connect, on: :member
+            post :uazapi_disconnect, on: :member
           end
+          resources :uazapi_inboxes, only: [:create]
           resources :inbox_members, only: [:create, :show], param: :inbox_id do
             collection do
               delete :destroy

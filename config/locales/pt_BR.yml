@@ -18,6 +18,10 @@
 #available at https://guides.rubyonrails.org/i18n.html.
 pt_BR:
   hello: 'Olá, mundo'
+  activerecord:
+    errors:
+      messages:
+        record_invalid: 'A validação falhou: %{errors}'
   inbox:
     reauthorization:
       success: 'Canal reautenticado com sucesso'
@@ -80,6 +84,8 @@ pt_BR:
       reauthorization:
         generic: 'Falha ao reautenticar o WhatsApp. Por favor, tente novamente.'
         not_supported: 'Reautenticação não é suportado por este tipo de canal WhatsApp.'
+    uazapi:
+      phone_number_invalid: 'O número de telefone deve ter exatamente 13 dígitos numéricos.'
     inboxes:
       imap:
         socket_error: Por favor, verifique a conexão de rede, endereço IMAP e tente novamente.

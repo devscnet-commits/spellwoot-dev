@@ -65,4 +65,16 @@ class InboxPolicy < ApplicationPolicy
   def health?
     @account_user.administrator?
   end
+
+  def uazapi_status?
+    @account_user.administrator?
+  end
+
+  def uazapi_connect?
+    @account_user.administrator?
+  end
+
+  def uazapi_disconnect?
+    @account_user.administrator?
+  end
 end
