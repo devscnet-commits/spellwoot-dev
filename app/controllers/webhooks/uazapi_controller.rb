@@ -23,3 +23,4 @@ class Webhooks::UazapiController < ActionController::API
   end
 end
 
+
