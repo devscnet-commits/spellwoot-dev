@@ -1,5 +1,12 @@
 <script setup>
-import { computed, ref, reactive, onMounted } from 'vue';
+import {
+  computed,
+  ref,
+  reactive,
+  onBeforeMount,
+  onUnmounted,
+  watch,
+} from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import Avatar from 'next/avatar/Avatar.vue';
@@ -15,6 +22,7 @@ import ChannelName from './components/ChannelName.vue';
 import ChannelIcon from 'next/icon/ChannelIcon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import InboxesAPI from 'dashboard/api/inboxes';
+import Spinner from 'shared/components/Spinner.vue';
 
 const getters = useStoreGetters();
 const store = useStore();
@@ -27,6 +35,16 @@ const selectedInbox = ref({});
 // UazAPI status tracking
 const uazapiStatuses = reactive({});
 const uazapiLoading = reactive({});
+
+// UazAPI reconnect modal state
+const showUazapiReconnectPopup = ref(false);
+const reconnectInbox = ref(null);
+const reconnectQrCode = ref('');
+const reconnectPairCode = ref('');
+const reconnectStatus = ref('');
+const reconnectProfileName = ref('');
+const reconnectPollingInterval = ref(null);
+const reconnectLoading = ref(false);
 
 const inboxes = useMapGetter('inboxes/getInboxes');
 
@@ -85,12 +103,8 @@ const isUazapiConnected = inboxId => {
   const statusData = uazapiStatuses[inboxId];
   if (!statusData) return false;
 
-  // Check if status is "connected" string or connected/logged_in boolean
-  return (
-    statusData.status === 'connected' ||
-    statusData.connected === true ||
-    statusData.logged_in === true
-  );
+  // Check exclusively the status field from backend
+  return statusData.status === 'connected';
 };
 
 const fetchUazapiStatus = async inboxId => {
@@ -105,30 +119,114 @@ const fetchUazapiStatus = async inboxId => {
   }
 };
 
-const reconnectUazapi = async inboxId => {
-  uazapiLoading[inboxId] = true;
-  try {
-    const { data } = await InboxesAPI.connectUazapi(inboxId);
-    uazapiStatuses[inboxId] = {
-      ...uazapiStatuses[inboxId],
-      qr_code: data.qr_code,
-      status: data.status,
-    };
-    useAlert(t('INBOX_MGMT.UAZAPI.RECONNECT_INITIATED'));
-  } catch (error) {
-    useAlert(t('INBOX_MGMT.UAZAPI.RECONNECT_ERROR'));
-  } finally {
-    uazapiLoading[inboxId] = false;
+const stopReconnectPolling = () => {
+  if (reconnectPollingInterval.value) {
+    clearInterval(reconnectPollingInterval.value);
+    reconnectPollingInterval.value = null;
   }
 };
 
-// Fetch UazAPI status for all UazAPI inboxes on mount
-onMounted(() => {
-  inboxes.value?.forEach(inbox => {
-    if (isUazapiInbox(inbox)) {
-      fetchUazapiStatus(inbox.id);
+const closeUazapiReconnect = () => {
+  stopReconnectPolling();
+  showUazapiReconnectPopup.value = false;
+  reconnectInbox.value = null;
+  reconnectQrCode.value = '';
+  reconnectPairCode.value = '';
+  reconnectStatus.value = '';
+  reconnectProfileName.value = '';
+  reconnectLoading.value = false;
+};
+
+const startReconnectPolling = inboxId => {
+  stopReconnectPolling();
+  reconnectPollingInterval.value = setInterval(async () => {
+    try {
+      const { data } = await InboxesAPI.getUazapiStatus(inboxId);
+      uazapiStatuses[inboxId] = data;
+      reconnectStatus.value = data.status || '';
+      reconnectProfileName.value = data.profile_name || '';
+      if (data.qr_code) reconnectQrCode.value = data.qr_code;
+      if (data.pair_code !== undefined)
+        reconnectPairCode.value = data.pair_code;
+
+      if (data.status === 'connected') {
+        useAlert(t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.SUCCESS_MESSAGE'));
+        closeUazapiReconnect();
+      }
+    } catch {
+      // Silently fail on polling errors
     }
-  });
+  }, 3000);
+};
+
+const refreshReconnectStatus = async inboxId => {
+  reconnectLoading.value = true;
+  try {
+    const { data } = await InboxesAPI.getUazapiStatus(inboxId);
+    uazapiStatuses[inboxId] = data;
+    reconnectStatus.value = data.status || '';
+    reconnectProfileName.value = data.profile_name || '';
+    if (data.qr_code) reconnectQrCode.value = data.qr_code;
+    if (data.pair_code !== undefined) reconnectPairCode.value = data.pair_code;
+
+    if (data.status === 'connected') {
+      useAlert(t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.SUCCESS_MESSAGE'));
+      closeUazapiReconnect();
+    }
+  } catch {
+    // noop
+  } finally {
+    reconnectLoading.value = false;
+  }
+};
+
+const initiateReconnect = async inboxId => {
+  reconnectLoading.value = true;
+  try {
+    const { data } = await InboxesAPI.connectUazapi(inboxId);
+    uazapiStatuses[inboxId] = { ...(uazapiStatuses[inboxId] || {}), ...data };
+    reconnectQrCode.value = data.qr_code || '';
+    reconnectStatus.value = data.status || 'connecting';
+    reconnectPairCode.value = data.pair_code || '';
+    startReconnectPolling(inboxId);
+  } catch (error) {
+    useAlert(t('INBOX_MGMT.UAZAPI.RECONNECT_ERROR'));
+  } finally {
+    reconnectLoading.value = false;
+  }
+};
+
+const openUazapiReconnect = async inbox => {
+  reconnectInbox.value = inbox;
+  showUazapiReconnectPopup.value = true;
+  reconnectQrCode.value = '';
+  reconnectPairCode.value = '';
+  reconnectProfileName.value = '';
+  reconnectStatus.value = 'connecting';
+  await initiateReconnect(inbox.id);
+};
+
+// Ensure inboxes are loaded
+onBeforeMount(() => {
+  store.dispatch('inboxes/get');
+});
+
+// Fetch UazAPI status once inboxes are available
+watch(
+  inboxesList,
+  list => {
+    list?.forEach(inbox => {
+      if (!isUazapiInbox(inbox)) return;
+      if (uazapiLoading[inbox.id]) return;
+      if (uazapiStatuses[inbox.id]) return;
+      fetchUazapiStatus(inbox.id);
+    });
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  stopReconnectPolling();
 });
 </script>
 
@@ -190,7 +288,7 @@ onMounted(() => {
                 <!-- UazAPI Connection Status -->
                 <template v-if="isUazapiInbox(inbox)">
                   <span
-                    v-if="uazapiLoading[inbox.id]"
+                    v-if="uazapiLoading[inbox.id] || !uazapiStatuses[inbox.id]"
                     class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                   >
                     {{ $t('INBOX_MGMT.UAZAPI.STATUS.CHECKING') }}
@@ -226,7 +324,7 @@ onMounted(() => {
                   xs
                   amber
                   faded
-                  @click="reconnectUazapi(inbox.id)"
+                  @click="openUazapiReconnect(inbox)"
                 />
                 <!-- Refresh Status Button -->
                 <Button
@@ -282,5 +380,100 @@ onMounted(() => {
       @on-confirm="confirmDeletion"
       @on-close="closeDelete"
     />
+
+    <!-- UazAPI reconnect modal -->
+    <woot-modal
+      v-model:show="showUazapiReconnectPopup"
+      :on-close="closeUazapiReconnect"
+    >
+      <div class="p-6 flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-1">
+          <h3 class="text-lg font-medium text-n-slate-12">
+            {{ $t('INBOX_MGMT.UAZAPI.RECONNECT') }}
+          </h3>
+          <p
+            v-if="reconnectInbox && reconnectInbox.name"
+            class="text-sm text-n-slate-11"
+          >
+            {{ reconnectInbox.name }}
+          </p>
+        </div>
+
+        <div
+          class="flex items-center gap-2 px-4 py-2 rounded-full"
+          :class="{
+            'bg-n-teal-3 text-n-teal-11': reconnectStatus === 'connected',
+            'bg-n-amber-3 text-n-amber-11': reconnectStatus !== 'connected',
+          }"
+        >
+          <span
+            v-if="reconnectStatus !== 'connected'"
+            class="relative flex h-3 w-3"
+          >
+            <span
+              class="absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping bg-n-amber-9"
+            />
+            <span
+              class="relative inline-flex w-3 h-3 rounded-full bg-n-amber-9"
+            />
+          </span>
+          <span v-else class="w-3 h-3 rounded-full bg-n-teal-9" />
+          <span class="text-sm font-medium">
+            {{
+              reconnectStatus === 'connected'
+                ? $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.STATUS.CONNECTED')
+                : $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.STATUS.CONNECTING')
+            }}
+          </span>
+        </div>
+
+        <p v-if="reconnectProfileName" class="text-sm text-n-slate-11">
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.CONNECTED_AS') }}:
+          {{ reconnectProfileName }}
+        </p>
+
+        <div v-if="reconnectQrCode" class="flex flex-col items-center gap-4">
+          <div class="p-4 bg-white rounded-2xl shadow-lg">
+            <img
+              :src="reconnectQrCode"
+              alt="WhatsApp QR Code"
+              class="w-64 h-64 object-contain"
+            />
+          </div>
+
+          <p class="text-sm text-center text-n-slate-11 max-w-sm">
+            {{ $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.QR_CODE_INSTRUCTIONS') }}
+          </p>
+
+          <div class="flex gap-2">
+            <Button
+              v-tooltip.top="$t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.REFRESH_QR')"
+              icon="i-lucide-refresh-cw"
+              xs
+              slate
+              faded
+              :loading="reconnectLoading"
+              @click="initiateReconnect(reconnectInbox.id)"
+            />
+            <Button
+              v-tooltip.top="$t('INBOX_MGMT.UAZAPI.REFRESH_STATUS')"
+              icon="i-lucide-activity"
+              xs
+              slate
+              faded
+              :loading="reconnectLoading"
+              @click="refreshReconnectStatus(reconnectInbox.id)"
+            />
+          </div>
+        </div>
+
+        <div v-else class="flex flex-col items-center gap-3">
+          <Spinner size="large" />
+          <p class="text-sm text-n-slate-11">
+            {{ $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.LOADING_QR') }}
+          </p>
+        </div>
+      </div>
+    </woot-modal>
   </SettingsLayout>
 </template>

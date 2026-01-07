@@ -6,6 +6,7 @@ import { useVuelidate } from '@vuelidate/core';
 import { required } from '@vuelidate/validators';
 import { useAlert } from 'dashboard/composables';
 import UazapiAPI from 'dashboard/api/uazapi';
+import { isNumber } from 'shared/helpers/Validators';
 
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import Spinner from 'shared/components/Spinner.vue';
@@ -26,10 +27,24 @@ const createdInbox = ref(null);
 const pollingInterval = ref(null);
 const profileName = ref('');
 
+// Custom validator for UazAPI phone number (exactly 13 digits, all numeric)
+const phoneNumberValidator = value => {
+  if (!value) return true; // required validator handles empty
+  const numericOnly = value.replace(/\D/g, '');
+  return numericOnly.length === 13 && isNumber(numericOnly);
+};
+
 // Validation rules
 const rules = {
   inboxName: { required },
-  phoneNumber: { required },
+  phoneNumber: {
+    required,
+    phoneNumberValidator: {
+      $validator: phoneNumberValidator,
+      $message: () =>
+        t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.PHONE_NUMBER.VALIDATION_ERROR'),
+    },
+  },
 };
 
 const v$ = useVuelidate(rules, { inboxName, phoneNumber });
@@ -98,9 +113,12 @@ const createChannel = async () => {
   isCreating.value = true;
 
   try {
+    // Clean phone number: remove all non-numeric characters
+    const cleanedPhoneNumber = phoneNumber.value.replace(/\D/g, '');
+
     const response = await UazapiAPI.createInbox({
       name: inboxName.value.trim(),
-      phone_number: phoneNumber.value.trim(),
+      phone_number: cleanedPhoneNumber,
     });
 
     if (response.data.inbox) {

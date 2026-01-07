@@ -4,9 +4,17 @@ class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseContro
   before_action :check_authorization
 
   def create
+    # Validate phone number format (exactly 13 digits, all numeric)
+    phone_number = permitted_params[:phone_number].to_s.gsub(/\D/, '')
+    unless phone_number.length == 13 && phone_number.match?(/^\d{13}$/)
+      return render json: {
+        error: I18n.t('errors.uazapi.phone_number_invalid')
+      }, status: :unprocessable_entity
+    end
+
     result = Whatsapp::UazapiConnectionService.new(
       inbox_name: permitted_params[:name],
-      phone_number: permitted_params[:phone_number],
+      phone_number: phone_number,
       account: Current.account
     ).perform
 

@@ -316,6 +316,7 @@
             "LABEL": "Phone Number",
             "PLACEHOLDER": "Enter your WhatsApp phone number (e.g., 5511999999999)",
             "ERROR": "Phone number is required",
+            "VALIDATION_ERROR": "Phone number must have exactly 13 numeric digits",
             "HELP": "Enter the phone number without + or spaces. Example: 5511999999999"
           },
           "SUBMIT_BUTTON": "Create UazAPI Channel",

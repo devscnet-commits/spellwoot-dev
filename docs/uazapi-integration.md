@@ -77,6 +77,8 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 - `app/controllers/api/v1/accounts/uazapi_inboxes_controller.rb`
   - Endpoint para criação de inboxes UazAPI
   - Retorna QR code e status inicial
+  - Validação de telefone: exatamente 13 dígitos numéricos
+  - Limpeza automática de caracteres não numéricos do telefone
 
 - `app/controllers/api/v1/accounts/inboxes_controller.rb` (modificado)
   - Adicionados endpoints: `uazapi_status`, `uazapi_connect`, `uazapi_disconnect`
@@ -110,6 +112,8 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 - `app/javascript/dashboard/routes/dashboard/settings/inbox/channels/UazapiWhatsapp.vue`
   - Componente principal para criação de inbox UazAPI
   - Formulário com nome e número de telefone
+  - Validação de telefone: exatamente 13 dígitos numéricos (frontend)
+  - Limpeza automática de caracteres não numéricos antes do envio
   - Exibição de QR code
   - Polling de status de conexão
   - Botão para reconexão
@@ -119,7 +123,11 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 
 - `app/javascript/dashboard/routes/dashboard/settings/inbox/Index.vue` (modificado)
   - Exibição de status de conexão UazAPI
-  - Botões de reconexão e refresh de status
+  - Busca automática de status ao carregar a listagem de inboxes
+  - Badge de status baseado exclusivamente no campo `status` do backend
+  - Botão "Reconnect WhatsApp" com modal completo contendo QR code
+  - Polling automático de status durante reconexão até ficar conectado
+  - Botão de refresh de status manual
 
 - `app/javascript/dashboard/routes/dashboard/settings/inbox/Settings.vue` (modificado)
   - Exibição de Instance ID e Instance Token
@@ -136,6 +144,12 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 #### Internacionalização
 - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` (modificado)
   - Adicionadas traduções para UazAPI
+- `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` (modificado)
+  - Adicionadas traduções completas para UazAPI em português do Brasil
+  - Traduções para formulário, status, mensagens de erro e sucesso
+- `config/locales/pt_BR.yml` (modificado)
+  - Adicionada tradução para `activerecord.errors.messages.record_invalid`
+  - Adicionada tradução para `errors.uazapi.phone_number_invalid`
 
 ### Configuração
 
@@ -280,6 +294,11 @@ Instância removida do UazAPI
 }
 ```
 
+**Validação:**
+- `phone_number`: Deve ter exatamente 13 dígitos numéricos
+- Caracteres não numéricos são removidos automaticamente antes da validação
+- Validação ocorre tanto no frontend quanto no backend
+
 **Response:**
 ```json
 {
@@ -303,14 +322,20 @@ Instância removida do UazAPI
 {
   "qr_code": "data:image/png;base64,...",
   "status": "connected",
-  "pair_code": ""
+  "pair_code": "",
+  "connected": true,
+  "logged_in": false,
+  "profile_name": "Nome do Perfil",
+  "profile_pic_url": "https://..."
 }
 ```
 
 **Status possíveis:**
 - `disconnected`: Desconectado
-- `connecting`: Conectando
-- `connected`: Conectado
+- `connecting`: Conectando (aguardando escaneamento do QR code)
+- `connected`: Conectado e pronto para uso
+
+**Nota Importante**: O frontend utiliza **exclusivamente** o campo `status` para determinar o estado da conexão. Os campos `connected` e `logged_in` são ignorados para evitar inconsistências, pois podem retornar valores diferentes do estado real representado por `status`.
 
 ### Conectar
 
@@ -372,16 +397,52 @@ O canal armazena as seguintes informações em `provider_config`:
 }
 ```
 
+## Validação de Dados
+
+### Validação de Telefone
+
+O número de telefone é validado tanto no frontend quanto no backend:
+
+**Requisitos:**
+- Deve ter exatamente 13 dígitos numéricos
+- Apenas números são aceitos (caracteres não numéricos são removidos automaticamente)
+- Exemplo válido: `5511999999999`
+
+**Frontend:**
+- Validação em tempo real usando Vuelidate
+- Mensagem de erro exibida imediatamente ao usuário
+- Caracteres não numéricos são removidos antes do envio
+
+**Backend:**
+- Validação no controller antes de processar
+- Retorna erro 422 se a validação falhar
+- Mensagem de erro traduzida conforme o locale do sistema
+
+**Mensagens de Erro:**
+- Português (pt_BR): "O número de telefone deve ter exatamente 13 dígitos numéricos"
+- Inglês (en): "Phone number must have exactly 13 numeric digits"
+
 ## Troubleshooting
 
 ### Problema: Erro 422 ao criar instância
 
-**Causa**: `UAZAPI_ADMIN_TOKEN` não configurado ou inválido
+**Causa**: `UAZAPI_ADMIN_TOKEN` não configurado ou inválido, ou número de telefone inválido
 
 **Solução**:
 1. Verifique se `UAZAPI_ADMIN_TOKEN` está no `.env`
-2. Recrie os containers: `docker compose down && docker compose up -d`
-3. Verifique logs: `docker compose logs rails | grep UAZAPI`
+2. Verifique se o número de telefone tem exatamente 13 dígitos numéricos
+3. Recrie os containers: `docker compose down && docker compose up -d`
+4. Verifique logs: `docker compose logs rails | grep UAZAPI`
+
+### Problema: Erro de validação de telefone
+
+**Causa**: Número de telefone não atende aos requisitos (13 dígitos numéricos)
+
+**Solução**:
+1. Verifique se o número tem exatamente 13 dígitos
+2. Remova caracteres não numéricos (espaços, parênteses, hífens, etc.)
+3. Exemplo correto: `5511999999999` (13 dígitos)
+4. O sistema remove automaticamente caracteres não numéricos, mas o resultado final deve ter 13 dígitos
 
 ### Problema: QR code não aparece
 
@@ -429,6 +490,16 @@ O canal armazena as seguintes informações em `provider_config`:
 2. Verifique se `UAZAPI_ADMIN_TOKEN` está correto
 3. Delete manualmente no UazAPI se necessário
 
+### Problema: Traduções aparecem em inglês
+
+**Causa**: Locale do sistema não está configurado como `pt_BR`
+
+**Solução**:
+1. Verifique as configurações de idioma do usuário ou da conta
+2. Certifique-se de que o locale está configurado como `pt_BR`
+3. Reinicie os serviços: `docker compose restart vite rails`
+4. Faça um hard refresh no navegador (Ctrl+Shift+R ou Cmd+Shift+R)
+
 ## Testes
 
 ### Testar Criação de Inbox
@@ -470,6 +541,11 @@ curl -X POST http://localhost:3000/webhooks/uazapi/5511999999999 \
 4. **Tokens**: Cada instância tem seu próprio token, armazenado em `provider_config.api_key`
 5. **Status**: O status é consultado via polling no frontend, não via webhooks
 6. **Deleção**: Ao deletar inbox, a instância UazAPI é automaticamente removida
+7. **Campo Status**: O frontend utiliza exclusivamente o campo `status` da resposta do backend para exibir o estado da conexão. Os campos `connected` e `logged_in` são ignorados para garantir consistência
+8. **Busca Automática de Status**: Ao carregar a listagem de inboxes, o status de todos os inboxes UazAPI é buscado automaticamente do backend
+9. **Reconexão**: O botão "Reconnect WhatsApp" abre um modal com QR code e faz polling automático até a conexão ser estabelecida
+10. **Validação de Telefone**: O número de telefone deve ter exatamente 13 dígitos numéricos. Caracteres não numéricos são removidos automaticamente, mas o número final deve ter exatamente 13 dígitos para ser aceito
+11. **Internacionalização**: A integração está totalmente traduzida para português do Brasil (pt_BR). Certifique-se de que o locale do sistema está configurado como `pt_BR` para ver todas as traduções
 
 ## Referências
 
@@ -478,7 +554,25 @@ curl -X POST http://localhost:3000/webhooks/uazapi/5511999999999 \
 
 ## Changelog
 
-### 2026-01-07
+### 2026-01-07 (Internacionalização e Validações)
+- **Tradução completa para português do Brasil**: Todas as strings da interface UazAPI foram traduzidas para pt_BR
+  - Traduções adicionadas em `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json`
+  - Traduções de erros adicionadas em `config/locales/pt_BR.yml`
+  - Correção de erro de tradução faltante: `activerecord.errors.messages.record_invalid`
+- **Validação de telefone**: Implementada validação rigorosa do número de telefone
+  - Frontend: Validação em tempo real com Vuelidate (exatamente 13 dígitos numéricos)
+  - Backend: Validação no controller antes de processar a requisição
+  - Limpeza automática: Caracteres não numéricos são removidos automaticamente
+  - Mensagens de erro traduzidas em português do Brasil
+  - Validação garante formato consistente: `5511999999999` (13 dígitos)
+
+### 2026-01-07 (Atualizações)
+- **Correção do status na listagem**: Status de inboxes UazAPI agora é buscado automaticamente ao carregar a página, evitando exibição incorreta de "disconnected"
+- **Implementação completa do botão Reconnect**: Botão "Reconnect WhatsApp" agora abre modal com QR code e faz polling automático até conexão ser estabelecida
+- **Correção do badge de status**: Badge agora utiliza exclusivamente o campo `status` do backend, ignorando campos `connected` e `logged_in` para evitar inconsistências
+- Melhoria na experiência do usuário com feedback visual durante reconexão
+
+### 2026-01-07 (Integração Inicial)
 - Integração inicial do UazAPI como provedor de WhatsApp
 - Implementação de criação, conexão e gerenciamento de instâncias
 - Implementação de webhooks para recebimento de mensagens

@@ -229,7 +229,9 @@
           "WHATSAPP_CLOUD": "Cloud do WhatsApp",
           "WHATSAPP_CLOUD_DESC": "Configuração rápida via Meta",
           "TWILIO_DESC": "Conectar através de credenciais Twilio",
-          "360_DIALOG": "360Dialog"
+          "360_DIALOG": "360Dialog",
+          "UAZAPI": "UazAPI (Não Oficial)",
+          "UAZAPI_DESC": "Conectar via leitura de QR Code"
         },
         "SELECT_PROVIDER": {
           "TITLE": "Selecione seu provedor de API",
@@ -303,6 +305,37 @@
         },
         "API": {
           "ERROR_MESSAGE": "Não foi possível salvar o canal do WhatsApp"
+        },
+        "UAZAPI": {
+          "INBOX_NAME": {
+            "LABEL": "Nome da Caixa de Entrada",
+            "PLACEHOLDER": "Digite um nome para sua caixa de entrada (ex: Suporte WhatsApp)",
+            "ERROR": "O nome da caixa de entrada é obrigatório"
+          },
+          "PHONE_NUMBER": {
+            "LABEL": "Número de Telefone",
+            "PLACEHOLDER": "Digite seu número do WhatsApp (ex: 5511999999999)",
+            "ERROR": "O número de telefone é obrigatório",
+            "VALIDATION_ERROR": "O número de telefone deve ter exatamente 13 dígitos numéricos",
+            "HELP": "Digite o número de telefone sem + ou espaços. Exemplo: 5511999999999"
+          },
+          "SUBMIT_BUTTON": "Criar Canal UazAPI",
+          "API": {
+            "ERROR_MESSAGE": "Não foi possível criar o canal UazAPI. Por favor, tente novamente."
+          },
+          "QR_CODE_INSTRUCTIONS": "Abra o WhatsApp no seu telefone, vá em Configurações > Aparelhos conectados > Conectar um aparelho e escaneie este QR code.",
+          "REFRESH_QR": "Atualizar QR Code",
+          "REFRESH_ERROR": "Falha ao atualizar o QR code. Por favor, tente novamente.",
+          "LOADING_QR": "Carregando QR Code...",
+          "SUCCESS_MESSAGE": "WhatsApp conectado com sucesso!",
+          "CONNECTED_AS": "Conectado como",
+          "ADD_AGENTS": "Adicionar Agentes",
+          "STATUS": {
+            "CONNECTED": "Conectado",
+            "CONNECTING": "Aguardando conexão...",
+            "DISCONNECTED": "Desconectado",
+            "UNKNOWN": "Status desconhecido"
+          }
         }
       },
       "VOICE": {
@@ -666,6 +699,23 @@
       }
     },
     "SETTINGS": "Configurações",
+    "UAZAPI": {
+      "STATUS": {
+        "CONNECTED": "Conectado",
+        "DISCONNECTED": "Desconectado",
+        "CHECKING": "Verificando..."
+      },
+      "RECONNECT": "Reconectar WhatsApp",
+      "REFRESH_STATUS": "Atualizar Status",
+      "RECONNECT_INITIATED": "Reconexão iniciada. Por favor, escaneie o QR code nas configurações da caixa de entrada.",
+      "RECONNECT_ERROR": "Falha ao reconectar. Por favor, tente novamente.",
+      "INSTANCE_ID_LABEL": "ID da Instância UazAPI",
+      "COPY_INSTANCE_ID": "Copiar ID da Instância",
+      "INSTANCE_ID_COPIED": "ID da instância copiado para a área de transferência",
+      "INSTANCE_TOKEN_LABEL": "Token da Instância UazAPI",
+      "COPY_INSTANCE_TOKEN": "Copiar Token da Instância",
+      "INSTANCE_TOKEN_COPIED": "Token da instância copiado para a área de transferência"
+    },
     "FEATURES": {
       "LABEL": "Funcionalidades",
       "DISPLAY_FILE_PICKER": "Exibir seletor de arquivos no widget",
