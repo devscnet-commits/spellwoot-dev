@@ -230,7 +230,7 @@
           "WHATSAPP_CLOUD_DESC": "Quick setup through Meta",
           "TWILIO_DESC": "Connect via Twilio credentials",
           "360_DIALOG": "360Dialog",
-          "UAZAPI": "UazAPI (Unofficial)",
+          "UAZAPI": "Uazapi (Unofficial) - Beta",
           "UAZAPI_DESC": "Connect via QR Code scanning"
         },
         "SELECT_PROVIDER": {
@@ -319,9 +319,9 @@
             "VALIDATION_ERROR": "Phone number must have exactly 13 numeric digits",
             "HELP": "Enter the phone number without + or spaces. Example: 5511999999999"
           },
-          "SUBMIT_BUTTON": "Create UazAPI Channel",
+          "SUBMIT_BUTTON": "Create Uazapi Channel",
           "API": {
-            "ERROR_MESSAGE": "We were not able to create the UazAPI channel. Please try again."
+            "ERROR_MESSAGE": "We were not able to create the Uazapi channel. Please try again."
           },
           "QR_CODE_INSTRUCTIONS": "Open WhatsApp on your phone, go to Settings > Linked Devices > Link a Device, and scan this QR code.",
           "REFRESH_QR": "Refresh QR Code",
@@ -713,10 +713,10 @@
       "REFRESH_STATUS": "Refresh Status",
       "RECONNECT_INITIATED": "Reconnection initiated. Please scan the QR code in the inbox settings.",
       "RECONNECT_ERROR": "Failed to reconnect. Please try again.",
-      "INSTANCE_ID_LABEL": "UazAPI Instance ID",
+      "INSTANCE_ID_LABEL": "Uazapi Instance ID",
       "COPY_INSTANCE_ID": "Copy Instance ID",
       "INSTANCE_ID_COPIED": "Instance ID copied to clipboard",
-      "INSTANCE_TOKEN_LABEL": "UazAPI Instance Token",
+      "INSTANCE_TOKEN_LABEL": "Uazapi Instance Token",
       "COPY_INSTANCE_TOKEN": "Copy Instance Token",
       "INSTANCE_TOKEN_COPIED": "Instance Token copied to clipboard"
     },

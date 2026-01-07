@@ -32,11 +32,11 @@ const { isAdmin } = useAdmin();
 const showDeletePopup = ref(false);
 const selectedInbox = ref({});
 
-// UazAPI status tracking
+// Uazapi status tracking
 const uazapiStatuses = reactive({});
 const uazapiLoading = reactive({});
 
-// UazAPI reconnect modal state
+// Uazapi reconnect modal state
 const showUazapiReconnectPopup = ref(false);
 const reconnectInbox = ref(null);
 const reconnectQrCode = ref('');
@@ -94,7 +94,7 @@ const openDelete = inbox => {
   selectedInbox.value = inbox;
 };
 
-// UazAPI connection methods
+// Uazapi connection methods
 const isUazapiInbox = inbox => {
   return inbox.is_uazapi === true;
 };
@@ -211,7 +211,7 @@ onBeforeMount(() => {
   store.dispatch('inboxes/get');
 });
 
-// Fetch UazAPI status once inboxes are available
+// Fetch Uazapi status once inboxes are available
 watch(
   inboxesList,
   list => {
@@ -278,14 +278,16 @@ onUnmounted(() => {
                 </div>
                 <div>
                   <span class="block font-medium capitalize">
-                    {{ inbox.name }}
+                    {{
+                      isUazapiInbox(inbox) ? `${inbox.name} - Beta` : inbox.name
+                    }}
                   </span>
                   <ChannelName
                     :channel-type="inbox.channel_type"
                     :medium="inbox.medium"
                   />
                 </div>
-                <!-- UazAPI Connection Status -->
+                <!-- Uazapi Connection Status -->
                 <template v-if="isUazapiInbox(inbox)">
                   <span
                     v-if="uazapiLoading[inbox.id] || !uazapiStatuses[inbox.id]"
@@ -311,7 +313,7 @@ onUnmounted(() => {
 
             <td class="py-4">
               <div class="flex gap-1 justify-end">
-                <!-- UazAPI Reconnect Button -->
+                <!-- Uazapi Reconnect Button -->
                 <Button
                   v-if="
                     isAdmin &&
@@ -381,7 +383,7 @@ onUnmounted(() => {
       @on-close="closeDelete"
     />
 
-    <!-- UazAPI reconnect modal -->
+    <!-- Uazapi reconnect modal -->
     <woot-modal
       v-model:show="showUazapiReconnectPopup"
       :on-close="closeUazapiReconnect"

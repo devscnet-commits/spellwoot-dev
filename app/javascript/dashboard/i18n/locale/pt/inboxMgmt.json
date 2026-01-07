@@ -230,7 +230,7 @@
           "WHATSAPP_CLOUD_DESC": "Quick setup through Meta",
           "TWILIO_DESC": "Connect via Twilio credentials",
           "360_DIALOG": "360Dialog",
-          "UAZAPI": "UazAPI (Não Oficial)",
+          "UAZAPI": "Uazapi (Não Oficial) - Beta",
           "UAZAPI_DESC": "Conectar via leitura de QR Code"
         },
         "SELECT_PROVIDER": {
@@ -318,9 +318,9 @@
             "ERROR": "O número de telefone é obrigatório",
             "HELP": "Digite o número de telefone sem + ou espaços. Exemplo: 5511999999999"
           },
-          "SUBMIT_BUTTON": "Criar Canal UazAPI",
+          "SUBMIT_BUTTON": "Criar Canal Uazapi",
           "API": {
-            "ERROR_MESSAGE": "Não foi possível criar o canal UazAPI. Por favor, tente novamente."
+            "ERROR_MESSAGE": "Não foi possível criar o canal Uazapi. Por favor, tente novamente."
           },
           "QR_CODE_INSTRUCTIONS": "Abra o WhatsApp no seu telefone, vá em Configurações > Aparelhos conectados > Conectar um aparelho e escaneie este QR code.",
           "REFRESH_QR": "Atualizar QR Code",
@@ -708,10 +708,10 @@
       "REFRESH_STATUS": "Atualizar Status",
       "RECONNECT_INITIATED": "Reconexão iniciada. Por favor, escaneie o QR code nas configurações da caixa de entrada.",
       "RECONNECT_ERROR": "Falha ao reconectar. Por favor, tente novamente.",
-      "INSTANCE_ID_LABEL": "ID da Instância UazAPI",
+      "INSTANCE_ID_LABEL": "ID da Instância Uazapi",
       "COPY_INSTANCE_ID": "Copiar ID da Instância",
       "INSTANCE_ID_COPIED": "ID da instância copiado para a área de transferência",
-      "INSTANCE_TOKEN_LABEL": "Token da Instância UazAPI",
+      "INSTANCE_TOKEN_LABEL": "Token da Instância Uazapi",
       "COPY_INSTANCE_TOKEN": "Copiar Token da Instância",
       "INSTANCE_TOKEN_COPIED": "Token da instância copiado para a área de transferência"
     },
