@@ -31,11 +31,6 @@ class Whatsapp::UazapiConnectionService
     connection_data = provider_service.connect
     Rails.logger.info "[UAZAPI] Connection data: #{connection_data}"
 
-    # Step 5: Setup webhook for receiving messages
-    Rails.logger.info "[UAZAPI] Step 5: Setting up webhook..."
-    webhook_result = provider_service.setup_webhook
-    Rails.logger.info "[UAZAPI] Webhook setup result: #{webhook_result}"
-
     {
       success: true,
       inbox: inbox,
@@ -89,8 +84,7 @@ class Whatsapp::UazapiConnectionService
       provider: 'uazapi',
       provider_config: {
         'uazapi_instance_token' => instance_token,
-        'uazapi_instance_id' => instance_id,
-        'webhook_verify_token' => SecureRandom.hex(16)
+        'uazapi_instance_id' => instance_id
       }
     )
   end

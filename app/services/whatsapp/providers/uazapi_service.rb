@@ -38,7 +38,6 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def media_url(media_id, _phone_number_id = nil)
-    # UazAPI media URLs are returned directly in webhook payloads
     media_id
   end
 
@@ -94,23 +93,6 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     return nil unless response.success?
 
     response.parsed_response
-  end
-
-  def setup_webhook
-    webhook_url = uazapi_webhook_url
-
-    response = HTTParty.post(
-      "#{base_url}/webhook",
-      headers: api_headers,
-      body: {
-        url: webhook_url,
-        enabled: true,
-        events: %w[messages messages_update connection],
-        excludeMessages: ['wasSentByApi']
-      }.to_json
-    )
-
-    response.success?
   end
 
   def disconnect
@@ -295,11 +277,6 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
       'Content-Type' => 'application/json',
       'admintoken' => ENV.fetch('UAZAPI_ADMIN_TOKEN', nil)
     }
-  end
-
-  def uazapi_webhook_url
-    base = ENV.fetch('UAZAPI_WEBHOOK_BASE_URL', nil) || ENV.fetch('FRONTEND_URL', nil)
-    "#{base}/webhooks/uazapi/#{whatsapp_channel.phone_number}"
   end
 end
 

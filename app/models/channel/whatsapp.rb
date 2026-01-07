@@ -76,7 +76,7 @@ class Channel::Whatsapp < ApplicationRecord
   private
 
   def ensure_webhook_verify_token
-    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud uazapi])
+    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider == 'whatsapp_cloud'
   end
 
   def validate_provider_config
@@ -84,13 +84,9 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def perform_webhook_setup
-    if uazapi?
-      provider_service.setup_webhook
-    else
-      business_account_id = provider_config['business_account_id']
-      api_key = provider_config['api_key']
-      Whatsapp::WebhookSetupService.new(self, business_account_id, api_key).perform
-    end
+    business_account_id = provider_config['business_account_id']
+    api_key = provider_config['api_key']
+    Whatsapp::WebhookSetupService.new(self, business_account_id, api_key).perform
   end
 
   def teardown_webhooks

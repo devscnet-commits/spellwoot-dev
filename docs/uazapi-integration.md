@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-Esta documentação descreve a integração do Uazapi como um novo provedor de WhatsApp no Chatwoot. O Uazapi permite gerenciar instâncias do WhatsApp através de uma API REST, incluindo criação de instâncias, conexão via QR code, recebimento de mensagens via webhooks e gerenciamento do ciclo de vida das instâncias.
+Esta documentação descreve a integração do Uazapi como um novo provedor de WhatsApp no Chatwoot. O Uazapi permite gerenciar instâncias do WhatsApp através de uma API REST, incluindo criação de instâncias, conexão via QR code e gerenciamento do ciclo de vida das instâncias.
 
 ## Arquitetura
 
@@ -43,12 +43,9 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 2. **Backend (Rails)**
    - Controllers para criação e gerenciamento de inboxes
    - Services para comunicação com Uazapi
-   - Jobs para processamento de webhooks
-   - Webhook controller para receber mensagens
 
 3. **Uazapi**
    - API REST para gerenciamento de instâncias
-   - Webhooks para notificações de mensagens
 
 ## Arquivos Criados
 
@@ -58,17 +55,12 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 - `app/services/whatsapp/providers/uazapi_service.rb`
   - Service principal para comunicação com Uazapi
   - Herda de `Whatsapp::Providers::BaseService`
-  - Implementa métodos: `send_message`, `send_template`, `create_instance`, `connect`, `get_status`, `setup_webhook`, `delete_instance`
+  - Implementa métodos: `send_message`, `send_template`, `create_instance`, `connect`, `get_status`, `delete_instance`
 
 - `app/services/whatsapp/uazapi_connection_service.rb`
   - Orquestra a criação completa de inbox Uazapi
   - Cria instância Uazapi, canal WhatsApp, inbox Chatwoot
-  - Gerencia conexão e configuração de webhook
-
-- `app/services/whatsapp/incoming_message_uazapi_service.rb`
-  - Processa mensagens recebidas via webhook
-  - Herda de `Whatsapp::IncomingMessageBaseService`
-  - Converte mensagens Uazapi para formato Chatwoot
+  - Gerencia conexão via QR code
 
 - `app/services/whatsapp/webhook_teardown_service.rb` (modificado)
   - Adicionada lógica para deletar instância Uazapi quando inbox é removido
@@ -82,15 +74,6 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 
 - `app/controllers/api/v1/accounts/inboxes_controller.rb` (modificado)
   - Adicionados endpoints: `uazapi_status`, `uazapi_connect`, `uazapi_disconnect`
-
-- `app/controllers/webhooks/uazapi_controller.rb`
-  - Recebe webhooks do Uazapi
-  - Valida token e enfileira job para processamento
-
-#### Jobs
-- `app/jobs/webhooks/uazapi_events_job.rb`
-  - Processa eventos recebidos via webhook
-  - Delega processamento de mensagens para `IncomingMessageUazapiService`
 
 #### Models
 - `app/models/channel/whatsapp.rb` (modificado)
@@ -165,7 +148,6 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
     - `GET /api/v1/accounts/:account_id/inboxes/:id/uazapi_status`
     - `POST /api/v1/accounts/:account_id/inboxes/:id/uazapi_connect`
     - `POST /api/v1/accounts/:account_id/inboxes/:id/uazapi_disconnect`
-    - `POST /webhooks/uazapi/:phone_number`
 
 #### Docker
 - `docker/entrypoints/sidekiq.sh` (criado)
@@ -189,12 +171,10 @@ Adicione as seguintes variáveis ao arquivo `.env`:
 # Uazapi Configuration
 UAZAPI_BASE_URL=https://api.uazapi.com  # ou https://free.uazapi.com
 UAZAPI_ADMIN_TOKEN=seu_token_admin_aqui
-UAZAPI_WEBHOOK_BASE_URL=https://seu-dominio.com  # URL base para webhooks
 ```
 
 **Importante**: 
 - `UAZAPI_ADMIN_TOKEN`: Token administrativo fornecido pelo Uazapi
-- `UAZAPI_WEBHOOK_BASE_URL`: URL base do seu Chatwoot (usado para construir URLs de webhook)
 - Após adicionar/modificar variáveis no `.env`, recrie os containers: `docker compose down && docker compose up -d`
 
 ### Redis
@@ -220,7 +200,6 @@ UazapiConnectionService.perform
 2. Cria Channel::Whatsapp no Chatwoot
 3. Cria Inbox no Chatwoot
 4. Conecta instância (POST /instance/connect) → retorna QR code
-5. Configura webhook (POST /webhook)
     ↓
 Retorna QR code e status para frontend
     ↓
@@ -239,23 +218,7 @@ Backend consulta Uazapi (GET /instance/status)
 Quando status = "connected", frontend para polling
 ```
 
-### 3. Recebimento de Mensagens
-
-```
-Uazapi recebe mensagem do WhatsApp
-    ↓
-Uazapi envia webhook para POST /webhooks/uazapi/:phone_number
-    ↓
-UazapiController valida token e enfileira UazapiEventsJob
-    ↓
-UazapiEventsJob processa evento
-    ↓
-IncomingMessageUazapiService converte mensagem
-    ↓
-Mensagem criada no Chatwoot
-```
-
-### 4. Envio de Mensagens
+### 3. Envio de Mensagens
 
 ```
 Usuário envia mensagem no Chatwoot
@@ -269,7 +232,7 @@ POST /message/text para Uazapi
 Uazapi envia mensagem via WhatsApp
 ```
 
-### 5. Deleção de Inbox
+### 4. Deleção de Inbox
 
 ```
 Usuário deleta inbox no Chatwoot
@@ -366,27 +329,6 @@ Instância removida do Uazapi
 }
 ```
 
-### Webhook (Uazapi → Chatwoot)
-
-**POST** `/webhooks/uazapi/:phone_number`
-
-**Headers:**
-```
-token: <instance_token>
-```
-
-**Request Body:**
-```json
-{
-  "event": "messages.upsert",
-  "data": {
-    "key": {...},
-    "message": {...},
-    ...
-  }
-}
-```
-
 ## Estrutura de Dados
 
 ### Channel::Whatsapp (Uazapi)
@@ -395,10 +337,10 @@ O canal armazena as seguintes informações em `provider_config`:
 
 ```ruby
 {
-  "api_key" => "instance_token",  # Token da instância
+  "uazapi_instance_token" => "instance_token",  # Token da instância
+  "uazapi_instance_id" => "instance_id_from_uazapi",
   "phone_number" => "5511999999999",
-  "provider" => "uazapi",
-  "uazapi_instance_id" => "instance_id_from_uazapi"
+  "provider" => "uazapi"
 }
 ```
 
@@ -457,15 +399,6 @@ O número de telefone é validado tanto no frontend quanto no backend:
 1. Verifique logs do Rails: `docker compose logs rails`
 2. Verifique se `UAZAPI_BASE_URL` está correto
 3. Teste manualmente a API do Uazapi
-
-### Problema: Mensagens não chegam
-
-**Causa**: Webhook não configurado ou URL incorreta
-
-**Solução**:
-1. Verifique se `UAZAPI_WEBHOOK_BASE_URL` está correto
-2. Verifique logs do webhook: `docker compose logs rails | grep webhook`
-3. Verifique se o webhook foi configurado no Uazapi (via `setup_webhook`)
 
 ### Problema: Sidekiq não inicia
 
@@ -526,33 +459,21 @@ curl http://localhost:3000/api/v1/accounts/1/inboxes/1/uazapi_status \
   -H "api_access_token: seu_token"
 ```
 
-### Testar Webhook (simulação)
-
-```bash
-curl -X POST http://localhost:3000/webhooks/uazapi/5511999999999 \
-  -H "Content-Type: application/json" \
-  -H "token: instance_token" \
-  -d '{
-    "event": "messages.upsert",
-    "data": {...}
-  }'
-```
-
 ## Notas Importantes
 
 1. **WhatsApp Business**: É recomendado usar contas WhatsApp Business para maior estabilidade
 2. **Limites**: O Uazapi pode ter limites de instâncias conectadas
-3. **Webhooks**: A URL do webhook é construída automaticamente usando `UAZAPI_WEBHOOK_BASE_URL`
-4. **Tokens**: Cada instância tem seu próprio token, armazenado em `provider_config.api_key`
-5. **Status**: O status é consultado via polling no frontend, não via webhooks
-6. **Deleção**: Ao deletar inbox, a instância Uazapi é automaticamente removida
-7. **Campo Status**: O frontend utiliza exclusivamente o campo `status` da resposta do backend para exibir o estado da conexão. Os campos `connected` e `logged_in` são ignorados para garantir consistência
-8. **Busca Automática de Status**: Ao carregar a listagem de inboxes, o status de todos os inboxes Uazapi é buscado automaticamente do backend
-9. **Reconexão**: O botão "Reconnect WhatsApp" abre um modal com QR code e faz polling automático até a conexão ser estabelecida
-10. **Validação de Telefone**: O número de telefone deve ter exatamente 13 dígitos numéricos. Caracteres não numéricos são removidos automaticamente, mas o número final deve ter exatamente 13 dígitos para ser aceito
-11. **Internacionalização**: A integração está totalmente traduzida para português do Brasil (pt_BR). Certifique-se de que o locale do sistema está configurado como `pt_BR` para ver todas as traduções
-12. **Nomenclatura**: Todos os textos visíveis ao usuário usam "Uazapi" (não "UazAPI") para consistência
-13. **Beta**: A integração Uazapi está marcada como "Beta" no título do card das inboxes e na seleção de provedores
+3. **Tokens**: Cada instância tem seu próprio token, armazenado em `provider_config.uazapi_instance_token`
+4. **Status**: O status é consultado via polling no frontend
+5. **Deleção**: Ao deletar inbox, a instância Uazapi é automaticamente removida
+6. **Campo Status**: O frontend utiliza exclusivamente o campo `status` da resposta do backend para exibir o estado da conexão. Os campos `connected` e `logged_in` são ignorados para garantir consistência
+7. **Busca Automática de Status**: Ao carregar a listagem de inboxes, o status de todos os inboxes Uazapi é buscado automaticamente do backend
+8. **Reconexão**: O botão "Reconnect WhatsApp" abre um modal com QR code e faz polling automático até a conexão ser estabelecida
+9. **Validação de Telefone**: O número de telefone deve ter exatamente 13 dígitos numéricos. Caracteres não numéricos são removidos automaticamente, mas o número final deve ter exatamente 13 dígitos para ser aceito
+10. **Internacionalização**: A integração está totalmente traduzida para português do Brasil (pt_BR). Certifique-se de que o locale do sistema está configurado como `pt_BR` para ver todas as traduções
+11. **Nomenclatura**: Todos os textos visíveis ao usuário usam "Uazapi" (não "UazAPI") para consistência
+12. **Beta**: A integração Uazapi está marcada como "Beta" no título do card das inboxes e na seleção de provedores
+13. **Recebimento de Mensagens**: A integração atual não inclui recebimento de mensagens via webhook. O recebimento será implementado via endpoint específico do Chatwoot no futuro
 
 ## Referências
 
@@ -584,10 +505,18 @@ curl -X POST http://localhost:3000/webhooks/uazapi/5511999999999 \
 - **Correção do badge de status**: Badge agora utiliza exclusivamente o campo `status` do backend, ignorando campos `connected` e `logged_in` para evitar inconsistências
 - Melhoria na experiência do usuário com feedback visual durante reconexão
 
+### 2026-01-07 (Remoção de Webhooks)
+- **Remoção de funcionalidade de webhooks**: Removida toda a implementação de webhooks do UazAPI
+  - Removidos arquivos: `Webhooks::UazapiController`, `Webhooks::UazapiEventsJob`, `Whatsapp::IncomingMessageUazapiService`
+  - Removidos métodos `setup_webhook` e `uazapi_webhook_url` do `UazapiService`
+  - Removida configuração de webhook durante criação de inbox
+  - Removidas rotas de webhook
+  - A funcionalidade de conexão da inbox permanece intacta
+  - O recebimento de mensagens será implementado via endpoint específico do Chatwoot no futuro
+
 ### 2026-01-07 (Integração Inicial)
 - Integração inicial do Uazapi como provedor de WhatsApp
 - Implementação de criação, conexão e gerenciamento de instâncias
-- Implementação de webhooks para recebimento de mensagens
 - Implementação de deleção automática de instâncias
 - Correção de problemas com Sidekiq e Redis
 - Adição de interface para gerenciamento de status e reconexão
