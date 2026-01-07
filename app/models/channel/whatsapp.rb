@@ -25,7 +25,7 @@ class Channel::Whatsapp < ApplicationRecord
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
 
   # default at the moment is 360dialog lets change later.
-  PROVIDERS = %w[default whatsapp_cloud].freeze
+  PROVIDERS = %w[default whatsapp_cloud uazapi].freeze
   before_validation :ensure_webhook_verify_token
 
   validates :provider, inclusion: { in: PROVIDERS }
@@ -40,11 +40,18 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def provider_service
-    if provider == 'whatsapp_cloud'
+    case provider
+    when 'whatsapp_cloud'
       Whatsapp::Providers::WhatsappCloudService.new(whatsapp_channel: self)
+    when 'uazapi'
+      Whatsapp::Providers::UazapiService.new(whatsapp_channel: self)
     else
       Whatsapp::Providers::Whatsapp360DialogService.new(whatsapp_channel: self)
     end
+  end
+
+  def uazapi?
+    provider == 'uazapi'
   end
 
   def mark_message_templates_updated
@@ -69,7 +76,7 @@ class Channel::Whatsapp < ApplicationRecord
   private
 
   def ensure_webhook_verify_token
-    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider == 'whatsapp_cloud'
+    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud uazapi])
   end
 
   def validate_provider_config
@@ -77,10 +84,13 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def perform_webhook_setup
-    business_account_id = provider_config['business_account_id']
-    api_key = provider_config['api_key']
-
-    Whatsapp::WebhookSetupService.new(self, business_account_id, api_key).perform
+    if uazapi?
+      provider_service.setup_webhook
+    else
+      business_account_id = provider_config['business_account_id']
+      api_key = provider_config['api_key']
+      Whatsapp::WebhookSetupService.new(self, business_account_id, api_key).perform
+    end
   end
 
   def teardown_webhooks

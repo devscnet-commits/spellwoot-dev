@@ -4,8 +4,9 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
-  before_action :check_authorization, except: [:show, :health]
+  before_action :check_authorization, except: [:show, :health, :uazapi_status]
   before_action :validate_whatsapp_cloud_channel, only: [:health]
+  before_action :validate_uazapi_channel, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect]
 
   def index
     @inboxes = policy_scope(Current.account.inboxes.order_by_name.includes(:channel, { avatar_attachment: [:blob] }))
@@ -87,6 +88,51 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
+  def uazapi_status
+    status_data = Whatsapp::UazapiConnectionService.get_status(@inbox.channel)
+
+    if status_data
+      render json: status_data
+    else
+      render json: { error: 'Failed to fetch status' }, status: :unprocessable_entity
+    end
+  rescue StandardError => e
+    Rails.logger.error "[UAZAPI STATUS] Error: #{e.message}"
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
+  def uazapi_connect
+    provider_service = @inbox.channel.provider_service
+    connection_data = provider_service.connect
+
+    if connection_data
+      render json: {
+        qr_code: connection_data.dig('instance', 'qrcode') || connection_data['qrcode'],
+        status: connection_data.dig('instance', 'status') || 'connecting',
+        pair_code: connection_data.dig('instance', 'paircode')
+      }
+    else
+      render json: { error: 'Failed to connect' }, status: :unprocessable_entity
+    end
+  rescue StandardError => e
+    Rails.logger.error "[UAZAPI CONNECT] Error: #{e.message}"
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
+  def uazapi_disconnect
+    provider_service = @inbox.channel.provider_service
+    success = provider_service.disconnect
+
+    if success
+      render json: { message: 'Disconnected successfully' }
+    else
+      render json: { error: 'Failed to disconnect' }, status: :unprocessable_entity
+    end
+  rescue StandardError => e
+    Rails.logger.error "[UAZAPI DISCONNECT] Error: #{e.message}"
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   private
 
   def fetch_inbox
@@ -102,6 +148,12 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     return if @inbox.channel.is_a?(Channel::Whatsapp) && @inbox.channel.provider == 'whatsapp_cloud'
 
     render json: { error: 'Health data only available for WhatsApp Cloud API channels' }, status: :bad_request
+  end
+
+  def validate_uazapi_channel
+    return if @inbox.channel.is_a?(Channel::Whatsapp) && @inbox.channel.uazapi?
+
+    render json: { error: 'This endpoint is only available for UazAPI WhatsApp channels' }, status: :bad_request
   end
 
   def create_channel

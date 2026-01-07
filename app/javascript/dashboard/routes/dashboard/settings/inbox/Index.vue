@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, reactive, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import Avatar from 'next/avatar/Avatar.vue';
@@ -14,6 +14,7 @@ import {
 import ChannelName from './components/ChannelName.vue';
 import ChannelIcon from 'next/icon/ChannelIcon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import InboxesAPI from 'dashboard/api/inboxes';
 
 const getters = useStoreGetters();
 const store = useStore();
@@ -22,6 +23,10 @@ const { isAdmin } = useAdmin();
 
 const showDeletePopup = ref(false);
 const selectedInbox = ref({});
+
+// UazAPI status tracking
+const uazapiStatuses = reactive({});
+const uazapiLoading = reactive({});
 
 const inboxes = useMapGetter('inboxes/getInboxes');
 
@@ -70,6 +75,61 @@ const openDelete = inbox => {
   showDeletePopup.value = true;
   selectedInbox.value = inbox;
 };
+
+// UazAPI connection methods
+const isUazapiInbox = inbox => {
+  return inbox.is_uazapi === true;
+};
+
+const isUazapiConnected = inboxId => {
+  const statusData = uazapiStatuses[inboxId];
+  if (!statusData) return false;
+
+  // Check if status is "connected" string or connected/logged_in boolean
+  return (
+    statusData.status === 'connected' ||
+    statusData.connected === true ||
+    statusData.logged_in === true
+  );
+};
+
+const fetchUazapiStatus = async inboxId => {
+  uazapiLoading[inboxId] = true;
+  try {
+    const { data } = await InboxesAPI.getUazapiStatus(inboxId);
+    uazapiStatuses[inboxId] = data;
+  } catch (error) {
+    uazapiStatuses[inboxId] = { connected: false, error: true };
+  } finally {
+    uazapiLoading[inboxId] = false;
+  }
+};
+
+const reconnectUazapi = async inboxId => {
+  uazapiLoading[inboxId] = true;
+  try {
+    const { data } = await InboxesAPI.connectUazapi(inboxId);
+    uazapiStatuses[inboxId] = {
+      ...uazapiStatuses[inboxId],
+      qr_code: data.qr_code,
+      status: data.status,
+    };
+    useAlert(t('INBOX_MGMT.UAZAPI.RECONNECT_INITIATED'));
+  } catch (error) {
+    useAlert(t('INBOX_MGMT.UAZAPI.RECONNECT_ERROR'));
+  } finally {
+    uazapiLoading[inboxId] = false;
+  }
+};
+
+// Fetch UazAPI status for all UazAPI inboxes on mount
+onMounted(() => {
+  inboxes.value?.forEach(inbox => {
+    if (isUazapiInbox(inbox)) {
+      fetchUazapiStatus(inbox.id);
+    }
+  });
+});
 </script>
 
 <template>
@@ -127,11 +187,58 @@ const openDelete = inbox => {
                     :medium="inbox.medium"
                   />
                 </div>
+                <!-- UazAPI Connection Status -->
+                <template v-if="isUazapiInbox(inbox)">
+                  <span
+                    v-if="uazapiLoading[inbox.id]"
+                    class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  >
+                    {{ $t('INBOX_MGMT.UAZAPI.STATUS.CHECKING') }}
+                  </span>
+                  <span
+                    v-else-if="isUazapiConnected(inbox.id)"
+                    class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                  >
+                    {{ $t('INBOX_MGMT.UAZAPI.STATUS.CONNECTED') }}
+                  </span>
+                  <span
+                    v-else
+                    class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                  >
+                    {{ $t('INBOX_MGMT.UAZAPI.STATUS.DISCONNECTED') }}
+                  </span>
+                </template>
               </div>
             </td>
 
             <td class="py-4">
               <div class="flex gap-1 justify-end">
+                <!-- UazAPI Reconnect Button -->
+                <Button
+                  v-if="
+                    isAdmin &&
+                    isUazapiInbox(inbox) &&
+                    !isUazapiConnected(inbox.id) &&
+                    !uazapiLoading[inbox.id]
+                  "
+                  v-tooltip.top="$t('INBOX_MGMT.UAZAPI.RECONNECT')"
+                  icon="i-lucide-refresh-cw"
+                  xs
+                  amber
+                  faded
+                  @click="reconnectUazapi(inbox.id)"
+                />
+                <!-- Refresh Status Button -->
+                <Button
+                  v-if="isAdmin && isUazapiInbox(inbox)"
+                  v-tooltip.top="$t('INBOX_MGMT.UAZAPI.REFRESH_STATUS')"
+                  icon="i-lucide-activity"
+                  xs
+                  slate
+                  faded
+                  :loading="uazapiLoading[inbox.id]"
+                  @click="fetchUazapiStatus(inbox.id)"
+                />
                 <router-link
                   :to="{
                     name: 'settings_inbox_show',

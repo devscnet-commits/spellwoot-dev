@@ -32,6 +32,19 @@ class Inboxes extends CacheEnabledApiClient {
   syncTemplates(inboxId) {
     return axios.post(`${this.url}/${inboxId}/sync_templates`);
   }
+
+  // UazAPI methods
+  getUazapiStatus(inboxId) {
+    return axios.get(`${this.url}/${inboxId}/uazapi_status`);
+  }
+
+  connectUazapi(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/uazapi_connect`);
+  }
+
+  disconnectUazapi(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/uazapi_disconnect`);
+  }
 }
 
 export default new Inboxes();
