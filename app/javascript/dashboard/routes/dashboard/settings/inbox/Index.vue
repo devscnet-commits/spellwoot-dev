@@ -118,7 +118,10 @@ const hasUazapiIntegrationError = inboxId => {
 
   // Check if integration has error
   const integrationStatus = statusData.integration_status;
-  return integrationStatus?.status === 'error' || statusData.integration_error === true;
+  return (
+    integrationStatus?.status === 'error' ||
+    statusData.integration_error === true
+  );
 };
 
 const fetchUazapiStatus = async inboxId => {
@@ -158,8 +161,7 @@ const pollReconnectStatus = async inboxId => {
     reconnectStatus.value = data.status || '';
     reconnectProfileName.value = data.profile_name || '';
     if (data.qr_code) reconnectQrCode.value = data.qr_code;
-    if (data.pair_code !== undefined)
-      reconnectPairCode.value = data.pair_code;
+    if (data.pair_code !== undefined) reconnectPairCode.value = data.pair_code;
 
     if (data.status === 'connected') {
       // Reconfigure integration after connection
@@ -174,10 +176,16 @@ const pollReconnectStatus = async inboxId => {
     }
 
     // Schedule next poll only after current one completes
-    reconnectPollingInterval.value = setTimeout(() => pollReconnectStatus(inboxId), 5000);
+    reconnectPollingInterval.value = setTimeout(
+      () => pollReconnectStatus(inboxId),
+      5000
+    );
   } catch {
     // Silently fail on polling errors, but still schedule next poll
-    reconnectPollingInterval.value = setTimeout(() => pollReconnectStatus(inboxId), 5000);
+    reconnectPollingInterval.value = setTimeout(
+      () => pollReconnectStatus(inboxId),
+      5000
+    );
   }
 };
 
@@ -185,33 +193,6 @@ const startReconnectPolling = inboxId => {
   stopReconnectPolling();
   // Start first poll immediately
   pollReconnectStatus(inboxId);
-};
-
-const refreshReconnectStatus = async inboxId => {
-  reconnectLoading.value = true;
-  try {
-    const { data } = await InboxesAPI.getUazapiStatus(inboxId);
-    uazapiStatuses[inboxId] = data;
-    reconnectStatus.value = data.status || '';
-    reconnectProfileName.value = data.profile_name || '';
-    if (data.qr_code) reconnectQrCode.value = data.qr_code;
-    if (data.pair_code !== undefined) reconnectPairCode.value = data.pair_code;
-
-    if (data.status === 'connected') {
-      // Reconfigure integration after connection
-      try {
-        await InboxesAPI.reconfigureUazapi(inboxId);
-        // Removed success toast - not needed
-      } catch (error) {
-        useAlert(t('INBOX_MGMT.UAZAPI.RECONFIGURE_ERROR'));
-      }
-      closeUazapiReconnect();
-    }
-  } catch {
-    // noop
-  } finally {
-    reconnectLoading.value = false;
-  }
 };
 
 const initiateReconnect = async inboxId => {
@@ -223,10 +204,14 @@ const initiateReconnect = async inboxId => {
       try {
         await InboxesAPI.disconnectUazapi(inboxId);
         // Wait a bit for disconnect to complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => {
+          setTimeout(() => {
+            resolve();
+          }, 1000);
+        });
       } catch (error) {
         // If disconnect fails, continue anyway
-        console.warn('Failed to disconnect before reconnect:', error);
+        // Silently continue
       }
     }
 
@@ -246,10 +231,10 @@ const initiateReconnect = async inboxId => {
 const openUazapiReconnect = async inbox => {
   reconnectInbox.value = inbox;
   showUazapiReconnectPopup.value = true;
-  
+
   // Check if there's already a status with QR code (e.g., from integration error)
   const existingStatus = uazapiStatuses[inbox.id];
-  
+
   // If already connected, we need to disconnect first, so don't use existing QR code
   if (isUazapiConnected(inbox.id)) {
     reconnectQrCode.value = '';
@@ -259,7 +244,7 @@ const openUazapiReconnect = async inbox => {
     await initiateReconnect(inbox.id);
     return;
   }
-  
+
   if (existingStatus?.qr_code && !isUazapiConnected(inbox.id)) {
     reconnectQrCode.value = existingStatus.qr_code;
     reconnectStatus.value = existingStatus.status || 'connecting';
@@ -280,7 +265,7 @@ const openUazapiReconnect = async inbox => {
         return;
       }
     }
-    
+
     reconnectQrCode.value = '';
     reconnectPairCode.value = '';
     reconnectProfileName.value = '';
@@ -375,7 +360,9 @@ onUnmounted(() => {
                   <div class="flex items-center gap-2">
                     <!-- Connection Status Badge -->
                     <span
-                      v-if="uazapiLoading[inbox.id] || !uazapiStatuses[inbox.id]"
+                      v-if="
+                        uazapiLoading[inbox.id] || !uazapiStatuses[inbox.id]
+                      "
                       class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                     >
                       {{ $t('INBOX_MGMT.UAZAPI.STATUS.CHECKING') }}
@@ -392,14 +379,22 @@ onUnmounted(() => {
                     >
                       {{ $t('INBOX_MGMT.UAZAPI.STATUS.DISCONNECTED') }}
                     </span>
-                    
+
                     <!-- Webhook Status Badge -->
                     <span
-                      v-if="!uazapiLoading[inbox.id] && uazapiStatuses[inbox.id] && (hasUazapiIntegrationError(inbox.id) || uazapiStatuses[inbox.id]?.webhook_url)"
+                      v-if="
+                        !uazapiLoading[inbox.id] &&
+                        uazapiStatuses[inbox.id] &&
+                        (hasUazapiIntegrationError(inbox.id) ||
+                          uazapiStatuses[inbox.id]?.webhook_url)
+                      "
                       class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full"
                       :class="{
-                        'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300': hasUazapiIntegrationError(inbox.id),
-                        'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300': !hasUazapiIntegrationError(inbox.id) && uazapiStatuses[inbox.id]?.webhook_url
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300':
+                          hasUazapiIntegrationError(inbox.id),
+                        'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300':
+                          !hasUazapiIntegrationError(inbox.id) &&
+                          uazapiStatuses[inbox.id]?.webhook_url,
                       }"
                     >
                       {{
@@ -420,7 +415,8 @@ onUnmounted(() => {
                   v-if="
                     isAdmin &&
                     isUazapiInbox(inbox) &&
-                    (!isUazapiConnected(inbox.id) || hasUazapiIntegrationError(inbox.id)) &&
+                    (!isUazapiConnected(inbox.id) ||
+                      hasUazapiIntegrationError(inbox.id)) &&
                     !uazapiLoading[inbox.id]
                   "
                   v-tooltip.top="$t('INBOX_MGMT.UAZAPI.RECONNECT')"
@@ -540,7 +536,9 @@ onUnmounted(() => {
           "
           class="w-full max-w-md p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
         >
-          <p class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+          <p
+            class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1"
+          >
             {{ $t('INBOX_MGMT.UAZAPI.INTEGRATION_ERROR_TITLE') }}
           </p>
           <p class="text-xs text-amber-700 dark:text-amber-300">

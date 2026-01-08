@@ -135,7 +135,8 @@ const createChannel = async () => {
       createdInbox.value = response.data.inbox;
       qrCode.value = response.data.qr_code;
       connectionStatus.value = response.data.status || 'connecting';
-      webhookUrl.value = response.data.webhook_url || response.data.inbox.webhook_url || '';
+      webhookUrl.value =
+        response.data.webhook_url || response.data.inbox.webhook_url || '';
       showQrCode.value = true;
 
       // Start polling for status
