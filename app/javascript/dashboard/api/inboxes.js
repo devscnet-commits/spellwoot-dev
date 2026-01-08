@@ -45,6 +45,10 @@ class Inboxes extends CacheEnabledApiClient {
   disconnectUazapi(inboxId) {
     return axios.post(`${this.url}/${inboxId}/uazapi_disconnect`);
   }
+
+  reconfigureUazapi(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/uazapi_reconfigure`);
+  }
 }
 
 export default new Inboxes();

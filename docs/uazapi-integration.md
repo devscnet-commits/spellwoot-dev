@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-Esta documentação descreve a integração do Uazapi como um novo provedor de WhatsApp no Chatwoot. O Uazapi permite gerenciar instâncias do WhatsApp através de uma API REST, incluindo criação de instâncias, conexão via QR code e gerenciamento do ciclo de vida das instâncias.
+Esta documentação descreve a integração do Uazapi como um novo provedor de WhatsApp no Chatwoot. A integração utiliza inboxes do tipo **API** (`Channel::Api`) e se conecta ao UazAPI através do endpoint `/chatwoot/config`, permitindo sincronização bidirecional de mensagens via webhook. O Uazapi permite gerenciar instâncias do WhatsApp através de uma API REST, incluindo criação de instâncias, conexão via QR code e gerenciamento do ciclo de vida das instâncias.
 
 ## Arquitetura
 
@@ -59,27 +59,53 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
 
 - `app/services/whatsapp/uazapi_connection_service.rb`
   - Orquestra a criação completa de inbox Uazapi
-  - Cria instância Uazapi, canal WhatsApp, inbox Chatwoot
+  - Cria instância Uazapi, canal API (`Channel::Api`), inbox Chatwoot
+  - Configura integração via `/chatwoot/config` do UazAPI
   - Gerencia conexão via QR code
+  - Adiciona logs detalhados em cada etapa do processo
+
+- `app/services/uazapi/incoming_message_service.rb` (novo)
+  - Processa mensagens recebidas do UazAPI via webhook
+  - Cria conversas e mensagens no Chatwoot
+  - Gerencia contatos e conversas
 
 - `app/services/whatsapp/webhook_teardown_service.rb` (modificado)
-  - Adicionada lógica para deletar instância Uazapi quando inbox é removido
+  - Suporte para `Channel::Api` UazAPI
+  - Desabilita integração no UazAPI via `/chatwoot/config` com `enabled: false`
+  - Deleta instância UazAPI quando inbox é removido
+  - Logs detalhados em cada operação
+
+#### Jobs
+- `app/jobs/webhooks/uazapi_events_job.rb` (novo)
+  - Job assíncrono para processar eventos recebidos do UazAPI
+  - Chama `Uazapi::IncomingMessageService` para processar mensagens
 
 #### Controllers
 - `app/controllers/api/v1/accounts/uazapi_inboxes_controller.rb`
   - Endpoint para criação de inboxes Uazapi
-  - Retorna QR code e status inicial
+  - Retorna QR code, status inicial e webhook_url
   - Validação de telefone: exatamente 13 dígitos numéricos
   - Limpeza automática de caracteres não numéricos do telefone
 
 - `app/controllers/api/v1/accounts/inboxes_controller.rb` (modificado)
-  - Adicionados endpoints: `uazapi_status`, `uazapi_connect`, `uazapi_disconnect`
+  - Endpoints: `uazapi_status`, `uazapi_connect`, `uazapi_disconnect`
+  - Adaptados para funcionar com `Channel::Api`
+  - Retornam `webhook_url` quando disponível
+  - Logs detalhados em cada operação
+
+- `app/controllers/webhooks/uazapi_controller.rb` (novo)
+  - Recebe webhooks do UazAPI quando mensagens chegam do WhatsApp
+  - Rota: `POST /webhooks/uazapi/:identifier`
+  - Processa payload e envia para job assíncrono
 
 #### Models
-- `app/models/channel/whatsapp.rb` (modificado)
-  - Adicionado `'uazapi'` aos provedores disponíveis
-  - Método `uazapi?` para verificação de tipo
-  - Roteamento para `UazapiService`
+- `app/models/channel/api.rb` (modificado)
+  - Adicionado callback `before_destroy` para teardown de instâncias UazAPI
+  - Armazena `uazapi_instance_token` e `uazapi_instance_id` em `additional_attributes`
+  - Armazena `webhook_url` retornado pelo UazAPI
+
+- `app/models/channel/whatsapp.rb` (mantido para backward compatibility)
+  - Suporte para inboxes UazAPI antigas do tipo WhatsApp
 
 #### Policies
 - `app/policies/inbox_policy.rb` (modificado)
@@ -100,6 +126,7 @@ A integração segue a arquitetura existente do Chatwoot para provedores de What
   - Exibição de QR code
   - Polling de status de conexão
   - Botão para reconexão
+  - Exibição de `webhook_url` quando configurado (com botão de copiar)
   - Título do card exibe "- Beta" para inboxes Uazapi
 
 - `app/javascript/dashboard/routes/dashboard/settings/inbox/channels/Whatsapp.vue` (modificado)
@@ -197,13 +224,15 @@ Frontend chama POST /api/v1/accounts/:account_id/uazapi_inboxes
 UazapiConnectionService.perform
     ↓
 1. Cria instância no Uazapi (POST /instance/init)
-2. Cria Channel::Whatsapp no Chatwoot
+2. Cria Channel::Api no Chatwoot (com instance_token e instance_id em additional_attributes)
 3. Cria Inbox no Chatwoot
-4. Conecta instância (POST /instance/connect) → retorna QR code
+4. Configura integração Chatwoot (PUT /chatwoot/config) → retorna webhook_url
+5. Atualiza Channel::Api.webhook_url com URL retornada
+6. Conecta instância (POST /instance/connect) → retorna QR code
     ↓
-Retorna QR code e status para frontend
+Retorna QR code, status e webhook_url para frontend
     ↓
-Frontend exibe QR code e inicia polling de status
+Frontend exibe QR code, inicia polling de status e mostra webhook_url quando configurado
 ```
 
 ### 2. Conexão via QR Code
@@ -223,29 +252,44 @@ Quando status = "connected", frontend para polling
 ```
 Usuário envia mensagem no Chatwoot
     ↓
-Channel::Whatsapp usa UazapiService
+Chatwoot envia mensagem via API pública para UazAPI
     ↓
-UazapiService.send_message
-    ↓
-POST /message/text para Uazapi
-    ↓
-Uazapi envia mensagem via WhatsApp
+UazAPI recebe mensagem e envia via WhatsApp
 ```
 
-### 4. Deleção de Inbox
+**Nota**: O envio de mensagens é feito pelo UazAPI através da integração configurada via `/chatwoot/config`. O Chatwoot envia mensagens usando a API pública do Chatwoot, e o UazAPI sincroniza essas mensagens para o WhatsApp.
+
+### 4. Recebimento de Mensagens
+
+```
+Mensagem recebida no WhatsApp
+    ↓
+UazAPI envia webhook para Chatwoot (POST /webhooks/uazapi/:identifier)
+    ↓
+Webhooks::UazapiController.process_payload
+    ↓
+Webhooks::UazapiEventsJob (assíncrono)
+    ↓
+Uazapi::IncomingMessageService.perform
+    ↓
+Cria/encontra contato, conversa e mensagem no Chatwoot
+```
+
+### 5. Deleção de Inbox
 
 ```
 Usuário deleta inbox no Chatwoot
     ↓
+Channel::Api.before_destroy callback
+    ↓
 WebhookTeardownService é chamado
     ↓
-Verifica se é inbox Uazapi
+Verifica se é Channel::Api com uazapi_instance_token
     ↓
-Chama UazapiService.delete_instance
+1. Desabilita integração no UazAPI (PUT /chatwoot/config com enabled: false)
+2. Deleta instância (DELETE /instance para Uazapi)
     ↓
-DELETE /instance para Uazapi
-    ↓
-Instância removida do Uazapi
+Instância removida do Uazapi e integração desabilitada
 ```
 
 ## Endpoints da API
@@ -257,7 +301,7 @@ Instância removida do Uazapi
 **Request Body:**
 ```json
 {
-  "inbox_name": "Suporte WhatsApp",
+  "name": "Suporte WhatsApp",
   "phone_number": "5511999999999"
 }
 ```
@@ -273,10 +317,14 @@ Instância removida do Uazapi
   "qr_code": "data:image/png;base64,...",
   "status": "connecting",
   "pair_code": "ABC123",
+  "webhook_url": "https://uazapi.com/chatwoot/webhook/inst_abc123",
   "inbox": {
     "id": 1,
     "name": "Suporte WhatsApp",
-    ...
+    "channel_type": "Channel::Api",
+    "identifier": "unique_identifier",
+    "webhook_url": "https://uazapi.com/chatwoot/webhook/inst_abc123",
+    "phone_number": "5511999999999"
   }
 }
 ```
@@ -294,7 +342,8 @@ Instância removida do Uazapi
   "connected": true,
   "logged_in": false,
   "profile_name": "Nome do Perfil",
-  "profile_pic_url": "https://..."
+  "profile_pic_url": "https://...",
+  "webhook_url": "https://uazapi.com/chatwoot/webhook/inst_abc123"
 }
 ```
 
@@ -331,18 +380,23 @@ Instância removida do Uazapi
 
 ## Estrutura de Dados
 
-### Channel::Whatsapp (Uazapi)
+### Channel::Api (Uazapi)
 
-O canal armazena as seguintes informações em `provider_config`:
+O canal armazena as seguintes informações:
 
 ```ruby
 {
-  "uazapi_instance_token" => "instance_token",  # Token da instância
-  "uazapi_instance_id" => "instance_id_from_uazapi",
-  "phone_number" => "5511999999999",
-  "provider" => "uazapi"
+  identifier: "unique_identifier",  # Identificador único do canal
+  webhook_url: "https://uazapi.com/chatwoot/webhook/inst_abc123",  # URL retornada pelo UazAPI
+  additional_attributes: {
+    "uazapi_instance_token" => "instance_token",  # Token da instância
+    "uazapi_instance_id" => "instance_id_from_uazapi",
+    "phone_number" => "5511999999999"
+  }
 }
 ```
+
+**Nota**: Inboxes UazAPI usam exclusivamente `Channel::Api`.
 
 ## Validação de Dados
 
@@ -461,19 +515,40 @@ curl http://localhost:3000/api/v1/accounts/1/inboxes/1/uazapi_status \
 
 ## Notas Importantes
 
-1. **WhatsApp Business**: É recomendado usar contas WhatsApp Business para maior estabilidade
-2. **Limites**: O Uazapi pode ter limites de instâncias conectadas
-3. **Tokens**: Cada instância tem seu próprio token, armazenado em `provider_config.uazapi_instance_token`
-4. **Status**: O status é consultado via polling no frontend
-5. **Deleção**: Ao deletar inbox, a instância Uazapi é automaticamente removida
-6. **Campo Status**: O frontend utiliza exclusivamente o campo `status` da resposta do backend para exibir o estado da conexão. Os campos `connected` e `logged_in` são ignorados para garantir consistência
-7. **Busca Automática de Status**: Ao carregar a listagem de inboxes, o status de todos os inboxes Uazapi é buscado automaticamente do backend
-8. **Reconexão**: O botão "Reconnect WhatsApp" abre um modal com QR code e faz polling automático até a conexão ser estabelecida
-9. **Validação de Telefone**: O número de telefone deve ter exatamente 13 dígitos numéricos. Caracteres não numéricos são removidos automaticamente, mas o número final deve ter exatamente 13 dígitos para ser aceito
-10. **Internacionalização**: A integração está totalmente traduzida para português do Brasil (pt_BR). Certifique-se de que o locale do sistema está configurado como `pt_BR` para ver todas as traduções
-11. **Nomenclatura**: Todos os textos visíveis ao usuário usam "Uazapi" (não "UazAPI") para consistência
-12. **Beta**: A integração Uazapi está marcada como "Beta" no título do card das inboxes e na seleção de provedores
-13. **Recebimento de Mensagens**: A integração atual não inclui recebimento de mensagens via webhook. O recebimento será implementado via endpoint específico do Chatwoot no futuro
+1. **Tipo de Inbox**: A integração utiliza inboxes do tipo **API** (`Channel::Api`). Isso permite integração via webhook com o endpoint `/chatwoot/config` do UazAPI.
+
+2. **Integração via Webhook**: A integração é configurada automaticamente via `/chatwoot/config` do UazAPI quando a inbox é criada. O UazAPI retorna uma `webhook_url` que é armazenada no `Channel::Api.webhook_url`.
+
+3. **Sincronização Bidirecional**: 
+   - **Envio**: Mensagens enviadas no Chatwoot são sincronizadas para o WhatsApp via API do Chatwoot (UazAPI monitora e envia)
+   - **Recebimento**: Mensagens recebidas no WhatsApp são enviadas pelo UazAPI para o webhook do Chatwoot (`POST /webhooks/uazapi/:identifier`)
+
+4. **WhatsApp Business**: É recomendado usar contas WhatsApp Business para maior estabilidade
+
+5. **Limites**: O Uazapi pode ter limites de instâncias conectadas
+
+6. **Tokens**: Cada instância tem seu próprio token, armazenado em `additional_attributes.uazapi_instance_token` do `Channel::Api`
+
+7. **Status**: O status é consultado via polling no frontend
+
+8. **Deleção**: Ao deletar inbox, a integração é desabilitada no UazAPI e a instância é removida automaticamente
+
+9. **Campo Status**: O frontend utiliza exclusivamente o campo `status` da resposta do backend para exibir o estado da conexão. Os campos `connected` e `logged_in` são ignorados para garantir consistência
+
+10. **Busca Automática de Status**: Ao carregar a listagem de inboxes, o status de todos os inboxes Uazapi é buscado automaticamente do backend
+
+11. **Reconexão**: O botão "Reconnect WhatsApp" abre um modal com QR code e faz polling automático até a conexão ser estabelecida
+
+12. **Validação de Telefone**: O número de telefone deve ter exatamente 13 dígitos numéricos. Caracteres não numéricos são removidos automaticamente, mas o número final deve ter exatamente 13 dígitos para ser aceito
+
+13. **Internacionalização**: A integração está totalmente traduzida para português do Brasil (pt_BR). Certifique-se de que o locale do sistema está configurado como `pt_BR` para ver todas as traduções
+
+14. **Nomenclatura**: Todos os textos visíveis ao usuário usam "Uazapi" (não "UazAPI") para consistência
+
+15. **Beta**: A integração Uazapi está marcada como "Beta" no título do card das inboxes e na seleção de provedores
+
+16. **Logs**: Todos os logs usam o prefixo `[UAZAPI]` para facilitar filtragem em produção. Logs detalhados são gerados em cada etapa do processo.
+
 
 ## Referências
 
@@ -505,14 +580,13 @@ curl http://localhost:3000/api/v1/accounts/1/inboxes/1/uazapi_status \
 - **Correção do badge de status**: Badge agora utiliza exclusivamente o campo `status` do backend, ignorando campos `connected` e `logged_in` para evitar inconsistências
 - Melhoria na experiência do usuário com feedback visual durante reconexão
 
-### 2026-01-07 (Remoção de Webhooks)
-- **Remoção de funcionalidade de webhooks**: Removida toda a implementação de webhooks do UazAPI
-  - Removidos arquivos: `Webhooks::UazapiController`, `Webhooks::UazapiEventsJob`, `Whatsapp::IncomingMessageUazapiService`
-  - Removidos métodos `setup_webhook` e `uazapi_webhook_url` do `UazapiService`
-  - Removida configuração de webhook durante criação de inbox
-  - Removidas rotas de webhook
-  - A funcionalidade de conexão da inbox permanece intacta
-  - O recebimento de mensagens será implementado via endpoint específico do Chatwoot no futuro
+### 2026-01-XX (Integração via Webhook com Channel::Api)
+- **Arquitetura**: Inboxes UazAPI usam `Channel::Api` com integração via webhook
+- **Integração via `/chatwoot/config`**: Configuração automática da integração via endpoint do UazAPI
+- **Webhook para recebimento**: Implementado `Webhooks::UazapiController` e `Uazapi::IncomingMessageService` para receber mensagens
+- **Logs detalhados**: Adicionados logs em todas as etapas do processo para facilitar debugging em produção
+- **Deleção completa**: Ao deletar inbox, desabilita integração no UazAPI e remove instância
+- **Frontend atualizado**: Exibição de `webhook_url` quando configurado
 
 ### 2026-01-07 (Integração Inicial)
 - Integração inicial do Uazapi como provedor de WhatsApp

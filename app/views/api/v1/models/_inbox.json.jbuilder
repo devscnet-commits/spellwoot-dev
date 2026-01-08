@@ -113,6 +113,18 @@ if resource.api?
   json.webhook_url resource.channel.try(:webhook_url)
   json.inbox_identifier resource.channel.try(:identifier)
   json.additional_attributes resource.channel.try(:additional_attributes)
+  
+  # UazAPI specific attributes for API Channel
+  if resource.channel.try(:additional_attributes)&.dig('uazapi_instance_token').present?
+    json.is_uazapi true
+    # For backward compatibility, also expose as provider_config
+    if Current.account_user&.administrator?
+      json.provider_config do
+        json.uazapi_instance_id resource.channel.try(:additional_attributes)&.dig('uazapi_instance_id')
+        json.uazapi_instance_token resource.channel.try(:additional_attributes)&.dig('uazapi_instance_token')
+      end
+    end
+  end
 end
 
 json.provider resource.channel.try(:provider)
@@ -125,11 +137,6 @@ if resource.whatsapp?
   json.message_templates resource.channel.try(:message_templates)
   json.provider_config resource.channel.try(:provider_config) if Current.account_user&.administrator?
   json.reauthorization_required resource.channel.try(:reauthorization_required?)
-
-  # UazAPI specific attributes
-  if resource.channel.try(:uazapi?)
-    json.is_uazapi true
-  end
 end
 
 ## Voice Channel Attributes

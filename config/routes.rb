@@ -208,6 +208,7 @@ Rails.application.routes.draw do
             get :uazapi_status, on: :member
             post :uazapi_connect, on: :member
             post :uazapi_disconnect, on: :member
+            post :uazapi_reconfigure, on: :member
           end
           resources :uazapi_inboxes, only: [:create]
           resources :inbox_members, only: [:create, :show], param: :inbox_id do
@@ -534,6 +535,7 @@ Rails.application.routes.draw do
   post 'webhooks/sms/:phone_number', to: 'webhooks/sms#process_payload'
   get 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#verify'
   post 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
+  post 'webhooks/uazapi/:identifier', to: 'webhooks/uazapi#process_payload'
   get 'webhooks/instagram', to: 'webhooks/instagram#verify'
   post 'webhooks/instagram', to: 'webhooks/instagram#events'
 

@@ -23,7 +23,8 @@ class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseContro
         inbox: inbox_json(result[:inbox]),
         qr_code: result[:qr_code],
         status: result[:status],
-        connection_data: result[:connection_data]
+        connection_data: result[:connection_data],
+        webhook_url: result[:webhook_url]
       }, status: :ok
     else
       render json: { error: result[:error] }, status: :unprocessable_entity
@@ -44,13 +45,17 @@ class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseContro
   end
 
   def inbox_json(inbox)
+    channel = inbox.channel
+    channel.reload if channel.persisted? # Ensure we have the latest webhook_url
     {
       id: inbox.id,
       name: inbox.name,
-      channel_id: inbox.channel_id,
+      channel_id: channel.id,
       channel_type: inbox.channel_type,
-      phone_number: inbox.channel.phone_number,
-      provider: inbox.channel.provider
+      phone_number: channel.additional_attributes&.dig('phone_number'),
+      identifier: channel.identifier,
+      webhook_url: channel.webhook_url,
+      is_uazapi: true
     }
   end
 end
