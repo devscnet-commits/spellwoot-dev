@@ -77,4 +77,8 @@ class InboxPolicy < ApplicationPolicy
   def uazapi_disconnect?
     @account_user.administrator?
   end
+
+  def uazapi_reconfigure?
+    @account_user.administrator?
+  end
 end

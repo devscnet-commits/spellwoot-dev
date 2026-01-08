@@ -26,6 +26,7 @@ const connectionStatus = ref('');
 const createdInbox = ref(null);
 const pollingInterval = ref(null);
 const profileName = ref('');
+const webhookUrl = ref('');
 
 // Custom validator for Uazapi phone number (exactly 13 digits, all numeric)
 const phoneNumberValidator = value => {
@@ -70,38 +71,47 @@ const statusLabel = computed(() => {
 
 const stopStatusPolling = () => {
   if (pollingInterval.value) {
-    clearInterval(pollingInterval.value);
+    clearTimeout(pollingInterval.value);
     pollingInterval.value = null;
   }
 };
 
-const startStatusPolling = () => {
-  if (pollingInterval.value) {
-    clearInterval(pollingInterval.value);
-  }
+const pollStatus = async () => {
+  if (!createdInbox.value?.id) return;
 
-  pollingInterval.value = setInterval(async () => {
-    if (!createdInbox.value?.id) return;
+  try {
+    const response = await UazapiAPI.getStatus(createdInbox.value.id);
+    const data = response.data;
 
-    try {
-      const response = await UazapiAPI.getStatus(createdInbox.value.id);
-      const data = response.data;
+    connectionStatus.value = data.status;
+    profileName.value = data.profile_name || '';
 
-      connectionStatus.value = data.status;
-      profileName.value = data.profile_name || '';
-
-      if (data.qr_code) {
-        qrCode.value = data.qr_code;
-      }
-
-      if (data.status === 'connected') {
-        stopStatusPolling();
-        useAlert(t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.SUCCESS_MESSAGE'));
-      }
-    } catch {
-      // Silently fail on polling errors
+    if (data.qr_code) {
+      qrCode.value = data.qr_code;
     }
-  }, 3000);
+
+    if (data.webhook_url) {
+      webhookUrl.value = data.webhook_url;
+    }
+
+    if (data.status === 'connected') {
+      stopStatusPolling();
+      useAlert(t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.SUCCESS_MESSAGE'));
+      return;
+    }
+
+    // Schedule next poll only after current one completes
+    pollingInterval.value = setTimeout(pollStatus, 5000);
+  } catch {
+    // Silently fail on polling errors, but still schedule next poll
+    pollingInterval.value = setTimeout(pollStatus, 5000);
+  }
+};
+
+const startStatusPolling = () => {
+  stopStatusPolling();
+  // Start first poll immediately
+  pollStatus();
 };
 
 const createChannel = async () => {
@@ -125,6 +135,7 @@ const createChannel = async () => {
       createdInbox.value = response.data.inbox;
       qrCode.value = response.data.qr_code;
       connectionStatus.value = response.data.status || 'connecting';
+      webhookUrl.value = response.data.webhook_url || response.data.inbox.webhook_url || '';
       showQrCode.value = true;
 
       // Start polling for status
@@ -162,6 +173,15 @@ const goToAgents = () => {
       inbox_id: createdInbox.value.id,
     },
   });
+};
+
+const copyWebhookUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(webhookUrl.value);
+    useAlert(t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.WEBHOOK_URL.COPIED'));
+  } catch {
+    useAlert(t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.WEBHOOK_URL.COPY_ERROR'));
+  }
 };
 
 onMounted(() => {
@@ -306,6 +326,32 @@ onUnmounted(() => {
         <Spinner size="large" />
         <p class="text-sm text-n-slate-11">
           {{ $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.LOADING_QR') }}
+        </p>
+      </div>
+
+      <!-- Webhook URL Info (when configured) -->
+      <div
+        v-if="isConnected && webhookUrl"
+        class="w-full max-w-md p-4 bg-n-slate-2 rounded-lg border border-n-weak"
+      >
+        <p class="text-sm font-medium text-n-slate-12 mb-2">
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.WEBHOOK_URL.LABEL') }}
+        </p>
+        <div class="flex items-center gap-2">
+          <input
+            :value="webhookUrl"
+            readonly
+            class="flex-1 px-3 py-2 text-xs border rounded-lg border-n-weak bg-n-alpha-black2 text-n-slate-12 font-mono"
+          />
+          <NextButton
+            variant="smooth"
+            size="small"
+            :label="$t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.WEBHOOK_URL.COPY')"
+            @click="copyWebhookUrl"
+          />
+        </div>
+        <p class="text-xs text-n-slate-11 mt-2">
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.WEBHOOK_URL.HELP') }}
         </p>
       </div>
 

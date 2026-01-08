@@ -29,11 +29,19 @@ class Channel::Api < ApplicationRecord
   validate :ensure_valid_agent_reply_time_window
   validates :webhook_url, length: { maximum: Limits::URL_LENGTH_LIMIT }
 
+  before_destroy :teardown_uazapi_if_needed
+
   def name
     'API'
   end
 
   private
+
+  def teardown_uazapi_if_needed
+    return unless additional_attributes&.dig('uazapi_instance_token').present?
+
+    Whatsapp::WebhookTeardownService.new(self).perform
+  end
 
   def ensure_valid_agent_reply_time_window
     return if additional_attributes['agent_reply_time_window'].blank?

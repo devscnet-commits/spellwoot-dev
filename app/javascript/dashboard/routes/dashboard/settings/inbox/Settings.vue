@@ -304,10 +304,20 @@ export default {
       return this.inbox?.is_uazapi === true;
     },
     uazapiInstanceId() {
-      return this.inbox?.provider_config?.uazapi_instance_id || '';
+      // Check both provider_config (backward compatibility) and additional_attributes (new API channel)
+      return (
+        this.inbox?.provider_config?.uazapi_instance_id ||
+        this.inbox?.additional_attributes?.uazapi_instance_id ||
+        ''
+      );
     },
     uazapiInstanceToken() {
-      return this.inbox?.provider_config?.uazapi_instance_token || '';
+      // Check both provider_config (backward compatibility) and additional_attributes (new API channel)
+      return (
+        this.inbox?.provider_config?.uazapi_instance_token ||
+        this.inbox?.additional_attributes?.uazapi_instance_token ||
+        ''
+      );
     },
   },
   watch: {

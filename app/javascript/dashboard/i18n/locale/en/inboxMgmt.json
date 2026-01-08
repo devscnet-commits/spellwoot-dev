@@ -335,6 +335,13 @@
             "CONNECTING": "Waiting for connection...",
             "DISCONNECTED": "Disconnected",
             "UNKNOWN": "Unknown status"
+          },
+          "WEBHOOK_URL": {
+            "LABEL": "Webhook URL",
+            "COPY": "Copy",
+            "COPIED": "Webhook URL copied to clipboard",
+            "COPY_ERROR": "Failed to copy webhook URL",
+            "HELP": "This URL is automatically configured in UazAPI. Messages from WhatsApp will be received via this webhook."
           }
         }
       },
@@ -718,7 +725,17 @@
       "INSTANCE_ID_COPIED": "Instance ID copied to clipboard",
       "INSTANCE_TOKEN_LABEL": "Uazapi Instance Token",
       "COPY_INSTANCE_TOKEN": "Copy Instance Token",
-      "INSTANCE_TOKEN_COPIED": "Instance Token copied to clipboard"
+      "INSTANCE_TOKEN_COPIED": "Instance Token copied to clipboard",
+      "WEBHOOK_CONFIG_ERROR": "Webhook Configuration Error",
+      "INTEGRATION_ERROR_TITLE": "Integration Configuration Error",
+      "RECONFIGURE_ERROR": "Failed to reconfigure integration. Please try again.",
+      "QR_CODE_REQUIRED_MESSAGE": "Please generate QR code to reconnect and fix the integration.",
+      "GENERATE_QR_CODE": "Generate QR Code",
+      "GENERATING_QR_CODE": "Generating QR code...",
+      "WEBHOOK_STATUS": {
+        "OK": "Webhook OK",
+        "ERROR": "Webhook Error"
+      }
     },
     "FEATURES": {
       "LABEL": "Features",

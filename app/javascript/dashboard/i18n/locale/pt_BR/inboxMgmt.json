@@ -335,6 +335,13 @@
             "CONNECTING": "Aguardando conexão...",
             "DISCONNECTED": "Desconectado",
             "UNKNOWN": "Status desconhecido"
+          },
+          "WEBHOOK_URL": {
+            "LABEL": "URL do Webhook",
+            "COPY": "Copiar",
+            "COPIED": "URL do webhook copiada para a área de transferência",
+            "COPY_ERROR": "Falha ao copiar URL do webhook",
+            "HELP": "Esta URL é automaticamente configurada no UazAPI. Mensagens do WhatsApp serão recebidas via este webhook."
           }
         }
       },
@@ -714,7 +721,17 @@
       "INSTANCE_ID_COPIED": "ID da instância copiado para a área de transferência",
       "INSTANCE_TOKEN_LABEL": "Token da Instância Uazapi",
       "COPY_INSTANCE_TOKEN": "Copiar Token da Instância",
-      "INSTANCE_TOKEN_COPIED": "Token da instância copiado para a área de transferência"
+      "INSTANCE_TOKEN_COPIED": "Token da instância copiado para a área de transferência",
+      "WEBHOOK_CONFIG_ERROR": "Erro na Configuração do Webhook",
+      "INTEGRATION_ERROR_TITLE": "Erro na Configuração da Integração",
+      "RECONFIGURE_ERROR": "Falha ao reconfigurar integração. Por favor, tente novamente.",
+      "QR_CODE_REQUIRED_MESSAGE": "Por favor, gere o QR code para reconectar e corrigir a integração.",
+      "GENERATE_QR_CODE": "Gerar QR Code",
+      "GENERATING_QR_CODE": "Gerando QR code...",
+      "WEBHOOK_STATUS": {
+        "OK": "Webhook OK",
+        "ERROR": "Erro no Webhook"
+      }
     },
     "FEATURES": {
       "LABEL": "Funcionalidades",

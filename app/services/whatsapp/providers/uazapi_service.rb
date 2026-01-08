@@ -278,5 +278,82 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
       'admintoken' => ENV.fetch('UAZAPI_ADMIN_TOKEN', nil)
     }
   end
+
+  def self.configure_chatwoot_integration(instance_token, chatwoot_config)
+    url = "#{base_url}/chatwoot/config"
+    
+    # Log antes de fazer a requisição (sem token sensível)
+    log_config = chatwoot_config.dup
+    log_config['access_token'] = "#{log_config['access_token'][0..10]}..." if log_config['access_token'].present?
+    Rails.logger.info "[UAZAPI] Configuring Chatwoot integration for instance"
+    Rails.logger.info "[UAZAPI] URL: #{url}"
+    Rails.logger.info "[UAZAPI] Config: #{log_config.to_json}"
+
+    headers = {
+      'Content-Type' => 'application/json',
+      'token' => instance_token
+    }
+
+    begin
+      response = HTTParty.put(
+        url,
+        headers: headers,
+        body: chatwoot_config.to_json
+      )
+
+      Rails.logger.info "[UAZAPI] Chatwoot config response code: #{response.code}"
+      Rails.logger.info "[UAZAPI] Chatwoot config response body: #{response.body}"
+
+      unless response.success?
+        Rails.logger.error "[UAZAPI] Failed to configure Chatwoot integration: #{response.body}"
+        return nil
+      end
+
+      parsed_response = response.parsed_response
+      webhook_url = parsed_response['chatwoot_inbox_webhook_url']
+      
+      Rails.logger.info "[UAZAPI] Chatwoot integration configured successfully"
+      Rails.logger.info "[UAZAPI] Webhook URL: #{webhook_url}" if webhook_url.present?
+
+      parsed_response
+    rescue StandardError => e
+      Rails.logger.error "[UAZAPI] Error configuring Chatwoot integration: #{e.message}"
+      Rails.logger.error "[UAZAPI] #{e.backtrace.join("\n")}"
+      nil
+    end
+  end
+
+  def self.get_chatwoot_config(instance_token)
+    url = "#{base_url}/chatwoot/config"
+    
+    Rails.logger.info "[UAZAPI] Getting Chatwoot integration status"
+    Rails.logger.info "[UAZAPI] URL: #{url}"
+
+    headers = {
+      'Content-Type' => 'application/json',
+      'token' => instance_token
+    }
+
+    begin
+      response = HTTParty.get(
+        url,
+        headers: headers
+      )
+
+      Rails.logger.info "[UAZAPI] Chatwoot config GET response code: #{response.code}"
+      Rails.logger.info "[UAZAPI] Chatwoot config GET response body: #{response.body}"
+
+      unless response.success?
+        Rails.logger.error "[UAZAPI] Failed to get Chatwoot integration status: #{response.body}"
+        return nil
+      end
+
+      response.parsed_response
+    rescue StandardError => e
+      Rails.logger.error "[UAZAPI] Error getting Chatwoot integration status: #{e.message}"
+      Rails.logger.error "[UAZAPI] #{e.backtrace.join("\n")}"
+      nil
+    end
+  end
 end
 
