@@ -24,10 +24,17 @@ Sidekiq.configure_server do |config|
     end
   end
 
-  # skip the default start stop logging
+  # Configure logging for production
   if Rails.env.production?
-    config.logger.formatter = Sidekiq::Logger::Formatters::JSON.new
-    config[:skip_default_job_logging] = true
+    # Use stdout for logs to be captured by Coolify/Docker
+    if ActiveModel::Type::Boolean.new.cast(ENV.fetch('RAILS_LOG_TO_STDOUT', true))
+      config.logger = ActiveSupport::Logger.new($stdout)
+      config.logger.formatter = ::Logger::Formatter.new
+    else
+      config.logger.formatter = Sidekiq::Logger::Formatters::JSON.new
+    end
+    # Keep default job logging enabled for visibility (can be disabled if needed)
+    config[:skip_default_job_logging] = ActiveModel::Type::Boolean.new.cast(ENV.fetch('SIDEKIQ_SKIP_DEFAULT_JOB_LOGGING', false))
     config.logger.level = Logger.const_get(ENV.fetch('LOG_LEVEL', 'info').upcase.to_s)
   end
 end
