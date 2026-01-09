@@ -120,7 +120,7 @@ class Uazapi::IncomingMessageService
       sender: @contact,
       content: message_data[:body],
       message_type: :incoming,
-      source_id: message_data[:message_id].to_s if message_data[:message_id].present?,
+      source_id: message_data[:message_id].present? ? message_data[:message_id].to_s : nil,
       in_reply_to_external_id: message_data[:in_reply_to]
     }.compact
 
