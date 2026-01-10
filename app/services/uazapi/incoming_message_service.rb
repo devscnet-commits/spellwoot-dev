@@ -124,21 +124,15 @@ class Uazapi::IncomingMessageService
       in_reply_to_external_id: message_data[:in_reply_to]
     }.compact
 
-    message = @conversation.messages.create!(message_params)
+    message = @conversation.messages.build(message_params)
 
     # Handle attachments if present
     if message_data[:media_url].present?
       Rails.logger.info "[UAZAPI] Processing attachment: media_url=#{message_data[:media_url]}"
-      # Download and attach media
-      # This is a simplified version - you may need to enhance this based on UazAPI's media format
-      attachment = message.attachments.create!(
-        account_id: inbox.account_id,
-        file_type: determine_file_type(message_data[:type]),
-        external_url: message_data[:media_url]
-      )
-      Rails.logger.info "[UAZAPI] Attachment created: attachment_id=#{attachment.id}"
+      attach_media_file(message, message_data)
     end
 
+    message.save!
     Rails.logger.info "[UAZAPI] Message created successfully: message_id=#{message.id}"
     message
   end
@@ -157,6 +151,55 @@ class Uazapi::IncomingMessageService
     when 'document' then 'file'
     else 'file'
     end
+  end
+
+  def attach_media_file(message, message_data)
+    media_url = message_data[:media_url]
+    file_type = determine_file_type(message_data[:type])
+
+    Rails.logger.info "[UAZAPI] Downloading attachment from: #{media_url}"
+
+    attachment_file = download_media_file(media_url)
+    unless attachment_file
+      Rails.logger.warn "[UAZAPI] Failed to download attachment from: #{media_url}"
+      # Fallback: create attachment with external_url only
+      message.attachments.build(
+        account_id: inbox.account_id,
+        file_type: file_type,
+        external_url: media_url
+      )
+      return
+    end
+
+    message.content ||= message_data[:caption]
+
+    message.attachments.build(
+      account_id: inbox.account_id,
+      file_type: file_type,
+      file: {
+        io: attachment_file,
+        filename: attachment_file.original_filename || File.basename(media_url),
+        content_type: attachment_file.content_type || 'application/octet-stream'
+      }
+    )
+
+    Rails.logger.info "[UAZAPI] Attachment prepared for message"
+  rescue StandardError => e
+    Rails.logger.error "[UAZAPI] Error downloading attachment: #{e.message}"
+    Rails.logger.error "[UAZAPI] #{e.backtrace.join("\n")}"
+    # Fallback: create attachment with external_url only
+    message.attachments.build(
+      account_id: inbox.account_id,
+      file_type: determine_file_type(message_data[:type]),
+      external_url: media_url
+    )
+  end
+
+  def download_media_file(media_url)
+    Down.download(media_url)
+  rescue StandardError => e
+    Rails.logger.error "[UAZAPI] Error downloading file from #{media_url}: #{e.message}"
+    nil
   end
 end
 

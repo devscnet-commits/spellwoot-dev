@@ -254,6 +254,31 @@ class Message < ApplicationRecord
     Messages::SearchDataPresenter.new(self).search_data
   end
 
+  def dispatch_create_events
+    # Wait for attachments to be uploaded before dispatching events
+    if attachments.any? && should_wait_for_attachments?
+      # Try to wait synchronously with a short timeout
+      if wait_for_attachments(timeout: 2.seconds)
+        # If timeout, use async job
+        Messages::ProcessAttachmentJob.perform_later(id)
+        return
+      end
+    end
+
+    dispatch_create_events_sync
+  end
+
+  def dispatch_create_events_sync
+    Rails.configuration.dispatcher.dispatch(MESSAGE_CREATED, Time.zone.now, message: self, performed_by: Current.executed_by)
+
+    if valid_first_reply?
+      Rails.configuration.dispatcher.dispatch(FIRST_REPLY_CREATED, Time.zone.now, message: self, performed_by: Current.executed_by)
+      conversation.update(first_reply_created_at: created_at, waiting_since: nil)
+    else
+      update_waiting_since
+    end
+  end
+
   private
 
   def prevent_message_flooding
@@ -326,15 +351,26 @@ class Message < ApplicationRecord
       sender.is_a?(User)
   end
 
-  def dispatch_create_events
-    Rails.configuration.dispatcher.dispatch(MESSAGE_CREATED, Time.zone.now, message: self, performed_by: Current.executed_by)
+  private
 
-    if valid_first_reply?
-      Rails.configuration.dispatcher.dispatch(FIRST_REPLY_CREATED, Time.zone.now, message: self, performed_by: Current.executed_by)
-      conversation.update(first_reply_created_at: created_at, waiting_since: nil)
-    else
-      update_waiting_since
+  def should_wait_for_attachments?
+    # Only wait for recently created messages (within last 5 minutes)
+    # This avoids unnecessary checks for old messages
+    created_at > 5.minutes.ago
+  end
+
+  def wait_for_attachments(timeout: 2.seconds, retry_interval: 0.5.seconds)
+    return false unless attachments.any?
+
+    start_time = Time.current
+    while Time.current - start_time < timeout
+      return false if attachments.all?(&:file_uploaded?)
+
+      sleep(retry_interval)
     end
+
+    # Timeout reached
+    true
   end
 
   def dispatch_update_event
