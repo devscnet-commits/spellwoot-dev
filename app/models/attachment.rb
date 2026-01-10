@@ -56,7 +56,65 @@ class Attachment < ApplicationRecord
   # NOTE: for External services use this methods since redirect doesn't work effectively in a lot of cases
   def download_url
     ActiveStorage::Current.url_options = Rails.application.routes.default_url_options if ActiveStorage::Current.url_options.blank?
-    file.attached? ? file.blob.url : ''
+    return '' unless file.attached?
+
+    # Wait for file to be uploaded to S3 before generating signed URL
+    wait_for_upload if file_requires_upload_verification?
+
+    file.blob.url
+  end
+
+  def file_uploaded?
+    return false unless file.attached?
+
+    blob = file.blob
+    return true unless blob.service.is_a?(ActiveStorage::Service::S3Service)
+
+    # Check if blob exists in S3
+    verify_blob_in_s3(blob)
+  end
+
+  private
+
+  def file_requires_upload_verification?
+    return false unless file.attached?
+
+    blob = file.blob
+    return false unless blob.service.is_a?(ActiveStorage::Service::S3Service)
+
+    # Only verify for recently created attachments (within last 5 minutes)
+    # This avoids unnecessary checks for old attachments
+    created_at > 5.minutes.ago
+  end
+
+  def wait_for_upload(max_wait: 5.seconds, retry_interval: 0.5.seconds)
+    return unless file_requires_upload_verification?
+
+    start_time = Time.current
+    while Time.current - start_time < max_wait
+      return if file_uploaded?
+
+      sleep(retry_interval)
+    end
+
+    # If still not uploaded after max_wait, log warning but continue
+    Rails.logger.warn "Attachment #{id}: File upload verification timeout after #{max_wait}s"
+  end
+
+  def verify_blob_in_s3(blob)
+    return false unless blob.service.is_a?(ActiveStorage::Service::S3Service)
+
+    begin
+      service = blob.service
+      bucket = service.bucket
+      bucket.object(blob.key).exists?
+    rescue Aws::S3::Errors::NotFound, Aws::S3::Errors::NoSuchKey
+      false
+    rescue StandardError => e
+      # On network errors or other exceptions, assume file exists to avoid blocking
+      Rails.logger.warn "Attachment #{id}: Error verifying blob in S3: #{e.message}"
+      true
+    end
   end
 
   def thumb_url
