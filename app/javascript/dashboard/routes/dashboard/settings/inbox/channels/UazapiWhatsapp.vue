@@ -28,11 +28,11 @@ const pollingInterval = ref(null);
 const profileName = ref('');
 const webhookUrl = ref('');
 
-// Custom validator for Uazapi phone number (exactly 13 digits, all numeric)
+// Custom validator for Uazapi phone number (12 or 13 digits, all numeric)
 const phoneNumberValidator = value => {
   if (!value) return true; // required validator handles empty
   const numericOnly = value.replace(/\D/g, '');
-  return numericOnly.length === 13 && isNumber(numericOnly);
+  return (numericOnly.length === 12 || numericOnly.length === 13) && isNumber(numericOnly);
 };
 
 // Validation rules
