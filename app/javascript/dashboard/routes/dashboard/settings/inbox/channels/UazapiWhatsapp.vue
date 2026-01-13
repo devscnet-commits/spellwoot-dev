@@ -32,7 +32,8 @@ const webhookUrl = ref('');
 const phoneNumberValidator = value => {
   if (!value) return true; // required validator handles empty
   const numericOnly = value.replace(/\D/g, '');
-  return (numericOnly.length === 12 || numericOnly.length === 13) && isNumber(numericOnly);
+  const validSize = numericOnly.length === 12 || numericOnly.length === 13;
+  return validSize && isNumber(numericOnly);
 };
 
 // Validation rules
