@@ -420,7 +420,7 @@ O número de telefone é validado tanto no frontend quanto no backend:
 - Mensagem de erro traduzida conforme o locale do sistema
 
 **Mensagens de Erro:**
-- Português (pt_BR): "O número de telefone deve ter exatamente 13 dígitos numéricos"
+- Português (pt_BR): "O número de telefone deve ter exatamente 12 ou 13 dígitos numéricos"
 - Inglês (en): "Phone number must have exactly 13 numeric digits"
 
 ## Troubleshooting
@@ -539,7 +539,7 @@ curl http://localhost:3000/api/v1/accounts/1/inboxes/1/uazapi_status \
 
 11. **Reconexão**: O botão "Reconnect WhatsApp" abre um modal com QR code e faz polling automático até a conexão ser estabelecida
 
-12. **Validação de Telefone**: O número de telefone deve ter exatamente 13 dígitos numéricos. Caracteres não numéricos são removidos automaticamente, mas o número final deve ter exatamente 13 dígitos para ser aceito
+12. **Validação de Telefone**: O número de telefone deve ter exatamente 12 ou 13 dígitos numéricos. Caracteres não numéricos são removidos automaticamente, mas o número final deve ter exatamente 12 ou 13 dígitos para ser aceito
 
 13. **Internacionalização**: A integração está totalmente traduzida para português do Brasil (pt_BR). Certifique-se de que o locale do sistema está configurado como `pt_BR` para ver todas as traduções
 

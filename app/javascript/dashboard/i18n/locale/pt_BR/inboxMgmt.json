@@ -316,7 +316,7 @@
             "LABEL": "Número de Telefone",
             "PLACEHOLDER": "Digite seu número do WhatsApp (ex: 5511999999999)",
             "ERROR": "O número de telefone é obrigatório",
-            "VALIDATION_ERROR": "O número de telefone deve ter exatamente 13 dígitos numéricos",
+            "VALIDATION_ERROR": "O número de telefone deve ter exatamente 12 ou 13 dígitos numéricos",
             "HELP": "Digite o número de telefone sem + ou espaços. Exemplo: 5511999999999"
           },
           "SUBMIT_BUTTON": "Criar Canal Uazapi",
