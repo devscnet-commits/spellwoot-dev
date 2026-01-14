@@ -346,9 +346,7 @@ onUnmounted(() => {
                 </div>
                 <div>
                   <span class="block font-medium capitalize">
-                    {{
-                      isUazapiInbox(inbox) ? `${inbox.name} - Beta` : inbox.name
-                    }}
+                    {{ inbox.name }}
                   </span>
                   <ChannelName
                     :channel-type="inbox.channel_type"

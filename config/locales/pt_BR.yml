@@ -85,7 +85,7 @@ pt_BR:
         generic: 'Falha ao reautenticar o WhatsApp. Por favor, tente novamente.'
         not_supported: 'Reautenticação não é suportado por este tipo de canal WhatsApp.'
     uazapi:
-      phone_number_invalid: 'O número de telefone deve ter exatamente 13 dígitos numéricos.'
+      phone_number_invalid: 'O número de telefone deve ter exatamente 12 ou 13 dígitos numéricos.'
     inboxes:
       imap:
         socket_error: Por favor, verifique a conexão de rede, endereço IMAP e tente novamente.
