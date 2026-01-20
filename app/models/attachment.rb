@@ -45,7 +45,20 @@ class Attachment < ApplicationRecord
   def push_event_data
     return unless file_type
 
-    base_data.merge(metadata_for_file_type)
+    begin
+      base_data.merge(metadata_for_file_type)
+    rescue ActiveStorage::FileNotFoundError => e
+      Rails.logger.error "[Attachment] FileNotFoundError in push_event_data for attachment_id=#{id}: #{e.message}"
+      # Return minimal data with external_url if available
+      base_data.merge(
+        extension: extension,
+        data_url: external_url || '',
+        thumb_url: '',
+        file_size: 0,
+        width: nil,
+        height: nil
+      )
+    end
   end
 
   # NOTE: the URl returned does a 301 redirect to the actual file
@@ -61,7 +74,18 @@ class Attachment < ApplicationRecord
     # Wait for file to be uploaded to S3 before generating signed URL
     wait_for_upload if file_requires_upload_verification?
 
-    file.blob.url
+    begin
+      file.blob.url
+    rescue ActiveStorage::FileNotFoundError => e
+      Rails.logger.error "[Attachment] FileNotFoundError for attachment_id=#{id}, blob_id=#{file.blob.id}, message_id=#{message_id}: #{e.message}"
+
+      # Fallback to external_url if available
+      return external_url if external_url.present?
+
+      # Log additional context for debugging
+      Rails.logger.error "[Attachment] No external_url fallback available for attachment_id=#{id}"
+      ''
+    end
   end
 
   def file_uploaded?
@@ -107,12 +131,24 @@ class Attachment < ApplicationRecord
     begin
       service = blob.service
       bucket = service.bucket
-      bucket.object(blob.key).exists?
+      exists = bucket.object(blob.key).exists?
+
+      unless exists
+        Rails.logger.warn "[Attachment] Blob #{blob.id} (key: #{blob.key}) does not exist in S3 for attachment_id=#{id}"
+      end
+
+      exists
     rescue Aws::S3::Errors::NotFound, Aws::S3::Errors::NoSuchKey
+      Rails.logger.warn "[Attachment] Blob #{blob.id} not found in S3 (NotFound/NoSuchKey) for attachment_id=#{id}"
       false
+    rescue Aws::S3::Errors::ServiceError => e
+      # Para erros de serviço AWS (timeout, etc), assumir que existe para não bloquear
+      # mas logar o erro para investigação
+      Rails.logger.warn "[Attachment] S3 service error verifying blob #{blob.id} for attachment_id=#{id}: #{e.class} - #{e.message}"
+      true
     rescue StandardError => e
-      # On network errors or other exceptions, assume file exists to avoid blocking
-      Rails.logger.warn "Attachment #{id}: Error verifying blob in S3: #{e.message}"
+      # Para outros erros (rede, etc), assumir que existe para não bloquear
+      Rails.logger.warn "[Attachment] Error verifying blob #{blob.id} in S3 for attachment_id=#{id}: #{e.class} - #{e.message}"
       true
     end
   end
@@ -159,17 +195,30 @@ class Attachment < ApplicationRecord
   end
 
   def file_metadata
-    metadata = {
-      extension: extension,
-      data_url: file_url,
-      thumb_url: thumb_url,
-      file_size: file.byte_size,
-      width: file.metadata[:width],
-      height: file.metadata[:height]
-    }
+    begin
+      metadata = {
+        extension: extension,
+        data_url: file_url,
+        thumb_url: thumb_url,
+        file_size: file.byte_size,
+        width: file.metadata[:width],
+        height: file.metadata[:height]
+      }
 
-    metadata[:data_url] = metadata[:thumb_url] = external_url if message.inbox.instagram? && message.incoming?
-    metadata
+      metadata[:data_url] = metadata[:thumb_url] = external_url if message.inbox.instagram? && message.incoming?
+      metadata
+    rescue ActiveStorage::FileNotFoundError => e
+      Rails.logger.error "[Attachment] FileNotFoundError in file_metadata for attachment_id=#{id}: #{e.message}"
+      # Return minimal metadata with external_url fallback
+      {
+        extension: extension,
+        data_url: external_url || '',
+        thumb_url: '',
+        file_size: 0,
+        width: nil,
+        height: nil
+      }
+    end
   end
 
   def location_metadata
