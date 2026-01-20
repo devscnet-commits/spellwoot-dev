@@ -18,8 +18,21 @@ class Messages::ProcessAttachmentJob < ApplicationJob
     end
 
     # If attachments are ready, dispatch events immediately
-    Rails.logger.info "[ProcessAttachmentJob] All attachments uploaded successfully for message_id=#{message_id}, dispatching events"
-    message.dispatch_create_events_sync
+    begin
+      Rails.logger.info "[ProcessAttachmentJob] All attachments uploaded successfully for message_id=#{message_id}, dispatching events"
+      message.dispatch_create_events_sync
+    rescue ActiveStorage::FileNotFoundError => e
+      # Log error but don't retry - the attachment may have been purged
+      Rails.logger.error "[ProcessAttachmentJob] FileNotFoundError while dispatching events for message_id=#{message_id}: #{e.message}"
+      Rails.logger.error "[ProcessAttachmentJob] Attempting to dispatch events anyway (attachment may have external_url fallback)"
+      # Try to dispatch anyway - push_event_data should handle missing files gracefully
+      begin
+        message.dispatch_create_events_sync
+      rescue => retry_error
+        Rails.logger.error "[ProcessAttachmentJob] Failed to dispatch events after FileNotFoundError: #{retry_error.message}"
+        # Don't raise - let the job complete to avoid infinite retries
+      end
+    end
   end
 
   private
