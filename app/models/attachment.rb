@@ -168,20 +168,8 @@ class Attachment < ApplicationRecord
       height: file.metadata[:height]
     }
 
-      metadata[:data_url] = metadata[:thumb_url] = external_url if message.inbox.instagram? && message.incoming?
-      metadata
-    rescue ActiveStorage::FileNotFoundError => e
-      Rails.logger.error "[Attachment] FileNotFoundError in file_metadata for attachment_id=#{id}: #{e.message}"
-      # Return minimal metadata with external_url fallback
-      {
-        extension: extension,
-        data_url: external_url || '',
-        thumb_url: '',
-        file_size: 0,
-        width: nil,
-        height: nil
-      }
-    end
+    metadata[:data_url] = metadata[:thumb_url] = external_url if message.inbox.instagram? && message.incoming?
+    metadata
   end
 
   def location_metadata

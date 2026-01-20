@@ -119,23 +119,7 @@ class Whatsapp::IncomingMessageBaseService
     @message.content ||= attachment_payload[:caption]
 
     attachment_file = download_attachment_file(attachment_payload)
-    if attachment_file.blank?
-      Rails.logger.warn "[WhatsApp] Failed to download attachment for message_type=#{message_type}, message_id=#{@message.id}, media_id=#{attachment_payload[:id]}"
-      # Create attachment with external_url as fallback if available
-      # WhatsApp Business API includes a temporary URL in the payload that expires quickly
-      fallback_url = attachment_payload[:url] || attachment_payload['url']
-      if fallback_url.present?
-        Rails.logger.info "[WhatsApp] Creating attachment with external_url fallback for message_id=#{@message.id}, url=#{fallback_url}"
-        @message.attachments.new(
-          account_id: @message.account_id,
-          file_type: file_content_type(message_type),
-          external_url: fallback_url
-        )
-      else
-        Rails.logger.error "[WhatsApp] No fallback URL available for attachment message_id=#{@message.id}, media_id=#{attachment_payload[:id]}"
-      end
-      return
-    end
+    return if attachment_file.blank?
 
     @message.attachments.new(
       account_id: @message.account_id,
