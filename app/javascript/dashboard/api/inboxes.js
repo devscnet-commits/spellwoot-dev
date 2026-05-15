@@ -33,23 +33,6 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.post(`${this.url}/${inboxId}/sync_templates`);
   }
 
-  // UazAPI methods
-  getUazapiStatus(inboxId) {
-    return axios.get(`${this.url}/${inboxId}/uazapi_status`);
-  }
-
-  connectUazapi(inboxId) {
-    return axios.post(`${this.url}/${inboxId}/uazapi_connect`);
-  }
-
-  disconnectUazapi(inboxId) {
-    return axios.post(`${this.url}/${inboxId}/uazapi_disconnect`);
-  }
-
-  reconfigureUazapi(inboxId) {
-    return axios.post(`${this.url}/${inboxId}/uazapi_reconfigure`);
-  }
-
   createCSATTemplate(inboxId, template) {
     return axios.post(`${this.url}/${inboxId}/csat_template`, {
       template,
@@ -58,6 +41,16 @@ class Inboxes extends CacheEnabledApiClient {
 
   getCSATTemplateStatus(inboxId) {
     return axios.get(`${this.url}/${inboxId}/csat_template`);
+  }
+
+  analyzeCSATTemplateUtility(inboxId, template) {
+    return axios.post(`${this.url}/${inboxId}/csat_template/analyze`, {
+      template,
+    });
+  }
+
+  resetSecret(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/reset_secret`);
   }
 }
 

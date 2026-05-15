@@ -66,19 +66,7 @@ class InboxPolicy < ApplicationPolicy
     @account_user.administrator?
   end
 
-  def uazapi_status?
-    @account_user.administrator?
-  end
-
-  def uazapi_connect?
-    @account_user.administrator?
-  end
-
-  def uazapi_disconnect?
-    @account_user.administrator?
-  end
-
-  def uazapi_reconfigure?
+  def reset_secret?
     @account_user.administrator?
   end
 end

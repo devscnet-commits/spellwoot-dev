@@ -41,8 +41,7 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def provider_service
-    case provider
-    when 'whatsapp_cloud'
+    if provider == 'whatsapp_cloud'
       Whatsapp::Providers::WhatsappCloudService.new(whatsapp_channel: self)
     else
       Whatsapp::Providers::Whatsapp360DialogService.new(whatsapp_channel: self)
@@ -81,6 +80,7 @@ class Channel::Whatsapp < ApplicationRecord
   def perform_webhook_setup
     business_account_id = provider_config['business_account_id']
     api_key = provider_config['api_key']
+
     Whatsapp::WebhookSetupService.new(self, business_account_id, api_key).perform
   end
 
