@@ -225,15 +225,23 @@ Rails.application.routes.draw do
             get :health, on: :member
             post :register_webhook, on: :member
             post :reset_secret, on: :member
+            # UazAPI WhatsApp endpoints
+            get :uazapi_status, on: :member
+            post :uazapi_connect, on: :member
+            post :uazapi_disconnect, on: :member
+            post :uazapi_reconfigure, on: :member
             if ChatwootApp.enterprise?
               resource :conference, only: %i[create destroy], controller: 'conference' do
                 get :token, on: :member
               end
             end
-
+          
             resource :csat_template, only: [:show, :create], controller: 'inbox_csat_templates' do
               post :analyze, on: :collection
             end
+          end
+          resources :uazapi_inboxes, only: [:create]
+          resources :inbox_members, only: [:create, :show], param: :inbox_id do
           end
 
           resources :inbox_members, only: [:create, :show], param: :inbox_id do
@@ -573,6 +581,7 @@ Rails.application.routes.draw do
   post 'webhooks/sms/:phone_number', to: 'webhooks/sms#process_payload'
   get 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#verify'
   post 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
+  post 'webhooks/uazapi/:identifier', to: 'webhooks/uazapi#process_payload'
   get 'webhooks/instagram', to: 'webhooks/instagram#verify'
   post 'webhooks/instagram', to: 'webhooks/instagram#events'
   post 'webhooks/tiktok', to: 'webhooks/tiktok#events'
