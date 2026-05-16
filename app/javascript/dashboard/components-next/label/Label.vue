@@ -69,4 +69,3 @@ const colorClasses = computed(() => COLOR_CLASSES[props.color]);
     <slot name="action" />
   </div>
 </template>
-
