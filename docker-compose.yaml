@@ -59,7 +59,6 @@ services:
     environment:
       - NODE_ENV=development
       - RAILS_ENV=development
-    entrypoint: docker/entrypoints/sidekiq.sh
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
 
   vite:
@@ -93,17 +92,17 @@ services:
     environment:
       - POSTGRES_DB=chatwoot
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=
 
   redis:
     image: redis:alpine
     restart: always
-    command: ["sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ] && [ \"$REDIS_PASSWORD\" != \"\" ]; then redis-server --requirepass \"$REDIS_PASSWORD\"; else redis-server; fi"]
+    command: ["sh", "-c", "redis-server --requirepass \"$REDIS_PASSWORD\""]
     env_file: .env
     volumes:
       - redis:/data/redis
     ports:
-      - '6380:6379'
+      - '6379:6379'
 
   mailhog:
     image: mailhog/mailhog
