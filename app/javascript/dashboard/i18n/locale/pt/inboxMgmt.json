@@ -563,584 +563,585 @@
         "SUCCESS_MESSAGE": "Configurações da caixa de entrada atualizadas com sucesso",
         "AUTO_ASSIGNMENT_SUCCESS_MESSAGE": "Atribuição automática atualizada com sucesso",
         "ERROR_MESSAGE": "Não foi possível atualizar as configurações da caixa de entrada. Por favor, tente novamente mais tarde."
-      },
-      "EMAIL_COLLECT_BOX": {
-        "ENABLED": "Ativado",
-        "DISABLED": "Desativado"
-      },
-      "ENABLE_CSAT": {
-        "ENABLED": "Ativado",
-        "DISABLED": "Desativado"
-      },
-      "SENDER_NAME_SECTION": {
-        "TITLE": "Nome do remetente",
-        "SUB_TEXT": "Selecione o nome a apresentar aos seus clientes quando receberem e-mails dos seus agentes.",
-        "FOR_EG": "Por exemplo:",
-        "FRIENDLY": {
-          "TITLE": "Amigável",
-          "FROM": "de",
-          "SUBTITLE": "Adicionar o nome do agente que enviou a resposta ao remetente, para a tornar mais pessoal."
-        },
-        "PROFESSIONAL": {
-          "TITLE": "Profissional",
-          "SUBTITLE": "Usar apenas o nome da empresa como nome do remetente no cabeçalho do e-mail."
-        },
-        "BUSINESS_NAME": {
-          "BUTTON_TEXT": "Configure o nome da sua empresa",
-          "PLACEHOLDER": "Insira o nome da sua empresa",
-          "SAVE_BUTTON_TEXT": "Guardar"
-        }
-      },
-      "ALLOW_MESSAGES_AFTER_RESOLVED": {
-        "ENABLED": "Ativado",
-        "DISABLED": "Desativado"
-      },
-      "ENABLE_CONTINUITY_VIA_EMAIL": {
-        "ENABLED": "Ativado",
-        "DISABLED": "Desativado"
-      },
-      "LOCK_TO_SINGLE_CONVERSATION": {
-        "ENABLED": "Reopen same conversation",
-        "DISABLED": "Create new conversations",
-        "ENABLED_DESCRIPTION": "When a contact messages again, the previous conversation will be reopened.",
-        "DISABLED_DESCRIPTION": "A new conversation will be created each time after the previous one is resolved."
-      },
-      "ENABLE_HMAC": {
-        "LABEL": "Ativar"
       }
     },
-    "DELETE": {
-      "BUTTON_TEXT": "Excluir",
-      "AVATAR_DELETE_BUTTON_TEXT": "Excluir avatar",
-      "CONFIRM": {
-        "TITLE": "Confirmar exclusão",
-        "MESSAGE": "Tem certeza que pretende excluir ",
-        "PLACE_HOLDER": "Por favor, digite {inboxName} para confirmar",
-        "YES": "Sim, excluir ",
-        "NO": "Não, manter "
+    "EMAIL_COLLECT_BOX": {
+      "ENABLED": "Ativado",
+      "DISABLED": "Desativado"
+    },
+    "ENABLE_CSAT": {
+      "ENABLED": "Ativado",
+      "DISABLED": "Desativado"
+    },
+    "SENDER_NAME_SECTION": {
+      "TITLE": "Nome do remetente",
+      "SUB_TEXT": "Selecione o nome a apresentar aos seus clientes quando receberem e-mails dos seus agentes.",
+      "FOR_EG": "Por exemplo:",
+      "FRIENDLY": {
+        "TITLE": "Amigável",
+        "FROM": "de",
+        "SUBTITLE": "Adicionar o nome do agente que enviou a resposta ao remetente, para a tornar mais pessoal."
       },
-      "API": {
-        "SUCCESS_MESSAGE": "Caixa de entrada excluída com sucesso",
-        "ERROR_MESSAGE": "Não foi possível excluir a caixa de entrada. Por favor, tente novamente mais tarde.",
-        "AVATAR_SUCCESS_MESSAGE": "Avatar da caixa de entrada excluído com sucesso",
-        "AVATAR_ERROR_MESSAGE": "Não foi possível excluir o avatar da caixa de entrada. Por favor, tente novamente mais tarde."
+      "PROFESSIONAL": {
+        "TITLE": "Profissional",
+        "SUBTITLE": "Usar apenas o nome da empresa como nome do remetente no cabeçalho do e-mail."
+      },
+      "BUSINESS_NAME": {
+        "BUTTON_TEXT": "Configure o nome da sua empresa",
+        "PLACEHOLDER": "Insira o nome da sua empresa",
+        "SAVE_BUTTON_TEXT": "Guardar"
       }
     },
-    "TABS": {
-      "SETTINGS": "Configurações",
-      "COLLABORATORS": "Colaboradores",
-      "CONFIGURATION": "Configuração",
-      "CAMPAIGN": "Campanhas",
-      "PRE_CHAT_FORM": "Formulário pré-chat",
-      "BUSINESS_HOURS": "Horário comercial",
-      "WIDGET_BUILDER": "Construtor de widgets",
-      "BOT_CONFIGURATION": "Configuração do bot",
-      "ACCOUNT_HEALTH": "Account Health",
-      "CSAT": "CSAT"
+    "ALLOW_MESSAGES_AFTER_RESOLVED": {
+      "ENABLED": "Ativado",
+      "DISABLED": "Desativado"
     },
-    "CHANNEL_PREFERENCES": "Channel Preferences",
-    "WIDGET_FEATURES": "Widget features",
-    "ACCOUNT_HEALTH": {
-      "TITLE": "Manage your WhatsApp account",
-      "DESCRIPTION": "Review your WhatsApp account status, messaging limits, and quality. Update settings or resolve issues if needed",
-      "GO_TO_SETTINGS": "Go to Meta Business Manager",
-      "NO_DATA": "Health data is not available",
-      "FIELDS": {
-        "DISPLAY_PHONE_NUMBER": {
-          "LABEL": "Display phone number",
-          "TOOLTIP": "Phone number displayed to customers"
-        },
-        "VERIFIED_NAME": {
-          "LABEL": "Business name",
-          "TOOLTIP": "Business name verified by WhatsApp"
-        },
-        "DISPLAY_NAME_STATUS": {
-          "LABEL": "Display name status",
-          "TOOLTIP": "Status of your business name verification"
-        },
-        "QUALITY_RATING": {
-          "LABEL": "Quality rating",
-          "TOOLTIP": "WhatsApp quality rating for your account"
-        },
-        "MESSAGING_LIMIT_TIER": {
-          "LABEL": "Messaging limit tier",
-          "TOOLTIP": "Daily messaging limit for your account"
-        },
-        "ACCOUNT_MODE": {
-          "LABEL": "Account mode",
-          "TOOLTIP": "Current operating mode of your WhatsApp account"
-        }
-      },
-      "VALUES": {
-        "TIERS": {
-          "TIER_250": "250 customers per 24h",
-          "TIER_1000": "1K customers per 24h",
-          "TIER_1K": "1K customers per 24h",
-          "TIER_10K": "10K customers per 24h",
-          "TIER_100K": "100K customers per 24h",
-          "TIER_UNLIMITED": "Unlimited customers per 24h",
-          "UNKNOWN": "Rating not available"
-        },
-        "STATUSES": {
-          "APPROVED": "Approved",
-          "PENDING_REVIEW": "Pending Review",
-          "AVAILABLE_WITHOUT_REVIEW": "Available Without Review",
-          "REJECTED": "Rejected",
-          "DECLINED": "Declined",
-          "NON_EXISTS": "Non exists"
-        },
-        "MODES": {
-          "SANDBOX": "Sandbox",
-          "LIVE": "Disponível"
-        }
-      },
-      "WEBHOOK": {
-        "TITLE": "Webhook Configuration",
-        "DESCRIPTION": "Webhook URL is required for your WhatsApp Business Account to receive messages from customers",
-        "ACTION_REQUIRED": "Webhook not configured",
-        "REGISTER_BUTTON": "Register Webhook",
-        "REGISTER_SUCCESS": "Webhook registered successfully",
-        "REGISTER_ERROR": "Failed to register webhook. Please try again.",
-        "CONFIGURED_SUCCESS": "Webhook configured successfully",
-        "URL_MISMATCH": "Webhook URL mismatch"
-      }
+    "ENABLE_CONTINUITY_VIA_EMAIL": {
+      "ENABLED": "Ativado",
+      "DISABLED": "Desativado"
     },
+    "LOCK_TO_SINGLE_CONVERSATION": {
+      "ENABLED": "Reopen same conversation",
+      "DISABLED": "Create new conversations",
+      "ENABLED_DESCRIPTION": "When a contact messages again, the previous conversation will be reopened.",
+      "DISABLED_DESCRIPTION": "A new conversation will be created each time after the previous one is resolved."
+    },
+    "ENABLE_HMAC": {
+      "LABEL": "Ativar"
+    }
+  },
+  "DELETE": {
+    "BUTTON_TEXT": "Excluir",
+    "AVATAR_DELETE_BUTTON_TEXT": "Excluir avatar",
+    "CONFIRM": {
+      "TITLE": "Confirmar exclusão",
+      "MESSAGE": "Tem certeza que pretende excluir ",
+      "PLACE_HOLDER": "Por favor, digite {inboxName} para confirmar",
+      "YES": "Sim, excluir ",
+      "NO": "Não, manter "
+    },
+    "API": {
+      "SUCCESS_MESSAGE": "Caixa de entrada excluída com sucesso",
+      "ERROR_MESSAGE": "Não foi possível excluir a caixa de entrada. Por favor, tente novamente mais tarde.",
+      "AVATAR_SUCCESS_MESSAGE": "Avatar da caixa de entrada excluído com sucesso",
+      "AVATAR_ERROR_MESSAGE": "Não foi possível excluir o avatar da caixa de entrada. Por favor, tente novamente mais tarde."
+    }
+  },
+  "TABS": {
     "SETTINGS": "Configurações",
-    "FEATURES": {
-      "LABEL": "Características",
-      "DISPLAY_FILE_PICKER": "Mostrar o selecionador de ficheiros no widget",
-      "DISPLAY_EMOJI_PICKER": "Mostrar selecionador de emojis no widget",
-      "ALLOW_END_CONVERSATION": "Permitir que os utilizadores terminem a conversa a partir da widget",
-      "USE_INBOX_AVATAR_FOR_BOT": "Usar o nome da caixa de entrada e o avatar do bot"
-    },
-    "SETTINGS_POPUP": {
-      "MESSENGER_HEADING": "Script do Messenger",
-      "MESSENGER_SUB_HEAD": "Coloque este botão no corpo da sua tag ",
-      "ALLOWED_DOMAINS": {
-        "TITLE": "Allowed Domains",
-        "DESCRIPTION": "Restrict which websites can embed your chat widget. For security, only add domains you own and trust. Add one or more domains separated by commas. Leave blank to allow all domains (not recommended for production).",
-        "PLACEHOLDER": "example.com, www.example.com, app.example.com"
+    "COLLABORATORS": "Colaboradores",
+    "CONFIGURATION": "Configuração",
+    "CAMPAIGN": "Campanhas",
+    "PRE_CHAT_FORM": "Formulário pré-chat",
+    "BUSINESS_HOURS": "Horário comercial",
+    "WIDGET_BUILDER": "Construtor de widgets",
+    "BOT_CONFIGURATION": "Configuração do bot",
+    "ACCOUNT_HEALTH": "Account Health",
+    "CSAT": "CSAT"
+  },
+  "CHANNEL_PREFERENCES": "Channel Preferences",
+  "WIDGET_FEATURES": "Widget features",
+  "ACCOUNT_HEALTH": {
+    "TITLE": "Manage your WhatsApp account",
+    "DESCRIPTION": "Review your WhatsApp account status, messaging limits, and quality. Update settings or resolve issues if needed",
+    "GO_TO_SETTINGS": "Go to Meta Business Manager",
+    "NO_DATA": "Health data is not available",
+    "FIELDS": {
+      "DISPLAY_PHONE_NUMBER": {
+        "LABEL": "Display phone number",
+        "TOOLTIP": "Phone number displayed to customers"
       },
-      "ALLOW_MOBILE_WEBVIEW": {
-        "LABEL": "Enable widget in mobile apps",
-        "SUBTITLE": "Check this if you embed the widget in iOS or Android apps. Mobile apps don't send domain information, so they would be blocked by domain restrictions unless this is enabled."
+      "VERIFIED_NAME": {
+        "LABEL": "Business name",
+        "TOOLTIP": "Business name verified by WhatsApp"
       },
-      "IDENTITY_VALIDATION": {
-        "TITLE": "Identity Validation",
-        "DESCRIPTION": "Verify user authenticity by generating secure tokens. This prevents unauthorized users from impersonating others in your chat.",
-        "SECRET_KEY": "Secret Key",
-        "VIEW_DOCS": "View documentation",
-        "REQUIRE_LABEL": "Require identity validation for all conversations",
-        "REQUIRE_DESCRIPTION": "When enabled, users must provide a valid identity token to start conversations. Requests without valid tokens will be rejected."
+      "DISPLAY_NAME_STATUS": {
+        "LABEL": "Display name status",
+        "TOOLTIP": "Status of your business name verification"
       },
-      "INBOX_AGENTS": "Agentes",
-      "INBOX_AGENTS_SUB_TEXT": "Adicionar ou remover agentes desta caixa de entrada",
-      "AGENT_ASSIGNMENT": "Atribuição da conversa",
-      "AGENT_ASSIGNMENT_SUB_TEXT": "Atualizar configurações de atribuição de conversa",
-      "UPDATE": "Atualização",
-      "ENABLE_EMAIL_COLLECT_BOX": "Ativar caixa de receção de e-mail",
-      "ENABLE_EMAIL_COLLECT_BOX_SUB_TEXT": "Ativar ou desativar caixa de receção de e-mails para as novas conversas",
-      "AUTO_ASSIGNMENT": "Ativar atribuição automática",
-      "SENDER_NAME_SECTION": "Adicionar o nome do agente ao e-mail",
-      "SENDER_NAME_SECTION_TEXT": "Ativar/Desativar exibição do nome do agente no e-mail. Se estiver desativado, exibirá o nome da empresa",
-      "ENABLE_CONTINUITY_VIA_EMAIL": "Ativar continuidade das conversas por e-mail",
-      "ENABLE_CONTINUITY_VIA_EMAIL_SUB_TEXT": "As conversas irão continuar por e-mail se o endereço de e-mail do contacto estiver disponível.",
-      "LOCK_TO_SINGLE_CONVERSATION": "Conversation Routing",
-      "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Configure conversation creation for existing contacts",
-      "INBOX_UPDATE_TITLE": "Configurações da caixa de entrada",
-      "INBOX_UPDATE_SUB_TEXT": "Atualize as suas configurações da caixa de entrada",
-      "AUTO_ASSIGNMENT_SUB_TEXT": "Ativar ou desativar a atribuição automática de novas conversas aos agentes adicionados a essa caixa de entrada.",
-      "HMAC_VERIFICATION": "Validação da identidade do utilizador",
-      "HMAC_DESCRIPTION": "Com esta chave, pode gerar um token secreto que pode ser usado para verificar a identidade dos seus utilizadores.",
-      "HMAC_LINK_TO_DOCS": "Pode saber mais aqui.",
-      "HMAC_MANDATORY_VERIFICATION": "Forçar validação de identidade do utilizador",
-      "HMAC_MANDATORY_DESCRIPTION": "Se ativado, os pedidos que não podem ser verificados serão rejeitados.",
-      "INBOX_IDENTIFIER": "Identificador da caixa de entrada",
-      "INBOX_IDENTIFIER_SUB_TEXT": "Use o token 'inbox_identifier' mostrado aqui para autenticar os seus clientes API.",
-      "FORWARD_EMAIL_TITLE": "Encaminhar para e-mail",
-      "FORWARD_EMAIL_SUB_TEXT": "Comece a encaminhar as suas mensagens de e-mail para o seguinte endereço.",
-      "FORWARD_EMAIL_NOT_CONFIGURED": "Forwarding emails to your inbox is currently disabled on this installation. To use this feature, it must be enabled by your administrator. Please get in touch with them to proceed.",
-      "ALLOW_MESSAGES_AFTER_RESOLVED": "Permitir mensagens após a resolução da conversa",
-      "ALLOW_MESSAGES_AFTER_RESOLVED_SUB_TEXT": "Permitir que os utilizadores finais enviem mensagens após a conversa estar resolvida.",
-      "WHATSAPP_SECTION_SUBHEADER": "Esta chave de API é usada para a integração com as APIs do WhatsApp.",
-      "WHATSAPP_SECTION_UPDATE_SUBHEADER": "Insira a nova chave da API a ser usada para a integração com as APIs do WhatsApp.",
-      "WHATSAPP_SECTION_TITLE": "Chave da API",
-      "WHATSAPP_SECTION_UPDATE_TITLE": "Atualizar chave da API",
-      "WHATSAPP_SECTION_UPDATE_PLACEHOLDER": "Insira a nova chave da API aqui",
-      "WHATSAPP_SECTION_UPDATE_BUTTON": "Atualização",
-      "WHATSAPP_EMBEDDED_SIGNUP_TITLE": "WhatsApp Embedded Signup",
-      "WHATSAPP_EMBEDDED_SIGNUP_SUBHEADER": "This inbox is connected through WhatsApp embedded signup.",
-      "WHATSAPP_EMBEDDED_SIGNUP_DESCRIPTION": "You can reconfigure this inbox to update your WhatsApp Business settings.",
-      "WHATSAPP_RECONFIGURE_BUTTON": "Reconfigure",
-      "WHATSAPP_CONNECT_TITLE": "Connect to WhatsApp Business",
-      "WHATSAPP_CONNECT_SUBHEADER": "Upgrade to WhatsApp embedded signup for easier management.",
-      "WHATSAPP_CONNECT_DESCRIPTION": "Connect this inbox to WhatsApp Business for enhanced features and easier management.",
-      "WHATSAPP_CONNECT_BUTTON": "Conectar",
-      "WHATSAPP_CONNECT_SUCCESS": "Successfully connected to WhatsApp Business!",
-      "WHATSAPP_CONNECT_ERROR": "Failed to connect to WhatsApp Business. Please try again.",
-      "WHATSAPP_RECONFIGURE_SUCCESS": "Successfully reconfigured WhatsApp Business!",
-      "WHATSAPP_RECONFIGURE_ERROR": "Failed to reconfigure WhatsApp Business. Please try again.",
-      "WHATSAPP_APP_ID_MISSING": "WhatsApp App ID is not configured. Please contact your administrator.",
-      "WHATSAPP_CONFIG_ID_MISSING": "WhatsApp Configuration ID is not configured. Please contact your administrator.",
-      "WHATSAPP_LOGIN_CANCELLED": "WhatsApp login was cancelled. Please try again.",
-      "WHATSAPP_WEBHOOK_TITLE": "Webhook de verificação do token",
-      "WHATSAPP_WEBHOOK_SUBHEADER": "Este token é usado para verificar a autenticidade do endpoint do webhook.",
-      "WHATSAPP_TEMPLATES_SYNC_TITLE": "Sync Templates",
-      "WHATSAPP_TEMPLATES_SYNC_SUBHEADER": "Manually sync message templates from WhatsApp to update your available templates.",
-      "WHATSAPP_TEMPLATES_SYNC_BUTTON": "Sync Templates",
-      "WHATSAPP_TEMPLATES_SYNC_SUCCESS": "Templates sync initiated successfully. It may take a couple of minutes to update.",
-      "UPDATE_PRE_CHAT_FORM_SETTINGS": "Atualizar configurações do formulário pré-chat"
-    },
-    "HELP_CENTER": {
-      "LABEL": "Centro de suporte",
-      "PLACEHOLDER": "Selecione centro de suporte",
-      "SELECT_PLACEHOLDER": "Selecione centro de suporte",
-      "NONE": "Nenhuma",
-      "REMOVE": "Remover centro de suporte",
-      "SUB_TEXT": "Associe um centro de suporte à caixa de entrada"
-    },
-    "AUTO_ASSIGNMENT": {
-      "MAX_ASSIGNMENT_LIMIT": "Limite de atribuição automática",
-      "MAX_ASSIGNMENT_LIMIT_RANGE_ERROR": "Por favor, insira um valor maior que 0",
-      "MAX_ASSIGNMENT_LIMIT_SUB_TEXT": "Limitar o número máximo de conversas desta caixa de entrada que pode ser atribuído automaticamente a um agente"
-    },
-    "ASSIGNMENT": {
-      "TITLE": "Atribuição da conversa",
-      "DESCRIPTION": "Automatically assign incoming conversations to available agents based on assignment policies",
-      "ENABLE_AUTO_ASSIGNMENT": "Enable automatic conversation assignment",
-      "DEFAULT_RULES_TITLE": "Default assignment rules",
-      "DEFAULT_RULES_DESCRIPTION": "Using the default assignment behavior for all conversations",
-      "DEFAULT_RULE_1": "Earliest created conversations first",
-      "DEFAULT_RULE_2": "Round robin distribution",
-      "CUSTOMIZE_WITH_POLICY": "Customize with assignment policy",
-      "USING_POLICY": "Using custom assignment policy for this inbox",
-      "CUSTOMIZE_POLICY": "Customize with assignment policy",
-      "DELETE_POLICY": "Delete policy",
-      "POLICY_LABEL": "Assignment policy",
-      "ASSIGNMENT_ORDER_LABEL": "Assignment Order",
-      "ASSIGNMENT_METHOD_LABEL": "Assignment Method",
-      "POLICY_STATUS": {
-        "ACTIVE": "Ativa",
-        "INACTIVE": "Inactive"
+      "QUALITY_RATING": {
+        "LABEL": "Quality rating",
+        "TOOLTIP": "WhatsApp quality rating for your account"
       },
-      "PRIORITY": {
-        "EARLIEST_CREATED": "Earliest created",
-        "LONGEST_WAITING": "Longest waiting"
+      "MESSAGING_LIMIT_TIER": {
+        "LABEL": "Messaging limit tier",
+        "TOOLTIP": "Daily messaging limit for your account"
       },
-      "METHOD": {
-        "ROUND_ROBIN": "Round robin",
-        "BALANCED": "Balanced assignment"
-      },
-      "UPGRADE_PROMPT": "Custom assignment policies are available on the Business plan",
-      "UPGRADE_TO_BUSINESS": "Upgrade to Business",
-      "DEFAULT_POLICY_LINKED": "Default policy linked",
-      "DEFAULT_POLICY_DESCRIPTION": "Link a custom assignment policy to customize how conversations are assigned to agents in this inbox.",
-      "LINK_EXISTING_POLICY": "Link existing policy",
-      "CREATE_NEW_POLICY": "Create new policy",
-      "NO_POLICIES": "No assignment policies found",
-      "VIEW_ALL_POLICIES": "View all policies",
-      "CURRENT_BEHAVIOR": "Currently using default assignment behavior:",
-      "LINK_SUCCESS": "Assignment policy linked successfully",
-      "LINK_ERROR": "Failed to link assignment policy"
-    },
-    "ASSIGNMENT_POLICY": {
-      "DELETE_CONFIRM_TITLE": "Delete assignment policy?",
-      "DELETE_CONFIRM_MESSAGE": "Are you sure you want to remove this assignment policy from this inbox? The inbox will revert to default assignment rules.",
-      "CANCEL": "Cancelar",
-      "CONFIRM_DELETE": "Excluir",
-      "DELETE_SUCCESS": "Assignment policy removed successfully",
-      "DELETE_ERROR": "Failed to remove assignment policy"
-    },
-    "FACEBOOK_REAUTHORIZE": {
-      "TITLE": "Reautorizar",
-      "SUBTITLE": "A sua conexão ao Facebook expirou, por favor, reconecte a página para poder continuar a utilizar os serviços",
-      "MESSAGE_SUCCESS": "Reconexão bem-sucedida",
-      "MESSAGE_ERROR": "Ocorreu um erro, por favor, tente novamente"
-    },
-    "PRE_CHAT_FORM": {
-      "DESCRIPTION": "O formulário de pré-chat permite-lhe capturar informações do utilizador antes de iniciar uma conversa.",
-      "SET_FIELDS": "Campos do formulário de pré-chat",
-      "SET_FIELDS_HEADER": {
-        "FIELDS": "Campos",
-        "LABEL": "Etiqueta",
-        "PLACE_HOLDER": "Placeholder",
-        "KEY": "Chave",
-        "TYPE": "Tipo",
-        "REQUIRED": "Obrigatório"
-      },
-      "ENABLE": {
-        "LABEL": "Ativar formulário de pré-chat",
-        "OPTIONS": {
-          "ENABLED": "Sim",
-          "DISABLED": "Não"
-        }
-      },
-      "PRE_CHAT_MESSAGE": {
-        "LABEL": "Mensagem de pré-chat",
-        "PLACEHOLDER": "Esta mensagem estará visível aos utilizadores, juntamente com o formulário"
-      },
-      "REQUIRE_EMAIL": {
-        "LABEL": "Os visitantes devem digitar o seu nome e e-mail antes de iniciarem uma conversa"
+      "ACCOUNT_MODE": {
+        "LABEL": "Account mode",
+        "TOOLTIP": "Current operating mode of your WhatsApp account"
       }
     },
-    "CSAT": {
-      "TITLE": "Ativar CSAT",
-      "SUBTITLE": "Acione automaticamente inquéritos CSAT no final das conversas para perceber como os clientes se sentem sobre o apoio recebido. Acompanhe tendências de satisfação e identifique áreas de melhoria ao longo do tempo.",
-      "DISPLAY_TYPE": {
-        "LABEL": "Tipo de visualização"
+    "VALUES": {
+      "TIERS": {
+        "TIER_250": "250 customers per 24h",
+        "TIER_1000": "1K customers per 24h",
+        "TIER_1K": "1K customers per 24h",
+        "TIER_10K": "10K customers per 24h",
+        "TIER_100K": "100K customers per 24h",
+        "TIER_UNLIMITED": "Unlimited customers per 24h",
+        "UNKNOWN": "Rating not available"
       },
-      "MESSAGE": {
-        "LABEL": "Messagem",
-        "PLACEHOLDER": "Por favor, insira uma mensagem para mostrar aos utilizadores com o formulário"
+      "STATUSES": {
+        "APPROVED": "Approved",
+        "PENDING_REVIEW": "Pending Review",
+        "AVAILABLE_WITHOUT_REVIEW": "Available Without Review",
+        "REJECTED": "Rejected",
+        "DECLINED": "Declined",
+        "NON_EXISTS": "Non exists"
       },
-      "BUTTON_TEXT": {
-        "LABEL": "Button text",
-        "PLACEHOLDER": "Please rate us"
+      "MODES": {
+        "SANDBOX": "Sandbox",
+        "LIVE": "Disponível"
+      }
+    },
+    "WEBHOOK": {
+      "TITLE": "Webhook Configuration",
+      "DESCRIPTION": "Webhook URL is required for your WhatsApp Business Account to receive messages from customers",
+      "ACTION_REQUIRED": "Webhook not configured",
+      "REGISTER_BUTTON": "Register Webhook",
+      "REGISTER_SUCCESS": "Webhook registered successfully",
+      "REGISTER_ERROR": "Failed to register webhook. Please try again.",
+      "CONFIGURED_SUCCESS": "Webhook configured successfully",
+      "URL_MISMATCH": "Webhook URL mismatch"
+    }
+  },
+  "SETTINGS": "Configurações",
+  "FEATURES": {
+    "LABEL": "Características",
+    "DISPLAY_FILE_PICKER": "Mostrar o selecionador de ficheiros no widget",
+    "DISPLAY_EMOJI_PICKER": "Mostrar selecionador de emojis no widget",
+    "ALLOW_END_CONVERSATION": "Permitir que os utilizadores terminem a conversa a partir da widget",
+    "USE_INBOX_AVATAR_FOR_BOT": "Usar o nome da caixa de entrada e o avatar do bot"
+  },
+  "SETTINGS_POPUP": {
+    "MESSENGER_HEADING": "Script do Messenger",
+    "MESSENGER_SUB_HEAD": "Coloque este botão no corpo da sua tag ",
+    "ALLOWED_DOMAINS": {
+      "TITLE": "Allowed Domains",
+      "DESCRIPTION": "Restrict which websites can embed your chat widget. For security, only add domains you own and trust. Add one or more domains separated by commas. Leave blank to allow all domains (not recommended for production).",
+      "PLACEHOLDER": "example.com, www.example.com, app.example.com"
+    },
+    "ALLOW_MOBILE_WEBVIEW": {
+      "LABEL": "Enable widget in mobile apps",
+      "SUBTITLE": "Check this if you embed the widget in iOS or Android apps. Mobile apps don't send domain information, so they would be blocked by domain restrictions unless this is enabled."
+    },
+    "IDENTITY_VALIDATION": {
+      "TITLE": "Identity Validation",
+      "DESCRIPTION": "Verify user authenticity by generating secure tokens. This prevents unauthorized users from impersonating others in your chat.",
+      "SECRET_KEY": "Secret Key",
+      "VIEW_DOCS": "View documentation",
+      "REQUIRE_LABEL": "Require identity validation for all conversations",
+      "REQUIRE_DESCRIPTION": "When enabled, users must provide a valid identity token to start conversations. Requests without valid tokens will be rejected."
+    },
+    "INBOX_AGENTS": "Agentes",
+    "INBOX_AGENTS_SUB_TEXT": "Adicionar ou remover agentes desta caixa de entrada",
+    "AGENT_ASSIGNMENT": "Atribuição da conversa",
+    "AGENT_ASSIGNMENT_SUB_TEXT": "Atualizar configurações de atribuição de conversa",
+    "UPDATE": "Atualização",
+    "ENABLE_EMAIL_COLLECT_BOX": "Ativar caixa de receção de e-mail",
+    "ENABLE_EMAIL_COLLECT_BOX_SUB_TEXT": "Ativar ou desativar caixa de receção de e-mails para as novas conversas",
+    "AUTO_ASSIGNMENT": "Ativar atribuição automática",
+    "SENDER_NAME_SECTION": "Adicionar o nome do agente ao e-mail",
+    "SENDER_NAME_SECTION_TEXT": "Ativar/Desativar exibição do nome do agente no e-mail. Se estiver desativado, exibirá o nome da empresa",
+    "ENABLE_CONTINUITY_VIA_EMAIL": "Ativar continuidade das conversas por e-mail",
+    "ENABLE_CONTINUITY_VIA_EMAIL_SUB_TEXT": "As conversas irão continuar por e-mail se o endereço de e-mail do contacto estiver disponível.",
+    "LOCK_TO_SINGLE_CONVERSATION": "Conversation Routing",
+    "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Configure conversation creation for existing contacts",
+    "INBOX_UPDATE_TITLE": "Configurações da caixa de entrada",
+    "INBOX_UPDATE_SUB_TEXT": "Atualize as suas configurações da caixa de entrada",
+    "AUTO_ASSIGNMENT_SUB_TEXT": "Ativar ou desativar a atribuição automática de novas conversas aos agentes adicionados a essa caixa de entrada.",
+    "HMAC_VERIFICATION": "Validação da identidade do utilizador",
+    "HMAC_DESCRIPTION": "Com esta chave, pode gerar um token secreto que pode ser usado para verificar a identidade dos seus utilizadores.",
+    "HMAC_LINK_TO_DOCS": "Pode saber mais aqui.",
+    "HMAC_MANDATORY_VERIFICATION": "Forçar validação de identidade do utilizador",
+    "HMAC_MANDATORY_DESCRIPTION": "Se ativado, os pedidos que não podem ser verificados serão rejeitados.",
+    "INBOX_IDENTIFIER": "Identificador da caixa de entrada",
+    "INBOX_IDENTIFIER_SUB_TEXT": "Use o token 'inbox_identifier' mostrado aqui para autenticar os seus clientes API.",
+    "FORWARD_EMAIL_TITLE": "Encaminhar para e-mail",
+    "FORWARD_EMAIL_SUB_TEXT": "Comece a encaminhar as suas mensagens de e-mail para o seguinte endereço.",
+    "FORWARD_EMAIL_NOT_CONFIGURED": "Forwarding emails to your inbox is currently disabled on this installation. To use this feature, it must be enabled by your administrator. Please get in touch with them to proceed.",
+    "ALLOW_MESSAGES_AFTER_RESOLVED": "Permitir mensagens após a resolução da conversa",
+    "ALLOW_MESSAGES_AFTER_RESOLVED_SUB_TEXT": "Permitir que os utilizadores finais enviem mensagens após a conversa estar resolvida.",
+    "WHATSAPP_SECTION_SUBHEADER": "Esta chave de API é usada para a integração com as APIs do WhatsApp.",
+    "WHATSAPP_SECTION_UPDATE_SUBHEADER": "Insira a nova chave da API a ser usada para a integração com as APIs do WhatsApp.",
+    "WHATSAPP_SECTION_TITLE": "Chave da API",
+    "WHATSAPP_SECTION_UPDATE_TITLE": "Atualizar chave da API",
+    "WHATSAPP_SECTION_UPDATE_PLACEHOLDER": "Insira a nova chave da API aqui",
+    "WHATSAPP_SECTION_UPDATE_BUTTON": "Atualização",
+    "WHATSAPP_EMBEDDED_SIGNUP_TITLE": "WhatsApp Embedded Signup",
+    "WHATSAPP_EMBEDDED_SIGNUP_SUBHEADER": "This inbox is connected through WhatsApp embedded signup.",
+    "WHATSAPP_EMBEDDED_SIGNUP_DESCRIPTION": "You can reconfigure this inbox to update your WhatsApp Business settings.",
+    "WHATSAPP_RECONFIGURE_BUTTON": "Reconfigure",
+    "WHATSAPP_CONNECT_TITLE": "Connect to WhatsApp Business",
+    "WHATSAPP_CONNECT_SUBHEADER": "Upgrade to WhatsApp embedded signup for easier management.",
+    "WHATSAPP_CONNECT_DESCRIPTION": "Connect this inbox to WhatsApp Business for enhanced features and easier management.",
+    "WHATSAPP_CONNECT_BUTTON": "Conectar",
+    "WHATSAPP_CONNECT_SUCCESS": "Successfully connected to WhatsApp Business!",
+    "WHATSAPP_CONNECT_ERROR": "Failed to connect to WhatsApp Business. Please try again.",
+    "WHATSAPP_RECONFIGURE_SUCCESS": "Successfully reconfigured WhatsApp Business!",
+    "WHATSAPP_RECONFIGURE_ERROR": "Failed to reconfigure WhatsApp Business. Please try again.",
+    "WHATSAPP_APP_ID_MISSING": "WhatsApp App ID is not configured. Please contact your administrator.",
+    "WHATSAPP_CONFIG_ID_MISSING": "WhatsApp Configuration ID is not configured. Please contact your administrator.",
+    "WHATSAPP_LOGIN_CANCELLED": "WhatsApp login was cancelled. Please try again.",
+    "WHATSAPP_WEBHOOK_TITLE": "Webhook de verificação do token",
+    "WHATSAPP_WEBHOOK_SUBHEADER": "Este token é usado para verificar a autenticidade do endpoint do webhook.",
+    "WHATSAPP_TEMPLATES_SYNC_TITLE": "Sync Templates",
+    "WHATSAPP_TEMPLATES_SYNC_SUBHEADER": "Manually sync message templates from WhatsApp to update your available templates.",
+    "WHATSAPP_TEMPLATES_SYNC_BUTTON": "Sync Templates",
+    "WHATSAPP_TEMPLATES_SYNC_SUCCESS": "Templates sync initiated successfully. It may take a couple of minutes to update.",
+    "UPDATE_PRE_CHAT_FORM_SETTINGS": "Atualizar configurações do formulário pré-chat"
+  },
+  "HELP_CENTER": {
+    "LABEL": "Centro de suporte",
+    "PLACEHOLDER": "Selecione centro de suporte",
+    "SELECT_PLACEHOLDER": "Selecione centro de suporte",
+    "NONE": "Nenhuma",
+    "REMOVE": "Remover centro de suporte",
+    "SUB_TEXT": "Associe um centro de suporte à caixa de entrada"
+  },
+  "AUTO_ASSIGNMENT": {
+    "MAX_ASSIGNMENT_LIMIT": "Limite de atribuição automática",
+    "MAX_ASSIGNMENT_LIMIT_RANGE_ERROR": "Por favor, insira um valor maior que 0",
+    "MAX_ASSIGNMENT_LIMIT_SUB_TEXT": "Limitar o número máximo de conversas desta caixa de entrada que pode ser atribuído automaticamente a um agente"
+  },
+  "ASSIGNMENT": {
+    "TITLE": "Atribuição da conversa",
+    "DESCRIPTION": "Automatically assign incoming conversations to available agents based on assignment policies",
+    "ENABLE_AUTO_ASSIGNMENT": "Enable automatic conversation assignment",
+    "DEFAULT_RULES_TITLE": "Default assignment rules",
+    "DEFAULT_RULES_DESCRIPTION": "Using the default assignment behavior for all conversations",
+    "DEFAULT_RULE_1": "Earliest created conversations first",
+    "DEFAULT_RULE_2": "Round robin distribution",
+    "CUSTOMIZE_WITH_POLICY": "Customize with assignment policy",
+    "USING_POLICY": "Using custom assignment policy for this inbox",
+    "CUSTOMIZE_POLICY": "Customize with assignment policy",
+    "DELETE_POLICY": "Delete policy",
+    "POLICY_LABEL": "Assignment policy",
+    "ASSIGNMENT_ORDER_LABEL": "Assignment Order",
+    "ASSIGNMENT_METHOD_LABEL": "Assignment Method",
+    "POLICY_STATUS": {
+      "ACTIVE": "Ativa",
+      "INACTIVE": "Inactive"
+    },
+    "PRIORITY": {
+      "EARLIEST_CREATED": "Earliest created",
+      "LONGEST_WAITING": "Longest waiting"
+    },
+    "METHOD": {
+      "ROUND_ROBIN": "Round robin",
+      "BALANCED": "Balanced assignment"
+    },
+    "UPGRADE_PROMPT": "Custom assignment policies are available on the Business plan",
+    "UPGRADE_TO_BUSINESS": "Upgrade to Business",
+    "DEFAULT_POLICY_LINKED": "Default policy linked",
+    "DEFAULT_POLICY_DESCRIPTION": "Link a custom assignment policy to customize how conversations are assigned to agents in this inbox.",
+    "LINK_EXISTING_POLICY": "Link existing policy",
+    "CREATE_NEW_POLICY": "Create new policy",
+    "NO_POLICIES": "No assignment policies found",
+    "VIEW_ALL_POLICIES": "View all policies",
+    "CURRENT_BEHAVIOR": "Currently using default assignment behavior:",
+    "LINK_SUCCESS": "Assignment policy linked successfully",
+    "LINK_ERROR": "Failed to link assignment policy"
+  },
+  "ASSIGNMENT_POLICY": {
+    "DELETE_CONFIRM_TITLE": "Delete assignment policy?",
+    "DELETE_CONFIRM_MESSAGE": "Are you sure you want to remove this assignment policy from this inbox? The inbox will revert to default assignment rules.",
+    "CANCEL": "Cancelar",
+    "CONFIRM_DELETE": "Excluir",
+    "DELETE_SUCCESS": "Assignment policy removed successfully",
+    "DELETE_ERROR": "Failed to remove assignment policy"
+  },
+  "FACEBOOK_REAUTHORIZE": {
+    "TITLE": "Reautorizar",
+    "SUBTITLE": "A sua conexão ao Facebook expirou, por favor, reconecte a página para poder continuar a utilizar os serviços",
+    "MESSAGE_SUCCESS": "Reconexão bem-sucedida",
+    "MESSAGE_ERROR": "Ocorreu um erro, por favor, tente novamente"
+  },
+  "PRE_CHAT_FORM": {
+    "DESCRIPTION": "O formulário de pré-chat permite-lhe capturar informações do utilizador antes de iniciar uma conversa.",
+    "SET_FIELDS": "Campos do formulário de pré-chat",
+    "SET_FIELDS_HEADER": {
+      "FIELDS": "Campos",
+      "LABEL": "Etiqueta",
+      "PLACE_HOLDER": "Placeholder",
+      "KEY": "Chave",
+      "TYPE": "Tipo",
+      "REQUIRED": "Obrigatório"
+    },
+    "ENABLE": {
+      "LABEL": "Ativar formulário de pré-chat",
+      "OPTIONS": {
+        "ENABLED": "Sim",
+        "DISABLED": "Não"
+      }
+    },
+    "PRE_CHAT_MESSAGE": {
+      "LABEL": "Mensagem de pré-chat",
+      "PLACEHOLDER": "Esta mensagem estará visível aos utilizadores, juntamente com o formulário"
+    },
+    "REQUIRE_EMAIL": {
+      "LABEL": "Os visitantes devem digitar o seu nome e e-mail antes de iniciarem uma conversa"
+    }
+  },
+  "CSAT": {
+    "TITLE": "Ativar CSAT",
+    "SUBTITLE": "Acione automaticamente inquéritos CSAT no final das conversas para perceber como os clientes se sentem sobre o apoio recebido. Acompanhe tendências de satisfação e identifique áreas de melhoria ao longo do tempo.",
+    "DISPLAY_TYPE": {
+      "LABEL": "Tipo de visualização"
+    },
+    "MESSAGE": {
+      "LABEL": "Messagem",
+      "PLACEHOLDER": "Por favor, insira uma mensagem para mostrar aos utilizadores com o formulário"
+    },
+    "BUTTON_TEXT": {
+      "LABEL": "Button text",
+      "PLACEHOLDER": "Please rate us"
+    },
+    "LANGUAGE": {
+      "LABEL": "Idioma",
+      "PLACEHOLDER": "Select template language"
+    },
+    "MESSAGE_PREVIEW": {
+      "LABEL": "Message preview",
+      "TOOLTIP": "This may vary slightly when rendered on WhatsApp's platform."
+    },
+    "TEMPLATE_STATUS": {
+      "APPROVED": "Approved by WhatsApp",
+      "PENDING": "Pending WhatsApp approval",
+      "REJECTED": "Meta rejected the template",
+      "DEFAULT": "Needs WhatsApp approval",
+      "NOT_FOUND": "The template does not exist in the Meta platform."
+    },
+    "TEMPLATE_CREATION": {
+      "SUCCESS_MESSAGE": "WhatsApp template created successfully and sent for approval",
+      "ERROR_MESSAGE": "Failed to create WhatsApp template"
+    },
+    "TEMPLATE_UPDATE_DIALOG": {
+      "TITLE": "Editar detalhes da pesquisa",
+      "DESCRIPTION": "Excluiremos o modelo anterior e criaremos um novo, que será enviado novamente para aprovação do WhatsApp",
+      "CONFIRM": "Criar novo modelo",
+      "CANCEL": "Voltar"
+    },
+    "UTILITY_ANALYZER": {
+      "ACTION": "Check utility fit",
+      "HELPER_NOTE": "Check this message before submission to improve Utility fit. The system creates a dedicated CSAT template with buttons for reporting and submits it as Utility; Meta may still reclassify it as Marketing based on content.",
+      "RESULT_LABEL": "Meta category prediction",
+      "GUIDANCE_NOTE": "This is a guidance check, not a guarantee of Meta approval.",
+      "SUGGESTION_LABEL": "Suggested utility-safe rewrite",
+      "APPLY": "Use this rewrite",
+      "ERROR_MESSAGE": "Couldn't analyze the message. Please try again.",
+      "CLASSIFICATION": {
+        "LIKELY_UTILITY": "Likely Utility",
+        "LIKELY_MARKETING": "Likely Marketing",
+        "UNCLEAR": "Needs clarification"
+      }
+    },
+    "SURVEY_RULE": {
+      "LABEL": "Regra do inquérito",
+      "DESCRIPTION_PREFIX": "Enviar o inquérito se a conversa",
+      "DESCRIPTION_SUFFIX": "qualquer uma das etiquetas",
+      "OPERATOR": {
+        "CONTAINS": "contém",
+        "DOES_NOT_CONTAINS": "não contém"
       },
-      "LANGUAGE": {
-        "LABEL": "Idioma",
-        "PLACEHOLDER": "Select template language"
-      },
-      "MESSAGE_PREVIEW": {
-        "LABEL": "Message preview",
-        "TOOLTIP": "This may vary slightly when rendered on WhatsApp's platform."
-      },
-      "TEMPLATE_STATUS": {
-        "APPROVED": "Approved by WhatsApp",
-        "PENDING": "Pending WhatsApp approval",
-        "REJECTED": "Meta rejected the template",
-        "DEFAULT": "Needs WhatsApp approval",
-        "NOT_FOUND": "The template does not exist in the Meta platform."
-      },
-      "TEMPLATE_CREATION": {
-        "SUCCESS_MESSAGE": "WhatsApp template created successfully and sent for approval",
-        "ERROR_MESSAGE": "Failed to create WhatsApp template"
-      },
-      "TEMPLATE_UPDATE_DIALOG": {
-        "TITLE": "Edit survey details",
-        "DESCRIPTION": "We will delete the previous template and make a new one which will be sent again for WhatsApp approval",
-        "CONFIRM": "Create new template",
-        "CANCEL": "Voltar"
-      },
-      "UTILITY_ANALYZER": {
-        "ACTION": "Check utility fit",
-        "HELPER_NOTE": "Check this message before submission to improve Utility fit. The system creates a dedicated CSAT template with buttons for reporting and submits it as Utility; Meta may still reclassify it as Marketing based on content.",
-        "RESULT_LABEL": "Meta category prediction",
-        "GUIDANCE_NOTE": "This is a guidance check, not a guarantee of Meta approval.",
-        "SUGGESTION_LABEL": "Suggested utility-safe rewrite",
-        "APPLY": "Use this rewrite",
-        "ERROR_MESSAGE": "Couldn't analyze the message. Please try again.",
-        "CLASSIFICATION": {
-          "LIKELY_UTILITY": "Likely Utility",
-          "LIKELY_MARKETING": "Likely Marketing",
-          "UNCLEAR": "Needs clarification"
+      "SELECT_PLACEHOLDER": "selecionar etiquetas"
+    },
+    "NOTE": "Nota: Os inquéritos CSAT são enviados apenas uma vez por conversa",
+    "WHATSAPP_NOTE": "Note: When you save, the system creates a dedicated CSAT template in WhatsApp (used to capture rating and feedback in reports) and submits it as Utility for approval. Meta may still classify it as Marketing based on content. After approval, surveys are sent only once per conversation as per the survey rule.",
+    "API": {
+      "SUCCESS_MESSAGE": "Definições de CSAT atualizadas com sucesso",
+      "ERROR_MESSAGE": "Não foi possível atualizar as definições de CSAT. Por favor, tente novamente mais tarde."
+    }
+  },
+  "BUSINESS_HOURS": {
+    "TITLE": "Definir disponibilidade",
+    "SUBTITLE": "Defina a sua disponibilidade no widget do livechat",
+    "WEEKLY_TITLE": "Defina as suas horas semanais",
+    "TIMEZONE_LABEL": "Selecionar fuso horário",
+    "UPDATE": "Atualizar as configurações do horário comercial",
+    "TOGGLE_AVAILABILITY": "Ativar a disponibilidade de negócios para esta caixa de entrada",
+    "UNAVAILABLE_MESSAGE_LABEL": "Mensagem indisponível para os visitantes",
+    "TOGGLE_HELP": "Permitir a disponibilidade de negócios mostrará as horas disponíveis no widget de live-chat, mesmo que todos os agentes estejam offline. Em caso de contactos fora do horário disponível, os clientes podem ser avisados com uma mensagem e um formulário de pré-chat.",
+    "DAY": {
+      "DAY": "Dia",
+      "AVAILABILITY": "Disponibilidade",
+      "HOURS": "Horas",
+      "ENABLE": "Ativar a disponibilidade para este dia",
+      "UNAVAILABLE": "Indisponível",
+      "VALIDATION_ERROR": "A hora de abertura deve ser anterior à hora de encerramento.",
+      "CHOOSE": "Escolher"
+    },
+    "ALL_DAY": "Todo o dia"
+  },
+"IMAP": {
+  "TITLE": "IMAP",
+  "SUBTITLE": "Defina seus dados de IMAP",
+  "NOTE_TEXT": "Para ativar o SMTP, por favor, configure o IMAP.",
+  "UPDATE": "Atualizar configurações de IMAP",
+  "TOGGLE_AVAILABILITY": "Ativar a configuração de IMAP para esta caixa de entrada",
+  "TOGGLE_HELP": "Habilitar o IMAP ajudará o usuário a receber e-mails",
+  "EDIT": {
+    "SUCCESS_MESSAGE": "Configurações de IMAP atualizadas com sucesso",
+    "ERROR_MESSAGE": "Não foi possível atualizar as configurações de IMAP"
+  },
+  "ADDRESS": {
+    "LABEL": "Endereço",
+    "PLACE_HOLDER": "Endereço (Ex. imap.gmail.com)"
+  },
+  "PORT": {
+    "LABEL": "Porta",
+    "PLACE_HOLDER": "Porta"
+  },
+  "LOGIN": {
+    "LABEL": "Iniciar sessão",
+    "PLACE_HOLDER": "Iniciar sessão"
+  },
+  "PASSWORD": {
+    "LABEL": "Palavra-passe",
+    "PLACE_HOLDER": "Palavra-passe"
+  },
+  "ENABLE_SSL": "Ativar SSL"
+}, 
+"MICROSOFT": {
+  "TITLE": "Microsoft",
+  "SUBTITLE": "Autorizar novamente a sua conta Microsoft"
+}, 
+"SMTP": {
+  "TITLE": "SMTP",
+  "SUBTITLE": "Defina seus dados de SMTP",
+  "UPDATE": "Atualizar configurações de SMTP",
+  "TOGGLE_AVAILABILITY": "Ativar a configuração de SMTP para esta caixa de entrada",
+  "TOGGLE_HELP": "Habilitar o SMTP ajudará o usuário a enviar e-mails",
+  "EDIT": {
+    "SUCCESS_MESSAGE": "Configurações de SMTP atualizadas com sucesso",
+    "ERROR_MESSAGE": "Não foi possível atualizar as configurações de SMTP"
+  }
+},
+"ADDRESS": {
+  "LABEL": "Endereço",
+  "PLACE_HOLDER": "Endereço (Ex. smtp.gmail.com)"
+},
+"PORT": {
+  "LABEL": "Porta",
+  "PLACE_HOLDER": "Porta"
+},
+"LOGIN": {
+  "LABEL": "Iniciar sessão",
+  "PLACE_HOLDER": "Iniciar sessão"
+},
+"PASSWORD": {
+  "LABEL": "Palavra-passe",
+  "PLACE_HOLDER": "Palavra-passe"
+},
+"DOMAIN": {
+  "LABEL": "Domínio",
+  "PLACE_HOLDER": "Domínio"
+},
+"ENCRYPTION": "Encriptação",
+"SSL_TLS": "SSL/TLS",
+"START_TLS": "STARTTLS",
+"OPEN_SSL_VERIFY_MODE": "Abrir o modo de verificação SSL",
+"AUTH_MECHANISM": "Autenticação", 
+"NOTE": "Observação: ",
+"WIDGET_BUILDER": {
+  "WIDGET_OPTIONS": {
+    "AVATAR": {
+      "LABEL": "Avatar do website",
+      "DELETE": {
+        "API": {
+          "SUCCESS_MESSAGE": "Avatar removido com sucesso",
+          "ERROR_MESSAGE": "Ocorreu um erro, por favor, tente novamente"
         }
-      },
-      "SURVEY_RULE": {
-        "LABEL": "Regra do inquérito",
-        "DESCRIPTION_PREFIX": "Enviar o inquérito se a conversa",
-        "DESCRIPTION_SUFFIX": "qualquer uma das etiquetas",
-        "OPERATOR": {
-          "CONTAINS": "contém",
-          "DOES_NOT_CONTAINS": "não contém"
-        },
-        "SELECT_PLACEHOLDER": "selecionar etiquetas"
-      },
-      "NOTE": "Nota: Os inquéritos CSAT são enviados apenas uma vez por conversa",
-      "WHATSAPP_NOTE": "Note: When you save, the system creates a dedicated CSAT template in WhatsApp (used to capture rating and feedback in reports) and submits it as Utility for approval. Meta may still classify it as Marketing based on content. After approval, surveys are sent only once per conversation as per the survey rule.",
+      }
+    },
+    "WEBSITE_NAME": {
+      "LABEL": "Nome do website",
+      "PLACE_HOLDER": "Insira o nome do seu website (ex. Acme Inc)",
+      "ERROR": "Por favor, insira um nome de website válido"
+    },
+    "WELCOME_HEADING": {
+      "LABEL": "Título de boas-vindas",
+      "PLACE_HOLDER": "Olá!"
+    },
+    "WELCOME_TAGLINE": {
+      "LABEL": "Slogan de boas-vindas",
+      "PLACE_HOLDER": "Nós simplificamos a sua conexão connosco. Pergunte-nos qualquer coisa ou partilhe um comentário."
+    },
+    "REPLY_TIME": {
+      "LABEL": "Tempo de resposta",
+      "IN_A_FEW_MINUTES": "Em poucos minutos",
+      "IN_A_FEW_HOURS": "Em poucas horas",
+      "IN_A_DAY": "Dentro de um dia"
+    },
+    "WIDGET_COLOR_LABEL": "Cor do widget",
+    "WIDGET_BUBBLE": "Bubble",
+    "WIDGET_BUBBLE_POSITION_LABEL": "Position:",
+    "WIDGET_BUBBLE_TYPE_LABEL": "Tipo:",
+    "WIDGET_BUBBLE_LAUNCHER_TITLE": {
+      "DEFAULT": "Fale connosco",
+      "LABEL": "Launcher Title",
+      "PLACE_HOLDER": "Fale connosco"
+    },
+    "UPDATE": {
+      "BUTTON_TEXT": "Atualizar configurações do widget",
       "API": {
-        "SUCCESS_MESSAGE": "Definições de CSAT atualizadas com sucesso",
-        "ERROR_MESSAGE": "Não foi possível atualizar as definições de CSAT. Por favor, tente novamente mais tarde."
+        "SUCCESS_MESSAGE": "Configurações do widget updated com sucesso",
+        "ERROR_MESSAGE": "Não é possível atualizar as configurações do widget"
       }
     },
-    "BUSINESS_HOURS": {
-      "TITLE": "Definir disponibilidade",
-      "SUBTITLE": "Defina a sua disponibilidade no widget do livechat",
-      "WEEKLY_TITLE": "Defina as suas horas semanais",
-      "TIMEZONE_LABEL": "Selecionar fuso horário",
-      "UPDATE": "Atualizar as configurações do horário comercial",
-      "TOGGLE_AVAILABILITY": "Ativar a disponibilidade de negócios para esta caixa de entrada",
-      "UNAVAILABLE_MESSAGE_LABEL": "Mensagem indisponível para os visitantes",
-      "TOGGLE_HELP": "Permitir a disponibilidade de negócios mostrará as horas disponíveis no widget de live-chat, mesmo que todos os agentes estejam offline. Em caso de contactos fora do horário disponível, os clientes podem ser avisados com uma mensagem e um formulário de pré-chat.",
-      "DAY": {
-        "DAY": "Dia",
-        "AVAILABILITY": "Disponibilidade",
-        "HOURS": "Horas",
-        "ENABLE": "Ativar a disponibilidade para este dia",
-        "UNAVAILABLE": "Indisponível",
-        "VALIDATION_ERROR": "A hora de abertura deve ser anterior à hora de encerramento.",
-        "CHOOSE": "Escolher"
-      },
-      "ALL_DAY": "Todo o dia"
+    "WIDGET_VIEW_OPTION": {
+      "PREVIEW": "Pré-visualizar",
+      "SCRIPT": "Script"
     },
-    "IMAP": {
-      "TITLE": "IMAP",
-      "SUBTITLE": "Defina os seus dados IMAP",
-      "NOTE_TEXT": "Para ativar o SMTP, por favor, configure o IMAP.",
-      "UPDATE": "Atualizar configurações IMAP",
-      "TOGGLE_AVAILABILITY": "Ativar a configuração IMAP para esta caixa de entrada",
-      "TOGGLE_HELP": "Habilitar o IMAP ajudará o utilizador a receber o e-mail",
-      "EDIT": {
-        "SUCCESS_MESSAGE": "Configurações IMAP atualizadas com sucesso",
-        "ERROR_MESSAGE": "Não foi possível atualizar as configurações do IMAP"
-      },
-      "ADDRESS": {
-        "LABEL": "Endereço",
-        "PLACE_HOLDER": "Endereço (Ex. imap.gmail.com)"
-      },
-      "PORT": {
-        "LABEL": "Porta",
-        "PLACE_HOLDER": "Porta"
-      },
-      "LOGIN": {
-        "LABEL": "Iniciar sessão",
-        "PLACE_HOLDER": "Iniciar sessão"
-      },
-      "PASSWORD": {
-        "LABEL": "Palavra-passe",
-        "PLACE_HOLDER": "Palavra-passe"
-      },
-      "ENABLE_SSL": "Ativar SSL"
+    "WIDGET_BUBBLE_POSITION": {
+      "LEFT": "Esquerda",
+      "RIGHT": "Direita"
     },
-    "MICROSOFT": {
-      "TITLE": "Microsoft",
-      "SUBTITLE": "Autorizar novamente a sua conta Microsoft"
+    "WIDGET_BUBBLE_TYPE": {
+      "STANDARD": "Padrão",
+      "EXPANDED_BUBBLE": "Balão expandido"
+    }
+  },
+  "WIDGET_SCREEN": {
+    "DEFAULT": "Padrão",
+    "CHAT": "Chat mode"
+  },
+  "REPLY_TIME": {
+    "IN_A_FEW_MINUTES": "Normalmente respondemos em poucos minutos",
+    "IN_A_FEW_HOURS": "Normalmente respondemos em poucas horas",
+    "IN_A_DAY": "Normalmente respondemos num dia"
+  },
+  "FOOTER": {
+    "START_CONVERSATION_BUTTON_TEXT": "Iniciar conversa",
+    "CHAT_INPUT_PLACEHOLDER": "Escreva a sua mensagem"
+  },
+  "BODY": {
+    "TEAM_AVAILABILITY": {
+      "ONLINE": "Estamos online",
+      "OFFLINE": "Neste momento, estamos ausentes"
     },
-    "SMTP": {
-      "TITLE": "SMTP",
-      "SUBTITLE": "Defina os seus dados IMAP",
-      "UPDATE": "Atualizar configurações de SMTP",
-      "TOGGLE_AVAILABILITY": "Ativar a configuração IMAP para esta caixa de entrada",
-      "TOGGLE_HELP": "Habilitar o SMTP ajudará o utilizador a enviar e-mail",
-      "EDIT": {
-        "SUCCESS_MESSAGE": "Configurações de SMTP atualizadas com sucesso",
-        "ERROR_MESSAGE": "Não é possível atualizar as configurações de SMTP"
-      },
-      "ADDRESS": {
-        "LABEL": "Endereço",
-        "PLACE_HOLDER": "Endereço (Ex. smtp.gmail.com)"
-      },
-      "PORT": {
-        "LABEL": "Porta",
-        "PLACE_HOLDER": "Porta"
-      },
-      "LOGIN": {
-        "LABEL": "Iniciar sessão",
-        "PLACE_HOLDER": "Iniciar sessão"
-      },
-      "PASSWORD": {
-        "LABEL": "Palavra-passe",
-        "PLACE_HOLDER": "Palavra-passe"
-      },
-      "DOMAIN": {
-        "LABEL": "Domínio",
-        "PLACE_HOLDER": "Domínio"
-      },
-      "ENCRYPTION": "Encriptação",
-      "SSL_TLS": "SSL/TLS",
-      "START_TLS": "STARTTLS",
-      "OPEN_SSL_VERIFY_MODE": "Abrir o modo de verificação SSL",
-      "AUTH_MECHANISM": "Autenticação"
-    },
-    "NOTE": "Observação: ",
-    "WIDGET_BUILDER": {
-      "WIDGET_OPTIONS": {
-        "AVATAR": {
-          "LABEL": "Avatar do website",
-          "DELETE": {
-            "API": {
-              "SUCCESS_MESSAGE": "Avatar removido com sucesso",
-              "ERROR_MESSAGE": "Ocorreu um erro, por favor, tente novamente"
-            }
-          }
-        },
-        "WEBSITE_NAME": {
-          "LABEL": "Nome do website",
-          "PLACE_HOLDER": "Insira o nome do seu website (ex. Acme Inc)",
-          "ERROR": "Por favor, insira um nome de website válido"
-        },
-        "WELCOME_HEADING": {
-          "LABEL": "Título de boas-vindas",
-          "PLACE_HOLDER": "Olá!"
-        },
-        "WELCOME_TAGLINE": {
-          "LABEL": "Slogan de boas-vindas",
-          "PLACE_HOLDER": "Nós simplificamos a sua conexão connosco. Pergunte-nos qualquer coisa ou partilhe um comentário."
-        },
-        "REPLY_TIME": {
-          "LABEL": "Tempo de resposta",
-          "IN_A_FEW_MINUTES": "Em poucos minutos",
-          "IN_A_FEW_HOURS": "Em poucas horas",
-          "IN_A_DAY": "Dentro de um dia"
-        },
-        "WIDGET_COLOR_LABEL": "Cor do widget",
-        "WIDGET_BUBBLE": "Bubble",
-        "WIDGET_BUBBLE_POSITION_LABEL": "Position:",
-        "WIDGET_BUBBLE_TYPE_LABEL": "Tipo:",
-        "WIDGET_BUBBLE_LAUNCHER_TITLE": {
-          "DEFAULT": "Fale connosco",
-          "LABEL": "Launcher Title",
-          "PLACE_HOLDER": "Fale connosco"
-        },
-        "UPDATE": {
-          "BUTTON_TEXT": "Atualizar configurações do widget",
-          "API": {
-            "SUCCESS_MESSAGE": "Configurações do widget atualizadas com sucesso",
-            "ERROR_MESSAGE": "Não é possível atualizar as configurações do widget"
-          }
-        },
-        "WIDGET_VIEW_OPTION": {
-          "PREVIEW": "Pré-visualizar",
-          "SCRIPT": "Script"
-        },
-        "WIDGET_BUBBLE_POSITION": {
-          "LEFT": "Esquerda",
-          "RIGHT": "Direita"
-        },
-        "WIDGET_BUBBLE_TYPE": {
-          "STANDARD": "Padrão",
-          "EXPANDED_BUBBLE": "Balão expandido"
-        }
-      },
-      "WIDGET_SCREEN": {
-        "DEFAULT": "Padrão",
-        "CHAT": "Chat mode"
-      },
-      "REPLY_TIME": {
-        "IN_A_FEW_MINUTES": "Normalmente respondemos em poucos minutos",
-        "IN_A_FEW_HOURS": "Normalmente respondemos em poucas horas",
-        "IN_A_DAY": "Normalmente respondemos num dia"
-      },
-      "FOOTER": {
-        "START_CONVERSATION_BUTTON_TEXT": "Iniciar conversa",
-        "CHAT_INPUT_PLACEHOLDER": "Escreva a sua mensagem"
-      },
-      "BODY": {
-        "TEAM_AVAILABILITY": {
-          "ONLINE": "Estamos online",
-          "OFFLINE": "Neste momento, estamos ausentes"
-        },
-        "USER_MESSAGE": "Olá",
-        "AGENT_MESSAGE": "Olá"
-      },
-      "BRANDING_TEXT": "Desenvolvido por Chatwoot",
-      "SCRIPT_SETTINGS": "\n      window.chatwootSettings = {options};"
-    },
-    "EMAIL_PROVIDERS": {
-      "MICROSOFT": {
-        "TITLE": "Microsoft",
-        "DESCRIPTION": "Connect with Microsoft"
-      },
-      "GOOGLE": {
-        "TITLE": "Google",
-        "DESCRIPTION": "Connect with Google"
-      },
-      "OTHER_PROVIDERS": {
-        "TITLE": "Outros fornecedores",
-        "DESCRIPTION": "Connect with Other Providers"
-      }
-    },
-    "CHANNELS": {
+    "USER_MESSAGE": "Olá",
+    "AGENT_MESSAGE": "Olá"
+  },
+  "BRANDING_TEXT": "Desenvolvido por Chatwoot",
+  "SCRIPT_SETTINGS": "\n      window.chatwootSettings = {options};"
+},
+"EMAIL_PROVIDERS": {
+  "MICROSOFT": {
+    "TITLE": "Microsoft",
+    "DESCRIPTION": "Connect with Microsoft"
+  },
+  "GOOGLE": {
+    "TITLE": "Google",
+    "DESCRIPTION": "Connect with Google"
+  },
+  "OTHER_PROVIDERS": {
+    "TITLE": "Outros fornecedores",
+    "DESCRIPTION": "Connect with Other Providers"
+  }
+},
+"CHANNELS": {
       "MESSENGER": "Messenger",
       "WEB_WIDGET": "Website",
       "TWITTER_PROFILE": "Twitter",
@@ -1156,4 +1157,3 @@
       "VOICE": "Voz"
     }
   }
-}
