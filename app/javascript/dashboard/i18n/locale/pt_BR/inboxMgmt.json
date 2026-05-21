@@ -585,14 +585,15 @@
       "MESSENGER_QR_INSTRUCTION": "Escaneie o código QR acima para testar rapidamente sua caixa de entrada do Facebook Messenger",
       "TELEGRAM_QR_INSTRUCTION": "Escaneie o código QR acima para testar rapidamente sua caixa de entrada do Telegram"
     },
-    "REAUTH": "Reautorizar",
+    "REAUTH": "Reautorizar",  
     "VIEW": "Visualizar",
-    "EDIT": {      "LOCK_TO_SINGLE_CONVERSATION": {
-        "ENABLED": "Ativado",
-        "ENABLED_DESCRIPTION": "Quando um contato enviar mensagem novamente, a conversa anterior será reaberta.",
-        "DISABLED": "Desativado",
-        "DISABLED_DESCRIPTION": "Uma nova conversa será criada cada vez após a anterior ser resolvida."
-      },
+      "EDIT": {
+        "LOCK_TO_SINGLE_CONVERSATION": {  
+          "ENABLED": "Ativado",
+          "ENABLED_DESCRIPTION": "Quando um contato enviar mensagem novamente, a conversa anterior será reaberta.",
+          "DISABLED": "Desativado",
+          "DISABLED_DESCRIPTION": "Uma nova conversa será criada cada vez após a anterior ser resolvida."
+        },
       "API": {
         "SUCCESS_MESSAGE": "Configurações de caixa de entrada atualizadas com sucesso",
         "AUTO_ASSIGNMENT_SUCCESS_MESSAGE": "Agente atualizado com sucesso",
@@ -633,12 +634,8 @@
         "ENABLED": "Ativado",
         "DISABLED": "Desativado"
       },
-      "LOCK_TO_SINGLE_CONVERSATION": {
-        "ENABLED": "Ativado",
-        "DISABLED": "Desativado"
-      },
       "ENABLE_HMAC": {
- "LABEL": "Ativar"
+        "LABEL": "Ativar"
       }
     },
     "CHANNEL_PREFERENCES": "Preferências do canal",
@@ -1128,8 +1125,3 @@
     }
   }
 }
-
-
-
-
-
