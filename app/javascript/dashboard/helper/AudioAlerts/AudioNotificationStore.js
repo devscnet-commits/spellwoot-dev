@@ -23,9 +23,7 @@ class AudioNotificationStore {
     const { conversation_id: conversationId } = message || {};
     if (!conversationId) return false;
 
-    const activeConversation =
-      this.store.getters.getConversationById(conversationId);
-    return activeConversation?.status === wootConstants.STATUS_TYPE.PENDING;
+    return false;
   };
 
   isMessageFromCurrentConversation = message => {

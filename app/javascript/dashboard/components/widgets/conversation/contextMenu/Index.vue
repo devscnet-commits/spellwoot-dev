@@ -107,27 +107,7 @@ export default {
           label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.REOPEN'),
           icon: 'arrow-redo',
         },
-        {
-          key: wootConstants.STATUS_TYPE.PENDING,
-          label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.PENDING'),
-          icon: 'book-clock',
-        },
-      ],
-      snoozeOption: {
-        key: wootConstants.STATUS_TYPE.SNOOZED,
-        label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.SNOOZE.TITLE'),
-        icon: 'snooze',
-      },
-      priorityConfig: {
-        key: MENU.PRIORITY,
-        label: this.$t('CONVERSATION.PRIORITY.TITLE'),
-        icon: 'warning',
-        options: [
-          {
-            label: this.$t('CONVERSATION.PRIORITY.OPTIONS.NONE'),
-            key: null,
-          },
-          {
+        {          
             label: this.$t('CONVERSATION.PRIORITY.OPTIONS.URGENT'),
             key: 'urgent',
           },
@@ -212,11 +192,6 @@ export default {
         ...this.filteredAgentOnAvailability,
       ];
     },
-    showSnooze() {
-      // Don't show snooze if the conversation is already snoozed/resolved/pending
-      return this.status === wootConstants.STATUS_TYPE.OPEN;
-    },
-  },
   mounted() {
     this.$store.dispatch('inboxAssignableAgents/fetch', [this.inboxId]);
   },
@@ -227,11 +202,6 @@ export default {
     },
     toggleStatus(status, snoozedUntil) {
       this.$emit('updateConversation', status, snoozedUntil);
-    },
-    async snoozeConversation() {
-      await this.$store.dispatch('setContextMenuChatId', this.chatId);
-      const ninja = document.querySelector('ninja-keys');
-      ninja.open({ parent: 'snooze_conversation' });
     },
     assignPriority(priority) {
       this.$emit('assignPriority', priority);
@@ -308,17 +278,6 @@ export default {
           @click.stop="toggleStatus(option.key, null)"
         />
       </template>
-      <MenuItem
-        v-if="showSnooze && isAllowed([MENU.SNOOZE])"
-        :option="snoozeOption"
-        variant="icon"
-        @click.stop="snoozeConversation()"
-      />
-      <hr class="m-1 rounded border-b border-n-weak dark:border-n-weak" />
-    </template>
-    <template
-      v-if="isAllowed([MENU.PRIORITY, MENU.LABEL, MENU.AGENT, MENU.TEAM])"
-    >
       <MenuItemWithSubmenu
         v-if="isAllowed([MENU.PRIORITY])"
         :option="priorityConfig"

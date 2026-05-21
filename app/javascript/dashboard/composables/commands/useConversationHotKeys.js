@@ -194,15 +194,12 @@ export function useConversationHotKeys() {
 
   const statusActions = computed(() => {
     const isOpen = currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN;
-    const isSnoozed =
-      currentChat.value?.status === wootConstants.STATUS_TYPE.SNOOZED;
     const isResolved =
       currentChat.value?.status === wootConstants.STATUS_TYPE.RESOLVED;
-
     let actions = [];
     if (isOpen) {
-      actions = [...OPEN_CONVERSATION_ACTIONS, ...SNOOZE_CONVERSATION_ACTIONS];
-    } else if (isResolved || isSnoozed) {
+      actions = OPEN_CONVERSATION_ACTIONS;
+    } else if (isResolved) {
       actions = RESOLVED_CONVERSATION_ACTIONS;
     }
     return prepareActions(actions, t);
