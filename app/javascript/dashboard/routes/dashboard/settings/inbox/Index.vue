@@ -30,6 +30,38 @@ const { t } = useI18n();
 const { isAdmin } = useAdmin();
 
 const showDeletePopup = ref(false);
+const showMigratePopup = ref(false);
+const migrateSourceInbox = ref({});
+const migrateTargetInboxId = ref('');
+const migratingInbox = ref(false);
+
+const openMigrate = inbox => {
+  migrateSourceInbox.value = inbox;
+  migrateTargetInboxId.value = '';
+  showMigratePopup.value = true;
+};
+
+const closeMigrate = () => {
+  showMigratePopup.value = false;
+  migrateSourceInbox.value = {};
+  migrateTargetInboxId.value = '';
+};     
+const executeMigrate = async () => {
+  if (!migrateTargetInboxId.value || !migrateSourceInbox.value.id) return;
+  migratingInbox.value = true;
+  try {
+    await InboxesAPI.migrateInbox(
+      migrateSourceInbox.value.id,
+      migrateTargetInboxId.value
+    );
+    useAlert(t('INBOX_MGMT.MIGRATE.SUCCESS'));
+    closeMigrate();
+  } catch (error) {
+    useAlert(t('INBOX_MGMT.MIGRATE.ERROR'));
+  } finally {
+    migratingInbox.value = false;
+  }
+};
 const selectedInbox = ref({});
 
 // Uazapi status tracking
@@ -451,6 +483,15 @@ onUnmounted(() => {
                   />
                 </router-link>
                 <Button
+  v-if="isAdmin"
+  v-tooltip.top="$t('INBOX_MGMT.MIGRATE.BUTTON_TEXT')"
+  icon="i-lucide-arrow-right-left"
+  xs
+  slate
+  faded
+  @click="openMigrate(inbox)"
+/>
+                <Button
                   v-if="isAdmin"
                   v-tooltip.top="$t('INBOX_MGMT.DELETE.BUTTON_TEXT')"
                   icon="i-lucide-trash-2"
@@ -466,6 +507,48 @@ onUnmounted(() => {
       </table>
     </template>
 
+<woot-modal v-if="showMigratePopup" :show="showMigratePopup" @close="closeMigrate">
+  <div class="p-6 flex flex-col gap-4 min-w-[400px]">
+    <h3 class="text-lg font-semibold text-n-slate-12">
+      {{ $t('INBOX_MGMT.MIGRATE.TITLE') }}
+    </h3>
+    <p class="text-sm text-n-slate-11">
+      {{ $t('INBOX_MGMT.MIGRATE.DESCRIPTION', { name: migrateSourceInbox.name }) }}
+    </p>
+    <div class="flex flex-col gap-2">
+      <label class="text-sm font-medium text-n-slate-12">
+        {{ $t('INBOX_MGMT.MIGRATE.TARGET_LABEL') }}
+      </label>
+      <select
+        v-model="migrateTargetInboxId"
+        class="w-full rounded border border-n-weak bg-n-alpha-2 px-3 py-2 text-sm text-n-slate-12"
+      >
+        <option value="" disabled>{{ $t('INBOX_MGMT.MIGRATE.SELECT_PLACEHOLDER') }}</option>
+        <option
+          v-for="inbox in inboxesList.filter(i => i.id !== migrateSourceInbox.id)"
+          :key="inbox.id"
+          :value="inbox.id"
+        >
+          {{ inbox.name }}
+        </option>
+      </select>
+    </div>
+    <div class="flex justify-end gap-2">
+      <Button slate xs @click="closeMigrate">
+        {{ $t('INBOX_MGMT.MIGRATE.CANCEL') }}
+      </Button>
+      <Button
+        :disabled="!migrateTargetInboxId || migratingInbox"
+        :is-loading="migratingInbox"
+        primary
+        xs
+        @click="executeMigrate"
+      >
+        {{ $t('INBOX_MGMT.MIGRATE.CONFIRM') }}
+      </Button>
+    </div>
+  </div>
+</woot-modal>
     <woot-confirm-delete-modal
       v-if="showDeletePopup"
       v-model:show="showDeletePopup"

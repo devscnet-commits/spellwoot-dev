@@ -271,7 +271,33 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   private
-
+  def migrate
+    target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
+    
+    ActiveRecord::Base.transaction do
+      conversations = @inbox.conversations
+      conversations.find_each do |conversation|
+        target_contact_inbox = ContactInbox.find_or_create_by!(
+          contact_id: conversation.contact_id,
+          inbox_id: target_inbox.id
+        ) do |ci|
+          ci.source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
+        end
+  
+        conversation.update!(
+          inbox_id: target_inbox.id,
+          contact_inbox_id: target_contact_inbox.id
+        )
+      end
+    end
+  
+    render json: { success: true, migrated_count: @inbox.conversations.count }
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Target inbox not found' }, status: :not_found
+  rescue StandardError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+  
   def fetch_inbox
     @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
     authorize @inbox, :show?

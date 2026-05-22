@@ -585,15 +585,15 @@
       "MESSENGER_QR_INSTRUCTION": "Escaneie o código QR acima para testar rapidamente sua caixa de entrada do Facebook Messenger",
       "TELEGRAM_QR_INSTRUCTION": "Escaneie o código QR acima para testar rapidamente sua caixa de entrada do Telegram"
     },
-    "REAUTH": "Reautorizar",  
+    "REAUTH": "Reautorizar",
     "VIEW": "Visualizar",
-      "EDIT": {
-        "LOCK_TO_SINGLE_CONVERSATION": {  
-          "ENABLED": "Ativado",
-          "ENABLED_DESCRIPTION": "Quando um contato enviar mensagem novamente, a conversa anterior será reaberta.",
-          "DISABLED": "Desativado",
-          "DISABLED_DESCRIPTION": "Uma nova conversa será criada cada vez após a anterior ser resolvida."
-        },
+    "EDIT": {
+      "LOCK_TO_SINGLE_CONVERSATION": {
+        "ENABLED": "Ativado",
+        "ENABLED_DESCRIPTION": "Quando um contato enviar mensagem novamente, a conversa anterior será reaberta.",
+        "DISABLED": "Desativado",
+        "DISABLED_DESCRIPTION": "Uma nova conversa será criada cada vez após a anterior ser resolvida."
+      },
       "API": {
         "SUCCESS_MESSAGE": "Configurações de caixa de entrada atualizadas com sucesso",
         "AUTO_ASSIGNMENT_SUCCESS_MESSAGE": "Agente atualizado com sucesso",
@@ -648,6 +648,17 @@
         "PLACE_HOLDER": "Digite {inboxName} para confirmar",
         "YES": "Sim, excluir ",
         "NO": "Não, Mantenha "
+      },
+      "MIGRATE": {
+        "BUTTON_TEXT": "Migrar caixa",
+        "TITLE": "Migrar conversas",
+        "DESCRIPTION": "Mover todas as conversas da caixa \"{name}\" para outra caixa de entrada.",
+        "TARGET_LABEL": "Caixa de destino",
+        "SELECT_PLACEHOLDER": "Selecione a caixa de destino",
+        "CANCEL": "Cancelar",
+        "CONFIRM": "Migrar agora",
+        "SUCCESS": "Conversas migradas com sucesso.",
+        "ERROR": "Erro ao migrar conversas. Tente novamente."
       },
       "API": {
         "SUCCESS_MESSAGE": "Agente excluído com sucesso",

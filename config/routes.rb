@@ -230,6 +230,7 @@ Rails.application.routes.draw do
             post :uazapi_connect, on: :member
             post :uazapi_disconnect, on: :member
             post :uazapi_reconfigure, on: :member
+            post :migrate, on: :member
             if ChatwootApp.enterprise?
               resource :conference, only: %i[create destroy], controller: 'conference' do
                 get :token, on: :member
