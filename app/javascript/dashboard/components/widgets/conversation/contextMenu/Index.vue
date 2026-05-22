@@ -196,8 +196,10 @@ export default {
           email: 'None',
         },
         ...this.filteredAgentOnAvailability,
-      ];
+     ];
     },
+  },
+  },
   mounted() {
     this.$store.dispatch('inboxAssignableAgents/fetch', [this.inboxId]);
   },
