@@ -102,12 +102,18 @@ export default {
           label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.RESOLVED'),
           icon: 'checkmark',
         },
-        {
+{
           key: wootConstants.STATUS_TYPE.OPEN,
           label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.REOPEN'),
           icon: 'arrow-redo',
         },
-        {          
+      ],
+      priorityMenuConfig: {
+        key: MENU.PRIORITY,
+        icon: 'arrow-sort',
+        label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.ASSIGN_PRIORITY'),
+        options: [
+          {
             label: this.$t('CONVERSATION.PRIORITY.OPTIONS.URGENT'),
             key: 'urgent',
           },
