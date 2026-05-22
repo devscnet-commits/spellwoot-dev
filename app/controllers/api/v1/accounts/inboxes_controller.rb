@@ -1,6 +1,7 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
-  before_action :fetch_inbox, except: [:index, :create]
+  before_action :fetch_inbox_for_migrate, only: [:migrate]
+  before_action :fetch_inbox, except: [:index, :create, :migrate]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
@@ -272,9 +273,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   private
 
-  def fetch_inbox
-    @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
-    authorize @inbox, :show?
+  def fetch_inbox_for_migrate
+    @inbox = Current.account.inboxes.find(params[:id])
   end
 
   def fetch_agent_bot

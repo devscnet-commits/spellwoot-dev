@@ -23,6 +23,10 @@ class InboxPolicy < ApplicationPolicy
     # FIXME: for agent bots, lets bring this validation to policies as well in future
     return true if @user.is_a?(AgentBot)
 
+  def migrate?
+      Current.user&.administrator?
+    end  
+
     Current.user.assigned_inboxes.include? record
   end
 
