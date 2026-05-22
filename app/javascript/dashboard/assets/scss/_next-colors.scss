@@ -145,6 +145,22 @@
     --black-alpha-2: 0, 0, 0, 0.04;
     --border-blue: 39, 129, 246, 0.5;
     --white-alpha: 255, 255, 255, 0.8;
+    
+  }
+  // CONEXIIA DARK THEME
+  .theme-dark,
+  [data-theme="dark"] {
+    --cx-bg: 12 2 6;
+    --cx-surface1: 18 3 10;
+    --cx-surface2: 30 7 20;
+    --cx-surface3: 36 10 23;
+    --cx-border1: 43 12 30;
+    --cx-border2: 62 20 40;
+    --cx-accent: 236 63 37;
+    --cx-accent-hover: 240 90 40;
+    --cx-text1: 252 250 251;
+    --cx-text2: 160 150 168;
+    --cx-text3: 117 100 109;
   }
 
   .dark {
