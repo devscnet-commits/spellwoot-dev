@@ -638,7 +638,19 @@
         "LABEL": "Ativar"
       }
     },
+    
     "CHANNEL_PREFERENCES": "Preferências do canal",
+    "MIGRATE": {
+  "BUTTON_TEXT": "Migrar caixa",
+  "TITLE": "Migrar conversas",
+  "DESCRIPTION": "Mover todas as conversas da caixa \"{name}\" para outra caixa de entrada.",
+  "TARGET_LABEL": "Caixa de destino",
+  "SELECT_PLACEHOLDER": "Selecione a caixa de destino",
+  "CANCEL": "Cancelar",
+  "CONFIRM": "Migrar agora",
+  "SUCCESS": "Conversas migradas com sucesso.",
+  "ERROR": "Erro ao migrar conversas. Tente novamente."
+},
     "DELETE": {
       "BUTTON_TEXT": "Excluir",
       "AVATAR_DELETE_BUTTON_TEXT": "Apagar Avatar",
@@ -648,17 +660,6 @@
         "PLACE_HOLDER": "Digite {inboxName} para confirmar",
         "YES": "Sim, excluir ",
         "NO": "Não, Mantenha "
-      },
-      "MIGRATE": {
-        "BUTTON_TEXT": "Migrar caixa",
-        "TITLE": "Migrar conversas",
-        "DESCRIPTION": "Mover todas as conversas da caixa \"{name}\" para outra caixa de entrada.",
-        "TARGET_LABEL": "Caixa de destino",
-        "SELECT_PLACEHOLDER": "Selecione a caixa de destino",
-        "CANCEL": "Cancelar",
-        "CONFIRM": "Migrar agora",
-        "SUCCESS": "Conversas migradas com sucesso.",
-        "ERROR": "Erro ao migrar conversas. Tente novamente."
       },
       "API": {
         "SUCCESS_MESSAGE": "Agente excluído com sucesso",
