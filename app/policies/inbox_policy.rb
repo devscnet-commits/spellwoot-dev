@@ -22,6 +22,7 @@ class InboxPolicy < ApplicationPolicy
   def show?
     # FIXME: for agent bots, lets bring this validation to policies as well in future
     return true if @user.is_a?(AgentBot)
+    return true if Current.user&.administrator?
 
     Current.user.assigned_inboxes.include? record
   end
