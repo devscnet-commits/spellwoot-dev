@@ -59,7 +59,7 @@ const getStatusText = computed(() => {
     </div>
     <div
       v-else
-      class="flex items-center h-10 bg-white rounded-md dark:!bg-n-slate-3"
+      class="flex items-center h-10 bg-[#12030a] rounded-md dark:!bg-n-slate-3"
       :class="{ 'ring-2 ring-n-brand dark:ring-n-brand': isInputFocused }"
     >
       <ResizableTextArea
@@ -68,7 +68,7 @@ const getStatusText = computed(() => {
         :placeholder="
           $t('INBOX_MGMT.WIDGET_BUILDER.FOOTER.CHAT_INPUT_PLACEHOLDER')
         "
-        class="flex-grow !bg-white border-0 outline-none !outline-0 border-none h-8 text-sm dark:!bg-n-slate-3 pb-0 !pt-1.5 resize-none px-3 !mb-0 focus:outline-none rounded-md"
+        class="flex-grow !bg-[#12030a] border-0 outline-none !outline-0 border-none h-8 text-sm dark:!bg-n-slate-3 pb-0 !pt-1.5 resize-none px-3 !mb-0 focus:outline-none rounded-md"
         @focus="isInputFocused = true"
         @blur="isInputFocused = false"
       />

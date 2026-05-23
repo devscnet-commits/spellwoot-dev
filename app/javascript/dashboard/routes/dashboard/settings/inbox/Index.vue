@@ -393,7 +393,7 @@ onUnmounted(() => {
                       v-if="
                         uazapiLoading[inbox.id] || !uazapiStatuses[inbox.id]
                       "
-                      class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-[#12030a] text-[#fcfafb] dark:bg-[#1e0714] dark:text-slate-300"
                     >
                       {{ $t('INBOX_MGMT.UAZAPI.STATUS.CHECKING') }}
                     </span>
@@ -637,7 +637,7 @@ onUnmounted(() => {
         </p>
 
         <div v-if="reconnectQrCode" class="flex flex-col items-center gap-4">
-          <div class="p-4 bg-white rounded-2xl shadow-lg">
+          <div class="p-4 bg-[#12030a] rounded-2xl shadow-lg">
             <img
               :src="reconnectQrCode"
               alt="WhatsApp QR Code"

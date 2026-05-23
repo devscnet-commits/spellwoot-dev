@@ -59,7 +59,7 @@ const closeBanner = event => {
           {{ t('YEAR_IN_REVIEW.BANNER.TITLE', { year: currentYear }) }}
         </span>
         <button
-          class="inline-flex items-center justify-center rounded hover:bg-white hover:bg-opacity-20 transition-colors p-0"
+          class="inline-flex items-center justify-center rounded hover:bg-[#12030a] hover:bg-opacity-20 transition-colors p-0"
           @click="closeBanner"
         >
           <Icon
@@ -75,7 +75,7 @@ const closeBanner = event => {
           class="w-full h-auto rounded"
         />
         <button
-          class="w-full px-3 py-2 bg-white text-n-iris-9 text-xs font-medium rounded-mdtracking-tight"
+          class="w-full px-3 py-2 bg-[#12030a] text-n-iris-9 text-xs font-medium rounded-mdtracking-tight"
           @click.stop="openModal"
         >
           {{ t('YEAR_IN_REVIEW.BANNER.BUTTON') }}

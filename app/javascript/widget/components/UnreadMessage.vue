@@ -93,7 +93,7 @@ export default {
 
 <template>
   <div class="chat-bubble-wrap">
-    <button class="chat-bubble agent bg-white" @click="onClickMessage">
+    <button class="chat-bubble agent bg-[#12030a]" @click="onClickMessage">
       <div v-if="showSender" class="row--agent-block">
         <Avatar
           :src="avatarUrl"

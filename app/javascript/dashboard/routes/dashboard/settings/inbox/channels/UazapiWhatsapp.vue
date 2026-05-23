@@ -300,7 +300,7 @@ onUnmounted(() => {
         v-if="!isConnected && qrCode"
         class="flex flex-col items-center gap-4"
       >
-        <div class="p-4 bg-white rounded-2xl shadow-lg">
+        <div class="p-4 bg-[#12030a] rounded-2xl shadow-lg">
           <img
             :src="qrCode"
             alt="WhatsApp QR Code"
