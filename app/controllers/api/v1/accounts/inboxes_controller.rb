@@ -290,6 +290,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
         )
       end
     end
+    @inbox.contact_inboxes.destroy_all
+    
     render json: { success: true, migrated_count: @inbox.conversations.count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
