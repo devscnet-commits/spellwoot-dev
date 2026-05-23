@@ -271,10 +271,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
-  private
   def migrate
     target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
-  
     ActiveRecord::Base.transaction do
       @inbox.conversations.find_each do |conversation|
         target_contact_inbox = ContactInbox.find_or_create_by!(
@@ -283,7 +281,6 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
         ) do |ci|
           ci.source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
         end
-  
         conversation.messages.update_all(inbox_id: target_inbox.id)
         conversation.reporting_events.update_all(inbox_id: target_inbox.id)
         conversation.sla_events.update_all(inbox_id: target_inbox.id)
@@ -293,26 +290,17 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
         )
       end
     end
-  
     render json: { success: true, migrated_count: @inbox.conversations.count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
   rescue StandardError => e
     render json: { error: e.message }, status: :unprocessable_entity
   end
-  
-        conversation.update!(
-          inbox_id: target_inbox.id,
-          contact_inbox_id: target_contact_inbox.id
-        )
-      end
-    end
-  
-    render json: { success: true, migrated_count: @inbox.conversations.count }
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: 'Target inbox not found' }, status: :not_found
-  rescue StandardError => e
-    render json: { error: e.message }, status: :unprocessable_entity
+
+  private
+
+  def fetch_inbox_for_migrate
+    @inbox = Current.account.inboxes.find(params[:id])
   end
 
   def fetch_inbox
