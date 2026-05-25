@@ -140,6 +140,16 @@ class Whatsapp::IncomingMessageBaseService
     return if @conversation
 
     @conversation = ::Conversation.create!(conversation_params)
+    Rails.logger.info(messages_data.first.to_json)
+
+referral =
+  messages_data.first[:referral]
+
+Attribution::ConversationAttributionService.process(
+  conversation: @conversation,
+  referral: referral,
+  provider: 'meta'
+)
   end
 
   def attach_files

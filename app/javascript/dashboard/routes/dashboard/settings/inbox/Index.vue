@@ -76,6 +76,11 @@ const deleteSourceInbox = async () => {
   }
 };
 
+const keepAndClose = () => {
+  useAlert(t('INBOX_MGMT.MIGRATE.KEEP_SUCCESS'));
+  closeMigrate();
+};
+
 // Uazapi status tracking
 const uazapiStatuses = reactive({});
 const uazapiLoading = reactive({});
@@ -548,7 +553,7 @@ onUnmounted(() => {
       </select>
     </div>
     <div class="flex justify-end gap-2">
-      <Button slate xs @click="closeMigrate">
+      <Button slate xs @click="keepAndClose">
         {{ $t('INBOX_MGMT.MIGRATE.CANCEL') }}
       </Button>
       <Button

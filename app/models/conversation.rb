@@ -258,12 +258,12 @@ class Conversation < ApplicationRecord
     return handle_campaign_status if campaign.present?
 
     # TODO: make this an inbox config instead of assuming bot conversations should start as pending
-    # status pending removido — conversas iniciam como open
+    # status pending removido ï¿½ conversas iniciam como open
   end
 
   def handle_campaign_status
     # If campaign has no sender (bot-initiated) and inbox has active bot, let bot handle it
-    # status pending removido — conversas iniciam como open
+    # status pending removido ï¿½ conversas iniciam como open
   end
 
   def notify_conversation_creation
