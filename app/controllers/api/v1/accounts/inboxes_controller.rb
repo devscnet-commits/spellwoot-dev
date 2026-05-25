@@ -273,6 +273,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def migrate
     target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
+    backup_migration_data(@inbox)
     ActiveRecord::Base.transaction do
       @inbox.conversations.find_each do |conversation|
         target_contact_inbox = ContactInbox.find_or_create_by!(
@@ -292,6 +293,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     end
     @inbox.contact_inboxes.destroy_all
     
+    redirect_uazapi_to_target(@inbox, target_inbox)
     render json: { success: true, migrated_count: @inbox.conversations.count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
@@ -301,6 +303,50 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   private
 
+  def backup_migration_data(inbox)
+    timestamp = Time.current.strftime('%Y%m%d%H%M%S')
+    key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
+    
+    data = {
+      inbox: inbox.attributes,
+      conversations: inbox.conversations.map(&:attributes),
+      contact_inboxes: inbox.contact_inboxes.map(&:attributes),
+      messages: Message.where(inbox_id: inbox.id).map(&:attributes),
+      migrated_at: Time.current,
+      migrated_by: Current.user&.id
+    }
+    
+    Redis::Alfred.set(key, data.to_json)
+    Redis::Alfred.expire(key, 30.days.to_i)
+  end
+  
+  def redirect_uazapi_to_target(source_inbox, target_inbox)
+    return unless source_inbox.channel.is_a?(Channel::Api)
+  
+    instance_token = source_inbox.channel.additional_attributes&.dig('uazapi_instance_token')
+    return unless instance_token.present?
+  
+    access_token = Current.user.access_token&.token
+    frontend_url = ENV.fetch('FRONTEND_URL', nil)
+    return unless access_token.present? && frontend_url.present?
+  
+    Whatsapp::Providers::UazapiService.configure_chatwoot_integration(
+      instance_token,
+      {
+        enabled: true,
+        url: frontend_url,
+        access_token: access_token,
+        account_id: Current.account.id,
+        inbox_id: target_inbox.id,
+        ignore_groups: false,
+        sign_messages: true,
+        create_new_conversation: true
+      }
+    )
+  rescue StandardError => e
+    Rails.logger.error "[MIGRATE] Falha ao redirecionar UazAPI: #{e.message}"
+  end
+  
   def fetch_inbox_for_migrate
     @inbox = Current.account.inboxes.find(params[:id])
   end
