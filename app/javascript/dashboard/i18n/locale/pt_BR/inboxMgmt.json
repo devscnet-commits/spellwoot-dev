@@ -656,7 +656,11 @@
       "DELETE_KEEP": "Manter caixa",
       "DELETE_CONFIRM": "Excluir caixa",
       "DELETE_SUCCESS": "Caixa excluída com sucesso.",
-      "DELETE_ERROR": "Erro ao excluir a caixa."
+      "DELETE_ERROR": "Erro ao excluir a caixa.",
+      "KEEP_SUCCESS": "Caixa mantida. A instância UazAPI já foi redirecionada para a nova caixa.",
+      "KEEP_WARNING": "A instância UazAPI já foi redirecionada para a nova caixa. Reconfigurar a caixa antiga pode reverter o redirecionamento.",
+      "CONFIRM_AND_DELETE": "As conversas serão migradas e a caixa \"{name}\" será excluída permanentemente. Deseja continuar?",
+      "SUCCESS_AND_DELETED": "Conversas migradas e caixa excluída com sucesso."
     },
     
     "DELETE": {
