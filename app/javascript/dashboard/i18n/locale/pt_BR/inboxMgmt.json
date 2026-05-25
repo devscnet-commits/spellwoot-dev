@@ -638,19 +638,27 @@
         "LABEL": "Ativar"
       }
     },
-    
+
     "CHANNEL_PREFERENCES": "Preferências do canal",
     "MIGRATE": {
-  "BUTTON_TEXT": "Migrar caixa",
-  "TITLE": "Migrar conversas",
-  "DESCRIPTION": "Mover todas as conversas da caixa \"{name}\" para outra caixa de entrada.",
-  "TARGET_LABEL": "Caixa de destino",
-  "SELECT_PLACEHOLDER": "Selecione a caixa de destino",
-  "CANCEL": "Cancelar",
-  "CONFIRM": "Migrar agora",
-  "SUCCESS": "Conversas migradas com sucesso.",
-  "ERROR": "Erro ao migrar conversas. Tente novamente."
-},
+      "BUTTON_TEXT": "Migrar caixa",
+      "TITLE": "Migrar conversas",
+      "DESCRIPTION": "Mover todas as conversas da caixa \"{name}\" para outra caixa de entrada.",
+      "TARGET_LABEL": "Caixa de destino",
+      "SELECT_PLACEHOLDER": "Selecione a caixa de destino",
+      "CANCEL": "Cancelar",
+      "CONFIRM": "Migrar agora",
+      "SUCCESS": "Conversas migradas com sucesso.",
+      "ERROR": "Erro ao migrar conversas. Tente novamente.",
+      "DELETE_TITLE": "Excluir caixa de origem?",
+      "DELETE_WARNING_TITLE": "Atenção — ação irreversível",
+      "DELETE_WARNING_BODY": "A caixa \"{name}\" ainda existe. Se não excluída, contatos que chamarem esse número criarão novas conversas desvinculadas do histórico migrado.",
+      "DELETE_KEEP": "Manter caixa",
+      "DELETE_CONFIRM": "Excluir caixa",
+      "DELETE_SUCCESS": "Caixa excluída com sucesso.",
+      "DELETE_ERROR": "Erro ao excluir a caixa."
+    },
+    
     "DELETE": {
       "BUTTON_TEXT": "Excluir",
       "AVATAR_DELETE_BUTTON_TEXT": "Apagar Avatar",

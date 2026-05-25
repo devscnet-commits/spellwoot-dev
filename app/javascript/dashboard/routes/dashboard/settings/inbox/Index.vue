@@ -35,9 +35,12 @@ const migrateSourceInbox = ref({});
 const migrateTargetInboxId = ref('');
 const migratingInbox = ref(false);
 
+const migrateStep = ref('select'); // 'select' | 'confirm_delete'
+
 const openMigrate = inbox => {
   migrateSourceInbox.value = inbox;
   migrateTargetInboxId.value = '';
+  migrateStep.value = 'select';
   showMigratePopup.value = true;
 };
 
@@ -54,15 +57,24 @@ const executeMigrate = async () => {
       migrateSourceInbox.value.id,
       migrateTargetInboxId.value
     );
-    useAlert(t('INBOX_MGMT.MIGRATE.SUCCESS'));
-    closeMigrate();
+    migrateStep.value = 'confirm_delete';
   } catch (error) {
     useAlert(t('INBOX_MGMT.MIGRATE.ERROR'));
   } finally {
     migratingInbox.value = false;
   }
 };
-const selectedInbox = ref({});
+
+const deleteSourceInbox = async () => {
+  try {
+    await store.dispatch('inboxes/delete', migrateSourceInbox.value.id);
+    useAlert(t('INBOX_MGMT.MIGRATE.DELETE_SUCCESS'));
+  } catch (error) {
+    useAlert(t('INBOX_MGMT.MIGRATE.DELETE_ERROR'));
+  } finally {
+    closeMigrate();
+  }
+};
 
 // Uazapi status tracking
 const uazapiStatuses = reactive({});
@@ -509,6 +521,8 @@ onUnmounted(() => {
 
 <woot-modal v-if="showMigratePopup" :show="showMigratePopup" @close="closeMigrate">
   <div class="p-6 flex flex-col gap-4 min-w-[400px]">
+  <!-- ETAPA 1: Selecionar destino -->
+  <template v-if="migrateStep === 'select'">
     <h3 class="text-lg font-semibold text-n-slate-12">
       {{ $t('INBOX_MGMT.MIGRATE.TITLE') }}
     </h3>
@@ -547,7 +561,33 @@ onUnmounted(() => {
         {{ $t('INBOX_MGMT.MIGRATE.CONFIRM') }}
       </Button>
     </div>
-  </div>
+  </template>
+
+  <!-- ETAPA 2: Confirmar exclusão da inbox origem -->
+  <template v-if="migrateStep === 'confirm_delete'">
+    <div class="flex flex-col gap-3">
+      <h3 class="text-lg font-semibold text-n-slate-12">
+        {{ $t('INBOX_MGMT.MIGRATE.DELETE_TITLE') }}
+      </h3>
+      <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3">
+        <p class="text-sm text-amber-800 dark:text-amber-200 font-medium mb-1">
+          {{ $t('INBOX_MGMT.MIGRATE.DELETE_WARNING_TITLE') }}
+        </p>
+        <p class="text-xs text-amber-700 dark:text-amber-300">
+          {{ $t('INBOX_MGMT.MIGRATE.DELETE_WARNING_BODY', { name: migrateSourceInbox.name }) }}
+        </p>
+      </div>
+      <div class="flex justify-end gap-2 mt-2">
+        <Button slate xs @click="closeMigrate">
+          {{ $t('INBOX_MGMT.MIGRATE.DELETE_KEEP') }}
+        </Button>
+        <Button ruby xs @click="deleteSourceInbox">
+          {{ $t('INBOX_MGMT.MIGRATE.DELETE_CONFIRM') }}
+        </Button>
+      </div>
+    </div>
+  </template>
+</div>
 </woot-modal>
     <woot-confirm-delete-modal
       v-if="showDeletePopup"
