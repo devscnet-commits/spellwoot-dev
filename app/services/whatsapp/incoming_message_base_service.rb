@@ -130,27 +130,6 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def set_conversation
-    # if lock to single conversation is disabled, we will create a new conversation if previous conversation is resolved
-    @conversation = if @inbox.lock_to_single_conversation
-                      @contact_inbox.conversations.last
-                    else
-                      @contact_inbox.conversations
-                                    .where.not(status: :resolved).last
-                    end
-    return if @conversation
-
-    @conversation = ::Conversation.create!(conversation_params)
-    Rails.logger.info(messages_data.first.to_json)
-
-    referral =
-    messages_data.first[:referral] || messages_data.first['referral']
-
-Attribution::ConversationAttributionService.process(
-  conversation: @conversation,
-  referral: referral,
-  provider: 'meta'
-)
-  end
 
   def attach_files
     return if %w[text button interactive location contacts].include?(message_type)

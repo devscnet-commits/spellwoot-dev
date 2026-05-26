@@ -537,7 +537,7 @@ onUnmounted(() => {
       >
         <option value="" disabled>{{ $t('INBOX_MGMT.MIGRATE.SELECT_PLACEHOLDER') }}</option>
         <option
-          v-for="inbox in inboxesList.filter(i => i.id !== migrateSourceInbox.id)"
+          v-for="inbox in inboxesList.filter(i => i.id !== migrateSourceInbox.id && i.channel_type === migrateSourceInbox.channel_type)"
           :key="inbox.id"
           :value="inbox.id"
         >

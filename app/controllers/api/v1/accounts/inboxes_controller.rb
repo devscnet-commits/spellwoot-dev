@@ -273,15 +273,28 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def migrate
     target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
+  
+    unless @inbox.channel_type == target_inbox.channel_type
+      return render json: { error: 'Só é possível migrar entre caixas do mesmo tipo' }, status: :unprocessable_entity
+    end
+  
     backup_migration_data(@inbox)
+    migrated_count = 0
+  
     ActiveRecord::Base.transaction do
       @inbox.conversations.find_each do |conversation|
-        target_contact_inbox = ContactInbox.find_or_create_by!(
+        source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
+  
+        target_contact_inbox = ContactInbox.find_by(
+          inbox_id: target_inbox.id,
+          source_id: source_id
+        ) || ContactInbox.find_or_create_by!(
           contact_id: conversation.contact_id,
           inbox_id: target_inbox.id
         ) do |ci|
-          ci.source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
+          ci.source_id = source_id
         end
+  
         conversation.messages.update_all(inbox_id: target_inbox.id)
         conversation.reporting_events.update_all(inbox_id: target_inbox.id)
         conversation.sla_events.update_all(inbox_id: target_inbox.id)
@@ -289,12 +302,14 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
           inbox_id: target_inbox.id,
           contact_inbox_id: target_contact_inbox.id
         )
+        migrated_count += 1
       end
+  
+      @inbox.contact_inboxes.destroy_all
     end
-    @inbox.contact_inboxes.destroy_all
-    
+  
     redirect_uazapi_to_target(@inbox, target_inbox)
-    render json: { success: true, migrated_count: @inbox.conversations.count }
+    render json: { success: true, migrated_count: migrated_count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
   rescue StandardError => e
