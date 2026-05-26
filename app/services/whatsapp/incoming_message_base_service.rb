@@ -130,6 +130,26 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def set_conversation
+    @conversation = if @inbox.lock_to_single_conversation
+                      @contact_inbox.conversations.last
+                    else
+                      @contact_inbox.conversations
+                                    .where.not(status: :resolved).last
+                    end
+    return if @conversation
+
+    @conversation = ::Conversation.create!(conversation_params)
+
+    referral = messages_data.first[:referral] || messages_data.first['referral']
+
+    Rails.logger.info("[ATTRIBUTION] referral payload: #{referral.to_json}")
+
+    Attribution::ConversationAttributionService.process(
+      conversation: @conversation,
+      referral: referral,
+      provider: 'meta'
+    )
+  end
 
   def attach_files
     return if %w[text button interactive location contacts].include?(message_type)
