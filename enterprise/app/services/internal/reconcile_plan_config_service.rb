@@ -36,13 +36,7 @@ class Internal::ReconcilePlanConfigService
   end
 
   def reconcile_premium_config
-    premium_config.each do |config|
-      new_config = config.with_indifferent_access
-      existing_config = InstallationConfig.find_by(name: new_config[:name])
-      next if existing_config&.value == new_config[:value]
-
-      existing_config&.update!(value: new_config[:value])
-    end
+    # desabilitado — branding gerenciado manualmente
   end
 
   def premium_features
@@ -50,10 +44,5 @@ class Internal::ReconcilePlanConfigService
   end
 
   def reconcile_premium_features
-    Account.find_in_batches do |accounts|
-      accounts.each do |account|
-        account.disable_features!(*premium_features)
-      end
-    end
   end
 end
