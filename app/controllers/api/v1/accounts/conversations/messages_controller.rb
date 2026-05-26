@@ -27,8 +27,10 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
 
   def retry
     return if message.blank?
-
-    message.update!(content_attributes: {})
+  
+    # Limpa só o external_error, mantém outros atributos
+    updated_attrs = message.content_attributes.except('external_error')
+    message.update!(content_attributes: updated_attrs, status: :progress)
     ::SendReplyJob.perform_later(message.id)
   rescue StandardError => e
     render_could_not_create_error(e.message)
