@@ -15,10 +15,6 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
-  showSnooze: {
-    type: Boolean,
-    default: true,
-  },
 });
 
 const emit = defineEmits(['update', 'close']);
@@ -28,18 +24,10 @@ const { t } = useI18n();
 const actions = ref([
   { icon: 'i-lucide-check', key: 'resolved' },
   { icon: 'i-lucide-redo', key: 'open' },
-  { icon: 'i-lucide-alarm-clock', key: 'snoozed' },
 ]);
 
 const updateConversations = key => {
-  if (key === 'snoozed') {
-    // If the user clicks on the snooze option from the bulk action change status dropdown.
-    // Open the snooze option for bulk action in the cmd bar.
-    const ninja = document.querySelector('ninja-keys');
-    ninja?.open({ parent: 'bulk_action_snooze_conversation' });
-  } else {
-    emit('update', key);
-  }
+  emit('update', key);
 };
 
 const onClose = () => {
@@ -50,7 +38,6 @@ const showAction = key => {
   const actionsMap = {
     resolved: props.showResolve,
     open: props.showReopen,
-    snoozed: props.showSnooze,
   };
   return actionsMap[key] || false;
 };
@@ -59,7 +46,6 @@ const actionLabel = key => {
   const labelsMap = {
     resolved: t('CONVERSATION.HEADER.RESOLVE_ACTION'),
     open: t('CONVERSATION.HEADER.REOPEN_ACTION'),
-    snoozed: t('BULK_ACTION.UPDATE.SNOOZE_UNTIL'),
   };
   return labelsMap[key] || '';
 };
