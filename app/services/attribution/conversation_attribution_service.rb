@@ -11,7 +11,8 @@ class Attribution::ConversationAttributionService
         utm_campaign: referral['headline'],
         utm_content: referral['source_id'],
         ctwa_clid: referral['ctwa_clid'],
-        media_url: referral['source_url'],
+        media_url: referral['source_url'] || referral['video_url'],
+        thumbnail_url: referral['thumbnail_url'],
         ad_body: referral['body'],
         captured_at: Time.current
       }.compact

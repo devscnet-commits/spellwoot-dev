@@ -142,8 +142,8 @@ class Whatsapp::IncomingMessageBaseService
     @conversation = ::Conversation.create!(conversation_params)
     Rails.logger.info(messages_data.first.to_json)
 
-referral =
-  messages_data.first[:referral]
+    referral =
+    messages_data.first[:referral] || messages_data.first['referral']
 
 Attribution::ConversationAttributionService.process(
   conversation: @conversation,
