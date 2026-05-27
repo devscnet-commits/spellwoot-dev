@@ -1,14 +1,13 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
   before_action :fetch_inbox_for_migrate, only: [:migrate]
-  before_action :fetch_inbox, except: [:index, :create, :migrate, :uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
+  before_action :fetch_inbox, except: [:index, :create, :migrate, :uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show, :health, :uazapi_status, :migrate]
   before_action :validate_whatsapp_cloud_channel, only: [:health]
-  before_action :fetch_inbox_without_auth, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
-
+  before_action :fetch_inbox_without_auth, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
   def index
     @inboxes = policy_scope(Current.account.inboxes.order_by_name.includes(:channel, { avatar_attachment: [:blob] }))
   end
@@ -102,7 +101,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       render json: response_data
     else
       Rails.logger.error "[UAZAPI] Failed to fetch status for inbox_id=#{@inbox.id}"
-      render json: { error: 'Failed to fetch status' }, status: :unprocessable_entity
+      render json: { status: 'disconnected', connected: false, logged_in: false }
     end
   rescue StandardError => e
     Rails.logger.error "[UAZAPI] Status error: #{e.message}"
@@ -321,7 +320,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def fetch_inbox_without_auth
     @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
   end
-  
+
   def backup_migration_data(inbox)
     timestamp = Time.current.strftime('%Y%m%d%H%M%S')
     key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"

@@ -33,5 +33,7 @@ class Attribution::ConversationAttributionService
     ).compact
 
     conversation.update!(custom_attributes: custom_attrs)
+    Meta::TrackLeadJob.perform_later(conversation.id) if custom_attrs['ctwa_clid'].present?
+
   end
 end

@@ -225,6 +225,7 @@ class Conversation < ApplicationRecord
     notify_conversation_updation
   end
 
+
   def handle_resolved_status_change
     # When conversation is resolved, clear waiting_since using update_column to avoid callbacks
     return unless saved_change_to_status? && status == 'resolved'
