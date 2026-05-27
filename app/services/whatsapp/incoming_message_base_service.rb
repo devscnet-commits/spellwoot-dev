@@ -57,9 +57,28 @@ class Whatsapp::IncomingMessageBaseService
     message.status = status[:status]
     if status[:status] == 'failed' && status[:errors].present?
       error = status[:errors]&.first
-      message.external_error = "#{error[:code]}: #{error[:title]}"
+      message.external_error = translate_whatsapp_error(error[:code])
     end
     message.save!
+  end
+  
+  def translate_whatsapp_error(code)
+    case code.to_i
+    when 470
+      'Mensagem fora do prazo de 24h — use um template'
+    when 131_047
+      'Número não está no WhatsApp'
+    when 131_026
+      'Falha na entrega — verifique o número'
+    when 131_021
+      'Número de telefone inválido'
+    when 404
+      'Instância não encontrada — verifique a conexão da caixa'
+    when 405
+      'Caixa desconectada — reconecte o WhatsApp'
+    else
+      'Falha ao enviar mensagem'
+    end
   end
 
   def create_messages
