@@ -6,7 +6,13 @@ class Whatsapp::SendOnUazapiService < Base::SendOnChannelService
   end
 
   def perform_reply
-    uazapi_service = Whatsapp::Providers::UazapiService.new(whatsapp_channel: channel)
+    instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
+    
+    channel_wrapper = OpenStruct.new(
+      provider_config: { 'uazapi_instance_token' => instance_token }
+    )
+    
+    uazapi_service = Whatsapp::Providers::UazapiService.new(whatsapp_channel: channel_wrapper)
     phone_number = conversation.contact_inbox.source_id
     uazapi_service.send_message(phone_number, message)
   end
