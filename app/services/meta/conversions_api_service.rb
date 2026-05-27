@@ -37,7 +37,16 @@ class Meta::ConversionsApiService
   def send_event
     payload = {
       data: [
-       
+        {
+          event_name: 'Lead',
+          event_time: Time.current.to_i,
+          action_source: 'business_messaging',
+          messaging_channel: 'whatsapp',
+          user_data: {
+            ph: [Digest::SHA256.hexdigest(phone_number.to_s)],
+            ctwa_clid: ctwa_clid
+          }
+        }
       ]
     }
 
