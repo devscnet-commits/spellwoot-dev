@@ -47,8 +47,9 @@ class Meta::ConversionsApiService
             ctwa_clid: ctwa_clid
           }
         }
-      ]
-    }
+      ],
+      test_event_code: ENV.fetch('META_TEST_EVENT_CODE', nil)
+    }.compact
 
     response = HTTParty.post(
       "#{API_URL}/#{@pixel_id}/events",
