@@ -47,13 +47,17 @@ const canRetry = computed(() => {
       </div>
     </div>
     <button
-      v-if="canRetry"
-      type="button"
-      :disabled="status !== MESSAGE_STATUS.FAILED"
-      class="bg-n-alpha-2 rounded-md size-5 grid place-content-center cursor-pointer"
-      @click="emit('retry')"
-    >
-      <Icon icon="i-lucide-refresh-ccw" class="text-n-ruby-11 size-[14px]" />
-    </button>
+  v-if="canRetry"
+  type="button"
+  :disabled="status !== MESSAGE_STATUS.FAILED"
+  class="bg-n-alpha-2 rounded-md size-5 grid place-content-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+  @click="emit('retry')"
+>
+  <Icon
+    icon="i-lucide-refresh-ccw"
+    class="text-n-ruby-11 size-[14px]"
+    :class="{ 'animate-spin': status === MESSAGE_STATUS.PROGRESS }"
+  />
+</button>
   </div>
 </template>

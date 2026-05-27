@@ -236,7 +236,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     Rails.logger.error "[UAZAPI] Error: #{response.body}"
     return if message.blank?
   
-    error_msg = case response.code
+    error_msg = case response.code.to_i
                 when 401
                   'Sessão expirada — reconecte a caixa do WhatsApp'
                 when 403
