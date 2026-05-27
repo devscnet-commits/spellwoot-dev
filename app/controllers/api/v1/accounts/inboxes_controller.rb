@@ -1,13 +1,13 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
   before_action :fetch_inbox_for_migrate, only: [:migrate]
-  before_action :fetch_inbox, except: [:index, :create, :migrate]
+  before_action :fetch_inbox, except: [:index, :create, :migrate, :uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show, :health, :uazapi_status, :migrate]
   before_action :validate_whatsapp_cloud_channel, only: [:health]
-  before_action :validate_uazapi_channel, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
+  before_action :fetch_inbox_without_auth, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
 
   def index
     @inboxes = policy_scope(Current.account.inboxes.order_by_name.includes(:channel, { avatar_attachment: [:blob] }))
@@ -318,6 +318,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   private
 
+  def fetch_inbox_without_auth
+    @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
+  end
+  
   def backup_migration_data(inbox)
     timestamp = Time.current.strftime('%Y%m%d%H%M%S')
     key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
