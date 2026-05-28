@@ -63,7 +63,10 @@ class Whatsapp::IncomingMessageBaseService
   end
   
   def translate_whatsapp_error(code)
+    Rails.logger.info "[WHATSAPP_ERROR] code=#{code.inspect} to_i=#{code.to_i}"
     case code.to_i
+    when 404
+      'Instância não encontrada — verifique a conexão da caixa'
     when 470
       'Mensagem fora do prazo de 24h — use um template'
     when 131_047
@@ -72,8 +75,8 @@ class Whatsapp::IncomingMessageBaseService
       'Falha na entrega — verifique o número'
     when 131_021
       'Número de telefone inválido'
-    when 404
-      'Instância não encontrada — verifique a conexão da caixa'
+    #when 404
+      #'Instância não encontrada — verifique a conexão da caixa'
     when 405
       'Caixa desconectada — reconecte o WhatsApp'
     else
