@@ -18,16 +18,16 @@ class SendReplyJob < ApplicationJob
   def perform(message_id)
     message = Message.find(message_id)
     channel_name = message.conversation.inbox.channel.class.to_s
-  
+
     return send_on_facebook_page(message) if channel_name == 'Channel::FacebookPage'
-  
+
     if channel_name == 'Channel::Api' && message.conversation.inbox.channel.additional_attributes&.dig('uazapi_instance_token').present?
       return Whatsapp::SendOnUazapiService.new(message: message).perform
     end
-  
+
     service_class = CHANNEL_SERVICES[channel_name]
     return unless service_class
-  
+
     service_class.new(message: message).perform
   end
 
