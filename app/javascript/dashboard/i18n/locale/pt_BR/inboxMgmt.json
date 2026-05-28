@@ -660,9 +660,10 @@
       "KEEP_SUCCESS": "Caixa mantida. A instância UazAPI já foi redirecionada para a nova caixa.",
       "KEEP_WARNING": "A instância UazAPI já foi redirecionada para a nova caixa. Reconfigurar a caixa antiga pode reverter o redirecionamento.",
       "CONFIRM_AND_DELETE": "As conversas serão migradas e a caixa \"{name}\" será excluída permanentemente. Deseja continuar?",
-      "SUCCESS_AND_DELETED": "Conversas migradas e caixa excluída com sucesso."
+      "SUCCESS_AND_DELETED": "Conversas migradas e caixa excluída com sucesso.",
+      "WIDGET_FEATURES": "Funcionalidades do Widget"
     },
-    
+
     "DELETE": {
       "BUTTON_TEXT": "Excluir",
       "AVATAR_DELETE_BUTTON_TEXT": "Apagar Avatar",

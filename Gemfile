@@ -223,9 +223,6 @@ group :development do
   gem 'bullet'
   gem 'letter_opener'
   gem 'rubocop', require: false
-  gem 'rubocop', require: false
-  gem 'rubocop', require: false
-  gem 'rubocop', require: false
   gem 'scss_lint', require: false
   gem 'web-console', '>= 4.2.1'
 
@@ -250,7 +247,6 @@ group :test do
   gem 'test-prof'
   gem 'simplecov_json_formatter', require: false
 end
-
 
 group :development, :test do
   gem 'active_record_query_trace'
