@@ -47,6 +47,8 @@ class Whatsapp::IncomingMessageBaseService
 
   def process_statuses
     return unless find_message_by_source_id(@processed_params[:statuses].first[:id])
+    Rails.logger.info "[STATUS_DEBUG] status=#{@processed_params[:statuses].first.inspect}"
+
 
     update_message_with_status(@message, @processed_params[:statuses].first)
   rescue ArgumentError => e
@@ -54,14 +56,16 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def update_message_with_status(message, status)
+    binding.break
     message.status = status[:status]
     if status[:status] == 'failed' && status[:errors].present?
       error = status[:errors]&.first
+      Rails.logger.info "[STATUS_UPDATE] error=#{error.inspect}"
       message.external_error = translate_whatsapp_error(error[:code])
     end
     message.save!
   end
-  
+
   def translate_whatsapp_error(code)
     Rails.logger.info "[WHATSAPP_ERROR] code=#{code.inspect} to_i=#{code.to_i}"
     case code.to_i
