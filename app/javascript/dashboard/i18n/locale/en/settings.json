@@ -607,6 +607,67 @@
         "AVAILABLE_ON": "The required conversation attributes feature is available on the paid plans.",
         "UPGRADE_PROMPT": "Upgrade to a paid plan to enforce required attributes before conversation resolution.",
         "ASK_ADMIN": "Please reach out to your administrator for the upgrade."
+      },
+      "RULE": {
+        "CONFIGURE_FOR": "Configure rule for \"{name}\"",
+        "ALWAYS": "Always required",
+        "CONDITIONAL": "Required if...",
+        "SELECT_FIELD": "Select trigger field",
+        "SELECT_VALUE": "Select trigger value",
+        "CONDITION_VALUE_PLACEHOLDER": "Enter trigger value",
+        "CONFIRM": "Confirm",
+        "CANCEL": "Cancel",
+        "LABEL_ALWAYS": "Always required",
+        "LABEL_CONDITIONAL": "Required if {field} = {value}"
+      }
+    },
+    "OUTCOME": {
+      "MARK_WON": "Mark as Won",
+      "MARK_LOST": "Mark as Lost",
+      "MODAL_DESCRIPTION": "Fill in the fields below before marking the outcome.",
+      "CONFIRM": "Confirm",
+      "CANCEL": "Cancel",
+      "NO_FIELDS": "No additional fields required.",
+      "SUCCESS": "Outcome recorded successfully",
+      "ERROR": "Could not record outcome, please try again"
+    },
+    "META_CONVERSION": {
+      "TITLE": "Meta Conversions API",
+      "DESCRIPTION": "Send conversion events back to Meta to optimize your Click-to-WhatsApp ad campaigns.",
+      "ENABLED_LABEL": "Enable",
+      "SAVE_BUTTON": "Save",
+      "SAVING": "Saving...",
+      "SAVE": {
+        "SUCCESS": "Meta conversion settings saved",
+        "ERROR": "Could not save settings, please try again"
+      },
+      "STRATEGY": {
+        "LABEL": "When to send the conversion event?",
+        "ON_ARRIVAL_LABEL": "Send Lead on arrival",
+        "ON_ARRIVAL_DESC": "Fires a Lead event automatically when the conversation is created with a ctwa_clid. Best for optimizing by lead volume.",
+        "ON_CLOSE_LABEL": "Send conversion on close / manual action",
+        "ON_CLOSE_DESC": "Nothing is sent on day 0. The agent manually marks Won or Lost. Best for optimizing by purchases with real value."
+      },
+      "ON_CLOSE": {
+        "SECTION_TITLE": "Outcome field configuration",
+        "STATUS_FIELD": "Status attribute (list)",
+        "SELECT_FIELD": "Select attribute",
+        "WIN_VALUE": "Won value",
+        "LOSS_VALUE": "Lost value",
+        "VALUE_FIELD": "Sale value attribute (number, optional)",
+        "NO_VALUE_FIELD": "Not configured",
+        "CURRENCY": "Currency (ISO 4217)",
+        "SELECT_VALUE": "Select value",
+        "CURRENCY_PLACEHOLDER": "e.g. BRL"
+      },
+      "ENRICHMENT": {
+        "TITLE": "Match quality enrichment (optional)",
+        "DESCRIPTION": "Map Meta fields to conversation/contact attributes. Values are hashed before sending.",
+        "EMAIL": "Email (em)",
+        "PHONE": "Phone (ph)",
+        "NAME": "First name (fn)",
+        "ZIP": "ZIP code (zp)",
+        "NOT_MAPPED": "Not mapped"
       }
     }
   },

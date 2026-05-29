@@ -138,6 +138,22 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     @conversation.save!
   end
 
+  def close_outcome
+    outcome = params[:outcome].to_s
+    raise Pundit::NotAuthorizedError unless %w[won lost].include?(outcome)
+
+    attrs = params.permit(custom_attributes: {})[:custom_attributes]
+    if attrs.present?
+      @conversation.custom_attributes = (@conversation.custom_attributes || {}).merge(attrs)
+      @conversation.save!
+    end
+
+    Meta::HandleCloseEventService.new(
+      conversation: @conversation,
+      outcome: outcome.to_sym
+    ).perform
+  end
+
   def destroy
     authorize @conversation, :destroy?
     ::DeleteObjectJob.perform_later(@conversation, Current.user, request.ip)

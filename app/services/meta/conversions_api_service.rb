@@ -1,20 +1,31 @@
 class Meta::ConversionsApiService
   API_URL = 'https://graph.facebook.com/v19.0'
 
-  def initialize(conversation:)
+  def initialize(conversation:, event_name: 'Lead', value: nil, currency: nil)
     @conversation = conversation
+    @account = conversation.account
+    @event_name = event_name
+    @value = value
+    @currency = currency || meta_settings.dig('currency') || 'BRL'
     @pixel_id = ENV.fetch('META_PIXEL_ID', nil)
     @access_token = ENV.fetch('META_CONVERSIONS_API_TOKEN', nil)
   end
 
   def self.track_lead(conversation)
-    new(conversation: conversation).perform
+    new(conversation: conversation, event_name: 'Lead').perform
+  end
+
+  def self.track_purchase(conversation, value: nil)
+    new(conversation: conversation, event_name: 'Purchase', value: value).perform
   end
 
   def perform
     return unless trackable?
+    return if already_sent?
 
-    send_event
+    response = post_to_meta(build_payload)
+    mark_as_sent! if response&.success?
+    response
   end
 
   private
@@ -26,31 +37,60 @@ class Meta::ConversionsApiService
     true
   end
 
+  def already_sent?
+    @conversation.additional_attributes&.dig('meta_conversion', 'sent') == true
+  end
+
   def ctwa_clid
     @conversation.custom_attributes&.dig('ctwa_clid')
   end
 
-  def phone_number
+  def contact_phone
     @conversation.contact&.phone_number&.gsub(/\D/, '')
   end
 
-  def send_event
-    payload = {
-      data: [
-        {
-          event_name: 'Lead',
-          event_time: Time.current.to_i,
-          action_source: 'business_messaging',
-          messaging_channel: 'whatsapp',
-          user_data: {
-            ph: [Digest::SHA256.hexdigest(phone_number.to_s)],
-            ctwa_clid: ctwa_clid
-          }
-        }
-      ],
-      test_event_code: ENV.fetch('META_TEST_EVENT_CODE', nil)
-    }.compact
+  def meta_settings
+    @account.settings&.dig('meta_conversion_settings') || {}
+  end
 
+  def hashed(value)
+    return nil if value.blank?
+
+    Digest::SHA256.hexdigest(value.to_s.downcase.strip)
+  end
+
+  def enrichment_user_data
+    fields = meta_settings.dig('enrichment_fields') || {}
+    fields.each_with_object({}) do |(meta_key, attr_key), acc|
+      raw = @conversation.custom_attributes&.dig(attr_key) ||
+            @conversation.contact&.custom_attributes&.dig(attr_key)
+      acc[meta_key.to_sym] = [hashed(raw)] if raw.present?
+    end
+  end
+
+  def build_payload
+    user_data = {
+      ctwa_clid: ctwa_clid,
+      ph: [hashed(contact_phone)]
+    }.merge(enrichment_user_data).compact
+
+    event = {
+      event_name: @event_name,
+      event_time: Time.current.to_i,
+      action_source: 'business_messaging',
+      messaging_channel: 'whatsapp',
+      user_data: user_data
+    }
+
+    event[:custom_data] = { currency: @currency, value: @value.to_f } if @event_name == 'Purchase'
+
+    body = { data: [event] }
+    test_code = ENV.fetch('META_TEST_EVENT_CODE', nil)
+    body[:test_event_code] = test_code if test_code.present?
+    body
+  end
+
+  def post_to_meta(payload)
     response = HTTParty.post(
       "#{API_URL}/#{@pixel_id}/events",
       headers: { 'Content-Type' => 'application/json' },
@@ -58,13 +98,27 @@ class Meta::ConversionsApiService
     )
 
     if response.success?
-      Rails.logger.info "[META] Lead event sent for conversation #{@conversation.id}"
+      Rails.logger.info "[META] #{@event_name} event sent for conversation #{@conversation.id}"
     else
-      Rails.logger.error "[META] Failed to send Lead event: #{response.body}"
+      Rails.logger.error "[META] Failed to send #{@event_name} event: #{response.body}"
     end
 
     response
   rescue StandardError => e
-    Rails.logger.error "[META] Error sending Lead event: #{e.message}"
+    Rails.logger.error "[META] Error sending #{@event_name} event: #{e.message}"
+    nil
+  end
+
+  def mark_as_sent!
+    @conversation.update!(
+      additional_attributes: (@conversation.additional_attributes || {}).deep_merge(
+        'meta_conversion' => {
+          'sent' => true,
+          'event_name' => @event_name,
+          'sent_at' => Time.current.iso8601,
+          'ctwa_clid' => ctwa_clid
+        }
+      )
+    )
   end
 end

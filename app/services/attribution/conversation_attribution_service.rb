@@ -33,7 +33,17 @@ class Attribution::ConversationAttributionService
     ).compact
 
     conversation.update!(custom_attributes: custom_attrs)
-    Meta::TrackLeadJob.perform_later(conversation.id) if custom_attrs['ctwa_clid'].present?
-
+    track_lead_on_arrival(conversation, custom_attrs)
   end
+
+  def self.track_lead_on_arrival(conversation, custom_attrs)
+    return if custom_attrs['ctwa_clid'].blank?
+
+    strategy = conversation.account.settings&.dig('meta_conversion_settings', 'strategy')
+    # Default to on_arrival when no strategy is configured (backward-compat)
+    return unless strategy.nil? || strategy == 'on_arrival'
+
+    Meta::TrackLeadJob.perform_later(conversation.id)
+  end
+  private_class_method :track_lead_on_arrival
 end

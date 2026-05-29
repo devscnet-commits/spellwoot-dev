@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, reactive } from 'vue';
+import { ref, computed, reactive, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useVuelidate } from '@vuelidate/core';
 import { required, url, helpers } from '@vuelidate/validators';
@@ -16,7 +16,8 @@ const emit = defineEmits(['submit']);
 const { t } = useI18n();
 
 const dialogRef = ref(null);
-const visibleAttributes = ref([]);
+// All required attributes (always + conditional)
+const allRequiredAttributes = ref([]);
 const formValues = reactive({});
 const conversationContext = ref(null);
 
@@ -32,13 +33,34 @@ const placeholders = computed(() => ({
 
 const getPlaceholder = type => placeholders.value[type] || '';
 
+// Compute which attributes should be visible given current form state
+const visibleAttributes = computed(() =>
+  allRequiredAttributes.value.filter(attr => {
+    if (attr.rule === 'conditional') {
+      return formValues[attr.condition_field] === attr.condition_value;
+    }
+    return true;
+  })
+);
+
+// When a conditional field disappears, clear its value so it doesn't linger
+watch(visibleAttributes, (newVisible, oldVisible) => {
+  if (!oldVisible) return;
+  const newKeys = new Set(newVisible.map(a => a.value));
+  oldVisible.forEach(attr => {
+    if (!newKeys.has(attr.value) && attr.rule === 'conditional') {
+      formValues[attr.value] =
+        attr.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
+    }
+  });
+});
+
 const validationRules = computed(() => {
   const rules = {};
   visibleAttributes.value.forEach(attribute => {
     if (attribute.type === ATTRIBUTE_TYPES.LINK) {
       rules[attribute.value] = { required, url };
     } else if (attribute.type === ATTRIBUTE_TYPES.CHECKBOX) {
-      // Checkbox doesn't need validation - any selection is valid
       rules[attribute.value] = {};
     } else {
       rules[attribute.value] = { required };
@@ -78,12 +100,10 @@ const isFormComplete = computed(() =>
   visibleAttributes.value.every(attribute => {
     const value = formValues[attribute.value];
 
-    // For checkbox attributes, ensure the agent has explicitly selected a value
     if (attribute.type === ATTRIBUTE_TYPES.CHECKBOX) {
       return formValues[attribute.value] !== null;
     }
 
-    // For other attribute types, check for valid non-empty values
     return value !== undefined && value !== null && String(value).trim() !== '';
   })
 );
@@ -109,23 +129,21 @@ const close = () => {
   v$.value.$reset();
 };
 
+// attributes: all required attributes (with rule/condition info merged)
+// initialValues: current conversation custom_attributes
 const open = (attributes = [], initialValues = {}, context = null) => {
-  visibleAttributes.value = attributes;
+  allRequiredAttributes.value = attributes;
   conversationContext.value = context;
 
-  // Clear existing formValues
   Object.keys(formValues).forEach(key => {
     delete formValues[key];
   });
 
-  // Initialize form values
   attributes.forEach(attribute => {
     const presetValue = initialValues[attribute.value];
     if (presetValue !== undefined && presetValue !== null) {
       formValues[attribute.value] = presetValue;
     } else {
-      // For checkbox attributes, initialize to null to avoid pre-selection
-      // For other attributes, initialize to empty string
       formValues[attribute.value] =
         attribute.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
     }
@@ -141,8 +159,14 @@ const handleConfirm = async () => {
     return;
   }
 
+  // Only emit values for currently visible attributes
+  const visibleValues = {};
+  visibleAttributes.value.forEach(attr => {
+    visibleValues[attr.value] = formValues[attr.value];
+  });
+
   emit('submit', {
-    attributes: { ...formValues },
+    attributes: visibleValues,
     context: conversationContext.value,
   });
   close();
