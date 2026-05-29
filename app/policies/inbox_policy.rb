@@ -36,50 +36,56 @@ class InboxPolicy < ApplicationPolicy
   end
 
   def campaigns?
-    @account_user.administrator?
+    admin?
   end
 
   def create?
-    @account_user.administrator?
+    admin?
   end
 
   def update?
-    @account_user.administrator?
+    admin?
   end
 
   def destroy?
-    @account_user.administrator?
+    admin?
   end
 
   def set_agent_bot?
-    @account_user.administrator?
+    admin?
   end
 
   def avatar?
-    @account_user.administrator?
+    admin?
   end
 
   def sync_templates?
-    @account_user.administrator?
+    admin?
   end
 
   def health?
-    @account_user.administrator?
+    admin?
   end
 
   def uazapi_status?
-    @account_user.administrator?
+    admin?
   end
 
   def uazapi_connect?
-    @account_user.administrator?
+    admin?
   end
 
   def uazapi_disconnect?
-    @account_user.administrator?
+    admin?
   end
 
   def uazapi_reconfigure?
-    @account_user.administrator?
+    admin?
+  end
+
+  private
+
+  def admin?
+    Current.user&.administrator? || @account_user&.administrator?
   end
 end

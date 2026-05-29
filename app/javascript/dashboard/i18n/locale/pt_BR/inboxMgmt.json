@@ -119,6 +119,14 @@
         "SUBMIT_BUTTON": "Criar caixa de entrada",
         "API": {
           "ERROR_MESSAGE": "Não conseguimos criar um canal de site, por favor, tente novamente"
+        },
+        "CHANNEL_WEBHOOK_SECRET": {
+          "LABEL": "Webhook Secret",
+          "COPY": "Copiar secret para área de transferência",
+          "COPY_SUCCESS": "Secret copiado para área de transferência",
+          "TOGGLE": "Mostrar/ocultar secret",
+          "RESET_SUCCESS": "Webhook secret regenerado com sucesso",
+          "RESET_ERROR": "Não foi possível regenerar o webhook secret. Tente novamente"
         }
       },
       "TWILIO": {
@@ -638,7 +646,6 @@
         "LABEL": "Ativar"
       }
     },
-
     "CHANNEL_PREFERENCES": "Preferências do canal",
     "MIGRATE": {
       "BUTTON_TEXT": "Migrar caixa",
@@ -663,7 +670,6 @@
       "SUCCESS_AND_DELETED": "Conversas migradas e caixa excluída com sucesso.",
       "WIDGET_FEATURES": "Funcionalidades do Widget"
     },
-
     "DELETE": {
       "BUTTON_TEXT": "Excluir",
       "AVATAR_DELETE_BUTTON_TEXT": "Apagar Avatar",
@@ -867,7 +873,8 @@
       "PLACEHOLDER": "Selecionar Centro de Ajuda",
       "SELECT_PLACEHOLDER": "Selecionar Centro de Ajuda",
       "REMOVE": "Remover Centro de Ajuda",
-      "SUB_TEXT": "Anexe um Centro de Ajuda com a caixa de entrada"
+      "SUB_TEXT": "Anexe um Centro de Ajuda com a caixa de entrada",
+      "NONE": "Nenhum"
     },
     "AUTO_ASSIGNMENT": {
       "MAX_ASSIGNMENT_LIMIT": "Limite de atribuição automática",
@@ -1161,6 +1168,54 @@
       "INSTAGRAM": "Instagram",
       "TIKTOK": "TikTok",
       "VOICE": "Voz"
+    },
+    "WIDGET_FEATURES": "Funcionalidades do Widget",
+    "ASSIGNMENT": {
+      "TITLE": "Atribuição de conversa",
+      "DESCRIPTION": "Atribuir automaticamente conversas recebidas a agentes disponíveis com base em políticas de atribuição",
+      "ENABLE_AUTO_ASSIGNMENT": "Ativar atribuição automática de conversa",
+      "DEFAULT_RULES_TITLE": "Regras de atribuição padrão",
+      "DEFAULT_RULES_DESCRIPTION": "Usando o comportamento de atribuição padrão para todas as conversas",
+      "DEFAULT_RULE_1": "Conversas criadas mais cedo primeiro",
+      "DEFAULT_RULE_2": "Distribuição round robin",
+      "CUSTOMIZE_WITH_POLICY": "Personalizar com política de atribuição",
+      "USING_POLICY": "Usando política de atribuição personalizada para esta caixa de entrada",
+      "CUSTOMIZE_POLICY": "Personalizar com política de atribuição",
+      "DELETE_POLICY": "Excluir política",
+      "POLICY_LABEL": "Política de atribuição",
+      "ASSIGNMENT_ORDER_LABEL": "Ordem de atribuição",
+      "ASSIGNMENT_METHOD_LABEL": "Método de atribuição",
+      "POLICY_STATUS": {
+        "ACTIVE": "Ativo",
+        "INACTIVE": "Inativo"
+      },
+      "PRIORITY": {
+        "EARLIEST_CREATED": "Criado mais cedo",
+        "LONGEST_WAITING": "Esperando há mais tempo"
+      },
+      "METHOD": {
+        "ROUND_ROBIN": "Round robin",
+        "BALANCED": "Atribuição balanceada"
+      },
+      "UPGRADE_PROMPT": "Políticas de atribuição personalizadas estão disponíveis no plano Business",
+      "UPGRADE_TO_BUSINESS": "Fazer upgrade para Business",
+      "DEFAULT_POLICY_LINKED": "Política padrão vinculada",
+      "DEFAULT_POLICY_DESCRIPTION": "Vincule uma política de atribuição personalizada para definir como as conversas são atribuídas aos agentes nesta caixa de entrada.",
+      "LINK_EXISTING_POLICY": "Vincular política existente",
+      "CREATE_NEW_POLICY": "Criar nova política",
+      "NO_POLICIES": "Nenhuma política de atribuição encontrada",
+      "VIEW_ALL_POLICIES": "Ver todas as políticas",
+      "CURRENT_BEHAVIOR": "Usando atualmente o comportamento de atribuição padrão:",
+      "LINK_SUCCESS": "Política de atribuição vinculada com sucesso",
+      "LINK_ERROR": "Falha ao vincular política de atribuição"
+    },
+    "ASSIGNMENT_POLICY": {
+      "DELETE_CONFIRM_TITLE": "Excluir política de atribuição?",
+      "DELETE_CONFIRM_MESSAGE": "Tem certeza que deseja remover esta política de atribuição desta caixa de entrada? A caixa voltará a usar as regras de atribuição padrão.",
+      "CANCEL": "Cancelar",
+      "CONFIRM_DELETE": "Excluir",
+      "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
+      "DELETE_ERROR": "Falha ao remover política de atribuição"
     }
   }
 }
