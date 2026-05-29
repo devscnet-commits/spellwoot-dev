@@ -789,7 +789,20 @@
       "ALLOWED_DOMAINS": {
         "TITLE": "Domínios permitidos",
         "SUBTITLE": "Adicione coringa ou domínios separados por vírgula (deixe em branco para permitir todos), ex: *.chatwoot.dev, chatwoot.com.",
-        "PLACEHOLDER": "Insira domínios separados por vírgula (ex: *.chatwoot.dev, chatwoot.com)"
+        "PLACEHOLDER": "Insira domínios separados por vírgula (ex: *.chatwoot.dev, chatwoot.com)",
+        "DESCRIPTION": "Especifique os domínios onde este widget pode ser incorporado. Deixe em branco para permitir todos os domínios."
+      },
+      "ALLOW_MOBILE_WEBVIEW": {
+        "LABEL": "Permitir em visualização mobile",
+        "SUBTITLE": "Habilitar o widget em webviews mobile como aplicativos nativos"
+      },
+      "IDENTITY_VALIDATION": {
+        "TITLE": "Validação de Identidade",
+        "DESCRIPTION": "Para validar a identidade do usuário, você pode passar um `identifier_hash` para cada usuário. Você pode gerar um hash HMAC sha256 usando o `identifier` com a chave mostrada aqui.",
+        "SECRET_KEY": "Chave secreta",
+        "VIEW_DOCS": "Ver documentação",
+        "REQUIRE_LABEL": "Forçar validação de identidade",
+        "REQUIRE_DESCRIPTION": "Se ativado, as solicitações sem o `identifier_hash` serão rejeitadas."
       },
       "INBOX_AGENTS": "Agentes",
       "INBOX_AGENTS_SUB_TEXT": "Adicionar ou remover agentes dessa caixa de entrada",

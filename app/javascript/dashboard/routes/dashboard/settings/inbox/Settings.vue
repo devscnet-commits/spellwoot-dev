@@ -879,7 +879,7 @@ export default {
               <SettingsFieldSection
                 :label="
                   $t(
-                    'INBOX_MGMT.ADD.WEBSITE_CHANNEL.CHANNEL_WELCOME_TITLE.LABEL'
+                    'INBOX_MGMT.ADD.WEBSITE_cx.CHANNEL_WELCOME_TITLE.LABEL'
                   )
                 "
               >
