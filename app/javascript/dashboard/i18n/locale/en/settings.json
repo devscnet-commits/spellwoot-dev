@@ -620,6 +620,16 @@
         "LABEL_ALWAYS": "Always required",
         "LABEL_CONDITIONAL": "Required if {field} = {value}"
       }
+    },
+    "OUTCOME": {
+      "MARK_WON": "Mark as Won",
+      "MARK_LOST": "Mark as Lost",
+      "MODAL_DESCRIPTION": "Fill in the fields below before marking the outcome.",
+      "CONFIRM": "Confirm",
+      "CANCEL": "Cancel",
+      "NO_FIELDS": "No additional fields required.",
+      "SUCCESS": "Outcome recorded successfully",
+      "ERROR": "Could not record outcome, please try again"
     }
   },
   "CREATE_ACCOUNT": {
