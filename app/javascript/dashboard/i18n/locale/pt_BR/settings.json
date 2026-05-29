@@ -608,6 +608,45 @@
         "UPGRADE_PROMPT": "Atualize para um plano pago para exigir atributos obrigatórios antes da resolução da conversa.",
         "ASK_ADMIN": "Entre em contato com seu administrador para fazer a atualização."
       }
+    },
+    "META_CONVERSION": {
+      "TITLE": "Meta Conversions API",
+      "DESCRIPTION": "Envie eventos de conversão de volta à Meta para otimizar suas campanhas de anúncios Click-to-WhatsApp.",
+      "ENABLED_LABEL": "Ativar",
+      "SAVE_BUTTON": "Salvar",
+      "SAVING": "Salvando...",
+      "SAVE": {
+        "SUCCESS": "Configurações de conversão Meta salvas",
+        "ERROR": "Não foi possível salvar as configurações. Por favor, tente novamente"
+      },
+      "STRATEGY": {
+        "LABEL": "Quando enviar o evento de conversão?",
+        "ON_ARRIVAL_LABEL": "Enviar Lead na chegada",
+        "ON_ARRIVAL_DESC": "Dispara um evento Lead automaticamente quando a conversa é criada com um ctwa_clid. Ideal para otimizar por volume de leads.",
+        "ON_CLOSE_LABEL": "Enviar conversão no fechamento / ação manual",
+        "ON_CLOSE_DESC": "Nada é enviado no dia 0. O agente marca manualmente como Ganho ou Perdido. Ideal para otimizar por compras com valor real."
+      },
+      "ON_CLOSE": {
+        "SECTION_TITLE": "Configuração do campo de resultado",
+        "STATUS_FIELD": "Atributo de status (lista)",
+        "SELECT_FIELD": "Selecionar atributo",
+        "WIN_VALUE": "Valor de ganho",
+        "LOSS_VALUE": "Valor de perda",
+        "VALUE_FIELD": "Atributo de valor de venda (número, opcional)",
+        "NO_VALUE_FIELD": "Não configurado",
+        "CURRENCY": "Moeda (ISO 4217)",
+        "SELECT_VALUE": "Selecionar valor",
+        "CURRENCY_PLACEHOLDER": "ex: BRL"
+      },
+      "ENRICHMENT": {
+        "TITLE": "Enriquecimento de qualidade de correspondência (opcional)",
+        "DESCRIPTION": "Mapeie campos Meta para atributos de conversa/contato. Os valores são hasheados antes do envio.",
+        "EMAIL": "E-mail (em)",
+        "PHONE": "Telefone (ph)",
+        "NAME": "Primeiro nome (fn)",
+        "ZIP": "CEP (zp)",
+        "NOT_MAPPED": "Não mapeado"
+      }
     }
   },
   "CREATE_ACCOUNT": {

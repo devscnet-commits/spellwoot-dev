@@ -119,13 +119,12 @@ const handleSave = async () => {
           {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.DESCRIPTION') }}
         </p>
       </div>
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input v-model="enabled" type="checkbox" class="sr-only" />
+      <label class="flex items-center gap-2 cursor-pointer select-none">
         <div
           class="relative w-10 h-5 rounded-full transition-colors"
           :class="enabled ? 'bg-n-brand' : 'bg-n-slate-5'"
-          @click="enabled = !enabled"
         >
+          <input v-model="enabled" type="checkbox" class="sr-only" />
           <div
             class="absolute top-0.5 size-4 bg-white rounded-full shadow transition-transform"
             :class="enabled ? 'translate-x-5' : 'translate-x-0.5'"
