@@ -14,7 +14,35 @@ module AccountSettingsSchema
         'captain_auto_resolve_mode': { 'type': %w[string null], 'enum': ['evaluated', 'legacy', 'disabled', nil] },
         'conversation_required_attributes': {
           'type': %w[array null],
-          'items': { 'type': 'string' }
+          'items': {
+            'oneOf': [
+              { 'type': 'string' },
+              {
+                'type': 'object',
+                'properties': {
+                  'key': { 'type': 'string' },
+                  'rule': { 'type': 'string', 'enum': %w[always conditional] },
+                  'condition_field': { 'type': %w[string null] },
+                  'condition_value': { 'type': %w[string null] }
+                },
+                'required': ['key']
+              }
+            ]
+          }
+        },
+        'meta_conversion_settings': {
+          'type': %w[object null],
+          'properties': {
+            'enabled': { 'type': %w[boolean null] },
+            'strategy': { 'type': %w[string null], 'enum': ['on_arrival', 'on_close', nil] },
+            'win_status_field': { 'type': %w[string null] },
+            'win_value': { 'type': %w[string null] },
+            'loss_value': { 'type': %w[string null] },
+            'value_field': { 'type': %w[string null] },
+            'currency': { 'type': %w[string null] },
+            'enrichment_fields': { 'type': %w[object null] }
+          },
+          'additionalProperties': false
         },
         'captain_models': {
           'type': %w[object null],
