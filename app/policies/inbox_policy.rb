@@ -60,26 +60,26 @@ class InboxPolicy < ApplicationPolicy
   end
 
   def sync_templates?
-    @account_user.administrator?
+    @user.is_a?(SuperAdmin) || @account_user&.administrator?
   end
 
   def health?
-    @account_user.administrator?
+    @user.is_a?(SuperAdmin) || @account_user&.administrator?
   end
 
   def uazapi_status?
-    @account_user.administrator?
+    @user.is_a?(SuperAdmin) || @account_user&.administrator?
   end
 
   def uazapi_connect?
-    @account_user.administrator?
+    @user.is_a?(SuperAdmin) || @account_user&.administrator?
   end
 
   def uazapi_disconnect?
-    @account_user.administrator?
+    @user.is_a?(SuperAdmin) || @account_user&.administrator?
   end
 
   def uazapi_reconfigure?
-    @account_user.administrator?
+    @user.is_a?(SuperAdmin) || @account_user&.administrator?
   end
 end
