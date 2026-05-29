@@ -607,6 +607,18 @@
         "AVAILABLE_ON": "The required conversation attributes feature is available on the paid plans.",
         "UPGRADE_PROMPT": "Upgrade to a paid plan to enforce required attributes before conversation resolution.",
         "ASK_ADMIN": "Please reach out to your administrator for the upgrade."
+      },
+      "RULE": {
+        "CONFIGURE_FOR": "Configure rule for \"{name}\"",
+        "ALWAYS": "Always required",
+        "CONDITIONAL": "Required if...",
+        "SELECT_FIELD": "Select trigger field",
+        "SELECT_VALUE": "Select trigger value",
+        "CONDITION_VALUE_PLACEHOLDER": "Enter trigger value",
+        "CONFIRM": "Confirm",
+        "CANCEL": "Cancel",
+        "LABEL_ALWAYS": "Always required",
+        "LABEL_CONDITIONAL": "Required if {field} = {value}"
       }
     }
   },
