@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
@@ -13,6 +13,7 @@ const conversationAttributes = useMapGetter(
 );
 
 const isSaving = ref(false);
+const isDirty = ref(false);
 
 // Form state
 const enabled = ref(false);
@@ -22,7 +23,7 @@ const winValue = ref('');
 const lossValue = ref('');
 const valueField = ref('');
 const currency = ref('BRL');
-const enrichmentFields = ref({ em: '', ph: '', fn: '', zp: '' });
+const enrichmentFields = reactive({ em: '', ph: '', fn: '', zp: '' });
 
 // Attribute option lists
 const listAttributes = computed(() =>
@@ -65,21 +66,37 @@ watch(
     lossValue.value = s.loss_value ?? '';
     valueField.value = s.value_field ?? '';
     currency.value = s.currency ?? 'BRL';
-    enrichmentFields.value = {
-      em: s.enrichment_fields?.em ?? '',
-      ph: s.enrichment_fields?.ph ?? '',
-      fn: s.enrichment_fields?.fn ?? '',
-      zp: s.enrichment_fields?.zp ?? '',
-    };
+    enrichmentFields.em = s.enrichment_fields?.em ?? '';
+    enrichmentFields.ph = s.enrichment_fields?.ph ?? '';
+    enrichmentFields.fn = s.enrichment_fields?.fn ?? '';
+    enrichmentFields.zp = s.enrichment_fields?.zp ?? '';
+    isDirty.value = false;
   },
   { immediate: true }
+);
+
+watch(
+  [
+    enabled,
+    strategy,
+    winStatusField,
+    winValue,
+    lossValue,
+    valueField,
+    currency,
+    enrichmentFields,
+  ],
+  () => {
+    isDirty.value = true;
+  },
+  { deep: true }
 );
 
 const handleSave = async () => {
   isSaving.value = true;
   try {
     const enrichment = Object.fromEntries(
-      Object.entries(enrichmentFields.value).filter(([, v]) => v !== '')
+      Object.entries(enrichmentFields).filter(([, v]) => v !== '')
     );
     await updateAccount(
       {
@@ -96,6 +113,7 @@ const handleSave = async () => {
       },
       { silent: true }
     );
+    isDirty.value = false;
     useAlert(t('CONVERSATION_WORKFLOW.META_CONVERSION.SAVE.SUCCESS'));
   } catch {
     useAlert(t('CONVERSATION_WORKFLOW.META_CONVERSION.SAVE.ERROR'));
@@ -131,7 +149,11 @@ const handleSave = async () => {
           />
         </div>
         <span class="text-body-para text-n-slate-12">
-          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENABLED_LABEL') }}
+          {{
+            enabled
+              ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.DISABLE_LABEL')
+              : $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENABLED_LABEL')
+          }}
         </span>
       </label>
     </div>
@@ -354,7 +376,7 @@ const handleSave = async () => {
 
         <div class="grid grid-cols-2 gap-3">
           <div
-            v-for="(metaKey, label) in {
+            v-for="(label, metaKey) in {
               em: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EMAIL'),
               ph: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.PHONE'),
               fn: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.NAME'),
@@ -394,7 +416,7 @@ const handleSave = async () => {
     <div class="flex justify-end px-5 py-4">
       <button
         class="text-body-para font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
-        :disabled="isSaving"
+        :disabled="isSaving || !isDirty"
         @click="handleSave"
       >
         {{
