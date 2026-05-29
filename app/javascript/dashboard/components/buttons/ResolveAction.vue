@@ -20,11 +20,11 @@ import ConversationResolveAttributesModal from 'dashboard/components-next/Conver
 const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
-const { checkMissingAttributes } = useConversationRequiredAttributes();
+const { requiredAttributes, checkMissingAttributes } =
+  useConversationRequiredAttributes();
 
 const isLoading = ref(false);
 const resolveAttributesModalRef = ref(null);
-
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 
@@ -35,7 +35,6 @@ const isOpen = computed(
 const isResolved = computed(
   () => currentChat.value.status === wootConstants.STATUS_TYPE.RESOLVED
 );
-
 
 const getConversationParams = () => {
   const allConversations = document.querySelectorAll(
@@ -56,7 +55,6 @@ const getConversationParams = () => {
     lastIndex: lastConversationIndex,
   };
 };
-
 
 const toggleStatus = (status, snoozedUntil, customAttributes = null) => {
   isLoading.value = true;
@@ -95,9 +93,7 @@ const onCmdOpenConversation = () => {
 
 const onCmdResolveConversation = () => {
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
-  const { hasMissing, missing } = checkMissingAttributes(
-    currentCustomAttributes
-  );
+  const { hasMissing } = checkMissingAttributes(currentCustomAttributes);
 
   if (hasMissing) {
     const conversationContext = {
@@ -105,7 +101,7 @@ const onCmdResolveConversation = () => {
       snoozedUntil: null,
     };
     resolveAttributesModalRef.value?.open(
-      missing,
+      requiredAttributes.value,
       currentCustomAttributes,
       conversationContext
     );
@@ -145,27 +141,27 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
 <template>
   <div class="flex relative justify-end items-center resolve-actions">
     <ButtonGroup
-  class="flex-shrink-0 rounded-lg shadow outline-1 outline outline-n-container"
->
-  <Button
-    v-if="isOpen"
-    :label="t('CONVERSATION.HEADER.RESOLVE_ACTION')"
-    size="sm"
-    color="slate"
-    no-animation
-    :is-loading="isLoading"
-    @click="onCmdResolveConversation"
-  />
-  <Button
-    v-else-if="isResolved"
-    :label="t('CONVERSATION.HEADER.REOPEN_ACTION')"
-    size="sm"
-    color="slate"
-    no-animation
-    :is-loading="isLoading"s
-    @click="onCmdOpenConversation"
-  />
-</ButtonGroup>
+      class="flex-shrink-0 rounded-lg shadow outline-1 outline outline-n-container"
+    >
+      <Button
+        v-if="isOpen"
+        :label="t('CONVERSATION.HEADER.RESOLVE_ACTION')"
+        size="sm"
+        color="slate"
+        no-animation
+        :is-loading="isLoading"
+        @click="onCmdResolveConversation"
+      />
+      <Button
+        v-else-if="isResolved"
+        :label="t('CONVERSATION.HEADER.REOPEN_ACTION')"
+        size="sm"
+        color="slate"
+        no-animation
+        :is-loading="isLoading"
+        @click="onCmdOpenConversation"
+      />
+    </ButtonGroup>
 
     <ConversationResolveAttributesModal
       ref="resolveAttributesModalRef"
@@ -173,4 +169,3 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
     />
   </div>
 </template>
-
