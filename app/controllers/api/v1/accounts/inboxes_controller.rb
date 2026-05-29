@@ -139,6 +139,52 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       body: {}.to_json
     )
 
+    # If instance no longer exists on UazAPI side, recreate it
+    if [401, 404].include?(response.code)
+      Rails.logger.warn "[UAZAPI] Instance token invalid (#{response.code}), recreating instance for inbox_id=#{@inbox.id}"
+      instance_data = Whatsapp::Providers::UazapiService.create_instance(@inbox.name)
+      unless instance_data.present?
+        Rails.logger.error "[UAZAPI] Failed to recreate instance for inbox_id=#{@inbox.id}"
+        return render json: { error: 'Failed to recreate instance' }, status: :unprocessable_entity
+      end
+
+      new_token = instance_data['token'] || instance_data.dig('instance', 'token')
+      unless new_token.present?
+        Rails.logger.error "[UAZAPI] No token in recreated instance response: #{instance_data.inspect}"
+        return render json: { error: 'Failed to obtain new instance token' }, status: :unprocessable_entity
+      end
+
+      channel.additional_attributes = (channel.additional_attributes || {}).merge('uazapi_instance_token' => new_token)
+      channel.save!
+      instance_token = new_token
+      headers['token'] = new_token
+
+      # Reconfigure Chatwoot webhook integration with new token
+      if Current.user.present? && (access_token = Current.user.access_token&.token).present?
+        frontend_url = ENV.fetch('FRONTEND_URL', nil)
+        if frontend_url.present?
+          chatwoot_config = {
+            enabled: true,
+            url: frontend_url,
+            access_token: access_token,
+            account_id: Current.account.id,
+            inbox_id: @inbox.id,
+            ignore_groups: false,
+            sign_messages: true,
+            create_new_conversation: true
+          }
+          result = Whatsapp::Providers::UazapiService.configure_chatwoot_integration(new_token, chatwoot_config)
+          channel.update!(webhook_url: result['chatwoot_inbox_webhook_url']) if result&.dig('chatwoot_inbox_webhook_url').present?
+        end
+      end
+
+      response = HTTParty.post(
+        "#{base_url}/instance/connect",
+        headers: headers,
+        body: {}.to_json
+      )
+    end
+
     if response.success?
       connection_data = response.parsed_response
       Rails.logger.info "[UAZAPI] Connection initiated: status=#{connection_data.dig('instance', 'status')}, qr_code_available=#{connection_data.dig('instance', 'qrcode').present?}"
