@@ -149,7 +149,11 @@ const handleSave = async () => {
           />
         </div>
         <span class="text-body-para text-n-slate-12">
-          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENABLED_LABEL') }}
+          {{
+            enabled
+              ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.DISABLE_LABEL')
+              : $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENABLED_LABEL')
+          }}
         </span>
       </label>
     </div>

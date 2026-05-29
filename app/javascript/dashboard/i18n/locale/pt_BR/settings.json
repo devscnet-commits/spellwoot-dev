@@ -613,6 +613,7 @@
       "TITLE": "Meta Conversions API",
       "DESCRIPTION": "Envie eventos de conversão de volta à Meta para otimizar suas campanhas de anúncios Click-to-WhatsApp.",
       "ENABLED_LABEL": "Ativar",
+      "DISABLE_LABEL": "Desativar",
       "SAVE_BUTTON": "Salvar",
       "SAVING": "Salvando...",
       "SAVE": {
