@@ -6,6 +6,7 @@ import { FEATURE_FLAGS } from '../../../../featureFlags';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import ConversationRequiredAttributes from 'dashboard/components-next/ConversationWorkflow/ConversationRequiredAttributes.vue';
+import MetaConversionSettings from 'dashboard/components-next/ConversationWorkflow/MetaConversionSettings.vue';
 import AutoResolve from 'dashboard/routes/dashboard/settings/account/components/AutoResolve.vue';
 
 const { accountId } = useAccount();
@@ -42,6 +43,7 @@ const showRequiredAttributes = computed(() => {
       <div class="flex flex-col gap-6 mt-4">
         <AutoResolve v-if="showAutoResolutionConfig" />
         <ConversationRequiredAttributes :is-enabled="showRequiredAttributes" />
+        <MetaConversionSettings />
       </div>
     </template>
   </SettingsLayout>
