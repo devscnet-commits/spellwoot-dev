@@ -878,9 +878,7 @@ export default {
             >
               <SettingsFieldSection
                 :label="
-                  $t(
-                    'INBOX_MGMT.ADD.WEBSITE_cx.CHANNEL_WELCOME_TITLE.LABEL'
-                  )
+                  $t('INBOX_MGMT.ADD.WEBSITE_cx.CHANNEL_WELCOME_TITLE.LABEL')
                 "
               >
                 <woot-input

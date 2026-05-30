@@ -201,7 +201,9 @@ const handleAvatarDelete = () => {
 <template>
   <div class="flex flex-col w-full gap-4">
     <div class="flex flex-col w-full gap-2">
-      <label class="mb-0.5 text-sm font-medium text-[#fcfafb] dark:text-gray-50">
+      <label
+        class="mb-0.5 text-sm font-medium text-[#fcfafb] dark:text-gray-50"
+      >
         {{ t('HELP_CENTER.PORTAL_SETTINGS.FORM.AVATAR.LABEL') }}
       </label>
       <Avatar
