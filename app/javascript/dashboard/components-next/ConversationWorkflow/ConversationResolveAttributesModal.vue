@@ -139,6 +139,12 @@ const open = (attributes = [], initialValues = {}, context = null) => {
     delete formValues[key];
   });
 
+  // Seed all conversation attributes so condition_field values are available
+  // for the visibleAttributes filter (conditional rules check formValues)
+  Object.entries(initialValues).forEach(([key, value]) => {
+    formValues[key] = value;
+  });
+
   attributes.forEach(attribute => {
     const presetValue = initialValues[attribute.value];
     if (presetValue !== undefined && presetValue !== null) {
