@@ -94,7 +94,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     status_data = Whatsapp::UazapiConnectionService.get_status(@inbox.channel)
 
     if status_data
-      Rails.logger.info "[UAZAPI] Status retrieved: status=#{status_data[:status]}, connected=#{status_data[:connected]}, logged_in=#{status_data[:logged_in]}"
+      Rails.logger.info "[UAZAPI] Status retrieved: status=#{status_data[:status]}, " \
+                         "connected=#{status_data[:connected]}, logged_in=#{status_data[:logged_in]}"
       webhook_url = @inbox.channel.webhook_url if @inbox.channel.is_a?(Channel::Api)
       Rails.logger.info "[UAZAPI] Webhook URL: #{webhook_url}" if webhook_url.present?
       response_data = status_data.merge(webhook_url: webhook_url)
@@ -122,7 +123,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
-      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, additional_attributes=#{channel.additional_attributes.inspect}"
+      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, " \
+                         "additional_attributes=#{channel.additional_attributes.inspect}"
       return render json: { error: 'Instance token not found' }, status: :unprocessable_entity
     end
 
@@ -187,7 +189,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
     if response.success?
       connection_data = response.parsed_response
-      Rails.logger.info "[UAZAPI] Connection initiated: status=#{connection_data.dig('instance', 'status')}, qr_code_available=#{connection_data.dig('instance', 'qrcode').present?}"
+      Rails.logger.info "[UAZAPI] Connection initiated: status=#{connection_data.dig('instance', 'status')}, " \
+                         "qr_code_available=#{connection_data.dig('instance', 'qrcode').present?}"
       render json: {
         qr_code: connection_data.dig('instance', 'qrcode') || connection_data['qrcode'],
         status: connection_data.dig('instance', 'status') || 'connecting',
@@ -216,7 +219,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
-      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, additional_attributes=#{channel.additional_attributes.inspect}"
+      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, " \
+                         "additional_attributes=#{channel.additional_attributes.inspect}"
       return render json: { error: 'Instance token not found' }, status: :unprocessable_entity
     end
 
@@ -431,7 +435,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def validate_uazapi_channel
-    Rails.logger.info "[UAZAPI] Validating channel for inbox_id=#{@inbox.id}, channel_id=#{@inbox.channel&.id}, channel_type=#{@inbox.channel&.class}"
+    Rails.logger.info "[UAZAPI] Validating channel for inbox_id=#{@inbox.id}, " \
+                       "channel_id=#{@inbox.channel&.id}, channel_type=#{@inbox.channel&.class}"
     
     unless @inbox.channel.is_a?(Channel::Api)
       Rails.logger.error "[UAZAPI] Channel validation failed: not Channel::Api, channel_type=#{@inbox.channel&.class}"
