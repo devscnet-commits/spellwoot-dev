@@ -17,8 +17,13 @@ class AudioNotificationStore {
     return mineConversation.some(conv => conv.unread_count > 0);
   };
 
-  // eslint-disable-next-line class-methods-use-this
-  isMessageFromPendingConversation = () => false;
+  isMessageFromPendingConversation = message => {
+    if (!message?.conversation_id) return false;
+    const conversation = this.store.getters.getConversationById(
+      message.conversation_id
+    );
+    return conversation?.status === 'pending';
+  };
 
   isMessageFromCurrentConversation = message => {
     return this.store.getters.getSelectedChat?.id === message.conversation_id;
