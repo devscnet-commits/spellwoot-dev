@@ -78,7 +78,9 @@ class Article < ApplicationRecord
   # TODO: if text search slows down https://www.postgresql.org/docs/current/textsearch-features.html#TEXTSEARCH-UPDATE-TRIGGERS
   # - the A, B and C are for weightage. See: https://github.com/Casecommons/pg_search#weighting
   # - the normalization is for ensuring the long articles that mention the search term too many times are not ranked higher.
+  # rubocop:disable Layout/LineLength
   #   it divides rank by log(document_length) to prevent longer articles from ranking higher just due to sizeSee: https://github.com/Casecommons/pg_search#normalization
+  # rubocop:enable Layout/LineLength
   # - the ranking is to ensure that articles with higher weightage are ranked higher
   pg_search_scope(
     :text_search,

@@ -12,6 +12,9 @@ require:
 
 Layout/LineLength:
   Max: 150
+  Exclude:
+    - 'spec/**/*'
+    - 'spec/factories/**/*'
 
 Metrics/ClassLength:
   Max: 175
