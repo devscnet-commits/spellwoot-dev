@@ -4,13 +4,10 @@ import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
 import { useElementSize } from '@vueuse/core';
 import BackButton from '../BackButton.vue';
-import InboxName from '../InboxName.vue';
 import MoreActions from './MoreActions.vue';
 import Avatar from 'next/avatar/Avatar.vue';
 import SLACardLabel from './components/SLACardLabel.vue';
-import wootConstants from 'dashboard/constants/globals';
 import { conversationListPageURL } from 'dashboard/helper/URLHelper';
-import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
 import { useInbox } from 'dashboard/composables/useInbox';
 import { useI18n } from 'vue-i18n';
 
@@ -25,7 +22,7 @@ const props = defineProps({
   },
 });
 
-const { t } = useI18n();
+useI18n();
 const store = useStore();
 const route = useRoute();
 const conversationHeader = ref(null);
@@ -67,27 +64,6 @@ const isHMACVerified = computed(() => {
 
 const currentContact = computed(() =>
   store.getters['contacts/getContact'](props.chat.meta.sender.id)
-);
-
-const isSnoozed = computed(
-  () => currentChat.value.status === wootConstants.STATUS_TYPE.SNOOZED
-);
-
-const snoozedDisplayText = computed(() => {
-  const { snoozed_until: snoozedUntil } = currentChat.value;
-  if (snoozedUntil) {
-    return `${t('CONVERSATION.HEADER.SNOOZED_UNTIL')} ${snoozedReopenTime(snoozedUntil)}`;
-  }
-  return t('CONVERSATION.HEADER.SNOOZED_UNTIL_NEXT_REPLY');
-});
-
-const inbox = computed(() => {
-  const { inbox_id: inboxId } = props.chat;
-  return store.getters['inboxes/getInbox'](inboxId);
-});
-
-const hasMultipleInboxes = computed(
-  () => store.getters['inboxes/getInboxes'].length > 1
 );
 
 const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
@@ -134,20 +110,20 @@ const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
 
         <div
           class="flex items-center gap-2 overflow-hidden text-xs conversation--header--actions text-ellipsis whitespace-nowrap"
-        </div>
+        />
       </div>
-    </div>
-    <div
-      class="flex flex-row items-center justify-start xl:justify-end flex-shrink-0 gap-2 w-full xl:w-auto header-actions-wrap"
-    >
-      <SLACardLabel
-        v-if="hasSlaPolicyId"
-        :chat="chat"
-        show-extended-info
-        :parent-width="width"
-        class="hidden md:flex"
-      />
-      <MoreActions :conversation-id="currentChat.id" />
+      <div
+        class="flex flex-row items-center justify-start xl:justify-end flex-shrink-0 gap-2 w-full xl:w-auto header-actions-wrap"
+      >
+        <SLACardLabel
+          v-if="hasSlaPolicyId"
+          :chat="chat"
+          show-extended-info
+          :parent-width="width"
+          class="hidden md:flex"
+        />
+        <MoreActions :conversation-id="currentChat.id" />
+      </div>
     </div>
   </div>
 </template>

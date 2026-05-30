@@ -3,8 +3,6 @@ import {
   CONVERSATION_PERMISSIONS,
 } from 'dashboard/constants/permissions';
 import { getUserPermissions } from 'dashboard/helper/permissionsHelper';
-import wootConstants from 'dashboard/constants/globals';
-
 class AudioNotificationStore {
   constructor(store) {
     this.store = store;
@@ -19,12 +17,8 @@ class AudioNotificationStore {
     return mineConversation.some(conv => conv.unread_count > 0);
   };
 
-  isMessageFromPendingConversation = (message = {}) => {
-    const { conversation_id: conversationId } = message || {};
-    if (!conversationId) return false;
-
-    return false;
-  };
+  // eslint-disable-next-line class-methods-use-this
+  isMessageFromPendingConversation = () => false;
 
   isMessageFromCurrentConversation = message => {
     return this.store.getters.getSelectedChat?.id === message.conversation_id;
