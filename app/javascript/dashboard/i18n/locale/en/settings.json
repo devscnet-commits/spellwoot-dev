@@ -645,9 +645,9 @@
       "STRATEGY": {
         "LABEL": "When to send the conversion event?",
         "ON_ARRIVAL_LABEL": "Send Lead on arrival",
-        "ON_ARRIVAL_DESC": "Fires a Lead event automatically when the conversation is created with a ctwa_clid. Best for optimizing by lead volume.",
-        "ON_CLOSE_LABEL": "Send conversion on close / manual action",
-        "ON_CLOSE_DESC": "Nothing is sent on day 0. The agent manually marks Won or Lost. Best for optimizing by purchases with real value."
+        "ON_ARRIVAL_DESC": "Fires a Lead event automatically when the conversation comes from a Click-to-WhatsApp ad. Best for optimizing by lead volume.",
+        "ON_CLOSE_LABEL": "Send conversion on close (manual action)",
+        "ON_CLOSE_DESC": "No event is sent automatically. The agent clicks \"Mark as Won\" or \"Mark as Lost\" on the conversation to trigger the event. The modal fields are configured in Conversation Workflow → Required Attributes."
       },
       "ON_CLOSE": {
         "SECTION_TITLE": "Outcome field configuration",
@@ -662,8 +662,8 @@
         "CURRENCY_PLACEHOLDER": "e.g. BRL"
       },
       "ENRICHMENT": {
-        "TITLE": "Match quality enrichment (optional)",
-        "DESCRIPTION": "Map Meta fields to conversation/contact attributes. Values are hashed before sending.",
+        "TITLE": "Contact data for matching (optional)",
+        "DESCRIPTION": "Map conversation attributes to contact data fields sent to Meta. These values are sent automatically — protected by hash before sending.",
         "EMAIL": "E-mail do contato (em)",
         "PHONE": "Telefone do contato (ph)",
         "NAME": "Primeiro nome do contato (fn)",

@@ -1,7 +1,7 @@
 <script>
 import { useVuelidate } from '@vuelidate/core';
 import { useAlert } from 'dashboard/composables';
-import { required, minLength } from '@vuelidate/validators';
+import { required } from '@vuelidate/validators';
 import { getRegexp } from 'shared/helpers/Validators';
 import { ATTRIBUTE_TYPES } from './constants';
 import NextButton from 'dashboard/components-next/button/Button.vue';
@@ -47,10 +47,7 @@ export default {
     attributeType: {
       required,
     },
-    description: {
-      required,
-      minLength: minLength(1),
-    },
+    description: {},
     attributeKey: {
       required,
       isKey(value) {
@@ -72,7 +69,7 @@ export default {
       return this.values;
     },
     isButtonDisabled() {
-      return this.v$.description.$invalid || this.isTagInputEmpty;
+      return this.v$.$invalid || this.isTagInputEmpty;
     },
     isTagInputEmpty() {
       return this.isAttributeTypeList && this.values.length === 0;
@@ -121,7 +118,7 @@ export default {
         ? getRegexp(this.selectedAttribute.regex_pattern).source
         : null;
       this.displayName = this.selectedAttribute.attribute_display_name;
-      this.description = this.selectedAttribute.attribute_description;
+      this.description = this.selectedAttribute.attribute_description || '';
       this.attributeType = this.selectedAttributeType;
       this.attributeKey = this.selectedAttribute.attribute_key;
       this.regexPattern = regexPattern;

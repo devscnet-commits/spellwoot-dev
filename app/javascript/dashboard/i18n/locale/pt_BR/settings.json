@@ -644,9 +644,9 @@
       "STRATEGY": {
         "LABEL": "Quando enviar o evento de conversão?",
         "ON_ARRIVAL_LABEL": "Enviar Lead na chegada",
-        "ON_ARRIVAL_DESC": "Dispara um evento Lead automaticamente quando a conversa é criada com um ctwa_clid. Ideal para otimizar por volume de leads.",
-        "ON_CLOSE_LABEL": "Enviar conversão no fechamento / ação manual",
-        "ON_CLOSE_DESC": "Nada é enviado no dia 0. O agente marca manualmente como Ganho ou Perdido. Ideal para otimizar por compras com valor real."
+        "ON_ARRIVAL_DESC": "Dispara um evento Lead automaticamente quando a conversa vem de um anúncio Click-to-WhatsApp. Ideal para otimizar por volume de leads.",
+        "ON_CLOSE_LABEL": "Enviar conversão no fechamento (ação manual)",
+        "ON_CLOSE_DESC": "Nenhum evento é enviado automaticamente. O agente clica em \"Marcar como Ganho\" ou \"Marcar como Perdido\" na conversa para disparar o evento. Os campos obrigatórios do modal são configurados em Fluxo de Conversa → Atributos obrigatórios."
       },
       "ON_CLOSE": {
         "SECTION_TITLE": "Configuração do campo de resultado",
@@ -661,8 +661,8 @@
         "CURRENCY_PLACEHOLDER": "ex: BRL"
       },
       "ENRICHMENT": {
-        "TITLE": "Enriquecimento de qualidade de correspondência (opcional)",
-        "DESCRIPTION": "Mapeie campos Meta para atributos de conversa/contato. Os valores são hasheados antes do envio.",
+        "TITLE": "Dados do contato para correspondência (opcional)",
+        "DESCRIPTION": "Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Esses valores são enviados automaticamente — protegidos por hash antes do envio.",
         "EMAIL": "E-mail do contato (em)",
         "PHONE": "Telefone do contato (ph)",
         "NAME": "Primeiro nome do contato (fn)",
