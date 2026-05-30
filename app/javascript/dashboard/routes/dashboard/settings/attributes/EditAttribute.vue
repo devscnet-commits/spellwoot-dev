@@ -140,6 +140,7 @@ export default {
           id: this.selectedAttribute.id,
           attribute_description: this.description,
           attribute_display_name: this.displayName,
+          attribute_key: this.attributeKey,
           attribute_values: this.updatedAttributeListValues,
           regex_pattern: this.regexPattern
             ? new RegExp(this.regexPattern).toString()
@@ -188,7 +189,6 @@ export default {
           :class="{ error: v$.attributeKey.$error }"
           :error="v$.attributeKey.$error ? keyErrorMessage : ''"
           :placeholder="$t('ATTRIBUTES_MGMT.ADD.FORM.KEY.PLACEHOLDER')"
-          readonly
           @blur="v$.attributeKey.$touch"
         />
         <label :class="{ error: v$.description.$error }">
