@@ -596,8 +596,19 @@
           "NO": "Não"
         }
       },
+      "RULE": {
+        "CONFIGURE_FOR": "Configurar regra para \"{name}\"",
+        "ALWAYS": "Sempre obrigatório",
+        "CONDITIONAL": "Obrigatório se...",
+        "SELECT_FIELD": "Selecionar campo gatilho",
+        "SELECT_VALUE": "Selecionar valor gatilho",
+        "CONDITION_VALUE_PLACEHOLDER": "Inserir valor gatilho",
+        "CONFIRM": "Confirmar",
+        "CANCEL": "Cancelar",
+        "LABEL_ALWAYS": "Sempre obrigatório",
+        "LABEL_CONDITIONAL": "Obrigatório se {field} = {value}"
+      },
       "PAYWALL": {
-        "TITLE": "Atualize para usar os atributos obrigatórios",
         "AVAILABLE_ON": "O recurso de atributos obrigatórios da conversa está disponível nos planos Business e Enterprise.",
         "UPGRADE_PROMPT": "Atualize seu plano para solicitar que os agentes preencham os atributos obrigatórios antes da resolução da conversa.",
         "UPGRADE_NOW": "Atualizar agora",
