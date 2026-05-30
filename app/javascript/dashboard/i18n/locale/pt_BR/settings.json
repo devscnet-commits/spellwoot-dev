@@ -609,6 +609,16 @@
         "ASK_ADMIN": "Entre em contato com seu administrador para fazer a atualização."
       }
     },
+    "OUTCOME": {
+      "MARK_WON": "Marcar como Ganho",
+      "MARK_LOST": "Marcar como Perdido",
+      "MODAL_DESCRIPTION": "Preencha os campos abaixo antes de marcar o resultado.",
+      "CONFIRM": "Confirmar",
+      "CANCEL": "Cancelar",
+      "NO_FIELDS": "Nenhum campo adicional necessário.",
+      "SUCCESS": "Resultado registrado com sucesso",
+      "ERROR": "Não foi possível registrar o resultado, tente novamente"
+    },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
       "DESCRIPTION": "Envie eventos de conversão de volta à Meta para otimizar suas campanhas de anúncios Click-to-WhatsApp.",

@@ -104,20 +104,20 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
 <template>
   <div v-if="showButtons" class="flex items-center gap-1">
     <Button
-      v-tooltip="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON')"
       size="sm"
       variant="ghost"
-      color="slate"
+      color="teal"
       icon="i-lucide-circle-check"
+      :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON')"
       class="rounded-md"
       @click="openWon"
     />
     <Button
-      v-tooltip="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST')"
       size="sm"
       variant="ghost"
-      color="slate"
+      color="ruby"
       icon="i-lucide-circle-x"
+      :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST')"
       class="rounded-md"
       @click="openLost"
     />
