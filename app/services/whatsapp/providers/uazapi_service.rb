@@ -244,26 +244,26 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   def handle_uazapi_error(response, message)
     Rails.logger.error "[UAZAPI] Error: #{response.body}"
     return if message.blank?
-  
+
     error_msg = case response.code.to_i
-    when 401
-      'Sessão expirada. Reconecte a caixa do WhatsApp'
-    when 403
-      'Sem permissão para enviar mensagens nesta conta'
-    when 404
-      'Instância não encontrada. Verifique a conexão da caixa'
-    when 405
-      'Caixa desconectada. Reconecte o WhatsApp'
-    when 422
-      'Número de telefone inválido ou não está no WhatsApp'
-    when 429
-      'Limite de mensagens atingido. Aguarde alguns minutos'
-    when 500, 502, 503
-      'Erro no servidor do WhatsApp. Tente reenviar em instantes'
-    else
-      response.parsed_response&.dig('error') || 'Falha ao enviar mensagem'
-    end
-  
+                when 401
+                  'Sessão expirada. Reconecte a caixa do WhatsApp'
+                when 403
+                  'Sem permissão para enviar mensagens nesta conta'
+                when 404
+                  'Instância não encontrada. Verifique a conexão da caixa'
+                when 405
+                  'Caixa desconectada. Reconecte o WhatsApp'
+                when 422
+                  'Número de telefone inválido ou não está no WhatsApp'
+                when 429
+                  'Limite de mensagens atingido. Aguarde alguns minutos'
+                when 500, 502, 503
+                  'Erro no servidor do WhatsApp. Tente reenviar em instantes'
+                else
+                  response.parsed_response&.dig('error') || 'Falha ao enviar mensagem'
+                end
+
     message.external_error = error_msg
     message.status = :failed
     message.save!
