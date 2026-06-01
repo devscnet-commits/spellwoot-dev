@@ -223,7 +223,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def process_uazapi_response(response, message)
     parsed = response.parsed_response
-    message_id = parsed&.dig('messageid') || parsed&.dig('id')
+    message_id = parsed.is_a?(Hash) ? (parsed['messageid'] || parsed['id']) : nil
 
     Rails.logger.info "[UAZAPI] Send response: status=#{response.code}, message_id=#{message_id}, body=#{response.body.truncate(200)}"
 
