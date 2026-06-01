@@ -22,7 +22,8 @@ class Uazapi::IncomingMessageService
     if message_data[:message_id].present?
       existing_message = Message.find_by(source_id: message_data[:message_id].to_s, inbox_id: inbox.id)
       if existing_message
-        Rails.logger.info "[UAZAPI] Message already exists, skipping: message_id=#{message_data[:message_id]}, existing_message_id=#{existing_message.id}"
+        Rails.logger.info "[UAZAPI] Message already exists, skipping: " \
+                           "message_id=#{message_data[:message_id]}, existing_message_id=#{existing_message.id}"
         return
       end
     end

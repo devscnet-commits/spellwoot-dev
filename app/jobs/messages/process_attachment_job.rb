@@ -13,7 +13,8 @@ class Messages::ProcessAttachmentJob < ApplicationJob
     # Wait for all attachments to be uploaded
     unless wait_for_attachments(message)
       # If timeout, retry the job
-      Rails.logger.warn "[ProcessAttachmentJob] Timeout waiting for attachments to upload for message_id=#{message_id} after 20s (attempt=#{attempt}/#{max_attempts}, will retry)"
+      Rails.logger.warn "[ProcessAttachmentJob] Timeout waiting for attachments to upload for " \
+                        "message_id=#{message_id} after 20s (attempt=#{attempt}/#{max_attempts}, will retry)"
       raise StandardError, "Timeout waiting for attachments to upload for message #{message_id}"
     end
 
@@ -28,14 +29,16 @@ class Messages::ProcessAttachmentJob < ApplicationJob
     return true unless message.attachments.any?
 
     attachment_count = message.attachments.count
-    Rails.logger.info "[ProcessAttachmentJob] Waiting for #{attachment_count} attachment(s) to be uploaded for message_id=#{message.id} (max_wait=#{max_wait}s)"
+    Rails.logger.info "[ProcessAttachmentJob] Waiting for #{attachment_count} attachment(s) to be uploaded for " \
+                      "message_id=#{message.id} (max_wait=#{max_wait}s)"
 
     start_time = Time.current
     check_count = 0
     while Time.current - start_time < max_wait
       elapsed = Time.current - start_time
       if all_attachments_uploaded?(message)
-        Rails.logger.info "[ProcessAttachmentJob] All attachments uploaded successfully for message_id=#{message.id} after #{elapsed.round(2)}s (#{check_count} checks)"
+        Rails.logger.info "[ProcessAttachmentJob] All attachments uploaded successfully for " \
+                          "message_id=#{message.id} after #{elapsed.round(2)}s (#{check_count} checks)"
         return true
       end
 
@@ -44,7 +47,8 @@ class Messages::ProcessAttachmentJob < ApplicationJob
     end
 
     elapsed = Time.current - start_time
-    Rails.logger.warn "[ProcessAttachmentJob] Timeout waiting for attachments for message_id=#{message.id} after #{elapsed.round(2)}s (#{check_count} checks, max_wait=#{max_wait}s)"
+    Rails.logger.warn "[ProcessAttachmentJob] Timeout waiting for attachments for " \
+                      "message_id=#{message.id} after #{elapsed.round(2)}s (#{check_count} checks, max_wait=#{max_wait}s)"
     # Timeout - will retry
     false
   end

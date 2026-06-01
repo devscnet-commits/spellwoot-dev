@@ -402,11 +402,13 @@ class Message < ApplicationRecord
 
   def reopen_conversation
     return if conversation.muted?
-    return unless incoming?
 
-    conversation.open! if conversation.snoozed?
+    conversation.open! if conversation.snoozed? && incoming?
 
-    reopen_resolved_conversation if conversation.resolved?
+    if conversation.resolved?
+      reopen_resolved_conversation if incoming?
+      reopen_resolved_conversation_for_human_agent if outgoing_human_agent?
+    end
   end
 
   def mark_pending_conversation_as_open_for_human_response
@@ -431,6 +433,14 @@ class Message < ApplicationRecord
     else
       conversation.open!
     end
+  end
+
+  def reopen_resolved_conversation_for_human_agent
+    conversation.open!
+  end
+
+  def outgoing_human_agent?
+    outgoing? && !private? && sender.instance_of?(User)
   end
 
   def reopened_by_contact?

@@ -365,7 +365,7 @@ export function useConversationHotKeys() {
 
   const shouldShowSnoozeOption = computed(() => {
     return (
-      isAConversationRoute(route.name, true, false) && contextMenuChatId.value
+      isAConversationRoute(route.name, true, true) && contextMenuChatId.value
     );
   });
 

@@ -82,7 +82,7 @@ export default {
       );
     },
     keyErrorMessage() {
-      if (!this.v$.attributeKey.isKey) {
+      if (this.v$.attributeKey.isKey.$invalid) {
         return this.$t('ATTRIBUTES_MGMT.ADD.FORM.KEY.IN_VALID');
       }
       return this.$t('ATTRIBUTES_MGMT.ADD.FORM.KEY.ERROR');

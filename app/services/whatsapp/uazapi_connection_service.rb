@@ -67,7 +67,8 @@ class Whatsapp::UazapiConnectionService
     # Step 5: Connect to WhatsApp (get QR code)
     Rails.logger.info "[UAZAPI] Step 5: Connecting instance to WhatsApp..."
     connection_data = connect_instance(instance_token)
-    Rails.logger.info "[UAZAPI] Connection data received: status=#{extract_status(connection_data)}, qr_code_available=#{extract_qr_code(connection_data).present?}"
+    Rails.logger.info "[UAZAPI] Connection data received: status=#{extract_status(connection_data)}, " \
+                       "qr_code_available=#{extract_qr_code(connection_data).present?}"
 
     {
       success: true,
