@@ -48,7 +48,7 @@ class Whatsapp::WebhookTeardownService
 
   def teardown_uazapi_api_channel
     Rails.logger.info "[UAZAPI] Tearing down UazAPI API channel: channel_id=#{@channel.id}"
-    
+
     instance_token = @channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
       Rails.logger.warn "[UAZAPI] Instance token not found for channel_id=#{@channel.id}"

@@ -596,8 +596,19 @@
           "NO": "Não"
         }
       },
+      "RULE": {
+        "CONFIGURE_FOR": "Configurar regra para \"{name}\"",
+        "ALWAYS": "Sempre obrigatório",
+        "CONDITIONAL": "Obrigatório se...",
+        "SELECT_FIELD": "Selecionar campo gatilho",
+        "SELECT_VALUE": "Selecionar valor gatilho",
+        "CONDITION_VALUE_PLACEHOLDER": "Inserir valor gatilho",
+        "CONFIRM": "Confirmar",
+        "CANCEL": "Cancelar",
+        "LABEL_ALWAYS": "Sempre obrigatório",
+        "LABEL_CONDITIONAL": "Obrigatório se {field} = {value}"
+      },
       "PAYWALL": {
-        "TITLE": "Atualize para usar os atributos obrigatórios",
         "AVAILABLE_ON": "O recurso de atributos obrigatórios da conversa está disponível nos planos Business e Enterprise.",
         "UPGRADE_PROMPT": "Atualize seu plano para solicitar que os agentes preencham os atributos obrigatórios antes da resolução da conversa.",
         "UPGRADE_NOW": "Atualizar agora",
@@ -607,6 +618,56 @@
         "AVAILABLE_ON": "O recurso de atributos obrigatórios de conversa está disponível nos planos pagos.",
         "UPGRADE_PROMPT": "Atualize para um plano pago para exigir atributos obrigatórios antes da resolução da conversa.",
         "ASK_ADMIN": "Entre em contato com seu administrador para fazer a atualização."
+      }
+    },
+    "OUTCOME": {
+      "MARK_WON": "Marcar como Ganho",
+      "MARK_LOST": "Marcar como Perdido",
+      "MODAL_DESCRIPTION": "Preencha os campos abaixo antes de marcar o resultado.",
+      "CONFIRM": "Confirmar",
+      "CANCEL": "Cancelar",
+      "NO_FIELDS": "Nenhum campo adicional necessário.",
+      "SUCCESS": "Resultado registrado com sucesso",
+      "ERROR": "Não foi possível registrar o resultado, tente novamente"
+    },
+    "META_CONVERSION": {
+      "TITLE": "Meta Conversions API",
+      "DESCRIPTION": "Envie eventos de conversão de volta à Meta para otimizar suas campanhas de anúncios Click-to-WhatsApp.",
+      "ENABLED_LABEL": "Ativar",
+      "DISABLE_LABEL": "Desativar",
+      "SAVE_BUTTON": "Salvar",
+      "SAVING": "Salvando...",
+      "SAVE": {
+        "SUCCESS": "Configurações de conversão Meta salvas",
+        "ERROR": "Não foi possível salvar as configurações. Por favor, tente novamente"
+      },
+      "STRATEGY": {
+        "LABEL": "Quando enviar o evento de conversão?",
+        "ON_ARRIVAL_LABEL": "Enviar Lead na chegada",
+        "ON_ARRIVAL_DESC": "Dispara um evento Lead automaticamente quando a conversa vem de um anúncio Click-to-WhatsApp. Ideal para otimizar por volume de leads.",
+        "ON_CLOSE_LABEL": "Enviar conversão no fechamento (ação manual)",
+        "ON_CLOSE_DESC": "Nenhum evento é enviado automaticamente. O agente clica em \"Marcar como Ganho\" ou \"Marcar como Perdido\" na conversa para disparar o evento. Os campos obrigatórios do modal são configurados em Fluxo de Conversa → Atributos obrigatórios."
+      },
+      "ON_CLOSE": {
+        "SECTION_TITLE": "Configuração do campo de resultado",
+        "STATUS_FIELD": "Atributo de status (lista)",
+        "SELECT_FIELD": "Selecionar atributo",
+        "WIN_VALUE": "Valor de ganho",
+        "LOSS_VALUE": "Valor de perda",
+        "VALUE_FIELD": "Atributo de valor de venda (número, opcional)",
+        "NO_VALUE_FIELD": "Não configurado",
+        "CURRENCY": "Moeda (ISO 4217)",
+        "SELECT_VALUE": "Selecionar valor",
+        "CURRENCY_PLACEHOLDER": "ex: BRL"
+      },
+      "ENRICHMENT": {
+        "TITLE": "Dados do contato para correspondência (opcional)",
+        "DESCRIPTION": "Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Esses valores são enviados automaticamente — protegidos por hash antes do envio.",
+        "EMAIL": "E-mail do contato (em)",
+        "PHONE": "Telefone do contato (ph)",
+        "NAME": "Primeiro nome do contato (fn)",
+        "ZIP": "CEP do contato (zp)",
+        "NOT_MAPPED": "Não mapeado"
       }
     }
   },

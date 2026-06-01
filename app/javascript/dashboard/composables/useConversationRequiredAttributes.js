@@ -4,12 +4,10 @@ import { useAccount } from 'dashboard/composables/useAccount';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 import { ATTRIBUTE_TYPES } from 'dashboard/components-next/ConversationWorkflow/constants';
 
-/**
- * Composable for managing conversation required attributes workflow
- *
- * This handles the logic for checking if conversations have all required
- * custom attributes filled before they can be resolved.
- */
+// Normalize legacy string format to object format
+const normalizeAttrConfig = item =>
+  typeof item === 'string' ? { key: item, rule: 'always' } : item;
+
 export function useConversationRequiredAttributes() {
   const { currentAccount, accountId } = useAccount();
   const isFeatureEnabledonAccount = useMapGetter(
@@ -26,12 +24,18 @@ export function useConversationRequiredAttributes() {
     )
   );
 
-  const requiredAttributeKeys = computed(() => {
+  // Normalized array of { key, rule, condition_field?, condition_value? }
+  const selectedAttributes = computed(() => {
     if (!isFeatureEnabled.value) return [];
-    return (
-      currentAccount.value?.settings?.conversation_required_attributes || []
-    );
+    const raw =
+      currentAccount.value?.settings?.conversation_required_attributes || [];
+    return raw.map(normalizeAttrConfig);
   });
+
+  // Backward-compat: array of keys only
+  const requiredAttributeKeys = computed(() =>
+    selectedAttributes.value.map(a => a.key)
+  );
 
   const allAttributeOptions = computed(() =>
     (conversationAttributes.value || []).map(attribute => ({
@@ -43,42 +47,43 @@ export function useConversationRequiredAttributes() {
     }))
   );
 
-  /**
-   * Get the full attribute definitions for only the required attributes
-   * Filters allAttributeOptions to only include attributes marked as required
-   */
-  const requiredAttributes = computed(
-    () =>
-      requiredAttributeKeys.value
-        .map(key =>
-          allAttributeOptions.value.find(attribute => attribute.value === key)
-        )
-        .filter(Boolean) // Remove any undefined attributes (deleted attributes)
+  // Full attribute definitions merged with rule config
+  const requiredAttributes = computed(() =>
+    selectedAttributes.value
+      .map(attrConfig => {
+        const def = allAttributeOptions.value.find(
+          a => a.value === attrConfig.key
+        );
+        if (!def) return null;
+        return { ...def, ...attrConfig };
+      })
+      .filter(Boolean)
   );
 
-  /**
-   * Check if a conversation is missing any required attributes
-   *
-   * @param {Object} conversationCustomAttributes - Current conversation's custom attributes
-   * @returns {Object} - Analysis result with missing attributes info
-   */
+  const isRequired = (attrConfig, conversationCustomAttributes) => {
+    if (attrConfig.rule === 'conditional') {
+      return (
+        conversationCustomAttributes[attrConfig.condition_field] ===
+        attrConfig.condition_value
+      );
+    }
+    return true;
+  };
+
   const checkMissingAttributes = (conversationCustomAttributes = {}) => {
-    // If no attributes are required, conversation can be resolved
     if (!requiredAttributes.value.length) {
       return { hasMissing: false, missing: [] };
     }
 
-    // Find attributes that are missing or empty
     const missing = requiredAttributes.value.filter(attribute => {
+      if (!isRequired(attribute, conversationCustomAttributes)) return false;
+
       const value = conversationCustomAttributes[attribute.value];
 
-      // For checkbox/boolean attributes, only check if the key exists
       if (attribute.type === ATTRIBUTE_TYPES.CHECKBOX) {
         return !(attribute.value in conversationCustomAttributes);
       }
 
-      // For other attribute types, only consider null, undefined, empty string, or whitespace-only as missing
-      // Allow falsy values like 0, false as they are valid filled values
       return value == null || String(value).trim() === '';
     });
 
@@ -90,6 +95,7 @@ export function useConversationRequiredAttributes() {
   };
 
   return {
+    selectedAttributes,
     requiredAttributeKeys,
     requiredAttributes,
     checkMissingAttributes,

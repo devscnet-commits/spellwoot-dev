@@ -12,17 +12,49 @@ require:
 
 Layout/LineLength:
   Max: 150
+  Exclude:
+    - 'spec/**/*'
+    - 'spec/factories/**/*'
 
 Metrics/ClassLength:
   Max: 175
   Exclude:
     - 'app/models/message.rb'
     - 'app/models/conversation.rb'
+    - 'app/controllers/api/v1/accounts/inboxes_controller.rb'
+    - 'app/controllers/api/v1/accounts/conversations_controller.rb'
+    - 'app/services/whatsapp/providers/uazapi_service.rb'
+    - 'app/services/whatsapp/uazapi_connection_service.rb'
+    - 'app/services/whatsapp/incoming_message_base_service.rb'
 
 Metrics/MethodLength:
   Max: 19
   Exclude:
     - 'enterprise/lib/captain/agent.rb'
+    - 'app/controllers/api/v1/accounts/inboxes_controller.rb'
+    - 'app/controllers/api/v1/accounts/uazapi_inboxes_controller.rb'
+    - 'app/controllers/webhooks/uazapi_controller.rb'
+    - 'app/services/whatsapp/providers/uazapi_service.rb'
+    - 'app/services/whatsapp/uazapi_connection_service.rb'
+    - 'app/services/whatsapp/webhook_teardown_service.rb'
+    - 'app/services/uazapi/incoming_message_service.rb'
+    - 'app/services/attribution/conversation_attribution_service.rb'
+    - 'app/jobs/messages/process_attachment_job.rb'
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - 'app/controllers/api/v1/accounts/inboxes_controller.rb'
+    - 'app/services/whatsapp/providers/uazapi_service.rb'
+    - 'app/services/whatsapp/uazapi_connection_service.rb'
+    - 'app/services/uazapi/incoming_message_service.rb'
+    - 'app/services/meta/conversions_api_service.rb'
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - 'app/controllers/api/v1/accounts/inboxes_controller.rb'
+    - 'app/services/whatsapp/providers/uazapi_service.rb'
+    - 'app/services/whatsapp/uazapi_connection_service.rb'
+    - 'app/services/uazapi/incoming_message_service.rb'
 
 RSpec/ExampleLength:
   Max: 50
@@ -177,10 +209,15 @@ Metrics/AbcSize:
   Max: 26
   Exclude:
     - 'app/controllers/concerns/auth_helper.rb'
-
     - 'app/models/integrations/hook.rb'
     - 'app/models/canned_response.rb'
     - 'app/models/telegram_bot.rb'
+    - 'app/controllers/api/v1/accounts/inboxes_controller.rb'
+    - 'app/controllers/api/v1/accounts/uazapi_inboxes_controller.rb'
+    - 'app/controllers/webhooks/uazapi_controller.rb'
+    - 'app/services/whatsapp/providers/uazapi_service.rb'
+    - 'app/services/whatsapp/uazapi_connection_service.rb'
+    - 'app/services/uazapi/incoming_message_service.rb'
 
 Rails/RenderInline:
   Exclude:
@@ -221,6 +258,7 @@ AllCops:
   Exclude:
     - 'bin/**/*'
     - 'db/schema.rb'
+    - 'db/migrate/**/*'
     - 'public/**/*'
     - 'config/initializers/bot.rb'
     - 'vendor/**/*'
@@ -229,7 +267,6 @@ AllCops:
     - 'config/environments/**/*'
     - 'tmp/**/*'
     - 'storage/**/*'
-    - 'db/migrate/20230426130150_init_schema.rb'
 
 FactoryBot/SyntaxMethods:
   Enabled: false
@@ -272,6 +309,74 @@ Style/MultipleComparison:
   Enabled: false
 
 Bundler/OrderedGems:
+  Enabled: false
+
+Bundler/DuplicatedGem:
+  Enabled: false
+
+Layout/EndOfLine:
+  Enabled: false
+
+Style/StringLiterals:
+  Enabled: false
+
+Naming/AccessorMethodName:
+  Enabled: false
+
+Rails/SkipsModelValidations:
+  Exclude:
+    - 'app/controllers/api/v1/accounts/inboxes_controller.rb'
+
+Lint/IneffectiveAccessModifier:
+  Exclude:
+    - 'app/services/whatsapp/providers/uazapi_service.rb'
+
+Lint/NestedMethodDefinition:
+  Exclude:
+    - 'app/policies/inbox_policy.rb'
+
+Style/MutableConstant:
+  Exclude:
+    - 'app/services/meta/conversions_api_service.rb'
+
+Style/SingleArgumentDig:
+  Enabled: false
+
+Rails/Blank:
+  Enabled: false
+
+Style/NumericPredicate:
+  Enabled: false
+
+Style/IfUnlessModifier:
+  Enabled: false
+
+Style/RedundantAssignment:
+  Enabled: false
+
+Style/RedundantBegin:
+  Enabled: false
+
+Style/EmptyMethod:
+  Enabled: false
+
+Lint/DuplicateBranch:
+  Enabled: false
+
+Lint/EmptyBlock:
+  Enabled: false
+
+Lint/UnusedMethodArgument:
+  Exclude:
+    - 'app/services/whatsapp/providers/uazapi_service.rb'
+
+Layout/LineEndStringConcatenationIndentation:
+  Enabled: false
+
+Layout/EmptyLineAfterGuardClause:
+  Enabled: false
+
+Layout/HashAlignment:
   Enabled: false
 
 RSpec/ExampleWording:

@@ -11,7 +11,7 @@ class ActionService
   end
 
   def snooze_conversation(_params)
-    @conversation.snoozed!
+    @conversation.open!
   end
 
   def resolve_conversation(_params)

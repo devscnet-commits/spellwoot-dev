@@ -222,10 +222,19 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def process_uazapi_response(response, message)
-    if response.success?
-      parsed = response.parsed_response
-      # UazAPI returns messageid in the response
-      parsed['messageid'] || parsed['id']
+    parsed = response.parsed_response
+    message_id = parsed.is_a?(Hash) ? (parsed['messageid'] || parsed['id']) : nil
+
+    Rails.logger.info "[UAZAPI] Send response: status=#{response.code}, message_id=#{message_id}, body=#{response.body.truncate(200)}"
+
+    if message_id.present?
+      # Message was accepted by UazAPI (has an ID) regardless of HTTP status
+      message.update!(source_id: message_id.to_s) if message.present?
+      message_id
+    elsif response.success?
+      # 2xx but no message ID — log but don't mark as failed
+      Rails.logger.warn "[UAZAPI] Success response but no message_id returned: #{response.body.truncate(200)}"
+      nil
     else
       handle_uazapi_error(response, message)
       nil
@@ -236,7 +245,26 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     Rails.logger.error "[UAZAPI] Error: #{response.body}"
     return if message.blank?
 
-    error_msg = response.parsed_response&.dig('error') || 'Unknown error'
+    if [404, 405].include?(response.code.to_i)
+      Rails.logger.warn "[UAZAPI] #{response.code} response — message may have been delivered despite connectivity error. Not marking as failed."
+      return
+    end
+
+    error_msg = case response.code.to_i
+                when 401
+                  'Sessão expirada. Reconecte a caixa do WhatsApp'
+                when 403
+                  'Sem permissão para enviar mensagens nesta conta'
+                when 422
+                  'Número de telefone inválido ou não está no WhatsApp'
+                when 429
+                  'Limite de mensagens atingido. Aguarde alguns minutos'
+                when 500, 502, 503
+                  'Erro no servidor do WhatsApp. Tente reenviar em instantes'
+                else
+                  response.parsed_response&.dig('error') || 'Falha ao enviar mensagem'
+                end
+
     message.external_error = error_msg
     message.status = :failed
     message.save!
@@ -281,7 +309,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def self.configure_chatwoot_integration(instance_token, chatwoot_config)
     url = "#{base_url}/chatwoot/config"
-    
+
     # Log antes de fazer a requisição (sem token sensível)
     log_config = chatwoot_config.dup
     log_config['access_token'] = "#{log_config['access_token'][0..10]}..." if log_config['access_token'].present?
@@ -311,7 +339,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
       parsed_response = response.parsed_response
       webhook_url = parsed_response['chatwoot_inbox_webhook_url']
-      
+
       Rails.logger.info "[UAZAPI] Chatwoot integration configured successfully"
       Rails.logger.info "[UAZAPI] Webhook URL: #{webhook_url}" if webhook_url.present?
 
@@ -325,7 +353,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def self.get_chatwoot_config(instance_token)
     url = "#{base_url}/chatwoot/config"
-    
+
     Rails.logger.info "[UAZAPI] Getting Chatwoot integration status"
     Rails.logger.info "[UAZAPI] URL: #{url}"
 

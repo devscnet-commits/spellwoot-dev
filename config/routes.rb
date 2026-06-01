@@ -156,6 +156,7 @@ Rails.application.routes.draw do
               post :update_last_seen
               post :unread
               post :custom_attributes
+              post :close_outcome
               get :attachments
               get :inbox_assistant
               get :reporting_events if ChatwootApp.enterprise?
@@ -230,12 +231,13 @@ Rails.application.routes.draw do
             post :uazapi_connect, on: :member
             post :uazapi_disconnect, on: :member
             post :uazapi_reconfigure, on: :member
+            post :migrate, on: :member
             if ChatwootApp.enterprise?
               resource :conference, only: %i[create destroy], controller: 'conference' do
                 get :token, on: :member
               end
             end
-          
+
             resource :csat_template, only: [:show, :create], controller: 'inbox_csat_templates' do
               post :analyze, on: :collection
             end

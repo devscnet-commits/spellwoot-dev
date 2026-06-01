@@ -54,7 +54,7 @@ class Whatsapp::UazapiConnectionService
     Rails.logger.info "[UAZAPI] Step 4: Configuring Chatwoot integration..."
     chatwoot_config_result = configure_chatwoot_integration(inbox, instance_token)
     webhook_url = chatwoot_config_result&.dig('chatwoot_inbox_webhook_url')
-    
+
     if webhook_url.present?
       Rails.logger.info "[UAZAPI] Chatwoot integration configured successfully, webhook_url=#{webhook_url}"
       channel.update!(webhook_url: webhook_url)
@@ -67,7 +67,8 @@ class Whatsapp::UazapiConnectionService
     # Step 5: Connect to WhatsApp (get QR code)
     Rails.logger.info "[UAZAPI] Step 5: Connecting instance to WhatsApp..."
     connection_data = connect_instance(instance_token)
-    Rails.logger.info "[UAZAPI] Connection data received: status=#{extract_status(connection_data)}, qr_code_available=#{extract_qr_code(connection_data).present?}"
+    Rails.logger.info "[UAZAPI] Connection data received: status=#{extract_status(connection_data)}, " \
+                       "qr_code_available=#{extract_qr_code(connection_data).present?}"
 
     {
       success: true,
@@ -119,10 +120,10 @@ class Whatsapp::UazapiConnectionService
       # Get Chatwoot integration status
       chatwoot_config = Whatsapp::Providers::UazapiService.get_chatwoot_config(instance_token)
       integration_status = chatwoot_config&.dig('integration_status') || {}
-      
+
       instance_status[:integration_status] = integration_status
       instance_status[:integration_error] = integration_status['status'] == 'error'
-      
+
       instance_status
     rescue StandardError => e
       Rails.logger.error "[UAZAPI] Error getting status: #{e.message}"

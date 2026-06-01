@@ -17,7 +17,6 @@ const MENU = {
   MARK_AS_UNREAD: 'mark-as-unread',
   PRIORITY: 'priority',
   STATUS: 'status',
-  SNOOZE: 'snooze',
   AGENT: 'agent',
   TEAM: 'team',
   LABEL: 'label',
@@ -107,17 +106,7 @@ export default {
           label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.REOPEN'),
           icon: 'arrow-redo',
         },
-        {
-          key: wootConstants.STATUS_TYPE.PENDING,
-          label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.PENDING'),
-          icon: 'book-clock',
-        },
       ],
-      snoozeOption: {
-        key: wootConstants.STATUS_TYPE.SNOOZED,
-        label: this.$t('CONVERSATION.CARD_CONTEXT_MENU.SNOOZE.TITLE'),
-        icon: 'snooze',
-      },
       priorityConfig: {
         key: MENU.PRIORITY,
         label: this.$t('CONVERSATION.PRIORITY.TITLE'),
@@ -212,10 +201,6 @@ export default {
         ...this.filteredAgentOnAvailability,
       ];
     },
-    showSnooze() {
-      // Don't show snooze if the conversation is already snoozed/resolved/pending
-      return this.status === wootConstants.STATUS_TYPE.OPEN;
-    },
   },
   mounted() {
     this.$store.dispatch('inboxAssignableAgents/fetch', [this.inboxId]);
@@ -228,11 +213,6 @@ export default {
     toggleStatus(status, snoozedUntil) {
       this.$emit('updateConversation', status, snoozedUntil);
     },
-    async snoozeConversation() {
-      await this.$store.dispatch('setContextMenuChatId', this.chatId);
-      const ninja = document.querySelector('ninja-keys');
-      ninja.open({ parent: 'snooze_conversation' });
-    },
     assignPriority(priority) {
       this.$emit('assignPriority', priority);
     },
@@ -241,7 +221,6 @@ export default {
     },
     openInNewTab() {
       if (!this.conversationUrl) return;
-
       const url = `${window.chatwootConfig.hostURL}${this.conversationUrl}`;
       window.open(url, '_blank', 'noopener,noreferrer');
       this.$emit('close');
@@ -258,8 +237,6 @@ export default {
       }
     },
     show(key) {
-      // If the conversation status is same as the action, then don't display the option
-      // i.e.: Don't show an option to resolve if the conversation is already resolved.
       return this.status !== key;
     },
     generateMenuLabelConfig(option, type = 'text') {
@@ -298,7 +275,7 @@ export default {
       />
       <hr class="m-1 rounded border-b border-n-weak dark:border-n-weak" />
     </template>
-    <template v-if="isAllowed([MENU.STATUS, MENU.SNOOZE])">
+    <template v-if="isAllowed([MENU.STATUS])">
       <template v-for="option in statusMenuConfig">
         <MenuItem
           v-if="show(option.key) && isAllowed([MENU.STATUS])"
@@ -308,12 +285,6 @@ export default {
           @click.stop="toggleStatus(option.key, null)"
         />
       </template>
-      <MenuItem
-        v-if="showSnooze && isAllowed([MENU.SNOOZE])"
-        :option="snoozeOption"
-        variant="icon"
-        @click.stop="snoozeConversation()"
-      />
       <hr class="m-1 rounded border-b border-n-weak dark:border-n-weak" />
     </template>
     <template

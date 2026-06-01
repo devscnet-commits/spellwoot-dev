@@ -56,11 +56,7 @@ const showSelfAssignBanner = computed(() => {
   );
 });
 
-const showBotHandoffBanner = computed(
-  () =>
-    isUserTyping.value &&
-    currentChat.value?.status === wootConstants.STATUS_TYPE.PENDING
-);
+const showBotHandoffBanner = computed(() => false);
 
 const botHandoffActionLabel = computed(() => {
   return assignedAgent.value?.id === currentUser.value?.id

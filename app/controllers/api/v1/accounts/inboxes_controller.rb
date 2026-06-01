@@ -1,14 +1,13 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
   before_action :fetch_inbox_for_migrate, only: [:migrate]
-  before_action :fetch_inbox, except: [:index, :create, :migrate]
+  before_action :fetch_inbox, except: [:index, :create, :migrate, :uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
-  before_action :check_authorization, except: [:show, :health, :uazapi_status]
+  before_action :check_authorization, except: [:show, :health, :uazapi_status, :migrate]
   before_action :validate_whatsapp_cloud_channel, only: [:health]
-  before_action :validate_uazapi_channel, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
-
+  before_action :fetch_inbox_without_auth, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
   def index
     @inboxes = policy_scope(Current.account.inboxes.order_by_name.includes(:channel, { avatar_attachment: [:blob] }))
   end
@@ -95,14 +94,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     status_data = Whatsapp::UazapiConnectionService.get_status(@inbox.channel)
 
     if status_data
-      Rails.logger.info "[UAZAPI] Status retrieved: status=#{status_data[:status]}, connected=#{status_data[:connected]}, logged_in=#{status_data[:logged_in]}"
+      Rails.logger.info "[UAZAPI] Status retrieved: status=#{status_data[:status]}, " \
+                         "connected=#{status_data[:connected]}, logged_in=#{status_data[:logged_in]}"
       webhook_url = @inbox.channel.webhook_url if @inbox.channel.is_a?(Channel::Api)
       Rails.logger.info "[UAZAPI] Webhook URL: #{webhook_url}" if webhook_url.present?
       response_data = status_data.merge(webhook_url: webhook_url)
       render json: response_data
     else
       Rails.logger.error "[UAZAPI] Failed to fetch status for inbox_id=#{@inbox.id}"
-      render json: { error: 'Failed to fetch status' }, status: :unprocessable_entity
+      render json: { status: 'disconnected', connected: false, logged_in: false }
     end
   rescue StandardError => e
     Rails.logger.error "[UAZAPI] Status error: #{e.message}"
@@ -123,7 +123,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
-      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, additional_attributes=#{channel.additional_attributes.inspect}"
+      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, " \
+                         "additional_attributes=#{channel.additional_attributes.inspect}"
       return render json: { error: 'Instance token not found' }, status: :unprocessable_entity
     end
 
@@ -140,9 +141,56 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       body: {}.to_json
     )
 
+    # If instance no longer exists on UazAPI side, recreate it
+    if [401, 404].include?(response.code)
+      Rails.logger.warn "[UAZAPI] Instance token invalid (#{response.code}), recreating instance for inbox_id=#{@inbox.id}"
+      instance_data = Whatsapp::Providers::UazapiService.create_instance(@inbox.name)
+      unless instance_data.present?
+        Rails.logger.error "[UAZAPI] Failed to recreate instance for inbox_id=#{@inbox.id}"
+        return render json: { error: 'Failed to recreate instance' }, status: :unprocessable_entity
+      end
+
+      new_token = instance_data['token'] || instance_data.dig('instance', 'token')
+      unless new_token.present?
+        Rails.logger.error "[UAZAPI] No token in recreated instance response: #{instance_data.inspect}"
+        return render json: { error: 'Failed to obtain new instance token' }, status: :unprocessable_entity
+      end
+
+      channel.additional_attributes = (channel.additional_attributes || {}).merge('uazapi_instance_token' => new_token)
+      channel.save!
+      instance_token = new_token
+      headers['token'] = new_token
+
+      # Reconfigure Chatwoot webhook integration with new token
+      if Current.user.present? && (access_token = Current.user.access_token&.token).present?
+        frontend_url = ENV.fetch('FRONTEND_URL', nil)
+        if frontend_url.present?
+          chatwoot_config = {
+            enabled: true,
+            url: frontend_url,
+            access_token: access_token,
+            account_id: Current.account.id,
+            inbox_id: @inbox.id,
+            ignore_groups: false,
+            sign_messages: true,
+            create_new_conversation: true
+          }
+          result = Whatsapp::Providers::UazapiService.configure_chatwoot_integration(new_token, chatwoot_config)
+          channel.update!(webhook_url: result['chatwoot_inbox_webhook_url']) if result&.dig('chatwoot_inbox_webhook_url').present?
+        end
+      end
+
+      response = HTTParty.post(
+        "#{base_url}/instance/connect",
+        headers: headers,
+        body: {}.to_json
+      )
+    end
+
     if response.success?
       connection_data = response.parsed_response
-      Rails.logger.info "[UAZAPI] Connection initiated: status=#{connection_data.dig('instance', 'status')}, qr_code_available=#{connection_data.dig('instance', 'qrcode').present?}"
+      Rails.logger.info "[UAZAPI] Connection initiated: status=#{connection_data.dig('instance', 'status')}, " \
+                         "qr_code_available=#{connection_data.dig('instance', 'qrcode').present?}"
       render json: {
         qr_code: connection_data.dig('instance', 'qrcode') || connection_data['qrcode'],
         status: connection_data.dig('instance', 'status') || 'connecting',
@@ -171,7 +219,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
-      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, additional_attributes=#{channel.additional_attributes.inspect}"
+      Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, " \
+                         "additional_attributes=#{channel.additional_attributes.inspect}"
       return render json: { error: 'Instance token not found' }, status: :unprocessable_entity
     end
 
@@ -271,10 +320,108 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
+  def migrate
+    target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
+  
+    unless @inbox.channel_type == target_inbox.channel_type
+      return render json: { error: 'Só é possível migrar entre caixas do mesmo tipo' }, status: :unprocessable_entity
+    end
+  
+    backup_migration_data(@inbox)
+    migrated_count = 0
+  
+    ActiveRecord::Base.transaction do
+      @inbox.conversations.find_each do |conversation|
+        source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
+  
+        target_contact_inbox = ContactInbox.find_by(
+          inbox_id: target_inbox.id,
+          source_id: source_id
+        ) || ContactInbox.find_or_create_by!(
+          contact_id: conversation.contact_id,
+          inbox_id: target_inbox.id
+        ) do |ci|
+          ci.source_id = source_id
+        end
+  
+        conversation.messages.update_all(inbox_id: target_inbox.id)
+        conversation.reporting_events.update_all(inbox_id: target_inbox.id)
+        conversation.sla_events.update_all(inbox_id: target_inbox.id)
+        conversation.update!(
+          inbox_id: target_inbox.id,
+          contact_inbox_id: target_contact_inbox.id
+        )
+        migrated_count += 1
+      end
+  
+      @inbox.contact_inboxes.destroy_all
+    end
+  
+    redirect_uazapi_to_target(@inbox, target_inbox)
+    render json: { success: true, migrated_count: migrated_count }
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Target inbox not found' }, status: :not_found
+  rescue StandardError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   private
 
+  def fetch_inbox_without_auth
+    @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
+  end
+
+  def backup_migration_data(inbox)
+    timestamp = Time.current.strftime('%Y%m%d%H%M%S')
+    key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
+    
+    data = {
+      inbox: inbox.attributes,
+      conversations: inbox.conversations.map(&:attributes),
+      contact_inboxes: inbox.contact_inboxes.map(&:attributes),
+      messages: Message.where(inbox_id: inbox.id).map(&:attributes),
+      migrated_at: Time.current,
+      migrated_by: Current.user&.id
+    }
+    
+    Redis::Alfred.set(key, data.to_json)
+    Redis::Alfred.expire(key, 30.days.to_i)
+  end
+  
+  def redirect_uazapi_to_target(source_inbox, target_inbox)
+    return unless source_inbox.channel.is_a?(Channel::Api)
+  
+    instance_token = source_inbox.channel.additional_attributes&.dig('uazapi_instance_token')
+    return unless instance_token.present?
+  
+    access_token = Current.user.access_token&.token
+    frontend_url = ENV.fetch('FRONTEND_URL', nil)
+    return unless access_token.present? && frontend_url.present?
+  
+    Whatsapp::Providers::UazapiService.configure_chatwoot_integration(
+      instance_token,
+      {
+        enabled: true,
+        url: frontend_url,
+        access_token: access_token,
+        account_id: Current.account.id,
+        inbox_id: target_inbox.id,
+        ignore_groups: false,
+        sign_messages: true,
+        create_new_conversation: true
+      }
+    )
+  rescue StandardError => e
+    Rails.logger.error "[MIGRATE] Falha ao redirecionar UazAPI: #{e.message}"
+  end
+  
   def fetch_inbox_for_migrate
     @inbox = Current.account.inboxes.find(params[:id])
+  end
+
+  def fetch_inbox
+    @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
+    authorize @inbox, :show?
   end
 
   def fetch_agent_bot
@@ -288,7 +435,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def validate_uazapi_channel
-    Rails.logger.info "[UAZAPI] Validating channel for inbox_id=#{@inbox.id}, channel_id=#{@inbox.channel&.id}, channel_type=#{@inbox.channel&.class}"
+    Rails.logger.info "[UAZAPI] Validating channel for inbox_id=#{@inbox.id}, " \
+                       "channel_id=#{@inbox.channel&.id}, channel_type=#{@inbox.channel&.class}"
     
     unless @inbox.channel.is_a?(Channel::Api)
       Rails.logger.error "[UAZAPI] Channel validation failed: not Channel::Api, channel_type=#{@inbox.channel&.class}"

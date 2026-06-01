@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useToggle } from '@vueuse/core';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -9,6 +9,7 @@ import { useAlert } from 'dashboard/composables';
 import Button from 'dashboard/components-next/button/Button.vue';
 import DropdownMenu from 'dashboard/components-next/dropdown-menu/DropdownMenu.vue';
 import ConversationRequiredAttributeItem from 'dashboard/components-next/ConversationWorkflow/ConversationRequiredAttributeItem.vue';
+import ConversationRequiredAttributeRulePicker from 'dashboard/components-next/ConversationWorkflow/ConversationRequiredAttributeRulePicker.vue';
 import ConversationRequiredEmpty from 'dashboard/components-next/Conversation/ConversationRequiredEmpty.vue';
 import BasePaywallModal from 'dashboard/routes/dashboard/settings/components/BasePaywallModal.vue';
 
@@ -31,6 +32,9 @@ const conversationAttributes = useMapGetter(
 );
 const currentUser = useMapGetter('getCurrentUser');
 
+// Attribute waiting for rule configuration
+const pendingAttribute = ref(null);
+
 const isSuperAdmin = computed(() => currentUser.value.type === 'SuperAdmin');
 const showPaywall = computed(() => !props.isEnabled && isOnChatwootCloud.value);
 const i18nKey = computed(() =>
@@ -48,9 +52,15 @@ const handleClick = () => {
   emit('click');
 };
 
-const selectedAttributeKeys = computed(
-  () => currentAccount.value?.settings?.conversation_required_attributes || []
-);
+// Normalize raw settings: string → { key, rule: 'always' }, object → as-is
+const normalizeAttrConfig = item =>
+  typeof item === 'string' ? { key: item, rule: 'always' } : item;
+
+const selectedAttributes = computed(() => {
+  const raw =
+    currentAccount.value?.settings?.conversation_required_attributes || [];
+  return raw.map(normalizeAttrConfig);
+});
 
 const allAttributeOptions = computed(() =>
   (conversationAttributes.value || []).map(attribute => ({
@@ -59,22 +69,36 @@ const allAttributeOptions = computed(() =>
     value: attribute.attributeKey,
     label: attribute.attributeDisplayName,
     type: attribute.attributeDisplayType,
+    attributeValues: attribute.attributeValues,
   }))
 );
 
 const attributeOptions = computed(() => {
-  const selectedKeysSet = new Set(selectedAttributeKeys.value);
+  const selectedKeys = new Set(selectedAttributes.value.map(a => a.key));
   return allAttributeOptions.value.filter(
-    attribute => !selectedKeysSet.has(attribute.value)
+    attribute => !selectedKeys.has(attribute.value)
   );
 });
 
+// Merge attribute definitions with rule config for display
 const conversationRequiredAttributes = computed(() => {
-  const attributeMap = new Map(
+  const attrMap = new Map(
     allAttributeOptions.value.map(attr => [attr.value, attr])
   );
-  return selectedAttributeKeys.value
-    .map(key => attributeMap.get(key))
+  return selectedAttributes.value
+    .map(attrConfig => {
+      const def = attrMap.get(attrConfig.key);
+      if (!def) return null;
+      const conditionFieldDef = attrConfig.condition_field
+        ? attrMap.get(attrConfig.condition_field)
+        : null;
+      return {
+        ...def,
+        ...attrConfig,
+        conditionFieldLabel:
+          conditionFieldDef?.label || attrConfig.condition_field,
+      };
+    })
     .filter(Boolean);
 });
 
@@ -83,11 +107,11 @@ const handleAddAttributesClick = event => {
   toggleDropdown();
 };
 
-const saveRequiredAttributes = async keys => {
+const saveRequiredAttributes = async configs => {
   try {
     toggleSaving(true);
     await updateAccount(
-      { conversation_required_attributes: keys },
+      { conversation_required_attributes: configs },
       { silent: true }
     );
     useAlert(t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.SAVE.SUCCESS'));
@@ -99,12 +123,24 @@ const saveRequiredAttributes = async keys => {
   }
 };
 
+// Step 1: user picks attribute from dropdown
 const handleAttributeAction = ({ value }) => {
   if (!value || isSaving.value) return;
-  const updatedKeys = Array.from(
-    new Set([...selectedAttributeKeys.value, value])
-  );
-  saveRequiredAttributes(updatedKeys);
+  const attribute = allAttributeOptions.value.find(a => a.value === value);
+  if (!attribute) return;
+  toggleDropdown(false);
+  pendingAttribute.value = attribute;
+};
+
+// Step 2: user picks rule in the picker
+const handleRuleConfirm = config => {
+  pendingAttribute.value = null;
+  const updatedConfigs = [...selectedAttributes.value, config];
+  saveRequiredAttributes(updatedConfigs);
+};
+
+const handleRuleCancel = () => {
+  pendingAttribute.value = null;
 };
 
 const closeDropdown = () => {
@@ -113,10 +149,10 @@ const closeDropdown = () => {
 
 const handleDelete = attribute => {
   if (isSaving.value) return;
-  const updatedKeys = selectedAttributeKeys.value.filter(
-    key => key !== attribute.value
+  const updatedConfigs = selectedAttributes.value.filter(
+    a => a.key !== attribute.key
   );
-  saveRequiredAttributes(updatedKeys);
+  saveRequiredAttributes(updatedConfigs);
 };
 </script>
 
@@ -161,13 +197,21 @@ const handleDelete = attribute => {
     </div>
 
     <template v-if="isEnabled">
+      <ConversationRequiredAttributeRulePicker
+        v-if="pendingAttribute"
+        :attribute="pendingAttribute"
+        :all-attributes="allAttributeOptions"
+        @confirm="handleRuleConfirm"
+        @cancel="handleRuleCancel"
+      />
+
       <ConversationRequiredEmpty
-        v-if="conversationRequiredAttributes.length === 0"
+        v-else-if="conversationRequiredAttributes.length === 0"
       />
 
       <ConversationRequiredAttributeItem
         v-for="attribute in conversationRequiredAttributes"
-        :key="attribute.value"
+        :key="attribute.key"
         :attribute="attribute"
         @delete="handleDelete"
       />

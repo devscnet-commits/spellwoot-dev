@@ -48,6 +48,7 @@ class Whatsapp::IncomingMessageBaseService
   def process_statuses
     return unless find_message_by_source_id(@processed_params[:statuses].first[:id])
 
+    Rails.logger.info "[STATUS_DEBUG] status=#{@processed_params[:statuses].first.inspect}"
     update_message_with_status(@message, @processed_params[:statuses].first)
   rescue ArgumentError => e
     Rails.logger.error "Error while processing whatsapp status update #{e.message}"
@@ -57,9 +58,30 @@ class Whatsapp::IncomingMessageBaseService
     message.status = status[:status]
     if status[:status] == 'failed' && status[:errors].present?
       error = status[:errors]&.first
-      message.external_error = "#{error[:code]}: #{error[:title]}"
+      Rails.logger.info "[STATUS_UPDATE] error=#{error.inspect}"
+      message.external_error = translate_whatsapp_error(error[:code])
     end
     message.save!
+  end
+
+  def translate_whatsapp_error(code)
+    Rails.logger.info "[WHATSAPP_ERROR] code=#{code.inspect} to_i=#{code.to_i}"
+    case code.to_i
+    when 404
+      'Instância não encontrada — verifique a conexão da caixa'
+    when 470
+      'Mensagem fora do prazo de 24h — use um template'
+    when 131_047
+      'Número não está no WhatsApp'
+    when 131_026
+      'Falha na entrega — verifique o número'
+    when 131_021
+      'Número de telefone inválido'
+    when 405
+      'Caixa desconectada — reconecte o WhatsApp'
+    else
+      'Falha ao enviar mensagem'
+    end
   end
 
   def create_messages
@@ -130,7 +152,6 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def set_conversation
-    # if lock to single conversation is disabled, we will create a new conversation if previous conversation is resolved
     @conversation = if @inbox.lock_to_single_conversation
                       @contact_inbox.conversations.last
                     else
@@ -140,6 +161,16 @@ class Whatsapp::IncomingMessageBaseService
     return if @conversation
 
     @conversation = ::Conversation.create!(conversation_params)
+
+    referral = messages_data.first[:referral] || messages_data.first['referral']
+
+    Rails.logger.info("[ATTRIBUTION] referral payload: #{referral.to_json}")
+
+    Attribution::ConversationAttributionService.process(
+      conversation: @conversation,
+      referral: referral,
+      provider: 'meta'
+    )
   end
 
   def attach_files

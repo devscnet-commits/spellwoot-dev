@@ -182,7 +182,7 @@ defineExpose({ handleOpen });
       <div v-if="isGenerating" class="flex items-center justify-center">
         <div class="text-center">
           <div
-            class="inline-block w-12 h-12 border-4 rounded-full border-white border-t-transparent animate-spin"
+            class="inline-block w-12 h-12 border-4 rounded-full border-[#2b0c1e] border-t-transparent animate-spin"
           />
           <p class="mt-4 text-sm text-white">
             {{ t('YEAR_IN_REVIEW.SHARE_MODAL.PREPARING') }}
@@ -192,7 +192,7 @@ defineExpose({ handleOpen });
 
       <div
         v-else-if="shareImageUrl"
-        class="max-w-2xl w-full mx-4 flex flex-col gap-6 bg-slate-800 rounded-2xl p-6"
+        class="max-w-2xl w-full mx-4 flex flex-col gap-6 bg-[#1e0714] rounded-2xl p-6"
         @click.stop
       >
         <div class="flex items-center justify-between">
@@ -200,7 +200,7 @@ defineExpose({ handleOpen });
             {{ t('YEAR_IN_REVIEW.SHARE_MODAL.TITLE') }}
           </h3>
           <button
-            class="w-10 h-10 flex items-center justify-center rounded-full text-white hover:bg-white hover:bg-opacity-20 transition-colors"
+            class="w-10 h-10 flex items-center justify-center rounded-full text-white hover:bg-[#12030a] hover:bg-opacity-20 transition-colors"
             @click="close"
           >
             <i class="i-lucide-x w-6 h-6" />
@@ -217,7 +217,7 @@ defineExpose({ handleOpen });
 
         <div class="flex gap-3">
           <button
-            class="flex-[2] px-4 py-3 flex items-center justify-center gap-2 rounded-full text-white bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors"
+            class="flex-[2] px-4 py-3 flex items-center justify-center gap-2 rounded-full text-white bg-[#12030a] bg-opacity-20 hover:bg-opacity-30 transition-colors"
             @click="downloadImage"
           >
             <i class="i-lucide-download w-5 h-5" />
@@ -227,7 +227,7 @@ defineExpose({ handleOpen });
           </button>
 
           <button
-            class="w-10 h-10 flex items-center justify-center rounded-full text-white bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors"
+            class="w-10 h-10 flex items-center justify-center rounded-full text-white bg-[#12030a] bg-opacity-20 hover:bg-opacity-30 transition-colors"
             @click="shareImage"
           >
             <i class="i-lucide-share-2 w-5 h-5" />

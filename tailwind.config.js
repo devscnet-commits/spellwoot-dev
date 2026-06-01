@@ -20,7 +20,7 @@ const defaultSansFonts = [
 ];
 
 const tailwindConfig = {
-  darkMode: 'class',
+  darkMode: ['class', 'body.dark'],
   content: [
     './enterprise/app/views/**/*.html.erb',
     './app/javascript/widget/**/*.vue',

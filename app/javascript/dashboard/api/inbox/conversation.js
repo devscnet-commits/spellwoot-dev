@@ -119,6 +119,13 @@ class ConversationApi extends ApiClient {
     });
   }
 
+  closeOutcome({ conversationId, outcome, customAttributes = {} }) {
+    return axios.post(`${this.url}/${conversationId}/close_outcome`, {
+      outcome,
+      custom_attributes: customAttributes,
+    });
+  }
+
   fetchParticipants(conversationId) {
     return axios.get(`${this.url}/${conversationId}/participants`);
   }

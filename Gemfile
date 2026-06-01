@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-ruby '3.4.4'
+ruby '~> 3.4'
 
 ##-- base gems for rails --##
 gem 'rack-cors', '2.0.0', require: 'rack/cors'
@@ -222,6 +222,7 @@ group :development do
   gem 'annotaterb'
   gem 'bullet'
   gem 'letter_opener'
+  gem 'rubocop', require: false
   gem 'scss_lint', require: false
   gem 'web-console', '>= 4.2.1'
 

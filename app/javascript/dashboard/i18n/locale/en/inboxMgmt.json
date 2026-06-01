@@ -636,6 +636,28 @@
         "LABEL": "Enable"
       }
     },
+    "MIGRATE": {
+      "BUTTON_TEXT": "Migrate inbox",
+      "TITLE": "Migrate conversations",
+      "DESCRIPTION": "Move all conversations from inbox \"{name}\" to another inbox.",
+      "TARGET_LABEL": "Destination inbox",
+      "SELECT_PLACEHOLDER": "Select destination inbox",
+      "CANCEL": "Cancel",
+      "CONFIRM": "Migrate now",
+      "SUCCESS": "Conversations migrated successfully.",
+      "ERROR": "Error migrating conversations. Please try again.",
+      "DELETE_TITLE": "Delete source inbox?",
+      "DELETE_WARNING_TITLE": "Warning — irreversible action",
+      "DELETE_WARNING_BODY": "Inbox \"{name}\" still exists. If not deleted, contacts calling this number will create new conversations disconnected from the migrated history.",
+      "DELETE_KEEP": "Keep inbox",
+      "DELETE_CONFIRM": "Delete inbox",
+      "DELETE_SUCCESS": "Inbox deleted successfully.",
+      "DELETE_ERROR": "Error deleting inbox.",
+      "KEEP_SUCCESS": "Inbox kept. The UazAPI instance has been redirected to the new inbox.",
+      "KEEP_WARNING": "The UazAPI instance has been redirected to the new inbox. Reconfiguring the old inbox may revert the redirection.",
+      "CONFIRM_AND_DELETE": "Conversations will be migrated and inbox \"{name}\" will be permanently deleted. Continue?",
+      "SUCCESS_AND_DELETED": "Conversations migrated and inbox deleted successfully."
+    },
     "DELETE": {
       "BUTTON_TEXT": "Delete",
       "AVATAR_DELETE_BUTTON_TEXT": "Delete Avatar",

@@ -6,6 +6,12 @@ class Inboxes extends CacheEnabledApiClient {
     super('inboxes', { accountScoped: true });
   }
 
+  migrateInbox(sourceInboxId, targetInboxId) {
+    return axios.post(`${this.url}/${sourceInboxId}/migrate`, {
+      target_inbox_id: targetInboxId,
+    });
+  }
+
   // eslint-disable-next-line class-methods-use-this
   get cacheModelName() {
     return 'inbox';

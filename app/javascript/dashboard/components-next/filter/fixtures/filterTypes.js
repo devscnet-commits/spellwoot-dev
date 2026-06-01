@@ -8,8 +8,6 @@ export const filterTypes = [
     options: [
       { id: 'open', name: 'Open' },
       { id: 'resolved', name: 'Resolved' },
-      { id: 'pending', name: 'Pending' },
-      { id: 'snoozed', name: 'Snoozed' },
       { id: 'all', name: 'All' },
     ],
     dataType: 'text',

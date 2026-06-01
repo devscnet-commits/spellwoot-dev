@@ -223,7 +223,7 @@ export default {
       "
     >
       <div
-        class="sticky top-0 p-1 bg-white dark:bg-transparent backdrop-blur-[100px]"
+        class="sticky top-0 p-1 bg-[#12030a] dark:bg-transparent backdrop-blur-[100px]"
       >
         <input
           ref="searchbar"

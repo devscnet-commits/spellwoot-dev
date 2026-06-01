@@ -100,7 +100,7 @@ class Message < ApplicationRecord
     sticker: 11,
     voice_call: 12
   }
-  enum status: { sent: 0, delivered: 1, read: 2, failed: 3 }
+  enum status: { sent: 0, delivered: 1, read: 2, failed: 3, progress: 4 }
   # [:submitted_email, :items, :submitted_values] : Used for bot message types
   # [:email] : Used by conversation_continuity incoming email messages
   # [:in_reply_to] : Used to reply to a particular tweet in threads
@@ -402,11 +402,13 @@ class Message < ApplicationRecord
 
   def reopen_conversation
     return if conversation.muted?
-    return unless incoming?
 
-    conversation.open! if conversation.snoozed?
+    conversation.open! if conversation.snoozed? && incoming?
 
-    reopen_resolved_conversation if conversation.resolved?
+    if conversation.resolved?
+      reopen_resolved_conversation if incoming?
+      reopen_resolved_conversation_for_human_agent if outgoing_human_agent?
+    end
   end
 
   def mark_pending_conversation_as_open_for_human_response
@@ -422,15 +424,16 @@ class Message < ApplicationRecord
   end
 
   def reopen_resolved_conversation
-    # mark resolved bot conversation as pending to be reopened by bot processor service
-    if conversation.inbox.active_bot?
-      conversation.pending!
-    elsif conversation.inbox.api?
-      Current.executed_by = sender if reopened_by_contact?
-      conversation.open!
-    else
-      conversation.open!
-    end
+    Current.executed_by = sender if conversation.inbox.api? && reopened_by_contact?
+    conversation.open!
+  end
+
+  def reopen_resolved_conversation_for_human_agent
+    conversation.open!
+  end
+
+  def outgoing_human_agent?
+    outgoing? && !private? && sender.instance_of?(User)
   end
 
   def reopened_by_contact?
