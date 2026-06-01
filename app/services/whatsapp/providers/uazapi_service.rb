@@ -245,15 +245,16 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     Rails.logger.error "[UAZAPI] Error: #{response.body}"
     return if message.blank?
 
+    if [404, 405].include?(response.code.to_i)
+      Rails.logger.warn "[UAZAPI] #{response.code} response — message may have been delivered despite connectivity error. Not marking as failed."
+      return
+    end
+
     error_msg = case response.code.to_i
                 when 401
                   'Sessão expirada. Reconecte a caixa do WhatsApp'
                 when 403
                   'Sem permissão para enviar mensagens nesta conta'
-                when 404
-                  'Instância não encontrada. Verifique a conexão da caixa'
-                when 405
-                  'Caixa desconectada. Reconecte o WhatsApp'
                 when 422
                   'Número de telefone inválido ou não está no WhatsApp'
                 when 429
