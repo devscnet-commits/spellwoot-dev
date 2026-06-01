@@ -47,9 +47,8 @@ class Whatsapp::IncomingMessageBaseService
 
   def process_statuses
     return unless find_message_by_source_id(@processed_params[:statuses].first[:id])
+
     Rails.logger.info "[STATUS_DEBUG] status=#{@processed_params[:statuses].first.inspect}"
-
-
     update_message_with_status(@message, @processed_params[:statuses].first)
   rescue ArgumentError => e
     Rails.logger.error "Error while processing whatsapp status update #{e.message}"
@@ -78,8 +77,6 @@ class Whatsapp::IncomingMessageBaseService
       'Falha na entrega — verifique o número'
     when 131_021
       'Número de telefone inválido'
-    #when 404
-      #'Instância não encontrada — verifique a conexão da caixa'
     when 405
       'Caixa desconectada — reconecte o WhatsApp'
     else
