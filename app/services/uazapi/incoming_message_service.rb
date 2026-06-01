@@ -197,7 +197,9 @@ class Uazapi::IncomingMessageService
   end
 
   def download_media_file(media_url)
-    Down.download(media_url)
+    instance_token = inbox.channel&.additional_attributes&.dig('uazapi_instance_token')
+    headers = instance_token.present? ? { 'token' => instance_token } : {}
+    Down.download(media_url, headers: headers, open_timeout: 15, read_timeout: 30)
   rescue StandardError => e
     Rails.logger.error "[UAZAPI] Error downloading file from #{media_url}: #{e.message}"
     nil
