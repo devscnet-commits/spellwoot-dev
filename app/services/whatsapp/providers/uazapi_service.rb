@@ -222,10 +222,19 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def process_uazapi_response(response, message)
-    if response.success?
-      parsed = response.parsed_response
-      # UazAPI returns messageid in the response
-      parsed['messageid'] || parsed['id']
+    parsed = response.parsed_response
+    message_id = parsed&.dig('messageid') || parsed&.dig('id')
+
+    Rails.logger.info "[UAZAPI] Send response: status=#{response.code}, message_id=#{message_id}, body=#{response.body.truncate(200)}"
+
+    if message_id.present?
+      # Message was accepted by UazAPI (has an ID) regardless of HTTP status
+      message.update!(source_id: message_id.to_s) if message.present?
+      message_id
+    elsif response.success?
+      # 2xx but no message ID — log but don't mark as failed
+      Rails.logger.warn "[UAZAPI] Success response but no message_id returned: #{response.body.truncate(200)}"
+      nil
     else
       handle_uazapi_error(response, message)
       nil
