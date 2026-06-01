@@ -112,18 +112,18 @@ const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
           class="flex items-center gap-2 overflow-hidden text-xs conversation--header--actions text-ellipsis whitespace-nowrap"
         />
       </div>
-      <div
-        class="flex flex-row items-center justify-start xl:justify-end flex-shrink-0 gap-2 w-full xl:w-auto header-actions-wrap"
-      >
-        <SLACardLabel
-          v-if="hasSlaPolicyId"
-          :chat="chat"
-          show-extended-info
-          :parent-width="width"
-          class="hidden md:flex"
-        />
-        <MoreActions :conversation-id="currentChat.id" />
-      </div>
+    </div>
+    <div
+      class="flex flex-row items-center justify-start xl:justify-end flex-shrink-0 gap-2 w-full xl:w-auto header-actions-wrap"
+    >
+      <SLACardLabel
+        v-if="hasSlaPolicyId"
+        :chat="chat"
+        show-extended-info
+        :parent-width="width"
+        class="hidden md:flex"
+      />
+      <MoreActions :conversation-id="currentChat.id" />
     </div>
   </div>
 </template>
