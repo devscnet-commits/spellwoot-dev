@@ -112,15 +112,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def uazapi_connect
     Rails.logger.info "[UAZAPI] Connecting instance for inbox_id=#{@inbox.id}, channel_id=#{@inbox.channel.id}"
-    
+
     channel = @inbox.channel
     channel.reload if channel.is_a?(Channel::Api) # Ensure we have latest data
-    
+
     unless channel.is_a?(Channel::Api)
       Rails.logger.error "[UAZAPI] Invalid channel type for inbox_id=#{@inbox.id}, channel_type=#{channel.class}"
       return render json: { error: 'Invalid channel type' }, status: :unprocessable_entity
     end
-    
+
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
       Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, " \
@@ -208,15 +208,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def uazapi_disconnect
     Rails.logger.info "[UAZAPI] Disconnecting instance for inbox_id=#{@inbox.id}, channel_id=#{@inbox.channel.id}"
-    
+
     channel = @inbox.channel
     channel.reload if channel.is_a?(Channel::Api) # Ensure we have latest data
-    
+
     unless channel.is_a?(Channel::Api)
       Rails.logger.error "[UAZAPI] Invalid channel type for inbox_id=#{@inbox.id}, channel_type=#{channel.class}"
       return render json: { error: 'Invalid channel type' }, status: :unprocessable_entity
     end
-    
+
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
       Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}, " \
@@ -250,10 +250,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def uazapi_reconfigure
     Rails.logger.info "[UAZAPI] Reconfiguring Chatwoot integration for inbox_id=#{@inbox.id}, channel_id=#{@inbox.channel.id}"
-    
+
     channel = @inbox.channel
     return render json: { error: 'Invalid channel type' }, status: :unprocessable_entity unless channel.is_a?(Channel::Api)
-    
+
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
     unless instance_token.present?
       Rails.logger.error "[UAZAPI] Instance token not found for channel_id=#{channel.id}"
@@ -289,19 +289,19 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     }
 
     result = Whatsapp::Providers::UazapiService.configure_chatwoot_integration(instance_token, chatwoot_config)
-    
+
     unless result.present?
       Rails.logger.error "[UAZAPI] Failed to reconfigure Chatwoot integration - no response from API"
       return render json: { error: 'Failed to reconfigure integration' }, status: :unprocessable_entity
     end
 
     webhook_url = result&.dig('chatwoot_inbox_webhook_url')
-    
+
     if webhook_url.present?
       Rails.logger.info "[UAZAPI] Chatwoot integration reconfigured successfully, webhook_url=#{webhook_url}"
       channel.update!(webhook_url: webhook_url)
       channel.reload
-      render json: { 
+      render json: {
         message: 'Integration reconfigured successfully',
         webhook_url: webhook_url
       }
@@ -309,7 +309,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       # API configured successfully but webhook_url not returned - this is ok, we'll keep existing webhook_url
       Rails.logger.info "[UAZAPI] Chatwoot integration reconfigured successfully, but webhook_url not returned in response"
       Rails.logger.info "[UAZAPI] Response: #{result.inspect}"
-      render json: { 
+      render json: {
         message: 'Integration reconfigured successfully',
         webhook_url: channel.webhook_url # Return existing webhook_url if available
       }
@@ -322,18 +322,18 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def migrate
     target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
-  
+
     unless @inbox.channel_type == target_inbox.channel_type
       return render json: { error: 'Só é possível migrar entre caixas do mesmo tipo' }, status: :unprocessable_entity
     end
-  
+
     backup_migration_data(@inbox)
     migrated_count = 0
-  
+
     ActiveRecord::Base.transaction do
       @inbox.conversations.find_each do |conversation|
         source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
-  
+
         target_contact_inbox = ContactInbox.find_by(
           inbox_id: target_inbox.id,
           source_id: source_id
@@ -343,7 +343,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
         ) do |ci|
           ci.source_id = source_id
         end
-  
+
         conversation.messages.update_all(inbox_id: target_inbox.id)
         conversation.reporting_events.update_all(inbox_id: target_inbox.id)
         conversation.sla_events.update_all(inbox_id: target_inbox.id)
@@ -353,10 +353,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
         )
         migrated_count += 1
       end
-  
+
       @inbox.contact_inboxes.destroy_all
     end
-  
+
     redirect_uazapi_to_target(@inbox, target_inbox)
     render json: { success: true, migrated_count: migrated_count }
   rescue ActiveRecord::RecordNotFound
@@ -374,7 +374,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def backup_migration_data(inbox)
     timestamp = Time.current.strftime('%Y%m%d%H%M%S')
     key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
-    
+
     data = {
       inbox: inbox.attributes,
       conversations: inbox.conversations.map(&:attributes),
@@ -383,21 +383,21 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       migrated_at: Time.current,
       migrated_by: Current.user&.id
     }
-    
+
     Redis::Alfred.set(key, data.to_json)
     Redis::Alfred.expire(key, 30.days.to_i)
   end
-  
+
   def redirect_uazapi_to_target(source_inbox, target_inbox)
     return unless source_inbox.channel.is_a?(Channel::Api)
-  
+
     instance_token = source_inbox.channel.additional_attributes&.dig('uazapi_instance_token')
     return unless instance_token.present?
-  
+
     access_token = Current.user.access_token&.token
     frontend_url = ENV.fetch('FRONTEND_URL', nil)
     return unless access_token.present? && frontend_url.present?
-  
+
     Whatsapp::Providers::UazapiService.configure_chatwoot_integration(
       instance_token,
       {
@@ -414,7 +414,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   rescue StandardError => e
     Rails.logger.error "[MIGRATE] Falha ao redirecionar UazAPI: #{e.message}"
   end
-  
+
   def fetch_inbox_for_migrate
     @inbox = Current.account.inboxes.find(params[:id])
   end
@@ -437,7 +437,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def validate_uazapi_channel
     Rails.logger.info "[UAZAPI] Validating channel for inbox_id=#{@inbox.id}, " \
                        "channel_id=#{@inbox.channel&.id}, channel_type=#{@inbox.channel&.class}"
-    
+
     unless @inbox.channel.is_a?(Channel::Api)
       Rails.logger.error "[UAZAPI] Channel validation failed: not Channel::Api, channel_type=#{@inbox.channel&.class}"
       render json: { error: 'This endpoint is only available for UazAPI channels' }, status: :bad_request

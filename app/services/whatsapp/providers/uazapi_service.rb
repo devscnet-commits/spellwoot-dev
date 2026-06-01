@@ -308,7 +308,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def self.configure_chatwoot_integration(instance_token, chatwoot_config)
     url = "#{base_url}/chatwoot/config"
-    
+
     # Log antes de fazer a requisição (sem token sensível)
     log_config = chatwoot_config.dup
     log_config['access_token'] = "#{log_config['access_token'][0..10]}..." if log_config['access_token'].present?
@@ -338,7 +338,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
       parsed_response = response.parsed_response
       webhook_url = parsed_response['chatwoot_inbox_webhook_url']
-      
+
       Rails.logger.info "[UAZAPI] Chatwoot integration configured successfully"
       Rails.logger.info "[UAZAPI] Webhook URL: #{webhook_url}" if webhook_url.present?
 
@@ -352,7 +352,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def self.get_chatwoot_config(instance_token)
     url = "#{base_url}/chatwoot/config"
-    
+
     Rails.logger.info "[UAZAPI] Getting Chatwoot integration status"
     Rails.logger.info "[UAZAPI] URL: #{url}"
 

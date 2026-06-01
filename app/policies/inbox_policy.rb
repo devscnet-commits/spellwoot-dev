@@ -83,6 +83,10 @@ class InboxPolicy < ApplicationPolicy
     admin?
   end
 
+  def migrate?
+    admin?
+  end
+
   private
 
   def admin?

@@ -27,7 +27,7 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
 
   def retry
     return if message.blank?
-  
+
     # Limpa só o external_error, mantém outros atributos
     updated_attrs = message.content_attributes.except('external_error')
     message.update!(content_attributes: updated_attrs, status: :progress)
@@ -35,7 +35,6 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
   rescue StandardError => e
     render_could_not_create_error(e.message)
   end
-
 
   def translate
     return head :ok if already_translated_content_available?

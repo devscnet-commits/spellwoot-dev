@@ -25,11 +25,11 @@ class Attribution::ConversationAttributionService
     )
 
     custom_attrs = (conversation.custom_attributes || {}).merge(
-      'utm_source'   => 'Meta_Ads',
-      'utm_medium'   => referral['media_type'],
+      'utm_source' => 'Meta_Ads',
+      'utm_medium' => referral['media_type'],
       'utm_campaign' => referral['headline'],
-      'utm_content'  => referral['source_id'],
-      'ctwa_clid'    => referral['ctwa_clid']
+      'utm_content' => referral['source_id'],
+      'ctwa_clid' => referral['ctwa_clid']
     ).compact
 
     conversation.update!(custom_attributes: custom_attrs)

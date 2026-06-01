@@ -237,7 +237,7 @@ Rails.application.routes.draw do
                 get :token, on: :member
               end
             end
-          
+
             resource :csat_template, only: [:show, :create], controller: 'inbox_csat_templates' do
               post :analyze, on: :collection
             end
