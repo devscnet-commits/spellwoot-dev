@@ -247,19 +247,19 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   
     error_msg = case response.code.to_i
     when 401
-      'Sessão expirada — reconecte a caixa do WhatsApp'
+      'Sessão expirada. Reconecte a caixa do WhatsApp'
     when 403
       'Sem permissão para enviar mensagens nesta conta'
     when 404
-      'Instância não encontrada — verifique a conexão da caixa'
+      'Instância não encontrada. Verifique a conexão da caixa'
     when 405
-      'Caixa desconectada — reconecte o WhatsApp'
+      'Caixa desconectada. Reconecte o WhatsApp'
     when 422
       'Número de telefone inválido ou não está no WhatsApp'
     when 429
-      'Limite de mensagens atingido — aguarde alguns minutos'
+      'Limite de mensagens atingido. Aguarde alguns minutos'
     when 500, 502, 503
-      'Erro no servidor do WhatsApp — tente reenviar em instantes'
+      'Erro no servidor do WhatsApp. Tente reenviar em instantes'
     else
       response.parsed_response&.dig('error') || 'Falha ao enviar mensagem'
     end

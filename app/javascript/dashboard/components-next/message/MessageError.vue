@@ -13,20 +13,20 @@ const props = defineProps({
 const emit = defineEmits(['retry']);
 
 const HTTP_ERROR_MAP = {
-  '404 Not Found': 'Instância não encontrada — verifique a conexão da caixa',
-  '401 Unauthorized': 'Sessão expirada — reconecte a caixa do WhatsApp',
+  '404 Not Found': 'Instância não encontrada. Verifique a conexão da caixa',
+  '401 Unauthorized': 'Sessão expirada. Reconecte a caixa do WhatsApp',
   '403 Forbidden': 'Sem permissão para enviar mensagens nesta conta',
-  '405 Method Not Allowed': 'Caixa desconectada — reconecte o WhatsApp',
+  '405 Method Not Allowed': 'Caixa desconectada. Reconecte o WhatsApp',
   '422 Unprocessable Entity':
     'Número de telefone inválido ou não está no WhatsApp',
   '429 Too Many Requests':
-    'Limite de mensagens atingido — aguarde alguns minutos',
+    'Limite de mensagens atingido. Aguarde alguns minutos',
   '500 Internal Server Error':
-    'Erro no servidor do WhatsApp — tente reenviar em instantes',
+    'Erro no servidor do WhatsApp. Tente reenviar em instantes',
   '502 Bad Gateway':
-    'Erro no servidor do WhatsApp — tente reenviar em instantes',
+    'Erro no servidor do WhatsApp. Tente reenviar em instantes',
   '503 Service Unavailable':
-    'Erro no servidor do WhatsApp — tente reenviar em instantes',
+    'Erro no servidor do WhatsApp. Tente reenviar em instantes',
 };
 
 const displayError = computed(() => HTTP_ERROR_MAP[props.error] || props.error);
