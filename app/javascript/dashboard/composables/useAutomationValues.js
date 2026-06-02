@@ -41,12 +41,6 @@ export default function useAutomationValues() {
       resolved: {
         TEXT: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.resolved.TEXT'),
       },
-      pending: {
-        TEXT: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.pending.TEXT'),
-      },
-      snoozed: {
-        TEXT: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.snoozed.TEXT'),
-      },
       all: {
         TEXT: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.all.TEXT'),
       },
@@ -55,13 +49,10 @@ export default function useAutomationValues() {
 
   const statusFilterOptions = computed(() => {
     const statusFilters = statusFilterItems.value;
-    return [
-      ...Object.keys(statusFilters).map(status => ({
-        id: status,
-        name: statusFilters[status].TEXT,
-      })),
-      { id: 'all', name: t('CHAT_LIST.FILTER_ALL') },
-    ];
+    return Object.keys(statusFilters).map(status => ({
+      id: status,
+      name: statusFilters[status].TEXT,
+    }));
   });
 
   const messageTypeOptions = computed(() =>
