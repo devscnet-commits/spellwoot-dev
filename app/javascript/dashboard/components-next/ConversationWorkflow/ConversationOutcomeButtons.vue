@@ -17,6 +17,7 @@ const { requiredAttributes } = useConversationRequiredAttributes();
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
+const pendingStatusSeed = ref({});
 
 const metaSettings = computed(
   () => currentAccount.value?.settings?.meta_conversion_settings || {}
@@ -45,32 +46,39 @@ const hasCtwaClid = computed(
     !!currentChat.value?.additional_attributes?.attribution?.ctwa_clid
 );
 
-const attributesForOutcome = outcomeValue =>
-  requiredAttributes.value.filter(
-    attr =>
-      attr.rule === 'always' ||
-      (attr.rule === 'conditional' &&
-        attr.condition_field === winStatusField.value &&
-        attr.condition_value === outcomeValue)
-  );
+const buildInitialValues = statusValue => {
+  const base = { ...(currentChat.value?.custom_attributes || {}) };
+  if (winStatusField.value) {
+    base[winStatusField.value] = statusValue;
+  }
+  return base;
+};
 
 const openWon = () => {
+  const initialValues = buildInitialValues(winValue.value);
+  pendingStatusSeed.value = winStatusField.value
+    ? { [winStatusField.value]: winValue.value }
+    : {};
   outcomeModalRef.value?.open({
     outcome: 'won',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
     statusValue: winValue.value,
-    attributes: attributesForOutcome(winValue.value),
-    initialValues: currentChat.value?.custom_attributes || {},
+    attributes: requiredAttributes.value,
+    initialValues,
   });
 };
 
 const openLost = () => {
+  const initialValues = buildInitialValues(lossValue.value);
+  pendingStatusSeed.value = winStatusField.value
+    ? { [winStatusField.value]: lossValue.value }
+    : {};
   outcomeModalRef.value?.open({
     outcome: 'lost',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
     statusValue: lossValue.value,
-    attributes: attributesForOutcome(lossValue.value),
-    initialValues: currentChat.value?.custom_attributes || {},
+    attributes: requiredAttributes.value,
+    initialValues,
   });
 };
 
@@ -78,10 +86,12 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
   try {
     const ConversationApi = (await import('dashboard/api/inbox/conversation'))
       .default;
+    // Merge the seeded status field value so it's persisted alongside form fields
+    const mergedAttributes = { ...pendingStatusSeed.value, ...customAttributes };
     await ConversationApi.closeOutcome({
       conversationId: currentChat.value.id,
       outcome,
-      customAttributes,
+      customAttributes: mergedAttributes,
     });
 
     await store.dispatch('updateConversation', {
@@ -96,7 +106,7 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
       },
       custom_attributes: {
         ...(currentChat.value.custom_attributes || {}),
-        ...customAttributes,
+        ...mergedAttributes,
       },
     });
 
