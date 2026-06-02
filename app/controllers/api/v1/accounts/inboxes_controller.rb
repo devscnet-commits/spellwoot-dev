@@ -322,41 +322,36 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def migrate
     target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
-  
+
     unless @inbox.channel_type == target_inbox.channel_type
       return render json: { error: 'Só é possível migrar entre caixas do mesmo tipo' }, status: :unprocessable_entity
     end
-  
+
     backup_migration_data(@inbox)
-    migrated_count = 0
-  
-    conversation_ids = @inbox.conversations.pluck(:id)
+    migrated_count = @inbox.conversations.count
 
     ActiveRecord::Base.transaction do
-      conversation_ids.each_slice(200) do |batch_ids|
-        batch_ids.each do |conv_id|
-          conversation = Conversation.find(conv_id)
-          source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
+      # Bulk-update messages and events in one query each (scales to any volume)
+      Message.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
+      ReportingEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
+      SlaEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id) if defined?(SlaEvent)
 
-          target_contact_inbox = ContactInbox.find_by(
-            inbox_id: target_inbox.id,
-            source_id: source_id
-          ) || ContactInbox.find_or_create_by!(
-            contact_id: conversation.contact_id,
-            inbox_id: target_inbox.id
-          ) do |ci|
-            ci.source_id = source_id
-          end
+      # Build contact_inbox mapping: one find_or_create per contact (not per conversation)
+      contact_inbox_map = {}
+      @inbox.conversations.select(:contact_id, :contact_inbox_id).find_each do |conv|
+        next if contact_inbox_map.key?(conv.contact_id)
 
-          Message.where(conversation_id: conv_id).update_all(inbox_id: target_inbox.id)
-          ReportingEvent.where(conversation_id: conv_id).update_all(inbox_id: target_inbox.id)
-          SlaEvent.where(conversation_id: conv_id).update_all(inbox_id: target_inbox.id) if defined?(SlaEvent)
-          conversation.update_columns(
-            inbox_id: target_inbox.id,
-            contact_inbox_id: target_contact_inbox.id
-          )
-          migrated_count += 1
-        end
+        source_id = ContactInbox.where(id: conv.contact_inbox_id).pick(:source_id) || SecureRandom.uuid
+        contact_inbox_map[conv.contact_id] = ContactInbox.find_or_create_by!(
+          contact_id: conv.contact_id,
+          inbox_id: target_inbox.id
+        ) { |ci| ci.source_id = source_id }
+      end
+
+      # Update conversations in bulk per contact group
+      contact_inbox_map.each do |contact_id, target_ci|
+        Conversation.where(inbox_id: @inbox.id, contact_id: contact_id)
+                    .update_all(inbox_id: target_inbox.id, contact_inbox_id: target_ci.id)
       end
 
       ContactInbox.where(inbox_id: @inbox.id).destroy_all
@@ -367,7 +362,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
   rescue StandardError => e
-    Rails.logger.error "[MIGRATE] Error migrating inbox #{@inbox.id}: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
+    Rails.logger.error "[MIGRATE] inbox=#{@inbox.id} #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
