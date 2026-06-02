@@ -664,10 +664,17 @@
       "ENRICHMENT": {
         "TITLE": "Contact data for matching (optional)",
         "DESCRIPTION": "Map conversation attributes to contact data fields sent to Meta. These values are sent automatically — protected by hash before sending.",
-        "EMAIL": "E-mail do contato (em)",
-        "PHONE": "Telefone do contato (ph)",
-        "NAME": "Primeiro nome do contato (fn)",
-        "ZIP": "CEP do contato (zp)",
+        "EMAIL": "Contact e-mail (em)",
+        "PHONE": "Contact phone (ph)",
+        "FIRST_NAME": "Contact first name (fn)",
+        "LAST_NAME": "Contact last name (ln)",
+        "ZIP": "Contact ZIP code (zp)",
+        "CITY": "Contact city (ct)",
+        "STATE": "Contact state (st)",
+        "COUNTRY": "Contact country (country)",
+        "DATE_OF_BIRTH": "Date of birth (db)",
+        "GENDER": "Gender (ge)",
+        "EXTERNAL_ID": "External ID (external_id)",
         "NOT_MAPPED": "Not mapped"
       }
     }
