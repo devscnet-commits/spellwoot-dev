@@ -42,7 +42,8 @@ class Meta::ConversionsApiService
   end
 
   def ctwa_clid
-    @conversation.custom_attributes&.dig('ctwa_clid')
+    @conversation.custom_attributes&.dig('ctwa_clid') ||
+      @conversation.additional_attributes&.dig('attribution', 'ctwa_clid')
   end
 
   def contact_phone

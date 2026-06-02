@@ -718,6 +718,14 @@
           "TOOLTIP": "Current operating mode of your WhatsApp account"
         }
       },
+      "WEBHOOK": {
+        "TITLE": "Webhook configuration",
+        "DESCRIPTION": "The webhook URL must be registered with Meta to receive WhatsApp messages",
+        "CONFIGURED_SUCCESS": "Webhook configured",
+        "URL_MISMATCH": "Webhook URL mismatch",
+        "ACTION_REQUIRED": "Action required",
+        "REGISTER_BUTTON": "Register webhook"
+      },
       "VALUES": {
         "TIERS": {
           "TIER_250": "250 customers per 24h",
