@@ -694,6 +694,12 @@ const menuItems = computed(() => {
           to: accountScopedRoute('settings_applications'),
         },
         {
+          name: 'Settings API Credentials',
+          label: t('SIDEBAR.API_CREDENTIALS'),
+          icon: 'i-lucide-key-round',
+          to: accountScopedRoute('settings_integrations_credentials'),
+        },
+        {
           name: 'Settings Audit Logs',
           label: t('SIDEBAR.AUDIT_LOGS'),
           icon: 'i-lucide-briefcase',

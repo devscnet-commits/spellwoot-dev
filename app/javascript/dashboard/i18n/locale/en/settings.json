@@ -355,6 +355,7 @@
     "REPORTS_SLA": "SLA",
     "REPORTS_BOT": "Bot",
     "REPORTS_LEADS": "Leads",
+    "API_CREDENTIALS": "APIs & Credentials",
     "REPORTS_AGENT": "Agents",
     "REPORTS_LABEL": "Labels",
     "REPORTS_INBOX": "Inbox",
@@ -999,6 +1000,40 @@
       "DESCRIPTION": "Are you sure you want to delete this policy? This action cannot be undone.",
       "CONFIRM_BUTTON_LABEL": "Delete",
       "CANCEL_BUTTON_LABEL": "Cancel"
+    }
+  },
+  "INTEGRATIONS_HUB": {
+    "TITLE": "APIs & Credentials",
+    "DESCRIPTION": "Configure your account integrations. Changes apply immediately without server access.",
+    "CONFIGURE": "Configure",
+    "CLOSE": "Close",
+    "SAVE": "Save",
+    "SAVING": "Saving...",
+    "SAVED": "Integration saved successfully.",
+    "ERROR": "Error saving integration. Please try again.",
+    "CONFIGURED": "Configured",
+    "RESET": "Reset",
+    "HOW_TO": "How to find?",
+    "META": {
+      "DESCRIPTION": "Conversion tracking via CAPI for Facebook/Instagram ads.",
+      "PIXEL_ID": "Pixel ID",
+      "ACCESS_TOKEN": "Conversions API Access Token",
+      "TEST_EVENT_CODE": "Test Event Code (Optional)"
+    },
+    "OPENAI": {
+      "DESCRIPTION": "Integration with GPT models for automatic responses.",
+      "API_KEY": "API Key",
+      "MODEL": "Default model"
+    },
+    "N8N": {
+      "DESCRIPTION": "Workflow automation via N8N.",
+      "WEBHOOK_URL": "Webhook URL",
+      "TOKEN": "Authentication token"
+    },
+    "BITRIX": {
+      "DESCRIPTION": "Integration with Bitrix24 CRM.",
+      "WEBHOOK_URL": "Webhook URL",
+      "TOKEN": "Token"
     }
   }
 }
