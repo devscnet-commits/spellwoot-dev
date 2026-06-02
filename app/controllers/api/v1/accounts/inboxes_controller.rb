@@ -330,38 +330,44 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     backup_migration_data(@inbox)
     migrated_count = 0
   
+    conversation_ids = @inbox.conversations.pluck(:id)
+
     ActiveRecord::Base.transaction do
-      @inbox.conversations.find_each do |conversation|
-        source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
-  
-        target_contact_inbox = ContactInbox.find_by(
-          inbox_id: target_inbox.id,
-          source_id: source_id
-        ) || ContactInbox.find_or_create_by!(
-          contact_id: conversation.contact_id,
-          inbox_id: target_inbox.id
-        ) do |ci|
-          ci.source_id = source_id
+      conversation_ids.each_slice(200) do |batch_ids|
+        batch_ids.each do |conv_id|
+          conversation = Conversation.find(conv_id)
+          source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
+
+          target_contact_inbox = ContactInbox.find_by(
+            inbox_id: target_inbox.id,
+            source_id: source_id
+          ) || ContactInbox.find_or_create_by!(
+            contact_id: conversation.contact_id,
+            inbox_id: target_inbox.id
+          ) do |ci|
+            ci.source_id = source_id
+          end
+
+          Message.where(conversation_id: conv_id).update_all(inbox_id: target_inbox.id)
+          ReportingEvent.where(conversation_id: conv_id).update_all(inbox_id: target_inbox.id)
+          SlaEvent.where(conversation_id: conv_id).update_all(inbox_id: target_inbox.id) if defined?(SlaEvent)
+          conversation.update_columns(
+            inbox_id: target_inbox.id,
+            contact_inbox_id: target_contact_inbox.id
+          )
+          migrated_count += 1
         end
-  
-        conversation.messages.update_all(inbox_id: target_inbox.id)
-        conversation.reporting_events.update_all(inbox_id: target_inbox.id)
-        conversation.sla_events.update_all(inbox_id: target_inbox.id)
-        conversation.update!(
-          inbox_id: target_inbox.id,
-          contact_inbox_id: target_contact_inbox.id
-        )
-        migrated_count += 1
       end
-  
-      @inbox.contact_inboxes.destroy_all
+
+      ContactInbox.where(inbox_id: @inbox.id).destroy_all
     end
-  
+
     redirect_uazapi_to_target(@inbox, target_inbox)
     render json: { success: true, migrated_count: migrated_count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
   rescue StandardError => e
+    Rails.logger.error "[MIGRATE] Error migrating inbox #{@inbox.id}: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
@@ -374,18 +380,20 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def backup_migration_data(inbox)
     timestamp = Time.current.strftime('%Y%m%d%H%M%S')
     key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
-    
+
     data = {
       inbox: inbox.attributes,
-      conversations: inbox.conversations.map(&:attributes),
-      contact_inboxes: inbox.contact_inboxes.map(&:attributes),
-      messages: Message.where(inbox_id: inbox.id).map(&:attributes),
+      conversation_ids: inbox.conversations.pluck(:id),
+      contact_inbox_ids: inbox.contact_inboxes.pluck(:id),
+      message_count: Message.where(inbox_id: inbox.id).count,
       migrated_at: Time.current,
       migrated_by: Current.user&.id
     }
-    
+
     Redis::Alfred.set(key, data.to_json)
     Redis::Alfred.expire(key, 30.days.to_i)
+  rescue StandardError => e
+    Rails.logger.warn "[MIGRATE] Backup skipped: #{e.message}"
   end
   
   def redirect_uazapi_to_target(source_inbox, target_inbox)
