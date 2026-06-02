@@ -20,8 +20,15 @@ class Meta::ConversionsApiService
   end
 
   def perform
-    return unless trackable?
-    return if already_sent?
+    unless trackable?
+      Rails.logger.info "[CAPI] conv=#{@conversation.id} skipped reason=#{skip_reason}"
+      return
+    end
+
+    if already_sent?
+      Rails.logger.info "[CAPI] conv=#{@conversation.id} skipped reason=already_sent"
+      return
+    end
 
     response = post_to_meta(build_payload)
     mark_as_sent! if response&.success?
@@ -35,6 +42,11 @@ class Meta::ConversionsApiService
     return false if ctwa_clid.blank?
 
     true
+  end
+
+  def skip_reason
+    return 'missing_pixel_or_token' if @pixel_id.blank? || @access_token.blank?
+    return 'missing_ctwa_clid' if ctwa_clid.blank?
   end
 
   def already_sent?
@@ -99,14 +111,14 @@ class Meta::ConversionsApiService
     )
 
     if response.success?
-      Rails.logger.info "[META] #{@event_name} event sent for conversation #{@conversation.id}"
+      Rails.logger.info "[CAPI] conv=#{@conversation.id} event=#{@event_name} status=sent ctwa_clid=#{ctwa_clid}"
     else
-      Rails.logger.error "[META] Failed to send #{@event_name} event: #{response.body}"
+      Rails.logger.error "[CAPI] conv=#{@conversation.id} event=#{@event_name} status=failed body=#{response.body}"
     end
 
     response
   rescue StandardError => e
-    Rails.logger.error "[META] Error sending #{@event_name} event: #{e.message}"
+    Rails.logger.error "[CAPI] conv=#{@conversation.id} event=#{@event_name} status=error message=#{e.message}"
     nil
   end
 
