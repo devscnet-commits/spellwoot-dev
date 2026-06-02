@@ -3,7 +3,6 @@ import { frontendURL } from '../../../../helper/URLHelper';
 import SettingsWrapper from '../SettingsWrapper.vue';
 import IntegrationHooks from './IntegrationHooks.vue';
 import Index from './Index.vue';
-import ApiCredentials from './ApiCredentials.vue';
 import Webhook from './Webhooks/Index.vue';
 import DashboardApps from './DashboardApps/Index.vue';
 import Slack from './Slack.vue';
@@ -24,14 +23,6 @@ export default {
           component: Index,
           meta: {
             featureFlag: FEATURE_FLAGS.INTEGRATIONS,
-            permissions: ['administrator'],
-          },
-        },
-        {
-          path: 'credentials',
-          name: 'settings_integrations_credentials',
-          component: ApiCredentials,
-          meta: {
             permissions: ['administrator'],
           },
         },
