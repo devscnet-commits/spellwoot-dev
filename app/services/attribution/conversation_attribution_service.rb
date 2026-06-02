@@ -1,7 +1,13 @@
 class Attribution::ConversationAttributionService
   def self.process(conversation:, referral:, provider: 'meta')
     return if conversation.blank?
-    return if referral.blank?
+
+    if referral.blank?
+      Rails.logger.info "[CAPI] conv=#{conversation.id} attribution skipped reason=no_referral"
+      return
+    end
+
+    Rails.logger.info "[CAPI] conv=#{conversation.id} referral_received ctwa_clid=#{referral['ctwa_clid'].presence || 'none'} source=#{referral['source_id']}"
 
     attribution_payload = {
       attribution: {
@@ -37,12 +43,18 @@ class Attribution::ConversationAttributionService
   end
 
   def self.track_lead_on_arrival(conversation, custom_attrs)
-    return if custom_attrs['ctwa_clid'].blank?
+    if custom_attrs['ctwa_clid'].blank?
+      Rails.logger.info "[CAPI] conv=#{conversation.id} lead_job skipped reason=no_ctwa_clid"
+      return
+    end
 
     strategy = conversation.account.settings&.dig('meta_conversion_settings', 'strategy')
-    # Default to on_arrival when no strategy is configured (backward-compat)
-    return unless strategy.nil? || strategy == 'on_arrival'
+    unless strategy.nil? || strategy == 'on_arrival'
+      Rails.logger.info "[CAPI] conv=#{conversation.id} lead_job skipped reason=strategy=#{strategy}"
+      return
+    end
 
+    Rails.logger.info "[CAPI] conv=#{conversation.id} lead_job enqueued"
     Meta::TrackLeadJob.perform_later(conversation.id)
   end
   private_class_method :track_lead_on_arrival
