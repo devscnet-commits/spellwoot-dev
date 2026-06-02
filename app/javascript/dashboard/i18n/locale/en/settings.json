@@ -384,7 +384,21 @@
     "DOCS": "Read docs",
     "SECURITY": "Security",
     "CAPTAIN_AI": "Captain",
-    "CONVERSATION_WORKFLOW": "Conversation Workflow"
+    "CONVERSATION_WORKFLOW": "Conversation Workflow",
+    "INTEGRATIONS_HUB": "Integrations"
+  },
+  "INTEGRATIONS_HUB": {
+    "TITLE": "APIs & Integrations",
+    "DESCRIPTION": "Configure your account integrations. Changes apply immediately without server access.",
+    "CONFIGURE": "Configure",
+    "SAVE": "Save",
+    "SAVING": "Saving...",
+    "SAVED": "Integration saved successfully.",
+    "ERROR": "Error saving integration. Please try again.",
+    "CONFIGURED": "Configured",
+    "RESET": "Reset",
+    "HOW_TO": "How to find?",
+    "BACK": "Back to integrations"
   },
   "CAPTAIN_SETTINGS": {
     "TITLE": "Captain Settings",
