@@ -134,7 +134,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def custom_attributes
-    @conversation.custom_attributes = params.permit(custom_attributes: {})[:custom_attributes]
+    attrs = params.permit(custom_attributes: {})[:custom_attributes]
+    @conversation.custom_attributes = (@conversation.custom_attributes || {}).merge(attrs)
     @conversation.save!
   end
 
