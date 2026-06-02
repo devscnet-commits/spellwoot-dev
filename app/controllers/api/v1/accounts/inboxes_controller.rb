@@ -331,29 +331,33 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     migrated_count = @inbox.conversations.count
 
     ActiveRecord::Base.transaction do
-      # Bulk-update messages and events in one query each (scales to any volume)
+      # 1. Bulk-update messages and events — 1 query each, regardless of volume
       Message.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
       ReportingEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
       SlaEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id) if defined?(SlaEvent)
 
-      # Build contact_inbox mapping: one find_or_create per contact (not per conversation)
-      contact_inbox_map = {}
-      @inbox.conversations.select(:contact_id, :contact_inbox_id).find_each do |conv|
-        next if contact_inbox_map.key?(conv.contact_id)
+      # 2. Get unique contact → contact_inbox pairs using pluck (integers only, no AR objects)
+      #    For N conversations there are at most N unique contacts — even 5000 rows is negligible memory
+      unique_contacts = @inbox.conversations
+                              .pluck(:contact_id, :contact_inbox_id)
+                              .each_with_object({}) { |(cid, ciid), h| h[cid] ||= ciid }
 
-        source_id = ContactInbox.where(id: conv.contact_inbox_id).pick(:source_id) || SecureRandom.uuid
-        contact_inbox_map[conv.contact_id] = ContactInbox.find_or_create_by!(
-          contact_id: conv.contact_id,
+      # 3. Find or create target ContactInbox for each unique contact
+      contact_inbox_map = unique_contacts.each_with_object({}) do |(contact_id, source_ci_id), map|
+        source_id = ContactInbox.where(id: source_ci_id).pick(:source_id) || SecureRandom.uuid
+        map[contact_id] = ContactInbox.find_or_create_by!(
+          contact_id: contact_id,
           inbox_id: target_inbox.id
         ) { |ci| ci.source_id = source_id }
       end
 
-      # Update conversations in bulk per contact group
+      # 4. Bulk-update conversations grouped by contact — 1 query per unique contact
       contact_inbox_map.each do |contact_id, target_ci|
         Conversation.where(inbox_id: @inbox.id, contact_id: contact_id)
                     .update_all(inbox_id: target_inbox.id, contact_inbox_id: target_ci.id)
       end
 
+      # 5. Remove old contact_inboxes (conversations already point to new ones)
       ContactInbox.where(inbox_id: @inbox.id).destroy_all
     end
 
