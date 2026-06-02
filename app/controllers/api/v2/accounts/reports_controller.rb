@@ -188,4 +188,16 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
       until: params[:until]
     }
   end
+
+  def leads_summary
+    scope = Current.account.conversations
+    scope = scope.where('created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
+    scope = scope.where('created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
+
+    render json: {
+      won: scope.where("additional_attributes ->> 'outcome' = 'won'").count,
+      lost: scope.where("additional_attributes ->> 'outcome' = 'lost'").count,
+      ai_closed: scope.where("additional_attributes ->> 'outcome' = 'ai_closed'").count
+    }
+  end
 end

@@ -157,6 +157,7 @@ Rails.application.routes.draw do
               post :unread
               post :custom_attributes
               post :close_outcome
+              post :close_as_ai
               get :attachments
               get :inbox_assistant
               get :reporting_events if ChatwootApp.enterprise?
@@ -468,6 +469,7 @@ Rails.application.routes.draw do
               get :inbox_label_matrix
               get :first_response_time_distribution
               get :outgoing_messages_count
+              get :leads_summary
             end
           end
           resource :year_in_review, only: [:show]

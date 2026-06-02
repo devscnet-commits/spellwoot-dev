@@ -7,6 +7,7 @@ import { useAccount } from 'dashboard/composables/useAccount';
 import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
+import wootConstants from 'dashboard/constants/globals';
 
 const store = useStore();
 const getters = useStoreGetters();
@@ -25,23 +26,25 @@ const isOnCloseStrategy = computed(
   () => metaSettings.value.strategy === 'on_close'
 );
 
-const hasCtwaClid = computed(
-  () => !!currentChat.value?.custom_attributes?.ctwa_clid
+const outcomeAlreadySet = computed(
+  () => !!currentChat.value?.additional_attributes?.outcome
 );
 
-const alreadySent = computed(
-  () => currentChat.value?.additional_attributes?.meta_conversion?.sent === true
-);
-
+// Show buttons on all open conversations without outcome set
 const showButtons = computed(
-  () => isOnCloseStrategy.value && hasCtwaClid.value && !alreadySent.value
+  () => currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN && !outcomeAlreadySet.value
 );
 
 const winValue = computed(() => metaSettings.value.win_value || 'Won');
 const lossValue = computed(() => metaSettings.value.loss_value || 'Lost');
 const winStatusField = computed(() => metaSettings.value.win_status_field);
 
-// Pre-filter attributes relevant to an outcome (condition_value matches win or loss)
+const hasCtwaClid = computed(
+  () =>
+    !!currentChat.value?.custom_attributes?.ctwa_clid ||
+    !!currentChat.value?.additional_attributes?.attribution?.ctwa_clid
+);
+
 const attributesForOutcome = outcomeValue =>
   requiredAttributes.value.filter(
     attr =>
@@ -81,12 +84,15 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
       customAttributes,
     });
 
-    // Refresh conversation so alreadySent computed re-evaluates
     await store.dispatch('updateConversation', {
       ...currentChat.value,
+      status: wootConstants.STATUS_TYPE.RESOLVED,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
-        meta_conversion: { sent: true },
+        outcome,
+        ...(isOnCloseStrategy.value && hasCtwaClid.value
+          ? { meta_conversion: { sent: true } }
+          : {}),
       },
       custom_attributes: {
         ...(currentChat.value.custom_attributes || {}),
@@ -99,6 +105,8 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
     useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
   }
 };
+
+defineExpose({ openWon, openLost });
 </script>
 
 <template>

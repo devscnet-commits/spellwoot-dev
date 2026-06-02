@@ -354,6 +354,7 @@
     "ONE_OFF": "One off",
     "REPORTS_SLA": "SLA",
     "REPORTS_BOT": "Bot",
+    "REPORTS_LEADS": "Leads",
     "REPORTS_AGENT": "Agents",
     "REPORTS_LABEL": "Labels",
     "REPORTS_INBOX": "Inbox",
@@ -621,6 +622,16 @@
         "LABEL_CONDITIONAL": "Required if {field} = {value}"
       }
     },
+    "LEADS_REPORT": {
+      "TITLE": "Leads",
+      "DESCRIPTION": "Track the outcome of your conversations: won, lost, and closed by AI.",
+      "LOADING": "Loading...",
+      "WON": "Won",
+      "LOST": "Lost",
+      "AI_CLOSED": "Closed by AI",
+      "TOTAL": "Total",
+      "OF_TOTAL": "of total"
+    },
     "OUTCOME": {
       "MARK_WON": "Mark as Won",
       "MARK_LOST": "Mark as Lost",
@@ -629,7 +640,8 @@
       "CANCEL": "Cancel",
       "NO_FIELDS": "No additional fields required.",
       "SUCCESS": "Outcome recorded successfully",
-      "ERROR": "Could not record outcome, please try again"
+      "ERROR": "Could not record outcome, please try again",
+      "PROMPT_RESOLVE": "Before resolving, define the lead outcome:"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
