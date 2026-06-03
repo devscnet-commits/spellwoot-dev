@@ -92,6 +92,7 @@ provide('contextMenuElementTarget', virtualListRef);
 
 const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
 const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
+const isResolvedTabActive = ref(false);
 const activeSortBy = ref(wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC);
 const showAdvancedFilters = ref(false);
 // chatsOnView is to store the chats that are currently visible on the screen,
@@ -195,7 +196,7 @@ const userPermissions = computed(() => {
 });
 
 const assigneeTabItems = computed(() => {
-  return filterItemsByPermission(
+  const items = filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
     userPermissions.value,
     item => item.permissions
@@ -204,13 +205,19 @@ const assigneeTabItems = computed(() => {
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
     count: conversationStats.value[countKey] || 0,
   }));
+  items.push({ key: 'resolved', name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'), count: 0 });
+  return items;
 });
+
+const activeDisplayTab = computed(() =>
+  isResolvedTabActive.value ? 'resolved' : activeAssigneeTab.value
+);
 
 const showAssigneeInConversationCard = computed(() => {
   return (
     hasAppliedFiltersOrActiveFolders.value ||
     activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ALL ||
-    activeAssigneeTab.value === 'resolved'
+    isResolvedTabActive.value
   );
 });
 
@@ -267,11 +274,10 @@ const conversationListPagination = computed(() => {
 });
 
 const conversationFilters = computed(() => {
-  const isResolvedTab = activeAssigneeTab.value === 'resolved';
   return {
     inboxId: props.conversationInbox ? props.conversationInbox : undefined,
-    assigneeType: isResolvedTab ? wootConstants.ASSIGNEE_TYPE.ALL : activeAssigneeTab.value,
-    status: isResolvedTab ? wootConstants.STATUS_TYPE.RESOLVED : activeStatus.value,
+    assigneeType: activeAssigneeTab.value,
+    status: activeStatus.value,
     sortBy: activeSortBy.value,
     page: conversationListPagination.value,
     labels: props.label ? [props.label] : undefined,
@@ -616,19 +622,26 @@ const intersectionObserverOptions = computed(() => ({
 }));
 
 function updateAssigneeTab(selectedTab) {
-  if (activeAssigneeTab.value !== selectedTab) {
-    resetBulkActions();
-    emitter.emit('clearSearchInput');
-    if (selectedTab === 'resolved') {
-      activeStatus.value = wootConstants.STATUS_TYPE.RESOLVED;
-    } else if (activeAssigneeTab.value === 'resolved') {
+  const alreadyActive =
+    selectedTab === 'resolved' ? isResolvedTabActive.value : activeAssigneeTab.value === selectedTab;
+  if (alreadyActive) return;
+
+  resetBulkActions();
+  emitter.emit('clearSearchInput');
+
+  if (selectedTab === 'resolved') {
+    isResolvedTabActive.value = true;
+    activeStatus.value = wootConstants.STATUS_TYPE.RESOLVED;
+    activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.ALL;
+  } else {
+    isResolvedTabActive.value = false;
+    if (activeStatus.value === wootConstants.STATUS_TYPE.RESOLVED) {
       activeStatus.value = wootConstants.STATUS_TYPE.OPEN;
     }
     activeAssigneeTab.value = selectedTab;
-    if (!currentPage.value) {
-      fetchConversations();
-    }
   }
+
+  if (!currentPage.value) fetchConversations();
 }
 
 function onBasicFilterChange(value, type) {
@@ -952,7 +965,7 @@ watch(conversationFilters, (newVal, oldVal) => {
     <ChatTypeTabs
       v-if="!hasAppliedFiltersOrActiveFolders"
       :items="assigneeTabItems"
-      :active-tab="activeAssigneeTab"
+      :active-tab="activeDisplayTab"
       is-compact
       @chat-tab-change="updateAssigneeTab"
     />
