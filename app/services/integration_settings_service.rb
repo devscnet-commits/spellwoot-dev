@@ -58,11 +58,55 @@ class IntegrationSettingsService
     { imported: env_values.size }
   end
 
+  def self.test_connection(provider, config)
+    case provider
+    when 'uazapi'
+      test_uazapi(config)
+    when 'evolution_api'
+      test_evolution_api(config)
+    else
+      { ok: false, message: 'Teste de conexão não disponível para este provedor.' }
+    end
+  rescue StandardError => e
+    { ok: false, message: e.message }
+  end
+
   def self.load_db(account_id, provider)
     setting = IntegrationSetting.find_by(account_id: account_id, provider: provider)
     return {} unless setting&.enabled?
 
     setting.config_hash.reject { |_, v| v.blank? }
+  end
+
+  def self.test_uazapi(config)
+    api_url = config['apiUrl'].to_s.chomp('/')
+    token   = config['token']
+    return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
+    return { ok: false, message: 'Token não configurado.' } if token.blank?
+
+    response = HTTParty.get("#{api_url}/instance/status", headers: { 'token' => token, 'Accept' => 'application/json' }, timeout: 10)
+    if response.success?
+      body = response.parsed_response
+      { ok: true, message: 'Conexão bem-sucedida.', status: body }
+    else
+      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+    end
+  end
+
+  def self.test_evolution_api(config)
+    api_url  = config['apiUrl'].to_s.chomp('/')
+    api_key  = config['apiKey']
+    instance = config['instance']
+    return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
+    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
+
+    path     = instance.present? ? "#{api_url}/instance/fetchInstances?instanceName=#{instance}" : "#{api_url}/instance/fetchInstances"
+    response = HTTParty.get(path, headers: { 'apikey' => api_key, 'Accept' => 'application/json' }, timeout: 10)
+    if response.success?
+      { ok: true, message: 'Conexão bem-sucedida.' }
+    else
+      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+    end
   end
 
   def self.load_env(provider)

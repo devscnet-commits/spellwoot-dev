@@ -220,6 +220,7 @@ Rails.application.routes.draw do
           resources :integration_settings, param: :provider, only: [:show, :update] do
             collection do
               post ':provider/import_from_env', action: :import_from_env, as: :import_from_env
+              post ':provider/test', action: :test_connection, as: :test_connection
             end
           end
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do

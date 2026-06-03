@@ -35,6 +35,7 @@ const PROVIDERS = [
     name: 'Evolution API',
     description: 'Integração com Evolution API para WhatsApp.',
     icon: 'i-lucide-message-square',
+    testable: true,
     fields: [
       { key: 'apiUrl', label: 'URL da API', sensitive: false, placeholder: 'https://evolution.exemplo.com', help: null },
       { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: '', help: null },
@@ -46,9 +47,10 @@ const PROVIDERS = [
     name: 'UazAPI',
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
+    testable: true,
     fields: [
       { key: 'apiUrl', label: 'URL da API', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
-      { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: 'https://doc.uazapi.com.br' },
+      { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
       { key: 'instance', label: 'Instância padrão', sensitive: false, placeholder: 'minha-instancia', help: null },
     ],
   },
@@ -96,7 +98,7 @@ const state = reactive(
   Object.fromEntries(
     PROVIDERS.map(p => [
       p.key,
-      { open: false, loading: false, saving: false, importing: false, enabled: true,
+      { open: false, loading: false, saving: false, importing: false, testing: false, testResult: null, enabled: true,
         config: {}, sources: {}, reset: {}, dirty: false },
     ])
   )
@@ -162,6 +164,21 @@ const importFromEnv = async providerKey => {
     useAlert(t('INTEGRATIONS_HUB.ERROR'));
   } finally {
     s.importing = false;
+  }
+};
+
+const testConnection = async providerKey => {
+  const s = state[providerKey];
+  s.testing = true;
+  s.testResult = null;
+  try {
+    const { data } = await integrationSettingsAPI.testConnection(accountId.value, providerKey);
+    s.testResult = { ok: true, message: data.message || 'Conexão bem-sucedida.' };
+  } catch (err) {
+    const msg = err?.response?.data?.message || 'Falha na conexão. Verifique as credenciais.';
+    s.testResult = { ok: false, message: msg };
+  } finally {
+    s.testing = false;
   }
 };
 </script>
@@ -290,16 +307,41 @@ const importFromEnv = async providerKey => {
             />
           </div>
 
+          <!-- Test result -->
+          <div
+            v-if="state[provider.key].testResult"
+            :class="[
+              'flex items-center gap-2 px-3 py-2 rounded-lg text-body-small',
+              state[provider.key].testResult.ok
+                ? 'bg-n-teal-3 text-n-teal-11'
+                : 'bg-n-ruby-3 text-n-ruby-11'
+            ]"
+          >
+            <span :class="state[provider.key].testResult.ok ? 'i-lucide-circle-check w-4 h-4' : 'i-lucide-circle-x w-4 h-4'" />
+            {{ state[provider.key].testResult.message }}
+          </div>
+
           <!-- Action buttons -->
           <div class="flex items-center justify-between pt-2 border-t border-n-weak/50">
-            <button
-              class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
-              :disabled="state[provider.key].importing"
-              @click="importFromEnv(provider.key)"
-            >
-              <span class="i-lucide-download w-3.5 h-3.5" />
-              {{ state[provider.key].importing ? 'Importando...' : 'Importar do servidor' }}
-            </button>
+            <div class="flex items-center gap-3">
+              <button
+                class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
+                :disabled="state[provider.key].importing"
+                @click="importFromEnv(provider.key)"
+              >
+                <span class="i-lucide-download w-3.5 h-3.5" />
+                {{ state[provider.key].importing ? 'Importando...' : 'Importar do servidor' }}
+              </button>
+              <button
+                v-if="provider.testable"
+                class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
+                :disabled="state[provider.key].testing"
+                @click="testConnection(provider.key)"
+              >
+                <span class="i-lucide-plug w-3.5 h-3.5" />
+                {{ state[provider.key].testing ? 'Testando...' : 'Testar conexão' }}
+              </button>
+            </div>
             <button
               class="px-4 py-1.5 rounded-lg bg-n-brand-9 text-white text-body-small font-medium hover:bg-n-brand-10 disabled:opacity-50 transition-colors"
               :disabled="state[provider.key].saving"
