@@ -2,7 +2,13 @@ import { computed } from 'vue';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
-import { ATTRIBUTE_TYPES } from 'dashboard/components-next/ConversationWorkflow/constants';
+import {
+  ATTRIBUTE_TYPES,
+  SYSTEM_CONDITION_FIELDS,
+  SYSTEM_OUTCOME_FIELD,
+  matchesConditionValue,
+  isAttrVisible,
+} from 'dashboard/components-next/ConversationWorkflow/constants';
 
 // Normalize legacy string format to object format
 const normalizeAttrConfig = item =>
@@ -48,6 +54,8 @@ export function useConversationRequiredAttributes() {
   );
 
   // Full attribute definitions merged with rule config
+  // System fields (e.g. __resultado_conversa__) are not in allAttributeOptions —
+  // they appear as condition triggers but not as required fields themselves.
   const requiredAttributes = computed(() =>
     selectedAttributes.value
       .map(attrConfig => {
@@ -60,12 +68,18 @@ export function useConversationRequiredAttributes() {
       .filter(Boolean)
   );
 
+  // All custom attributes available as condition fields (for the rule picker)
+  const conditionFieldOptions = computed(() => [
+    ...SYSTEM_CONDITION_FIELDS,
+    ...allAttributeOptions.value.filter(a =>
+      [ATTRIBUTE_TYPES.LIST, ATTRIBUTE_TYPES.TEXT].includes(a.type)
+    ),
+  ]);
+
   const isRequired = (attrConfig, conversationCustomAttributes) => {
     if (attrConfig.rule === 'conditional') {
-      return (
-        conversationCustomAttributes[attrConfig.condition_field] ===
-        attrConfig.condition_value
-      );
+      const fieldValue = conversationCustomAttributes[attrConfig.condition_field];
+      return matchesConditionValue(fieldValue, attrConfig.condition_value);
     }
     return true;
   };
@@ -98,6 +112,9 @@ export function useConversationRequiredAttributes() {
     selectedAttributes,
     requiredAttributeKeys,
     requiredAttributes,
+    conditionFieldOptions,
     checkMissingAttributes,
+    isAttrVisible,
+    SYSTEM_OUTCOME_FIELD,
   };
 }

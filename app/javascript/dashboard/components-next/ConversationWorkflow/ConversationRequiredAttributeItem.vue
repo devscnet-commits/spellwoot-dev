@@ -29,7 +29,13 @@ const attributeIcon = computed(() => {
 
 const ruleLabel = computed(() => {
   if (props.attribute.rule === 'conditional') {
-    return `${props.attribute.conditionFieldLabel || props.attribute.condition_field} = ${props.attribute.condition_value}`;
+    const field =
+      props.attribute.conditionFieldLabel || props.attribute.condition_field;
+    const rawValue = props.attribute.condition_value;
+    const valueStr = Array.isArray(rawValue)
+      ? rawValue.join(' OU ')
+      : rawValue;
+    return `${field} = ${valueStr}`;
   }
   return null;
 });
