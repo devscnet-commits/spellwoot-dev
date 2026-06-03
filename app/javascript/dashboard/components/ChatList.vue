@@ -87,8 +87,35 @@ const store = useStore();
 const resolveAttributesModalRef = ref(null);
 const conversationListRef = ref(null);
 const virtualListRef = ref(null);
+const panelRef = ref(null);
 
 provide('contextMenuElementTarget', virtualListRef);
+
+const PANEL_WIDTH_KEY = 'cw_chat_list_width';
+const MIN_PANEL_WIDTH = 260;
+const MAX_PANEL_WIDTH = 600;
+const storedWidth = localStorage.getItem(PANEL_WIDTH_KEY);
+const panelWidth = ref(storedWidth ? parseInt(storedWidth, 10) : null);
+const isResizing = ref(false);
+
+function startResize(e) {
+  isResizing.value = true;
+  const startX = e.clientX;
+  const startWidth = panelRef.value?.offsetWidth || panelWidth.value || 340;
+
+  function onMove(ev) {
+    const newWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, startWidth + ev.clientX - startX));
+    panelWidth.value = newWidth;
+  }
+  function onUp() {
+    isResizing.value = false;
+    localStorage.setItem(PANEL_WIDTH_KEY, panelWidth.value);
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
 
 const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
 const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
@@ -919,12 +946,20 @@ watch(conversationFilters, (newVal, oldVal) => {
 
 <template>
   <div
-    class="flex flex-col flex-shrink-0 conversations-list-wrap bg-n-surface-1"
+    ref="panelRef"
+    class="relative flex flex-col flex-shrink-0 conversations-list-wrap bg-n-surface-1"
     :class="[
       { hidden: !showConversationList },
-      isOnExpandedLayout ? 'basis-full' : 'w-[340px] 2xl:w-[412px]',
+      isOnExpandedLayout ? 'basis-full' : (!panelWidth ? 'w-[340px] 2xl:w-[412px]' : ''),
     ]"
+    :style="!isOnExpandedLayout && panelWidth ? { width: panelWidth + 'px' } : {}"
   >
+    <div
+      v-if="!isOnExpandedLayout"
+      class="absolute top-0 right-0 z-10 w-1 h-full cursor-col-resize hover:bg-n-brand/40 active:bg-n-brand/60 transition-colors"
+      :class="{ 'bg-n-brand/60': isResizing }"
+      @mousedown.prevent="startResize"
+    />
     <slot />
     <ChatListHeader
       :page-title="pageTitle"
