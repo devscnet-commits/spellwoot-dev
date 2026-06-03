@@ -189,15 +189,68 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     }
   end
 
+  OUTCOME_SELECT = <<~SQL.freeze
+    COUNT(*) AS total,
+    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won'       THEN 1 ELSE 0 END) AS won,
+    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'lost'      THEN 1 ELSE 0 END) AS lost,
+    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'ai_closed' THEN 1 ELSE 0 END) AS ai_closed
+  SQL
+
   def leads_summary
     scope = Current.account.conversations
-    scope = scope.where('created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
-    scope = scope.where('created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
+    scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
+    scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
+
+    total     = scope.count
+    won       = scope.where("additional_attributes ->> 'outcome' = 'won'").count
+    lost      = scope.where("additional_attributes ->> 'outcome' = 'lost'").count
+    ai_closed = scope.where("additional_attributes ->> 'outcome' = 'ai_closed'").count
+    open      = total - won - lost - ai_closed
+    concluded = won + lost
+    conversion_rate = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
 
     render json: {
-      won: scope.where("additional_attributes ->> 'outcome' = 'won'").count,
-      lost: scope.where("additional_attributes ->> 'outcome' = 'lost'").count,
-      ai_closed: scope.where("additional_attributes ->> 'outcome' = 'ai_closed'").count
+      summary: { total:, won:, lost:, open:, ai_closed:, conversion_rate: },
+      by_agent:  leads_by_agent(scope),
+      by_inbox:  leads_by_inbox(scope),
+      by_origin: leads_by_origin(scope)
     }
+  end
+
+  private
+
+  def leads_by_agent(scope)
+    scope.joins('LEFT JOIN users ON users.id = conversations.assignee_id')
+         .group('users.id, users.name')
+         .select("users.id, COALESCE(users.name, 'Sem atribuição') AS name, #{OUTCOME_SELECT}")
+         .map { |r| row_with_open(r, id: r.id, name: r.name) }
+         .sort_by { |r| -r[:total] }
+  end
+
+  def leads_by_inbox(scope)
+    scope.joins(:inbox)
+         .group('inboxes.id, inboxes.name, inboxes.channel_type')
+         .select("inboxes.id, inboxes.name, inboxes.channel_type, #{OUTCOME_SELECT}")
+         .map { |r| row_with_open(r, id: r.id, name: r.name, channel_type: r.channel_type) }
+         .sort_by { |r| -r[:total] }
+  end
+
+  def leads_by_origin(scope)
+    scope.joins(:inbox)
+         .group('inboxes.channel_type')
+         .select("inboxes.channel_type AS origin, #{OUTCOME_SELECT}")
+         .map { |r| row_with_open(r, origin: r.origin) }
+         .sort_by { |r| -r[:total] }
+  end
+
+  def row_with_open(record, extra = {})
+    total     = record.total.to_i
+    won       = record.won.to_i
+    lost      = record.lost.to_i
+    ai_closed = record.ai_closed.to_i
+    open      = total - won - lost - ai_closed
+    concluded = won + lost
+    rate      = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
+    extra.merge(total:, won:, lost:, open:, ai_closed:, conversion_rate: rate)
   end
 end
