@@ -1,5 +1,5 @@
 namespace :spellwoot do
-  desc 'Create default custom attributes (won/lost) for all existing accounts'
+  desc 'Create default custom attributes (won/lost) and pre-configure MetaConversionSettings for all existing accounts'
   task setup_default_attributes: :environment do
     Account.find_each do |account|
       account.send(:create_default_custom_attributes)

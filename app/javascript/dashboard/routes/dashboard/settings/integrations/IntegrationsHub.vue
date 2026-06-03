@@ -49,11 +49,10 @@ const PROVIDERS = [
     icon: 'i-lucide-smartphone',
     testable: true,
     syncable: true,
+    multiInstance: true,
     fields: [
-      { key: 'apiUrl', label: 'URL da API', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
+      { key: 'apiUrl', label: 'URL do servidor', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
       { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
-      { key: 'instance', label: 'Instância padrão', sensitive: false, placeholder: 'minha-instancia', help: null },
-      { key: 'chatwootInboxId', label: 'ID da Inbox no Chatwoot', sensitive: false, placeholder: '5', help: null },
     ],
   },
   {
@@ -168,6 +167,24 @@ const importFromEnv = async providerKey => {
   } finally {
     s.importing = false;
   }
+};
+
+const getInstances = providerKey => {
+  const raw = state[providerKey].config.instances;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    state[providerKey].config.instances = [{ instanceName: '', chatwootInboxId: '' }];
+  }
+  return state[providerKey].config.instances;
+};
+
+const addInstance = providerKey => {
+  getInstances(providerKey).push({ instanceName: '', chatwootInboxId: '' });
+  state[providerKey].dirty = true;
+};
+
+const removeInstance = (providerKey, index) => {
+  getInstances(providerKey).splice(index, 1);
+  state[providerKey].dirty = true;
 };
 
 const syncChatwoot = async providerKey => {
@@ -323,6 +340,52 @@ const testConnection = async providerKey => {
               class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
               @input="state[provider.key].dirty = true"
             />
+          </div>
+
+          <!-- Multi-instance connections table -->
+          <div v-if="provider.multiInstance" class="flex flex-col gap-2 pt-2 border-t border-n-weak/50">
+            <div class="flex items-center justify-between">
+              <span class="text-body-small font-medium text-n-slate-12">Conexões (instância → inbox)</span>
+              <button
+                class="text-xs text-n-brand-9 hover:text-n-brand-10 flex items-center gap-1"
+                @click="addInstance(provider.key)"
+              >
+                <span class="i-lucide-plus w-3.5 h-3.5" />
+                Adicionar
+              </button>
+            </div>
+            <div class="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-n-slate-11 px-1">
+              <span>Nome da instância</span>
+              <span>ID da Inbox</span>
+              <span />
+            </div>
+            <div
+              v-for="(inst, idx) in getInstances(provider.key)"
+              :key="idx"
+              class="grid grid-cols-[1fr_1fr_auto] gap-2 items-center"
+            >
+              <input
+                v-model="inst.instanceName"
+                type="text"
+                placeholder="nome-da-instancia"
+                class="px-2 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
+                @input="state[provider.key].dirty = true"
+              />
+              <input
+                v-model="inst.chatwootInboxId"
+                type="text"
+                placeholder="Ex: 5"
+                class="px-2 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
+                @input="state[provider.key].dirty = true"
+              />
+              <button
+                class="text-n-ruby-11 hover:text-n-ruby-12 disabled:opacity-30"
+                :disabled="getInstances(provider.key).length === 1"
+                @click="removeInstance(provider.key, idx)"
+              >
+                <span class="i-lucide-trash-2 w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <!-- Sync result -->

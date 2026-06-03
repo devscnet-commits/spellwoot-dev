@@ -36,9 +36,11 @@ const showButtons = computed(
   () => currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN && !outcomeAlreadySet.value
 );
 
-const winValue = computed(() => metaSettings.value.win_value || 'Won');
-const lossValue = computed(() => metaSettings.value.loss_value || 'Lost');
-const winStatusField = computed(() => metaSettings.value.win_status_field);
+const winValue = computed(() => metaSettings.value.win_value || 'Ganho');
+const lossValue = computed(() => metaSettings.value.loss_value || 'Perdido');
+const winStatusField = computed(
+  () => metaSettings.value.win_status_field || 'marcado_como_ganho_ou_perdido'
+);
 
 const hasCtwaClid = computed(
   () =>
