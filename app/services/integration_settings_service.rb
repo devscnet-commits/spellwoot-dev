@@ -1,5 +1,5 @@
 class IntegrationSettingsService
-  PROVIDERS = %w[meta openai evolution_api bitrix n8n google].freeze
+  PROVIDERS = %w[meta openai evolution_api uazapi bitrix n8n google].freeze
 
   ENV_KEYS = {
     'meta' => {
@@ -15,6 +15,11 @@ class IntegrationSettingsService
       'apiUrl'   => 'EVOLUTION_API_URL',
       'apiKey'   => 'EVOLUTION_API_KEY',
       'instance' => 'EVOLUTION_DEFAULT_INSTANCE'
+    },
+    'uazapi' => {
+      'apiUrl'   => 'UAZAPI_URL',
+      'token'    => 'UAZAPI_TOKEN',
+      'instance' => 'UAZAPI_DEFAULT_INSTANCE'
     },
     'bitrix' => {
       'webhookUrl' => 'BITRIX_WEBHOOK',
@@ -53,11 +58,98 @@ class IntegrationSettingsService
     { imported: env_values.size }
   end
 
+  def self.test_connection(provider, config)
+    case provider
+    when 'uazapi'
+      test_uazapi(config)
+    when 'evolution_api'
+      test_evolution_api(config)
+    else
+      { ok: false, message: 'Teste de conexão não disponível para este provedor.' }
+    end
+  rescue StandardError => e
+    { ok: false, message: e.message }
+  end
+
   def self.load_db(account_id, provider)
     setting = IntegrationSetting.find_by(account_id: account_id, provider: provider)
     return {} unless setting&.enabled?
 
     setting.config_hash.reject { |_, v| v.blank? }
+  end
+
+  def self.sync_uazapi_chatwoot(config, account, user)
+    api_url  = config['apiUrl'].to_s.chomp('/')
+    token    = config['token']
+    inbox_id = config['chatwootInboxId'].to_s.strip
+
+    return { ok: false, message: 'URL da API não configurada.' }   if api_url.blank?
+    return { ok: false, message: 'Token não configurado.' }        if token.blank?
+    return { ok: false, message: 'ID da Inbox não configurado.' }  if inbox_id.blank?
+
+    inbox = Inbox.find_by(id: inbox_id.to_i, account_id: account.id)
+    return { ok: false, message: "Inbox #{inbox_id} não encontrada nesta conta." } unless inbox
+
+    chatwoot_url  = ENV.fetch('FRONTEND_URL', 'https://app.chatwoot.com').chomp('/')
+    access_token  = user.access_token&.token
+    return { ok: false, message: 'Token de acesso do usuário não encontrado.' } if access_token.blank?
+
+    body = {
+      enabled: true,
+      url: chatwoot_url,
+      access_token: access_token,
+      account_id: account.id,
+      inbox_id: inbox_id.to_i,
+      ignore_groups: false,
+      sign_messages: true,
+      create_new_conversation: false
+    }
+
+    response = HTTParty.put(
+      "#{api_url}/chatwoot/config",
+      headers: { 'token' => token, 'Content-Type' => 'application/json', 'Accept' => 'application/json' },
+      body: body.to_json,
+      timeout: 15
+    )
+
+    return { ok: false, message: "Erro #{response.code} na UazAPI: #{response.message}" } unless response.success?
+
+    data        = response.parsed_response
+    webhook_url = data['chatwoot_inbox_webhook_url']
+    inbox.update!(webhook_url: webhook_url) if webhook_url.present?
+
+    { ok: true, message: 'Integração configurada com sucesso!', webhook_url: webhook_url }
+  end
+
+  def self.test_uazapi(config)
+    api_url = config['apiUrl'].to_s.chomp('/')
+    token   = config['token']
+    return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
+    return { ok: false, message: 'Token não configurado.' } if token.blank?
+
+    response = HTTParty.get("#{api_url}/instance/status", headers: { 'token' => token, 'Accept' => 'application/json' }, timeout: 10)
+    if response.success?
+      body = response.parsed_response
+      { ok: true, message: 'Conexão bem-sucedida.', status: body }
+    else
+      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+    end
+  end
+
+  def self.test_evolution_api(config)
+    api_url  = config['apiUrl'].to_s.chomp('/')
+    api_key  = config['apiKey']
+    instance = config['instance']
+    return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
+    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
+
+    path     = instance.present? ? "#{api_url}/instance/fetchInstances?instanceName=#{instance}" : "#{api_url}/instance/fetchInstances"
+    response = HTTParty.get(path, headers: { 'apikey' => api_key, 'Accept' => 'application/json' }, timeout: 10)
+    if response.success?
+      { ok: true, message: 'Conexão bem-sucedida.' }
+    else
+      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+    end
   end
 
   def self.load_env(provider)

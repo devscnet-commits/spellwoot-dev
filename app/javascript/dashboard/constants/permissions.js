@@ -30,9 +30,13 @@ export const REPORTS_PERMISSIONS = 'report_manage';
 export const PORTAL_PERMISSIONS = 'knowledge_base_manage';
 
 export const ASSIGNEE_TYPE_TAB_PERMISSIONS = {
-  me: {
-    count: 'mineCount',
-    permissions: [...ROLES, ...CONVERSATION_PERMISSIONS],
+  all: {
+    count: 'allCount',
+    permissions: [
+      ...ROLES,
+      MANAGE_ALL_CONVERSATION_PERMISSIONS,
+      CONVERSATION_PARTICIPATING_PERMISSIONS,
+    ],
   },
   unassigned: {
     count: 'unAssignedCount',
@@ -42,8 +46,12 @@ export const ASSIGNEE_TYPE_TAB_PERMISSIONS = {
       CONVERSATION_UNASSIGNED_PERMISSIONS,
     ],
   },
-  all: {
-    count: 'allCount',
+  me: {
+    count: 'mineCount',
+    permissions: [...ROLES, ...CONVERSATION_PERMISSIONS],
+  },
+  resolved: {
+    count: '',
     permissions: [
       ...ROLES,
       MANAGE_ALL_CONVERSATION_PERMISSIONS,

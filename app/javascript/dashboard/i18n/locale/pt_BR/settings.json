@@ -382,7 +382,21 @@
     "DOCS": "Ler documentos",
     "SECURITY": "Segurança",
     "CAPTAIN_AI": "Capitão",
-    "CONVERSATION_WORKFLOW": "Fluxo de Conversa"
+    "CONVERSATION_WORKFLOW": "Fluxo de Conversa",
+    "INTEGRATIONS_HUB": "APIs & Credenciais"
+  },
+  "INTEGRATIONS_HUB": {
+    "TITLE": "APIs & Credenciais",
+    "DESCRIPTION": "Configure as integrações da sua conta. As alterações são aplicadas imediatamente, sem acesso ao servidor.",
+    "CONFIGURE": "Configurar",
+    "CLOSE": "Fechar",
+    "SAVE": "Salvar",
+    "SAVING": "Salvando...",
+    "SAVED": "Integração salva com sucesso.",
+    "ERROR": "Erro ao salvar integração. Por favor, tente novamente.",
+    "CONFIGURED": "Configurado",
+    "RESET": "Redefinir",
+    "HOW_TO": "Como encontrar?"
   },
   "CAPTAIN_SETTINGS": {
     "TITLE": "Configurações do Capitão",
@@ -665,10 +679,27 @@
         "DESCRIPTION": "Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Esses valores são enviados automaticamente — protegidos por hash antes do envio.",
         "EMAIL": "E-mail do contato (em)",
         "PHONE": "Telefone do contato (ph)",
-        "NAME": "Primeiro nome do contato (fn)",
+        "FIRST_NAME": "Primeiro nome do contato (fn)",
+        "LAST_NAME": "Sobrenome do contato (ln)",
         "ZIP": "CEP do contato (zp)",
+        "CITY": "Cidade do contato (ct)",
+        "STATE": "Estado do contato (st)",
+        "COUNTRY": "País do contato (country)",
+        "DATE_OF_BIRTH": "Data de nascimento (db)",
+        "GENDER": "Gênero (ge)",
+        "EXTERNAL_ID": "ID externo (external_id)",
         "NOT_MAPPED": "Não mapeado"
       }
+    },
+    "LEADS_REPORT": {
+      "TITLE": "Leads",
+      "DESCRIPTION": "Acompanhe o resultado das suas conversas: ganhas, perdidas e fechadas pela IA.",
+      "LOADING": "Carregando...",
+      "WON": "Ganho",
+      "LOST": "Perdido",
+      "AI_CLOSED": "Fechado pela IA",
+      "TOTAL": "Total",
+      "OF_TOTAL": "do total"
     }
   },
   "CREATE_ACCOUNT": {
