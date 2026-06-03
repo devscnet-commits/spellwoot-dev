@@ -78,6 +78,49 @@ class IntegrationSettingsService
     setting.config_hash.reject { |_, v| v.blank? }
   end
 
+  def self.sync_uazapi_chatwoot(config, account, user)
+    api_url  = config['apiUrl'].to_s.chomp('/')
+    token    = config['token']
+    inbox_id = config['chatwootInboxId'].to_s.strip
+
+    return { ok: false, message: 'URL da API não configurada.' }   if api_url.blank?
+    return { ok: false, message: 'Token não configurado.' }        if token.blank?
+    return { ok: false, message: 'ID da Inbox não configurado.' }  if inbox_id.blank?
+
+    inbox = Inbox.find_by(id: inbox_id.to_i, account_id: account.id)
+    return { ok: false, message: "Inbox #{inbox_id} não encontrada nesta conta." } unless inbox
+
+    chatwoot_url  = ENV.fetch('FRONTEND_URL', 'https://app.chatwoot.com').chomp('/')
+    access_token  = user.access_token&.token
+    return { ok: false, message: 'Token de acesso do usuário não encontrado.' } if access_token.blank?
+
+    body = {
+      enabled: true,
+      url: chatwoot_url,
+      access_token: access_token,
+      account_id: account.id,
+      inbox_id: inbox_id.to_i,
+      ignore_groups: false,
+      sign_messages: true,
+      create_new_conversation: false
+    }
+
+    response = HTTParty.put(
+      "#{api_url}/chatwoot/config",
+      headers: { 'token' => token, 'Content-Type' => 'application/json', 'Accept' => 'application/json' },
+      body: body.to_json,
+      timeout: 15
+    )
+
+    return { ok: false, message: "Erro #{response.code} na UazAPI: #{response.message}" } unless response.success?
+
+    data        = response.parsed_response
+    webhook_url = data['chatwoot_inbox_webhook_url']
+    inbox.update!(webhook_url: webhook_url) if webhook_url.present?
+
+    { ok: true, message: 'Integração configurada com sucesso!', webhook_url: webhook_url }
+  end
+
   def self.test_uazapi(config)
     api_url = config['apiUrl'].to_s.chomp('/')
     token   = config['token']

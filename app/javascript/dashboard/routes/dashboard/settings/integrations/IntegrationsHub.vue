@@ -48,10 +48,12 @@ const PROVIDERS = [
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
     testable: true,
+    syncable: true,
     fields: [
       { key: 'apiUrl', label: 'URL da API', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
       { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
       { key: 'instance', label: 'Instância padrão', sensitive: false, placeholder: 'minha-instancia', help: null },
+      { key: 'chatwootInboxId', label: 'ID da Inbox no Chatwoot', sensitive: false, placeholder: '5', help: null },
     ],
   },
   {
@@ -98,7 +100,8 @@ const state = reactive(
   Object.fromEntries(
     PROVIDERS.map(p => [
       p.key,
-      { open: false, loading: false, saving: false, importing: false, testing: false, testResult: null, enabled: true,
+      { open: false, loading: false, saving: false, importing: false, testing: false, syncing: false,
+        testResult: null, syncResult: null, enabled: true,
         config: {}, sources: {}, reset: {}, dirty: false },
     ])
   )
@@ -164,6 +167,21 @@ const importFromEnv = async providerKey => {
     useAlert(t('INTEGRATIONS_HUB.ERROR'));
   } finally {
     s.importing = false;
+  }
+};
+
+const syncChatwoot = async providerKey => {
+  const s = state[providerKey];
+  s.syncing = true;
+  s.syncResult = null;
+  try {
+    const { data } = await integrationSettingsAPI.syncChatwoot(accountId.value, providerKey);
+    s.syncResult = { ok: true, message: data.message || 'Integração configurada!', webhookUrl: data.webhook_url };
+  } catch (err) {
+    const msg = err?.response?.data?.message || 'Falha ao sincronizar. Verifique as configurações.';
+    s.syncResult = { ok: false, message: msg };
+  } finally {
+    s.syncing = false;
   }
 };
 
@@ -307,6 +325,23 @@ const testConnection = async providerKey => {
             />
           </div>
 
+          <!-- Sync result -->
+          <div
+            v-if="state[provider.key].syncResult"
+            :class="[
+              'flex flex-col gap-1 px-3 py-2 rounded-lg text-body-small',
+              state[provider.key].syncResult.ok ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-ruby-3 text-n-ruby-11'
+            ]"
+          >
+            <div class="flex items-center gap-2">
+              <span :class="state[provider.key].syncResult.ok ? 'i-lucide-circle-check w-4 h-4' : 'i-lucide-circle-x w-4 h-4'" />
+              {{ state[provider.key].syncResult.message }}
+            </div>
+            <div v-if="state[provider.key].syncResult.webhookUrl" class="text-xs font-mono opacity-80 break-all">
+              Webhook: {{ state[provider.key].syncResult.webhookUrl }}
+            </div>
+          </div>
+
           <!-- Test result -->
           <div
             v-if="state[provider.key].testResult"
@@ -340,6 +375,15 @@ const testConnection = async providerKey => {
               >
                 <span class="i-lucide-plug w-3.5 h-3.5" />
                 {{ state[provider.key].testing ? 'Testando...' : 'Testar conexão' }}
+              </button>
+              <button
+                v-if="provider.syncable"
+                class="text-body-small text-n-teal-11 hover:text-n-teal-12 flex items-center gap-1 disabled:opacity-50 font-medium"
+                :disabled="state[provider.key].syncing"
+                @click="syncChatwoot(provider.key)"
+              >
+                <span class="i-lucide-refresh-cw w-3.5 h-3.5" />
+                {{ state[provider.key].syncing ? 'Sincronizando...' : 'Sincronizar com Chatwoot' }}
               </button>
             </div>
             <button

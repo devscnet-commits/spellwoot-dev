@@ -221,6 +221,7 @@ Rails.application.routes.draw do
             collection do
               post ':provider/import_from_env', action: :import_from_env, as: :import_from_env
               post ':provider/test', action: :test_connection, as: :test_connection
+              post ':provider/sync_chatwoot', action: :sync_chatwoot, as: :sync_chatwoot
             end
           end
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do

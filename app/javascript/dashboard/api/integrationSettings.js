@@ -20,4 +20,9 @@ export default {
       `/api/v1/accounts/${accountId}/integration_settings/${provider}/test`
     );
   },
+  syncChatwoot(accountId, provider) {
+    return axios.post(
+      `/api/v1/accounts/${accountId}/integration_settings/${provider}/sync_chatwoot`
+    );
+  },
 };
