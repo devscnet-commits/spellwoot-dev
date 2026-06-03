@@ -201,16 +201,8 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
 
-    total     = scope.count
-    won       = scope.where("additional_attributes ->> 'outcome' = 'won'").count
-    lost      = scope.where("additional_attributes ->> 'outcome' = 'lost'").count
-    ai_closed = scope.where("additional_attributes ->> 'outcome' = 'ai_closed'").count
-    open      = total - won - lost - ai_closed
-    concluded = won + lost
-    conversion_rate = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
-
     render json: {
-      summary: { total:, won:, lost:, open:, ai_closed:, conversion_rate: },
+      summary:  build_summary_row(scope),
       by_agent:  leads_by_agent(scope),
       by_inbox:  leads_by_inbox(scope),
       by_origin: leads_by_origin(scope),
@@ -224,16 +216,8 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
 
-    total     = scope.count
-    won       = scope.where("additional_attributes ->> 'outcome' = 'won'").count
-    lost      = scope.where("additional_attributes ->> 'outcome' = 'lost'").count
-    ai_closed = scope.where("additional_attributes ->> 'outcome' = 'ai_closed'").count
-    open      = total - won - lost - ai_closed
-    concluded = won + lost
-    conversion_rate = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
-
     render json: {
-      summary: { total:, won:, lost:, open:, ai_closed:, conversion_rate: },
+      summary:     build_summary_row(scope),
       by_agent:    leads_by_agent(scope),
       by_campaign: marketing_by_campaign(scope),
       by_inbox:    leads_by_inbox(scope)
@@ -279,6 +263,11 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
          .select("conversations.additional_attributes -> 'attribution' ->> 'utm_campaign' AS campaign, #{OUTCOME_SELECT}")
          .map { |r| row_with_open(r, campaign: r.campaign.presence || '(sem campanha)') }
          .sort_by { |r| -r[:total] }
+  end
+
+  def build_summary_row(scope)
+    r = scope.select(OUTCOME_SELECT).take
+    row_with_open(r)
   end
 
   def row_with_open(record, extra = {})
