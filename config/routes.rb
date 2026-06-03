@@ -483,6 +483,7 @@ Rails.application.routes.draw do
               get :first_response_time_distribution
               get :outgoing_messages_count
               get :leads_summary
+              get :marketing_summary
             end
           end
           resource :year_in_review, only: [:show]
