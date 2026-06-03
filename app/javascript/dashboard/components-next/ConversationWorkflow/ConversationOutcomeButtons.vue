@@ -7,6 +7,7 @@ import { useAccount } from 'dashboard/composables/useAccount';
 import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
+import wootConstants from 'dashboard/constants/globals';
 
 const store = useStore();
 const getters = useStoreGetters();
@@ -16,6 +17,7 @@ const { requiredAttributes } = useConversationRequiredAttributes();
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
+const pendingStatusSeed = ref({});
 
 const metaSettings = computed(
   () => currentAccount.value?.settings?.meta_conversion_settings || {}
@@ -25,49 +27,58 @@ const isOnCloseStrategy = computed(
   () => metaSettings.value.strategy === 'on_close'
 );
 
-const hasCtwaClid = computed(
-  () => !!currentChat.value?.custom_attributes?.ctwa_clid
+const outcomeAlreadySet = computed(
+  () => !!currentChat.value?.additional_attributes?.outcome
 );
 
-const alreadySent = computed(
-  () => currentChat.value?.additional_attributes?.meta_conversion?.sent === true
-);
-
+// Show buttons on all open conversations without outcome set
 const showButtons = computed(
-  () => isOnCloseStrategy.value && hasCtwaClid.value && !alreadySent.value
+  () => currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN && !outcomeAlreadySet.value
 );
 
 const winValue = computed(() => metaSettings.value.win_value || 'Won');
 const lossValue = computed(() => metaSettings.value.loss_value || 'Lost');
 const winStatusField = computed(() => metaSettings.value.win_status_field);
 
-// Pre-filter attributes relevant to an outcome (condition_value matches win or loss)
-const attributesForOutcome = outcomeValue =>
-  requiredAttributes.value.filter(
-    attr =>
-      attr.rule === 'always' ||
-      (attr.rule === 'conditional' &&
-        attr.condition_field === winStatusField.value &&
-        attr.condition_value === outcomeValue)
-  );
+const hasCtwaClid = computed(
+  () =>
+    !!currentChat.value?.custom_attributes?.ctwa_clid ||
+    !!currentChat.value?.additional_attributes?.attribution?.ctwa_clid
+);
+
+const buildInitialValues = statusValue => {
+  const base = { ...(currentChat.value?.custom_attributes || {}) };
+  if (winStatusField.value) {
+    base[winStatusField.value] = statusValue;
+  }
+  return base;
+};
 
 const openWon = () => {
+  const initialValues = buildInitialValues(winValue.value);
+  pendingStatusSeed.value = winStatusField.value
+    ? { [winStatusField.value]: winValue.value }
+    : {};
   outcomeModalRef.value?.open({
     outcome: 'won',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
     statusValue: winValue.value,
-    attributes: attributesForOutcome(winValue.value),
-    initialValues: currentChat.value?.custom_attributes || {},
+    attributes: requiredAttributes.value,
+    initialValues,
   });
 };
 
 const openLost = () => {
+  const initialValues = buildInitialValues(lossValue.value);
+  pendingStatusSeed.value = winStatusField.value
+    ? { [winStatusField.value]: lossValue.value }
+    : {};
   outcomeModalRef.value?.open({
     outcome: 'lost',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
     statusValue: lossValue.value,
-    attributes: attributesForOutcome(lossValue.value),
-    initialValues: currentChat.value?.custom_attributes || {},
+    attributes: requiredAttributes.value,
+    initialValues,
   });
 };
 
@@ -75,22 +86,27 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
   try {
     const ConversationApi = (await import('dashboard/api/inbox/conversation'))
       .default;
+    // Merge the seeded status field value so it's persisted alongside form fields
+    const mergedAttributes = { ...pendingStatusSeed.value, ...customAttributes };
     await ConversationApi.closeOutcome({
       conversationId: currentChat.value.id,
       outcome,
-      customAttributes,
+      customAttributes: mergedAttributes,
     });
 
-    // Refresh conversation so alreadySent computed re-evaluates
     await store.dispatch('updateConversation', {
       ...currentChat.value,
+      status: wootConstants.STATUS_TYPE.RESOLVED,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
-        meta_conversion: { sent: true },
+        outcome,
+        ...(isOnCloseStrategy.value && hasCtwaClid.value
+          ? { meta_conversion: { sent: true } }
+          : {}),
       },
       custom_attributes: {
         ...(currentChat.value.custom_attributes || {}),
-        ...customAttributes,
+        ...mergedAttributes,
       },
     });
 
@@ -99,6 +115,8 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
     useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
   }
 };
+
+defineExpose({ openWon, openLost });
 </script>
 
 <template>

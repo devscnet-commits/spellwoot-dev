@@ -354,6 +354,7 @@
     "ONE_OFF": "One off",
     "REPORTS_SLA": "SLA",
     "REPORTS_BOT": "Bot",
+    "REPORTS_LEADS": "Leads",
     "REPORTS_AGENT": "Agents",
     "REPORTS_LABEL": "Labels",
     "REPORTS_INBOX": "Inbox",
@@ -382,7 +383,8 @@
     "DOCS": "Read docs",
     "SECURITY": "Security",
     "CAPTAIN_AI": "Captain",
-    "CONVERSATION_WORKFLOW": "Conversation Workflow"
+    "CONVERSATION_WORKFLOW": "Conversation Workflow",
+    "INTEGRATIONS_HUB": "Integrations"
   },
   "CAPTAIN_SETTINGS": {
     "TITLE": "Captain Settings",
@@ -621,6 +623,16 @@
         "LABEL_CONDITIONAL": "Required if {field} = {value}"
       }
     },
+    "LEADS_REPORT": {
+      "TITLE": "Leads",
+      "DESCRIPTION": "Track the outcome of your conversations: won, lost, and closed by AI.",
+      "LOADING": "Loading...",
+      "WON": "Won",
+      "LOST": "Lost",
+      "AI_CLOSED": "Closed by AI",
+      "TOTAL": "Total",
+      "OF_TOTAL": "of total"
+    },
     "OUTCOME": {
       "MARK_WON": "Mark as Won",
       "MARK_LOST": "Mark as Lost",
@@ -629,7 +641,8 @@
       "CANCEL": "Cancel",
       "NO_FIELDS": "No additional fields required.",
       "SUCCESS": "Outcome recorded successfully",
-      "ERROR": "Could not record outcome, please try again"
+      "ERROR": "Could not record outcome, please try again",
+      "PROMPT_RESOLVE": "Before resolving, define the lead outcome:"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
@@ -664,10 +677,17 @@
       "ENRICHMENT": {
         "TITLE": "Contact data for matching (optional)",
         "DESCRIPTION": "Map conversation attributes to contact data fields sent to Meta. These values are sent automatically — protected by hash before sending.",
-        "EMAIL": "E-mail do contato (em)",
-        "PHONE": "Telefone do contato (ph)",
-        "NAME": "Primeiro nome do contato (fn)",
-        "ZIP": "CEP do contato (zp)",
+        "EMAIL": "Contact e-mail (em)",
+        "PHONE": "Contact phone (ph)",
+        "FIRST_NAME": "Contact first name (fn)",
+        "LAST_NAME": "Contact last name (ln)",
+        "ZIP": "Contact ZIP code (zp)",
+        "CITY": "Contact city (ct)",
+        "STATE": "Contact state (st)",
+        "COUNTRY": "Contact country (country)",
+        "DATE_OF_BIRTH": "Date of birth (db)",
+        "GENDER": "Gender (ge)",
+        "EXTERNAL_ID": "External ID (external_id)",
         "NOT_MAPPED": "Not mapped"
       }
     }
@@ -980,6 +1000,40 @@
       "DESCRIPTION": "Are you sure you want to delete this policy? This action cannot be undone.",
       "CONFIRM_BUTTON_LABEL": "Delete",
       "CANCEL_BUTTON_LABEL": "Cancel"
+    }
+  },
+  "INTEGRATIONS_HUB": {
+    "TITLE": "APIs & Credentials",
+    "DESCRIPTION": "Configure your account integrations. Changes apply immediately without server access.",
+    "CONFIGURE": "Configure",
+    "CLOSE": "Close",
+    "SAVE": "Save",
+    "SAVING": "Saving...",
+    "SAVED": "Integration saved successfully.",
+    "ERROR": "Error saving integration. Please try again.",
+    "CONFIGURED": "Configured",
+    "RESET": "Reset",
+    "HOW_TO": "How to find?",
+    "META": {
+      "DESCRIPTION": "Conversion tracking via CAPI for Facebook/Instagram ads.",
+      "PIXEL_ID": "Pixel ID",
+      "ACCESS_TOKEN": "Conversions API Access Token",
+      "TEST_EVENT_CODE": "Test Event Code (Optional)"
+    },
+    "OPENAI": {
+      "DESCRIPTION": "Integration with GPT models for automatic responses.",
+      "API_KEY": "API Key",
+      "MODEL": "Default model"
+    },
+    "N8N": {
+      "DESCRIPTION": "Workflow automation via N8N.",
+      "WEBHOOK_URL": "Webhook URL",
+      "TOKEN": "Authentication token"
+    },
+    "BITRIX": {
+      "DESCRIPTION": "Integration with Bitrix24 CRM.",
+      "WEBHOOK_URL": "Webhook URL",
+      "TOKEN": "Token"
     }
   }
 }

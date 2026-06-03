@@ -16,6 +16,7 @@ import {
 import ButtonGroup from 'dashboard/components-next/buttonGroup/ButtonGroup.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationResolveAttributesModal from 'dashboard/components-next/ConversationWorkflow/ConversationResolveAttributesModal.vue';
+import ConversationOutcomeButtons from 'dashboard/components-next/ConversationWorkflow/ConversationOutcomeButtons.vue';
 
 const store = useStore();
 const getters = useStoreGetters();
@@ -25,6 +26,8 @@ const { requiredAttributes, checkMissingAttributes } =
 
 const isLoading = ref(false);
 const resolveAttributesModalRef = ref(null);
+const outcomeButtonsRef = ref(null);
+const showOutcomePrompt = ref(false);
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 
@@ -36,54 +39,64 @@ const isResolved = computed(
   () => currentChat.value.status === wootConstants.STATUS_TYPE.RESOLVED
 );
 
+const wasHandledByHuman = computed(
+  () => !!currentChat.value?.additional_attributes?.was_handled_by_human
+);
+
+const outcomeAlreadySet = computed(
+  () => !!currentChat.value?.additional_attributes?.outcome
+);
+
 const getConversationParams = () => {
   const allConversations = document.querySelectorAll(
     '.conversations-list .conversation'
   );
-
   const activeConversation = document.querySelector(
     'div.conversations-list div.conversation.active'
   );
-  const activeConversationIndex = [...allConversations].indexOf(
-    activeConversation
-  );
-  const lastConversationIndex = allConversations.length - 1;
-
+  const activeConversationIndex = [...allConversations].indexOf(activeConversation);
   return {
     all: allConversations,
     activeIndex: activeConversationIndex,
-    lastIndex: lastConversationIndex,
+    lastIndex: allConversations.length - 1,
   };
 };
 
 const toggleStatus = (status, snoozedUntil, customAttributes = null) => {
   isLoading.value = true;
-
-  const payload = {
-    conversationId: currentChat.value.id,
-    status,
-    snoozedUntil,
-  };
-
-  if (customAttributes) {
-    payload.customAttributes = customAttributes;
-  }
-
+  const payload = { conversationId: currentChat.value.id, status, snoozedUntil };
+  if (customAttributes) payload.customAttributes = customAttributes;
   store.dispatch('toggleStatus', payload).then(() => {
     useAlert(t('CONVERSATION.CHANGE_STATUS'));
     isLoading.value = false;
   });
 };
 
+const closeAsAi = async () => {
+  isLoading.value = true;
+  try {
+    const ConversationApi = (await import('dashboard/api/inbox/conversation')).default;
+    await ConversationApi.closeAsAi(currentChat.value.id);
+    await store.dispatch('updateConversation', {
+      ...currentChat.value,
+      status: wootConstants.STATUS_TYPE.RESOLVED,
+      additional_attributes: {
+        ...(currentChat.value.additional_attributes || {}),
+        outcome: 'ai_closed',
+      },
+    });
+    useAlert(t('CONVERSATION.CHANGE_STATUS'));
+  } catch {
+    useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
+  } finally {
+    isLoading.value = false;
+  }
+};
+
 const handleResolveWithAttributes = ({ attributes, context }) => {
   if (context) {
-    const currentCustomAttributes = currentChat.value.custom_attributes || {};
-    const mergedAttributes = { ...currentCustomAttributes, ...attributes };
-    toggleStatus(
-      wootConstants.STATUS_TYPE.RESOLVED,
-      context.snoozedUntil,
-      mergedAttributes
-    );
+    const mergedAttributes = { ...(currentChat.value.custom_attributes || {}), ...attributes };
+    toggleStatus(wootConstants.STATUS_TYPE.RESOLVED, context.snoozedUntil, mergedAttributes);
   }
 };
 
@@ -92,38 +105,51 @@ const onCmdOpenConversation = () => {
 };
 
 const onCmdResolveConversation = () => {
+  // AI-only conversation → close as ai_closed
+  if (!wasHandledByHuman.value) {
+    closeAsAi();
+    return;
+  }
+
+  // Human handled but no outcome yet → prompt for Won/Lost
+  if (!outcomeAlreadySet.value) {
+    showOutcomePrompt.value = true;
+    return;
+  }
+
+  // Outcome set → check required attributes then resolve
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
   const { hasMissing } = checkMissingAttributes(currentCustomAttributes);
 
   if (hasMissing) {
-    const conversationContext = {
-      id: currentChat.value.id,
-      snoozedUntil: null,
-    };
     resolveAttributesModalRef.value?.open(
       requiredAttributes.value,
       currentCustomAttributes,
-      conversationContext
+      { id: currentChat.value.id, snoozedUntil: null }
     );
   } else {
     toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
   }
 };
 
+const onSelectWon = () => {
+  showOutcomePrompt.value = false;
+  outcomeButtonsRef.value?.openWon();
+};
+
+const onSelectLost = () => {
+  showOutcomePrompt.value = false;
+  outcomeButtonsRef.value?.openLost();
+};
+
 const keyboardEvents = {
-  'Alt+KeyE': {
-    action: async () => {
-      onCmdResolveConversation();
-    },
-  },
+  'Alt+KeyE': { action: () => onCmdResolveConversation() },
   '$mod+Alt+KeyE': {
-    action: async event => {
+    action: event => {
       const { all, activeIndex, lastIndex } = getConversationParams();
       onCmdResolveConversation();
-
-      if (activeIndex < lastIndex) {
-        all[activeIndex + 1].click();
-      } else if (all.length > 1) {
+      if (activeIndex < lastIndex) all[activeIndex + 1].click();
+      else if (all.length > 1) {
         all[0].click();
         document.querySelector('.conversations-list').scrollTop = 0;
       }
@@ -133,13 +159,49 @@ const keyboardEvents = {
 };
 
 useKeyboardEvents(keyboardEvents);
-
 useEmitter(CMD_REOPEN_CONVERSATION, onCmdOpenConversation);
 useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
 </script>
 
 <template>
   <div class="flex relative justify-end items-center resolve-actions">
+    <!-- Hidden outcome buttons used programmatically when prompted -->
+    <ConversationOutcomeButtons ref="outcomeButtonsRef" class="hidden" />
+
+    <!-- Outcome prompt overlay -->
+    <div
+      v-if="showOutcomePrompt"
+      class="absolute bottom-full mb-2 right-0 z-50 flex flex-col gap-2 p-3 rounded-xl bg-n-solid-3 shadow-lg border border-n-weak min-w-48"
+    >
+      <p class="text-body-small text-n-slate-11 mb-1">
+        {{ $t('CONVERSATION_WORKFLOW.OUTCOME.PROMPT_RESOLVE') }}
+      </p>
+      <Button
+        size="sm"
+        color="teal"
+        icon="i-lucide-circle-check"
+        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON')"
+        class="w-full rounded-md"
+        @click="onSelectWon"
+      />
+      <Button
+        size="sm"
+        color="ruby"
+        icon="i-lucide-circle-x"
+        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST')"
+        class="w-full rounded-md"
+        @click="onSelectLost"
+      />
+      <Button
+        size="sm"
+        variant="ghost"
+        color="slate"
+        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.CANCEL')"
+        class="w-full rounded-md"
+        @click="showOutcomePrompt = false"
+      />
+    </div>
+
     <ButtonGroup
       class="flex-shrink-0 rounded-lg shadow outline-1 outline outline-n-container"
     >

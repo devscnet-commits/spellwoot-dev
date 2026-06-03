@@ -126,6 +126,10 @@ class ConversationApi extends ApiClient {
     });
   }
 
+  closeAsAi(conversationId) {
+    return axios.post(`${this.url}/${conversationId}/close_as_ai`);
+  }
+
   fetchParticipants(conversationId) {
     return axios.get(`${this.url}/${conversationId}/participants`);
   }

@@ -146,13 +146,34 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     attrs = params.permit(custom_attributes: {})[:custom_attributes]
     if attrs.present?
       @conversation.custom_attributes = (@conversation.custom_attributes || {}).merge(attrs)
-      @conversation.save!
     end
+
+    @conversation.additional_attributes = (@conversation.additional_attributes || {}).merge(
+      'outcome' => outcome,
+      'outcome_set_at' => Time.current.iso8601
+    )
+    @conversation.save!
+
+    @conversation.update_columns(status: :resolved)
 
     Meta::HandleCloseEventService.new(
       conversation: @conversation,
       outcome: outcome.to_sym
     ).perform
+
+    render json: { outcome: outcome }, status: :ok
+  end
+
+  def close_as_ai
+    @conversation.additional_attributes = (@conversation.additional_attributes || {}).merge(
+      'outcome' => 'ai_closed',
+      'outcome_set_at' => Time.current.iso8601
+    )
+    @conversation.update_columns(
+      status: :resolved,
+      additional_attributes: @conversation.additional_attributes
+    )
+    render json: { outcome: 'ai_closed' }, status: :ok
   end
 
   def destroy

@@ -503,6 +503,11 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.REPORTS_BOT'),
           to: accountScopedRoute('bot_reports'),
         },
+        {
+          name: 'Reports Leads',
+          label: t('SIDEBAR.REPORTS_LEADS'),
+          to: accountScopedRoute('leads_reports'),
+        },
       ],
     },
     {
@@ -687,6 +692,12 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.INTEGRATIONS'),
           icon: 'i-lucide-blocks',
           to: accountScopedRoute('settings_applications'),
+        },
+        {
+          name: 'Settings Integrations Hub',
+          label: t('SIDEBAR.INTEGRATIONS_HUB'),
+          icon: 'i-lucide-key-round',
+          to: accountScopedRoute('integrations_hub'),
         },
         {
           name: 'Settings Audit Logs',

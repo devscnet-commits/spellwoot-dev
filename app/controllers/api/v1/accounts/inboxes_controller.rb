@@ -322,46 +322,51 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def migrate
     target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
-  
+
     unless @inbox.channel_type == target_inbox.channel_type
       return render json: { error: 'Só é possível migrar entre caixas do mesmo tipo' }, status: :unprocessable_entity
     end
-  
+
     backup_migration_data(@inbox)
-    migrated_count = 0
-  
+    migrated_count = @inbox.conversations.count
+
     ActiveRecord::Base.transaction do
-      @inbox.conversations.find_each do |conversation|
-        source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
-  
-        target_contact_inbox = ContactInbox.find_by(
-          inbox_id: target_inbox.id,
-          source_id: source_id
-        ) || ContactInbox.find_or_create_by!(
-          contact_id: conversation.contact_id,
+      # 1. Bulk-update messages and events — 1 query each, regardless of volume
+      Message.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
+      ReportingEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
+      SlaEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id) if defined?(SlaEvent)
+
+      # 2. Get unique contact → contact_inbox pairs using pluck (integers only, no AR objects)
+      #    For N conversations there are at most N unique contacts — even 5000 rows is negligible memory
+      unique_contacts = @inbox.conversations
+                              .pluck(:contact_id, :contact_inbox_id)
+                              .each_with_object({}) { |(cid, ciid), h| h[cid] ||= ciid }
+
+      # 3. Find or create target ContactInbox for each unique contact
+      contact_inbox_map = unique_contacts.each_with_object({}) do |(contact_id, source_ci_id), map|
+        source_id = ContactInbox.where(id: source_ci_id).pick(:source_id) || SecureRandom.uuid
+        map[contact_id] = ContactInbox.find_or_create_by!(
+          contact_id: contact_id,
           inbox_id: target_inbox.id
-        ) do |ci|
-          ci.source_id = source_id
-        end
-  
-        conversation.messages.update_all(inbox_id: target_inbox.id)
-        conversation.reporting_events.update_all(inbox_id: target_inbox.id)
-        conversation.sla_events.update_all(inbox_id: target_inbox.id)
-        conversation.update!(
-          inbox_id: target_inbox.id,
-          contact_inbox_id: target_contact_inbox.id
-        )
-        migrated_count += 1
+        ) { |ci| ci.source_id = source_id }
       end
-  
-      @inbox.contact_inboxes.destroy_all
+
+      # 4. Bulk-update conversations grouped by contact — 1 query per unique contact
+      contact_inbox_map.each do |contact_id, target_ci|
+        Conversation.where(inbox_id: @inbox.id, contact_id: contact_id)
+                    .update_all(inbox_id: target_inbox.id, contact_inbox_id: target_ci.id)
+      end
+
+      # 5. Remove old contact_inboxes (conversations already point to new ones)
+      ContactInbox.where(inbox_id: @inbox.id).destroy_all
     end
-  
+
     redirect_uazapi_to_target(@inbox, target_inbox)
     render json: { success: true, migrated_count: migrated_count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
   rescue StandardError => e
+    Rails.logger.error "[MIGRATE] inbox=#{@inbox.id} #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
@@ -374,18 +379,20 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def backup_migration_data(inbox)
     timestamp = Time.current.strftime('%Y%m%d%H%M%S')
     key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
-    
+
     data = {
       inbox: inbox.attributes,
-      conversations: inbox.conversations.map(&:attributes),
-      contact_inboxes: inbox.contact_inboxes.map(&:attributes),
-      messages: Message.where(inbox_id: inbox.id).map(&:attributes),
+      conversation_ids: inbox.conversations.pluck(:id),
+      contact_inbox_ids: inbox.contact_inboxes.pluck(:id),
+      message_count: Message.where(inbox_id: inbox.id).count,
       migrated_at: Time.current,
       migrated_by: Current.user&.id
     }
-    
+
     Redis::Alfred.set(key, data.to_json)
     Redis::Alfred.expire(key, 30.days.to_i)
+  rescue StandardError => e
+    Rails.logger.warn "[MIGRATE] Backup skipped: #{e.message}"
   end
   
   def redirect_uazapi_to_target(source_inbox, target_inbox)

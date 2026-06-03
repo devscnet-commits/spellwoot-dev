@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, reactive } from 'vue';
+import { ref, computed, reactive, watch } from 'vue';
 import { useVuelidate } from '@vuelidate/core';
 import { required } from '@vuelidate/validators';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
@@ -13,14 +13,36 @@ const emit = defineEmits(['confirm']);
 
 const dialogRef = ref(null);
 const pendingOutcome = ref(null);
-const pendingAttributes = ref([]);
+const allAttributes = ref([]);
 const formValues = reactive({});
 
 const title = computed(() => pendingOutcome.value?.label || '');
 
+// Dynamically show attributes based on current form state (same engine as ConversationResolveAttributesModal)
+const visibleAttributes = computed(() =>
+  allAttributes.value.filter(attr => {
+    if (attr.rule === 'conditional') {
+      return formValues[attr.condition_field] === attr.condition_value;
+    }
+    return true;
+  })
+);
+
+// When a conditional field disappears, clear its value
+watch(visibleAttributes, (newVisible, oldVisible) => {
+  if (!oldVisible) return;
+  const newKeys = new Set(newVisible.map(a => a.value));
+  oldVisible.forEach(attr => {
+    if (!newKeys.has(attr.value) && attr.rule === 'conditional') {
+      formValues[attr.value] =
+        attr.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
+    }
+  });
+});
+
 const validationRules = computed(() => {
   const rules = {};
-  pendingAttributes.value.forEach(attr => {
+  visibleAttributes.value.forEach(attr => {
     if (attr.type !== ATTRIBUTE_TYPES.CHECKBOX) {
       rules[attr.value] = { required };
     }
@@ -31,7 +53,7 @@ const validationRules = computed(() => {
 const v$ = useVuelidate(validationRules, formValues);
 
 const isFormComplete = computed(() =>
-  pendingAttributes.value.every(attr => {
+  visibleAttributes.value.every(attr => {
     const val = formValues[attr.value];
     if (attr.type === ATTRIBUTE_TYPES.CHECKBOX) return val !== null;
     return val !== undefined && val !== null && String(val).trim() !== '';
@@ -40,7 +62,7 @@ const isFormComplete = computed(() =>
 
 const comboOptions = computed(() => {
   const opts = {};
-  pendingAttributes.value.forEach(attr => {
+  visibleAttributes.value.forEach(attr => {
     if (attr.type === ATTRIBUTE_TYPES.LIST) {
       opts[attr.value] = (attr.attributeValues || []).map(v => ({
         value: v,
@@ -53,14 +75,21 @@ const comboOptions = computed(() => {
 
 const open = ({ outcome, label, statusValue, attributes, initialValues }) => {
   pendingOutcome.value = { outcome, label, statusValue };
-  pendingAttributes.value = attributes;
+  allAttributes.value = attributes;
 
   Object.keys(formValues).forEach(k => delete formValues[k]);
+
+  // Seed ALL conversation attributes so conditional rules evaluate correctly
+  Object.entries(initialValues).forEach(([key, value]) => {
+    formValues[key] = value;
+  });
+
+  // Seed required attribute fields (don't override initialValues)
   attributes.forEach(attr => {
-    const preset = initialValues[attr.value];
-    const hasPreset = preset !== undefined && preset !== null;
-    const emptyValue = attr.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
-    formValues[attr.value] = hasPreset ? preset : emptyValue;
+    if (!(attr.value in formValues)) {
+      formValues[attr.value] =
+        attr.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
+    }
   });
 
   v$.value.$reset();
@@ -71,7 +100,12 @@ const handleConfirm = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;
 
-  const customAttributes = { ...formValues };
+  // Only emit values for visible required attributes
+  const customAttributes = {};
+  visibleAttributes.value.forEach(attr => {
+    customAttributes[attr.value] = formValues[attr.value];
+  });
+
   emit('confirm', {
     outcome: pendingOutcome.value.outcome,
     customAttributes,
@@ -93,9 +127,9 @@ defineExpose({ open });
     :disable-confirm-button="!isFormComplete"
     @confirm="handleConfirm"
   >
-    <div v-if="pendingAttributes.length" class="flex flex-col gap-4">
+    <div v-if="visibleAttributes.length" class="flex flex-col gap-4">
       <div
-        v-for="attr in pendingAttributes"
+        v-for="attr in visibleAttributes"
         :key="attr.value"
         class="flex flex-col gap-2"
       >

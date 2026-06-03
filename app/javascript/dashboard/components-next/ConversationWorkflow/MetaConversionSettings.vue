@@ -23,7 +23,9 @@ const winValue = ref('');
 const lossValue = ref('');
 const valueField = ref('');
 const currency = ref('BRL');
-const enrichmentFields = reactive({ em: '', ph: '', fn: '', zp: '' });
+const enrichmentFields = reactive({
+  em: '', ph: '', fn: '', ln: '', zp: '', ct: '', st: '', country: '', db: '', ge: '', external_id: '',
+});
 
 // Attribute option lists
 const listAttributes = computed(() =>
@@ -69,7 +71,14 @@ watch(
     enrichmentFields.em = s.enrichment_fields?.em ?? '';
     enrichmentFields.ph = s.enrichment_fields?.ph ?? '';
     enrichmentFields.fn = s.enrichment_fields?.fn ?? '';
+    enrichmentFields.ln = s.enrichment_fields?.ln ?? '';
     enrichmentFields.zp = s.enrichment_fields?.zp ?? '';
+    enrichmentFields.ct = s.enrichment_fields?.ct ?? '';
+    enrichmentFields.st = s.enrichment_fields?.st ?? '';
+    enrichmentFields.country = s.enrichment_fields?.country ?? '';
+    enrichmentFields.db = s.enrichment_fields?.db ?? '';
+    enrichmentFields.ge = s.enrichment_fields?.ge ?? '';
+    enrichmentFields.external_id = s.enrichment_fields?.external_id ?? '';
     isDirty.value = false;
   },
   { immediate: true }
@@ -379,8 +388,15 @@ const handleSave = async () => {
             v-for="(label, metaKey) in {
               em: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EMAIL'),
               ph: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.PHONE'),
-              fn: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.NAME'),
+              fn: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.FIRST_NAME'),
+              ln: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.LAST_NAME'),
               zp: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.ZIP'),
+              ct: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.CITY'),
+              st: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.STATE'),
+              country: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.COUNTRY'),
+              db: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.DATE_OF_BIRTH'),
+              ge: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.GENDER'),
+              external_id: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EXTERNAL_ID'),
             }"
             :key="metaKey"
             class="flex flex-col gap-1"
