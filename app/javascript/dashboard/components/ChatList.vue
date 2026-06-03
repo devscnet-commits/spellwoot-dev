@@ -209,7 +209,8 @@ const assigneeTabItems = computed(() => {
 const showAssigneeInConversationCard = computed(() => {
   return (
     hasAppliedFiltersOrActiveFolders.value ||
-    activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ALL
+    activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ALL ||
+    activeAssigneeTab.value === 'resolved'
   );
 });
 
@@ -266,10 +267,11 @@ const conversationListPagination = computed(() => {
 });
 
 const conversationFilters = computed(() => {
+  const isResolvedTab = activeAssigneeTab.value === 'resolved';
   return {
     inboxId: props.conversationInbox ? props.conversationInbox : undefined,
-    assigneeType: activeAssigneeTab.value,
-    status: activeStatus.value,
+    assigneeType: isResolvedTab ? wootConstants.ASSIGNEE_TYPE.ALL : activeAssigneeTab.value,
+    status: isResolvedTab ? wootConstants.STATUS_TYPE.RESOLVED : activeStatus.value,
     sortBy: activeSortBy.value,
     page: conversationListPagination.value,
     labels: props.label ? [props.label] : undefined,
@@ -617,6 +619,11 @@ function updateAssigneeTab(selectedTab) {
   if (activeAssigneeTab.value !== selectedTab) {
     resetBulkActions();
     emitter.emit('clearSearchInput');
+    if (selectedTab === 'resolved') {
+      activeStatus.value = wootConstants.STATUS_TYPE.RESOLVED;
+    } else if (activeAssigneeTab.value === 'resolved') {
+      activeStatus.value = wootConstants.STATUS_TYPE.OPEN;
+    }
     activeAssigneeTab.value = selectedTab;
     if (!currentPage.value) {
       fetchConversations();

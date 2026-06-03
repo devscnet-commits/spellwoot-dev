@@ -15,9 +15,10 @@
     },
     "FILTER_ALL": "All",
     "ASSIGNEE_TYPE_TABS": {
-      "me": "Mine",
+      "all": "All",
       "unassigned": "Unassigned",
-      "all": "All"
+      "me": "Mine",
+      "resolved": "Resolved"
     },
     "CHAT_STATUS_FILTER_ITEMS": {
       "open": {
