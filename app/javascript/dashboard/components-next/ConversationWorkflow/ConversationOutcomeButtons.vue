@@ -8,6 +8,7 @@ import { useConversationRequiredAttributes } from 'dashboard/composables/useConv
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
 import wootConstants from 'dashboard/constants/globals';
+import { SYSTEM_OUTCOME_FIELD, OUTCOME_TO_SYSTEM_VALUE } from './constants';
 
 const store = useStore();
 const getters = useStoreGetters();
@@ -48,16 +49,18 @@ const hasCtwaClid = computed(
     !!currentChat.value?.additional_attributes?.attribution?.ctwa_clid
 );
 
-const buildInitialValues = statusValue => {
+const buildInitialValues = (statusValue, outcome) => {
   const base = { ...(currentChat.value?.custom_attributes || {}) };
   if (winStatusField.value) {
     base[winStatusField.value] = statusValue;
   }
+  // Inject system field so resultado_conversa conditions evaluate correctly in the modal
+  base[SYSTEM_OUTCOME_FIELD] = OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null;
   return base;
 };
 
 const openWon = () => {
-  const initialValues = buildInitialValues(winValue.value);
+  const initialValues = buildInitialValues(winValue.value, 'won');
   pendingStatusSeed.value = winStatusField.value
     ? { [winStatusField.value]: winValue.value }
     : {};
@@ -71,7 +74,7 @@ const openWon = () => {
 };
 
 const openLost = () => {
-  const initialValues = buildInitialValues(lossValue.value);
+  const initialValues = buildInitialValues(lossValue.value, 'lost');
   pendingStatusSeed.value = winStatusField.value
     ? { [winStatusField.value]: lossValue.value }
     : {};
