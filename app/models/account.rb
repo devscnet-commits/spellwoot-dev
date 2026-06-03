@@ -107,6 +107,7 @@ class Account < ApplicationRecord
 
   before_validation :validate_limit_keys
   after_create_commit :notify_creation
+  after_create_commit :create_default_custom_attributes
   after_destroy :remove_account_sequences
 
   def agents
@@ -162,6 +163,21 @@ class Account < ApplicationRecord
 
   def notify_creation
     Rails.configuration.dispatcher.dispatch(ACCOUNT_CREATED, Time.zone.now, account: self)
+  end
+
+  def create_default_custom_attributes
+    return if custom_attribute_definitions.exists?(attribute_key: 'marcado_como_ganho_ou_perdido')
+
+    custom_attribute_definitions.create!(
+      display_name: 'Marcado como Ganho ou Perdido',
+      attribute_key: 'marcado_como_ganho_ou_perdido',
+      attribute_display_type: :list,
+      attribute_model: :conversation_attribute,
+      default_value: nil,
+      attribute_values: %w[Ganho Perdido]
+    )
+  rescue StandardError => e
+    Rails.logger.error "Failed to create default custom attributes for account #{id}: #{e.message}"
   end
 
   trigger.after(:insert).for_each(:row) do

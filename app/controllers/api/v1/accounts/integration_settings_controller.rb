@@ -9,7 +9,7 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
     setting   = IntegrationSetting.find_by(account_id: Current.account.id, provider: params[:provider])
     render json: {
       provider: params[:provider],
-      enabled: setting&.enabled ?? true,
+      enabled: setting ? setting.enabled : true,
       config: mask_sensitive(effective),
       has_account_config: setting.present?,
       sources: config_sources(params[:provider], effective)
@@ -33,6 +33,20 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
     }
   rescue ActionController::ParameterMissing => e
     render json: { error: e.message }, status: :unprocessable_entity
+  end
+
+  def sync_chatwoot
+    config = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
+    result = IntegrationSettingsService.sync_uazapi_chatwoot(config, Current.account, current_user)
+    status = result[:ok] ? :ok : :unprocessable_entity
+    render json: result, status: status
+  end
+
+  def test_connection
+    config = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
+    result = IntegrationSettingsService.test_connection(params[:provider], config)
+    status = result[:ok] ? :ok : :unprocessable_entity
+    render json: result, status: status
   end
 
   # Admin action: read current ENV vars and persist as global (account_id = nil) config
