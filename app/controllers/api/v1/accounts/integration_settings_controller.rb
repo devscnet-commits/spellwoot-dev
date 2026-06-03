@@ -9,7 +9,7 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
     setting   = IntegrationSetting.find_by(account_id: Current.account.id, provider: params[:provider])
     render json: {
       provider: params[:provider],
-      enabled: setting&.enabled ?? true,
+      enabled: setting ? setting.enabled : true,
       config: mask_sensitive(effective),
       has_account_config: setting.present?,
       sources: config_sources(params[:provider], effective)
