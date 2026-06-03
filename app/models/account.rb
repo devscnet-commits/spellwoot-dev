@@ -168,7 +168,7 @@ class Account < ApplicationRecord
   def create_default_custom_attributes
     unless custom_attribute_definitions.exists?(attribute_key: 'marcado_como_ganho_ou_perdido')
       custom_attribute_definitions.create!(
-        display_name: 'Marcado como Ganho ou Perdido',
+        attribute_display_name: 'Marcado como Ganho ou Perdido',
         attribute_key: 'marcado_como_ganho_ou_perdido',
         attribute_display_type: :list,
         attribute_model: :conversation_attribute,

@@ -17,8 +17,8 @@ class IntegrationSettingsService
       'instance' => 'EVOLUTION_DEFAULT_INSTANCE'
     },
     'uazapi' => {
-      'apiUrl' => 'UAZAPI_URL',
-      'token'  => 'UAZAPI_TOKEN'
+      'apiUrl' => 'UAZAPI_BASE_URL',
+      'token'  => 'UAZAPI_ADMIN_TOKEN'
     },
     'bitrix' => {
       'webhookUrl' => 'BITRIX_WEBHOOK',
@@ -140,10 +140,10 @@ class IntegrationSettingsService
     return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
     return { ok: false, message: 'Token não configurado.' } if token.blank?
 
-    response = HTTParty.get("#{api_url}/instance/status", headers: { 'token' => token, 'Accept' => 'application/json' }, timeout: 10)
+    response = HTTParty.get("#{api_url}/instance", headers: { 'token' => token, 'Accept' => 'application/json' }, timeout: 10)
     if response.success?
-      body = response.parsed_response
-      { ok: true, message: 'Conexão bem-sucedida.', status: body }
+      instances = Array(response.parsed_response)
+      { ok: true, message: "Conexão bem-sucedida. #{instances.size} instância(s) encontrada(s)." }
     else
       { ok: false, message: "Erro #{response.code}: #{response.message}" }
     end

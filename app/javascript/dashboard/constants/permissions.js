@@ -50,12 +50,4 @@ export const ASSIGNEE_TYPE_TAB_PERMISSIONS = {
     count: 'mineCount',
     permissions: [...ROLES, ...CONVERSATION_PERMISSIONS],
   },
-  resolved: {
-    count: '',
-    permissions: [
-      ...ROLES,
-      MANAGE_ALL_CONVERSATION_PERMISSIONS,
-      CONVERSATION_PARTICIPATING_PERMISSIONS,
-    ],
-  },
 };
