@@ -217,7 +217,11 @@ Rails.application.routes.draw do
           resources :reporting_events, only: [:index] if ChatwootApp.enterprise?
           resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy]
           resources :custom_filters, only: [:index, :show, :create, :update, :destroy]
-          resources :integration_settings, param: :provider, only: [:show, :update]
+          resources :integration_settings, param: :provider, only: [:show, :update] do
+            collection do
+              post ':provider/import_from_env', action: :import_from_env, as: :import_from_env
+            end
+          end
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do
             get :assignable_agents, on: :member
             get :campaigns, on: :member
