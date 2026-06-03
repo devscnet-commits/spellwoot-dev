@@ -222,8 +222,10 @@ Rails.application.routes.draw do
               post ':provider/import_from_env', action: :import_from_env, as: :import_from_env
               post ':provider/test', action: :test_connection, as: :test_connection
               post ':provider/sync_chatwoot', action: :sync_chatwoot, as: :sync_chatwoot
+              post ':provider/sync_instances', action: :sync_instances, as: :sync_instances
             end
           end
+          resources :provider_instances, only: [:index]
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do
             get :assignable_agents, on: :member
             get :campaigns, on: :member
@@ -250,7 +252,11 @@ Rails.application.routes.draw do
               post :analyze, on: :collection
             end
           end
-          resources :uazapi_inboxes, only: [:create]
+          resources :uazapi_inboxes, only: [:create] do
+            collection do
+              post :from_instance
+            end
+          end
           resources :inbox_members, only: [:create, :show], param: :inbox_id do
           end
 
