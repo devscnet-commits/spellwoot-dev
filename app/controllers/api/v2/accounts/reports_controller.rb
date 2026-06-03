@@ -213,7 +213,30 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
       summary: { total:, won:, lost:, open:, ai_closed:, conversion_rate: },
       by_agent:  leads_by_agent(scope),
       by_inbox:  leads_by_inbox(scope),
-      by_origin: leads_by_origin(scope)
+      by_origin: leads_by_origin(scope),
+      by_team:   leads_by_team(scope)
+    }
+  end
+
+  def marketing_summary
+    scope = Current.account.conversations
+                   .where("conversations.additional_attributes -> 'attribution' ->> 'ctwa_clid' IS NOT NULL")
+    scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
+    scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
+
+    total     = scope.count
+    won       = scope.where("additional_attributes ->> 'outcome' = 'won'").count
+    lost      = scope.where("additional_attributes ->> 'outcome' = 'lost'").count
+    ai_closed = scope.where("additional_attributes ->> 'outcome' = 'ai_closed'").count
+    open      = total - won - lost - ai_closed
+    concluded = won + lost
+    conversion_rate = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
+
+    render json: {
+      summary: { total:, won:, lost:, open:, ai_closed:, conversion_rate: },
+      by_agent:    leads_by_agent(scope),
+      by_campaign: marketing_by_campaign(scope),
+      by_inbox:    leads_by_inbox(scope)
     }
   end
 
@@ -240,6 +263,21 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
          .group('inboxes.channel_type')
          .select("inboxes.channel_type AS origin, #{OUTCOME_SELECT}")
          .map { |r| row_with_open(r, origin: r.origin) }
+         .sort_by { |r| -r[:total] }
+  end
+
+  def leads_by_team(scope)
+    scope.joins('LEFT JOIN teams ON teams.id = conversations.team_id')
+         .group('teams.id, teams.name')
+         .select("teams.id, COALESCE(teams.name, 'Sem equipe') AS name, #{OUTCOME_SELECT}")
+         .map { |r| row_with_open(r, id: r.id, name: r.name) }
+         .sort_by { |r| -r[:total] }
+  end
+
+  def marketing_by_campaign(scope)
+    scope.group("conversations.additional_attributes -> 'attribution' ->> 'utm_campaign'")
+         .select("conversations.additional_attributes -> 'attribution' ->> 'utm_campaign' AS campaign, #{OUTCOME_SELECT}")
+         .map { |r| row_with_open(r, campaign: r.campaign.presence || '(sem campanha)') }
          .sort_by { |r| -r[:total] }
   end
 
