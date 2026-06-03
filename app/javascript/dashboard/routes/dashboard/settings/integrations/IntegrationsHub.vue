@@ -42,6 +42,17 @@ const PROVIDERS = [
     ],
   },
   {
+    key: 'uazapi',
+    name: 'UazAPI',
+    description: 'Integração com UazAPI para WhatsApp.',
+    icon: 'i-lucide-smartphone',
+    fields: [
+      { key: 'apiUrl', label: 'URL da API', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
+      { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: 'https://doc.uazapi.com.br' },
+      { key: 'instance', label: 'Instância padrão', sensitive: false, placeholder: 'minha-instancia', help: null },
+    ],
+  },
+  {
     key: 'bitrix',
     name: 'Bitrix24',
     description: 'Integração com CRM Bitrix24.',

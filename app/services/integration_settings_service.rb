@@ -1,5 +1,5 @@
 class IntegrationSettingsService
-  PROVIDERS = %w[meta openai evolution_api bitrix n8n google].freeze
+  PROVIDERS = %w[meta openai evolution_api uazapi bitrix n8n google].freeze
 
   ENV_KEYS = {
     'meta' => {
@@ -15,6 +15,11 @@ class IntegrationSettingsService
       'apiUrl'   => 'EVOLUTION_API_URL',
       'apiKey'   => 'EVOLUTION_API_KEY',
       'instance' => 'EVOLUTION_DEFAULT_INSTANCE'
+    },
+    'uazapi' => {
+      'apiUrl'   => 'UAZAPI_URL',
+      'token'    => 'UAZAPI_TOKEN',
+      'instance' => 'UAZAPI_DEFAULT_INSTANCE'
     },
     'bitrix' => {
       'webhookUrl' => 'BITRIX_WEBHOOK',
