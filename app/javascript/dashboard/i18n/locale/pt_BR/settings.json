@@ -382,7 +382,21 @@
     "DOCS": "Ler documentos",
     "SECURITY": "Segurança",
     "CAPTAIN_AI": "Capitão",
-    "CONVERSATION_WORKFLOW": "Fluxo de Conversa"
+    "CONVERSATION_WORKFLOW": "Fluxo de Conversa",
+    "INTEGRATIONS_HUB": "APIs & Credenciais"
+  },
+  "INTEGRATIONS_HUB": {
+    "TITLE": "APIs & Credenciais",
+    "DESCRIPTION": "Configure as integrações da sua conta. As alterações são aplicadas imediatamente, sem acesso ao servidor.",
+    "CONFIGURE": "Configurar",
+    "CLOSE": "Fechar",
+    "SAVE": "Salvar",
+    "SAVING": "Salvando...",
+    "SAVED": "Integração salva com sucesso.",
+    "ERROR": "Erro ao salvar integração. Por favor, tente novamente.",
+    "CONFIGURED": "Configurado",
+    "RESET": "Redefinir",
+    "HOW_TO": "Como encontrar?"
   },
   "CAPTAIN_SETTINGS": {
     "TITLE": "Configurações do Capitão",
