@@ -4,6 +4,7 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import {
   ATTRIBUTE_TYPES,
   SYSTEM_CONDITION_FIELDS,
+  SYSTEM_OUTCOME_FIELD,
 } from './constants';
 
 const props = defineProps({
@@ -15,36 +16,37 @@ const emit = defineEmits(['confirm', 'cancel']);
 
 const rule = ref('always');
 const conditionField = ref('');
-const conditionValues = ref([]); // always array internally; serialized to string if single-value
+const conditionValues = ref([]);
 
-// All available condition fields: system fields + LIST/TEXT custom attributes
-const conditionFieldOptions = computed(() => [
-  ...SYSTEM_CONDITION_FIELDS,
-  ...props.allAttributes.filter(a =>
+const systemFields = SYSTEM_CONDITION_FIELDS;
+
+const customFieldOptions = computed(() =>
+  props.allAttributes.filter(a =>
     [ATTRIBUTE_TYPES.LIST, ATTRIBUTE_TYPES.TEXT].includes(a.type)
-  ),
+  )
+);
+
+const allConditionFieldOptions = computed(() => [
+  ...systemFields,
+  ...customFieldOptions.value,
 ]);
 
 const selectedConditionAttr = computed(() =>
-  conditionFieldOptions.value.find(a => a.value === conditionField.value)
+  allConditionFieldOptions.value.find(a => a.value === conditionField.value)
 );
 
-// For LIST and system fields: multi-select checkboxes
-// For TEXT fields: single text input
 const isMultiSelectMode = computed(
   () =>
     selectedConditionAttr.value?.type === ATTRIBUTE_TYPES.LIST ||
     selectedConditionAttr.value?.isSystem
 );
 
-const valueOptions = computed(() => {
-  if (isMultiSelectMode.value) {
-    return selectedConditionAttr.value?.attributeValues || [];
-  }
-  return null;
-});
+const valueOptions = computed(() =>
+  isMultiSelectMode.value
+    ? selectedConditionAttr.value?.attributeValues || []
+    : null
+);
 
-// Reset values when the condition field changes
 watch(conditionField, () => {
   conditionValues.value = [];
 });
@@ -58,15 +60,35 @@ const toggleValue = val => {
 const isValid = computed(() => {
   if (rule.value === 'always') return true;
   if (!conditionField.value) return false;
-  if (isMultiSelectMode.value) return conditionValues.value.length > 0;
   return conditionValues.value.length > 0;
 });
+
+// Visual style per value (for system outcome field)
+const valueStyle = val => {
+  if (conditionField.value !== SYSTEM_OUTCOME_FIELD) return null;
+  if (val === 'ganho') return 'teal';
+  if (val === 'perdido') return 'ruby';
+  return null;
+};
+
+const valueIcon = val => {
+  if (conditionField.value !== SYSTEM_OUTCOME_FIELD) return null;
+  if (val === 'ganho') return 'i-lucide-circle-check';
+  if (val === 'perdido') return 'i-lucide-circle-x';
+  return null;
+};
+
+const valueLabel = val => {
+  if (conditionField.value !== SYSTEM_OUTCOME_FIELD) return val;
+  if (val === 'ganho') return 'Ganho';
+  if (val === 'perdido') return 'Perdido';
+  return val;
+};
 
 const handleConfirm = () => {
   const config = { key: props.attribute.value, rule: rule.value };
   if (rule.value === 'conditional') {
     config.condition_field = conditionField.value;
-    // Store as array for multi-values, string for single text value
     config.condition_value =
       isMultiSelectMode.value && conditionValues.value.length === 1
         ? conditionValues.value[0]
@@ -79,8 +101,9 @@ const handleConfirm = () => {
 </script>
 
 <template>
-  <div class="px-4 py-3 bg-n-solid-1 border-t border-n-weak">
-    <p class="text-body-small text-n-slate-11 mb-3">
+  <div class="px-4 py-4 bg-n-solid-1 border-t border-n-weak flex flex-col gap-4">
+    <!-- Header -->
+    <p class="text-body-small text-n-slate-11">
       {{
         $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONFIGURE_FOR', {
           name: attribute.label,
@@ -89,46 +112,74 @@ const handleConfirm = () => {
     </p>
 
     <!-- Rule selection -->
-    <div class="flex flex-col gap-2 mb-4">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input v-model="rule" type="radio" value="always" />
-        <span class="text-body-para text-n-slate-12">
-          {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.ALWAYS') }}
+    <div class="flex flex-col gap-2">
+      <label
+        class="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+        :class="rule === 'always'
+          ? 'border-n-brand-9 bg-n-brand-3'
+          : 'border-n-weak bg-n-solid-2 hover:bg-n-slate-2'"
+      >
+        <input v-model="rule" type="radio" value="always" class="hidden" />
+        <span
+          class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
+          :class="rule === 'always' ? 'border-n-brand-9' : 'border-n-slate-6'"
+        >
+          <span v-if="rule === 'always'" class="w-2 h-2 rounded-full bg-n-brand-9" />
         </span>
+        <div>
+          <p class="text-body-para font-medium text-n-slate-12">
+            {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.ALWAYS') }}
+          </p>
+          <p class="text-xs text-n-slate-11">Sempre exigido ao resolver</p>
+        </div>
       </label>
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input v-model="rule" type="radio" value="conditional" />
-        <span class="text-body-para text-n-slate-12">
-          {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITIONAL') }}
+
+      <label
+        class="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+        :class="rule === 'conditional'
+          ? 'border-n-brand-9 bg-n-brand-3'
+          : 'border-n-weak bg-n-solid-2 hover:bg-n-slate-2'"
+      >
+        <input v-model="rule" type="radio" value="conditional" class="hidden" />
+        <span
+          class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
+          :class="rule === 'conditional' ? 'border-n-brand-9' : 'border-n-slate-6'"
+        >
+          <span v-if="rule === 'conditional'" class="w-2 h-2 rounded-full bg-n-brand-9" />
         </span>
+        <div>
+          <p class="text-body-para font-medium text-n-slate-12">
+            {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITIONAL') }}
+          </p>
+          <p class="text-xs text-n-slate-11">Exigido apenas quando uma condição for atendida</p>
+        </div>
       </label>
     </div>
 
+    <!-- Condition config -->
     <template v-if="rule === 'conditional'">
-      <div class="flex flex-col gap-2 mb-4">
-        <!-- Condition field selector -->
+      <!-- Field selector -->
+      <div class="flex flex-col gap-1.5">
+        <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Quando o campo</p>
         <select
           v-model="conditionField"
-          class="text-body-para text-n-slate-12 bg-n-solid-2 border border-n-weak rounded px-2 py-1.5 w-full"
+          class="text-body-para text-n-slate-12 bg-n-solid-2 border border-n-weak rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-n-brand-9"
         >
           <option value="" disabled>
             {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.SELECT_FIELD') }}
           </option>
-          <optgroup
-            v-if="conditionFieldOptions.some(a => a.isSystem)"
-            label="Sistema"
-          >
+          <optgroup v-if="systemFields.length" label="— Sistema —">
             <option
-              v-for="attr in conditionFieldOptions.filter(a => a.isSystem)"
+              v-for="attr in systemFields"
               :key="attr.value"
               :value="attr.value"
             >
               {{ attr.label }}
             </option>
           </optgroup>
-          <optgroup label="Atributos personalizados">
+          <optgroup v-if="customFieldOptions.length" label="— Atributos personalizados —">
             <option
-              v-for="attr in conditionFieldOptions.filter(a => !a.isSystem)"
+              v-for="attr in customFieldOptions"
               :key="attr.value"
               :value="attr.value"
             >
@@ -136,36 +187,58 @@ const handleConfirm = () => {
             </option>
           </optgroup>
         </select>
+      </div>
 
-        <!-- Multi-select checkboxes (LIST / system fields) -->
-        <div
-          v-if="conditionField && isMultiSelectMode && valueOptions"
-          class="flex flex-col gap-1.5 px-1"
-        >
-          <p class="text-xs text-n-slate-11 mb-1">
-            Selecione um ou mais valores (OU):
-          </p>
-          <label
+      <!-- Value selection -->
+      <div v-if="conditionField" class="flex flex-col gap-2">
+        <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">
+          For igual a
+          <span v-if="isMultiSelectMode" class="normal-case font-normal">(selecione um ou mais)</span>
+        </p>
+
+        <!-- Styled chips for LIST / system fields -->
+        <div v-if="isMultiSelectMode && valueOptions" class="flex flex-wrap gap-2">
+          <button
             v-for="val in valueOptions"
             :key="val"
-            class="flex items-center gap-2 cursor-pointer"
+            type="button"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-body-small font-medium transition-all"
+            :class="{
+              // Outcome system field — colored
+              'border-n-teal-9 bg-n-teal-3 text-n-teal-11':
+                conditionValues.includes(val) && valueStyle(val) === 'teal',
+              'border-n-teal-5 bg-n-solid-2 text-n-slate-11 hover:border-n-teal-7 hover:bg-n-teal-2':
+                !conditionValues.includes(val) && valueStyle(val) === 'teal',
+              'border-n-ruby-9 bg-n-ruby-3 text-n-ruby-11':
+                conditionValues.includes(val) && valueStyle(val) === 'ruby',
+              'border-n-ruby-5 bg-n-solid-2 text-n-slate-11 hover:border-n-ruby-7 hover:bg-n-ruby-2':
+                !conditionValues.includes(val) && valueStyle(val) === 'ruby',
+              // Generic LIST field
+              'border-n-brand-9 bg-n-brand-3 text-n-brand-11':
+                conditionValues.includes(val) && !valueStyle(val),
+              'border-n-weak bg-n-solid-2 text-n-slate-11 hover:border-n-slate-6 hover:bg-n-slate-2':
+                !conditionValues.includes(val) && !valueStyle(val),
+            }"
+            @click="toggleValue(val)"
           >
-            <input
-              type="checkbox"
-              :checked="conditionValues.includes(val)"
-              class="w-3.5 h-3.5 rounded accent-n-brand-9"
-              @change="toggleValue(val)"
+            <span
+              v-if="valueIcon(val)"
+              :class="[valueIcon(val), 'w-3.5 h-3.5']"
             />
-            <span class="text-body-para text-n-slate-12">{{ val }}</span>
-          </label>
+            <span
+              v-else-if="conditionValues.includes(val)"
+              class="i-lucide-check w-3.5 h-3.5"
+            />
+            {{ valueLabel(val) }}
+          </button>
         </div>
 
-        <!-- Single text input (TEXT fields) -->
+        <!-- Text input for TEXT fields -->
         <input
-          v-else-if="conditionField && !isMultiSelectMode"
+          v-else-if="!isMultiSelectMode"
           :value="conditionValues[0] || ''"
           type="text"
-          class="text-body-para text-n-slate-12 bg-n-solid-2 border border-n-weak rounded px-2 py-1.5 w-full"
+          class="text-body-para text-n-slate-12 bg-n-solid-2 border border-n-weak rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-n-brand-9"
           :placeholder="
             $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITION_VALUE_PLACEHOLDER')
           "
@@ -173,18 +246,25 @@ const handleConfirm = () => {
         />
       </div>
 
-      <!-- Preview of condition -->
-      <p
+      <!-- Summary preview -->
+      <div
         v-if="conditionField && conditionValues.length"
-        class="text-xs text-n-slate-11 mb-3"
+        class="flex items-start gap-2 px-3 py-2 rounded-lg bg-n-slate-2 text-xs text-n-slate-11"
       >
-        Obrigatório se
-        <strong>{{ selectedConditionAttr?.label }}</strong>
-        = {{ Array.isArray(conditionValues) && conditionValues.length > 1 ? conditionValues.join(' OU ') : conditionValues[0] }}
-      </p>
+        <span class="i-lucide-info w-3.5 h-3.5 mt-0.5 shrink-0 text-n-slate-9" />
+        <span>
+          Obrigatório quando
+          <strong class="text-n-slate-12">{{ selectedConditionAttr?.label }}</strong>
+          for
+          <strong class="text-n-slate-12">
+            {{ conditionValues.map(v => valueLabel(v)).join(' ou ') }}
+          </strong>
+        </span>
+      </div>
     </template>
 
-    <div class="flex gap-2 justify-end">
+    <!-- Actions -->
+    <div class="flex gap-2 justify-end pt-1 border-t border-n-weak/50">
       <Button
         sm
         slate
