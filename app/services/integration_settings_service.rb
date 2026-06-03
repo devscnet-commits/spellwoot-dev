@@ -57,6 +57,17 @@ class IntegrationSettingsService
     { imported: env_values.size }
   end
 
+  def self.sync_instances(account_id, provider)
+    case provider
+    when 'uazapi'
+      sync_uazapi_instances(account_id)
+    else
+      { ok: false, message: 'Sincronização não disponível para este provedor.' }
+    end
+  rescue StandardError => e
+    { ok: false, message: e.message }
+  end
+
   def self.test_connection(provider, config)
     case provider
     when 'uazapi'
@@ -163,6 +174,49 @@ class IntegrationSettingsService
     else
       { ok: false, message: "Erro #{response.code}: #{response.message}" }
     end
+  end
+
+  def self.sync_uazapi_instances(account_id)
+    config  = get_config(account_id, 'uazapi')
+    api_url = config['apiUrl'].to_s.chomp('/')
+    token   = config['token']
+
+    return { ok: false, message: 'URL do servidor não configurada.' } if api_url.blank?
+    return { ok: false, message: 'Token não configurado.' }           if token.blank?
+
+    response = HTTParty.get(
+      "#{api_url}/instance",
+      headers: { 'token' => token, 'Accept' => 'application/json' },
+      timeout: 15
+    )
+
+    unless response.success?
+      return { ok: false, message: "Erro #{response.code}: #{response.message}" }
+    end
+
+    instances = Array(response.parsed_response)
+    synced = 0
+
+    instances.each do |inst|
+      instance_name = inst['instanceName'] || inst['name'] || inst['id'].to_s
+      next if instance_name.blank?
+
+      pi = ProviderInstance.find_or_initialize_by(
+        account_id: account_id,
+        provider:   'uazapi',
+        instance_name: instance_name
+      )
+      pi.assign_attributes(
+        instance_id:  (inst['id'] || inst['instanceId']).to_s.presence,
+        phone_number: inst['phone'] || inst['phoneNumber'],
+        status:       inst['status'] || 'unknown',
+        raw_data:     inst
+      )
+      pi.save!
+      synced += 1
+    end
+
+    { ok: true, message: "#{synced} instância(s) sincronizada(s).", count: synced }
   end
 
   def self.load_env(provider)

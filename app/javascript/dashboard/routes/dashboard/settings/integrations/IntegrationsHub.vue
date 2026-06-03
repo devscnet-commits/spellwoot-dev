@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useAlert } from 'dashboard/composables';
 import integrationSettingsAPI from '../../../../api/integrationSettings';
+import providerInstancesAPI from '../../../../api/providerInstances';
 
 const { t } = useI18n();
 const { accountId } = useAccount();
@@ -48,11 +49,10 @@ const PROVIDERS = [
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
     testable: true,
-    syncable: true,
-    multiInstance: true,
+    syncInstances: true,
     fields: [
       { key: 'apiUrl', label: 'URL do servidor', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
-      { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
+      { key: 'token', label: 'Token Administrador', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
     ],
   },
   {
@@ -99,9 +99,12 @@ const state = reactive(
   Object.fromEntries(
     PROVIDERS.map(p => [
       p.key,
-      { open: false, loading: false, saving: false, importing: false, testing: false, syncing: false,
-        testResult: null, syncResult: null, enabled: true,
-        config: {}, sources: {}, reset: {}, dirty: false },
+      {
+        open: false, loading: false, saving: false, importing: false,
+        testing: false, syncing: false, loadingInstances: false,
+        testResult: null, syncResult: null, instances: [],
+        enabled: true, config: {}, sources: {}, reset: {}, dirty: false,
+      },
     ])
   )
 );
@@ -123,10 +126,27 @@ const loadProvider = async providerKey => {
   }
 };
 
+const loadInstances = async providerKey => {
+  const s = state[providerKey];
+  s.loadingInstances = true;
+  try {
+    const { data } = await providerInstancesAPI.list(accountId.value, providerKey);
+    s.instances = data;
+  } catch {
+    s.instances = [];
+  } finally {
+    s.loadingInstances = false;
+  }
+};
+
 const toggleOpen = async providerKey => {
   const s = state[providerKey];
   s.open = !s.open;
-  if (s.open && !s.dirty) await loadProvider(providerKey);
+  if (s.open && !s.dirty) {
+    await loadProvider(providerKey);
+    const provider = PROVIDERS.find(p => p.key === providerKey);
+    if (provider?.syncInstances) loadInstances(providerKey);
+  }
 };
 
 const isSensitive = (field, s) => field.sensitive && s.config[field.key] && !s.reset[field.key];
@@ -169,31 +189,14 @@ const importFromEnv = async providerKey => {
   }
 };
 
-const getInstances = providerKey => {
-  const raw = state[providerKey].config.instances;
-  if (!Array.isArray(raw) || raw.length === 0) {
-    state[providerKey].config.instances = [{ instanceName: '', chatwootInboxId: '' }];
-  }
-  return state[providerKey].config.instances;
-};
-
-const addInstance = providerKey => {
-  getInstances(providerKey).push({ instanceName: '', chatwootInboxId: '' });
-  state[providerKey].dirty = true;
-};
-
-const removeInstance = (providerKey, index) => {
-  getInstances(providerKey).splice(index, 1);
-  state[providerKey].dirty = true;
-};
-
-const syncChatwoot = async providerKey => {
+const syncInstances = async providerKey => {
   const s = state[providerKey];
   s.syncing = true;
   s.syncResult = null;
   try {
-    const { data } = await integrationSettingsAPI.syncChatwoot(accountId.value, providerKey);
-    s.syncResult = { ok: true, message: data.message || 'Integração configurada!', webhookUrl: data.webhook_url };
+    const { data } = await integrationSettingsAPI.syncInstances(accountId.value, providerKey);
+    s.syncResult = { ok: true, message: data.message || 'Instâncias sincronizadas!' };
+    await loadInstances(providerKey);
   } catch (err) {
     const msg = err?.response?.data?.message || 'Falha ao sincronizar. Verifique as configurações.';
     s.syncResult = { ok: false, message: msg };
@@ -342,49 +345,37 @@ const testConnection = async providerKey => {
             />
           </div>
 
-          <!-- Multi-instance connections table -->
-          <div v-if="provider.multiInstance" class="flex flex-col gap-2 pt-2 border-t border-n-weak/50">
+          <!-- Synced instances list -->
+          <div v-if="provider.syncInstances" class="flex flex-col gap-2 pt-2 border-t border-n-weak/50">
             <div class="flex items-center justify-between">
-              <span class="text-body-small font-medium text-n-slate-12">Conexões (instância → inbox)</span>
-              <button
-                class="text-xs text-n-brand-9 hover:text-n-brand-10 flex items-center gap-1"
-                @click="addInstance(provider.key)"
-              >
-                <span class="i-lucide-plus w-3.5 h-3.5" />
-                Adicionar
-              </button>
+              <span class="text-body-small font-medium text-n-slate-12">Instâncias sincronizadas</span>
+              <span v-if="state[provider.key].loadingInstances" class="text-xs text-n-slate-11">Carregando...</span>
             </div>
-            <div class="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-n-slate-11 px-1">
-              <span>Nome da instância</span>
-              <span>ID da Inbox</span>
-              <span />
+            <div v-if="state[provider.key].instances.length === 0 && !state[provider.key].loadingInstances" class="text-xs text-n-slate-11 py-1">
+              Nenhuma instância sincronizada. Clique em "Sincronizar Instâncias" após salvar as credenciais.
             </div>
-            <div
-              v-for="(inst, idx) in getInstances(provider.key)"
-              :key="idx"
-              class="grid grid-cols-[1fr_1fr_auto] gap-2 items-center"
-            >
-              <input
-                v-model="inst.instanceName"
-                type="text"
-                placeholder="nome-da-instancia"
-                class="px-2 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
-                @input="state[provider.key].dirty = true"
-              />
-              <input
-                v-model="inst.chatwootInboxId"
-                type="text"
-                placeholder="Ex: 5"
-                class="px-2 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
-                @input="state[provider.key].dirty = true"
-              />
-              <button
-                class="text-n-ruby-11 hover:text-n-ruby-12 disabled:opacity-30"
-                :disabled="getInstances(provider.key).length === 1"
-                @click="removeInstance(provider.key, idx)"
+            <div v-else class="flex flex-col gap-1">
+              <div class="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-n-slate-11 px-1">
+                <span>Instância</span>
+                <span>Número</span>
+                <span>Status</span>
+              </div>
+              <div
+                v-for="inst in state[provider.key].instances"
+                :key="inst.id"
+                class="grid grid-cols-[1fr_1fr_auto] gap-2 items-center px-1 py-1.5 rounded-lg bg-n-slate-2/50"
               >
-                <span class="i-lucide-trash-2 w-4 h-4" />
-              </button>
+                <span class="text-body-small text-n-slate-12 truncate">{{ inst.instance_name }}</span>
+                <span class="text-body-small text-n-slate-11 font-mono">{{ inst.phone_number || '—' }}</span>
+                <span
+                  :class="[
+                    'text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
+                    inst.status === 'connected' ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-slate-3 text-n-slate-11'
+                  ]"
+                >
+                  {{ inst.status === 'connected' ? 'Conectada' : inst.status }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -440,13 +431,13 @@ const testConnection = async providerKey => {
                 {{ state[provider.key].testing ? 'Testando...' : 'Testar conexão' }}
               </button>
               <button
-                v-if="provider.syncable"
+                v-if="provider.syncInstances"
                 class="text-body-small text-n-teal-11 hover:text-n-teal-12 flex items-center gap-1 disabled:opacity-50 font-medium"
                 :disabled="state[provider.key].syncing"
-                @click="syncChatwoot(provider.key)"
+                @click="syncInstances(provider.key)"
               >
                 <span class="i-lucide-refresh-cw w-3.5 h-3.5" />
-                {{ state[provider.key].syncing ? 'Sincronizando...' : 'Sincronizar com Chatwoot' }}
+                {{ state[provider.key].syncing ? 'Sincronizando...' : 'Sincronizar Instâncias' }}
               </button>
             </div>
             <button

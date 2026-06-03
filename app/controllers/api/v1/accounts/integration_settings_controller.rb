@@ -35,6 +35,12 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
+  def sync_instances
+    result = IntegrationSettingsService.sync_instances(Current.account.id, params[:provider])
+    status = result[:ok] ? :ok : :unprocessable_entity
+    render json: result, status: status
+  end
+
   def sync_chatwoot
     config = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
     result = IntegrationSettingsService.sync_uazapi_chatwoot(config, Current.account, current_user)
