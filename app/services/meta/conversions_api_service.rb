@@ -7,8 +7,10 @@ class Meta::ConversionsApiService
     @event_name = event_name
     @value = value
     @currency = currency || meta_settings.dig('currency') || 'BRL'
-    @pixel_id = ENV.fetch('META_PIXEL_ID', nil)
-    @access_token = ENV.fetch('META_CONVERSIONS_API_TOKEN', nil)
+    meta_config = IntegrationSettingsService.get_config(@conversation.account_id, 'meta')
+    @pixel_id = meta_config['pixelId']
+    @access_token = meta_config['accessToken']
+    @test_event_code = meta_config.fetch('testEventCode', ENV.fetch('META_TEST_EVENT_CODE', nil))
   end
 
   def self.track_lead(conversation)
@@ -98,8 +100,7 @@ class Meta::ConversionsApiService
     event[:custom_data] = { currency: @currency, value: @value.to_f } if @event_name == 'Purchase'
 
     body = { data: [event] }
-    test_code = ENV.fetch('META_TEST_EVENT_CODE', nil)
-    body[:test_event_code] = test_code if test_code.present?
+    body[:test_event_code] = @test_event_code if @test_event_code.present?
     body
   end
 

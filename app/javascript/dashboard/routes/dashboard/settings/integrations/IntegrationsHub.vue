@@ -1,0 +1,304 @@
+<script setup>
+import { ref, reactive } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useAccount } from 'dashboard/composables/useAccount';
+import { useAlert } from 'dashboard/composables';
+import integrationSettingsAPI from '../../../../api/integrationSettings';
+
+const { t } = useI18n();
+const { accountId } = useAccount();
+
+const PROVIDERS = [
+  {
+    key: 'meta',
+    name: 'Meta Conversions API',
+    description: 'Rastreamento de conversões via CAPI para anúncios no Facebook/Instagram.',
+    icon: 'i-lucide-facebook',
+    fields: [
+      { key: 'pixelId', label: 'Pixel ID', sensitive: false, placeholder: '123456789', help: 'https://www.facebook.com/business/help/952192354843755' },
+      { key: 'accessToken', label: 'Access Token da CAPI', sensitive: true, placeholder: 'EAAB...', help: 'https://developers.facebook.com/docs/marketing-api/conversions-api/get-started' },
+      { key: 'testEventCode', label: 'Test Event Code (Opcional)', sensitive: false, placeholder: 'TEST12345', help: null },
+    ],
+  },
+  {
+    key: 'openai',
+    name: 'OpenAI',
+    description: 'Integração com modelos GPT para respostas automáticas.',
+    icon: 'i-lucide-brain',
+    fields: [
+      { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: 'sk-...', help: 'https://platform.openai.com/api-keys' },
+      { key: 'model', label: 'Modelo padrão', sensitive: false, placeholder: 'gpt-4o', help: null },
+    ],
+  },
+  {
+    key: 'evolution_api',
+    name: 'Evolution API',
+    description: 'Integração com Evolution API para WhatsApp.',
+    icon: 'i-lucide-message-square',
+    fields: [
+      { key: 'apiUrl', label: 'URL da API', sensitive: false, placeholder: 'https://evolution.exemplo.com', help: null },
+      { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: '', help: null },
+      { key: 'instance', label: 'Instância padrão', sensitive: false, placeholder: 'minha-instancia', help: null },
+    ],
+  },
+  {
+    key: 'bitrix',
+    name: 'Bitrix24',
+    description: 'Integração com CRM Bitrix24.',
+    icon: 'i-lucide-building-2',
+    fields: [
+      { key: 'webhookUrl', label: 'Webhook URL', sensitive: false, placeholder: 'https://...bitrix24.com/rest/...', help: null },
+      { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: null },
+    ],
+  },
+  {
+    key: 'n8n',
+    name: 'N8N',
+    description: 'Automação de fluxos via N8N.',
+    icon: 'i-lucide-workflow',
+    fields: [
+      { key: 'webhookUrl', label: 'Webhook URL', sensitive: false, placeholder: 'https://n8n.exemplo.com/webhook/...', help: null },
+      { key: 'token', label: 'Token de autenticação', sensitive: true, placeholder: '', help: null },
+    ],
+  },
+  {
+    key: 'google',
+    name: 'Google',
+    description: 'Integração com APIs Google.',
+    icon: 'i-lucide-search',
+    fields: [
+      { key: 'clientId', label: 'Client ID', sensitive: false, placeholder: '', help: null },
+      { key: 'clientSecret', label: 'Client Secret', sensitive: true, placeholder: '', help: null },
+      { key: 'refreshToken', label: 'Refresh Token', sensitive: true, placeholder: '', help: null },
+    ],
+  },
+];
+
+const SOURCE_LABELS = {
+  account: { label: 'Esta conta', color: 'bg-n-teal-3 text-n-teal-11' },
+  global:  { label: 'Global',    color: 'bg-n-blue-3 text-n-blue-11' },
+  env:     { label: 'Servidor',  color: 'bg-n-slate-3 text-n-slate-11' },
+};
+
+// State per provider
+const state = reactive(
+  Object.fromEntries(
+    PROVIDERS.map(p => [
+      p.key,
+      { open: false, loading: false, saving: false, importing: false, enabled: true,
+        config: {}, sources: {}, reset: {}, dirty: false },
+    ])
+  )
+);
+
+const loadProvider = async providerKey => {
+  const s = state[providerKey];
+  s.loading = true;
+  try {
+    const { data } = await integrationSettingsAPI.get(accountId.value, providerKey);
+    s.enabled = data.enabled ?? true;
+    s.config  = { ...data.config };
+    s.sources = data.sources || {};
+    s.reset   = {};
+    s.dirty   = false;
+  } catch {
+    // provider not configured yet — leave empty
+  } finally {
+    s.loading = false;
+  }
+};
+
+const toggleOpen = async providerKey => {
+  const s = state[providerKey];
+  s.open = !s.open;
+  if (s.open && !s.dirty) await loadProvider(providerKey);
+};
+
+const isSensitive = (field, s) => field.sensitive && s.config[field.key] && !s.reset[field.key];
+
+const resetField = (field, s) => {
+  s.reset[field.key] = true;
+  s.config[field.key] = '';
+  s.dirty = true;
+};
+
+const saveProvider = async providerKey => {
+  const s = state[providerKey];
+  s.saving = true;
+  try {
+    await integrationSettingsAPI.update(accountId.value, providerKey, s.config, s.enabled);
+    await loadProvider(providerKey);
+    useAlert(t('INTEGRATIONS_HUB.SAVED'));
+  } catch {
+    useAlert(t('INTEGRATIONS_HUB.ERROR'));
+  } finally {
+    s.saving = false;
+  }
+};
+
+const importFromEnv = async providerKey => {
+  const s = state[providerKey];
+  s.importing = true;
+  try {
+    const { data } = await integrationSettingsAPI.importFromEnv(accountId.value, providerKey);
+    if (data.imported > 0) {
+      await loadProvider(providerKey);
+      useAlert(`${data.imported} variáveis importadas do servidor.`);
+    } else {
+      useAlert('Nenhuma variável de ambiente encontrada para este provedor.');
+    }
+  } catch {
+    useAlert(t('INTEGRATIONS_HUB.ERROR'));
+  } finally {
+    s.importing = false;
+  }
+};
+</script>
+
+<template>
+  <div class="flex flex-col gap-1 p-6 max-w-3xl">
+    <div class="mb-6">
+      <h2 class="text-heading-2 font-semibold text-n-slate-12">
+        {{ t('INTEGRATIONS_HUB.TITLE') }}
+      </h2>
+      <p class="text-body-para text-n-slate-11 mt-1">
+        {{ t('INTEGRATIONS_HUB.DESCRIPTION') }}
+      </p>
+    </div>
+
+    <div
+      v-for="provider in PROVIDERS"
+      :key="provider.key"
+      class="rounded-xl border border-n-weak bg-n-solid-2 overflow-hidden"
+    >
+      <!-- Provider header -->
+      <button
+        class="w-full flex items-center justify-between px-5 py-4 hover:bg-n-slate-2 dark:hover:bg-n-solid-3 transition-colors text-left"
+        @click="toggleOpen(provider.key)"
+      >
+        <div class="flex items-center gap-3">
+          <span :class="[provider.icon, 'w-5 h-5 text-n-slate-9']" />
+          <div>
+            <p class="text-body-para font-medium text-n-slate-12">{{ provider.name }}</p>
+            <p class="text-body-small text-n-slate-11">{{ provider.description }}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span
+            v-if="state[provider.key].sources && Object.keys(state[provider.key].sources).length"
+            class="text-xs px-2 py-0.5 rounded-full bg-n-teal-3 text-n-teal-11"
+          >
+            Configurado
+          </span>
+          <span
+            :class="[
+              'w-4 h-4 transition-transform',
+              state[provider.key].open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down',
+              'text-n-slate-9'
+            ]"
+          />
+        </div>
+      </button>
+
+      <!-- Expanded form -->
+      <div v-if="state[provider.key].open" class="border-t border-n-weak px-5 py-4 flex flex-col gap-4">
+        <!-- Loading -->
+        <div v-if="state[provider.key].loading" class="text-body-small text-n-slate-11 py-2">
+          Carregando...
+        </div>
+
+        <template v-else>
+          <!-- Enabled toggle -->
+          <div class="flex items-center justify-between">
+            <span class="text-body-small font-medium text-n-slate-12">Ativar integração</span>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                v-model="state[provider.key].enabled"
+                type="checkbox"
+                class="w-4 h-4 rounded accent-n-teal-9"
+                @change="state[provider.key].dirty = true"
+              />
+            </label>
+          </div>
+
+          <!-- Fields -->
+          <div
+            v-for="field in provider.fields"
+            :key="field.key"
+            class="flex flex-col gap-1"
+          >
+            <div class="flex items-center justify-between">
+              <label class="text-body-small font-medium text-n-slate-12">{{ field.label }}</label>
+              <div class="flex items-center gap-2">
+                <!-- Source badge -->
+                <span
+                  v-if="state[provider.key].sources[field.key]"
+                  :class="[
+                    'text-xs px-1.5 py-0.5 rounded-full font-medium',
+                    SOURCE_LABELS[state[provider.key].sources[field.key]]?.color
+                  ]"
+                >
+                  {{ SOURCE_LABELS[state[provider.key].sources[field.key]]?.label }}
+                </span>
+                <!-- Reset link for masked sensitive fields -->
+                <button
+                  v-if="isSensitive(field, state[provider.key])"
+                  class="text-xs text-n-ruby-11 hover:underline"
+                  @click="resetField(field, state[provider.key])"
+                >
+                  Redefinir
+                </button>
+                <!-- Help link -->
+                <a
+                  v-if="field.help"
+                  :href="field.help"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-xs text-n-blue-11 hover:underline"
+                >
+                  Como encontrar?
+                </a>
+              </div>
+            </div>
+
+            <!-- Masked display when sensitive and set -->
+            <div
+              v-if="isSensitive(field, state[provider.key])"
+              class="px-3 py-2 rounded-lg bg-n-slate-2 text-n-slate-11 text-body-small font-mono"
+            >
+              {{ state[provider.key].config[field.key] }}
+            </div>
+            <!-- Editable input -->
+            <input
+              v-else
+              v-model="state[provider.key].config[field.key]"
+              :type="field.sensitive ? 'password' : 'text'"
+              :placeholder="field.placeholder"
+              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
+              @input="state[provider.key].dirty = true"
+            />
+          </div>
+
+          <!-- Action buttons -->
+          <div class="flex items-center justify-between pt-2 border-t border-n-weak/50">
+            <button
+              class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
+              :disabled="state[provider.key].importing"
+              @click="importFromEnv(provider.key)"
+            >
+              <span class="i-lucide-download w-3.5 h-3.5" />
+              {{ state[provider.key].importing ? 'Importando...' : 'Importar do servidor' }}
+            </button>
+            <button
+              class="px-4 py-1.5 rounded-lg bg-n-brand-9 text-white text-body-small font-medium hover:bg-n-brand-10 disabled:opacity-50 transition-colors"
+              :disabled="state[provider.key].saving"
+              @click="saveProvider(provider.key)"
+            >
+              {{ state[provider.key].saving ? t('INTEGRATIONS_HUB.SAVING') : t('INTEGRATIONS_HUB.SAVE') }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</template>
