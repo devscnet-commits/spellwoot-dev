@@ -665,10 +665,27 @@
         "DESCRIPTION": "Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Esses valores são enviados automaticamente — protegidos por hash antes do envio.",
         "EMAIL": "E-mail do contato (em)",
         "PHONE": "Telefone do contato (ph)",
-        "NAME": "Primeiro nome do contato (fn)",
+        "FIRST_NAME": "Primeiro nome do contato (fn)",
+        "LAST_NAME": "Sobrenome do contato (ln)",
         "ZIP": "CEP do contato (zp)",
+        "CITY": "Cidade do contato (ct)",
+        "STATE": "Estado do contato (st)",
+        "COUNTRY": "País do contato (country)",
+        "DATE_OF_BIRTH": "Data de nascimento (db)",
+        "GENDER": "Gênero (ge)",
+        "EXTERNAL_ID": "ID externo (external_id)",
         "NOT_MAPPED": "Não mapeado"
       }
+    },
+    "LEADS_REPORT": {
+      "TITLE": "Leads",
+      "DESCRIPTION": "Acompanhe o resultado das suas conversas: ganhas, perdidas e fechadas pela IA.",
+      "LOADING": "Carregando...",
+      "WON": "Ganho",
+      "LOST": "Perdido",
+      "AI_CLOSED": "Fechado pela IA",
+      "TOTAL": "Total",
+      "OF_TOTAL": "do total"
     }
   },
   "CREATE_ACCOUNT": {
