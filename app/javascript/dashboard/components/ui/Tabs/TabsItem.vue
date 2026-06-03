@@ -58,7 +58,7 @@ const onTabClick = event => {
     >
       {{ name }}
       <div
-        v-if="showBadge"
+        v-if="showBadge && getItemCount > 0"
         class="rounded-full h-5 flex items-center justify-center text-xs font-medium my-0 ltr:ml-1 rtl:mr-1 px-1.5 py-0 min-w-[20px]"
         :class="[
           active
