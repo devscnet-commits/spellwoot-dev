@@ -56,6 +56,9 @@ Rails.application.routes.draw do
           resource :bulk_actions, only: [:create]
           resources :agents, only: [:index, :create, :update, :destroy] do
             post :bulk_create, on: :collection
+            resource :schedule, only: [:show, :update, :destroy],
+                                controller: 'agent_schedules',
+                                param: :agent_id
           end
           namespace :captain do
             resource :preferences, only: [:show, :update]
@@ -484,6 +487,7 @@ Rails.application.routes.draw do
               get :outgoing_messages_count
               get :leads_summary
               get :marketing_summary
+              get :schedule_report
             end
           end
           resource :year_in_review, only: [:show]
