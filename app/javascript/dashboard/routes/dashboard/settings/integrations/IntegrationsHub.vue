@@ -151,6 +151,9 @@ const toggleOpen = async providerKey => {
 
 const isSensitive = (field, s) => field.sensitive && s.config[field.key] && !s.reset[field.key];
 
+const showToken = ref({});
+const toggleShowToken = key => { showToken.value[key] = !showToken.value[key]; };
+
 const resetField = (field, s) => {
   s.reset[field.key] = true;
   s.config[field.key] = '';
@@ -330,15 +333,40 @@ const testConnection = async providerKey => {
             <!-- Masked display when sensitive and set -->
             <div
               v-if="isSensitive(field, state[provider.key])"
-              class="px-3 py-2 rounded-lg bg-n-slate-2 text-n-slate-11 text-body-small font-mono"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-n-slate-2 text-n-slate-11 text-body-small font-mono"
             >
-              {{ state[provider.key].config[field.key] }}
+              <span class="flex-1 tracking-widest">
+                {{ showToken[`${provider.key}.${field.key}`] ? state[provider.key].config[field.key] : '••••••••••••' }}
+              </span>
+              <button
+                type="button"
+                class="shrink-0 text-n-slate-9 hover:text-n-slate-12 transition-colors"
+                @click="toggleShowToken(`${provider.key}.${field.key}`)"
+              >
+                <span :class="showToken[`${provider.key}.${field.key}`] ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="w-4 h-4" />
+              </button>
             </div>
             <!-- Editable input -->
+            <div v-else-if="field.sensitive" class="relative">
+              <input
+                v-model="state[provider.key].config[field.key]"
+                :type="showToken[`${provider.key}.${field.key}_edit`] ? 'text' : 'password'"
+                :placeholder="field.placeholder"
+                class="w-full px-3 py-2 pr-10 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
+                @input="state[provider.key].dirty = true"
+              />
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-n-slate-9 hover:text-n-slate-12 transition-colors"
+                @click="toggleShowToken(`${provider.key}.${field.key}_edit`)"
+              >
+                <span :class="showToken[`${provider.key}.${field.key}_edit`] ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="w-4 h-4" />
+              </button>
+            </div>
             <input
               v-else
               v-model="state[provider.key].config[field.key]"
-              :type="field.sensitive ? 'password' : 'text'"
+              type="text"
               :placeholder="field.placeholder"
               class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
               @input="state[provider.key].dirty = true"
