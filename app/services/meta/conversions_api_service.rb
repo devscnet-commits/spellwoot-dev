@@ -68,11 +68,6 @@ class Meta::ConversionsApiService
     @conversation.contact&.name&.split&.first
   end
 
-  def contact_last_name
-    parts = @conversation.contact&.name&.split
-    parts&.length.to_i > 1 ? parts[1..].join(' ') : nil
-  end
-
   def meta_settings
     @account.settings&.dig('meta_conversion_settings') || {}
   end
@@ -83,7 +78,7 @@ class Meta::ConversionsApiService
     Digest::SHA256.hexdigest(value.to_s.downcase.strip)
   end
 
-  AUTO_CONTACT_FIELDS = %w[fn ln ph].freeze
+  AUTO_CONTACT_FIELDS = %w[fn ph].freeze
 
   def enrichment_user_data
     fields = (meta_settings.dig('enrichment_fields') || {}).reject { |k, _| AUTO_CONTACT_FIELDS.include?(k.to_s) }
@@ -99,7 +94,6 @@ class Meta::ConversionsApiService
       ctwa_clid: ctwa_clid,
       ph: contact_phone.present? ? [hashed(contact_phone)] : nil,
       fn: contact_first_name.present? ? [hashed(contact_first_name)] : nil,
-      ln: contact_last_name.present? ? [hashed(contact_last_name)] : nil,
     }
     user_data = enrichment_user_data.merge(auto_data).compact
 
