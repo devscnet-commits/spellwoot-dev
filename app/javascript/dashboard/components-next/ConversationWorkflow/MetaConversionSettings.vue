@@ -51,6 +51,26 @@ const allAttributeOptions = computed(() =>
   }))
 );
 
+const TEXT_LIKE = [ATTRIBUTE_TYPES.TEXT, ATTRIBUTE_TYPES.LINK];
+const ENRICHMENT_FIELD_TYPES = {
+  em: TEXT_LIKE,
+  zp: [...TEXT_LIKE, ATTRIBUTE_TYPES.NUMBER],
+  ct: TEXT_LIKE,
+  st: TEXT_LIKE,
+  country: TEXT_LIKE,
+  db: [ATTRIBUTE_TYPES.DATE, ...TEXT_LIKE],
+  ge: [ATTRIBUTE_TYPES.LIST, ...TEXT_LIKE],
+  external_id: [...TEXT_LIKE, ATTRIBUTE_TYPES.NUMBER],
+};
+
+function attributeOptionsFor(metaKey) {
+  const allowed = ENRICHMENT_FIELD_TYPES[metaKey];
+  if (!allowed) return allAttributeOptions.value;
+  return (conversationAttributes.value || [])
+    .filter(a => allowed.includes(a.attributeDisplayType))
+    .map(a => ({ value: a.attributeKey, label: a.attributeDisplayName }));
+}
+
 const winStatusValues = computed(() => {
   const attr = listAttributes.value.find(a => a.value === winStatusField.value);
   return attr?.attributeValues || [];
@@ -381,12 +401,11 @@ const handleSave = async () => {
         <!-- Auto fields (read-only) -->
         <div class="flex flex-col gap-2">
           <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Enviados automaticamente do contato</p>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-2 gap-2">
             <div
               v-for="item in [
                 { label: 'Telefone (ph)', icon: 'i-lucide-phone' },
-                { label: 'Primeiro nome (fn)', icon: 'i-lucide-user' },
-                { label: 'Sobrenome (ln)', icon: 'i-lucide-user' },
+                { label: 'Nome do contato (fn)', icon: 'i-lucide-user' },
               ]"
               :key="item.label"
               class="flex items-center gap-2 px-3 py-2 rounded-lg bg-n-teal-2 border border-n-teal-4"
@@ -430,7 +449,7 @@ const handleSave = async () => {
                   }}
                 </option>
                 <option
-                  v-for="attr in allAttributeOptions"
+                  v-for="attr in attributeOptionsFor(metaKey)"
                   :key="attr.value"
                   :value="attr.value"
                 >
