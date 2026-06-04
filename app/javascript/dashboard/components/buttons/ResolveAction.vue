@@ -12,6 +12,10 @@ import {
   CMD_REOPEN_CONVERSATION,
   CMD_RESOLVE_CONVERSATION,
 } from 'dashboard/helper/commandbar/events';
+import {
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+} from 'dashboard/components-next/ConversationWorkflow/constants';
 
 import ButtonGroup from 'dashboard/components-next/buttonGroup/ButtonGroup.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
@@ -119,7 +123,11 @@ const onCmdResolveConversation = () => {
 
   // Outcome set → check required attributes then resolve
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
-  const { hasMissing } = checkMissingAttributes(currentCustomAttributes);
+  const outcome = currentChat.value.additional_attributes?.outcome;
+  const systemContext = outcome
+    ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
+    : {};
+  const { hasMissing } = checkMissingAttributes(currentCustomAttributes, systemContext);
 
   if (hasMissing) {
     resolveAttributesModalRef.value?.open(

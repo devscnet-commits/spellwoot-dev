@@ -30,6 +30,10 @@ import TeleportWithDirection from 'dashboard/components-next/TeleportWithDirecti
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 import IntersectionObserver from 'dashboard/components/IntersectionObserver.vue';
 import ConversationResolveAttributesModal from 'dashboard/components-next/ConversationWorkflow/ConversationResolveAttributesModal.vue';
+import {
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+} from 'dashboard/components-next/ConversationWorkflow/constants';
 
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useAlert } from 'dashboard/composables';
@@ -810,8 +814,13 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   // Check for required attributes before resolving
   const conversation = getConversationById.value(conversationId);
   const currentCustomAttributes = conversation?.custom_attributes || {};
+  const outcome = conversation?.additional_attributes?.outcome;
+  const systemContext = outcome
+    ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
+    : {};
   const { hasMissing, missing } = checkMissingAttributes(
-    currentCustomAttributes
+    currentCustomAttributes,
+    systemContext
   );
 
   if (hasMissing) {
