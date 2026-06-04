@@ -82,7 +82,6 @@ const formattedAllCount = computed(() => formatNumber(allCount.value));
           <div
             id="saveFilterTeleportTarget"
             class="absolute z-50 mt-2"
-            class=""
           />
         </div>
         <NextButton
@@ -108,7 +107,6 @@ const formattedAllCount = computed(() => formatNumber(allCount.value));
           <div
             id="conversationFilterTeleportTarget"
             class="absolute z-50 mt-2"
-            class=""
           />
         </div>
         <NextButton
