@@ -122,9 +122,9 @@ const handleConfirm = () => {
         <input v-model="rule" type="radio" value="always" class="hidden" />
         <span
           class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
-          :class="rule === 'always' ? 'border-n-brand-9' : 'border-n-slate-6'"
+          :class="rule === 'always' ? 'border-n-brand-9 bg-n-brand-9' : 'border-n-slate-6'"
         >
-          <span v-if="rule === 'always'" class="w-2 h-2 rounded-full bg-n-brand-9" />
+          <span v-if="rule === 'always'" class="w-2 h-2 rounded-full bg-white" />
         </span>
         <div>
           <p class="text-body-para font-medium text-n-slate-12">
@@ -143,9 +143,9 @@ const handleConfirm = () => {
         <input v-model="rule" type="radio" value="conditional" class="hidden" />
         <span
           class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
-          :class="rule === 'conditional' ? 'border-n-brand-9' : 'border-n-slate-6'"
+          :class="rule === 'conditional' ? 'border-n-brand-9 bg-n-brand-9' : 'border-n-slate-6'"
         >
-          <span v-if="rule === 'conditional'" class="w-2 h-2 rounded-full bg-n-brand-9" />
+          <span v-if="rule === 'conditional'" class="w-2 h-2 rounded-full bg-white" />
         </span>
         <div>
           <p class="text-body-para font-medium text-n-slate-12">
