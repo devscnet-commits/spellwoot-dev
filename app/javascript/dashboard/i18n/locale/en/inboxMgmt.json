@@ -969,7 +969,8 @@
         "VALIDATION_ERROR": "O horário de início deve ser anterior ao de encerramento.",
         "CHOOSE": "Escolher"
       },
-      "ALL_DAY": "O dia todo"
+      "ALL_DAY": "O dia todo",
+      "LUNCH_BREAK": "Horário de almoço"
     },
     "IMAP": {
       "TITLE": "IMAP",
