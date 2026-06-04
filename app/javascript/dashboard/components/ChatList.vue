@@ -964,7 +964,7 @@ watch(conversationFilters, (newVal, oldVal) => {
     :style="!isOnExpandedLayout && panelWidth ? { width: panelWidth + 'px' } : {}"
   >
     <div
-      v-if="!isOnExpandedLayout"
+      v-if="!isOnExpandedLayout && showConversationList"
       class="absolute top-0 right-0 z-10 w-1 h-full cursor-col-resize hover:bg-n-brand/40 active:bg-n-brand/60 transition-colors"
       :class="{ 'bg-n-brand/60': isResizing }"
       @mousedown.prevent="startResize"
@@ -975,7 +975,6 @@ watch(conversationFilters, (newVal, oldVal) => {
       :has-applied-filters="hasAppliedFilters"
       :has-active-folders="hasActiveFolders"
       :active-status="activeStatus"
-      :is-on-expanded-layout="isOnExpandedLayout"
       :conversation-stats="conversationStats"
       :is-list-loading="chatListLoading && !conversationList.length"
       @add-folders="onClickOpenAddFoldersModal"
