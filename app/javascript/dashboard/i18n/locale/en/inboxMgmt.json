@@ -952,22 +952,24 @@
       }
     },
     "BUSINESS_HOURS": {
-      "TITLE": "Set your availability",
-      "SUBTITLE": "Set your availability on your livechat widget",
-      "WEEKLY_TITLE": "Set your weekly hours",
-      "TIMEZONE_LABEL": "Select timezone",
-      "UPDATE": "Update business hours settings",
-      "TOGGLE_AVAILABILITY": "Enable business availability for this inbox",
-      "UNAVAILABLE_MESSAGE_LABEL": "Unavailable message for visitors",
-      "TOGGLE_HELP": "Enabling business availability will show the available hours on live chat widget even if all the agents are offline. Outside available hours visitors can be warned with a message and a pre-chat form.",
+      "TITLE": "Defina sua disponibilidade",
+      "SUBTITLE": "Configure os horários de atendimento desta caixa",
+      "WEEKLY_TITLE": "Definir horas semanais",
+      "TIMEZONE_LABEL": "Selecionar fuso horário",
+      "UPDATE": "Atualizar configurações do horário comercial",
+      "TOGGLE_AVAILABILITY": "Ativar horário comercial para esta caixa",
+      "UNAVAILABLE_MESSAGE_LABEL": "Mensagem para visitantes fora do horário",
+      "TOGGLE_HELP": "Ao ativar, os horários de atendimento serão exibidos no widget e visitantes fora do horário receberão uma mensagem de aviso.",
       "DAY": {
+        "DAY": "Dia",
+        "AVAILABILITY": "Disponibilidade",
         "ENABLE": "Enable availability for this day",
-        "UNAVAILABLE": "Unavailable",
-        "HOURS": "hours",
-        "VALIDATION_ERROR": "Starting time should be before closing time.",
-        "CHOOSE": "Choose"
+        "UNAVAILABLE": "Indisponível",
+        "HOURS": "horas",
+        "VALIDATION_ERROR": "O horário de início deve ser anterior ao de encerramento.",
+        "CHOOSE": "Escolher"
       },
-      "ALL_DAY": "All-Day"
+      "ALL_DAY": "O dia todo"
     },
     "IMAP": {
       "TITLE": "IMAP",
