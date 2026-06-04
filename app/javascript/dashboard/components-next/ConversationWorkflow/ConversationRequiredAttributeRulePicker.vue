@@ -112,20 +112,9 @@ const handleConfirm = () => {
     </p>
 
     <!-- Rule selection -->
-    <div class="flex flex-col gap-2">
-      <label
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
-        :class="rule === 'always'
-          ? 'border-n-brand-9 bg-n-brand-3'
-          : 'border-n-weak bg-n-solid-2 hover:bg-n-slate-2'"
-      >
-        <input v-model="rule" type="radio" value="always" class="hidden" />
-        <span
-          class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
-          :class="rule === 'always' ? 'border-n-brand-9 bg-n-brand-9' : 'border-n-slate-6'"
-        >
-          <span v-if="rule === 'always'" class="w-2 h-2 rounded-full bg-white" />
-        </span>
+    <div class="flex flex-col gap-3">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input v-model="rule" type="radio" value="always" class="mt-0.5" />
         <div>
           <p class="text-body-para font-medium text-n-slate-12">
             {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.ALWAYS') }}
@@ -134,19 +123,8 @@ const handleConfirm = () => {
         </div>
       </label>
 
-      <label
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
-        :class="rule === 'conditional'
-          ? 'border-n-brand-9 bg-n-brand-3'
-          : 'border-n-weak bg-n-solid-2 hover:bg-n-slate-2'"
-      >
-        <input v-model="rule" type="radio" value="conditional" class="hidden" />
-        <span
-          class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
-          :class="rule === 'conditional' ? 'border-n-brand-9 bg-n-brand-9' : 'border-n-slate-6'"
-        >
-          <span v-if="rule === 'conditional'" class="w-2 h-2 rounded-full bg-white" />
-        </span>
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input v-model="rule" type="radio" value="conditional" class="mt-0.5" />
         <div>
           <p class="text-body-para font-medium text-n-slate-12">
             {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITIONAL') }}
