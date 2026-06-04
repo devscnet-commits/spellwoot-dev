@@ -31,7 +31,8 @@ const { isEnterprise } = useConfig();
 
 const selectedAgentIds = ref([]);
 const agentEligibility = ref({});
-const agentSearch = ref('');
+const addSearch = ref('');
+const showAddDropdown = ref(false);
 const isAgentListUpdating = ref(false);
 const enableAutoAssignment = ref(false);
 const maxAssignmentLimit = ref(null);
@@ -46,30 +47,45 @@ const isLinkingPolicy = ref(false);
 
 const agentList = computed(() => store.getters['agents/getAgents']);
 
-const filteredAgents = computed(() => {
-  const q = agentSearch.value.toLowerCase();
-  if (!q) return agentList.value;
-  return agentList.value.filter(a => a.name.toLowerCase().includes(q));
+// Agents currently in the inbox (in order they were added)
+const memberAgents = computed(() =>
+  selectedAgentIds.value
+    .map(id => agentList.value.find(a => a.id === id))
+    .filter(Boolean)
+);
+
+// Agents NOT yet in inbox, filtered by search
+const addableAgents = computed(() => {
+  const q = addSearch.value.toLowerCase();
+  return agentList.value.filter(
+    a =>
+      !selectedAgentIds.value.includes(a.id) &&
+      (!q || a.name.toLowerCase().includes(q))
+  );
 });
 
-const toggleAgent = agentId => {
-  if (selectedAgentIds.value.includes(agentId)) {
-    selectedAgentIds.value = selectedAgentIds.value.filter(id => id !== agentId);
-    const updated = { ...agentEligibility.value };
-    delete updated[agentId];
-    agentEligibility.value = updated;
-  } else {
-    selectedAgentIds.value = [...selectedAgentIds.value, agentId];
-    agentEligibility.value = { ...agentEligibility.value, [agentId]: true };
-  }
+const addAgent = agent => {
+  selectedAgentIds.value = [...selectedAgentIds.value, agent.id];
+  agentEligibility.value = { ...agentEligibility.value, [agent.id]: true };
+  addSearch.value = '';
+  showAddDropdown.value = false;
+};
+
+const removeAgent = agentId => {
+  selectedAgentIds.value = selectedAgentIds.value.filter(id => id !== agentId);
+  const updated = { ...agentEligibility.value };
+  delete updated[agentId];
+  agentEligibility.value = updated;
 };
 
 const toggleEligibility = agentId => {
   agentEligibility.value = {
     ...agentEligibility.value,
-    [agentId]: !(agentEligibility.value[agentId] !== false),
+    [agentId]: !agentEligibility.value[agentId],
   };
 };
+
+const closeAddDropdown = () => { showAddDropdown.value = false; };
 
 const isFeatureEnabled = feature => {
   const accountId = Number(route.params.accountId);
@@ -376,81 +392,102 @@ onMounted(() => {
       class="[&>div]:!items-start"
     >
       <div class="flex flex-col gap-2">
-        <!-- Search -->
-        <div class="relative">
-          <span
-            class="absolute left-2.5 top-1/2 -translate-y-1/2 i-lucide-search text-n-slate-9 text-sm pointer-events-none"
-          />
-          <input
-            v-model="agentSearch"
-            type="text"
-            placeholder="Buscar agente..."
-            class="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-n-weak bg-n-solid-2 text-n-slate-12 placeholder:text-n-slate-9 focus:outline-none focus:border-n-brand-8"
-          />
+        <!-- Add agent row -->
+        <div
+          v-on-click-outside="closeAddDropdown"
+          class="relative"
+        >
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <span class="absolute left-2.5 top-1/2 -translate-y-1/2 i-lucide-search text-n-slate-9 text-sm pointer-events-none" />
+              <input
+                v-model="addSearch"
+                type="text"
+                placeholder="Buscar e adicionar agente..."
+                class="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-n-weak bg-n-solid-2 text-n-slate-12 placeholder:text-n-slate-9 focus:outline-none focus:border-n-brand-8"
+                @focus="showAddDropdown = true"
+              />
+            </div>
+          </div>
+
+          <!-- Dropdown list of addable agents -->
+          <div
+            v-if="showAddDropdown && addableAgents.length > 0"
+            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg max-h-48 overflow-y-auto"
+          >
+            <button
+              v-for="agent in addableAgents"
+              :key="agent.id"
+              type="button"
+              class="w-full flex items-center gap-2 px-3 py-2 text-sm text-n-slate-12 hover:bg-n-slate-2 text-left"
+              @click="addAgent(agent)"
+            >
+              <span class="i-lucide-user-plus text-n-slate-9 shrink-0" />
+              {{ agent.name }}
+            </button>
+          </div>
+          <div
+            v-else-if="showAddDropdown && addSearch && addableAgents.length === 0"
+            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg px-3 py-3 text-sm text-n-slate-10"
+          >
+            Nenhum agente encontrado
+          </div>
         </div>
 
-        <!-- Agent table -->
+        <!-- Members table — only current inbox members -->
         <div class="rounded-lg border border-n-weak overflow-hidden">
           <div class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak">
             <span class="text-xs font-medium text-n-slate-11 flex-1">Agente</span>
-            <span class="text-xs font-medium text-n-slate-11 w-36 text-right">
-              Recebe atribuições
-            </span>
+            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">Recebe atribuições</span>
+            <span class="w-6" />
           </div>
           <div class="max-h-64 overflow-y-auto">
             <div
-              v-for="agent in filteredAgents"
+              v-for="agent in memberAgents"
               :key="agent.id"
-              class="flex items-center px-3 py-2.5 border-b border-n-weak/50 last:border-0 hover:bg-n-slate-1 transition-colors cursor-pointer"
-              @click.self="toggleAgent(agent.id)"
+              class="flex items-center px-3 py-2.5 border-b border-n-weak/50 last:border-0 hover:bg-n-slate-1 transition-colors"
             >
-              <input
-                type="checkbox"
-                :checked="selectedAgentIds.includes(agent.id)"
-                class="mr-3 rounded shrink-0 cursor-pointer"
-                @change="toggleAgent(agent.id)"
-              />
-              <span
-                class="text-sm text-n-slate-12 flex-1 cursor-pointer select-none"
-                @click="toggleAgent(agent.id)"
-              >
-                {{ agent.name }}
-              </span>
+              <span class="text-sm text-n-slate-12 flex-1">{{ agent.name }}</span>
+
+              <!-- Eligibility toggle -->
+              <div class="w-36 flex justify-center">
+                <button
+                  role="switch"
+                  type="button"
+                  :aria-checked="agentEligibility[agent.id]"
+                  class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none"
+                  :class="agentEligibility[agent.id] ? 'bg-n-brand-9' : 'bg-n-slate-5'"
+                  @click="toggleEligibility(agent.id)"
+                >
+                  <span
+                    class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform"
+                    :class="agentEligibility[agent.id] ? 'translate-x-4' : 'translate-x-1'"
+                  />
+                </button>
+              </div>
+
+              <!-- Remove button -->
               <button
-                role="switch"
                 type="button"
-                :disabled="!selectedAgentIds.includes(agent.id)"
-                :aria-checked="selectedAgentIds.includes(agent.id) && agentEligibility[agent.id] !== false"
-                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-30"
-                :class="
-                  selectedAgentIds.includes(agent.id) && agentEligibility[agent.id] !== false
-                    ? 'bg-n-brand-9'
-                    : 'bg-n-slate-5'
-                "
-                @click.stop="selectedAgentIds.includes(agent.id) && toggleEligibility(agent.id)"
+                class="w-6 flex items-center justify-center text-n-slate-9 hover:text-n-ruby-9 transition-colors"
+                @click="removeAgent(agent.id)"
               >
-                <span
-                  class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform"
-                  :class="
-                    selectedAgentIds.includes(agent.id) && agentEligibility[agent.id] !== false
-                      ? 'translate-x-4'
-                      : 'translate-x-1'
-                  "
-                />
+                <span class="i-lucide-x text-sm" />
               </button>
             </div>
+
             <div
-              v-if="filteredAgents.length === 0"
-              class="px-3 py-4 text-sm text-n-slate-10 text-center"
+              v-if="memberAgents.length === 0"
+              class="px-3 py-5 text-sm text-n-slate-10 text-center"
             >
-              Nenhum agente encontrado
+              Nenhum agente adicionado. Use o campo acima para adicionar.
             </div>
           </div>
         </div>
 
         <p class="text-xs text-n-slate-10">
-          {{ selectedAgentIds.length }}
-          {{ selectedAgentIds.length === 1 ? 'agente selecionado' : 'agentes selecionados' }}
+          {{ memberAgents.length }}
+          {{ memberAgents.length === 1 ? 'agente nesta caixa' : 'agentes nesta caixa' }}
         </p>
       </div>
 
