@@ -49,6 +49,9 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     @inbox.update!(inbox_params)
     update_inbox_working_hours
     update_channel if channel_update_required?
+  rescue StandardError => e
+    Rails.logger.error "[InboxUpdate] inbox_id=#{@inbox&.id} #{e.class}: #{e.message}\n#{e.backtrace.first(15).join("\n")}"
+    render json: { error: e.message, type: e.class.name }, status: :internal_server_error
   end
 
   def agent_bot

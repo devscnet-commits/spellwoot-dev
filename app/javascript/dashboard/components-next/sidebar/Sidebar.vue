@@ -513,6 +513,11 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.REPORTS_MARKETING'),
           to: accountScopedRoute('marketing_reports'),
         },
+        {
+          name: 'Reports Schedule',
+          label: t('SIDEBAR.REPORTS_SCHEDULE'),
+          to: accountScopedRoute('schedule_reports'),
+        },
       ],
     },
     {

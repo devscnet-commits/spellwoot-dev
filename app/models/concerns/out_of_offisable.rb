@@ -34,7 +34,12 @@ module OutOfOffisable
   def update_working_hours(params)
     ActiveRecord::Base.transaction do
       params.each do |working_hour|
-        working_hours.find_by(day_of_week: working_hour['day_of_week']).update(working_hour.slice(*OFFISABLE_ATTRS))
+        record = working_hours.find_by(day_of_week: working_hour['day_of_week'])
+        if record
+          record.update(working_hour.slice(*OFFISABLE_ATTRS))
+        else
+          Rails.logger.warn "[WorkingHours] No record found for inbox #{id}, day_of_week=#{working_hour['day_of_week']}"
+        end
       end
     end
   end

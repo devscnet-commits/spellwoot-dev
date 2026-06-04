@@ -223,6 +223,14 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     }
   end
 
+  def schedule_report
+    render json: {
+      by_hour:          conversations_by_hour,
+      response_by_hour: first_response_by_hour,
+      agent_by_hour:    agent_activity_by_hour
+    }
+  end
+
   private
 
   def build_leads_scope
@@ -344,5 +352,51 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     reopen_rate = total.positive? ? (reopened.to_f / total * 100).round(1) : 0.0
     extra.merge(total:, won:, lost:, open:, ai_closed:, pending:, attended:, revenue:,
                 conversion_rate: rate, reopened:, reopen_rate:)
+  end
+
+  # ── Schedule report helpers ─────────────────────────────────────────────────
+
+  def schedule_scope
+    tz_offset = (params[:timezone_offset] || 0).to_f
+    tz = ActiveSupport::TimeZone[tz_offset] || Time.zone
+    scope = Current.account.conversations
+    scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
+    scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
+    scope = scope.where(inbox_id: params[:inbox_id])   if params[:inbox_id].present?
+    scope = scope.where(team_id: params[:team_id])     if params[:team_id].present?
+    scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
+    [scope, tz]
+  end
+
+  def conversations_by_hour
+    scope, tz = schedule_scope
+    scope
+      .group("EXTRACT(HOUR FROM conversations.created_at AT TIME ZONE '#{tz.tzinfo.name}')::int")
+      .order(Arel.sql("1"))
+      .count
+      .map { |hour, count| { hour: hour, total: count } }
+  end
+
+  def first_response_by_hour
+    scope, tz = schedule_scope
+    scope
+      .joins("JOIN reporting_events re ON re.conversation_id = conversations.id AND re.name = 'first_response'")
+      .group("EXTRACT(HOUR FROM conversations.created_at AT TIME ZONE '#{tz.tzinfo.name}')::int")
+      .order(Arel.sql("1"))
+      .average('re.value')
+      .map { |hour, avg| { hour: hour, avg_seconds: avg&.round(0).to_i } }
+  end
+
+  def agent_activity_by_hour
+    scope, tz = schedule_scope
+    scope
+      .joins('LEFT JOIN users ON users.id = conversations.assignee_id')
+      .where('conversations.assignee_id IS NOT NULL')
+      .group("users.id, users.name, EXTRACT(HOUR FROM conversations.created_at AT TIME ZONE '#{tz.tzinfo.name}')::int")
+      .order(Arel.sql("1, 2, 3"))
+      .count
+      .map do |(user_id, name, hour), count|
+        { agent_id: user_id, agent: name, hour: hour, total: count }
+      end
   end
 end
