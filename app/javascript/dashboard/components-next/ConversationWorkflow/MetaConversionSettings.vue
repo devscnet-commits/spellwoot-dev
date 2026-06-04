@@ -24,7 +24,7 @@ const lossValue = ref('');
 const valueField = ref('');
 const currency = ref('BRL');
 const enrichmentFields = reactive({
-  em: '', ph: '', fn: '', ln: '', zp: '', ct: '', st: '', country: '', db: '', ge: '', external_id: '',
+  em: '', zp: '', ct: '', st: '', country: '', db: '', ge: '', external_id: '',
 });
 
 // Attribute option lists
@@ -69,9 +69,6 @@ watch(
     valueField.value = s.value_field ?? '';
     currency.value = s.currency ?? 'BRL';
     enrichmentFields.em = s.enrichment_fields?.em ?? '';
-    enrichmentFields.ph = s.enrichment_fields?.ph ?? '';
-    enrichmentFields.fn = s.enrichment_fields?.fn ?? '';
-    enrichmentFields.ln = s.enrichment_fields?.ln ?? '';
     enrichmentFields.zp = s.enrichment_fields?.zp ?? '';
     enrichmentFields.ct = s.enrichment_fields?.ct ?? '';
     enrichmentFields.st = s.enrichment_fields?.st ?? '';
@@ -371,58 +368,76 @@ const handleSave = async () => {
       </div>
 
       <!-- Enrichment fields -->
-      <div class="px-5 py-4 flex flex-col gap-3">
+      <div class="px-5 py-4 flex flex-col gap-4">
         <div>
           <p class="text-body-para font-medium text-n-slate-12 mb-0">
             {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.TITLE') }}
           </p>
           <p class="text-body-small text-n-slate-11 mb-0">
-            {{
-              $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.DESCRIPTION')
-            }}
+            Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Todos os valores são protegidos por hash antes do envio.
           </p>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div
-            v-for="(label, metaKey) in {
-              em: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EMAIL'),
-              ph: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.PHONE'),
-              fn: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.FIRST_NAME'),
-              ln: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.LAST_NAME'),
-              zp: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.ZIP'),
-              ct: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.CITY'),
-              st: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.STATE'),
-              country: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.COUNTRY'),
-              db: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.DATE_OF_BIRTH'),
-              ge: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.GENDER'),
-              external_id: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EXTERNAL_ID'),
-            }"
-            :key="metaKey"
-            class="flex flex-col gap-1"
-          >
-            <label class="text-body-small font-medium text-n-slate-12">
-              {{ label }}
-            </label>
-            <select
-              v-model="enrichmentFields[metaKey]"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
+        <!-- Auto fields (read-only) -->
+        <div class="flex flex-col gap-2">
+          <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Enviados automaticamente do contato</p>
+          <div class="grid grid-cols-3 gap-2">
+            <div
+              v-for="item in [
+                { label: 'Telefone (ph)', icon: 'i-lucide-phone' },
+                { label: 'Primeiro nome (fn)', icon: 'i-lucide-user' },
+                { label: 'Sobrenome (ln)', icon: 'i-lucide-user' },
+              ]"
+              :key="item.label"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-n-teal-2 border border-n-teal-4"
             >
-              <option value="">
-                {{
-                  $t(
-                    'CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.NOT_MAPPED'
-                  )
-                }}
-              </option>
-              <option
-                v-for="attr in allAttributeOptions"
-                :key="attr.value"
-                :value="attr.value"
+              <span :class="[item.icon, 'w-3.5 h-3.5 text-n-teal-11 shrink-0']" />
+              <span class="text-xs text-n-teal-11 font-medium">{{ item.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Configurable fields -->
+        <div class="flex flex-col gap-2">
+          <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Dados adicionais (opcional)</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div
+              v-for="(label, metaKey) in {
+                em: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EMAIL'),
+                zp: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.ZIP'),
+                ct: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.CITY'),
+                st: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.STATE'),
+                country: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.COUNTRY'),
+                db: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.DATE_OF_BIRTH'),
+                ge: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.GENDER'),
+                external_id: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EXTERNAL_ID'),
+              }"
+              :key="metaKey"
+              class="flex flex-col gap-1"
+            >
+              <label class="text-body-small font-medium text-n-slate-12">
+                {{ label }}
+              </label>
+              <select
+                v-model="enrichmentFields[metaKey]"
+                class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
               >
-                {{ attr.label }}
-              </option>
-            </select>
+                <option value="">
+                  {{
+                    $t(
+                      'CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.NOT_MAPPED'
+                    )
+                  }}
+                </option>
+                <option
+                  v-for="attr in allAttributeOptions"
+                  :key="attr.value"
+                  :value="attr.value"
+                >
+                  {{ attr.label }}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
