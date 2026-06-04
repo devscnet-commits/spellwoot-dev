@@ -31,6 +31,7 @@ const { t } = useI18n();
 const { isEnterprise } = useConfig();
 
 const selectedAgentIds = ref([]);
+const agentEligibility = ref({});
 const isAgentListUpdating = ref(false);
 const enableAutoAssignment = ref(false);
 const maxAssignmentLimit = ref(null);
@@ -65,11 +66,16 @@ const agentMenuItems = computed(() =>
 const handleAgentAdd = ({ value }) => {
   if (!selectedAgentIds.value.includes(value)) {
     selectedAgentIds.value.push(value);
+    agentEligibility.value = { ...agentEligibility.value, [value]: true };
   }
 };
 
 const handleAgentRemove = index => {
+  const removedId = selectedAgentIds.value[index];
   selectedAgentIds.value.splice(index, 1);
+  const updated = { ...agentEligibility.value };
+  delete updated[removedId];
+  agentEligibility.value = updated;
 };
 
 const isFeatureEnabled = feature => {
@@ -153,6 +159,11 @@ const fetchAttachedAgents = async () => {
       data: { payload: inboxMembers },
     } = response;
     selectedAgentIds.value = inboxMembers.map(m => m.id);
+    const map = {};
+    inboxMembers.forEach(m => {
+      map[m.id] = m.eligible_for_assignment !== false;
+    });
+    agentEligibility.value = map;
   } catch (error) {
     //  Handle error
   }
@@ -264,9 +275,13 @@ const handleToggleAutoAssignment = async val => {
 const updateAgents = async () => {
   isAgentListUpdating.value = true;
   try {
-    await store.dispatch('inboxMembers/create', {
+    const members = selectedAgentIds.value.map(id => ({
+      user_id: id,
+      eligible_for_assignment: agentEligibility.value[id] !== false,
+    }));
+    await store.dispatch('inboxMembers/createWithEligibility', {
       inboxId: props.inbox.id,
-      agentList: selectedAgentIds.value,
+      members,
     });
     useAlert(t('AGENT_MGMT.EDIT.API.SUCCESS_MESSAGE'));
   } catch (error) {
@@ -380,6 +395,41 @@ onMounted(() => {
           @add="handleAgentAdd"
           @remove="handleAgentRemove"
         />
+      </div>
+
+      <!-- Eligibility toggles -->
+      <div
+        v-if="selectedAgentIds.length > 0"
+        class="mt-3 rounded-lg border border-n-weak overflow-hidden"
+      >
+        <div
+          class="flex items-center justify-between px-3 py-2 bg-n-slate-2 border-b border-n-weak"
+        >
+          <span class="text-xs font-medium text-n-slate-11">Agente</span>
+          <span class="text-xs font-medium text-n-slate-11">Recebe atribuições</span>
+        </div>
+        <div
+          v-for="agentId in selectedAgentIds"
+          :key="agentId"
+          class="flex items-center justify-between px-3 py-2.5 border-b border-n-weak/50 last:border-0 hover:bg-n-slate-1 transition-colors"
+        >
+          <span class="text-sm text-n-slate-12">
+            {{ agentList.find(a => a.id === agentId)?.name ?? '—' }}
+          </span>
+          <button
+            role="switch"
+            type="button"
+            :aria-checked="agentEligibility[agentId] !== false"
+            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none"
+            :class="agentEligibility[agentId] !== false ? 'bg-n-brand-9' : 'bg-n-slate-5'"
+            @click="agentEligibility = { ...agentEligibility, [agentId]: !(agentEligibility[agentId] !== false) }"
+          >
+            <span
+              class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform"
+              :class="agentEligibility[agentId] !== false ? 'translate-x-4' : 'translate-x-1'"
+            />
+          </button>
+        </div>
       </div>
 
       <template #extra>
