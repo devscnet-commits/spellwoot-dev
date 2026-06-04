@@ -193,43 +193,77 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     COUNT(*) AS total,
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won'       THEN 1 ELSE 0 END) AS won,
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'lost'      THEN 1 ELSE 0 END) AS lost,
-    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'ai_closed' THEN 1 ELSE 0 END) AS ai_closed
+    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'ai_closed' THEN 1 ELSE 0 END) AS ai_closed,
+    SUM(CASE WHEN conversations.status = 'pending'                                 THEN 1 ELSE 0 END) AS pending,
+    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL                       THEN 1 ELSE 0 END) AS reopened
   SQL
 
   def leads_summary
-    scope = Current.account.conversations
-    scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
-    scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
-
+    scope = build_leads_scope
     render json: {
-      summary:  build_summary_row(scope),
+      summary:   build_summary_row(scope),
       by_agent:  leads_by_agent(scope),
       by_inbox:  leads_by_inbox(scope),
       by_origin: leads_by_origin(scope),
-      by_team:   leads_by_team(scope)
+      by_team:   leads_by_team(scope),
+      by_number: leads_by_number(scope)
     }
   end
 
   def marketing_summary
-    scope = Current.account.conversations
-                   .where("conversations.additional_attributes -> 'attribution' ->> 'ctwa_clid' IS NOT NULL")
-    scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
-    scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
-
+    scope = build_leads_scope
+              .where("conversations.additional_attributes -> 'attribution' ->> 'ctwa_clid' IS NOT NULL")
     render json: {
-      summary:     build_summary_row(scope),
-      by_agent:    leads_by_agent(scope),
-      by_campaign: marketing_by_campaign(scope),
-      by_inbox:    leads_by_inbox(scope)
+      summary:      build_summary_row(scope),
+      by_agent:     leads_by_agent(scope),
+      by_campaign:  marketing_by_campaign(scope),
+      by_inbox:     leads_by_inbox(scope),
+      by_media:     marketing_by_media(scope),
+      by_ad:        marketing_by_ad(scope)
     }
   end
 
   private
 
+  def build_leads_scope
+    @value_key = Current.account.settings&.dig('meta_conversion_settings', 'value_field').presence
+
+    scope = Current.account.conversations.joins(reopen_join_sql)
+    scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i))   if params[:since].present?
+    scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i))   if params[:until].present?
+    scope = scope.where(inbox_id: params[:inbox_id])                                           if params[:inbox_id].present?
+    scope = scope.where(team_id: params[:team_id])                                             if params[:team_id].present?
+    scope = scope.where(assignee_id: params[:assignee_id])                                     if params[:assignee_id].present?
+    scope
+  end
+
+  def reopen_join_sql
+    <<~SQL
+      LEFT JOIN (
+        SELECT DISTINCT conversation_id
+        FROM reporting_events
+        WHERE account_id = #{Current.account.id}
+          AND name = 'conversation_opened'
+          AND value > 0
+      ) AS reopened_convs ON reopened_convs.conversation_id = conversations.id
+    SQL
+  end
+
+  def outcome_select_sql
+    base = OUTCOME_SELECT.chomp
+    if @value_key.present?
+      safe_key = @value_key.gsub(/[^a-zA-Z0-9_]/, '')
+      "#{base},\n    COALESCE(SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won' " \
+        "THEN NULLIF(conversations.custom_attributes->>'#{safe_key}', '')::numeric ELSE NULL END), 0) AS revenue"
+    else
+      "#{base},\n    0::numeric AS revenue"
+    end
+  end
+
   def leads_by_agent(scope)
     scope.joins('LEFT JOIN users ON users.id = conversations.assignee_id')
          .group('users.id, users.name')
-         .select("users.id, COALESCE(users.name, 'Sem atribuição') AS name, #{OUTCOME_SELECT}")
+         .select("users.id, COALESCE(users.name, 'Sem atribuição') AS name, #{outcome_select_sql}")
          .map { |r| row_with_open(r, id: r.id, name: r.name) }
          .sort_by { |r| -r[:total] }
   end
@@ -237,7 +271,7 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def leads_by_inbox(scope)
     scope.joins(:inbox)
          .group('inboxes.id, inboxes.name, inboxes.channel_type')
-         .select("inboxes.id, inboxes.name, inboxes.channel_type, #{OUTCOME_SELECT}")
+         .select("inboxes.id, inboxes.name, inboxes.channel_type, #{outcome_select_sql}")
          .map { |r| row_with_open(r, id: r.id, name: r.name, channel_type: r.channel_type) }
          .sort_by { |r| -r[:total] }
   end
@@ -245,7 +279,7 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def leads_by_origin(scope)
     scope.joins(:inbox)
          .group('inboxes.channel_type')
-         .select("inboxes.channel_type AS origin, #{OUTCOME_SELECT}")
+         .select("inboxes.channel_type AS origin, #{outcome_select_sql}")
          .map { |r| row_with_open(r, origin: r.origin) }
          .sort_by { |r| -r[:total] }
   end
@@ -253,20 +287,45 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def leads_by_team(scope)
     scope.joins('LEFT JOIN teams ON teams.id = conversations.team_id')
          .group('teams.id, teams.name')
-         .select("teams.id, COALESCE(teams.name, 'Sem equipe') AS name, #{OUTCOME_SELECT}")
+         .select("teams.id, COALESCE(teams.name, 'Sem equipe') AS name, #{outcome_select_sql}")
          .map { |r| row_with_open(r, id: r.id, name: r.name) }
+         .sort_by { |r| -r[:total] }
+  end
+
+  def leads_by_number(scope)
+    scope.joins(:inbox)
+         .where("inboxes.phone_number IS NOT NULL AND inboxes.phone_number <> ''")
+         .group('inboxes.phone_number, inboxes.name')
+         .select("inboxes.phone_number AS number, inboxes.name, #{outcome_select_sql}")
+         .map { |r| row_with_open(r, number: r.number, name: r.name) }
          .sort_by { |r| -r[:total] }
   end
 
   def marketing_by_campaign(scope)
     scope.group("conversations.additional_attributes -> 'attribution' ->> 'utm_campaign'")
-         .select("conversations.additional_attributes -> 'attribution' ->> 'utm_campaign' AS campaign, #{OUTCOME_SELECT}")
+         .select("conversations.additional_attributes -> 'attribution' ->> 'utm_campaign' AS campaign, #{outcome_select_sql}")
          .map { |r| row_with_open(r, campaign: r.campaign.presence || '(sem campanha)') }
          .sort_by { |r| -r[:total] }
   end
 
+  def marketing_by_media(scope)
+    scope.group("conversations.additional_attributes -> 'attribution' ->> 'utm_medium'")
+         .select("conversations.additional_attributes -> 'attribution' ->> 'utm_medium' AS media_type, #{outcome_select_sql}")
+         .map { |r| row_with_open(r, media_type: r.media_type.presence || 'Não identificado') }
+         .sort_by { |r| -r[:total] }
+  end
+
+  def marketing_by_ad(scope)
+    scope.group("conversations.additional_attributes -> 'attribution' ->> 'utm_content', " \
+                "conversations.additional_attributes -> 'attribution' ->> 'utm_campaign'")
+         .select("conversations.additional_attributes -> 'attribution' ->> 'utm_content'  AS ad_id, " \
+                 "conversations.additional_attributes -> 'attribution' ->> 'utm_campaign' AS campaign, #{outcome_select_sql}")
+         .map { |r| row_with_open(r, ad_id: r.ad_id.presence || '—', campaign: r.campaign.presence || '—') }
+         .sort_by { |r| -r[:total] }
+  end
+
   def build_summary_row(scope)
-    r = scope.select(OUTCOME_SELECT).take
+    r = scope.select(outcome_select_sql).take
     row_with_open(r)
   end
 
@@ -275,9 +334,15 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     won       = record.won.to_i
     lost      = record.lost.to_i
     ai_closed = record.ai_closed.to_i
+    pending   = record.respond_to?(:pending) ? record.pending.to_i : 0
     open      = total - won - lost - ai_closed
+    attended  = total - pending
+    revenue   = record.respond_to?(:revenue) ? record.revenue.to_f.round(2) : 0.0
+    reopened  = record.try(:reopened).to_i
     concluded = won + lost
-    rate      = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
-    extra.merge(total:, won:, lost:, open:, ai_closed:, conversion_rate: rate)
+    rate        = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
+    reopen_rate = total.positive? ? (reopened.to_f / total * 100).round(1) : 0.0
+    extra.merge(total:, won:, lost:, open:, ai_closed:, pending:, attended:, revenue:,
+                conversion_rate: rate, reopened:, reopen_rate:)
   end
 end

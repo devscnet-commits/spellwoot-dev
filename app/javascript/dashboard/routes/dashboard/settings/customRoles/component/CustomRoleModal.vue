@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useStore } from 'dashboard/composables/store';
+import { useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import { useVuelidate } from '@vuelidate/core';
 import { required, minLength } from '@vuelidate/validators';
@@ -31,9 +32,14 @@ const emit = defineEmits(['close']);
 const store = useStore();
 const { t } = useI18n();
 
+const inboxList = useMapGetter('inboxes/getInboxes');
+const teamList = useMapGetter('teams/getTeams');
+
 const name = ref('');
 const description = ref('');
 const selectedPermissions = ref([]);
+const scopeType = ref('all');
+const scopeIds = ref([]);
 
 const nameInput = ref(null);
 
@@ -54,6 +60,8 @@ const resetForm = () => {
   name.value = '';
   description.value = '';
   selectedPermissions.value = [];
+  scopeType.value = 'all';
+  scopeIds.value = [];
   v$.value.$reset();
 };
 
@@ -61,6 +69,8 @@ const populateEditForm = () => {
   name.value = props.selectedRole.name || '';
   description.value = props.selectedRole.description || '';
   selectedPermissions.value = props.selectedRole.permissions || [];
+  scopeType.value = props.selectedRole.scope_type || 'all';
+  scopeIds.value = props.selectedRole.scope_ids || [];
 };
 
 watch(
@@ -113,6 +123,10 @@ const modalTitle = computed(() => t(getTranslationKey('TITLE')));
 const modalDescription = computed(() => t(getTranslationKey('DESC')));
 const submitButtonText = computed(() => t(getTranslationKey('SUBMIT')));
 
+watch(scopeType, () => {
+  scopeIds.value = [];
+});
+
 const handleCustomRole = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;
@@ -123,6 +137,8 @@ const handleCustomRole = async () => {
       name: name.value,
       description: description.value,
       permissions: selectedPermissions.value,
+      scope_type: scopeType.value,
+      scope_ids: scopeType.value === 'all' ? [] : scopeIds.value.map(Number),
     };
 
     if (props.mode === 'edit') {
@@ -208,6 +224,68 @@ const isSubmitDisabled = computed(
             </label>
           </div>
         </div>
+      </div>
+
+      <!-- Scope de acesso -->
+      <div class="w-full mt-2">
+        <p class="text-sm font-medium text-n-slate-12 mb-2">Escopo de acesso</p>
+        <div class="flex flex-col gap-2 mb-3">
+          <label
+            v-for="opt in [
+              { value: 'all',     label: 'Todas as caixas' },
+              { value: 'inboxes', label: 'Caixas específicas' },
+              { value: 'teams',   label: 'Times específicos' },
+            ]"
+            :key="opt.value"
+            class="flex items-center gap-2 cursor-pointer"
+          >
+            <input
+              v-model="scopeType"
+              type="radio"
+              :value="opt.value"
+              name="scope_type"
+              class="ltr:mr-1 rtl:ml-1"
+            />
+            <span class="text-sm font-normal text-n-slate-12">{{ opt.label }}</span>
+          </label>
+        </div>
+
+        <select
+          v-if="scopeType === 'inboxes'"
+          v-model="scopeIds"
+          multiple
+          class="w-full border border-n-weak rounded-lg px-2 py-1.5 text-sm text-n-slate-12 bg-n-solid-2 min-h-[110px]"
+        >
+          <option
+            v-for="inbox in inboxList"
+            :key="inbox.id"
+            :value="inbox.id"
+          >
+            {{ inbox.name }}
+          </option>
+        </select>
+
+        <select
+          v-if="scopeType === 'teams'"
+          v-model="scopeIds"
+          multiple
+          class="w-full border border-n-weak rounded-lg px-2 py-1.5 text-sm text-n-slate-12 bg-n-solid-2 min-h-[110px]"
+        >
+          <option
+            v-for="team in teamList"
+            :key="team.id"
+            :value="team.id"
+          >
+            {{ team.name }}
+          </option>
+        </select>
+
+        <p
+          v-if="scopeType !== 'all'"
+          class="text-xs text-n-slate-11 mt-1"
+        >
+          Segure Ctrl / Cmd para selecionar múltiplos itens.
+        </p>
       </div>
 
       <div class="flex flex-row justify-end w-full gap-2 px-0 py-2">

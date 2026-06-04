@@ -37,6 +37,17 @@ class CustomRole < ApplicationRecord
     knowledge_base_manage
   ].freeze
 
+  SCOPE_TYPES = %w[all inboxes teams].freeze
+
   validates :name, presence: true
   validates :permissions, inclusion: { in: PERMISSIONS }
+  validates :scope_type, inclusion: { in: SCOPE_TYPES }
+
+  def scoped_inboxes(account)
+    return account.inboxes if scope_type == 'all'
+    return account.inboxes.where(id: scope_ids) if scope_type == 'inboxes'
+    return account.teams.where(id: scope_ids).includes(:inboxes).flat_map(&:inboxes) if scope_type == 'teams'
+
+    account.inboxes
+  end
 end
