@@ -30,6 +30,10 @@ import TeleportWithDirection from 'dashboard/components-next/TeleportWithDirecti
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 import IntersectionObserver from 'dashboard/components/IntersectionObserver.vue';
 import ConversationResolveAttributesModal from 'dashboard/components-next/ConversationWorkflow/ConversationResolveAttributesModal.vue';
+import {
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+} from 'dashboard/components-next/ConversationWorkflow/constants';
 
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useAlert } from 'dashboard/composables';
@@ -810,8 +814,13 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   // Check for required attributes before resolving
   const conversation = getConversationById.value(conversationId);
   const currentCustomAttributes = conversation?.custom_attributes || {};
+  const outcome = conversation?.additional_attributes?.outcome;
+  const systemContext = outcome
+    ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
+    : {};
   const { hasMissing, missing } = checkMissingAttributes(
-    currentCustomAttributes
+    currentCustomAttributes,
+    systemContext
   );
 
   if (hasMissing) {
@@ -955,7 +964,7 @@ watch(conversationFilters, (newVal, oldVal) => {
     :style="!isOnExpandedLayout && panelWidth ? { width: panelWidth + 'px' } : {}"
   >
     <div
-      v-if="!isOnExpandedLayout"
+      v-if="!isOnExpandedLayout && showConversationList"
       class="absolute top-0 right-0 z-10 w-1 h-full cursor-col-resize hover:bg-n-brand/40 active:bg-n-brand/60 transition-colors"
       :class="{ 'bg-n-brand/60': isResizing }"
       @mousedown.prevent="startResize"
@@ -966,7 +975,6 @@ watch(conversationFilters, (newVal, oldVal) => {
       :has-applied-filters="hasAppliedFilters"
       :has-active-folders="hasActiveFolders"
       :active-status="activeStatus"
-      :is-on-expanded-layout="isOnExpandedLayout"
       :conversation-stats="conversationStats"
       :is-list-loading="chatListLoading && !conversationList.length"
       @add-folders="onClickOpenAddFoldersModal"

@@ -6,6 +6,7 @@ import {
   ATTRIBUTE_TYPES,
   SYSTEM_CONDITION_FIELDS,
   SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
   matchesConditionValue,
   isAttrVisible,
 } from 'dashboard/components-next/ConversationWorkflow/constants';
@@ -76,21 +77,25 @@ export function useConversationRequiredAttributes() {
     ),
   ]);
 
-  const isRequired = (attrConfig, conversationCustomAttributes) => {
+  const isRequired = (attrConfig, context) => {
     if (attrConfig.rule === 'conditional') {
-      const fieldValue = conversationCustomAttributes[attrConfig.condition_field];
+      const fieldValue = context[attrConfig.condition_field];
       return matchesConditionValue(fieldValue, attrConfig.condition_value);
     }
     return true;
   };
 
-  const checkMissingAttributes = (conversationCustomAttributes = {}) => {
+  // systemContext: optional dict with system field values (e.g. __resultado_conversa__)
+  // derived from additional_attributes, since system fields are not in custom_attributes
+  const checkMissingAttributes = (conversationCustomAttributes = {}, systemContext = {}) => {
     if (!requiredAttributes.value.length) {
       return { hasMissing: false, missing: [] };
     }
 
+    const fullContext = { ...conversationCustomAttributes, ...systemContext };
+
     const missing = requiredAttributes.value.filter(attribute => {
-      if (!isRequired(attribute, conversationCustomAttributes)) return false;
+      if (!isRequired(attribute, fullContext)) return false;
 
       const value = conversationCustomAttributes[attribute.value];
 

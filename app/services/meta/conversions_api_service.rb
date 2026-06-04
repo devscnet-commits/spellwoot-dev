@@ -64,6 +64,15 @@ class Meta::ConversionsApiService
     @conversation.contact&.phone_number&.gsub(/\D/, '')
   end
 
+  def contact_first_name
+    @conversation.contact&.name&.split&.first
+  end
+
+  def contact_last_name
+    parts = @conversation.contact&.name&.split
+    parts&.length.to_i > 1 ? parts[1..].join(' ') : nil
+  end
+
   def meta_settings
     @account.settings&.dig('meta_conversion_settings') || {}
   end
@@ -74,8 +83,10 @@ class Meta::ConversionsApiService
     Digest::SHA256.hexdigest(value.to_s.downcase.strip)
   end
 
+  AUTO_CONTACT_FIELDS = %w[fn ln ph].freeze
+
   def enrichment_user_data
-    fields = meta_settings.dig('enrichment_fields') || {}
+    fields = (meta_settings.dig('enrichment_fields') || {}).reject { |k, _| AUTO_CONTACT_FIELDS.include?(k.to_s) }
     fields.each_with_object({}) do |(meta_key, attr_key), acc|
       raw = @conversation.custom_attributes&.dig(attr_key) ||
             @conversation.contact&.custom_attributes&.dig(attr_key)
@@ -84,10 +95,13 @@ class Meta::ConversionsApiService
   end
 
   def build_payload
-    user_data = {
+    auto_data = {
       ctwa_clid: ctwa_clid,
-      ph: [hashed(contact_phone)]
-    }.merge(enrichment_user_data).compact
+      ph: contact_phone.present? ? [hashed(contact_phone)] : nil,
+      fn: contact_first_name.present? ? [hashed(contact_first_name)] : nil,
+      ln: contact_last_name.present? ? [hashed(contact_last_name)] : nil,
+    }
+    user_data = enrichment_user_data.merge(auto_data).compact
 
     event = {
       event_name: @event_name,
