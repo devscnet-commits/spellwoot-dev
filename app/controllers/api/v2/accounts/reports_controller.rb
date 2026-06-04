@@ -194,7 +194,8 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won'       THEN 1 ELSE 0 END) AS won,
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'lost'      THEN 1 ELSE 0 END) AS lost,
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'ai_closed' THEN 1 ELSE 0 END) AS ai_closed,
-    SUM(CASE WHEN conversations.status = 'pending'                                 THEN 1 ELSE 0 END) AS pending
+    SUM(CASE WHEN conversations.status = 'pending'                                 THEN 1 ELSE 0 END) AS pending,
+    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL                       THEN 1 ELSE 0 END) AS reopened
   SQL
 
   def leads_summary
@@ -227,13 +228,25 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def build_leads_scope
     @value_key = Current.account.settings&.dig('meta_conversion_settings', 'value_field').presence
 
-    scope = Current.account.conversations
+    scope = Current.account.conversations.joins(reopen_join_sql)
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i))   if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i))   if params[:until].present?
     scope = scope.where(inbox_id: params[:inbox_id])                                           if params[:inbox_id].present?
     scope = scope.where(team_id: params[:team_id])                                             if params[:team_id].present?
     scope = scope.where(assignee_id: params[:assignee_id])                                     if params[:assignee_id].present?
     scope
+  end
+
+  def reopen_join_sql
+    <<~SQL
+      LEFT JOIN (
+        SELECT DISTINCT conversation_id
+        FROM reporting_events
+        WHERE account_id = #{Current.account.id}
+          AND name = 'conversation_opened'
+          AND value > 0
+      ) AS reopened_convs ON reopened_convs.conversation_id = conversations.id
+    SQL
   end
 
   def outcome_select_sql
@@ -325,8 +338,11 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     open      = total - won - lost - ai_closed
     attended  = total - pending
     revenue   = record.respond_to?(:revenue) ? record.revenue.to_f.round(2) : 0.0
+    reopened  = record.try(:reopened).to_i
     concluded = won + lost
-    rate      = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
-    extra.merge(total:, won:, lost:, open:, ai_closed:, pending:, attended:, revenue:, conversion_rate: rate)
+    rate        = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
+    reopen_rate = total.positive? ? (reopened.to_f / total * 100).round(1) : 0.0
+    extra.merge(total:, won:, lost:, open:, ai_closed:, pending:, attended:, revenue:,
+                conversion_rate: rate, reopened:, reopen_rate:)
   end
 end
