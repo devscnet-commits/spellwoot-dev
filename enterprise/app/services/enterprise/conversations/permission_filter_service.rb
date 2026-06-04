@@ -16,24 +16,33 @@ module Enterprise::Conversations::PermissionFilterService
   end
 
   def filter_by_permissions(permissions)
-    # Permission-based filtering with hierarchy
-    # conversation_manage > conversation_unassigned_manage > conversation_participating_manage
+    base = scoped_accessible_conversations
     if permissions.include?('conversation_manage')
-      accessible_conversations
+      base
     elsif permissions.include?('conversation_unassigned_manage')
-      filter_unassigned_and_mine
+      mine = base.assigned_to(user)
+      unassigned = base.unassigned
+      Conversation.from("(#{mine.to_sql} UNION #{unassigned.to_sql}) as conversations")
+                  .where(account_id: account.id)
     elsif permissions.include?('conversation_participating_manage')
-      accessible_conversations.assigned_to(user)
+      base.assigned_to(user)
     else
       Conversation.none
     end
   end
 
-  def filter_unassigned_and_mine
-    mine = accessible_conversations.assigned_to(user)
-    unassigned = accessible_conversations.unassigned
+  def scoped_accessible_conversations
+    base = accessible_conversations
+    return base if custom_role_scope_type == 'all'
 
-    Conversation.from("(#{mine.to_sql} UNION #{unassigned.to_sql}) as conversations")
-                .where(account_id: account.id)
+    base.where(inbox_id: scoped_inbox_ids)
+  end
+
+  def custom_role_scope_type
+    account_user&.custom_role&.scope_type || 'all'
+  end
+
+  def scoped_inbox_ids
+    @scoped_inbox_ids ||= account_user.custom_role.scoped_inboxes(account).map(&:id)
   end
 end

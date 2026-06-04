@@ -29,7 +29,7 @@ const filterAgentId = ref('');
 
 // Data
 const isLoading = ref(false);
-const summary = ref({ total: 0, won: 0, lost: 0, open: 0, ai_closed: 0, pending: 0, attended: 0, revenue: 0, conversion_rate: 0 });
+const summary = ref({ total: 0, won: 0, lost: 0, open: 0, ai_closed: 0, pending: 0, attended: 0, revenue: 0, conversion_rate: 0, reopened: 0, reopen_rate: 0 });
 const byAgent = ref([]);
 const byInbox = ref([]);
 const byOrigin = ref([]);
@@ -147,10 +147,10 @@ const sortIcon = key => {
 const exportCsv = () => {
   const tabId = activeTab.value;
   const hasFmt = showRevenue.value;
-  const header = ['Nome', 'Total', 'Atendidos', 'Ganhos', 'Perdidos', 'Em Aberto', 'IA', 'Conversão%', ...(hasFmt ? ['Receita'] : [])];
+  const header = ['Nome', 'Total', 'Atendidos', 'Ganhos', 'Perdidos', 'Em Aberto', 'IA', 'Conversão%', 'Reaberturas', 'Taxa Reab.%', ...(hasFmt ? ['Receita'] : [])];
   const rows = sortedTableData.value.map(r => [
     `"${rowName(r).replace(/"/g, '""')}"`,
-    r.total, r.attended, r.won, r.lost, r.open, r.ai_closed, r.conversion_rate,
+    r.total, r.attended, r.won, r.lost, r.open, r.ai_closed, r.conversion_rate, r.reopened, r.reopen_rate,
     ...(hasFmt ? [r.revenue] : []),
   ]);
   const csv = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
@@ -345,6 +345,24 @@ onMounted(fetchData);
             <span class="text-xs text-n-slate-10">ganhos / (ganhos+perdidos)</span>
           </div>
 
+          <div class="flex flex-col gap-1.5 p-4 rounded-xl bg-n-solid-2 border border-n-weak">
+            <div class="flex items-center gap-1.5">
+              <span class="i-lucide-refresh-cw w-4 h-4 text-n-amber-9" />
+              <span class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Reaberturas</span>
+            </div>
+            <span class="text-2xl font-bold text-n-slate-12">{{ summary.reopened || 0 }}</span>
+            <span
+              class="text-xs font-medium"
+              :class="(summary.reopen_rate || 0) > 15
+                ? 'text-n-ruby-11'
+                : (summary.reopen_rate || 0) > 5
+                  ? 'text-n-amber-11'
+                  : 'text-n-slate-10'"
+            >
+              {{ summary.reopen_rate || 0 }}% do total
+            </span>
+          </div>
+
           <div v-if="showRevenue" class="flex flex-col gap-1.5 p-4 rounded-xl bg-n-solid-2 border border-n-weak">
             <div class="flex items-center gap-1.5">
               <span class="i-lucide-circle-dollar-sign w-4 h-4 text-n-teal-9" />
@@ -479,13 +497,15 @@ onMounted(fetchData);
                   </th>
                   <th
                     v-for="col in [
-                      { key: 'total',     label: 'Total' },
-                      { key: 'attended',  label: 'Atendidos' },
-                      { key: 'won',       label: 'Ganhos',    cls: 'text-n-teal-11' },
-                      { key: 'lost',      label: 'Perdidos',  cls: 'text-n-ruby-11' },
-                      { key: 'open',      label: 'Em Aberto', cls: 'text-n-amber-11' },
-                      { key: 'ai_closed', label: 'IA' },
+                      { key: 'total',         label: 'Total' },
+                      { key: 'attended',      label: 'Atendidos' },
+                      { key: 'won',           label: 'Ganhos',    cls: 'text-n-teal-11' },
+                      { key: 'lost',          label: 'Perdidos',  cls: 'text-n-ruby-11' },
+                      { key: 'open',          label: 'Em Aberto', cls: 'text-n-amber-11' },
+                      { key: 'ai_closed',     label: 'IA' },
                       { key: 'conversion_rate', label: 'Conversão' },
+                      { key: 'reopened',      label: 'Reaberturas' },
+                      { key: 'reopen_rate',   label: 'Taxa Reab.' },
                     ]"
                     :key="col.key"
                     class="px-3 py-3 text-right cursor-pointer select-none hover:text-n-slate-12 transition-colors"
@@ -534,6 +554,19 @@ onMounted(fetchData);
                           : 'bg-n-slate-3 text-n-slate-11'"
                     >
                       {{ row.conversion_rate }}%
+                    </span>
+                  </td>
+                  <td class="px-3 py-3 text-right text-n-slate-11 font-medium">{{ row.reopened || 0 }}</td>
+                  <td class="px-3 py-3 text-right">
+                    <span
+                      class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                      :class="row.reopen_rate > 15
+                        ? 'bg-n-ruby-3 text-n-ruby-11'
+                        : row.reopen_rate > 5
+                          ? 'bg-n-amber-3 text-n-amber-11'
+                          : 'bg-n-slate-3 text-n-slate-11'"
+                    >
+                      {{ row.reopen_rate || 0 }}%
                     </span>
                   </td>
                   <td v-if="showRevenue" class="px-3 py-3 text-right text-n-teal-11 font-medium text-xs">
