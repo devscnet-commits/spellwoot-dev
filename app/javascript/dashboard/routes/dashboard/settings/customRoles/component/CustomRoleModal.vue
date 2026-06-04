@@ -40,6 +40,7 @@ const description = ref('');
 const selectedPermissions = ref([]);
 const scopeType = ref('all');
 const scopeIds = ref([]);
+const scopeSearch = ref('');
 
 const nameInput = ref(null);
 
@@ -125,7 +126,28 @@ const submitButtonText = computed(() => t(getTranslationKey('SUBMIT')));
 
 watch(scopeType, () => {
   scopeIds.value = [];
+  scopeSearch.value = '';
 });
+
+const scopeItems = computed(() => {
+  const list = scopeType.value === 'inboxes' ? inboxList.value : teamList.value;
+  const q = scopeSearch.value.toLowerCase();
+  if (!q) return list;
+  return list.filter(item => item.name.toLowerCase().includes(q));
+});
+
+const toggleScopeId = id => {
+  if (scopeIds.value.includes(id)) {
+    scopeIds.value = scopeIds.value.filter(x => x !== id);
+  } else {
+    scopeIds.value = [...scopeIds.value, id];
+  }
+};
+
+const scopeItemName = id => {
+  const list = scopeType.value === 'inboxes' ? inboxList.value : teamList.value;
+  return list.find(item => item.id === id)?.name ?? id;
+};
 
 const handleCustomRole = async () => {
   v$.value.$touch();
@@ -250,42 +272,59 @@ const isSubmitDisabled = computed(
           </label>
         </div>
 
-        <select
-          v-if="scopeType === 'inboxes'"
-          v-model="scopeIds"
-          multiple
-          class="w-full border border-n-weak rounded-lg px-2 py-1.5 text-sm text-n-slate-12 bg-n-solid-2 min-h-[110px]"
-        >
-          <option
-            v-for="inbox in inboxList"
-            :key="inbox.id"
-            :value="inbox.id"
-          >
-            {{ inbox.name }}
-          </option>
-        </select>
+        <template v-if="scopeType !== 'all'">
+          <!-- Search -->
+          <div class="relative mb-2">
+            <span
+              class="absolute left-2.5 top-1/2 -translate-y-1/2 i-lucide-search text-n-slate-9 text-sm pointer-events-none"
+            />
+            <input
+              v-model="scopeSearch"
+              type="text"
+              :placeholder="scopeType === 'inboxes' ? 'Buscar caixa...' : 'Buscar time...'"
+              class="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-n-weak bg-n-solid-2 text-n-slate-12 placeholder:text-n-slate-9 focus:outline-none focus:border-n-brand-8"
+            />
+          </div>
 
-        <select
-          v-if="scopeType === 'teams'"
-          v-model="scopeIds"
-          multiple
-          class="w-full border border-n-weak rounded-lg px-2 py-1.5 text-sm text-n-slate-12 bg-n-solid-2 min-h-[110px]"
-        >
-          <option
-            v-for="team in teamList"
-            :key="team.id"
-            :value="team.id"
-          >
-            {{ team.name }}
-          </option>
-        </select>
+          <!-- Checkable list -->
+          <div class="rounded-lg border border-n-weak max-h-40 overflow-y-auto">
+            <label
+              v-for="item in scopeItems"
+              :key="item.id"
+              class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-n-slate-1 border-b border-n-weak/50 last:border-0"
+            >
+              <input
+                type="checkbox"
+                :checked="scopeIds.includes(item.id)"
+                class="rounded shrink-0"
+                @change="toggleScopeId(item.id)"
+              />
+              <span class="text-sm text-n-slate-12 select-none">{{ item.name }}</span>
+            </label>
+            <div
+              v-if="scopeItems.length === 0"
+              class="px-3 py-3 text-sm text-n-slate-10 text-center"
+            >
+              Nenhum item encontrado
+            </div>
+          </div>
 
-        <p
-          v-if="scopeType !== 'all'"
-          class="text-xs text-n-slate-11 mt-1"
-        >
-          Segure Ctrl / Cmd para selecionar múltiplos itens.
-        </p>
+          <!-- Selected tags -->
+          <div v-if="scopeIds.length > 0" class="flex flex-wrap gap-1.5 mt-2">
+            <span
+              v-for="id in scopeIds"
+              :key="id"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-n-brand-3 text-n-brand-11"
+            >
+              {{ scopeItemName(id) }}
+              <button
+                type="button"
+                class="i-lucide-x text-xs leading-none"
+                @click="toggleScopeId(id)"
+              />
+            </span>
+          </div>
+        </template>
       </div>
 
       <div class="flex flex-row justify-end w-full gap-2 px-0 py-2">

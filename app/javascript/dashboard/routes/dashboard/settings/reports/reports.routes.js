@@ -25,6 +25,7 @@ import LiveReports from './LiveReports.vue';
 import SLAReports from './SLAReports.vue';
 import LeadsReports from './LeadsReports.vue';
 import MarketingReport from './MarketingReport.vue';
+import ScheduleReport from './ScheduleReport.vue';
 
 const meta = {
   featureFlag: FEATURE_FLAGS.REPORTS,
@@ -181,6 +182,12 @@ export default {
           name: 'marketing_reports',
           meta,
           component: MarketingReport,
+        },
+        {
+          path: 'schedule',
+          name: 'schedule_reports',
+          meta,
+          component: ScheduleReport,
         },
       ],
     },
