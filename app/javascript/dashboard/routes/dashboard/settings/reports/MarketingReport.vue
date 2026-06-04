@@ -1,27 +1,22 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { useI18n } from 'vue-i18n';
 import { useAccount } from 'dashboard/composables/useAccount';
 import subDays from 'date-fns/subDays';
 import { getUnixStartOfDay, getUnixEndOfDay } from 'helpers/DateHelper';
 import axios from 'axios';
 
-const { t } = useI18n();
 const { accountId } = useAccount();
 
-// State
 const isLoading = ref(false);
 const since = ref(getUnixStartOfDay(subDays(new Date(), 29)));
 const until = ref(getUnixEndOfDay(new Date()));
-const activeTable = ref('agent');
+const activeTable = ref('campaign');
 
 const summary = ref({ total: 0, won: 0, lost: 0, open: 0, ai_closed: 0, conversion_rate: 0 });
+const byCampaign = ref([]);
 const byAgent = ref([]);
 const byInbox = ref([]);
-const byOrigin = ref([]);
-const byTeam = ref([]);
 
-// Date range presets (last 7d / 30d / 90d / 180d / 1y)
 const presets = [
   { id: 7,   label: '7 dias' },
   { id: 30,  label: '30 dias' },
@@ -37,7 +32,6 @@ const selectPreset = days => {
   fetchData();
 };
 
-// Channel type labels
 const CHANNEL_LABELS = {
   'Channel::Api':           'WhatsApp (API)',
   'Channel::Whatsapp':      'WhatsApp (Cloud)',
@@ -52,7 +46,6 @@ const CHANNEL_LABELS = {
 };
 const channelLabel = type => CHANNEL_LABELS[type] || type || '—';
 
-// Computed
 const conversionBg = rate => {
   if (rate >= 60) return 'text-n-teal-11';
   if (rate >= 30) return 'text-n-amber-11';
@@ -60,32 +53,34 @@ const conversionBg = rate => {
 };
 
 const activeTableData = computed(() => {
+  if (activeTable.value === 'campaign') return byCampaign.value;
   if (activeTable.value === 'agent') return byAgent.value;
-  if (activeTable.value === 'inbox') return byInbox.value;
-  if (activeTable.value === 'team') return byTeam.value;
-  return byOrigin.value;
+  return byInbox.value;
 });
 
 const activeTableName = computed(() => {
+  if (activeTable.value === 'campaign') return item => item.campaign || '—';
   if (activeTable.value === 'agent') return item => item.name || '—';
-  if (activeTable.value === 'inbox') return item => `${item.name} (${channelLabel(item.channel_type)})`;
-  if (activeTable.value === 'team') return item => item.name || '—';
-  return item => channelLabel(item.origin);
+  return item => `${item.name} (${channelLabel(item.channel_type)})`;
 });
 
-// Fetch
+const activeTableHeader = computed(() => {
+  if (activeTable.value === 'campaign') return 'Campanha';
+  if (activeTable.value === 'agent') return 'Agente';
+  return 'Caixa de Entrada';
+});
+
 const fetchData = async () => {
   isLoading.value = true;
   try {
     const { data } = await axios.get(
-      `/api/v2/accounts/${accountId.value}/reports/leads_summary`,
+      `/api/v2/accounts/${accountId.value}/reports/marketing_summary`,
       { params: { since: since.value, until: until.value } }
     );
-    summary.value = data.summary || {};
-    byAgent.value  = data.by_agent  || [];
-    byInbox.value  = data.by_inbox  || [];
-    byOrigin.value = data.by_origin || [];
-    byTeam.value   = data.by_team   || [];
+    summary.value   = data.summary    || {};
+    byCampaign.value = data.by_campaign || [];
+    byAgent.value   = data.by_agent   || [];
+    byInbox.value   = data.by_inbox   || [];
   } catch {
     // silent
   } finally {
@@ -101,9 +96,9 @@ onMounted(fetchData);
     <!-- Header -->
     <div class="px-6 pt-6 pb-4 border-b border-n-weak flex items-center justify-between gap-4 flex-wrap">
       <div>
-        <h1 class="text-heading-1 font-semibold text-n-slate-12">Relatório de Leads</h1>
+        <h1 class="text-heading-1 font-semibold text-n-slate-12">Relatório de Marketing</h1>
         <p class="text-body-para text-n-slate-11 mt-0.5">
-          Visão operacional dos leads por resultado, agente, caixa e canal
+          Leads originados via Meta Ads (WhatsApp Click-to-Chat)
         </p>
       </div>
 
@@ -136,8 +131,8 @@ onMounted(fetchData);
           <!-- Total -->
           <div class="flex flex-col gap-1.5 p-4 rounded-xl bg-n-solid-2 border border-n-weak">
             <div class="flex items-center gap-1.5">
-              <span class="i-lucide-users w-4 h-4 text-n-slate-9" />
-              <span class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Total</span>
+              <span class="i-lucide-target w-4 h-4 text-n-slate-9" />
+              <span class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Leads Meta</span>
             </div>
             <span class="text-2xl font-bold text-n-slate-12">{{ summary.total }}</span>
           </div>
@@ -191,16 +186,24 @@ onMounted(fetchData);
           </div>
         </div>
 
+        <!-- Info banner -->
+        <div class="flex items-start gap-2 px-4 py-3 rounded-lg bg-n-brand-2 border border-n-brand-4 text-body-small text-n-brand-11">
+          <span class="i-lucide-info w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            Apenas conversas originadas por anúncios Meta Ads (Click-to-WhatsApp).
+            Os totais aqui são um subconjunto do Relatório de Leads.
+          </span>
+        </div>
+
         <!-- Table tabs -->
         <div class="flex flex-col gap-0 rounded-xl bg-n-solid-2 border border-n-weak overflow-hidden">
           <!-- Tab selector -->
           <div class="flex items-center border-b border-n-weak bg-n-solid-1 px-4">
             <button
               v-for="tab in [
-                { id: 'agent',  label: 'Por Agente', icon: 'i-lucide-user' },
-                { id: 'inbox',  label: 'Por Caixa',  icon: 'i-lucide-inbox' },
-                { id: 'team',   label: 'Por Equipe', icon: 'i-lucide-users' },
-                { id: 'origin', label: 'Por Origem', icon: 'i-lucide-signal' },
+                { id: 'campaign', label: 'Por Campanha', icon: 'i-lucide-megaphone' },
+                { id: 'agent',    label: 'Por Agente',   icon: 'i-lucide-user' },
+                { id: 'inbox',    label: 'Por Caixa',    icon: 'i-lucide-inbox' },
               ]"
               :key="tab.id"
               class="flex items-center gap-1.5 px-4 py-3 text-body-small font-medium border-b-2 transition-colors"
@@ -221,9 +224,7 @@ onMounted(fetchData);
           <table v-else class="w-full text-left text-body-small">
             <thead class="bg-n-slate-1 text-xs font-medium text-n-slate-11 uppercase tracking-wide">
               <tr>
-                <th class="px-4 py-3 w-1/3">
-                  {{ activeTable === 'agent' ? 'Agente' : activeTable === 'inbox' ? 'Caixa de Entrada' : activeTable === 'team' ? 'Equipe' : 'Origem' }}
-                </th>
+                <th class="px-4 py-3 w-1/3">{{ activeTableHeader }}</th>
                 <th class="px-3 py-3 text-right">Total</th>
                 <th class="px-3 py-3 text-right text-n-teal-11">Ganhos</th>
                 <th class="px-3 py-3 text-right text-n-ruby-11">Perdidos</th>

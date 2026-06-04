@@ -23,7 +23,12 @@ module AccountSettingsSchema
                   'key': { 'type': 'string' },
                   'rule': { 'type': 'string', 'enum': %w[always conditional] },
                   'condition_field': { 'type': %w[string null] },
-                  'condition_value': { 'type': %w[string null] }
+                  'condition_value': {
+                    'oneOf': [
+                      { 'type': %w[string null] },
+                      { 'type': 'array', 'items': { 'type': 'string' } }
+                    ]
+                  }
                 },
                 'required': ['key']
               }

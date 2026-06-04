@@ -7,7 +7,12 @@ import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'next/textarea/TextArea.vue';
 import ChoiceToggle from 'dashboard/components-next/input/ChoiceToggle.vue';
-import { ATTRIBUTE_TYPES } from './constants';
+import {
+  ATTRIBUTE_TYPES,
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+  isAttrVisible,
+} from './constants';
 
 const emit = defineEmits(['confirm']);
 
@@ -18,14 +23,10 @@ const formValues = reactive({});
 
 const title = computed(() => pendingOutcome.value?.label || '');
 
-// Dynamically show attributes based on current form state (same engine as ConversationResolveAttributesModal)
+// Dynamically show attributes based on current form state
+// formValues includes __resultado_conversa__ for system-field conditions
 const visibleAttributes = computed(() =>
-  allAttributes.value.filter(attr => {
-    if (attr.rule === 'conditional') {
-      return formValues[attr.condition_field] === attr.condition_value;
-    }
-    return true;
-  })
+  allAttributes.value.filter(attr => isAttrVisible(attr, formValues))
 );
 
 // When a conditional field disappears, clear its value
@@ -78,6 +79,11 @@ const open = ({ outcome, label, statusValue, attributes, initialValues }) => {
   allAttributes.value = attributes;
 
   Object.keys(formValues).forEach(k => delete formValues[k]);
+
+  // Inject system outcome field so __resultado_conversa__ conditions evaluate correctly
+  if (outcome) {
+    formValues[SYSTEM_OUTCOME_FIELD] = OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null;
+  }
 
   // Seed ALL conversation attributes so conditional rules evaluate correctly
   Object.entries(initialValues).forEach(([key, value]) => {

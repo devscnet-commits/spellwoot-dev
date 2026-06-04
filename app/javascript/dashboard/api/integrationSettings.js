@@ -25,4 +25,9 @@ export default {
       `/api/v1/accounts/${accountId}/integration_settings/${provider}/sync_chatwoot`
     );
   },
+  syncInstances(accountId, provider) {
+    return axios.post(
+      `/api/v1/accounts/${accountId}/integration_settings/${provider}/sync_instances`
+    );
+  },
 };

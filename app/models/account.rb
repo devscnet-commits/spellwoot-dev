@@ -166,16 +166,29 @@ class Account < ApplicationRecord
   end
 
   def create_default_custom_attributes
-    return if custom_attribute_definitions.exists?(attribute_key: 'marcado_como_ganho_ou_perdido')
+    unless custom_attribute_definitions.exists?(attribute_key: 'marcado_como_ganho_ou_perdido')
+      custom_attribute_definitions.create!(
+        attribute_display_name: 'Marcado como Ganho ou Perdido',
+        attribute_key: 'marcado_como_ganho_ou_perdido',
+        attribute_display_type: :list,
+        attribute_model: :conversation_attribute,
+        default_value: nil,
+        attribute_values: %w[Ganho Perdido]
+      )
+    end
 
-    custom_attribute_definitions.create!(
-      display_name: 'Marcado como Ganho ou Perdido',
-      attribute_key: 'marcado_como_ganho_ou_perdido',
-      attribute_display_type: :list,
-      attribute_model: :conversation_attribute,
-      default_value: nil,
-      attribute_values: %w[Ganho Perdido]
-    )
+    current_meta = settings['meta_conversion_settings'] || {}
+    if current_meta['win_status_field'].blank?
+      update_columns(
+        settings: settings.merge(
+          'meta_conversion_settings' => current_meta.merge(
+            'win_status_field' => 'marcado_como_ganho_ou_perdido',
+            'win_value'        => 'Ganho',
+            'loss_value'       => 'Perdido'
+          )
+        )
+      )
+    end
   rescue StandardError => e
     Rails.logger.error "Failed to create default custom attributes for account #{id}: #{e.message}"
   end

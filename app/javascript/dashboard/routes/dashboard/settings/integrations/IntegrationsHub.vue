@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useAlert } from 'dashboard/composables';
 import integrationSettingsAPI from '../../../../api/integrationSettings';
+import providerInstancesAPI from '../../../../api/providerInstances';
 
 const { t } = useI18n();
 const { accountId } = useAccount();
@@ -48,12 +49,10 @@ const PROVIDERS = [
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
     testable: true,
-    syncable: true,
+    syncInstances: true,
     fields: [
-      { key: 'apiUrl', label: 'URL da API', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
-      { key: 'token', label: 'Token', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
-      { key: 'instance', label: 'Instância padrão', sensitive: false, placeholder: 'minha-instancia', help: null },
-      { key: 'chatwootInboxId', label: 'ID da Inbox no Chatwoot', sensitive: false, placeholder: '5', help: null },
+      { key: 'apiUrl', label: 'URL do servidor', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
+      { key: 'token', label: 'Token Administrador', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
     ],
   },
   {
@@ -100,9 +99,12 @@ const state = reactive(
   Object.fromEntries(
     PROVIDERS.map(p => [
       p.key,
-      { open: false, loading: false, saving: false, importing: false, testing: false, syncing: false,
-        testResult: null, syncResult: null, enabled: true,
-        config: {}, sources: {}, reset: {}, dirty: false },
+      {
+        open: false, loading: false, saving: false, importing: false,
+        testing: false, syncing: false, loadingInstances: false,
+        testResult: null, syncResult: null, instances: [],
+        enabled: true, config: {}, sources: {}, reset: {}, dirty: false,
+      },
     ])
   )
 );
@@ -124,13 +126,33 @@ const loadProvider = async providerKey => {
   }
 };
 
+const loadInstances = async providerKey => {
+  const s = state[providerKey];
+  s.loadingInstances = true;
+  try {
+    const { data } = await providerInstancesAPI.list(accountId.value, providerKey);
+    s.instances = data;
+  } catch {
+    s.instances = [];
+  } finally {
+    s.loadingInstances = false;
+  }
+};
+
 const toggleOpen = async providerKey => {
   const s = state[providerKey];
   s.open = !s.open;
-  if (s.open && !s.dirty) await loadProvider(providerKey);
+  if (s.open && !s.dirty) {
+    await loadProvider(providerKey);
+    const provider = PROVIDERS.find(p => p.key === providerKey);
+    if (provider?.syncInstances) loadInstances(providerKey);
+  }
 };
 
 const isSensitive = (field, s) => field.sensitive && s.config[field.key] && !s.reset[field.key];
+
+const showToken = ref({});
+const toggleShowToken = key => { showToken.value[key] = !showToken.value[key]; };
 
 const resetField = (field, s) => {
   s.reset[field.key] = true;
@@ -170,13 +192,14 @@ const importFromEnv = async providerKey => {
   }
 };
 
-const syncChatwoot = async providerKey => {
+const syncInstances = async providerKey => {
   const s = state[providerKey];
   s.syncing = true;
   s.syncResult = null;
   try {
-    const { data } = await integrationSettingsAPI.syncChatwoot(accountId.value, providerKey);
-    s.syncResult = { ok: true, message: data.message || 'Integração configurada!', webhookUrl: data.webhook_url };
+    const { data } = await integrationSettingsAPI.syncInstances(accountId.value, providerKey);
+    s.syncResult = { ok: true, message: data.message || 'Instâncias sincronizadas!' };
+    await loadInstances(providerKey);
   } catch (err) {
     const msg = err?.response?.data?.message || 'Falha ao sincronizar. Verifique as configurações.';
     s.syncResult = { ok: false, message: msg };
@@ -310,19 +333,78 @@ const testConnection = async providerKey => {
             <!-- Masked display when sensitive and set -->
             <div
               v-if="isSensitive(field, state[provider.key])"
-              class="px-3 py-2 rounded-lg bg-n-slate-2 text-n-slate-11 text-body-small font-mono"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-n-slate-2 text-n-slate-11 text-body-small font-mono"
             >
-              {{ state[provider.key].config[field.key] }}
+              <span class="flex-1 tracking-widest">
+                {{ showToken[`${provider.key}.${field.key}`] ? state[provider.key].config[field.key] : '••••••••••••' }}
+              </span>
+              <button
+                type="button"
+                class="shrink-0 text-n-slate-9 hover:text-n-slate-12 transition-colors"
+                @click="toggleShowToken(`${provider.key}.${field.key}`)"
+              >
+                <span :class="showToken[`${provider.key}.${field.key}`] ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="w-4 h-4" />
+              </button>
             </div>
             <!-- Editable input -->
+            <div v-else-if="field.sensitive" class="relative">
+              <input
+                v-model="state[provider.key].config[field.key]"
+                :type="showToken[`${provider.key}.${field.key}_edit`] ? 'text' : 'password'"
+                :placeholder="field.placeholder"
+                class="w-full px-3 py-2 pr-10 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
+                @input="state[provider.key].dirty = true"
+              />
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-n-slate-9 hover:text-n-slate-12 transition-colors"
+                @click="toggleShowToken(`${provider.key}.${field.key}_edit`)"
+              >
+                <span :class="showToken[`${provider.key}.${field.key}_edit`] ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="w-4 h-4" />
+              </button>
+            </div>
             <input
               v-else
               v-model="state[provider.key].config[field.key]"
-              :type="field.sensitive ? 'password' : 'text'"
+              type="text"
               :placeholder="field.placeholder"
               class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
               @input="state[provider.key].dirty = true"
             />
+          </div>
+
+          <!-- Synced instances list -->
+          <div v-if="provider.syncInstances" class="flex flex-col gap-2 pt-2 border-t border-n-weak/50">
+            <div class="flex items-center justify-between">
+              <span class="text-body-small font-medium text-n-slate-12">Instâncias sincronizadas</span>
+              <span v-if="state[provider.key].loadingInstances" class="text-xs text-n-slate-11">Carregando...</span>
+            </div>
+            <div v-if="state[provider.key].instances.length === 0 && !state[provider.key].loadingInstances" class="text-xs text-n-slate-11 py-1">
+              Nenhuma instância sincronizada. Clique em "Sincronizar Instâncias" após salvar as credenciais.
+            </div>
+            <div v-else class="flex flex-col gap-1">
+              <div class="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-n-slate-11 px-1">
+                <span>Instância</span>
+                <span>Número</span>
+                <span>Status</span>
+              </div>
+              <div
+                v-for="inst in state[provider.key].instances"
+                :key="inst.id"
+                class="grid grid-cols-[1fr_1fr_auto] gap-2 items-center px-1 py-1.5 rounded-lg bg-n-slate-2/50"
+              >
+                <span class="text-body-small text-n-slate-12 truncate">{{ inst.instance_name }}</span>
+                <span class="text-body-small text-n-slate-11 font-mono">{{ inst.phone_number || '—' }}</span>
+                <span
+                  :class="[
+                    'text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
+                    inst.status === 'connected' ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-slate-3 text-n-slate-11'
+                  ]"
+                >
+                  {{ inst.status === 'connected' ? 'Conectada' : inst.status }}
+                </span>
+              </div>
+            </div>
           </div>
 
           <!-- Sync result -->
@@ -377,13 +459,13 @@ const testConnection = async providerKey => {
                 {{ state[provider.key].testing ? 'Testando...' : 'Testar conexão' }}
               </button>
               <button
-                v-if="provider.syncable"
+                v-if="provider.syncInstances"
                 class="text-body-small text-n-teal-11 hover:text-n-teal-12 flex items-center gap-1 disabled:opacity-50 font-medium"
                 :disabled="state[provider.key].syncing"
-                @click="syncChatwoot(provider.key)"
+                @click="syncInstances(provider.key)"
               >
                 <span class="i-lucide-refresh-cw w-3.5 h-3.5" />
-                {{ state[provider.key].syncing ? 'Sincronizando...' : 'Sincronizar com Chatwoot' }}
+                {{ state[provider.key].syncing ? 'Sincronizando...' : 'Sincronizar Instâncias' }}
               </button>
             </div>
             <button
