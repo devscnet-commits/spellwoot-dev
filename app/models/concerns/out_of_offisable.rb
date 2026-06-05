@@ -27,6 +27,10 @@ module OutOfOffisable
 
     # Use multi-period schedule if configured, otherwise fall back to legacy
     working_periods.exists? ? periods_open_now? : !working_hours.today&.closed_now?
+  rescue StandardError => e
+    # Availability must never be blocked by a failure in the holidays/periods module.
+    Rails.logger.error "[BusinessHours] available_now? failed for inbox #{id}: #{e.message}"
+    true
   end
 
   def out_of_office?
@@ -69,6 +73,10 @@ module OutOfOffisable
 
     # Closed for the rest of today — find next open slot
     { status: :closed, next_open: next_available_time(now) }
+  rescue StandardError => e
+    # The status badge is non-essential — never let it 500 the inbox payload.
+    Rails.logger.error "[BusinessHours] current_status failed for inbox #{id}: #{e.message}"
+    { status: :disabled }
   end
 
   def next_available_time(from = Time.zone.now.in_time_zone(timezone))
@@ -91,17 +99,29 @@ module OutOfOffisable
 
   # ── Schedule accessors ───────────────────────────────────────────────────────
 
+  # The three schedule accessors below feed the inbox JSON payload. They must
+  # degrade to an empty list (never raise) so the Business Hours tab keeps
+  # rendering even if the holidays/periods module or its tables are unavailable.
   def working_periods_schedule
     working_periods.as_json(only: PERIOD_ATTRS + ['id'])
+  rescue StandardError => e
+    Rails.logger.error "[BusinessHours] working_periods_schedule failed for inbox #{id}: #{e.message}"
+    []
   end
 
   def holidays_schedule
     inbox_holidays.as_json(only: HOLIDAY_ATTRS + ['id'])
+  rescue StandardError => e
+    Rails.logger.error "[BusinessHours] holidays_schedule failed for inbox #{id}: #{e.message}"
+    []
   end
 
   # Legacy — kept for old code paths and widget
   def weekly_schedule
     working_hours.order(day_of_week: :asc).select(*OFFISABLE_ATTRS).as_json(except: :id)
+  rescue StandardError => e
+    Rails.logger.error "[BusinessHours] weekly_schedule failed for inbox #{id}: #{e.message}"
+    []
   end
 
   # ── Writers ──────────────────────────────────────────────────────────────────

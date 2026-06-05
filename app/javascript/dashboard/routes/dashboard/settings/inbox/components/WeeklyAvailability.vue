@@ -138,7 +138,7 @@ export default {
       this.intervalMessage     = intervalMessage    || '';
       this.holidayMessage      = holidayMessage     || '';
       this.holidays            = holidays           || [];
-      this.daySlots            = workingPeriods.length ? periodsFromApi(workingPeriods) : defaultDaySlots();
+      this.daySlots            = (workingPeriods || []).length ? periodsFromApi(workingPeriods) : defaultDaySlots();
       this.timeZone            = this.timeZones.find(item => timeZone === item.value) || DEFAULT_TIMEZONE;
     },
     onSlotUpdate(day, newSlot) {
