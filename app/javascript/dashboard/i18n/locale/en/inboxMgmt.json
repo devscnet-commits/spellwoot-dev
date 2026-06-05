@@ -970,6 +970,7 @@
       "TABS": {
         "HOURS": "Horário Comercial",
         "HOLIDAYS": "Feriados",
+        "EXCEPTIONS": "Exceções",
         "MESSAGES": "Mensagens Automáticas"
       },
       "STATUS": {
@@ -1004,6 +1005,19 @@
         "TYPE": "Tipo",
         "RECURRING": "Recorrente todo ano",
         "ONE_TIME": "Apenas este ano"
+      },
+      "EXCEPTIONS": {
+        "HINT": "Uma exceção tem prioridade sobre o horário padrão e os feriados nessa data.",
+        "EMPTY": "Nenhuma exceção cadastrada.",
+        "ADD": "Adicionar exceção",
+        "EDIT": "Editar exceção",
+        "NAME": "Nome (opcional)",
+        "NAME_PLACEHOLDER": "Ex: Véspera de Natal",
+        "DATE": "Data",
+        "CLOSED": "Fechado o dia todo",
+        "CLOSED_ALL_DAY": "Fechado o dia todo",
+        "PERIODS": "Períodos de atendimento",
+        "ADD_PERIOD": "Adicionar período"
       },
       "MESSAGES": {
         "OUT_OF_OFFICE_TITLE": "Mensagem fora do expediente",

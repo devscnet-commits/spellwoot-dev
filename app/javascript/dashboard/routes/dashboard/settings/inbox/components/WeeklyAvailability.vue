@@ -6,6 +6,7 @@ import SettingsToggleSection from 'dashboard/components-next/Settings/SettingsTo
 import SettingsFieldSection from 'dashboard/components-next/Settings/SettingsFieldSection.vue';
 import DayPeriodsRow from './DayPeriodsRow.vue';
 import HolidaysTab from './HolidaysTab.vue';
+import ExceptionsTab from './ExceptionsTab.vue';
 import AutoMessagesTab from './AutoMessagesTab.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
@@ -30,6 +31,7 @@ export default {
     SettingsFieldSection,
     DayPeriodsRow,
     HolidaysTab,
+    ExceptionsTab,
     AutoMessagesTab,
     NextButton,
     ComboBox,
@@ -48,6 +50,7 @@ export default {
       timeZone: DEFAULT_TIMEZONE,
       daySlots: defaultDaySlots(),
       holidays: [],
+      exceptions: [],
     };
   },
   computed: {
@@ -85,7 +88,8 @@ export default {
         this.daySlots,
         this.timeZone.value,
         this.holidays,
-        this.isBusinessHoursEnabled
+        this.isBusinessHoursEnabled,
+        this.exceptions
       );
     },
     statusLabel() {
@@ -130,6 +134,7 @@ export default {
         holiday_message: holidayMessage,
         working_periods: workingPeriods = [],
         holidays = [],
+        exceptions = [],
         timezone: timeZone,
       } = this.inbox;
 
@@ -138,6 +143,7 @@ export default {
       this.intervalMessage     = intervalMessage    || '';
       this.holidayMessage      = holidayMessage     || '';
       this.holidays            = holidays           || [];
+      this.exceptions          = exceptions         || [];
       this.daySlots            = (workingPeriods || []).length ? periodsFromApi(workingPeriods) : defaultDaySlots();
       this.timeZone            = this.timeZones.find(item => timeZone === item.value) || DEFAULT_TIMEZONE;
     },
@@ -168,6 +174,7 @@ export default {
           holiday_message:       this.holidayMessage,
           working_periods:       periodsToApi(this.daySlots),
           holidays:              this.holidays,
+          exceptions:            this.exceptions,
           timezone:              this.timeZone.value,
           channel: {},
         };
@@ -209,7 +216,7 @@ export default {
       <!-- Sub-tabs -->
       <div class="flex items-center gap-1 border-b border-n-weak">
         <button
-          v-for="tab in ['hours', 'holidays', 'messages']"
+          v-for="tab in ['hours', 'holidays', 'exceptions', 'messages']"
           :key="tab"
           class="px-4 py-2 text-body-main font-medium transition-colors border-b-2 -mb-px"
           :class="activeTab === tab
@@ -249,6 +256,11 @@ export default {
         <!-- Tab: Feriados -->
         <template v-else-if="activeTab === 'holidays'">
           <HolidaysTab :holidays="holidays" @update="h => (holidays = h)" />
+        </template>
+
+        <!-- Tab: Exceções -->
+        <template v-else-if="activeTab === 'exceptions'">
+          <ExceptionsTab :exceptions="exceptions" @update="e => (exceptions = e)" />
         </template>
 
         <!-- Tab: Mensagens Automáticas -->

@@ -50,6 +50,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     update_inbox_working_hours
     update_inbox_working_periods
     update_inbox_holidays
+    update_inbox_exceptions
     update_channel if channel_update_required?
   rescue StandardError => e
     Rails.logger.error "[InboxUpdate] inbox_id=#{@inbox&.id} #{e.class}: #{e.message}\n#{e.backtrace.first(15).join("\n")}"
@@ -492,6 +493,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
     permitted = params.permit(holidays: Inbox::HOLIDAY_ATTRS)[:holidays]
     @inbox.update_holidays(permitted)
+  end
+
+  def update_inbox_exceptions
+    return unless params[:exceptions]
+
+    permitted = params.permit(
+      exceptions: [:name, :exception_date, :closed, { periods: Inbox::EXCEPTION_PERIOD_ATTRS }]
+    )[:exceptions]
+    @inbox.update_exceptions(permitted)
   end
 
   def update_channel
