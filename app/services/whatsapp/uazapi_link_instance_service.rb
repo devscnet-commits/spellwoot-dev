@@ -43,12 +43,13 @@ class Whatsapp::UazapiLinkInstanceService
     access_token = Current.user.access_token&.token
     return nil unless access_token.present?
 
-    frontend_url = ENV.fetch('FRONTEND_URL', nil)
-    return nil unless frontend_url.present?
+    creds = Whatsapp::Providers::UazapiService.credentials_for(@account.id)
+    chatwoot_url = creds[:webhook_base_url] || ENV.fetch('FRONTEND_URL', nil)
+    return nil unless chatwoot_url.present?
 
     config = {
       enabled: true,
-      url: frontend_url,
+      url: chatwoot_url,
       access_token: access_token,
       account_id: @account.id,
       inbox_id: inbox.id,
@@ -57,7 +58,7 @@ class Whatsapp::UazapiLinkInstanceService
       create_new_conversation: true
     }
 
-    result = Whatsapp::Providers::UazapiService.configure_chatwoot_integration(instance_token, config)
+    result = Whatsapp::Providers::UazapiService.configure_chatwoot_integration(instance_token, config, account_id: @account.id)
     result&.dig('chatwoot_inbox_webhook_url')
   end
 end

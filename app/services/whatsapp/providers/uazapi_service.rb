@@ -43,13 +43,13 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   # UazAPI specific methods
 
-  def self.create_instance(name)
-    url = "#{base_url}/instance/init"
+  def self.create_instance(name, account_id: nil)
+    url = "#{base_url(account_id)}/instance/init"
     Rails.logger.info "[UAZAPI] Creating instance: #{name} at #{url}"
 
     response = HTTParty.post(
       url,
-      headers: admin_headers,
+      headers: admin_headers(account_id),
       body: { name: name }.to_json
     )
 
@@ -223,7 +223,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def process_uazapi_response(response, message)
     parsed = response.parsed_response
-    message_id = parsed.is_a?(Hash) ? (parsed['messageid'] || parsed['id']) : nil
+    message_id = parsed&.dig('messageid') || parsed&.dig('id')
 
     Rails.logger.info "[UAZAPI] Send response: status=#{response.code}, message_id=#{message_id}, body=#{response.body.truncate(200)}"
 
@@ -245,16 +245,15 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     Rails.logger.error "[UAZAPI] Error: #{response.body}"
     return if message.blank?
 
-    if [404, 405].include?(response.code.to_i)
-      Rails.logger.warn "[UAZAPI] #{response.code} response — message may have been delivered despite connectivity error. Not marking as failed."
-      return
-    end
-
     error_msg = case response.code.to_i
                 when 401
                   'Sessão expirada. Reconecte a caixa do WhatsApp'
                 when 403
                   'Sem permissão para enviar mensagens nesta conta'
+                when 404
+                  'Instância não encontrada. Verifique a conexão da caixa'
+                when 405
+                  'Caixa desconectada. Reconecte o WhatsApp'
                 when 422
                   'Número de telefone inválido ou não está no WhatsApp'
                 when 429
@@ -293,23 +292,45 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def base_url
-    self.class.base_url
+    self.class.base_url(whatsapp_channel.account_id)
   end
 
-  def self.base_url
-    ENV.fetch('UAZAPI_BASE_URL', 'https://free.uazapi.com')
-  end
+  # Resolves credentials using the 3-tier chain:
+  # account settings → global settings → environment variables.
+  # Falls back gracefully so ENV-only installs keep working.
+  def self.credentials_for(account_id = nil)
+    if account_id.present?
+      config = IntegrationSettingsService.get_config(account_id, 'uazapi')
+      db_account = IntegrationSettingsService.load_db(account_id, 'uazapi')
+      db_global  = IntegrationSettingsService.load_db(nil, 'uazapi')
+      source = (db_account.any? || db_global.any?) ? 'account/global settings' : 'environment variables'
+      Rails.logger.info "[UAZAPI] Credential source: #{source} (account_id=#{account_id})"
+    else
+      config = {}
+      Rails.logger.info '[UAZAPI] Credential source: environment variables (no account context)'
+    end
 
-  def self.admin_headers
     {
-      'Content-Type' => 'application/json',
-      'admintoken' => ENV.fetch('UAZAPI_ADMIN_TOKEN', nil)
+      base_url:         config['apiUrl'].presence         || ENV.fetch('UAZAPI_BASE_URL', 'https://free.uazapi.com'),
+      admin_token:      config['token'].presence          || ENV.fetch('UAZAPI_ADMIN_TOKEN', nil),
+      webhook_base_url: config['webhookBaseUrl'].presence || ENV.fetch('UAZAPI_WEBHOOK_BASE_URL', nil)
     }
   end
 
-  def self.configure_chatwoot_integration(instance_token, chatwoot_config)
-    url = "#{base_url}/chatwoot/config"
+  def self.base_url(account_id = nil)
+    credentials_for(account_id)[:base_url]
+  end
 
+  def self.admin_headers(account_id = nil)
+    {
+      'Content-Type' => 'application/json',
+      'admintoken'   => credentials_for(account_id)[:admin_token]
+    }
+  end
+
+  def self.configure_chatwoot_integration(instance_token, chatwoot_config, account_id: nil)
+    url = "#{base_url(account_id)}/chatwoot/config"
+    
     # Log antes de fazer a requisição (sem token sensível)
     log_config = chatwoot_config.dup
     log_config['access_token'] = "#{log_config['access_token'][0..10]}..." if log_config['access_token'].present?
@@ -339,7 +360,7 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
       parsed_response = response.parsed_response
       webhook_url = parsed_response['chatwoot_inbox_webhook_url']
-
+      
       Rails.logger.info "[UAZAPI] Chatwoot integration configured successfully"
       Rails.logger.info "[UAZAPI] Webhook URL: #{webhook_url}" if webhook_url.present?
 
@@ -351,9 +372,9 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     end
   end
 
-  def self.get_chatwoot_config(instance_token)
-    url = "#{base_url}/chatwoot/config"
-
+  def self.get_chatwoot_config(instance_token, account_id: nil)
+    url = "#{base_url(account_id)}/chatwoot/config"
+    
     Rails.logger.info "[UAZAPI] Getting Chatwoot integration status"
     Rails.logger.info "[UAZAPI] URL: #{url}"
 
