@@ -41,8 +41,18 @@
     "SORT_TOOLTIP_LABEL": "Sort conversations",
     "CHAT_SORT": {
       "STATUS": "Status",
-      "ORDER_BY": "Order by"
+      "ORDER_BY": "Order by",
+      "ORIGIN": "Origin"
     },
+    "CHAT_ORIGIN_FILTER_ITEMS": {
+      "all": {
+        "TEXT": "All"
+      },
+      "reopened": {
+        "TEXT": "Reopened"
+      }
+    },
+    "REOPENED_BADGE": "REABERTA",
     "CHAT_TIME_STAMP": {
       "CREATED": {
         "LATEST": "Created",

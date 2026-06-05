@@ -56,6 +56,10 @@ Rails.application.routes.draw do
           resource :bulk_actions, only: [:create]
           resources :agents, only: [:index, :create, :update, :destroy] do
             post :bulk_create, on: :collection
+            member do
+              post :deactivate
+              post :reactivate
+            end
             resource :schedule, only: [:show, :update, :destroy],
                                 controller: 'agent_schedules',
                                 param: :agent_id
@@ -290,6 +294,7 @@ Rails.application.routes.draw do
               collection do
                 delete :destroy
                 patch :update
+                patch :update_member_role
               end
             end
           end
@@ -489,6 +494,7 @@ Rails.application.routes.draw do
               get :leads_summary
               get :marketing_summary
               get :schedule_report
+              get :conversation_distribution
             end
           end
           resource :year_in_review, only: [:show]

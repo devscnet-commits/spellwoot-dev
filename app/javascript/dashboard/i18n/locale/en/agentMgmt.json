@@ -20,7 +20,8 @@
       "ACTIONS": "Actions",
       "VERIFIED": "Verified",
       "VERIFICATION_PENDING": "Verification Pending",
-      "AVAILABLE_CUSTOM_ROLE": "Available custom role permissions"
+      "AVAILABLE_CUSTOM_ROLE": "Available custom role permissions",
+      "INACTIVE": "Inactive"
     },
     "ADD": {
       "TITLE": "Add agent to your team",
@@ -61,6 +62,21 @@
         "NO": "No, Keep "
       }
     },
+    "DEACTIVATE": {
+      "BUTTON_TEXT": "Deactivate",
+      "REACTIVATE_BUTTON_TEXT": "Reactivate",
+      "API": {
+        "SUCCESS_MESSAGE": "Agent deactivated successfully",
+        "REACTIVATE_SUCCESS_MESSAGE": "Agent reactivated successfully",
+        "ERROR_MESSAGE": "Could not update agent status. Please try again later"
+      },
+      "CONFIRM": {
+        "TITLE": "Deactivate agent",
+        "MESSAGE": "The agent will lose access and stop receiving assignments. All history will be preserved. Deactivate ",
+        "YES": "Yes, Deactivate ",
+        "NO": "No, Keep "
+      }
+    },
     "EDIT": {
       "TITLE": "Edit agent",
       "FORM": {
@@ -77,10 +93,9 @@
           "LABEL": "Email Address",
           "PLACEHOLDER": "Please enter an email address of the agent"
         },
-        "AGENT_AVAILABILITY": {
-          "LABEL": "Availability",
-          "PLACEHOLDER": "Please select an availability status",
-          "ERROR": "Availability is required"
+        "RECEIVES_ASSIGNMENTS": {
+          "LABEL": "Receives automatic assignments",
+          "DESCRIPTION": "When enabled, this agent participates in the automatic assignment queue"
         },
         "SUBMIT": "Edit Agent"
       },

@@ -14,8 +14,10 @@ class ConversationApi extends ApiClient {
     labels,
     teamId,
     conversationType,
+    campaignId,
     sortBy,
     updatedWithin,
+    wasReopened,
   }) {
     return axios.get(this.url, {
       params: {
@@ -26,8 +28,10 @@ class ConversationApi extends ApiClient {
         page,
         labels,
         conversation_type: conversationType,
+        campaign_id: campaignId,
         sort_by: sortBy,
         updated_within: updatedWithin,
+        was_reopened: wasReopened,
       },
     });
   }
