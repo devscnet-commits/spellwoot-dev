@@ -960,17 +960,61 @@
       "TOGGLE_AVAILABILITY": "Ativar horário comercial para esta caixa",
       "UNAVAILABLE_MESSAGE_LABEL": "Mensagem para visitantes fora do horário",
       "TOGGLE_HELP": "Ao ativar, os horários de atendimento serão exibidos no widget e visitantes fora do horário receberão uma mensagem de aviso.",
+      "ADD_PERIOD": "Adicionar período",
+      "TEMPLATES": "Modelos de horário",
+      "COPY_TO": "Copiar para outros dias",
+      "APPLY_TO": "Aplicar para",
+      "APPLY": "Aplicar",
+      "CANCEL": "Cancelar",
+      "SAVE": "Salvar",
+      "TABS": {
+        "HOURS": "Horário Comercial",
+        "HOLIDAYS": "Feriados",
+        "MESSAGES": "Mensagens Automáticas"
+      },
+      "STATUS": {
+        "OPEN": "Aberta",
+        "INTERVAL": "Intervalo",
+        "CLOSED": "Fechada",
+        "HOLIDAY": "Feriado",
+        "CLOSES_AT": "Fecha às {time}",
+        "OPENS_AT": "Abre às {time}"
+      },
       "DAY": {
         "DAY": "Dia",
         "AVAILABILITY": "Disponibilidade",
-        "ENABLE": "Enable availability for this day",
+        "ENABLE": "Ativar disponibilidade para este dia",
         "UNAVAILABLE": "Indisponível",
         "HOURS": "horas",
         "VALIDATION_ERROR": "O horário de início deve ser anterior ao de encerramento.",
         "CHOOSE": "Escolher"
       },
       "ALL_DAY": "O dia todo",
-      "LUNCH_BREAK": "Horário de almoço"
+      "LUNCH_BREAK": "Horário de almoço",
+      "HOLIDAYS": {
+        "EMPTY": "Nenhum feriado cadastrado.",
+        "ADD": "Adicionar feriado",
+        "EDIT": "Editar feriado",
+        "NAME": "Nome",
+        "NAME_PLACEHOLDER": "Ex: Natal",
+        "DAY": "Dia",
+        "MONTH": "Mês",
+        "YEAR": "Ano",
+        "ANY_YEAR": "Todo ano",
+        "TYPE": "Tipo",
+        "RECURRING": "Recorrente todo ano",
+        "ONE_TIME": "Apenas este ano"
+      },
+      "MESSAGES": {
+        "OUT_OF_OFFICE_TITLE": "Mensagem fora do expediente",
+        "OUT_OF_OFFICE_HELP": "Enviada quando o contato entra em atendimento fora do horário comercial.",
+        "INTERVAL_TITLE": "Mensagem de intervalo",
+        "INTERVAL_HELP": "Enviada quando o contato entra em atendimento durante o intervalo entre períodos (ex: almoço).",
+        "INTERVAL_PLACEHOLDER": "Ex: Estamos em intervalo. Retornamos em breve.",
+        "HOLIDAY_TITLE": "Mensagem de feriado",
+        "HOLIDAY_HELP": "Enviada quando o contato entra em atendimento durante um feriado cadastrado.",
+        "HOLIDAY_PLACEHOLDER": "Ex: Hoje é feriado. Retornamos no próximo dia útil."
+      }
     },
     "IMAP": {
       "TITLE": "IMAP",
