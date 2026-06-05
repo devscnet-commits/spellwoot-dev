@@ -76,6 +76,7 @@ const props = defineProps({
   teamId: { type: [String, Number], default: 0 },
   label: { type: String, default: '' },
   conversationType: { type: String, default: '' },
+  campaignId: { type: [String, Number], default: 0 },
   foldersId: { type: [String, Number], default: 0 },
   showConversationList: { default: true, type: Boolean },
   isOnExpandedLayout: { default: false, type: Boolean },
@@ -315,6 +316,7 @@ const conversationFilters = computed(() => {
     labels: props.label ? [props.label] : undefined,
     teamId: props.teamId || undefined,
     conversationType: props.conversationType || undefined,
+    campaignId: props.campaignId || undefined,
     wasReopened:
       activeOriginFilter.value === 'reopened' ? true : undefined,
   };
