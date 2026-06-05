@@ -3,12 +3,10 @@ import { FEATURE_FLAGS } from '../../../../featureFlags';
 
 import TeamsIndex from './Index.vue';
 import CreateStepWrap from './Create/Index.vue';
-import EditStepWrap from './Edit/Index.vue';
 import CreateTeam from './Create/CreateTeam.vue';
-import EditTeam from './Edit/EditTeam.vue';
 import AddAgents from './Create/AddAgents.vue';
-import EditAgents from './Edit/EditAgents.vue';
 import FinishSetup from './FinishSetup.vue';
+import TeamEditPage from './Edit/TeamEditPage.vue';
 import SettingsContent from '../Wrapper.vue';
 import SettingsWrapper from '../SettingsWrapper.vue';
 
@@ -81,36 +79,12 @@ export default {
         },
         {
           path: ':teamId/edit',
-          component: EditStepWrap,
-          children: [
-            {
-              path: '',
-              name: 'settings_teams_edit',
-              component: EditTeam,
-              meta: {
-                featureFlag: FEATURE_FLAGS.TEAM_MANAGEMENT,
-                permissions: ['administrator'],
-              },
-            },
-            {
-              path: 'agents',
-              name: 'settings_teams_edit_members',
-              component: EditAgents,
-              meta: {
-                featureFlag: FEATURE_FLAGS.TEAM_MANAGEMENT,
-                permissions: ['administrator'],
-              },
-            },
-            {
-              path: 'finish',
-              name: 'settings_teams_edit_finish',
-              meta: {
-                featureFlag: FEATURE_FLAGS.TEAM_MANAGEMENT,
-                permissions: ['administrator'],
-              },
-              component: FinishSetup,
-            },
-          ],
+          name: 'settings_teams_edit',
+          component: TeamEditPage,
+          meta: {
+            featureFlag: FEATURE_FLAGS.TEAM_MANAGEMENT,
+            permissions: ['administrator'],
+          },
         },
       ],
     },

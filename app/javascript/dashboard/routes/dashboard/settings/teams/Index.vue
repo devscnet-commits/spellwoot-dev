@@ -137,6 +137,24 @@ const confirmPlaceHolderText = computed(() =>
               <p class="mb-0 text-n-slate-11 text-body-main">
                 {{ team.description }}
               </p>
+              <div class="flex items-center gap-3 mt-1">
+                <span class="flex items-center gap-1 text-xs text-n-slate-11">
+                  <span class="i-lucide-users size-3" />
+                  {{ $t('TEAMS_SETTINGS.LIST.MEMBERS_COUNT', { count: team.agents_count ?? 0 }) }}
+                </span>
+                <span
+                  :class="[
+                    'text-xs px-1.5 py-0.5 rounded-full font-medium',
+                    team.allow_auto_assign
+                      ? 'bg-n-teal-3 text-n-teal-11'
+                      : 'bg-n-slate-3 text-n-slate-11',
+                  ]"
+                >
+                  {{ team.allow_auto_assign
+                    ? $t('TEAMS_SETTINGS.LIST.AUTO_ASSIGN_ON')
+                    : $t('TEAMS_SETTINGS.LIST.AUTO_ASSIGN_OFF') }}
+                </span>
+              </div>
             </div>
           </div>
           <div class="flex justify-end gap-3">
