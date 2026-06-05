@@ -111,34 +111,56 @@ export const scheduleTemplates = [
 const parseTimeInZone = (timeStr, refDate) =>
   parse(timeStr, 'hh:mm a', refDate);
 
-export const computeInboxStatus = (daySlots, timezone, holidays = [], workingHoursEnabled) => {
+const pad2 = n => String(n).padStart(2, '0');
+
+export const computeInboxStatus = (
+  daySlots,
+  timezone,
+  holidays = [],
+  workingHoursEnabled,
+  exceptions = []
+) => {
   if (!workingHoursEnabled) return null;
 
   const now = utcToZonedTime(new Date(), timezone);
-
-  // Check holiday
   const todayMonth = now.getMonth() + 1;
   const todayDay = now.getDate();
   const todayYear = now.getFullYear();
-  const isHoliday = holidays.some(h => {
-    if (!h.recurring && h.holiday_year && h.holiday_year !== todayYear) return false;
-    return h.holiday_month === todayMonth && h.holiday_day === todayDay;
-  });
-  if (isHoliday) return { status: 'holiday' };
 
-  const todaySlot = daySlots.find(s => s.day === now.getDay());
-  if (!todaySlot || !todaySlot.enabled || !todaySlot.periods.length) {
-    return { status: 'closed', nextOpen: null };
-  }
+  let todayPeriods;
 
-  const refDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Priority: exception (this date) > holiday > standard weekly schedule.
+  const todayStr = `${todayYear}-${pad2(todayMonth)}-${pad2(todayDay)}`;
+  const exception = exceptions.find(
+    e => String(e.exception_date || '').slice(0, 10) === todayStr
+  );
 
-  const todayPeriods = todaySlot.periods
-    .filter(p => p.from && p.to)
-    .map(p => ({
-      start: parseTimeInZone(p.from, refDate),
-      end: parseTimeInZone(p.to, refDate),
+  if (exception) {
+    if (exception.closed) return { status: 'closed', nextOpen: null };
+    todayPeriods = (exception.periods || []).map(p => ({
+      start: new Date(todayYear, now.getMonth(), todayDay, p.start_hour, p.start_minutes),
+      end: new Date(todayYear, now.getMonth(), todayDay, p.end_hour, p.end_minutes),
     }));
+  } else {
+    const isHoliday = holidays.some(h => {
+      if (!h.recurring && h.holiday_year && h.holiday_year !== todayYear) return false;
+      return h.holiday_month === todayMonth && h.holiday_day === todayDay;
+    });
+    if (isHoliday) return { status: 'holiday' };
+
+    const todaySlot = daySlots.find(s => s.day === now.getDay());
+    if (!todaySlot || !todaySlot.enabled || !todaySlot.periods.length) {
+      return { status: 'closed', nextOpen: null };
+    }
+
+    const refDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    todayPeriods = todaySlot.periods
+      .filter(p => p.from && p.to)
+      .map(p => ({
+        start: parseTimeInZone(p.from, refDate),
+        end: parseTimeInZone(p.to, refDate),
+      }));
+  }
 
   // Inside an open period?
   for (const p of todayPeriods) {

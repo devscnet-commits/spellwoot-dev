@@ -21,6 +21,8 @@ class Team < ApplicationRecord
   belongs_to :account
   has_many :team_members, dependent: :destroy_async
   has_many :members, through: :team_members, source: :user
+  has_many :team_inboxes, dependent: :destroy_async
+  has_many :inboxes, through: :team_inboxes
   has_many :conversations, dependent: :nullify
 
   validates :name,

@@ -17,6 +17,7 @@ json.holiday_message resource.holiday_message
 json.working_hours resource.weekly_schedule
 json.working_periods resource.working_periods_schedule
 json.holidays resource.holidays_schedule
+json.exceptions resource.exceptions_schedule
 json.timezone resource.timezone
 json.current_status resource.current_status
 json.callback_webhook_url resource.callback_webhook_url

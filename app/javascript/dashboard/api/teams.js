@@ -44,6 +44,16 @@ export class TeamsAPI extends CacheEnabledApiClient {
       role,
     });
   }
+
+  getInboxes({ teamId }) {
+    return axios.get(`${this.url}/${teamId}/team_inboxes`);
+  }
+
+  updateInboxes({ teamId, inboxIds }) {
+    return axios.patch(`${this.url}/${teamId}/team_inboxes/update`, {
+      inbox_ids: inboxIds,
+    });
+  }
 }
 
 export default new TeamsAPI();

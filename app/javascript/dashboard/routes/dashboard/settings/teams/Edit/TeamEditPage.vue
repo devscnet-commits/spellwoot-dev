@@ -8,6 +8,7 @@ import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import TeamsAPI from 'dashboard/api/teams';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -21,6 +22,7 @@ const team = computed(() => getTeam.value(teamId.value));
 const getTeamMembers = useMapGetter('teamMembers/getTeamMembers');
 const teamMembers = computed(() => getTeamMembers.value(teamId.value) || []);
 const agentList = useMapGetter('agents/getAgents');
+const allInboxes = useMapGetter('inboxes/getInboxes');
 const membersUiFlags = useMapGetter('teamMembers/getUIFlags');
 const teamsUiFlags = useMapGetter('teams/getUIFlags');
 
@@ -35,6 +37,11 @@ const localMembers = ref([]);
 const showAddPanel = ref(false);
 const agentSearch = ref('');
 const isSavingMembers = ref(false);
+
+// Linked inboxes local state
+const linkedInboxIds = ref([]);
+const isLoadingInboxes = ref(false);
+const isSavingInboxes = ref(false);
 
 const AVAILABILITY_KEYS = ['online', 'busy', 'offline'];
 
@@ -72,11 +79,43 @@ function syncFromMembers(members) {
   localMembers.value = members.map(m => ({ ...m, team_role: m.team_role || 'member' }));
 }
 
+async function loadInboxes() {
+  isLoadingInboxes.value = true;
+  try {
+    if (!allInboxes.value?.length) store.dispatch('inboxes/get');
+    const { data } = await TeamsAPI.getInboxes({ teamId: teamId.value });
+    linkedInboxIds.value = data.map(i => i.id);
+  } catch {
+    linkedInboxIds.value = [];
+  } finally {
+    isLoadingInboxes.value = false;
+  }
+}
+
 onMounted(async () => {
   store.dispatch('agents/get');
   await store.dispatch('teamMembers/get', { teamId: teamId.value });
   syncFromMembers(teamMembers.value);
+  loadInboxes();
 });
+
+function toggleInbox(inboxId) {
+  linkedInboxIds.value = linkedInboxIds.value.includes(inboxId)
+    ? linkedInboxIds.value.filter(id => id !== inboxId)
+    : [...linkedInboxIds.value, inboxId];
+}
+
+async function saveInboxes() {
+  isSavingInboxes.value = true;
+  try {
+    await TeamsAPI.updateInboxes({ teamId: teamId.value, inboxIds: linkedInboxIds.value });
+    useAlert(t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.SAVED'));
+  } catch {
+    useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
+  } finally {
+    isSavingInboxes.value = false;
+  }
+}
 
 watch(team, syncFromTeam, { immediate: true });
 watch(teamMembers, syncFromMembers, { immediate: false });
@@ -181,6 +220,7 @@ async function saveMembers() {
         v-for="tab in [
           { key: 'details', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.DETAILS') },
           { key: 'members', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.MEMBERS') },
+          { key: 'inboxes', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.INBOXES') },
         ]"
         :key="tab.key"
         type="button"
@@ -372,6 +412,47 @@ async function saveMembers() {
             :disabled="isSavingMembers"
             :is-loading="isSavingMembers"
             @click="saveMembers"
+          />
+        </div>
+      </template>
+    </div>
+
+    <!-- Inboxes tab -->
+    <div v-else-if="activeTab === 'inboxes'" class="flex flex-col gap-4">
+      <p class="text-sm text-n-slate-11">
+        {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.HINT') }}
+      </p>
+      <div v-if="isLoadingInboxes" class="flex justify-center py-8">
+        <Spinner class="text-n-brand" />
+      </div>
+      <template v-else>
+        <div
+          v-if="(allInboxes || []).length"
+          class="border border-n-weak rounded-xl divide-y divide-n-weak overflow-hidden"
+        >
+          <label
+            v-for="ibx in allInboxes"
+            :key="ibx.id"
+            class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-n-alpha-2"
+          >
+            <input
+              type="checkbox"
+              :checked="linkedInboxIds.includes(ibx.id)"
+              class="m-0"
+              @change="toggleInbox(ibx.id)"
+            />
+            <span class="text-sm text-n-slate-12">{{ ibx.name }}</span>
+          </label>
+        </div>
+        <p v-else class="text-sm text-n-slate-11 text-center py-4">
+          {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.EMPTY') }}
+        </p>
+        <div class="flex justify-end">
+          <Button
+            :label="t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.SAVE')"
+            :disabled="isSavingInboxes"
+            :is-loading="isSavingInboxes"
+            @click="saveInboxes"
           />
         </div>
       </template>
