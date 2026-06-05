@@ -3,50 +3,18 @@ import getHours from 'date-fns/getHours';
 import getMinutes from 'date-fns/getMinutes';
 import timeZoneData from './timezones.json';
 
-export const defaultTimeSlot = [
-  {
-    day: 0,
-    to: '',
-    from: '',
-    valid: false,
-  },
-  {
-    day: 1,
-    to: '',
-    from: '',
-    valid: false,
-  },
-  {
-    day: 2,
-    to: '',
-    from: '',
-    valid: false,
-  },
-  {
-    day: 3,
-    to: '',
-    from: '',
-    valid: false,
-  },
-  {
-    day: 4,
-    to: '',
-    from: '',
-    valid: false,
-  },
-  {
-    day: 5,
-    to: '',
-    from: '',
-    valid: false,
-  },
-  {
-    day: 6,
-    to: '',
-    from: '',
-    valid: false,
-  },
-];
+const emptySlot = day => ({
+  day,
+  from: '',
+  to: '',
+  valid: false,
+  openAllDay: false,
+  hasLunchBreak: false,
+  lunchFrom: '',
+  lunchTo: '',
+});
+
+export const defaultTimeSlot = [0, 1, 2, 3, 4, 5, 6].map(emptySlot);
 
 export const generateTimeSlots = (step = 15) => {
   /* 
@@ -95,16 +63,32 @@ export const timeSlotParse = timeSlots => {
       close_minutes: closeMinutes,
       closed_all_day: closedAllDay,
       open_all_day: openAllDay,
+      has_lunch_break: hasLunchBreak,
+      lunch_start_hour: lunchStartHour,
+      lunch_start_minutes: lunchStartMinutes,
+      lunch_end_hour: lunchEndHour,
+      lunch_end_minutes: lunchEndMinutes,
     } = slot;
     const from = closedAllDay ? '' : getTime(openHour, openMinutes);
     const to = closedAllDay ? '' : getTime(closeHour, closeMinutes);
+    const lunchFrom =
+      hasLunchBreak && lunchStartHour != null
+        ? getTime(lunchStartHour, lunchStartMinutes ?? 0)
+        : '';
+    const lunchTo =
+      hasLunchBreak && lunchEndHour != null
+        ? getTime(lunchEndHour, lunchEndMinutes ?? 0)
+        : '';
 
     return {
       day,
-      to,
       from,
+      to,
       valid: !closedAllDay,
       openAllDay,
+      hasLunchBreak: Boolean(hasLunchBreak),
+      lunchFrom,
+      lunchTo,
     };
   });
 };
@@ -113,20 +97,33 @@ export const timeSlotTransform = timeSlots => {
   return timeSlots.map(slot => {
     const closed = slot.openAllDay ? false : !(slot.to && slot.from);
     const openAllDay = slot.openAllDay;
-    let fromDate = '';
-    let toDate = '';
     let openHour = '';
     let openMinutes = '';
     let closeHour = '';
     let closeMinutes = '';
 
     if (!closed) {
-      fromDate = parse(slot.from, 'hh:mm a', new Date());
-      toDate = parse(slot.to, 'hh:mm a', new Date());
+      const fromDate = parse(slot.from, 'hh:mm a', new Date());
+      const toDate = parse(slot.to, 'hh:mm a', new Date());
       openHour = getHours(fromDate);
       openMinutes = getMinutes(fromDate);
       closeHour = getHours(toDate);
       closeMinutes = getMinutes(toDate);
+    }
+
+    const hasLunchBreak = Boolean(slot.hasLunchBreak && slot.lunchFrom && slot.lunchTo);
+    let lunchStartHour = null;
+    let lunchStartMinutes = null;
+    let lunchEndHour = null;
+    let lunchEndMinutes = null;
+
+    if (hasLunchBreak) {
+      const lunchFromDate = parse(slot.lunchFrom, 'hh:mm a', new Date());
+      const lunchToDate = parse(slot.lunchTo, 'hh:mm a', new Date());
+      lunchStartHour = getHours(lunchFromDate);
+      lunchStartMinutes = getMinutes(lunchFromDate);
+      lunchEndHour = getHours(lunchToDate);
+      lunchEndMinutes = getMinutes(lunchToDate);
     }
 
     return {
@@ -137,6 +134,11 @@ export const timeSlotTransform = timeSlots => {
       close_hour: closeHour,
       close_minutes: closeMinutes,
       open_all_day: openAllDay,
+      has_lunch_break: hasLunchBreak,
+      lunch_start_hour: lunchStartHour,
+      lunch_start_minutes: lunchStartMinutes,
+      lunch_end_hour: lunchEndHour,
+      lunch_end_minutes: lunchEndMinutes,
     };
   });
 };

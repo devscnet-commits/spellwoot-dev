@@ -3,7 +3,10 @@
 module OutOfOffisable
   extend ActiveSupport::Concern
 
-  OFFISABLE_ATTRS = %w[day_of_week closed_all_day open_hour open_minutes close_hour close_minutes open_all_day].freeze
+  OFFISABLE_ATTRS = %w[
+    day_of_week closed_all_day open_hour open_minutes close_hour close_minutes open_all_day
+    has_lunch_break lunch_start_hour lunch_start_minutes lunch_end_hour lunch_end_minutes
+  ].freeze
 
   included do
     has_many :working_hours, dependent: :destroy_async
