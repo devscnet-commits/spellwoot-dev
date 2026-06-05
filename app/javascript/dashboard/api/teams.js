@@ -32,9 +32,16 @@ export class TeamsAPI extends CacheEnabledApiClient {
     });
   }
 
-  updateAgents({ teamId, agentsList }) {
-    return axios.patch(`${this.url}/${teamId}/team_members`, {
-      user_ids: agentsList,
+  // agentsList: array of user_ids (legacy) or members: [{user_id, role}]
+  updateAgents({ teamId, agentsList, members }) {
+    const payload = members ? { members } : { user_ids: agentsList };
+    return axios.patch(`${this.url}/${teamId}/team_members`, payload);
+  }
+
+  updateMemberRole({ teamId, userId, role }) {
+    return axios.patch(`${this.url}/${teamId}/team_members/update_member_role`, {
+      user_id: userId,
+      role,
     });
   }
 }

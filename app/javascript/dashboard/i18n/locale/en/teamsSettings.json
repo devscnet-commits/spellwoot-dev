@@ -39,6 +39,11 @@
         "BODY": "You are all set to go!"
       }
     },
+    "MEMBER_ROLES": {
+      "member": "Member",
+      "coordinator": "Coordinator",
+      "manager": "Manager"
+    },
     "EDIT_FLOW": {
       "TABS": {
         "DETAILS": "Detalhes",
@@ -46,6 +51,10 @@
       },
       "UPDATE_SUCCESS": "Team updated successfully.",
       "MEMBERS_UPDATED": "Team members updated successfully.",
+      "ROLE_UPDATED": "Member role updated successfully.",
+      "ADD_MEMBER": "Add member",
+      "REMOVE_MEMBER": "Remove",
+      "NO_MEMBERS": "No members yet. Add agents to this team.",
       "CREATE": {
         "TITLE": "Edit your team details",
         "DESC": "Edit title and description to your team.",

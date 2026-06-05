@@ -294,6 +294,7 @@ Rails.application.routes.draw do
               collection do
                 delete :destroy
                 patch :update
+                patch :update_member_role
               end
             end
           end
