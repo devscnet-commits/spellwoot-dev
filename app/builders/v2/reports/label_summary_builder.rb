@@ -31,19 +31,26 @@ class V2::Reports::LabelSummaryBuilder < V2::Reports::BaseSummaryBuilder
       resolved_counts: fetch_resolved_counts,
       resolution_metrics: fetch_metrics(conversation_filter, 'conversation_resolved', use_business_hours),
       first_response_metrics: fetch_metrics(conversation_filter, 'first_response', use_business_hours),
-      reply_metrics: fetch_metrics(conversation_filter, 'reply_time', use_business_hours)
+      reply_metrics: fetch_metrics(conversation_filter, 'reply_time', use_business_hours),
+      reopen_data: fetch_reopen_data(conversation_filter, use_business_hours)
     }
   end
 
   def build_label_report(label, report_data)
+    total = report_data[:conversation_counts][label.title] || 0
+    reopen = report_data[:reopen_data][label.title] || {}
+    reopened = reopen[:count] || 0
     {
       id: label.id,
       name: label.title,
-      conversations_count: report_data[:conversation_counts][label.title] || 0,
+      conversations_count: total,
       avg_resolution_time: report_data[:resolution_metrics][label.title] || 0,
       avg_first_response_time: report_data[:first_response_metrics][label.title] || 0,
       avg_reply_time: report_data[:reply_metrics][label.title] || 0,
-      resolved_conversations_count: report_data[:resolved_counts][label.title] || 0
+      resolved_conversations_count: report_data[:resolved_counts][label.title] || 0,
+      reopened_conversations_count: reopened,
+      reopen_rate: total.positive? ? (reopened.to_f / total * 100).round(1) : 0.0,
+      avg_time_to_reopen: reopen[:avg_time]
     }
   end
 
@@ -108,5 +115,20 @@ class V2::Reports::LabelSummaryBuilder < V2::Reports::BaseSummaryBuilder
         use_business_hours ? 'AVG(reporting_events.value_in_business_hours) as avg_value' : 'AVG(reporting_events.value) as avg_value'
       )
       .each_with_object({}) { |record, hash| hash[record.name] = record.avg_value.to_f }
+  end
+
+  def fetch_reopen_data(conversation_filter, use_business_hours)
+    avg_col = use_business_hours ? 'reporting_events.value_in_business_hours' : 'reporting_events.value'
+    ReportingEvent
+      .joins(conversation: { taggings: :tag })
+      .where(
+        conversations: conversation_filter,
+        name: 'conversation_opened',
+        taggings: { taggable_type: 'Conversation', context: 'labels' }
+      )
+      .where('reporting_events.value > 0')
+      .group('tags.name')
+      .select("tags.name, COUNT(*) as reopen_count, AVG(#{avg_col}) as avg_time")
+      .each_with_object({}) { |r, h| h[r.name] = { count: r.reopen_count, avg_time: r.avg_time } }
   end
 end
