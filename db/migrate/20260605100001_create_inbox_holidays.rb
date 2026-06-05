@@ -12,6 +12,5 @@ class CreateInboxHolidays < ActiveRecord::Migration[7.0]
     end
 
     add_index :inbox_holidays, :account_id
-    add_index :inbox_holidays, :inbox_id
   end
 end

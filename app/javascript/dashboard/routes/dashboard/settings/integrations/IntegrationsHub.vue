@@ -48,12 +48,8 @@ const PROVIDERS = [
     name: 'UazAPI',
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
-    testable: true,
-    syncInstances: true,
-    fields: [
-      { key: 'apiUrl', label: 'URL do servidor', sensitive: false, placeholder: 'https://uazapi.exemplo.com', help: null },
-      { key: 'token', label: 'Token Administrador', sensitive: true, placeholder: '', help: 'https://docs.uazapi.com' },
-    ],
+    managedByEnv: true,
+    fields: [],
   },
   {
     key: 'bitrix',
@@ -283,6 +279,19 @@ const testConnection = async providerKey => {
         <!-- Loading -->
         <div v-if="state[provider.key].loading" class="text-body-small text-n-slate-11 py-2">
           Carregando...
+        </div>
+
+        <!-- Managed by environment variables (read-only) -->
+        <div
+          v-else-if="provider.managedByEnv"
+          class="flex items-start gap-3 px-4 py-3 rounded-lg bg-n-slate-2 border border-n-weak"
+        >
+          <span class="i-lucide-server w-4 h-4 text-n-slate-9 shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-1 text-body-small text-n-slate-11">
+            <p class="font-medium text-n-slate-12">Esta instalação utiliza configuração por variáveis de ambiente.</p>
+            <p>As credenciais são gerenciadas pelo servidor.</p>
+            <p>A configuração via interface será disponibilizada em uma versão futura.</p>
+          </div>
         </div>
 
         <template v-else>
