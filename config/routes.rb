@@ -298,6 +298,11 @@ Rails.application.routes.draw do
                 patch :update_member_role
               end
             end
+            resources :team_inboxes, only: [:index] do
+              collection do
+                patch :update
+              end
+            end
           end
 
           # Assignment V2 Routes

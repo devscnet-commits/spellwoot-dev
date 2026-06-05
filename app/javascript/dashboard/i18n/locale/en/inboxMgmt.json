@@ -1010,6 +1010,7 @@
         "LABEL": "Aplicar para",
         "THIS": "Apenas esta caixa",
         "SELECTED": "Caixas selecionadas",
+        "TEAM": "Todas as caixas do time",
         "ACCOUNT": "Todas as caixas da conta",
         "NO_OTHER": "Nenhuma outra caixa disponível.",
         "ACCOUNT_WARNING": "Isso substituirá o horário comercial de todas as outras caixas da conta.",

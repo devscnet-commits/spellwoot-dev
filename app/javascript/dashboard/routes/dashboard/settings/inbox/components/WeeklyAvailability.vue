@@ -302,6 +302,7 @@ export default {
           >
             <option value="this">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}</option>
             <option value="selected">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}</option>
+            <option value="team">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.TEAM') }}</option>
             <option value="account">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}</option>
           </select>
 

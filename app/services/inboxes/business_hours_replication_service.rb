@@ -26,6 +26,7 @@ class Inboxes::BusinessHoursReplicationService
     case @scope
     when 'account'  then base
     when 'selected' then base.where(id: @inbox_ids)
+    when 'team'     then base.joins(:team_inboxes).where(team_inboxes: { team_id: @source.team_ids }).distinct
     else Inbox.none
     end
   end

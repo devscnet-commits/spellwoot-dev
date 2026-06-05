@@ -47,7 +47,14 @@
     "EDIT_FLOW": {
       "TABS": {
         "DETAILS": "Detalhes",
-        "MEMBERS": "Integrantes"
+        "MEMBERS": "Integrantes",
+        "INBOXES": "Caixas"
+      },
+      "INBOXES": {
+        "HINT": "Vincule as caixas de entrada que pertencem a este time. Isso permite replicar configurações e organizar o atendimento por time.",
+        "EMPTY": "Nenhuma caixa de entrada disponível.",
+        "SAVE": "Salvar caixas",
+        "SAVED": "Caixas do time atualizadas com sucesso."
       },
       "UPDATE_SUCCESS": "Time atualizado com sucesso.",
       "MEMBERS_UPDATED": "Integrantes do time atualizados com sucesso.",
