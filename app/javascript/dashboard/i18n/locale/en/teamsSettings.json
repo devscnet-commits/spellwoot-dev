@@ -39,11 +39,6 @@
         "BODY": "Tudo pronto!"
       }
     },
-    "MEMBER_ROLES": {
-      "member": "Agente",
-      "coordinator": "Coordenador",
-      "manager": "Gerente"
-    },
     "EDIT_FLOW": {
       "TABS": {
         "DETAILS": "Detalhes",
@@ -56,32 +51,24 @@
         "SAVE": "Salvar caixas",
         "SAVED": "Caixas do time atualizadas com sucesso."
       },
+      "MEMBERS_SUBTITLE": "Gerencie os agentes deste time. A função é definida no cadastro do agente.",
+      "MEMBER_ADDED": "Integrante adicionado ao time.",
+      "MEMBER_REMOVED": "Integrante removido do time.",
+      "ACCOUNT_ROLES": {
+        "agent": "Agente",
+        "administrator": "Administrador"
+      },
+      "FILTERS": {
+        "all": "Todos",
+        "agent": "Agentes",
+        "administrator": "Administradores"
+      },
       "UPDATE_SUCCESS": "Time atualizado com sucesso.",
-      "MEMBERS_UPDATED": "Integrantes do time atualizados com sucesso.",
-      "ROLE_UPDATED": "Função do integrante atualizada com sucesso.",
       "ADD_MEMBER": "Adicionar integrante",
       "REMOVE_MEMBER": "Remover",
       "NO_MEMBERS": "Nenhum integrante vinculado. Adicione agentes a este time.",
-      "LINKED_COUNT": "{n} integrante vinculado | {n} integrantes vinculados",
       "SEARCH_PLACEHOLDER": "Buscar agentes...",
       "NO_AVAILABLE_AGENTS": "Nenhum agente disponível para adicionar.",
-      "SUMMARY": {
-        "MEMBERS": "Integrantes",
-        "COORDINATORS": "Coordenadores",
-        "MANAGERS": "Gerentes",
-        "AGENTS": "Agentes"
-      },
-      "TABLE": {
-        "NAME": "Nome",
-        "ROLE": "Função",
-        "STATUS": "Status",
-        "AVAILABILITY": "Disponibilidade",
-        "ACTIONS": "Ações"
-      },
-      "STATUS": {
-        "ACTIVE": "Ativo",
-        "INACTIVE": "Inativo"
-      },
       "AVAILABILITY": {
         "online": "Disponível",
         "busy": "Ocupado",
