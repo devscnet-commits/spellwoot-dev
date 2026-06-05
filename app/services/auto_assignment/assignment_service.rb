@@ -4,6 +4,10 @@ class AutoAssignment::AssignmentService
   def perform_bulk_assignment(limit: 100)
     return 0 unless inbox.auto_assignment_v2_enabled?
     return 0 unless inbox.enable_auto_assignment?
+    # Skip auto-assignment outside business hours when working_hours_enabled.
+    # The periodic job triggers this path independently of AutoAssignmentHandler,
+    # so the guard must live here too.
+    return 0 if inbox.out_of_office?
 
     assigned_count = 0
 
