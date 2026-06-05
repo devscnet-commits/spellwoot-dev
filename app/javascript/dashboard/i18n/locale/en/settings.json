@@ -855,24 +855,35 @@
           }
         },
         "FAIR_DISTRIBUTION": {
-          "LABEL": "Fair distribution policy",
-          "DESCRIPTION": "Set the maximum number of conversations that can be assigned per agent within a time window to avoid overloading any one agent. This required field defaults to 100 conversations per hour.",
+          "LABEL": "Conversation limit per agent",
+          "DESCRIPTION": "Maximum conversations assigned per agent in a time window. Prevents overloading. Defaults to 100 per hour.",
           "INPUT_MAX": "Assign max",
           "DURATION": "Conversations per agent in every"
         },
         "INBOXES": {
-          "LABEL": "Added inboxes",
-          "DESCRIPTION": "Add inboxes for which this policy will be applicable.",
+          "LABEL": "Participating inboxes",
+          "DESCRIPTION": "Select the inboxes where this policy will apply.",
           "ADD_BUTTON": "Add inbox",
+          "SEARCH_PLACEHOLDER": "Search inboxes...",
+          "SELECTED": "Selected",
+          "SELECTED_COUNT": "{count} inbox(es) selected",
+          "LOADING": "Loading inboxes...",
           "DROPDOWN": {
             "SEARCH_PLACEHOLDER": "Search and select inboxes to add",
             "ADD_BUTTON": "Add"
           },
-          "EMPTY_STATE": "No inboxes added to this policy, add an inbox to get started",
+          "EMPTY_STATE": "No inboxes found",
           "API": {
             "SUCCESS_MESSAGE": "Inbox successfully added to policy",
             "ERROR_MESSAGE": "Failed to add inbox to policy"
           }
+        },
+        "SUMMARY": {
+          "TITLE": "Summary",
+          "INBOXES": "{count} inbox(es) linked",
+          "STRATEGY": "Strategy",
+          "PRIORITY": "Priority",
+          "LIMIT": "Limit"
         }
       },
       "DELETE_POLICY": {
