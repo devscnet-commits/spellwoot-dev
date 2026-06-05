@@ -39,6 +39,13 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.post(`${this.url}/${inboxId}/sync_templates`);
   }
 
+  replicateBusinessHours(inboxId, { scope, inboxIds = [] }) {
+    return axios.post(`${this.url}/${inboxId}/replicate_business_hours`, {
+      scope,
+      inbox_ids: inboxIds,
+    });
+  }
+
   // UazAPI methods
   getUazapiStatus(inboxId) {
     return axios.get(`${this.url}/${inboxId}/uazapi_status`);

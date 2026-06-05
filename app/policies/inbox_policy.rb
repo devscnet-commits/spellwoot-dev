@@ -87,6 +87,10 @@ class InboxPolicy < ApplicationPolicy
     admin?
   end
 
+  def replicate_business_hours?
+    admin?
+  end
+
   private
 
   def admin?

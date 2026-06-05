@@ -1006,6 +1006,15 @@
         "RECURRING": "Recorrente todo ano",
         "ONE_TIME": "Apenas este ano"
       },
+      "REPLICATE": {
+        "LABEL": "Aplicar para",
+        "THIS": "Apenas esta caixa",
+        "SELECTED": "Caixas selecionadas",
+        "ACCOUNT": "Todas as caixas da conta",
+        "NO_OTHER": "Nenhuma outra caixa disponível.",
+        "ACCOUNT_WARNING": "Isso substituirá o horário comercial de todas as outras caixas da conta.",
+        "SUCCESS": "Configuração aplicada a {count} caixa(s)."
+      },
       "EXCEPTIONS": {
         "HINT": "Uma exceção tem prioridade sobre o horário padrão e os feriados nessa data.",
         "EMPTY": "Nenhuma exceção cadastrada.",

@@ -57,6 +57,18 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     render json: { error: e.message, type: e.class.name }, status: :internal_server_error
   end
 
+  def replicate_business_hours
+    result = Inboxes::BusinessHoursReplicationService.new(
+      source: @inbox,
+      scope: params[:scope],
+      inbox_ids: params[:inbox_ids]
+    ).perform
+    render json: result
+  rescue StandardError => e
+    Rails.logger.error "[BusinessHoursReplication] inbox_id=#{@inbox&.id} #{e.class}: #{e.message}"
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   def agent_bot
     @agent_bot = @inbox.agent_bot
   end

@@ -10,6 +10,7 @@ import ExceptionsTab from './ExceptionsTab.vue';
 import AutoMessagesTab from './AutoMessagesTab.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import InboxesAPI from 'dashboard/api/inboxes';
 import {
   periodsFromApi,
   periodsToApi,
@@ -51,10 +52,15 @@ export default {
       daySlots: defaultDaySlots(),
       holidays: [],
       exceptions: [],
+      replicationScope: 'this',
+      selectedInboxIds: [],
     };
   },
   computed: {
-    ...mapGetters({ uiFlags: 'inboxes/getUIFlags' }),
+    ...mapGetters({ uiFlags: 'inboxes/getUIFlags', allInboxes: 'inboxes/getInboxes' }),
+    otherInboxes() {
+      return (this.allInboxes || []).filter(item => item.id !== this.inbox.id);
+    },
     timeZones() {
       return [...timeZoneOptions()];
     },
@@ -124,6 +130,7 @@ export default {
   },
   mounted() {
     this.setDefaults();
+    if (!this.allInboxes.length) this.$store.dispatch('inboxes/get');
   },
   methods: {
     setDefaults() {
@@ -179,7 +186,18 @@ export default {
           channel: {},
         };
         await this.$store.dispatch('inboxes/updateInbox', payload);
-        useAlert(this.$t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
+
+        if (this.replicationScope !== 'this') {
+          const { data } = await InboxesAPI.replicateBusinessHours(this.inbox.id, {
+            scope: this.replicationScope,
+            inboxIds: this.selectedInboxIds,
+          });
+          useAlert(
+            this.$t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SUCCESS', { count: data.count })
+          );
+        } else {
+          useAlert(this.$t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
+        }
       } catch (error) {
         useAlert(error.message || this.$t('INBOX_MGMT.EDIT.API.ERROR_MESSAGE'));
       }
@@ -273,12 +291,51 @@ export default {
           />
         </template>
 
+        <!-- Aplicar para (replicação) -->
+        <div class="flex flex-col gap-2 border-t border-n-weak pt-4">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.LABEL') }}
+          </label>
+          <select
+            v-model="replicationScope"
+            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-main text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+          >
+            <option value="this">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}</option>
+            <option value="selected">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}</option>
+            <option value="account">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}</option>
+          </select>
+
+          <div
+            v-if="replicationScope === 'selected'"
+            class="flex flex-col gap-1 max-h-40 overflow-y-auto outline outline-1 -outline-offset-1 outline-n-weak rounded-lg p-2"
+          >
+            <label
+              v-for="ibx in otherInboxes"
+              :key="ibx.id"
+              class="flex items-center gap-2 cursor-pointer px-1 py-1"
+            >
+              <input v-model="selectedInboxIds" type="checkbox" :value="ibx.id" class="m-0" />
+              <span class="text-body-main text-n-slate-12">{{ ibx.name }}</span>
+            </label>
+            <p v-if="!otherInboxes.length" class="text-label-small text-n-slate-10 px-1 py-2">
+              {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.NO_OTHER') }}
+            </p>
+          </div>
+
+          <p
+            v-if="replicationScope === 'account'"
+            class="text-label-small text-n-amber-10"
+          >
+            {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT_WARNING') }}
+          </p>
+        </div>
+
         <div class="flex justify-end py-2">
           <NextButton
             type="submit"
             :label="$t('INBOX_MGMT.BUSINESS_HOURS.UPDATE')"
             :is-loading="uiFlags.isUpdating"
-            :disabled="hasError"
+            :disabled="hasError || (replicationScope === 'selected' && !selectedInboxIds.length)"
           />
         </div>
       </form>

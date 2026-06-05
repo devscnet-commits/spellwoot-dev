@@ -244,6 +244,7 @@ Rails.application.routes.draw do
             get :health, on: :member
             post :register_webhook, on: :member
             post :reset_secret, on: :member
+            post :replicate_business_hours, on: :member
             # UazAPI WhatsApp endpoints
             get :uazapi_status, on: :member
             post :uazapi_connect, on: :member
