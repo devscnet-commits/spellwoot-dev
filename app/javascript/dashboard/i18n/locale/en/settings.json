@@ -990,6 +990,12 @@
             "SUCCESS_MESSAGE": "Agent successfully added to policy",
             "ERROR_MESSAGE": "Failed to add agent to policy"
           }
+        },
+        "SUMMARY": {
+          "TITLE": "Summary",
+          "INBOXES": "{count} inbox(es) selected",
+          "AGENTS": "{count} agent(s) selected",
+          "CAPACITY": "Total capacity: {total} conversations"
         }
       },
       "DELETE_POLICY": {

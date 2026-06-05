@@ -1,29 +1,27 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
+import camelcaseKeys from 'camelcase-keys';
+import { getInboxIconByType } from 'dashboard/helper/inbox';
 
 import Breadcrumb from 'dashboard/components-next/breadcrumb/Breadcrumb.vue';
 import SettingsLayout from 'dashboard/routes/dashboard/settings/SettingsLayout.vue';
-import AgentCapacityPolicyForm from 'dashboard/routes/dashboard/settings/assignmentPolicy/pages/components/AgentCapacityPolicyForm.vue';
+import AgentCapacityPolicyForm from './components/AgentCapacityPolicyForm.vue';
 
 const router = useRouter();
 const store = useStore();
 const { t } = useI18n();
 
 const formRef = ref(null);
-const uiFlags = useMapGetter('agentCapacityPolicies/getUIFlags');
-const labelsList = useMapGetter('labels/getLabels');
 
-const allLabels = computed(() =>
-  labelsList.value?.map(({ title, color, id }) => ({
-    id,
-    name: title,
-    color,
-  }))
-);
+const uiFlags      = useMapGetter('agentCapacityPolicies/getUIFlags');
+const agentsList   = useMapGetter('agents/getAgents');
+const labelsList   = useMapGetter('labels/getLabels');
+const inboxes      = useMapGetter('inboxes/getAllInboxes');
+const inboxesUiFlags = useMapGetter('inboxes/getUIFlags');
 
 const breadcrumbItems = computed(() => [
   {
@@ -35,35 +33,51 @@ const breadcrumbItems = computed(() => [
   },
 ]);
 
+const buildList = items =>
+  items?.map(({ name, title, id, email, avatarUrl, thumbnail, color }) => ({
+    name: name || title,
+    id,
+    email,
+    avatarUrl: avatarUrl || thumbnail,
+    color,
+  })) || [];
+
+const allAgents = computed(() => buildList(camelcaseKeys(agentsList.value)));
+const allLabels = computed(() => buildList(labelsList.value));
+
+const allInboxes = computed(() =>
+  inboxes.value
+    ?.slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(({ name, id, email, phoneNumber, channelType, medium }) => ({
+      name,
+      id,
+      email,
+      phoneNumber,
+      icon: getInboxIconByType(channelType, medium, 'line'),
+    })) || []
+);
+
 const handleBreadcrumbClick = item => {
-  router.push({
-    name: item.routeName,
-  });
+  if (item.routeName) router.push({ name: item.routeName });
 };
 
 const handleSubmit = async formState => {
   try {
-    const policy = await store.dispatch(
-      'agentCapacityPolicies/create',
-      formState
-    );
-    useAlert(
-      t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.SUCCESS_MESSAGE')
-    );
+    await store.dispatch('agentCapacityPolicies/create', formState);
+    useAlert(t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.SUCCESS_MESSAGE'));
     formRef.value?.resetForm();
-
-    router.push({
-      name: 'agent_capacity_policy_edit',
-      params: {
-        id: policy.id,
-      },
-    });
-  } catch (error) {
-    useAlert(
-      t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.ERROR_MESSAGE')
-    );
+    router.push({ name: 'agent_capacity_policy_index' });
+  } catch {
+    useAlert(t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.ERROR_MESSAGE'));
   }
 };
+
+onMounted(() => {
+  store.dispatch('agents/get');
+  store.dispatch('labels/get');
+  store.dispatch('inboxes/get');
+});
 </script>
 
 <template>
@@ -79,7 +93,10 @@ const handleSubmit = async formState => {
         ref="formRef"
         mode="CREATE"
         :is-loading="uiFlags.isCreating"
+        :agent-list="allAgents"
         :label-list="allLabels"
+        :inbox-list="allInboxes"
+        :is-inboxes-loading="inboxesUiFlags.isFetching"
         @submit="handleSubmit"
       />
     </template>

@@ -43,14 +43,6 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  showUserSection: {
-    type: Boolean,
-    default: false,
-  },
-  showInboxLimitSection: {
-    type: Boolean,
-    default: false,
-  },
   isLoading: {
     type: Boolean,
     default: false,
@@ -79,6 +71,8 @@ const { t } = useI18n();
 
 const BASE_KEY = 'ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY';
 
+const isCreate = computed(() => props.mode === 'CREATE');
+
 const state = reactive({
   name: '',
   description: '',
@@ -87,65 +81,130 @@ const state = reactive({
     excludeOlderThanHours: null,
   },
   inboxCapacityLimits: [],
+  localUsers: [], // only used in CREATE mode
 });
 
-const validationState = ref({
-  isValid: false,
-});
+const validationState = ref({ isValid: false });
 
 const buttonLabel = computed(() =>
   t(`${BASE_KEY}.${props.mode.toUpperCase()}.${props.mode}_BUTTON`)
 );
+
+// ── Computed for display ──────────────────────────────────────────────────────
+
+const displayUsers = computed(() =>
+  isCreate.value ? state.localUsers : props.policyUsers
+);
+
+// In CREATE mode, filter out already-selected agents
+const availableAgents = computed(() => {
+  if (!isCreate.value) return props.agentList;
+  const selectedIds = new Set(state.localUsers.map(u => u.id));
+  return props.agentList.filter(a => !selectedIds.has(a.id));
+});
+
+const totalCapacity = computed(() =>
+  state.inboxCapacityLimits.reduce((sum, l) => sum + (l.conversationLimit || 0), 0)
+);
+
+// ── Handlers ─────────────────────────────────────────────────────────────────
 
 const handleValidationChange = validation => {
   validationState.value = validation;
   emit('validationChange', validation);
 };
 
-const handleDeleteInboxLimit = id => {
-  emit('deleteInboxLimit', id);
+// Inbox limits — local in CREATE, emit events in EDIT
+const handleAddInboxLimit = limit => {
+  if (isCreate.value) {
+    state.inboxCapacityLimits.push({
+      id: limit.inboxId,       // use inboxId as temp key (no DB id yet)
+      inboxId: limit.inboxId,
+      conversationLimit: limit.conversationLimit,
+    });
+  } else {
+    emit('addInboxLimit', limit);
+  }
 };
 
-const handleAddInboxLimit = limit => {
-  emit('addInboxLimit', limit);
+const handleDeleteInboxLimit = id => {
+  if (isCreate.value) {
+    const idx = state.inboxCapacityLimits.findIndex(l => l.id === id);
+    if (idx !== -1) state.inboxCapacityLimits.splice(idx, 1);
+  } else {
+    emit('deleteInboxLimit', id);
+  }
 };
 
 const handleLimitChange = limit => {
-  emit('updateInboxLimit', limit);
+  if (!isCreate.value) {
+    emit('updateInboxLimit', limit);
+  }
+  // In CREATE mode the v-model.number in InboxCapacityLimits mutates directly
+};
+
+// Users — local in CREATE, emit events in EDIT
+const handleAddUser = agent => {
+  if (isCreate.value) {
+    state.localUsers.push(agent);
+  } else {
+    emit('addUser', agent);
+  }
+};
+
+const handleDeleteUser = agentId => {
+  if (isCreate.value) {
+    const idx = state.localUsers.findIndex(u => u.id === agentId);
+    if (idx !== -1) state.localUsers.splice(idx, 1);
+  } else {
+    emit('deleteUser', agentId);
+  }
 };
 
 const resetForm = () => {
   Object.assign(state, {
     name: '',
     description: '',
-    exclusionRules: {
-      excludedLabels: [],
-      excludeOlderThanHours: null,
-    },
+    exclusionRules: { excludedLabels: [], excludeOlderThanHours: null },
     inboxCapacityLimits: [],
+    localUsers: [],
   });
 };
 
 const handleSubmit = () => {
-  emit('submit', { ...state });
+  const payload = {
+    name: state.name,
+    description: state.description,
+    exclusionRules: { ...state.exclusionRules },
+    inboxCapacityLimits: [...state.inboxCapacityLimits],
+  };
+
+  if (isCreate.value) {
+    payload.inboxLimits = state.inboxCapacityLimits.map(l => ({
+      inboxId: l.inboxId,
+      conversationLimit: l.conversationLimit,
+    }));
+    payload.agentIds = state.localUsers.map(u => u.id);
+  }
+
+  emit('submit', payload);
 };
 
 watch(
   () => props.initialData,
   newData => {
-    Object.assign(state, newData);
+    Object.assign(state, { ...newData, localUsers: [] });
   },
   { immediate: true, deep: true }
 );
 
-defineExpose({
-  resetForm,
-});
+defineExpose({ resetForm });
 </script>
 
 <template>
   <form @submit.prevent="handleSubmit">
     <div class="flex flex-col gap-4 mb-2 divide-y divide-n-weak">
+      <!-- Base info + exclusion rules -->
       <BaseInfo
         v-model:policy-name="state.name"
         v-model:description="state.description"
@@ -157,25 +216,12 @@ defineExpose({
       />
       <ExclusionRules
         v-model:excluded-labels="state.exclusionRules.excludedLabels"
-        v-model:exclude-older-than-minutes="
-          state.exclusionRules.excludeOlderThanHours
-        "
+        v-model:exclude-older-than-minutes="state.exclusionRules.excludeOlderThanHours"
         :tags-list="labelList"
       />
-    </div>
-    <Button
-      type="submit"
-      :label="buttonLabel"
-      :disabled="!validationState.isValid || isLoading"
-      :is-loading="isLoading"
-    />
 
-    <div
-      v-if="showInboxLimitSection || showUserSection"
-      class="flex flex-col gap-4 divide-y divide-n-weak border-t border-n-weak mt-6"
-    >
+      <!-- Inbox capacity limits — always visible -->
       <InboxCapacityLimits
-        v-if="showInboxLimitSection"
         v-model:inbox-capacity-limits="state.inboxCapacityLimits"
         :inbox-list="inboxList"
         :is-fetching="isInboxesLoading"
@@ -183,7 +229,9 @@ defineExpose({
         @add="handleAddInboxLimit"
         @update="handleLimitChange"
       />
-      <div v-if="showUserSection" class="py-4 flex-col flex gap-4">
+
+      <!-- Agents — always visible -->
+      <div class="py-4 flex-col flex gap-4">
         <div class="flex items-end gap-4 w-full justify-between">
           <div class="flex flex-col items-start gap-1 py-1">
             <label class="text-sm font-medium text-n-slate-12 py-1">
@@ -195,20 +243,43 @@ defineExpose({
           </div>
           <AddDataDropdown
             :label="t(`${BASE_KEY}.FORM.USERS.ADD_BUTTON`)"
-            :search-placeholder="
-              t(`${BASE_KEY}.FORM.USERS.DROPDOWN.SEARCH_PLACEHOLDER`)
-            "
-            :items="agentList"
-            @add="$emit('addUser', $event)"
+            :search-placeholder="t(`${BASE_KEY}.FORM.USERS.DROPDOWN.SEARCH_PLACEHOLDER`)"
+            :items="availableAgents"
+            @add="handleAddUser"
           />
         </div>
         <DataTable
-          :items="policyUsers"
-          :is-fetching="isUsersLoading"
+          :items="displayUsers"
+          :is-fetching="!isCreate && isUsersLoading"
           :empty-state-message="t(`${BASE_KEY}.FORM.USERS.EMPTY_STATE`)"
-          @delete="$emit('deleteUser', $event)"
+          @delete="handleDeleteUser"
         />
       </div>
+
+      <!-- Summary (CREATE only) -->
+      <div v-if="isCreate" class="py-4 flex flex-col gap-2">
+        <p class="text-sm font-medium text-n-slate-12">
+          {{ t(`${BASE_KEY}.FORM.SUMMARY.TITLE`) }}
+        </p>
+        <div class="flex flex-wrap gap-4 text-sm text-n-slate-11">
+          <span>
+            {{ t(`${BASE_KEY}.FORM.SUMMARY.INBOXES`, { count: state.inboxCapacityLimits.length }) }}
+          </span>
+          <span>
+            {{ t(`${BASE_KEY}.FORM.SUMMARY.AGENTS`, { count: state.localUsers.length }) }}
+          </span>
+          <span>
+            {{ t(`${BASE_KEY}.FORM.SUMMARY.CAPACITY`, { total: totalCapacity }) }}
+          </span>
+        </div>
+      </div>
     </div>
+
+    <Button
+      type="submit"
+      :label="buttonLabel"
+      :disabled="!validationState.isValid || isLoading"
+      :is-loading="isLoading"
+    />
   </form>
 </template>
