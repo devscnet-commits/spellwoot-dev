@@ -87,6 +87,14 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     render json: builder.build
   end
 
+  def conversation_distribution
+    builder = V2::Reports::ConversationDistributionBuilder.new(
+      account: Current.account,
+      params: distribution_params
+    )
+    render json: builder.build
+  end
+
   private
 
   def generate_csv(filename, template)
@@ -186,6 +194,16 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
       group_by: params[:group_by],
       since: params[:since],
       until: params[:until]
+    }
+  end
+
+  def distribution_params
+    {
+      since:        params[:since],
+      until:        params[:until],
+      inbox_id:     params[:inbox_id],
+      team_id:      params[:team_id],
+      account_user: Current.account_user
     }
   end
 

@@ -494,6 +494,7 @@ Rails.application.routes.draw do
               get :leads_summary
               get :marketing_summary
               get :schedule_report
+              get :conversation_distribution
             end
           end
           resource :year_in_review, only: [:show]
