@@ -236,7 +236,9 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def build_leads_scope
     @value_key = Current.account.settings&.dig('meta_conversion_settings', 'value_field').presence
 
-    scope = Current.account.conversations.joins(reopen_join_sql)
+    scope = Reports::PermissionScopeService.new(Current.account_user).scope_conversations(
+      Current.account.conversations.joins(reopen_join_sql)
+    )
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i))   if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i))   if params[:until].present?
     scope = scope.where(inbox_id: params[:inbox_id])                                           if params[:inbox_id].present?

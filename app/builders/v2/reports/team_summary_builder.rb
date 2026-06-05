@@ -11,7 +11,7 @@ class V2::Reports::TeamSummaryBuilder < V2::Reports::BaseSummaryBuilder
   end
 
   def reporting_events
-    @reporting_events ||= account.reporting_events.where(created_at: range).joins(:conversation)
+    @reporting_events ||= account.reporting_events.where(created_at: range).where.not(team_id: nil)
   end
 
   def prepare_report
@@ -32,6 +32,6 @@ class V2::Reports::TeamSummaryBuilder < V2::Reports::BaseSummaryBuilder
   end
 
   def group_by_key
-    'conversations.team_id'
+    :team_id
   end
 end

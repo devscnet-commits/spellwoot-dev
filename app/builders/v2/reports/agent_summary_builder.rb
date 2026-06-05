@@ -16,7 +16,7 @@ class V2::Reports::AgentSummaryBuilder < V2::Reports::BaseSummaryBuilder
   end
 
   def prepare_report
-    account.account_users.map do |account_user|
+    account.account_users.where(active: true).map do |account_user|
       build_agent_stats(account_user)
     end
   end
