@@ -11,7 +11,10 @@
     "LIST": {
       "404": "There are no teams created on this account.",
       "EDIT_TEAM": "Edit team",
-      "NONE": "None"
+      "NONE": "None",
+      "MEMBERS_COUNT": "{count} member | {count} members",
+      "AUTO_ASSIGN_ON": "Auto-assign on",
+      "AUTO_ASSIGN_OFF": "Auto-assign off"
     },
     "CREATE_FLOW": {
       "CREATE": {
@@ -37,6 +40,12 @@
       }
     },
     "EDIT_FLOW": {
+      "TABS": {
+        "DETAILS": "Detalhes",
+        "MEMBERS": "Integrantes"
+      },
+      "UPDATE_SUCCESS": "Team updated successfully.",
+      "MEMBERS_UPDATED": "Team members updated successfully.",
       "CREATE": {
         "TITLE": "Edit your team details",
         "DESC": "Edit title and description to your team.",

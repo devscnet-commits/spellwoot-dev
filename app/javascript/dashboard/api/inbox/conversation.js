@@ -119,6 +119,10 @@ class ConversationApi extends ApiClient {
     });
   }
 
+  setOutcome({ conversationId, outcome }) {
+    return axios.post(`${this.url}/${conversationId}/set_outcome`, { outcome });
+  }
+
   closeOutcome({ conversationId, outcome, customAttributes = {} }) {
     return axios.post(`${this.url}/${conversationId}/close_outcome`, {
       outcome,

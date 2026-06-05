@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
+import { vOnClickOutside } from '@vueuse/components';
 import BaseInfo from 'dashboard/components-next/AssignmentPolicy/components/BaseInfo.vue';
 import RadioCard from 'dashboard/components-next/radioCard/RadioCard.vue';
 import FairDistribution from 'dashboard/components-next/AssignmentPolicy/components/FairDistribution.vue';
@@ -15,7 +16,6 @@ import {
   ROUND_ROBIN,
   BALANCED,
   EARLIEST_CREATED,
-  LONGEST_WAITING,
   DEFAULT_FAIR_DISTRIBUTION_LIMIT,
   DEFAULT_FAIR_DISTRIBUTION_WINDOW,
 } from 'dashboard/routes/dashboard/settings/assignmentPolicy/constants';
@@ -38,9 +38,8 @@ const props = defineProps({
     required: true,
     validator: value => ['CREATE', 'EDIT'].includes(value),
   },
-  policyInboxes: { type: Array, default: () => [] },
-  inboxList:     { type: Array, default: () => [] },
-  // Legacy prop — kept for EDIT compat but no longer controls visibility
+  policyInboxes:    { type: Array,   default: () => [] },
+  inboxList:        { type: Array,   default: () => [] },
   showInboxSection: { type: Boolean, default: true },
   isLoading:        { type: Boolean, default: false },
   isInboxLoading:   { type: Boolean, default: false },
@@ -92,16 +91,38 @@ const { isDirty, capture } = useFormDirty(() => ({
 
 watch(isDirty, val => emit('dirtyChange', val));
 
-// ── Inbox selection ───────────────────────────────────────────────────────────
+// ── Inbox multi-select ────────────────────────────────────────────────────────
 
+const isDropdownOpen = ref(false);
 const inboxSearch = ref('');
 // Local selected IDs — used in CREATE mode only
 const localSelectedIds = ref([]);
+
+const closeDropdown = () => {
+  isDropdownOpen.value = false;
+  inboxSearch.value = '';
+};
 
 const isInboxSelected = inbox => {
   if (isCreate.value) return localSelectedIds.value.includes(inbox.id);
   return props.policyInboxes.some(i => i.id === inbox.id);
 };
+
+// Inboxes shown as selected chips
+const selectedInboxes = computed(() => {
+  if (isCreate.value) {
+    return props.inboxList.filter(i => localSelectedIds.value.includes(i.id));
+  }
+  return props.policyInboxes;
+});
+
+// Inboxes shown inside the dropdown (not yet selected, filtered by search)
+const dropdownInboxes = computed(() => {
+  const q = inboxSearch.value.toLowerCase();
+  return props.inboxList.filter(
+    i => !isInboxSelected(i) && (!q || i.name.toLowerCase().includes(q))
+  );
+});
 
 const toggleInbox = inbox => {
   if (isInboxSelected(inbox)) {
@@ -119,19 +140,13 @@ const toggleInbox = inbox => {
   }
 };
 
-// Selected first, then available — both filtered by search
-const sortedInboxes = computed(() => {
-  const q = inboxSearch.value.toLowerCase();
-  const filtered = props.inboxList.filter(i => i.name.toLowerCase().includes(q));
-  return [
-    ...filtered.filter(i => isInboxSelected(i)),
-    ...filtered.filter(i => !isInboxSelected(i)),
-  ];
-});
-
-const selectedInboxCount = computed(() =>
-  isCreate.value ? localSelectedIds.value.length : props.policyInboxes.length
-);
+const removeInbox = inbox => {
+  if (isCreate.value) {
+    localSelectedIds.value = localSelectedIds.value.filter(id => id !== inbox.id);
+  } else {
+    emit('deleteInbox', inbox.id);
+  }
+};
 
 // ── Radio options ─────────────────────────────────────────────────────────────
 
@@ -165,26 +180,6 @@ const assignmentPriorityOptions = computed(() =>
   OPTIONS.PRIORITY.map(key => createOption('ASSIGNMENT_PRIORITY', key, 'conversationPriority'))
 );
 
-// ── Summary ───────────────────────────────────────────────────────────────────
-
-const summaryStrategy = computed(() => {
-  const key = state.assignmentOrder === BALANCED ? 'BALANCED' : 'ROUND_ROBIN';
-  return t(`${BASE_KEY}.FORM.ASSIGNMENT_ORDER.${key}.LABEL`);
-});
-
-const summaryPriority = computed(() => {
-  const key = state.conversationPriority === LONGEST_WAITING ? 'LONGEST_WAITING' : 'EARLIEST_CREATED';
-  return t(`${BASE_KEY}.FORM.ASSIGNMENT_PRIORITY.${key}.LABEL`);
-});
-
-const summaryLimit = computed(() => {
-  const secs = state.fairDistributionWindow;
-  const unitLabel = secs % 3600 === 0
-    ? `${secs / 3600}h`
-    : `${Math.round(secs / 60)}min`;
-  return `${state.fairDistributionLimit} / ${unitLabel}`;
-});
-
 // ── Misc ──────────────────────────────────────────────────────────────────────
 
 const buttonLabel = computed(() => {
@@ -210,7 +205,7 @@ const resetForm = () => {
     fairDistributionWindow: DEFAULT_FAIR_DISTRIBUTION_WINDOW,
   });
   localSelectedIds.value = [];
-  inboxSearch.value = '';
+  closeDropdown();
   capture();
 };
 
@@ -238,7 +233,7 @@ defineExpose({ resetForm });
   <form @submit.prevent="handleSubmit">
     <div class="flex flex-col gap-4 divide-y divide-n-weak mb-4">
 
-      <!-- 1. Informações Gerais -->
+      <!-- 1. Nome e descrição -->
       <BaseInfo
         v-model:policy-name="state.name"
         v-model:description="state.description"
@@ -249,73 +244,97 @@ defineExpose({ resetForm });
         @validation-change="handleValidationChange"
       />
 
-      <!-- 2. Aplicação — Caixas participantes -->
+      <!-- 2. Caixas de entrada vinculadas -->
       <div class="pt-4 flex flex-col gap-3">
         <div class="flex flex-col gap-0.5">
           <label class="text-sm font-medium text-n-slate-12">
-            {{ t(`${BASE_KEY}.FORM.INBOXES.LABEL`) }}
+            Caixas de entrada vinculadas
           </label>
           <p class="text-sm text-n-slate-10">
-            {{ t(`${BASE_KEY}.FORM.INBOXES.DESCRIPTION`) }}
+            Selecione as caixas de entrada que participarão desta política.
           </p>
         </div>
 
-        <!-- Search -->
-        <SearchInput
-          v-model="inboxSearch"
-          :placeholder="t(`${BASE_KEY}.FORM.INBOXES.SEARCH_PLACEHOLDER`)"
-        />
-
-        <!-- Inbox checklist -->
-        <div v-if="inboxList.length" class="flex flex-col max-h-48 overflow-y-auto rounded-xl border border-n-weak divide-y divide-n-weak">
+        <!-- Dropdown trigger -->
+        <div v-on-click-outside="closeDropdown" class="relative">
           <button
-            v-for="inbox in sortedInboxes"
-            :key="inbox.id"
             type="button"
-            class="flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-n-alpha-black2"
-            :class="isInboxSelected(inbox) ? 'bg-n-blue-3' : ''"
-            @click="toggleInbox(inbox)"
+            class="flex items-center justify-between w-full px-3 py-2 text-sm rounded-lg border border-n-weak bg-n-solid-2 text-n-slate-12 hover:border-n-brand transition-colors focus:outline-none focus:border-n-brand"
+            @click="isDropdownOpen = !isDropdownOpen"
           >
+            <span class="text-n-slate-9">Selecionar caixas de entrada</span>
             <span
-              class="size-4 flex-shrink-0 flex items-center justify-center rounded border transition-colors"
-              :class="isInboxSelected(inbox)
-                ? 'bg-n-blue-9 border-n-blue-9 text-white'
-                : 'border-n-weak bg-n-solid-2'"
-            >
-              <span v-if="isInboxSelected(inbox)" class="i-lucide-check size-3" />
-            </span>
-            <span class="text-sm text-n-slate-12 flex-1 truncate">{{ inbox.name }}</span>
-            <span
-              v-if="isInboxSelected(inbox)"
-              class="text-label-small text-n-blue-9 font-medium flex-shrink-0"
-            >
-              {{ t(`${BASE_KEY}.FORM.INBOXES.SELECTED`) }}
-            </span>
+              class="i-lucide-chevron-down size-4 text-n-slate-9 transition-transform duration-200"
+              :class="{ 'rotate-180': isDropdownOpen }"
+            />
           </button>
 
+          <!-- Dropdown panel -->
           <div
-            v-if="!sortedInboxes.length"
-            class="px-3 py-4 text-sm text-n-slate-10 text-center"
+            v-if="isDropdownOpen"
+            class="absolute z-20 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg"
           >
-            {{ t(`${BASE_KEY}.FORM.INBOXES.EMPTY_STATE`) }}
+            <!-- Search inside dropdown -->
+            <div class="p-2 border-b border-n-weak">
+              <SearchInput
+                v-model="inboxSearch"
+                placeholder="Buscar caixa de entrada..."
+              />
+            </div>
+
+            <!-- Loading -->
+            <div v-if="isInboxLoading" class="px-3 py-4 text-sm text-n-slate-10 text-center">
+              Carregando caixas de entrada...
+            </div>
+
+            <!-- Inbox list -->
+            <div v-else class="max-h-48 overflow-y-auto">
+              <button
+                v-for="inbox in dropdownInboxes"
+                :key="inbox.id"
+                type="button"
+                class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-sm text-n-slate-12 hover:bg-n-alpha-black2 transition-colors"
+                @click="toggleInbox(inbox)"
+              >
+                <span class="i-lucide-inbox size-4 text-n-slate-9 flex-shrink-0" />
+                <span class="flex-1 truncate">{{ inbox.name }}</span>
+              </button>
+
+              <div
+                v-if="!dropdownInboxes.length"
+                class="px-3 py-4 text-sm text-n-slate-10 text-center"
+              >
+                {{ inboxSearch ? 'Nenhuma caixa encontrada.' : 'Todas as caixas já foram vinculadas.' }}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div
-          v-else-if="isInboxLoading"
-          class="text-sm text-n-slate-10 text-center py-4"
-        >
-          {{ t(`${BASE_KEY}.FORM.INBOXES.LOADING`) }}
+        <!-- Selected inboxes as chips -->
+        <div v-if="selectedInboxes.length" class="flex flex-wrap gap-2">
+          <span
+            v-for="inbox in selectedInboxes"
+            :key="inbox.id"
+            class="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-sm font-medium bg-n-blue-3 text-n-blue-11 border border-n-blue-6"
+          >
+            {{ inbox.name }}
+            <button
+              type="button"
+              class="flex items-center justify-center size-4 rounded-full hover:bg-n-blue-5 transition-colors flex-shrink-0"
+              @click="removeInbox(inbox)"
+            >
+              <span class="i-lucide-x size-3" />
+            </button>
+          </span>
         </div>
 
-        <p v-if="selectedInboxCount > 0" class="text-label-small text-n-slate-11">
-          {{ t(`${BASE_KEY}.FORM.INBOXES.SELECTED_COUNT`, { count: selectedInboxCount }) }}
+        <p v-else class="text-sm text-n-slate-10">
+          Nenhuma caixa vinculada.
         </p>
       </div>
 
-      <!-- 3. Estratégia e Prioridade -->
+      <!-- 3. Ordem de atribuição -->
       <div class="flex flex-col items-center">
-        <!-- Strategy -->
         <div class="py-4 flex flex-col items-start gap-3 w-full">
           <WithLabel
             :label="t(`${BASE_KEY}.FORM.ASSIGNMENT_ORDER.LABEL`)"
@@ -339,7 +358,7 @@ defineExpose({ resetForm });
           </WithLabel>
         </div>
 
-        <!-- Priority -->
+        <!-- 4. Prioridade de atribuição -->
         <div class="py-4 flex flex-col items-start gap-3 w-full border-t border-n-weak">
           <WithLabel
             :label="t(`${BASE_KEY}.FORM.ASSIGNMENT_PRIORITY.LABEL`)"
@@ -364,7 +383,7 @@ defineExpose({ resetForm });
         </div>
       </div>
 
-      <!-- 4. Limite de distribuição (ex "Política de distribuição justa") -->
+      <!-- 5. Política de distribuição justa -->
       <div class="pt-4 pb-2 flex-col flex gap-4">
         <div class="flex flex-col items-start gap-1 py-1">
           <label class="text-sm font-medium text-n-slate-12 py-1">
@@ -380,34 +399,9 @@ defineExpose({ resetForm });
           v-model:window-unit="state.windowUnit"
         />
       </div>
-
-      <!-- 5. Resumo -->
-      <div class="pt-4 pb-2 flex flex-col gap-2">
-        <p class="text-sm font-medium text-n-slate-12">
-          {{ t(`${BASE_KEY}.FORM.SUMMARY.TITLE`) }}
-        </p>
-        <ul class="flex flex-col gap-1.5 text-sm text-n-slate-11">
-          <li class="flex items-center gap-2">
-            <span class="i-lucide-inbox size-4 text-n-slate-9" />
-            {{ t(`${BASE_KEY}.FORM.SUMMARY.INBOXES`, { count: selectedInboxCount }) }}
-          </li>
-          <li class="flex items-center gap-2">
-            <span class="i-lucide-shuffle size-4 text-n-slate-9" />
-            {{ t(`${BASE_KEY}.FORM.SUMMARY.STRATEGY`) }}: <strong class="text-n-slate-12">{{ summaryStrategy }}</strong>
-          </li>
-          <li class="flex items-center gap-2">
-            <span class="i-lucide-arrow-up-narrow-wide size-4 text-n-slate-9" />
-            {{ t(`${BASE_KEY}.FORM.SUMMARY.PRIORITY`) }}: <strong class="text-n-slate-12">{{ summaryPriority }}</strong>
-          </li>
-          <li class="flex items-center gap-2">
-            <span class="i-lucide-gauge size-4 text-n-slate-9" />
-            {{ t(`${BASE_KEY}.FORM.SUMMARY.LIMIT`) }}: <strong class="text-n-slate-12">{{ summaryLimit }}</strong>
-          </li>
-        </ul>
-      </div>
     </div>
 
-    <!-- Save -->
+    <!-- Salvar -->
     <Button
       type="submit"
       :label="buttonLabel"

@@ -94,6 +94,15 @@ const SOURCE_LABELS = {
   env:     { label: 'Servidor',  color: 'bg-n-slate-3 text-n-slate-11' },
 };
 
+const getConfigSource = providerKey => {
+  const sources = state[providerKey].sources;
+  if (!sources || Object.keys(sources).length === 0) return null;
+  const values = Object.values(sources);
+  if (values.some(v => v === 'account')) return 'account';
+  if (values.some(v => v === 'global')) return 'global';
+  return 'env';
+};
+
 // State per provider
 const state = reactive(
   Object.fromEntries(
@@ -277,6 +286,23 @@ const testConnection = async providerKey => {
         </div>
 
         <template v-else>
+          <!-- Config source indicator -->
+          <div v-if="getConfigSource(provider.key)" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-n-slate-2 border border-n-weak text-body-small">
+            <span class="i-lucide-database w-3.5 h-3.5 text-n-slate-9 shrink-0" />
+            <span class="text-n-slate-11 shrink-0">Fonte da configuração:</span>
+            <span
+              :class="[
+                'text-xs px-2 py-0.5 rounded-full font-medium',
+                SOURCE_LABELS[getConfigSource(provider.key)]?.color
+              ]"
+            >
+              {{ SOURCE_LABELS[getConfigSource(provider.key)]?.label }}
+            </span>
+            <span v-if="getConfigSource(provider.key) === 'env'" class="text-xs text-n-slate-10 truncate">
+              — variáveis de ambiente do servidor
+            </span>
+          </div>
+
           <!-- Enabled toggle -->
           <div class="flex items-center justify-between">
             <span class="text-body-small font-medium text-n-slate-12">Ativar integração</span>
@@ -352,7 +378,7 @@ const testConnection = async providerKey => {
                 v-model="state[provider.key].config[field.key]"
                 :type="showToken[`${provider.key}.${field.key}_edit`] ? 'text' : 'password'"
                 :placeholder="field.placeholder"
-                class="w-full px-3 py-2 pr-10 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
+                class="w-full px-3 py-2 pr-10 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
                 @input="state[provider.key].dirty = true"
               />
               <button
@@ -368,7 +394,7 @@ const testConnection = async providerKey => {
               v-model="state[provider.key].config[field.key]"
               type="text"
               :placeholder="field.placeholder"
-              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand-9"
+              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-small text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
               @input="state[provider.key].dirty = true"
             />
           </div>
@@ -380,7 +406,7 @@ const testConnection = async providerKey => {
               <span v-if="state[provider.key].loadingInstances" class="text-xs text-n-slate-11">Carregando...</span>
             </div>
             <div v-if="state[provider.key].instances.length === 0 && !state[provider.key].loadingInstances" class="text-xs text-n-slate-11 py-1">
-              Nenhuma instância sincronizada. Clique em "Sincronizar Instâncias" após salvar as credenciais.
+              Nenhuma instância sincronizada. Clique em "Sincronizar Instâncias" para buscar as instâncias disponíveis.
             </div>
             <div v-else class="flex flex-col gap-1">
               <div class="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-n-slate-11 px-1">
@@ -469,7 +495,7 @@ const testConnection = async providerKey => {
               </button>
             </div>
             <button
-              class="px-4 py-1.5 rounded-lg bg-n-brand-9 text-white text-body-small font-medium hover:bg-n-brand-10 disabled:opacity-50 transition-colors"
+              class="px-4 py-1.5 rounded-lg bg-n-brand text-white text-body-small font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
               :disabled="state[provider.key].saving"
               @click="saveProvider(provider.key)"
             >

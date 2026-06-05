@@ -160,6 +160,7 @@ Rails.application.routes.draw do
               post :unread
               post :custom_attributes
               post :close_outcome
+              post :set_outcome
               post :close_as_ai
               get :attachments
               get :inbox_assistant

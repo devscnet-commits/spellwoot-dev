@@ -204,9 +204,10 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
         size="sm"
         variant="ghost"
         color="slate"
-        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.CANCEL')"
+        icon="i-lucide-minus-circle"
+        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_NO_RESULT')"
         class="w-full rounded-md"
-        @click="showOutcomePrompt = false"
+        @click="() => { showOutcomePrompt = false; toggleStatus(wootConstants.STATUS_TYPE.RESOLVED); }"
       />
     </div>
 
