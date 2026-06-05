@@ -48,6 +48,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     inbox_params[:csat_config] = format_csat_config(permitted_params[:csat_config]) if permitted_params[:csat_config].present?
     @inbox.update!(inbox_params)
     update_inbox_working_hours
+    update_inbox_working_periods
+    update_inbox_holidays
     update_channel if channel_update_required?
   rescue StandardError => e
     Rails.logger.error "[InboxUpdate] inbox_id=#{@inbox&.id} #{e.class}: #{e.message}\n#{e.backtrace.first(15).join("\n")}"
@@ -478,6 +480,20 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     @inbox.update_working_hours(params.permit(working_hours: Inbox::OFFISABLE_ATTRS)[:working_hours]) if params[:working_hours]
   end
 
+  def update_inbox_working_periods
+    return unless params[:working_periods]
+
+    permitted = params.permit(working_periods: Inbox::PERIOD_ATTRS)[:working_periods]
+    @inbox.update_working_periods(permitted)
+  end
+
+  def update_inbox_holidays
+    return unless params[:holidays]
+
+    permitted = params.permit(holidays: Inbox::HOLIDAY_ATTRS)[:holidays]
+    @inbox.update_holidays(permitted)
+  end
+
   def update_channel
     channel_attributes = get_channel_attributes(@inbox.channel_type)
     return if permitted_params(channel_attributes)[:channel].blank?
@@ -532,8 +548,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def inbox_attributes
     [:name, :avatar, :greeting_enabled, :greeting_message, :enable_email_collect, :csat_survey_enabled,
-     :enable_auto_assignment, :working_hours_enabled, :out_of_office_message, :timezone, :allow_messages_after_resolved,
-     :lock_to_single_conversation, :portal_id, :sender_name_type, :business_name,
+     :enable_auto_assignment, :working_hours_enabled, :out_of_office_message, :interval_message, :holiday_message,
+     :timezone, :allow_messages_after_resolved, :lock_to_single_conversation, :portal_id, :sender_name_type, :business_name,
      { csat_config: [:display_type, :message, :button_text, :language,
                      { survey_rules: [:operator, { values: [] }],
                        template: [:name, :template_id, :friendly_name, :content_sid, :approval_sid, :created_at, :language, :status] }] }]
