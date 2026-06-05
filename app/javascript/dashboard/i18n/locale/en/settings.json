@@ -627,30 +627,30 @@
     },
     "LEADS_REPORT": {
       "TITLE": "Leads",
-      "DESCRIPTION": "Track the outcome of your conversations: won, lost, and closed by AI.",
-      "LOADING": "Loading...",
-      "WON": "Won",
-      "LOST": "Lost",
-      "AI_CLOSED": "Closed by AI",
+      "DESCRIPTION": "Acompanhe o resultado das suas conversas: ganhos, perdidos e fechados pela IA.",
+      "LOADING": "Carregando...",
+      "WON": "Ganho",
+      "LOST": "Perdido",
+      "AI_CLOSED": "Fechado pela IA",
       "TOTAL": "Total",
-      "OF_TOTAL": "of total"
+      "OF_TOTAL": "do total"
     },
     "OUTCOME": {
-      "MARK_WON": "Mark as Won",
-      "MARK_LOST": "Mark as Lost",
-      "MARK_NO_RESULT": "No result",
-      "MODAL_DESCRIPTION": "Fill in the fields below before marking the outcome.",
-      "CONFIRM": "Confirm",
-      "CANCEL": "Cancel",
-      "NO_FIELDS": "No additional fields required.",
-      "SUCCESS": "Outcome recorded successfully",
-      "ERROR": "Could not record outcome, please try again",
-      "PROMPT_RESOLVE": "Before resolving, define the lead outcome:",
-      "RESULT_WON": "Won",
-      "RESULT_LOST": "Lost",
-      "RESULT_NONE": "No result",
-      "RESULT_UPDATED": "Result updated",
-      "RESULT_LABEL": "Result"
+      "MARK_WON": "Marcar como Ganho",
+      "MARK_LOST": "Marcar como Perdido",
+      "MARK_NO_RESULT": "Sem resultado",
+      "MODAL_DESCRIPTION": "Preencha os campos abaixo antes de marcar o resultado.",
+      "CONFIRM": "Confirmar",
+      "CANCEL": "Cancelar",
+      "NO_FIELDS": "Nenhum campo adicional necessário.",
+      "SUCCESS": "Resultado registrado com sucesso",
+      "ERROR": "Não foi possível registrar o resultado, tente novamente",
+      "PROMPT_RESOLVE": "Antes de resolver, defina o resultado do lead:",
+      "RESULT_WON": "Ganho",
+      "RESULT_LOST": "Perdido",
+      "RESULT_NONE": "Sem resultado",
+      "RESULT_UPDATED": "Resultado atualizado",
+      "RESULT_LABEL": "Resultado"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
@@ -793,10 +793,11 @@
         "HEADER": {
           "TITLE": "Edit assignment policy"
         },
-        "EDIT_BUTTON": "Update policy",
-        "SAVE_CHANGES_BUTTON": "Save changes",
-        "SAVED_BUTTON": "Up to date",
-        "UNSAVED_INDICATOR": "Unsaved changes",
+        "EDIT_BUTTON": "Atualizar política",
+        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "SAVED_BUTTON": "Tudo salvo",
+        "UNSAVED_INDICATOR": "Alterações não salvas",
+        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?",
         "CONFIRM_ADD_INBOX_DIALOG": {
           "TITLE": "Add inbox",
           "DESCRIPTION": "{inboxName} inbox is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",
@@ -926,10 +927,11 @@
         "HEADER": {
           "TITLE": "Edit agent capacity policy"
         },
-        "EDIT_BUTTON": "Update policy",
-        "SAVE_CHANGES_BUTTON": "Save changes",
-        "SAVED_BUTTON": "Up to date",
-        "UNSAVED_INDICATOR": "Unsaved changes",
+        "EDIT_BUTTON": "Atualizar política",
+        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "SAVED_BUTTON": "Tudo salvo",
+        "UNSAVED_INDICATOR": "Alterações não salvas",
+        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?",
         "CONFIRM_ADD_AGENT_DIALOG": {
           "TITLE": "Add agent",
           "DESCRIPTION": "{agentName} is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",
