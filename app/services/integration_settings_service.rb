@@ -17,8 +17,9 @@ class IntegrationSettingsService
       'instance' => 'EVOLUTION_DEFAULT_INSTANCE'
     },
     'uazapi' => {
-      'apiUrl' => 'UAZAPI_BASE_URL',
-      'token'  => 'UAZAPI_ADMIN_TOKEN'
+      'apiUrl'         => 'UAZAPI_BASE_URL',
+      'token'          => 'UAZAPI_ADMIN_TOKEN',
+      'webhookBaseUrl' => 'UAZAPI_WEBHOOK_BASE_URL'
     },
     'bitrix' => {
       'webhookUrl' => 'BITRIX_WEBHOOK',

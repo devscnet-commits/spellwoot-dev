@@ -90,7 +90,7 @@ class Whatsapp::UazapiConnectionService
     return nil unless channel.additional_attributes&.dig('uazapi_instance_token').present?
 
     instance_token = channel.additional_attributes['uazapi_instance_token']
-    base_url = Whatsapp::Providers::UazapiService.base_url
+    base_url = Whatsapp::Providers::UazapiService.base_url(channel.account_id)
 
     headers = {
       'Content-Type' => 'application/json',
@@ -118,7 +118,7 @@ class Whatsapp::UazapiConnectionService
       }
 
       # Get Chatwoot integration status
-      chatwoot_config = Whatsapp::Providers::UazapiService.get_chatwoot_config(instance_token)
+      chatwoot_config = Whatsapp::Providers::UazapiService.get_chatwoot_config(instance_token, account_id: channel.account_id)
       integration_status = chatwoot_config&.dig('integration_status') || {}
       
       instance_status[:integration_status] = integration_status
@@ -162,7 +162,7 @@ class Whatsapp::UazapiConnectionService
 
   def create_uazapi_instance
     instance_name = generate_instance_name
-    Whatsapp::Providers::UazapiService.create_instance(instance_name)
+    Whatsapp::Providers::UazapiService.create_instance(instance_name, account_id: account.id)
   end
 
   def generate_instance_name
@@ -199,15 +199,19 @@ class Whatsapp::UazapiConnectionService
       return nil
     end
 
-    frontend_url = ENV.fetch('FRONTEND_URL', nil) || (ENV['HEROKU_APP_NAME'].present? ? "https://#{ENV['HEROKU_APP_NAME']}.herokuapp.com" : nil)
-    unless frontend_url.present?
-      Rails.logger.warn "[UAZAPI] FRONTEND_URL not configured"
+    creds = Whatsapp::Providers::UazapiService.credentials_for(account.id)
+    chatwoot_url = creds[:webhook_base_url] ||
+                   ENV.fetch('FRONTEND_URL', nil) ||
+                   (ENV['HEROKU_APP_NAME'].present? ? "https://#{ENV['HEROKU_APP_NAME']}.herokuapp.com" : nil)
+
+    unless chatwoot_url.present?
+      Rails.logger.warn '[UAZAPI] No webhook base URL configured (UAZAPI_WEBHOOK_BASE_URL / FRONTEND_URL missing)'
       return nil
     end
 
     chatwoot_config = {
       enabled: true,
-      url: frontend_url,
+      url: chatwoot_url,
       access_token: access_token,
       account_id: account.id,
       inbox_id: inbox.id,
@@ -216,11 +220,11 @@ class Whatsapp::UazapiConnectionService
       create_new_conversation: true
     }
 
-    Whatsapp::Providers::UazapiService.configure_chatwoot_integration(instance_token, chatwoot_config)
+    Whatsapp::Providers::UazapiService.configure_chatwoot_integration(instance_token, chatwoot_config, account_id: account.id)
   end
 
   def connect_instance(instance_token)
-    base_url = Whatsapp::Providers::UazapiService.base_url
+    base_url = Whatsapp::Providers::UazapiService.base_url(account.id)
     headers = {
       'Content-Type' => 'application/json',
       'token' => instance_token

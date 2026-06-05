@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useRoute, useRouter } from 'vue-router';
@@ -31,6 +31,7 @@ const inboxesUiFlags = useMapGetter('inboxes/getUIFlags');
 const routeId = computed(() => route.params.id);
 const selectedPolicy = computed(() => selectedPolicyById.value(routeId.value));
 const selectedPolicyId = computed(() => selectedPolicy.value?.id);
+const isFormDirty = ref(false);
 
 const breadcrumbItems = computed(() => [
   {
@@ -190,7 +191,16 @@ onMounted(() => store.dispatch('agents/get'));
   >
     <template #header>
       <div class="flex items-center gap-2 w-full justify-between mb-4 min-h-10">
-        <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+        <div class="flex items-center gap-3">
+          <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+          <span
+            v-if="isFormDirty"
+            class="text-xs text-n-amber-9 font-medium flex items-center gap-1"
+          >
+            <span class="size-1.5 rounded-full bg-n-amber-9 inline-block" />
+            {{ t(`${BASE_KEY}.EDIT.UNSAVED_INDICATOR`) }}
+          </span>
+        </div>
       </div>
     </template>
 
@@ -214,6 +224,7 @@ onMounted(() => store.dispatch('agents/get'));
         @add-inbox-limit="handleAddInboxLimit"
         @update-inbox-limit="handleLimitChange"
         @delete-inbox-limit="handleDeleteInboxLimit"
+        @dirty-change="isFormDirty = $event"
       />
     </template>
   </SettingsLayout>

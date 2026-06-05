@@ -76,6 +76,7 @@ const props = defineProps({
   teamId: { type: [String, Number], default: 0 },
   label: { type: String, default: '' },
   conversationType: { type: String, default: '' },
+  campaignId: { type: [String, Number], default: 0 },
   foldersId: { type: [String, Number], default: 0 },
   showConversationList: { default: true, type: Boolean },
   isOnExpandedLayout: { default: false, type: Boolean },
@@ -125,6 +126,7 @@ const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
 const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
 const isResolvedTabActive = ref(false);
 const activeSortBy = ref(wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC);
+const activeOriginFilter = ref('all');
 const showAdvancedFilters = ref(false);
 // chatsOnView is to store the chats that are currently visible on the screen,
 // which mirrors the conversationList.
@@ -314,6 +316,9 @@ const conversationFilters = computed(() => {
     labels: props.label ? [props.label] : undefined,
     teamId: props.teamId || undefined,
     conversationType: props.conversationType || undefined,
+    campaignId: props.campaignId || undefined,
+    wasReopened:
+      activeOriginFilter.value === 'reopened' ? true : undefined,
   };
 });
 
@@ -678,6 +683,8 @@ function updateAssigneeTab(selectedTab) {
 function onBasicFilterChange(value, type) {
   if (type === 'status') {
     activeStatus.value = value;
+  } else if (type === 'origin') {
+    activeOriginFilter.value = value;
   } else {
     activeSortBy.value = value;
   }

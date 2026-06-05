@@ -17,6 +17,13 @@
 class TeamMember < ApplicationRecord
   belongs_to :user
   belongs_to :team
+
+  enum role: { member: 0, coordinator: 1, manager: 2 }
+
+  scope :coordinators, -> { where(role: :coordinator) }
+  scope :managers, -> { where(role: :manager) }
+  scope :with_elevated_access, -> { where(role: [:coordinator, :manager]) }
+
   validates :user_id, uniqueness: { scope: :team_id }
 end
 

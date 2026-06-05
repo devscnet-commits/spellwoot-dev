@@ -61,6 +61,14 @@ class V2::Reports::Timeseries::CountReportBuilder < V2::Reports::Timeseries::Bas
     ).distinct
   end
 
+  def scope_for_reopened_conversations_count
+    scope.reporting_events.where(
+      name: :conversation_opened,
+      account_id: account.id,
+      created_at: range
+    ).where('value > 0')
+  end
+
   def grouped_count
     # IMPORTANT: time_zone parameter affects both data grouping AND output timestamps
     # It converts timestamps to the target timezone before grouping, which means

@@ -3,7 +3,7 @@ class V2::Reports::Conversations::BaseReportBuilder
 
   private
 
-  AVG_METRICS = %w[avg_first_response_time avg_resolution_time reply_time].freeze
+  AVG_METRICS = %w[avg_first_response_time avg_resolution_time reply_time avg_time_to_reopen].freeze
   COUNT_METRICS = %w[
     conversations_count
     incoming_messages_count
@@ -11,6 +11,7 @@ class V2::Reports::Conversations::BaseReportBuilder
     resolutions_count
     bot_resolutions_count
     bot_handoffs_count
+    reopened_conversations_count
   ].freeze
 
   def builder_class(metric)

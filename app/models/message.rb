@@ -435,6 +435,11 @@ class Message < ApplicationRecord
 
   def reopen_resolved_conversation
     Current.executed_by = sender if conversation.inbox.api? && reopened_by_contact?
+    attrs = (conversation.additional_attributes || {}).merge(
+      'was_reopened' => true,
+      'reopened_at' => Time.current.iso8601
+    )
+    conversation.update_columns(additional_attributes: attrs)
     conversation.open!
   end
 

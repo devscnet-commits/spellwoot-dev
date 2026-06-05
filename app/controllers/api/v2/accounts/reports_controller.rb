@@ -87,6 +87,14 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     render json: builder.build
   end
 
+  def conversation_distribution
+    builder = V2::Reports::ConversationDistributionBuilder.new(
+      account: Current.account,
+      params: distribution_params
+    )
+    render json: builder.build
+  end
+
   private
 
   def generate_csv(filename, template)
@@ -156,8 +164,8 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
 
   def build_summary(method)
     builder = V2::Reports::Conversations::MetricBuilder
-    current_summary = builder.new(Current.account, current_summary_params).send(method)
-    previous_summary = builder.new(Current.account, previous_summary_params).send(method)
+    current_summary = builder.new(Current.account, current_summary_params.merge(account_user: Current.account_user)).send(method)
+    previous_summary = builder.new(Current.account, previous_summary_params.merge(account_user: Current.account_user)).send(method)
     current_summary.merge(previous: previous_summary)
   end
 
@@ -189,13 +197,26 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     }
   end
 
+  def distribution_params
+    {
+      since:        params[:since],
+      until:        params[:until],
+      inbox_id:     params[:inbox_id],
+      team_id:      params[:team_id],
+      account_user: Current.account_user
+    }
+  end
+
   OUTCOME_SELECT = <<~SQL.freeze
     COUNT(*) AS total,
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won'       THEN 1 ELSE 0 END) AS won,
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'lost'      THEN 1 ELSE 0 END) AS lost,
     SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'ai_closed' THEN 1 ELSE 0 END) AS ai_closed,
     SUM(CASE WHEN conversations.status = 'pending'                                 THEN 1 ELSE 0 END) AS pending,
-    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL                       THEN 1 ELSE 0 END) AS reopened
+    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL                       THEN 1 ELSE 0 END) AS reopened,
+    SUM(CASE WHEN conversations.status = 'resolved'
+              AND (conversations.additional_attributes ->> 'outcome' IS NULL
+                   OR conversations.additional_attributes ->> 'outcome' = '')      THEN 1 ELSE 0 END) AS no_outcome
   SQL
 
   def leads_summary
@@ -236,7 +257,9 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def build_leads_scope
     @value_key = Current.account.settings&.dig('meta_conversion_settings', 'value_field').presence
 
-    scope = Current.account.conversations.joins(reopen_join_sql)
+    scope = Reports::PermissionScopeService.new(Current.account_user).scope_conversations(
+      Current.account.conversations.joins(reopen_join_sql)
+    )
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i))   if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i))   if params[:until].present?
     scope = scope.where(inbox_id: params[:inbox_id])                                           if params[:inbox_id].present?
@@ -261,10 +284,13 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     base = OUTCOME_SELECT.chomp
     if @value_key.present?
       safe_key = @value_key.gsub(/[^a-zA-Z0-9_]/, '')
-      "#{base},\n    COALESCE(SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won' " \
-        "THEN NULLIF(conversations.custom_attributes->>'#{safe_key}', '')::numeric ELSE NULL END), 0) AS revenue"
+      "#{base},\n" \
+        "    COALESCE(SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won' " \
+        "THEN NULLIF(conversations.custom_attributes->>'#{safe_key}', '')::numeric ELSE NULL END), 0) AS revenue,\n" \
+        "    COALESCE(SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'lost' " \
+        "THEN NULLIF(conversations.custom_attributes->>'#{safe_key}', '')::numeric ELSE NULL END), 0) AS revenue_lost"
     else
-      "#{base},\n    0::numeric AS revenue"
+      "#{base},\n    0::numeric AS revenue,\n    0::numeric AS revenue_lost"
     end
   end
 
@@ -338,20 +364,25 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   end
 
   def row_with_open(record, extra = {})
-    total     = record.total.to_i
-    won       = record.won.to_i
-    lost      = record.lost.to_i
-    ai_closed = record.ai_closed.to_i
-    pending   = record.respond_to?(:pending) ? record.pending.to_i : 0
-    open      = total - won - lost - ai_closed
-    attended  = total - pending
-    revenue   = record.respond_to?(:revenue) ? record.revenue.to_f.round(2) : 0.0
-    reopened  = record.try(:reopened).to_i
-    concluded = won + lost
-    rate        = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
-    reopen_rate = total.positive? ? (reopened.to_f / total * 100).round(1) : 0.0
-    extra.merge(total:, won:, lost:, open:, ai_closed:, pending:, attended:, revenue:,
-                conversion_rate: rate, reopened:, reopen_rate:)
+    total        = record.total.to_i
+    won          = record.won.to_i
+    lost         = record.lost.to_i
+    ai_closed    = record.ai_closed.to_i
+    pending      = record.respond_to?(:pending) ? record.pending.to_i : 0
+    open         = total - won - lost - ai_closed
+    attended     = total - pending
+    revenue      = record.respond_to?(:revenue)      ? record.revenue.to_f.round(2)      : 0.0
+    revenue_lost = record.respond_to?(:revenue_lost) ? record.revenue_lost.to_f.round(2) : 0.0
+    reopened     = record.try(:reopened).to_i
+    no_outcome   = record.try(:no_outcome).to_i
+    concluded    = won + lost
+    rate         = concluded.positive? ? (won.to_f / concluded * 100).round(1) : 0.0
+    reopen_rate  = total.positive? ? (reopened.to_f / total * 100).round(1) : 0.0
+    extra.merge(
+      total:, won:, lost:, open:, ai_closed:, pending:, attended:,
+      no_outcome:, revenue:, revenue_lost:,
+      conversion_rate: rate, reopened:, reopen_rate:
+    )
   end
 
   # ── Schedule report helpers ─────────────────────────────────────────────────
@@ -359,11 +390,13 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def schedule_scope
     tz_offset = (params[:timezone_offset] || 0).to_f
     tz = ActiveSupport::TimeZone[tz_offset] || Time.zone
-    scope = Current.account.conversations
+    scope = Reports::PermissionScopeService.new(Current.account_user).scope_conversations(
+      Current.account.conversations
+    )
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
-    scope = scope.where(inbox_id: params[:inbox_id])   if params[:inbox_id].present?
-    scope = scope.where(team_id: params[:team_id])     if params[:team_id].present?
+    scope = scope.where(inbox_id: params[:inbox_id])       if params[:inbox_id].present?
+    scope = scope.where(team_id: params[:team_id])         if params[:team_id].present?
     scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
     [scope, tz]
   end

@@ -43,13 +43,13 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   # UazAPI specific methods
 
-  def self.create_instance(name)
-    url = "#{base_url}/instance/init"
+  def self.create_instance(name, account_id: nil)
+    url = "#{base_url(account_id)}/instance/init"
     Rails.logger.info "[UAZAPI] Creating instance: #{name} at #{url}"
 
     response = HTTParty.post(
       url,
-      headers: admin_headers,
+      headers: admin_headers(account_id),
       body: { name: name }.to_json
     )
 
@@ -292,22 +292,44 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def base_url
-    self.class.base_url
+    self.class.base_url(whatsapp_channel.account_id)
   end
 
-  def self.base_url
-    ENV.fetch('UAZAPI_BASE_URL', 'https://free.uazapi.com')
-  end
+  # Resolves credentials using the 3-tier chain:
+  # account settings → global settings → environment variables.
+  # Falls back gracefully so ENV-only installs keep working.
+  def self.credentials_for(account_id = nil)
+    if account_id.present?
+      config = IntegrationSettingsService.get_config(account_id, 'uazapi')
+      db_account = IntegrationSettingsService.load_db(account_id, 'uazapi')
+      db_global  = IntegrationSettingsService.load_db(nil, 'uazapi')
+      source = (db_account.any? || db_global.any?) ? 'account/global settings' : 'environment variables'
+      Rails.logger.info "[UAZAPI] Credential source: #{source} (account_id=#{account_id})"
+    else
+      config = {}
+      Rails.logger.info '[UAZAPI] Credential source: environment variables (no account context)'
+    end
 
-  def self.admin_headers
     {
-      'Content-Type' => 'application/json',
-      'admintoken' => ENV.fetch('UAZAPI_ADMIN_TOKEN', nil)
+      base_url:         config['apiUrl'].presence         || ENV.fetch('UAZAPI_BASE_URL', 'https://free.uazapi.com'),
+      admin_token:      config['token'].presence          || ENV.fetch('UAZAPI_ADMIN_TOKEN', nil),
+      webhook_base_url: config['webhookBaseUrl'].presence || ENV.fetch('UAZAPI_WEBHOOK_BASE_URL', nil)
     }
   end
 
-  def self.configure_chatwoot_integration(instance_token, chatwoot_config)
-    url = "#{base_url}/chatwoot/config"
+  def self.base_url(account_id = nil)
+    credentials_for(account_id)[:base_url]
+  end
+
+  def self.admin_headers(account_id = nil)
+    {
+      'Content-Type' => 'application/json',
+      'admintoken'   => credentials_for(account_id)[:admin_token]
+    }
+  end
+
+  def self.configure_chatwoot_integration(instance_token, chatwoot_config, account_id: nil)
+    url = "#{base_url(account_id)}/chatwoot/config"
     
     # Log antes de fazer a requisição (sem token sensível)
     log_config = chatwoot_config.dup
@@ -350,8 +372,8 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     end
   end
 
-  def self.get_chatwoot_config(instance_token)
-    url = "#{base_url}/chatwoot/config"
+  def self.get_chatwoot_config(instance_token, account_id: nil)
+    url = "#{base_url(account_id)}/chatwoot/config"
     
     Rails.logger.info "[UAZAPI] Getting Chatwoot integration status"
     Rails.logger.info "[UAZAPI] URL: #{url}"

@@ -139,6 +139,21 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     @conversation.save!
   end
 
+  def set_outcome
+    outcome = params[:outcome].to_s
+    allowed = %w[won lost]
+    attrs = @conversation.additional_attributes || {}
+
+    if outcome.in?(allowed)
+      attrs = attrs.merge('outcome' => outcome, 'outcome_set_at' => Time.current.iso8601)
+    else
+      attrs = attrs.except('outcome', 'outcome_set_at')
+    end
+
+    @conversation.update!(additional_attributes: attrs)
+    render json: { outcome: attrs['outcome'] }, status: :ok
+  end
+
   def close_outcome
     outcome = params[:outcome].to_s
     raise Pundit::NotAuthorizedError unless %w[won lost].include?(outcome)

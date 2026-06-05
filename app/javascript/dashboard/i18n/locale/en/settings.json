@@ -638,13 +638,19 @@
     "OUTCOME": {
       "MARK_WON": "Mark as Won",
       "MARK_LOST": "Mark as Lost",
+      "MARK_NO_RESULT": "No result",
       "MODAL_DESCRIPTION": "Fill in the fields below before marking the outcome.",
       "CONFIRM": "Confirm",
       "CANCEL": "Cancel",
       "NO_FIELDS": "No additional fields required.",
       "SUCCESS": "Outcome recorded successfully",
       "ERROR": "Could not record outcome, please try again",
-      "PROMPT_RESOLVE": "Before resolving, define the lead outcome:"
+      "PROMPT_RESOLVE": "Before resolving, define the lead outcome:",
+      "RESULT_WON": "Won",
+      "RESULT_LOST": "Lost",
+      "RESULT_NONE": "No result",
+      "RESULT_UPDATED": "Result updated",
+      "RESULT_LABEL": "Result"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
@@ -788,6 +794,9 @@
           "TITLE": "Edit assignment policy"
         },
         "EDIT_BUTTON": "Update policy",
+        "SAVE_CHANGES_BUTTON": "Save changes",
+        "SAVED_BUTTON": "Up to date",
+        "UNSAVED_INDICATOR": "Unsaved changes",
         "CONFIRM_ADD_INBOX_DIALOG": {
           "TITLE": "Add inbox",
           "DESCRIPTION": "{inboxName} inbox is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",
@@ -855,24 +864,35 @@
           }
         },
         "FAIR_DISTRIBUTION": {
-          "LABEL": "Fair distribution policy",
-          "DESCRIPTION": "Set the maximum number of conversations that can be assigned per agent within a time window to avoid overloading any one agent. This required field defaults to 100 conversations per hour.",
+          "LABEL": "Conversation limit per agent",
+          "DESCRIPTION": "Maximum conversations assigned per agent in a time window. Prevents overloading. Defaults to 100 per hour.",
           "INPUT_MAX": "Assign max",
           "DURATION": "Conversations per agent in every"
         },
         "INBOXES": {
-          "LABEL": "Added inboxes",
-          "DESCRIPTION": "Add inboxes for which this policy will be applicable.",
+          "LABEL": "Participating inboxes",
+          "DESCRIPTION": "Select the inboxes where this policy will apply.",
           "ADD_BUTTON": "Add inbox",
+          "SEARCH_PLACEHOLDER": "Search inboxes...",
+          "SELECTED": "Selected",
+          "SELECTED_COUNT": "{count} inbox(es) selected",
+          "LOADING": "Loading inboxes...",
           "DROPDOWN": {
             "SEARCH_PLACEHOLDER": "Search and select inboxes to add",
             "ADD_BUTTON": "Add"
           },
-          "EMPTY_STATE": "No inboxes added to this policy, add an inbox to get started",
+          "EMPTY_STATE": "No inboxes found",
           "API": {
             "SUCCESS_MESSAGE": "Inbox successfully added to policy",
             "ERROR_MESSAGE": "Failed to add inbox to policy"
           }
+        },
+        "SUMMARY": {
+          "TITLE": "Summary",
+          "INBOXES": "{count} inbox(es) linked",
+          "STRATEGY": "Strategy",
+          "PRIORITY": "Priority",
+          "LIMIT": "Limit"
         }
       },
       "DELETE_POLICY": {
@@ -907,6 +927,9 @@
           "TITLE": "Edit agent capacity policy"
         },
         "EDIT_BUTTON": "Update policy",
+        "SAVE_CHANGES_BUTTON": "Save changes",
+        "SAVED_BUTTON": "Up to date",
+        "UNSAVED_INDICATOR": "Unsaved changes",
         "CONFIRM_ADD_AGENT_DIALOG": {
           "TITLE": "Add agent",
           "DESCRIPTION": "{agentName} is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",
@@ -990,6 +1013,12 @@
             "SUCCESS_MESSAGE": "Agent successfully added to policy",
             "ERROR_MESSAGE": "Failed to add agent to policy"
           }
+        },
+        "SUMMARY": {
+          "TITLE": "Summary",
+          "INBOXES": "{count} inbox(es) selected",
+          "AGENTS": "{count} agent(s) selected",
+          "CAPACITY": "Total capacity: {total} conversations"
         }
       },
       "DELETE_POLICY": {
