@@ -56,6 +56,10 @@ Rails.application.routes.draw do
           resource :bulk_actions, only: [:create]
           resources :agents, only: [:index, :create, :update, :destroy] do
             post :bulk_create, on: :collection
+            member do
+              post :deactivate
+              post :reactivate
+            end
             resource :schedule, only: [:show, :update, :destroy],
                                 controller: 'agent_schedules',
                                 param: :agent_id
