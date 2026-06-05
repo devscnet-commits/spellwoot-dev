@@ -9,6 +9,7 @@ import RadioCard from 'dashboard/components-next/radioCard/RadioCard.vue';
 import FairDistribution from 'dashboard/components-next/AssignmentPolicy/components/FairDistribution.vue';
 import WithLabel from 'v3/components/Form/WithLabel.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import SearchInput from 'dashboard/components-next/input/SearchInput.vue';
 import {
   OPTIONS,
   ROUND_ROBIN,
@@ -260,15 +261,10 @@ defineExpose({ resetForm });
         </div>
 
         <!-- Search -->
-        <div class="flex items-center gap-2 rounded-lg border border-n-weak px-3 py-2">
-          <span class="i-lucide-search size-4 text-n-slate-9 flex-shrink-0" />
-          <input
-            v-model="inboxSearch"
-            type="search"
-            class="flex-1 bg-transparent text-sm text-n-slate-12 focus:outline-none placeholder:text-n-slate-9"
-            :placeholder="t(`${BASE_KEY}.FORM.INBOXES.SEARCH_PLACEHOLDER`)"
-          />
-        </div>
+        <SearchInput
+          v-model="inboxSearch"
+          :placeholder="t(`${BASE_KEY}.FORM.INBOXES.SEARCH_PLACEHOLDER`)"
+        />
 
         <!-- Inbox checklist -->
         <div v-if="inboxList.length" class="flex flex-col max-h-48 overflow-y-auto rounded-xl border border-n-weak divide-y divide-n-weak">

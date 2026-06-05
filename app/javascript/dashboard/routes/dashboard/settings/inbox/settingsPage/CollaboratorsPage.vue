@@ -13,6 +13,8 @@ import NextButton from 'dashboard/components-next/button/Button.vue';
 import SettingsToggleSection from 'dashboard/components-next/Settings/SettingsToggleSection.vue';
 import DropdownMenu from 'dashboard/components-next/dropdown-menu/DropdownMenu.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
+import Switch from 'dashboard/components-next/switch/Switch.vue';
+import SearchInput from 'dashboard/components-next/input/SearchInput.vue';
 import assignmentPoliciesAPI from 'dashboard/api/assignmentPolicies';
 import { useI18n } from 'vue-i18n';
 
@@ -398,16 +400,12 @@ onMounted(() => {
           class="relative"
         >
           <div class="flex gap-2">
-            <div class="relative flex-1">
-              <span class="absolute left-2.5 top-1/2 -translate-y-1/2 i-lucide-search text-n-slate-9 text-sm pointer-events-none" />
-              <input
-                v-model="addSearch"
-                type="text"
-                placeholder="Buscar e adicionar agente..."
-                class="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-n-weak bg-n-solid-2 text-n-slate-12 placeholder:text-n-slate-9 focus:outline-none focus:border-n-brand-8"
-                @focus="showAddDropdown = true"
-              />
-            </div>
+            <SearchInput
+              v-model="addSearch"
+              class="flex-1"
+              placeholder="Buscar e adicionar agente..."
+              @focus="showAddDropdown = true"
+            />
           </div>
 
           <!-- Dropdown list of addable agents -->
@@ -451,19 +449,10 @@ onMounted(() => {
 
               <!-- Eligibility toggle -->
               <div class="w-36 flex justify-center">
-                <button
-                  role="switch"
-                  type="button"
-                  :aria-checked="agentEligibility[agent.id]"
-                  class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none"
-                  :class="agentEligibility[agent.id] ? 'bg-n-brand-9' : 'bg-n-slate-5'"
-                  @click="toggleEligibility(agent.id)"
-                >
-                  <span
-                    class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform"
-                    :class="agentEligibility[agent.id] ? 'translate-x-4' : 'translate-x-1'"
-                  />
-                </button>
+                <Switch
+                  :model-value="agentEligibility[agent.id]"
+                  @change="toggleEligibility(agent.id)"
+                />
               </div>
 
               <!-- Remove button -->
