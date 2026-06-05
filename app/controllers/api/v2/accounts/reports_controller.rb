@@ -156,8 +156,8 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
 
   def build_summary(method)
     builder = V2::Reports::Conversations::MetricBuilder
-    current_summary = builder.new(Current.account, current_summary_params).send(method)
-    previous_summary = builder.new(Current.account, previous_summary_params).send(method)
+    current_summary = builder.new(Current.account, current_summary_params.merge(account_user: Current.account_user)).send(method)
+    previous_summary = builder.new(Current.account, previous_summary_params.merge(account_user: Current.account_user)).send(method)
     current_summary.merge(previous: previous_summary)
   end
 
@@ -361,11 +361,13 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
   def schedule_scope
     tz_offset = (params[:timezone_offset] || 0).to_f
     tz = ActiveSupport::TimeZone[tz_offset] || Time.zone
-    scope = Current.account.conversations
+    scope = Reports::PermissionScopeService.new(Current.account_user).scope_conversations(
+      Current.account.conversations
+    )
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
-    scope = scope.where(inbox_id: params[:inbox_id])   if params[:inbox_id].present?
-    scope = scope.where(team_id: params[:team_id])     if params[:team_id].present?
+    scope = scope.where(inbox_id: params[:inbox_id])       if params[:inbox_id].present?
+    scope = scope.where(team_id: params[:team_id])         if params[:team_id].present?
     scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
     [scope, tz]
   end

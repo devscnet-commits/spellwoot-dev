@@ -13,13 +13,15 @@ class V2::Reports::AgentSummaryBuilder < V2::Reports::BaseSummaryBuilder
               :reopened_count, :avg_time_to_reopen
 
   def fetch_conversations_count
-    account.conversations.where(created_at: range).group('assignee_id').count
+    base = account.conversations.where(created_at: range)
+    base = permission_scope.scope_conversations(base) if permission_scope
+    base.group('assignee_id').count
   end
 
   def prepare_report
-    account.account_users.where(active: true).map do |account_user|
-      build_agent_stats(account_user)
-    end
+    base = account.account_users.where(active: true)
+    base = permission_scope.scope_account_users(base) if permission_scope
+    base.map { |au| build_agent_stats(au) }
   end
 
   def build_agent_stats(account_user)

@@ -18,13 +18,15 @@ class V2::Reports::InboxSummaryBuilder < V2::Reports::BaseSummaryBuilder
   end
 
   def fetch_conversations_count
-    account.conversations.where(created_at: range).group(group_by_key).count
+    base = account.conversations.where(created_at: range)
+    base = permission_scope.scope_conversations(base) if permission_scope
+    base.group(group_by_key).count
   end
 
   def prepare_report
-    account.inboxes.map do |inbox|
-      build_inbox_stats(inbox)
-    end
+    base = account.inboxes
+    base = permission_scope.scope_inboxes(base) if permission_scope
+    base.map { |inbox| build_inbox_stats(inbox) }
   end
 
   def build_inbox_stats(inbox)

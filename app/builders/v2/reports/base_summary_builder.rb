@@ -39,7 +39,16 @@ class V2::Reports::BaseSummaryBuilder
   end
 
   def reporting_events
-    @reporting_events ||= account.reporting_events.where(created_at: range)
+    @reporting_events ||= begin
+      base = account.reporting_events.where(created_at: range)
+      permission_scope ? permission_scope.scope_reporting_events(base) : base
+    end
+  end
+
+  def permission_scope
+    return @permission_scope if defined?(@permission_scope)
+
+    @permission_scope = params[:account_user] ? Reports::PermissionScopeService.new(params[:account_user]) : nil
   end
 
   def fetch_conversations_count

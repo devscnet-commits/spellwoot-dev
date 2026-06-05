@@ -8,17 +8,22 @@ class V2::Reports::TeamSummaryBuilder < V2::Reports::BaseSummaryBuilder
               :reopened_count, :avg_time_to_reopen
 
   def fetch_conversations_count
-    account.conversations.where(created_at: range).group(:team_id).count
+    base = account.conversations.where(created_at: range)
+    base = permission_scope.scope_conversations(base) if permission_scope
+    base.group(:team_id).count
   end
 
   def reporting_events
-    @reporting_events ||= account.reporting_events.where(created_at: range).where.not(team_id: nil)
+    @reporting_events ||= begin
+      base = account.reporting_events.where(created_at: range).where.not(team_id: nil)
+      permission_scope ? permission_scope.scope_reporting_events(base) : base
+    end
   end
 
   def prepare_report
-    account.teams.map do |team|
-      build_team_stats(team)
-    end
+    base = account.teams
+    base = permission_scope.scope_teams(base) if permission_scope
+    base.map { |team| build_team_stats(team) }
   end
 
   def build_team_stats(team)
