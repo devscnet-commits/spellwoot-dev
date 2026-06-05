@@ -30,17 +30,36 @@ const formDescription = ref('');
 const formAllowAutoAssign = ref(true);
 const isSavingDetails = ref(false);
 
-// Members local state — [{id, name, email, thumbnail, team_role}]
+// Members local state — [{id, name, email, thumbnail, team_role, active, availability_status}]
 const localMembers = ref([]);
 const showAddPanel = ref(false);
 const agentSearch = ref('');
 const isSavingMembers = ref(false);
+
+const AVAILABILITY_KEYS = ['online', 'busy', 'offline'];
 
 const ROLES = computed(() => [
   { value: 'member', label: t('TEAMS_SETTINGS.MEMBER_ROLES.member') },
   { value: 'coordinator', label: t('TEAMS_SETTINGS.MEMBER_ROLES.coordinator') },
   { value: 'manager', label: t('TEAMS_SETTINGS.MEMBER_ROLES.manager') },
 ]);
+
+// Operational counts shown at the top of the team
+const counts = computed(() => {
+  const result = { total: localMembers.value.length, coordinator: 0, manager: 0, member: 0 };
+  localMembers.value.forEach(m => {
+    const role = m.team_role || 'member';
+    result[role] = (result[role] || 0) + 1;
+  });
+  return result;
+});
+
+const availabilityLabel = status => {
+  const key = AVAILABILITY_KEYS.includes(status) ? status : 'offline';
+  return t(`TEAMS_SETTINGS.EDIT_FLOW.AVAILABILITY.${key}`);
+};
+
+const isOnline = status => status === 'online';
 
 function syncFromTeam(teamData) {
   if (!teamData) return;
@@ -124,13 +143,36 @@ async function saveMembers() {
 
 <template>
   <div class="p-6 col-span-full w-full max-w-3xl flex flex-col gap-6">
-    <div class="flex flex-col gap-0.5">
-      <h2 class="text-heading-2 font-semibold text-n-slate-12 capitalize">
-        {{ team?.name || '' }}
-      </h2>
-      <p v-if="team?.description" class="text-body-main text-n-slate-11">
-        {{ team.description }}
-      </p>
+    <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-0.5">
+        <h2 class="text-heading-2 font-semibold text-n-slate-12 capitalize">
+          {{ team?.name || '' }}
+        </h2>
+        <p v-if="team?.description" class="text-body-main text-n-slate-11">
+          {{ team.description }}
+        </p>
+      </div>
+
+      <!-- Operational summary -->
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
+          <span class="i-lucide-users size-3.5 text-n-slate-11" />
+          <span class="font-medium text-n-slate-12">{{ counts.total }}</span>
+          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.MEMBERS') }}</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
+          <span class="font-medium text-n-slate-12">{{ counts.coordinator }}</span>
+          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.COORDINATORS') }}</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
+          <span class="font-medium text-n-slate-12">{{ counts.manager }}</span>
+          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.MANAGERS') }}</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
+          <span class="font-medium text-n-slate-12">{{ counts.member }}</span>
+          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.AGENTS') }}</span>
+        </span>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -205,38 +247,82 @@ async function saveMembers() {
         <Spinner class="text-n-brand" />
       </div>
       <template v-else>
-        <!-- Current member list -->
+        <p class="text-sm text-n-slate-11">
+          {{ t('TEAMS_SETTINGS.EDIT_FLOW.LINKED_COUNT', { n: counts.total }) }}
+        </p>
+
+        <!-- Members table -->
         <div
           v-if="localMembers.length"
-          class="divide-y divide-n-weak border border-n-weak rounded-xl overflow-hidden"
+          class="border border-n-weak rounded-xl overflow-hidden"
         >
-          <div
-            v-for="member in localMembers"
-            :key="member.id"
-            class="flex items-center gap-3 px-4 py-3"
-          >
-            <Avatar :src="member.thumbnail" :name="member.name" :size="32" />
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-n-slate-12 truncate">{{ member.name }}</p>
-              <p class="text-xs text-n-slate-11 truncate">{{ member.email }}</p>
-            </div>
-            <select
-              :value="member.team_role || 'member'"
-              class="text-sm border border-n-weak rounded-lg px-2 py-1 bg-n-solid-1 text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-              @change="setMemberRole(member.id, $event.target.value)"
-            >
-              <option v-for="role in ROLES" :key="role.value" :value="role.value">
-                {{ role.label }}
-              </option>
-            </select>
-            <button
-              type="button"
-              class="text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors flex-shrink-0"
-              @click="removeMember(member.id)"
-            >
-              {{ t('TEAMS_SETTINGS.EDIT_FLOW.REMOVE_MEMBER') }}
-            </button>
-          </div>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-n-alpha-2 text-n-slate-11 text-left">
+                <th class="font-medium px-4 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.NAME') }}</th>
+                <th class="font-medium px-3 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.ROLE') }}</th>
+                <th class="font-medium px-3 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.STATUS') }}</th>
+                <th class="font-medium px-3 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.AVAILABILITY') }}</th>
+                <th class="font-medium px-4 py-2.5 text-right">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.ACTIONS') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-n-weak">
+              <tr v-for="member in localMembers" :key="member.id">
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <Avatar :src="member.thumbnail" :name="member.name" :size="32" />
+                    <div class="min-w-0">
+                      <p class="font-medium text-n-slate-12 truncate">{{ member.name }}</p>
+                      <p class="text-xs text-n-slate-11 truncate">{{ member.email }}</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-3 py-3">
+                  <select
+                    :value="member.team_role || 'member'"
+                    class="text-sm border border-n-weak rounded-lg px-2 py-1 bg-n-solid-1 text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                    @change="setMemberRole(member.id, $event.target.value)"
+                  >
+                    <option v-for="role in ROLES" :key="role.value" :value="role.value">
+                      {{ role.label }}
+                    </option>
+                  </select>
+                </td>
+                <td class="px-3 py-3">
+                  <span
+                    :class="[
+                      'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                      member.active === false ? 'bg-n-slate-3 text-n-slate-11' : 'bg-n-teal-3 text-n-teal-11',
+                    ]"
+                  >
+                    {{ member.active === false
+                      ? t('TEAMS_SETTINGS.EDIT_FLOW.STATUS.INACTIVE')
+                      : t('TEAMS_SETTINGS.EDIT_FLOW.STATUS.ACTIVE') }}
+                  </span>
+                </td>
+                <td class="px-3 py-3">
+                  <span class="inline-flex items-center gap-1.5 text-xs text-n-slate-11">
+                    <span
+                      :class="[
+                        'size-2 rounded-full',
+                        isOnline(member.availability_status) ? 'bg-n-teal-9' : 'bg-n-slate-8',
+                      ]"
+                    />
+                    {{ availabilityLabel(member.availability_status) }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <button
+                    type="button"
+                    class="text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors"
+                    @click="removeMember(member.id)"
+                  >
+                    {{ t('TEAMS_SETTINGS.EDIT_FLOW.REMOVE_MEMBER') }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <p v-else class="text-sm text-n-slate-11 text-center py-4">
           {{ t('TEAMS_SETTINGS.EDIT_FLOW.NO_MEMBERS') }}
@@ -247,7 +333,7 @@ async function saveMembers() {
           <input
             v-model="agentSearch"
             type="text"
-            :placeholder="$t('AGENT_MGMT.SEARCH_PLACEHOLDER')"
+            :placeholder="t('TEAMS_SETTINGS.EDIT_FLOW.SEARCH_PLACEHOLDER')"
             class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
             autofocus
           />
@@ -266,7 +352,7 @@ async function saveMembers() {
               </div>
             </button>
             <p v-if="!availableAgents.length" class="text-sm text-n-slate-11 text-center py-3">
-              {{ $t('AGENT_MGMT.NO_RESULTS') }}
+              {{ t('TEAMS_SETTINGS.EDIT_FLOW.NO_AVAILABLE_AGENTS') }}
             </p>
           </div>
         </div>
