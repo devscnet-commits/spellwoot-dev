@@ -85,6 +85,13 @@ class ConversationFinder
     filter_by_labels
     filter_by_query
     filter_by_source_id
+    filter_by_reopened
+  end
+
+  def filter_by_reopened
+    return unless params[:was_reopened].to_s == 'true'
+
+    @conversations = @conversations.where("additional_attributes->>'was_reopened' = 'true'")
   end
 
   def set_inboxes

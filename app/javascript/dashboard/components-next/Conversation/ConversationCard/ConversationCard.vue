@@ -118,6 +118,12 @@ const onCardClick = e => {
           </span>
         </div>
       </div>
+      <span
+        v-if="conversation.additional_attributes?.was_reopened"
+        class="inline-flex self-start text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 rounded leading-5"
+      >
+        {{ $t('CHAT_LIST.REOPENED_BADGE') }}
+      </span>
       <CardMessagePreview
         v-show="showMessagePreviewWithoutMeta"
         :conversation="conversation"
