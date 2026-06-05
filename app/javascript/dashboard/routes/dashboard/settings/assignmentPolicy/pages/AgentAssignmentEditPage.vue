@@ -34,8 +34,8 @@ const routeId = computed(() => route.params.id);
 const selectedPolicy = computed(() => selectedPolicyById.value(routeId.value));
 
 const confirmInboxDialogRef = ref(null);
-// Store the policy linked to the inbox when adding a new inbox
 const inboxLinkedPolicy = ref(null);
+const isFormDirty = ref(false);
 
 // Inbox linking prompt from create flow
 const inboxIdFromQuery = computed(() => {
@@ -257,7 +257,16 @@ watch(routeId, fetchPolicyData, { immediate: true });
   >
     <template #header>
       <div class="flex items-center gap-2 w-full justify-between mb-4 min-h-10">
-        <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+        <div class="flex items-center gap-3">
+          <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+          <span
+            v-if="isFormDirty"
+            class="text-xs text-n-amber-9 font-medium flex items-center gap-1"
+          >
+            <span class="size-1.5 rounded-full bg-n-amber-9 inline-block" />
+            {{ t(`${BASE_KEY}.EDIT.UNSAVED_INDICATOR`) }}
+          </span>
+        </div>
       </div>
     </template>
 
@@ -275,6 +284,7 @@ watch(routeId, fetchPolicyData, { immediate: true });
         @add-inbox="handleAddInbox"
         @delete-inbox="handleDeleteInbox"
         @navigate-to-inbox="handleNavigateToInbox"
+        @dirty-change="isFormDirty = $event"
       />
     </template>
 

@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { useMapGetter } from 'dashboard/composables/store';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import BaseInfo from 'dashboard/components-next/AssignmentPolicy/components/BaseInfo.vue';
 import RadioCard from 'dashboard/components-next/radioCard/RadioCard.vue';
 import FairDistribution from 'dashboard/components-next/AssignmentPolicy/components/FairDistribution.vue';
@@ -50,6 +51,7 @@ const emit = defineEmits([
   'deleteInbox',
   'navigateToInbox',
   'validationChange',
+  'dirtyChange',
 ]);
 
 const { t } = useI18n();
@@ -74,6 +76,20 @@ const state = reactive({
 });
 
 const validationState = ref({ isValid: false });
+
+// ── Dirty tracking (EDIT mode only) ──────────────────────────────────────────
+
+const { isDirty, capture } = useFormDirty(() => ({
+  name: state.name,
+  description: state.description,
+  enabled: state.enabled,
+  assignmentOrder: state.assignmentOrder,
+  conversationPriority: state.conversationPriority,
+  fairDistributionLimit: state.fairDistributionLimit,
+  fairDistributionWindow: state.fairDistributionWindow,
+}));
+
+watch(isDirty, val => emit('dirtyChange', val));
 
 // ── Inbox selection ───────────────────────────────────────────────────────────
 
@@ -170,9 +186,12 @@ const summaryLimit = computed(() => {
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
 
-const buttonLabel = computed(() =>
-  t(`${BASE_KEY}.${props.mode.toUpperCase()}.${props.mode}_BUTTON`)
-);
+const buttonLabel = computed(() => {
+  if (isCreate.value) return t(`${BASE_KEY}.CREATE.CREATE_BUTTON`);
+  return isDirty.value
+    ? t(`${BASE_KEY}.EDIT.SAVE_CHANGES_BUTTON`)
+    : t(`${BASE_KEY}.EDIT.SAVED_BUTTON`);
+});
 
 const handleValidationChange = validation => {
   validationState.value = validation;
@@ -191,6 +210,7 @@ const resetForm = () => {
   });
   localSelectedIds.value = [];
   inboxSearch.value = '';
+  capture();
 };
 
 const handleSubmit = () => {
@@ -203,7 +223,10 @@ const handleSubmit = () => {
 
 watch(
   () => props.initialData,
-  newData => { Object.assign(state, newData); },
+  newData => {
+    Object.assign(state, newData);
+    if (!isCreate.value) capture();
+  },
   { immediate: true, deep: true }
 );
 
@@ -392,7 +415,7 @@ defineExpose({ resetForm });
     <Button
       type="submit"
       :label="buttonLabel"
-      :disabled="!validationState.isValid || isLoading"
+      :disabled="!validationState.isValid || isLoading || (!isCreate && !isDirty)"
       :is-loading="isLoading"
     />
   </form>

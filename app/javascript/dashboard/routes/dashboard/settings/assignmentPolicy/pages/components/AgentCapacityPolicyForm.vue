@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import BaseInfo from 'dashboard/components-next/AssignmentPolicy/components/BaseInfo.vue';
 import DataTable from 'dashboard/components-next/AssignmentPolicy/components/DataTable.vue';
 import AddDataDropdown from 'dashboard/components-next/AssignmentPolicy/components/AddDataDropdown.vue';
@@ -65,6 +66,7 @@ const emit = defineEmits([
   'deleteInboxLimit',
   'addInboxLimit',
   'updateInboxLimit',
+  'dirtyChange',
 ]);
 
 const { t } = useI18n();
@@ -86,9 +88,22 @@ const state = reactive({
 
 const validationState = ref({ isValid: false });
 
-const buttonLabel = computed(() =>
-  t(`${BASE_KEY}.${props.mode.toUpperCase()}.${props.mode}_BUTTON`)
-);
+// ── Dirty tracking (EDIT mode only) ──────────────────────────────────────────
+
+const { isDirty, capture } = useFormDirty(() => ({
+  name: state.name,
+  description: state.description,
+  exclusionRules: JSON.parse(JSON.stringify(state.exclusionRules)),
+}));
+
+watch(isDirty, val => emit('dirtyChange', val));
+
+const buttonLabel = computed(() => {
+  if (isCreate.value) return t(`${BASE_KEY}.CREATE.CREATE_BUTTON`);
+  return isDirty.value
+    ? t(`${BASE_KEY}.EDIT.SAVE_CHANGES_BUTTON`)
+    : t(`${BASE_KEY}.EDIT.SAVED_BUTTON`);
+});
 
 // ── Computed for display ──────────────────────────────────────────────────────
 
@@ -194,6 +209,7 @@ watch(
   () => props.initialData,
   newData => {
     Object.assign(state, { ...newData, localUsers: [] });
+    if (!isCreate.value) capture();
   },
   { immediate: true, deep: true }
 );
@@ -278,7 +294,7 @@ defineExpose({ resetForm });
     <Button
       type="submit"
       :label="buttonLabel"
-      :disabled="!validationState.isValid || isLoading"
+      :disabled="!validationState.isValid || isLoading || (!isCreate && !isDirty)"
       :is-loading="isLoading"
     />
   </form>
