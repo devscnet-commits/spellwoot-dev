@@ -1,142 +1,167 @@
 {
   "TEAMS_SETTINGS": {
-    "NEW_TEAM": "Create new team",
-    "HEADER": "Teams",
-    "LOADING": "Fetching teams",
-    "DESCRIPTION": "Teams allow you to organize agents into groups based on their responsibilities. An agent can belong to multiple teams. When working collaboratively, you can assign conversations to specific teams.",
-    "LEARN_MORE": "Learn more about teams",
-    "COUNT": "{n} team | {n} teams",
-    "SEARCH_PLACEHOLDER": "Search teams...",
-    "NO_RESULTS": "No teams found matching your search",
+    "NEW_TEAM": "Criar novo time",
+    "HEADER": "Times",
+    "LOADING": "Buscando times",
+    "DESCRIPTION": "Os times permitem organizar os agentes em grupos de acordo com suas responsabilidades. Um agente pode pertencer a vários times. Trabalhando em conjunto, você pode atribuir conversas a times específicos.",
+    "LEARN_MORE": "Saiba mais sobre times",
+    "COUNT": "{n} time | {n} times",
+    "SEARCH_PLACEHOLDER": "Buscar times...",
+    "NO_RESULTS": "Nenhum time encontrado para sua busca",
     "LIST": {
-      "404": "There are no teams created on this account.",
-      "EDIT_TEAM": "Edit team",
-      "NONE": "None",
-      "MEMBERS_COUNT": "{count} member | {count} members",
-      "AUTO_ASSIGN_ON": "Auto-assign on",
-      "AUTO_ASSIGN_OFF": "Auto-assign off"
+      "404": "Nenhum time foi criado nesta conta.",
+      "EDIT_TEAM": "Editar time",
+      "NONE": "Nenhum",
+      "MEMBERS_COUNT": "{count} integrante | {count} integrantes",
+      "AUTO_ASSIGN_ON": "Atribuição automática ativada",
+      "AUTO_ASSIGN_OFF": "Atribuição automática desativada"
     },
     "CREATE_FLOW": {
       "CREATE": {
-        "TITLE": "Create a new team",
-        "DESC": "Add a title and description to your new team."
+        "TITLE": "Criar um novo time",
+        "DESC": "Adicione um nome e uma descrição ao seu novo time."
       },
       "AGENTS": {
-        "BUTTON_TEXT": "Add agents to team",
-        "TITLE": "Add agents to team - {teamName}",
-        "DESC": "Add Agents to your newly created team. This lets you collaborate as a team on conversations, get notified on new events in the same conversation."
+        "BUTTON_TEXT": "Adicionar agentes ao time",
+        "TITLE": "Adicionar agentes ao time - {teamName}",
+        "DESC": "Adicione agentes ao time recém-criado. Isso permite colaborar em conversas e receber notificações sobre novos eventos na mesma conversa."
       },
       "WIZARD_CREATE": {
-        "TITLE": "Create",
-        "BODY": "Create a new team of agents."
+        "TITLE": "Criar",
+        "BODY": "Criar um novo time de agentes."
       },
       "WIZARD_ADD_AGENTS": {
-        "TITLE": "Add Agents",
-        "BODY": "Add agents to the team."
+        "TITLE": "Adicionar agentes",
+        "BODY": "Adicione agentes ao time."
       },
       "WIZARD_FINISH": {
-        "TITLE": "Finish",
-        "BODY": "You are all set to go!"
+        "TITLE": "Concluir",
+        "BODY": "Tudo pronto!"
       }
     },
     "MEMBER_ROLES": {
-      "member": "Member",
-      "coordinator": "Coordinator",
-      "manager": "Manager"
+      "member": "Agente",
+      "coordinator": "Coordenador",
+      "manager": "Gerente"
     },
     "EDIT_FLOW": {
       "TABS": {
         "DETAILS": "Detalhes",
         "MEMBERS": "Integrantes"
       },
-      "UPDATE_SUCCESS": "Team updated successfully.",
-      "MEMBERS_UPDATED": "Team members updated successfully.",
-      "ROLE_UPDATED": "Member role updated successfully.",
-      "ADD_MEMBER": "Add member",
-      "REMOVE_MEMBER": "Remove",
-      "NO_MEMBERS": "No members yet. Add agents to this team.",
+      "UPDATE_SUCCESS": "Time atualizado com sucesso.",
+      "MEMBERS_UPDATED": "Integrantes do time atualizados com sucesso.",
+      "ROLE_UPDATED": "Função do integrante atualizada com sucesso.",
+      "ADD_MEMBER": "Adicionar integrante",
+      "REMOVE_MEMBER": "Remover",
+      "NO_MEMBERS": "Nenhum integrante vinculado. Adicione agentes a este time.",
+      "LINKED_COUNT": "{n} integrante vinculado | {n} integrantes vinculados",
+      "SEARCH_PLACEHOLDER": "Buscar agentes...",
+      "NO_AVAILABLE_AGENTS": "Nenhum agente disponível para adicionar.",
+      "SUMMARY": {
+        "MEMBERS": "Integrantes",
+        "COORDINATORS": "Coordenadores",
+        "MANAGERS": "Gerentes",
+        "AGENTS": "Agentes"
+      },
+      "TABLE": {
+        "NAME": "Nome",
+        "ROLE": "Função",
+        "STATUS": "Status",
+        "AVAILABILITY": "Disponibilidade",
+        "ACTIONS": "Ações"
+      },
+      "STATUS": {
+        "ACTIVE": "Ativo",
+        "INACTIVE": "Inativo"
+      },
+      "AVAILABILITY": {
+        "online": "Disponível",
+        "busy": "Ocupado",
+        "offline": "Offline"
+      },
       "CREATE": {
-        "TITLE": "Edit your team details",
-        "DESC": "Edit title and description to your team.",
-        "BUTTON_TEXT": "Update team"
+        "TITLE": "Editar os detalhes do time",
+        "DESC": "Edite o nome e a descrição do seu time.",
+        "BUTTON_TEXT": "Salvar detalhes"
       },
       "AGENTS": {
-        "BUTTON_TEXT": "Update agents in team",
-        "TITLE": "Add agents to team - {teamName}",
-        "DESC": "Add Agents to your newly created team. All the added agents will be notified when a conversation is assigned to this team."
+        "BUTTON_TEXT": "Salvar integrantes",
+        "TITLE": "Adicionar agentes ao time - {teamName}",
+        "DESC": "Adicione agentes ao time. Todos os agentes adicionados serão notificados quando uma conversa for atribuída a este time."
       },
       "EDIT_WIZARD_DETAILS": {
-        "TITLE": "Team details",
+        "TITLE": "Detalhes do time",
         "ROUTE": "settings_teams_edit",
-        "BODY": "Change name, description and other details."
+        "BODY": "Altere o nome, a descrição e outros detalhes."
       },
       "EDIT_WIZARD_AGENTS": {
-        "TITLE": "Edit Agents",
+        "TITLE": "Editar agentes",
         "ROUTE": "settings_teams_edit_members",
-        "BODY": "Edit agents in your team."
+        "BODY": "Edite os agentes do seu time."
       },
       "EDIT_WIZARD_FINISH": {
-        "TITLE": "Finish",
+        "TITLE": "Concluir",
         "ROUTE": "settings_teams_edit_finish",
-        "BODY": "You are all set to go!"
+        "BODY": "Tudo pronto!"
       }
     },
     "TEAM_FORM": {
-      "ERROR_MESSAGE": "Couldn't save the team details. Try again."
+      "ERROR_MESSAGE": "Não foi possível salvar os detalhes do time. Tente novamente."
     },
     "AGENTS": {
-      "AGENT": "Agent",
-      "EMAIL": "Email",
-      "BUTTON_TEXT": "Add agents",
-      "ADD_AGENTS": "Adding Agents to your Team...",
-      "SELECT": "select",
-      "SELECT_ALL": "select all agents",
-      "SELECTED_COUNT": "{selected} out of {total} agents selected."
+      "AGENT": "Agente",
+      "EMAIL": "E-mail",
+      "BUTTON_TEXT": "Adicionar agentes",
+      "ADD_AGENTS": "Adicionando agentes ao seu time...",
+      "SELECT": "selecionar",
+      "SELECT_ALL": "selecionar todos os agentes",
+      "SELECTED_COUNT": "{selected} de {total} agentes selecionados."
     },
     "ADD": {
-      "TITLE": "Add agents to team - {teamName}",
-      "DESC": "Add Agents to your newly created team. This lets you collaborate as a team on conversations, get notified on new events in the same conversation.",
-      "SELECT": "select",
-      "SELECT_ALL": "select all agents",
-      "SELECTED_COUNT": "{selected} out of {total} agents selected.",
-      "BUTTON_TEXT": "Add agents",
-      "AGENT_VALIDATION_ERROR": "Select at least one agent."
+      "TITLE": "Adicionar agentes ao time - {teamName}",
+      "DESC": "Adicione agentes ao time recém-criado. Isso permite colaborar em conversas e receber notificações sobre novos eventos na mesma conversa.",
+      "SELECT": "selecionar",
+      "SELECT_ALL": "selecionar todos os agentes",
+      "SELECTED_COUNT": "{selected} de {total} agentes selecionados.",
+      "BUTTON_TEXT": "Adicionar agentes",
+      "AGENT_VALIDATION_ERROR": "Selecione pelo menos um agente."
     },
     "FINISH": {
-      "TITLE": "Your team is ready!",
-      "MESSAGE": "You can now collaborate as a team on conversations. Happy supporting ",
-      "BUTTON_TEXT": "Finish"
+      "TITLE": "Seu time está pronto!",
+      "MESSAGE": "Agora vocês podem colaborar em conversas como um time. Bom atendimento ",
+      "BUTTON_TEXT": "Concluir"
     },
     "DELETE": {
-      "BUTTON_TEXT": "Delete",
+      "BUTTON_TEXT": "Excluir",
       "API": {
-        "SUCCESS_MESSAGE": "Team deleted successfully.",
-        "ERROR_MESSAGE": "Couldn't delete the team. Try again."
+        "SUCCESS_MESSAGE": "Time excluído com sucesso.",
+        "ERROR_MESSAGE": "Não foi possível excluir o time. Tente novamente."
       },
       "CONFIRM": {
-        "TITLE": "Are you sure you want to delete the team?",
-        "PLACE_HOLDER": "Please type {teamName} to confirm",
-        "MESSAGE": "Deleting the team will remove the team assignment from the conversations assigned to this team.",
-        "YES": "Delete ",
-        "NO": "Cancel"
+        "TITLE": "Tem certeza de que deseja excluir o time?",
+        "PLACE_HOLDER": "Digite {teamName} para confirmar",
+        "MESSAGE": "Excluir o time removerá a atribuição do time das conversas atribuídas a ele.",
+        "YES": "Excluir ",
+        "NO": "Cancelar"
       }
     },
-    "SETTINGS": "Settings",
+    "SETTINGS": "Configurações",
     "FORM": {
-      "UPDATE": "Update team",
-      "CREATE": "Create team",
+      "UPDATE": "Atualizar time",
+      "CREATE": "Criar time",
       "NAME": {
-        "LABEL": "Team name",
-        "PLACEHOLDER": "Example: Sales, Customer Support"
+        "LABEL": "Nome do time",
+        "PLACEHOLDER": "Exemplo: Vendas, Suporte ao Cliente"
       },
       "DESCRIPTION": {
-        "LABEL": "Team Description",
-        "PLACEHOLDER": "Short description about this team."
+        "LABEL": "Descrição do time",
+        "PLACEHOLDER": "Breve descrição sobre este time."
       },
       "AUTO_ASSIGN": {
-        "LABEL": "Allow auto assign for this team."
+        "LABEL": "Permitir atribuição automática para este time."
       },
-      "SUBMIT_CREATE": "Create team"
+      "SUBMIT_CREATE": "Criar time"
     }
   }
 }

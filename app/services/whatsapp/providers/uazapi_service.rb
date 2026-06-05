@@ -310,9 +310,13 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
       Rails.logger.info '[UAZAPI] Credential source: environment variables (no account context)'
     end
 
+    # A masked token (contains '*') is never a real credential — fall back to ENV.
+    saved_token = config['token'].to_s
+    saved_token = nil if saved_token.include?('*')
+
     {
       base_url:         config['apiUrl'].presence         || ENV.fetch('UAZAPI_BASE_URL', 'https://free.uazapi.com'),
-      admin_token:      config['token'].presence          || ENV.fetch('UAZAPI_ADMIN_TOKEN', nil),
+      admin_token:      saved_token.presence              || ENV.fetch('UAZAPI_ADMIN_TOKEN', nil),
       webhook_base_url: config['webhookBaseUrl'].presence || ENV.fetch('UAZAPI_WEBHOOK_BASE_URL', nil)
     }
   end
