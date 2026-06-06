@@ -207,16 +207,22 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     }
   end
 
+  # Native columns drive the reports (see Conversation: result none/won/lost + closed_by_ai).
+  # `ai_closed` is a closure type, not a business result, so it has its own native flag.
+  RESULT_WON = Conversation.results['won']
+  RESULT_LOST = Conversation.results['lost']
+  RESULT_NONE = Conversation.results['none']
+
   OUTCOME_SELECT = <<~SQL.freeze
     COUNT(*) AS total,
-    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won'       THEN 1 ELSE 0 END) AS won,
-    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'lost'      THEN 1 ELSE 0 END) AS lost,
-    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'ai_closed' THEN 1 ELSE 0 END) AS ai_closed,
-    SUM(CASE WHEN conversations.status = 'pending'                                 THEN 1 ELSE 0 END) AS pending,
-    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL                       THEN 1 ELSE 0 END) AS reopened,
+    SUM(CASE WHEN conversations.result = #{RESULT_WON}  THEN 1 ELSE 0 END) AS won,
+    SUM(CASE WHEN conversations.result = #{RESULT_LOST} THEN 1 ELSE 0 END) AS lost,
+    SUM(CASE WHEN conversations.closed_by_ai            THEN 1 ELSE 0 END) AS ai_closed,
+    SUM(CASE WHEN conversations.status = 'pending'      THEN 1 ELSE 0 END) AS pending,
+    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL THEN 1 ELSE 0 END) AS reopened,
     SUM(CASE WHEN conversations.status = 'resolved'
-              AND (conversations.additional_attributes ->> 'outcome' IS NULL
-                   OR conversations.additional_attributes ->> 'outcome' = '')      THEN 1 ELSE 0 END) AS no_outcome
+              AND conversations.result = #{RESULT_NONE}
+              AND conversations.closed_by_ai = false THEN 1 ELSE 0 END) AS no_outcome
   SQL
 
   def leads_summary
@@ -285,9 +291,9 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     if @value_key.present?
       safe_key = @value_key.gsub(/[^a-zA-Z0-9_]/, '')
       "#{base},\n" \
-        "    COALESCE(SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'won' " \
+        "    COALESCE(SUM(CASE WHEN conversations.result = #{RESULT_WON} " \
         "THEN NULLIF(conversations.custom_attributes->>'#{safe_key}', '')::numeric ELSE NULL END), 0) AS revenue,\n" \
-        "    COALESCE(SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'lost' " \
+        "    COALESCE(SUM(CASE WHEN conversations.result = #{RESULT_LOST} " \
         "THEN NULLIF(conversations.custom_attributes->>'#{safe_key}', '')::numeric ELSE NULL END), 0) AS revenue_lost"
     else
       "#{base},\n    0::numeric AS revenue,\n    0::numeric AS revenue_lost"

@@ -109,7 +109,10 @@ function startResize(e) {
   const startWidth = panelRef.value?.offsetWidth || panelWidth.value || 340;
 
   function onMove(ev) {
-    const newWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, startWidth + ev.clientX - startX));
+    const newWidth = Math.min(
+      MAX_PANEL_WIDTH,
+      Math.max(MIN_PANEL_WIDTH, startWidth + ev.clientX - startX)
+    );
     panelWidth.value = newWidth;
   }
   function onUp() {
@@ -238,7 +241,11 @@ const assigneeTabItems = computed(() => {
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
     count: conversationStats.value[countKey] || 0,
   }));
-  items.push({ key: 'resolved', name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'), count: 0 });
+  items.push({
+    key: 'resolved',
+    name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'),
+    count: 0,
+  });
   return items;
 });
 
@@ -317,8 +324,7 @@ const conversationFilters = computed(() => {
     teamId: props.teamId || undefined,
     conversationType: props.conversationType || undefined,
     campaignId: props.campaignId || undefined,
-    wasReopened:
-      activeOriginFilter.value === 'reopened' ? true : undefined,
+    wasReopened: activeOriginFilter.value === 'reopened' ? true : undefined,
   };
 });
 
@@ -659,7 +665,9 @@ const intersectionObserverOptions = computed(() => ({
 
 function updateAssigneeTab(selectedTab) {
   const alreadyActive =
-    selectedTab === 'resolved' ? isResolvedTabActive.value : activeAssigneeTab.value === selectedTab;
+    selectedTab === 'resolved'
+      ? isResolvedTabActive.value
+      : activeAssigneeTab.value === selectedTab;
   if (alreadyActive) return;
 
   resetBulkActions();
@@ -821,7 +829,8 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   // Check for required attributes before resolving
   const conversation = getConversationById.value(conversationId);
   const currentCustomAttributes = conversation?.custom_attributes || {};
-  const outcome = conversation?.additional_attributes?.outcome;
+  const result = conversation?.result;
+  const outcome = result === 'won' || result === 'lost' ? result : null;
   const systemContext = outcome
     ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
     : {};
@@ -966,9 +975,15 @@ watch(conversationFilters, (newVal, oldVal) => {
     class="relative flex flex-col flex-shrink-0 conversations-list-wrap bg-n-surface-1"
     :class="[
       { hidden: !showConversationList },
-      isOnExpandedLayout ? 'basis-full' : (!panelWidth ? 'w-[340px] 2xl:w-[412px]' : ''),
+      isOnExpandedLayout
+        ? 'basis-full'
+        : !panelWidth
+          ? 'w-[340px] 2xl:w-[412px]'
+          : '',
     ]"
-    :style="!isOnExpandedLayout && panelWidth ? { width: panelWidth + 'px' } : {}"
+    :style="
+      !isOnExpandedLayout && panelWidth ? { width: panelWidth + 'px' } : {}
+    "
   >
     <div
       v-if="!isOnExpandedLayout && showConversationList"

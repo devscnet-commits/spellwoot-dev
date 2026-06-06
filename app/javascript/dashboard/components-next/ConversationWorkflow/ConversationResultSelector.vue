@@ -13,7 +13,11 @@ const currentChat = computed(() => getters.getSelectedChat.value);
 const isDropdownOpen = ref(false);
 const isLoading = ref(false);
 
-const outcome = computed(() => currentChat.value?.additional_attributes?.outcome ?? null);
+// Read the first-class result column; only won/lost are selectable values here.
+const outcome = computed(() => {
+  const result = currentChat.value?.result;
+  return result === 'won' || result === 'lost' ? result : null;
+});
 
 const RESULT_OPTIONS = [
   {
@@ -57,22 +61,15 @@ const selectOutcome = async outcomeKey => {
   isDropdownOpen.value = false;
   isLoading.value = true;
   try {
-    const ConversationApi = (await import('dashboard/api/inbox/conversation')).default;
+    const ConversationApi = (await import('dashboard/api/inbox/conversation'))
+      .default;
     await ConversationApi.setOutcome({
       conversationId: currentChat.value.id,
       outcome: outcomeKey,
     });
-    const newAttrs = { ...(currentChat.value.additional_attributes || {}) };
-    if (outcomeKey) {
-      newAttrs.outcome = outcomeKey;
-      newAttrs.outcome_set_at = new Date().toISOString();
-    } else {
-      delete newAttrs.outcome;
-      delete newAttrs.outcome_set_at;
-    }
     await store.dispatch('updateConversation', {
       ...currentChat.value,
-      additional_attributes: newAttrs,
+      result: outcomeKey || 'none',
     });
     useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_UPDATED'));
   } catch {
@@ -91,8 +88,8 @@ const selectOutcome = async outcomeKey => {
   >
     <button
       type="button"
+      class="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-opacity"
       :class="[
-        'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-opacity',
         currentResult.bgClass,
         currentResult.colorClass,
         isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80',
@@ -100,7 +97,7 @@ const selectOutcome = async outcomeKey => {
       :disabled="isLoading"
       @click="isDropdownOpen = !isDropdownOpen"
     >
-      <span :class="[currentResult.icon, 'size-3.5']" />
+      <span class="size-3.5" :class="[currentResult.icon]" />
       {{ labelFor(currentResult.key) }}
       <span class="i-lucide-chevron-down size-3 opacity-70" />
     </button>
@@ -113,15 +110,18 @@ const selectOutcome = async outcomeKey => {
         v-for="option in RESULT_OPTIONS"
         :key="String(option.key)"
         type="button"
+        class="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition-colors text-left"
         :class="[
-          'flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition-colors text-left',
           outcome === option.key
             ? [option.bgClass, option.colorClass, 'font-medium']
             : ['text-n-slate-12', option.hoverClass],
         ]"
         @click="selectOutcome(option.key)"
       >
-        <span :class="[option.icon, 'size-4 shrink-0', option.colorClass]" />
+        <span
+          class="size-4 shrink-0"
+          :class="[option.icon, option.colorClass]"
+        />
         {{ labelFor(option.key) }}
       </button>
     </div>

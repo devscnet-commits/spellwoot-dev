@@ -28,13 +28,16 @@ const isOnCloseStrategy = computed(
   () => metaSettings.value.strategy === 'on_close'
 );
 
-const outcomeAlreadySet = computed(
-  () => !!currentChat.value?.additional_attributes?.outcome
-);
+const outcomeAlreadySet = computed(() => {
+  const result = currentChat.value?.result;
+  return !!result && result !== 'none';
+});
 
 // Show buttons on all open conversations without outcome set
 const showButtons = computed(
-  () => currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN && !outcomeAlreadySet.value
+  () =>
+    currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN &&
+    !outcomeAlreadySet.value
 );
 
 const winValue = computed(() => metaSettings.value.win_value || 'Ganho');
@@ -92,7 +95,10 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
     const ConversationApi = (await import('dashboard/api/inbox/conversation'))
       .default;
     // Merge the seeded status field value so it's persisted alongside form fields
-    const mergedAttributes = { ...pendingStatusSeed.value, ...customAttributes };
+    const mergedAttributes = {
+      ...pendingStatusSeed.value,
+      ...customAttributes,
+    };
     await ConversationApi.closeOutcome({
       conversationId: currentChat.value.id,
       outcome,
@@ -102,9 +108,9 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
     await store.dispatch('updateConversation', {
       ...currentChat.value,
       status: wootConstants.STATUS_TYPE.RESOLVED,
+      result: outcome,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
-        outcome,
         ...(isOnCloseStrategy.value && hasCtwaClid.value
           ? { meta_conversion: { sent: true } }
           : {}),

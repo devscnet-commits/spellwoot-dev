@@ -26,8 +26,18 @@ class BulkActionsJob < ApplicationJob
     records.each do |conversation|
       bulk_add_labels(conversation)
       bulk_snoozed_until(conversation)
+      next if params && resolving?(params) && !required_attributes_satisfied?(conversation)
+
       conversation.update(params) if params
     end
+  end
+
+  def resolving?(params)
+    params[:status].to_s == 'resolved'
+  end
+
+  def required_attributes_satisfied?(conversation)
+    Conversations::RequiredAttributesValidator.new(conversation: conversation).valid?
   end
 
   def bulk_remove_labels

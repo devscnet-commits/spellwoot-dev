@@ -47,9 +47,10 @@ const wasHandledByHuman = computed(
   () => !!currentChat.value?.additional_attributes?.was_handled_by_human
 );
 
-const outcomeAlreadySet = computed(
-  () => !!currentChat.value?.additional_attributes?.outcome
-);
+const outcomeAlreadySet = computed(() => {
+  const result = currentChat.value?.result;
+  return !!result && result !== 'none';
+});
 
 const getConversationParams = () => {
   const allConversations = document.querySelectorAll(
@@ -58,7 +59,9 @@ const getConversationParams = () => {
   const activeConversation = document.querySelector(
     'div.conversations-list div.conversation.active'
   );
-  const activeConversationIndex = [...allConversations].indexOf(activeConversation);
+  const activeConversationIndex = [...allConversations].indexOf(
+    activeConversation
+  );
   return {
     all: allConversations,
     activeIndex: activeConversationIndex,
@@ -68,7 +71,11 @@ const getConversationParams = () => {
 
 const toggleStatus = (status, snoozedUntil, customAttributes = null) => {
   isLoading.value = true;
-  const payload = { conversationId: currentChat.value.id, status, snoozedUntil };
+  const payload = {
+    conversationId: currentChat.value.id,
+    status,
+    snoozedUntil,
+  };
   if (customAttributes) payload.customAttributes = customAttributes;
   store.dispatch('toggleStatus', payload).then(() => {
     useAlert(t('CONVERSATION.CHANGE_STATUS'));
@@ -79,15 +86,13 @@ const toggleStatus = (status, snoozedUntil, customAttributes = null) => {
 const closeAsAi = async () => {
   isLoading.value = true;
   try {
-    const ConversationApi = (await import('dashboard/api/inbox/conversation')).default;
+    const ConversationApi = (await import('dashboard/api/inbox/conversation'))
+      .default;
     await ConversationApi.closeAsAi(currentChat.value.id);
     await store.dispatch('updateConversation', {
       ...currentChat.value,
       status: wootConstants.STATUS_TYPE.RESOLVED,
-      additional_attributes: {
-        ...(currentChat.value.additional_attributes || {}),
-        outcome: 'ai_closed',
-      },
+      closed_by_ai: true,
     });
     useAlert(t('CONVERSATION.CHANGE_STATUS'));
   } catch {
@@ -99,8 +104,15 @@ const closeAsAi = async () => {
 
 const handleResolveWithAttributes = ({ attributes, context }) => {
   if (context) {
-    const mergedAttributes = { ...(currentChat.value.custom_attributes || {}), ...attributes };
-    toggleStatus(wootConstants.STATUS_TYPE.RESOLVED, context.snoozedUntil, mergedAttributes);
+    const mergedAttributes = {
+      ...(currentChat.value.custom_attributes || {}),
+      ...attributes,
+    };
+    toggleStatus(
+      wootConstants.STATUS_TYPE.RESOLVED,
+      context.snoozedUntil,
+      mergedAttributes
+    );
   }
 };
 
@@ -123,11 +135,15 @@ const onCmdResolveConversation = () => {
 
   // Outcome set → check required attributes then resolve
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
-  const outcome = currentChat.value.additional_attributes?.outcome;
+  const result = currentChat.value.result;
+  const outcome = result === 'won' || result === 'lost' ? result : null;
   const systemContext = outcome
     ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
     : {};
-  const { hasMissing } = checkMissingAttributes(currentCustomAttributes, systemContext);
+  const { hasMissing } = checkMissingAttributes(
+    currentCustomAttributes,
+    systemContext
+  );
 
   if (hasMissing) {
     resolveAttributesModalRef.value?.open(
@@ -207,7 +223,12 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
         icon="i-lucide-minus-circle"
         :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_NO_RESULT')"
         class="w-full rounded-md"
-        @click="() => { showOutcomePrompt = false; toggleStatus(wootConstants.STATUS_TYPE.RESOLVED); }"
+        @click="
+          () => {
+            showOutcomePrompt = false;
+            toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
+          }
+        "
       />
     </div>
 

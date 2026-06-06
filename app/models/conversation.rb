@@ -74,6 +74,8 @@ class Conversation < ApplicationRecord
 
   enum status: { open: 0, resolved: 1, pending: 2, snoozed: 3 }
   enum priority: { low: 0, medium: 1, high: 2, urgent: 3 }
+  # _prefix avoids generating a `Conversation.none` scope that would shadow ActiveRecord's `none`.
+  enum result: { none: 0, won: 1, lost: 2 }, _prefix: :result
 
   scope :unassigned, -> { where(assignee_id: nil) }
   scope :assigned, -> { where.not(assignee_id: nil) }
@@ -224,6 +226,7 @@ class Conversation < ApplicationRecord
     create_activity
     notify_conversation_updation
   end
+
 
   def handle_resolved_status_change
     # When conversation is resolved, clear waiting_since using update_column to avoid callbacks

@@ -734,6 +734,17 @@ const menuItems = computed(() => {
           to: accountScopedRoute('conversation_workflow_index'),
         },
         {
+          name: 'Settings Operational Flows',
+          label: t('SIDEBAR.OPERATIONAL_FLOWS'),
+          icon: 'i-lucide-route',
+          activeOn: [
+            'settings_operational_flows_list',
+            'settings_operational_flows_new',
+            'settings_operational_flows_edit',
+          ],
+          to: accountScopedRoute('settings_operational_flows_list'),
+        },
+        {
           name: 'Settings Security',
           label: t('SIDEBAR.SECURITY'),
           icon: 'i-lucide-shield',
