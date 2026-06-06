@@ -39,6 +39,10 @@ pt_BR:
     saml_not_available: A autenticação SAML não está disponível nesta instalação.
     inbox_deletetion_response: Seu pedido de exclusão da caixa de entrada será processado dentro de algum tempo.
   errors:
+    conversations:
+      required_attributes_missing: 'Os atributos obrigatórios precisam ser preenchidos antes de resolver esta conversa.'
+      reason_required: 'É necessário um motivo para resolver esta conversa com este resultado.'
+      reason_invalid: 'O motivo selecionado não é válido para o fluxo desta caixa.'
     validations:
       presence: não pode ficar em branco
     webhook:
