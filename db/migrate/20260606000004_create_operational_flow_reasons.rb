@@ -10,6 +10,6 @@ class CreateOperationalFlowReasons < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    add_index :operational_flow_reasons, %i[operational_flow_id result position]
+    add_index :operational_flow_reasons, %i[operational_flow_id result position], name: 'idx_ofr_flow_result_position'
   end
 end
