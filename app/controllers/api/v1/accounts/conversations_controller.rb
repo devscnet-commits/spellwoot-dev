@@ -80,6 +80,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def toggle_status
     # FIXME: move this logic into a service object
+    return if resolving_blocked_by_required_attributes?
+
     if pending_to_open_by_bot?
       @conversation.bot_handoff!
     elsif params[:status].present?
@@ -156,9 +158,11 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     raise Pundit::NotAuthorizedError unless %w[won lost].include?(outcome)
 
     attrs = params.permit(custom_attributes: {})[:custom_attributes]
-    if attrs.present?
-      @conversation.custom_attributes = (@conversation.custom_attributes || {}).merge(attrs)
-    end
+    merged_attributes = (@conversation.custom_attributes || {}).merge(attrs || {})
+
+    return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
+
+    @conversation.custom_attributes = merged_attributes if attrs.present?
 
     Conversations::ResultService.new(
       conversation: @conversation,
@@ -230,6 +234,33 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   def set_conversation_status
     @conversation.status = params[:status]
     @conversation.snoozed_until = parse_date_time(params[:snoozed_until].to_s) if params[:snoozed_until]
+  end
+
+  # Enforce account required-attributes config on the backend when a human agent resolves a
+  # conversation. System actors (bots, automations, auto-resolve jobs) are intentionally exempt,
+  # mirroring the frontend which only validates agent-initiated resolves.
+  def resolving_blocked_by_required_attributes?(custom_attributes: nil, result: nil, force_resolve: false)
+    return false unless Current.user.is_a?(User)
+    return false unless force_resolve || resolving_to_resolved?
+
+    validator = Conversations::RequiredAttributesValidator.new(
+      conversation: @conversation,
+      custom_attributes: custom_attributes,
+      result: result
+    )
+    return false if validator.valid?
+
+    render json: {
+      error: I18n.t('errors.conversations.required_attributes_missing'),
+      missing_attributes: validator.missing_keys
+    }, status: :unprocessable_entity
+    true
+  end
+
+  def resolving_to_resolved?
+    return params[:status] == 'resolved' if params[:status].present?
+
+    @conversation.open?
   end
 
   def assign_conversation
