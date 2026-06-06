@@ -106,7 +106,6 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
       result: outcome,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
-        outcome,
         ...(isOnCloseStrategy.value && hasCtwaClid.value
           ? { meta_conversion: { sent: true } }
           : {}),

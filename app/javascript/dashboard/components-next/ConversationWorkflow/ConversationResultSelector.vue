@@ -66,18 +66,9 @@ const selectOutcome = async outcomeKey => {
       conversationId: currentChat.value.id,
       outcome: outcomeKey,
     });
-    const newAttrs = { ...(currentChat.value.additional_attributes || {}) };
-    if (outcomeKey) {
-      newAttrs.outcome = outcomeKey;
-      newAttrs.outcome_set_at = new Date().toISOString();
-    } else {
-      delete newAttrs.outcome;
-      delete newAttrs.outcome_set_at;
-    }
     await store.dispatch('updateConversation', {
       ...currentChat.value,
       result: outcomeKey || 'none',
-      additional_attributes: newAttrs,
     });
     useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_UPDATED'));
   } catch {

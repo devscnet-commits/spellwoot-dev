@@ -30,4 +30,21 @@ namespace :result do
 
     puts "Done. #{total} result events created."
   end
+
+  # Removes the legacy additional_attributes.outcome / outcome_set_at keys now that result lives
+  # in native columns (result / closed_by_ai). Run on demand to clean old conversations so their
+  # webhook/API payloads stop carrying stale outcome data. Safe to re-run.
+  desc 'Strip legacy additional_attributes.outcome from conversations'
+  task strip_legacy_outcome: :environment do
+    total = 0
+    Conversation.where("additional_attributes ? 'outcome' OR additional_attributes ? 'outcome_set_at'")
+                .in_batches(of: 1000) do |batch|
+      total += batch.update_all(
+        "additional_attributes = additional_attributes - 'outcome' - 'outcome_set_at'"
+      )
+      puts "Stripped #{total} conversations..."
+    end
+
+    puts "Done. #{total} conversations cleaned."
+  end
 end

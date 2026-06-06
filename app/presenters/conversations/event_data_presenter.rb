@@ -14,6 +14,7 @@ class Conversations::EventDataPresenter < SimpleDelegator
       result: result,
       result_reason: result_reason,
       result_set_at: result_set_at&.to_i,
+      closed_by_ai: closed_by_ai,
       custom_attributes: custom_attributes,
       snoozed_until: snoozed_until,
       unread_count: unread_incoming_messages.count,

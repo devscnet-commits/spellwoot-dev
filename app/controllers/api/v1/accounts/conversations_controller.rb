@@ -152,7 +152,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       ip_address: request.ip
     ).perform
 
-    render json: { outcome: @conversation.additional_attributes['outcome'] }, status: :ok
+    render json: { outcome: @conversation.result_none? ? nil : @conversation.result }, status: :ok
   end
 
   def close_outcome

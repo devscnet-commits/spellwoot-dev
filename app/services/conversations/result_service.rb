@@ -20,13 +20,7 @@ class Conversations::ResultService
     previous_result = @conversation.result
 
     ActiveRecord::Base.transaction do
-      @conversation.update!(
-        result: @result,
-        result_reason: @reason,
-        result_set_at: Time.current,
-        result_set_by_id: @user&.id,
-        additional_attributes: synced_attributes
-      )
+      @conversation.update!(update_attributes)
       record_event(previous_result)
     end
 
@@ -34,6 +28,19 @@ class Conversations::ResultService
   end
 
   private
+
+  def update_attributes
+    attrs = {
+      result: @result,
+      result_reason: @reason,
+      result_set_at: Time.current,
+      result_set_by_id: @user&.id,
+      closed_by_ai: @outcome == 'ai_closed'
+    }
+    cleaned = cleaned_additional_attributes
+    attrs[:additional_attributes] = cleaned unless cleaned.nil?
+    attrs
+  end
 
   # Validate the reason (motivo) against the inbox operational flow. A flow can require a reason
   # and/or restrict it to a configured list per result. Skipped when there is no flow or no result.
@@ -51,15 +58,14 @@ class Conversations::ResultService
     raise InvalidReasonError, 'reason_invalid' if @reason.present? && valid_labels.exclude?(@reason)
   end
 
-  # Keep additional_attributes.outcome in sync so every existing reader (reports, Meta,
-  # required attributes, serializers) keeps working unchanged during the transition.
-  def synced_attributes
+  # The result now lives in native columns (result / closed_by_ai). Drop the legacy
+  # additional_attributes.outcome keys when present so payloads (incl. webhooks) stop carrying
+  # stale data. Returns nil when there is nothing to clean, to avoid an unnecessary write.
+  def cleaned_additional_attributes
     attrs = @conversation.additional_attributes || {}
-    if @recognized
-      attrs.merge('outcome' => @outcome, 'outcome_set_at' => Time.current.iso8601)
-    else
-      attrs.except('outcome', 'outcome_set_at')
-    end
+    return nil unless attrs.key?('outcome') || attrs.key?('outcome_set_at')
+
+    attrs.except('outcome', 'outcome_set_at')
   end
 
   def record_event(previous_result)

@@ -207,9 +207,8 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     }
   end
 
-  # Native result enum values (see Conversation: none/won/lost). Reports read the first-class
-  # `result` column directly. `ai_closed` is intentionally NOT a business result (it maps to
-  # result=none), so it is still read from additional_attributes.outcome.
+  # Native columns drive the reports (see Conversation: result none/won/lost + closed_by_ai).
+  # `ai_closed` is a closure type, not a business result, so it has its own native flag.
   RESULT_WON = Conversation.results['won']
   RESULT_LOST = Conversation.results['lost']
   RESULT_NONE = Conversation.results['none']
@@ -218,12 +217,12 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     COUNT(*) AS total,
     SUM(CASE WHEN conversations.result = #{RESULT_WON}  THEN 1 ELSE 0 END) AS won,
     SUM(CASE WHEN conversations.result = #{RESULT_LOST} THEN 1 ELSE 0 END) AS lost,
-    SUM(CASE WHEN conversations.additional_attributes ->> 'outcome' = 'ai_closed' THEN 1 ELSE 0 END) AS ai_closed,
-    SUM(CASE WHEN conversations.status = 'pending'                                 THEN 1 ELSE 0 END) AS pending,
-    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL                       THEN 1 ELSE 0 END) AS reopened,
+    SUM(CASE WHEN conversations.closed_by_ai            THEN 1 ELSE 0 END) AS ai_closed,
+    SUM(CASE WHEN conversations.status = 'pending'      THEN 1 ELSE 0 END) AS pending,
+    SUM(CASE WHEN reopened_convs.conversation_id IS NOT NULL THEN 1 ELSE 0 END) AS reopened,
     SUM(CASE WHEN conversations.status = 'resolved'
               AND conversations.result = #{RESULT_NONE}
-              AND COALESCE(conversations.additional_attributes ->> 'outcome', '') <> 'ai_closed' THEN 1 ELSE 0 END) AS no_outcome
+              AND conversations.closed_by_ai = false THEN 1 ELSE 0 END) AS no_outcome
   SQL
 
   def leads_summary

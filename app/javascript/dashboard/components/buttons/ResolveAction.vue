@@ -85,10 +85,7 @@ const closeAsAi = async () => {
     await store.dispatch('updateConversation', {
       ...currentChat.value,
       status: wootConstants.STATUS_TYPE.RESOLVED,
-      additional_attributes: {
-        ...(currentChat.value.additional_attributes || {}),
-        outcome: 'ai_closed',
-      },
+      closed_by_ai: true,
     });
     useAlert(t('CONVERSATION.CHANGE_STATUS'));
   } catch {
