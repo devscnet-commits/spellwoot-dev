@@ -47,9 +47,10 @@ class Inbox < ApplicationRecord
   include InboxAgentAvailability
 
   # Re-export concern constants so controllers can reference Inbox::*_ATTRS
-  OFFISABLE_ATTRS = OutOfOffisable::OFFISABLE_ATTRS
-  PERIOD_ATTRS    = OutOfOffisable::PERIOD_ATTRS
-  HOLIDAY_ATTRS   = OutOfOffisable::HOLIDAY_ATTRS
+  OFFISABLE_ATTRS        = OutOfOffisable::OFFISABLE_ATTRS
+  PERIOD_ATTRS           = OutOfOffisable::PERIOD_ATTRS
+  HOLIDAY_ATTRS          = OutOfOffisable::HOLIDAY_ATTRS
+  EXCEPTION_PERIOD_ATTRS = OutOfOffisable::EXCEPTION_PERIOD_ATTRS
 
   # Not allowing characters:
   validates :name, presence: true
@@ -70,6 +71,8 @@ class Inbox < ApplicationRecord
 
   has_many :inbox_members, dependent: :destroy_async
   has_many :members, through: :inbox_members, source: :user
+  has_many :team_inboxes, dependent: :destroy_async
+  has_many :teams, through: :team_inboxes
   has_many :conversations, dependent: :destroy_async
   has_many :messages, dependent: :destroy_async
 

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
+import { useUnsavedChangesGuard } from 'dashboard/composables/useUnsavedChangesGuard';
 import camelcaseKeys from 'camelcase-keys';
 import { getInboxIconByType } from 'dashboard/helper/inbox';
 
@@ -32,6 +33,8 @@ const routeId = computed(() => route.params.id);
 const selectedPolicy = computed(() => selectedPolicyById.value(routeId.value));
 const selectedPolicyId = computed(() => selectedPolicy.value?.id);
 const isFormDirty = ref(false);
+
+useUnsavedChangesGuard(isFormDirty, `${BASE_KEY}.EDIT.UNSAVED_LEAVE_CONFIRM`);
 
 const breadcrumbItems = computed(() => [
   {
@@ -193,13 +196,6 @@ onMounted(() => store.dispatch('agents/get'));
       <div class="flex items-center gap-2 w-full justify-between mb-4 min-h-10">
         <div class="flex items-center gap-3">
           <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
-          <span
-            v-if="isFormDirty"
-            class="text-xs text-n-amber-9 font-medium flex items-center gap-1"
-          >
-            <span class="size-1.5 rounded-full bg-n-amber-9 inline-block" />
-            {{ t(`${BASE_KEY}.EDIT.UNSAVED_INDICATOR`) }}
-          </span>
         </div>
       </div>
     </template>

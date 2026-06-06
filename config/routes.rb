@@ -244,6 +244,7 @@ Rails.application.routes.draw do
             get :health, on: :member
             post :register_webhook, on: :member
             post :reset_secret, on: :member
+            post :replicate_business_hours, on: :member
             # UazAPI WhatsApp endpoints
             get :uazapi_status, on: :member
             post :uazapi_connect, on: :member
@@ -295,6 +296,11 @@ Rails.application.routes.draw do
                 delete :destroy
                 patch :update
                 patch :update_member_role
+              end
+            end
+            resources :team_inboxes, only: [:index] do
+              collection do
+                patch :update
               end
             end
           end
