@@ -386,6 +386,7 @@
     "SECURITY": "Security",
     "CAPTAIN_AI": "Captain",
     "CONVERSATION_WORKFLOW": "Conversation Workflow",
+    "OPERATIONAL_FLOWS": "Operational Flows",
     "INTEGRATIONS_HUB": "APIs & Credentials"
   },
   "CAPTAIN_SETTINGS": {
