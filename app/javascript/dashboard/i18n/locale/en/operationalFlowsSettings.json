@@ -1,0 +1,53 @@
+{
+  "OPERATIONAL_FLOWS_SETTINGS": {
+    "HEADER": "Operational Flows",
+    "DESCRIPTION": "Configure the operational flow for each Caixa (inbox): the result reasons available when resolving a conversation as won or lost, and whether a reason is required.",
+    "LOADING": "Loading operational flows...",
+    "NEW_FLOW": "Create flow",
+    "LIST": {
+      "404": "No operational flows created yet",
+      "EDIT_FLOW": "Edit flow",
+      "REASONS_COUNT": "{count} reason | {count} reasons",
+      "REASON_REQUIRED": "Reason required",
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive"
+    },
+    "DELETE": {
+      "BUTTON_TEXT": "Delete",
+      "API": {
+        "SUCCESS_MESSAGE": "Operational flow deleted successfully",
+        "ERROR_MESSAGE": "Could not delete the operational flow"
+      },
+      "CONFIRM": {
+        "TITLE": "Delete {flowName}?",
+        "MESSAGE": "Are you sure you want to delete this operational flow? Caixas using it will fall back to no flow.",
+        "YES": "Yes, delete",
+        "NO": "Cancel"
+      }
+    },
+    "FORM": {
+      "NEW_TITLE": "New operational flow",
+      "EDIT_TITLE": "Edit operational flow",
+      "SUBTITLE": "Define the reasons agents can pick when resolving a conversation.",
+      "NAME": {
+        "LABEL": "Flow name",
+        "PLACEHOLDER": "e.g., Sales"
+      },
+      "REQUIRE_REASON": {
+        "LABEL": "Require a reason",
+        "HELP": "Agents must pick a reason to resolve a conversation as won or lost."
+      },
+      "ACTIVE": {
+        "LABEL": "Active"
+      },
+      "WON_REASONS": "Reasons for Won",
+      "LOST_REASONS": "Reasons for Lost",
+      "REASON_PLACEHOLDER": "e.g., Price too high",
+      "ADD_REASON": "Add reason",
+      "SAVE": "Save flow",
+      "CREATE_SUCCESS": "Operational flow created successfully",
+      "UPDATE_SUCCESS": "Operational flow updated successfully",
+      "ERROR_MESSAGE": "Could not save the operational flow"
+    }
+  }
+}
