@@ -29,6 +29,8 @@ const isOnCloseStrategy = computed(
 );
 
 const outcomeAlreadySet = computed(() => {
+  const legacy = currentChat.value?.additional_attributes?.outcome;
+  if (legacy === 'won' || legacy === 'lost') return true;
   const result = currentChat.value?.result;
   return !!result && result !== 'none';
 });

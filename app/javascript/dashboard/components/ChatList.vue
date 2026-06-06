@@ -829,8 +829,10 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   // Check for required attributes before resolving
   const conversation = getConversationById.value(conversationId);
   const currentCustomAttributes = conversation?.custom_attributes || {};
+  const legacy = conversation?.additional_attributes?.outcome;
   const result = conversation?.result;
-  const outcome = result === 'won' || result === 'lost' ? result : null;
+  const picked = legacy === 'won' || legacy === 'lost' ? legacy : result;
+  const outcome = picked === 'won' || picked === 'lost' ? picked : null;
   const systemContext = outcome
     ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
     : {};
