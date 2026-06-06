@@ -30,16 +30,14 @@ class Conversations::ResultService
   private
 
   def update_attributes
-    attrs = {
+    {
       result: @result,
       result_reason: @reason,
       result_set_at: Time.current,
       result_set_by_id: @user&.id,
-      closed_by_ai: @outcome == 'ai_closed'
+      closed_by_ai: @outcome == 'ai_closed',
+      additional_attributes: synced_attributes
     }
-    cleaned = cleaned_additional_attributes
-    attrs[:additional_attributes] = cleaned unless cleaned.nil?
-    attrs
   end
 
   # Validate the reason (motivo) against the inbox operational flow. A flow can require a reason
@@ -58,14 +56,16 @@ class Conversations::ResultService
     raise InvalidReasonError, 'reason_invalid' if @reason.present? && valid_labels.exclude?(@reason)
   end
 
-  # The result now lives in native columns (result / closed_by_ai). Drop the legacy
-  # additional_attributes.outcome keys when present so payloads (incl. webhooks) stop carrying
-  # stale data. Returns nil when there is nothing to clean, to avoid an unnecessary write.
-  def cleaned_additional_attributes
+  # The canonical result lives in native columns (result / closed_by_ai), but we keep mirroring it
+  # into additional_attributes.outcome so external integrations (n8n, CRM, webhooks) that still read
+  # the JSON keep working. Retire this only once those consumers migrate to result/closed_by_ai.
+  def synced_attributes
     attrs = @conversation.additional_attributes || {}
-    return nil unless attrs.key?('outcome') || attrs.key?('outcome_set_at')
-
-    attrs.except('outcome', 'outcome_set_at')
+    if @recognized
+      attrs.merge('outcome' => @outcome, 'outcome_set_at' => Time.current.iso8601)
+    else
+      attrs.except('outcome', 'outcome_set_at')
+    end
   end
 
   def record_event(previous_result)

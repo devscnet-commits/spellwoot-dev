@@ -31,10 +31,10 @@ namespace :result do
     puts "Done. #{total} result events created."
   end
 
-  # Removes the legacy additional_attributes.outcome / outcome_set_at keys now that result lives
-  # in native columns (result / closed_by_ai). Run on demand to clean old conversations so their
-  # webhook/API payloads stop carrying stale outcome data. Safe to re-run.
-  desc 'Strip legacy additional_attributes.outcome from conversations'
+  # WARNING: DESTRUCTIVE FOR EXTERNAL INTEGRATIONS. Removes additional_attributes.outcome /
+  # outcome_set_at. Only run AFTER every external consumer (n8n, CRM, webhooks) has migrated to
+  # the native result / closed_by_ai fields. While dual-write is on, do NOT run this in production.
+  desc 'Strip legacy additional_attributes.outcome (run only after integrations migrate)'
   task strip_legacy_outcome: :environment do
     total = 0
     Conversation.where("additional_attributes ? 'outcome' OR additional_attributes ? 'outcome_set_at'")
