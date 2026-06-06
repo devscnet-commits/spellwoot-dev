@@ -6,6 +6,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   before_action :conversation, except: [:index, :meta, :search, :create, :filter]
   before_action :inbox, :contact, :contact_inbox, only: [:create]
 
+  rescue_from Conversations::ResultService::InvalidReasonError, with: :render_invalid_reason
+
   ATTACHMENT_RESULTS_PER_PAGE = 100
 
   def index
@@ -80,6 +82,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def toggle_status
     # FIXME: move this logic into a service object
+    return if resolving_blocked_by_required_attributes?
+
     if pending_to_open_by_bot?
       @conversation.bot_handoff!
     elsif params[:status].present?
@@ -140,18 +144,15 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def set_outcome
-    outcome = params[:outcome].to_s
-    allowed = %w[won lost]
-    attrs = @conversation.additional_attributes || {}
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: params[:outcome].to_s,
+      user: Current.user,
+      reason: params[:reason],
+      ip_address: request.ip
+    ).perform
 
-    if outcome.in?(allowed)
-      attrs = attrs.merge('outcome' => outcome, 'outcome_set_at' => Time.current.iso8601)
-    else
-      attrs = attrs.except('outcome', 'outcome_set_at')
-    end
-
-    @conversation.update!(additional_attributes: attrs)
-    render json: { outcome: attrs['outcome'] }, status: :ok
+    render json: { outcome: @conversation.result_none? ? nil : @conversation.result }, status: :ok
   end
 
   def close_outcome
@@ -159,15 +160,19 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     raise Pundit::NotAuthorizedError unless %w[won lost].include?(outcome)
 
     attrs = params.permit(custom_attributes: {})[:custom_attributes]
-    if attrs.present?
-      @conversation.custom_attributes = (@conversation.custom_attributes || {}).merge(attrs)
-    end
+    merged_attributes = (@conversation.custom_attributes || {}).merge(attrs || {})
 
-    @conversation.additional_attributes = (@conversation.additional_attributes || {}).merge(
-      'outcome' => outcome,
-      'outcome_set_at' => Time.current.iso8601
-    )
-    @conversation.save!
+    return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
+
+    @conversation.custom_attributes = merged_attributes if attrs.present?
+
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: outcome,
+      user: Current.user,
+      reason: params[:reason],
+      ip_address: request.ip
+    ).perform
 
     @conversation.update_columns(status: :resolved)
 
@@ -180,14 +185,14 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def close_as_ai
-    @conversation.additional_attributes = (@conversation.additional_attributes || {}).merge(
-      'outcome' => 'ai_closed',
-      'outcome_set_at' => Time.current.iso8601
-    )
-    @conversation.update_columns(
-      status: :resolved,
-      additional_attributes: @conversation.additional_attributes
-    )
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: 'ai_closed',
+      user: Current.user,
+      ip_address: request.ip
+    ).perform
+
+    @conversation.update_columns(status: :resolved)
     render json: { outcome: 'ai_closed' }, status: :ok
   end
 
@@ -231,6 +236,37 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   def set_conversation_status
     @conversation.status = params[:status]
     @conversation.snoozed_until = parse_date_time(params[:snoozed_until].to_s) if params[:snoozed_until]
+  end
+
+  # Enforce account required-attributes config on the backend when a human agent resolves a
+  # conversation. System actors (bots, automations, auto-resolve jobs) are intentionally exempt,
+  # mirroring the frontend which only validates agent-initiated resolves.
+  def resolving_blocked_by_required_attributes?(custom_attributes: nil, result: nil, force_resolve: false)
+    return false unless Current.user.is_a?(User)
+    return false unless force_resolve || resolving_to_resolved?
+
+    validator = Conversations::RequiredAttributesValidator.new(
+      conversation: @conversation,
+      custom_attributes: custom_attributes,
+      result: result
+    )
+    return false if validator.valid?
+
+    render json: {
+      error: I18n.t('errors.conversations.required_attributes_missing'),
+      missing_attributes: validator.missing_keys
+    }, status: :unprocessable_entity
+    true
+  end
+
+  def resolving_to_resolved?
+    return params[:status] == 'resolved' if params[:status].present?
+
+    @conversation.open?
+  end
+
+  def render_invalid_reason(exception)
+    render json: { error: I18n.t("errors.conversations.#{exception.message}") }, status: :unprocessable_entity
   end
 
   def assign_conversation
