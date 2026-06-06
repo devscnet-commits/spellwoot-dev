@@ -115,6 +115,8 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
+  has_many :result_events, class_name: 'ConversationResultEvent', dependent: :destroy_async
+  belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status
@@ -132,6 +134,12 @@ class Conversation < ApplicationRecord
 
   def language
     additional_attributes&.dig('conversation_language')
+  end
+
+  # A conversation inherits its operational flow from its Caixa (inbox). Teams are only used to
+  # organize agents, so they never own a flow.
+  def operational_flow
+    inbox&.operational_flow
   end
 
   # Be aware: The precision of created_at and last_activity_at may differ from Ruby's Time precision.
@@ -222,9 +230,27 @@ class Conversation < ApplicationRecord
 
   def execute_after_update_commit_callbacks
     handle_resolved_status_change
+    record_result_reopen_event
     notify_status_change
     create_activity
     notify_conversation_updation
+  end
+
+  # When a resolved conversation with a business result is reopened, keep the result intact
+  # but append a history event so reporting can account for the reopen.
+  def record_result_reopen_event
+    return unless saved_change_to_status? && open?
+    return if result_none?
+
+    result_events.create!(
+      account_id: account_id,
+      inbox_id: inbox_id,
+      team_id: team_id,
+      user_id: Current.user&.id,
+      result: result,
+      previous_result: result,
+      event_type: 'reopened'
+    )
   end
 
 
