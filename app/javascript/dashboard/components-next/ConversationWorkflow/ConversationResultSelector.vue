@@ -13,7 +13,11 @@ const currentChat = computed(() => getters.getSelectedChat.value);
 const isDropdownOpen = ref(false);
 const isLoading = ref(false);
 
-const outcome = computed(() => currentChat.value?.additional_attributes?.outcome ?? null);
+// Read the first-class result column; only won/lost are selectable values here.
+const outcome = computed(() => {
+  const result = currentChat.value?.result;
+  return result === 'won' || result === 'lost' ? result : null;
+});
 
 const RESULT_OPTIONS = [
   {
@@ -72,6 +76,7 @@ const selectOutcome = async outcomeKey => {
     }
     await store.dispatch('updateConversation', {
       ...currentChat.value,
+      result: outcomeKey || 'none',
       additional_attributes: newAttrs,
     });
     useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_UPDATED'));

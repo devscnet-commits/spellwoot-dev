@@ -47,9 +47,10 @@ const wasHandledByHuman = computed(
   () => !!currentChat.value?.additional_attributes?.was_handled_by_human
 );
 
-const outcomeAlreadySet = computed(
-  () => !!currentChat.value?.additional_attributes?.outcome
-);
+const outcomeAlreadySet = computed(() => {
+  const result = currentChat.value?.result;
+  return !!result && result !== 'none';
+});
 
 const getConversationParams = () => {
   const allConversations = document.querySelectorAll(
@@ -123,7 +124,8 @@ const onCmdResolveConversation = () => {
 
   // Outcome set → check required attributes then resolve
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
-  const outcome = currentChat.value.additional_attributes?.outcome;
+  const result = currentChat.value.result;
+  const outcome = result === 'won' || result === 'lost' ? result : null;
   const systemContext = outcome
     ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
     : {};
