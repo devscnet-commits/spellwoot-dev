@@ -136,6 +136,12 @@ class Conversation < ApplicationRecord
     additional_attributes&.dig('conversation_language')
   end
 
+  # A conversation inherits its operational flow from its Caixa (inbox). Teams are only used to
+  # organize agents, so they never own a flow.
+  def operational_flow
+    inbox&.operational_flow
+  end
+
   # Be aware: The precision of created_at and last_activity_at may differ from Ruby's Time precision.
   # Our DB column (see schema) stores timestamps with second-level precision (no microseconds), so
   # if you assign a Ruby Time with microseconds, the DB will truncate it. This may cause subtle differences

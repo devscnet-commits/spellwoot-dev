@@ -1,4 +1,6 @@
 class Conversations::ResultService
+  class InvalidReasonError < StandardError; end
+
   # Business outcomes that map to a first-class result. Anything else clears the result.
   OUTCOMES = %w[won lost ai_closed].freeze
   RESULT_BY_OUTCOME = { 'won' => 'won', 'lost' => 'lost', 'ai_closed' => 'none' }.freeze
@@ -14,6 +16,7 @@ class Conversations::ResultService
   end
 
   def perform
+    validate_reason!
     previous_result = @conversation.result
 
     ActiveRecord::Base.transaction do
@@ -31,6 +34,22 @@ class Conversations::ResultService
   end
 
   private
+
+  # Validate the reason (motivo) against the inbox operational flow. A flow can require a reason
+  # and/or restrict it to a configured list per result. Skipped when there is no flow or no result.
+  def validate_reason!
+    return unless @result.in?(%w[won lost])
+
+    flow = @conversation.operational_flow
+    return unless flow
+
+    raise InvalidReasonError, 'reason_required' if flow.require_reason && @reason.blank?
+
+    valid_labels = flow.reasons_for(@result).pluck(:label)
+    return if valid_labels.empty?
+
+    raise InvalidReasonError, 'reason_invalid' if @reason.present? && valid_labels.exclude?(@reason)
+  end
 
   # Keep additional_attributes.outcome in sync so every existing reader (reports, Meta,
   # required attributes, serializers) keeps working unchanged during the transition.

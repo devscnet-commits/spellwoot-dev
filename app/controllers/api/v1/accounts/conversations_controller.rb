@@ -6,6 +6,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   before_action :conversation, except: [:index, :meta, :search, :create, :filter]
   before_action :inbox, :contact, :contact_inbox, only: [:create]
 
+  rescue_from Conversations::ResultService::InvalidReasonError, with: :render_invalid_reason
+
   ATTACHMENT_RESULTS_PER_PAGE = 100
 
   def index
@@ -261,6 +263,10 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     return params[:status] == 'resolved' if params[:status].present?
 
     @conversation.open?
+  end
+
+  def render_invalid_reason(exception)
+    render json: { error: I18n.t("errors.conversations.#{exception.message}") }, status: :unprocessable_entity
   end
 
   def assign_conversation

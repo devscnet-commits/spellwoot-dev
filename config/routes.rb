@@ -299,6 +299,8 @@ Rails.application.routes.draw do
             end
           end
 
+          resources :operational_flows
+
           # Assignment V2 Routes
           resources :assignment_policies do
             resources :inboxes, only: [:index, :create, :destroy], module: :assignment_policies
