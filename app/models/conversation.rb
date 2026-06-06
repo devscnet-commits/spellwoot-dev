@@ -74,6 +74,8 @@ class Conversation < ApplicationRecord
 
   enum status: { open: 0, resolved: 1, pending: 2, snoozed: 3 }
   enum priority: { low: 0, medium: 1, high: 2, urgent: 3 }
+  # _prefix avoids generating a `Conversation.none` scope that would shadow ActiveRecord's `none`.
+  enum result: { none: 0, won: 1, lost: 2 }, _prefix: :result
 
   scope :unassigned, -> { where(assignee_id: nil) }
   scope :assigned, -> { where.not(assignee_id: nil) }
@@ -113,6 +115,8 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
+  has_many :result_events, class_name: 'ConversationResultEvent', dependent: :destroy_async
+  belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status
@@ -220,9 +224,27 @@ class Conversation < ApplicationRecord
 
   def execute_after_update_commit_callbacks
     handle_resolved_status_change
+    record_result_reopen_event
     notify_status_change
     create_activity
     notify_conversation_updation
+  end
+
+  # When a resolved conversation with a business result is reopened, keep the result intact
+  # but append a history event so reporting can account for the reopen.
+  def record_result_reopen_event
+    return unless saved_change_to_status? && open?
+    return if result_none?
+
+    result_events.create!(
+      account_id: account_id,
+      inbox_id: inbox_id,
+      team_id: team_id,
+      user_id: Current.user&.id,
+      result: result,
+      previous_result: result,
+      event_type: 'reopened'
+    )
   end
 
 

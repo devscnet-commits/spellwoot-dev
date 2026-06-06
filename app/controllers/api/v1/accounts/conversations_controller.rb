@@ -140,18 +140,15 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def set_outcome
-    outcome = params[:outcome].to_s
-    allowed = %w[won lost]
-    attrs = @conversation.additional_attributes || {}
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: params[:outcome].to_s,
+      user: Current.user,
+      reason: params[:reason],
+      ip_address: request.ip
+    ).perform
 
-    if outcome.in?(allowed)
-      attrs = attrs.merge('outcome' => outcome, 'outcome_set_at' => Time.current.iso8601)
-    else
-      attrs = attrs.except('outcome', 'outcome_set_at')
-    end
-
-    @conversation.update!(additional_attributes: attrs)
-    render json: { outcome: attrs['outcome'] }, status: :ok
+    render json: { outcome: @conversation.additional_attributes['outcome'] }, status: :ok
   end
 
   def close_outcome
@@ -163,11 +160,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       @conversation.custom_attributes = (@conversation.custom_attributes || {}).merge(attrs)
     end
 
-    @conversation.additional_attributes = (@conversation.additional_attributes || {}).merge(
-      'outcome' => outcome,
-      'outcome_set_at' => Time.current.iso8601
-    )
-    @conversation.save!
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: outcome,
+      user: Current.user,
+      reason: params[:reason],
+      ip_address: request.ip
+    ).perform
 
     @conversation.update_columns(status: :resolved)
 
@@ -180,14 +179,14 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def close_as_ai
-    @conversation.additional_attributes = (@conversation.additional_attributes || {}).merge(
-      'outcome' => 'ai_closed',
-      'outcome_set_at' => Time.current.iso8601
-    )
-    @conversation.update_columns(
-      status: :resolved,
-      additional_attributes: @conversation.additional_attributes
-    )
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: 'ai_closed',
+      user: Current.user,
+      ip_address: request.ip
+    ).perform
+
+    @conversation.update_columns(status: :resolved)
     render json: { outcome: 'ai_closed' }, status: :ok
   end
 
