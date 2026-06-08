@@ -345,47 +345,13 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       return render json: { error: 'Só é possível migrar entre caixas do mesmo tipo' }, status: :unprocessable_entity
     end
 
-    backup_migration_data(@inbox)
+    # Run the migration in the background so large inboxes never time out the request.
     migrated_count = @inbox.conversations.count
+    Inboxes::MigrateConversationsJob.perform_later(@inbox, target_inbox, Current.user, params[:delete_source].present?)
 
-    ActiveRecord::Base.transaction do
-      # 1. Bulk-update messages and events — 1 query each, regardless of volume
-      Message.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
-      ReportingEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id)
-      SlaEvent.where(inbox_id: @inbox.id).update_all(inbox_id: target_inbox.id) if defined?(SlaEvent)
-
-      # 2. Get unique contact → contact_inbox pairs using pluck (integers only, no AR objects)
-      #    For N conversations there are at most N unique contacts — even 5000 rows is negligible memory
-      unique_contacts = @inbox.conversations
-                              .pluck(:contact_id, :contact_inbox_id)
-                              .each_with_object({}) { |(cid, ciid), h| h[cid] ||= ciid }
-
-      # 3. Find or create target ContactInbox for each unique contact
-      contact_inbox_map = unique_contacts.each_with_object({}) do |(contact_id, source_ci_id), map|
-        source_id = ContactInbox.where(id: source_ci_id).pick(:source_id) || SecureRandom.uuid
-        map[contact_id] = ContactInbox.find_or_create_by!(
-          contact_id: contact_id,
-          inbox_id: target_inbox.id
-        ) { |ci| ci.source_id = source_id }
-      end
-
-      # 4. Bulk-update conversations grouped by contact — 1 query per unique contact
-      contact_inbox_map.each do |contact_id, target_ci|
-        Conversation.where(inbox_id: @inbox.id, contact_id: contact_id)
-                    .update_all(inbox_id: target_inbox.id, contact_inbox_id: target_ci.id)
-      end
-
-      # 5. Remove old contact_inboxes (conversations already point to new ones)
-      ContactInbox.where(inbox_id: @inbox.id).destroy_all
-    end
-
-    redirect_uazapi_to_target(@inbox, target_inbox)
-    render json: { success: true, migrated_count: migrated_count }
+    render json: { success: true, status: 'processing', migrated_count: migrated_count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
-  rescue StandardError => e
-    Rails.logger.error "[MIGRATE] inbox=#{@inbox.id} #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
-    render json: { error: e.message }, status: :unprocessable_entity
   end
 
   private
@@ -394,52 +360,6 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
   end
 
-  def backup_migration_data(inbox)
-    timestamp = Time.current.strftime('%Y%m%d%H%M%S')
-    key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
-
-    data = {
-      inbox: inbox.attributes,
-      conversation_ids: inbox.conversations.pluck(:id),
-      contact_inbox_ids: inbox.contact_inboxes.pluck(:id),
-      message_count: Message.where(inbox_id: inbox.id).count,
-      migrated_at: Time.current,
-      migrated_by: Current.user&.id
-    }
-
-    Redis::Alfred.set(key, data.to_json)
-    Redis::Alfred.expire(key, 30.days.to_i)
-  rescue StandardError => e
-    Rails.logger.warn "[MIGRATE] Backup skipped: #{e.message}"
-  end
-  
-  def redirect_uazapi_to_target(source_inbox, target_inbox)
-    return unless source_inbox.channel.is_a?(Channel::Api)
-  
-    instance_token = source_inbox.channel.additional_attributes&.dig('uazapi_instance_token')
-    return unless instance_token.present?
-  
-    access_token = Current.user.access_token&.token
-    frontend_url = ENV.fetch('FRONTEND_URL', nil)
-    return unless access_token.present? && frontend_url.present?
-  
-    Whatsapp::Providers::UazapiService.configure_chatwoot_integration(
-      instance_token,
-      {
-        enabled: true,
-        url: frontend_url,
-        access_token: access_token,
-        account_id: Current.account.id,
-        inbox_id: target_inbox.id,
-        ignore_groups: false,
-        sign_messages: true,
-        create_new_conversation: true
-      }
-    )
-  rescue StandardError => e
-    Rails.logger.error "[MIGRATE] Falha ao redirecionar UazAPI: #{e.message}"
-  end
-  
   def fetch_inbox_for_migrate
     @inbox = Current.account.inboxes.find(params[:id])
   end

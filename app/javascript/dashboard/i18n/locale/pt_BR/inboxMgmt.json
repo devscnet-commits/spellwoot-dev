@@ -656,6 +656,7 @@
       "CANCEL": "Cancelar",
       "CONFIRM": "Migrar agora",
       "SUCCESS": "Conversas migradas com sucesso.",
+      "STARTED": "Migração iniciada. As conversas estão sendo movidas em segundo plano e a caixa de origem será removida ao concluir — atualize a página em instantes.",
       "ERROR": "Erro ao migrar conversas. Tente novamente.",
       "DELETE_TITLE": "Excluir caixa de origem?",
       "DELETE_WARNING_TITLE": "Atenção — ação irreversível",

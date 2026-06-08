@@ -60,12 +60,13 @@ const executeMigrate = async () => {
 
   migratingInbox.value = true;
   try {
+    // Migration runs in the background; the source inbox is deleted by the job once it finishes.
     await InboxesAPI.migrateInbox(
       migrateSourceInbox.value.id,
-      migrateTargetInboxId.value
+      migrateTargetInboxId.value,
+      true
     );
-    await store.dispatch('inboxes/delete', migrateSourceInbox.value.id);
-    useAlert(t('INBOX_MGMT.MIGRATE.SUCCESS_AND_DELETED'));
+    useAlert(t('INBOX_MGMT.MIGRATE.STARTED'));
     closeMigrate();
   } catch (error) {
     useAlert(t('INBOX_MGMT.MIGRATE.ERROR'));
