@@ -645,6 +645,7 @@
       "CANCEL": "Cancel",
       "CONFIRM": "Migrate now",
       "SUCCESS": "Conversations migrated successfully.",
+      "STARTED": "Migration started. Conversations are being moved in the background and the source inbox will be removed once it finishes — refresh the page in a moment.",
       "ERROR": "Error migrating conversations. Please try again.",
       "DELETE_TITLE": "Delete source inbox?",
       "DELETE_WARNING_TITLE": "Warning — irreversible action",
