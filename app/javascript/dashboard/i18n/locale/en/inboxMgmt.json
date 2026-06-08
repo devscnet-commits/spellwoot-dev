@@ -809,8 +809,9 @@
       "LOCK_TO_SINGLE_CONVERSATION": "Lock to single conversation",
       "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Enable or disable multiple conversations for the same contact in this inbox",
       "REOPEN_WINDOW": {
-        "LABEL": "Reopen window (hours)",
-        "HELP": "If a contact messages a resolved conversation within this many hours, reopen it instead of creating a new one. Set 0 to disable."
+        "LABEL": "Janela de reabertura",
+        "HELP": "Quando ativada, uma mensagem para uma conversa resolvida dentro do tempo definido reabre a mesma conversa em vez de criar uma nova.",
+        "HOURS_SUFFIX": "horas"
       },
       "INBOX_UPDATE_TITLE": "Inbox Settings",
       "INBOX_UPDATE_SUB_TEXT": "Update your inbox settings",
