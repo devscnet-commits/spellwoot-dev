@@ -17,6 +17,7 @@ const { t } = useI18n();
 const getFlow = useMapGetter('operationalFlows/getFlow');
 const uiFlags = useMapGetter('operationalFlows/getUIFlags');
 const inboxes = useMapGetter('inboxes/getInboxes');
+const conversationAttributes = useMapGetter('attributes/getConversationAttributes');
 
 const flowId = computed(() =>
   route.params.flowId ? Number(route.params.flowId) : null
@@ -25,6 +26,15 @@ const isEdit = computed(() => !!flowId.value);
 
 const CATEGORIES = ['sales', 'support'];
 const POLARITIES = ['positive', 'negative', 'neutral'];
+// Standard Meta event names a state can fire ('' = do not send). value only matters for Purchase.
+const META_EVENTS = ['', 'Purchase', 'Lead', 'CompleteRegistration'];
+
+const metaAttributeOptions = computed(() =>
+  (conversationAttributes.value || []).map(attribute => ({
+    value: attribute.attributeKey,
+    label: attribute.attributeDisplayName,
+  }))
+);
 
 // Each state mirrors a closing button: canonical_key is immutable, display_label is free text.
 const defaultStates = () => [
@@ -33,6 +43,8 @@ const defaultStates = () => [
     display_label: 'Ganho',
     polarity: 'positive',
     requires_reason: false,
+    meta_event_type: '',
+    meta_value_attr: '',
     reasons: [],
   },
   {
@@ -40,6 +52,8 @@ const defaultStates = () => [
     display_label: 'Perdido',
     polarity: 'negative',
     requires_reason: false,
+    meta_event_type: '',
+    meta_value_attr: '',
     reasons: [],
   },
 ];
@@ -47,6 +61,7 @@ const defaultStates = () => [
 const name = ref('');
 const category = ref('sales');
 const active = ref(true);
+const metaEnabled = ref(false);
 const states = ref(defaultStates());
 const removedReasonIds = ref([]);
 const selectedInboxIds = ref([]);
@@ -58,6 +73,7 @@ const populate = flow => {
   name.value = flow.name || '';
   category.value = flow.category || 'sales';
   active.value = flow.active ?? true;
+  metaEnabled.value = !!flow.meta_enabled;
   selectedInboxIds.value = [...(flow.inbox_ids || [])];
 
   const reasons = flow.reasons || [];
@@ -76,12 +92,15 @@ const populate = flow => {
     display_label: s.display_label,
     polarity: s.polarity || 'neutral',
     requires_reason: !!s.requires_reason,
+    meta_event_type: s.meta_event_type || '',
+    meta_value_attr: s.meta_value_attr || '',
     reasons: reasonsForResult(s.canonical_key),
   }));
 };
 
 onMounted(async () => {
   store.dispatch('inboxes/get');
+  store.dispatch('attributes/get');
   if (!isEdit.value) return;
   isLoading.value = true;
   try {
@@ -108,6 +127,8 @@ const buildStatesAttributes = () =>
     display_label: state.display_label.trim(),
     polarity: state.polarity,
     requires_reason: state.requires_reason,
+    meta_event_type: state.meta_event_type || null,
+    meta_value_attr: state.meta_value_attr || null,
     sort_order: sortOrder,
   }));
 
@@ -142,6 +163,7 @@ const save = async () => {
     category: category.value,
     require_reason: states.value.some(s => s.requires_reason),
     active: active.value,
+    meta_enabled: metaEnabled.value,
     inbox_ids: selectedInboxIds.value,
     resolution_states_attributes: buildStatesAttributes(),
     reasons_attributes: buildReasonsAttributes(),
@@ -223,6 +245,20 @@ const save = async () => {
         <Switch v-model="active" />
       </div>
 
+      <div
+        class="flex items-center justify-between py-2 px-3 rounded-lg bg-n-alpha-2"
+      >
+        <div class="flex flex-col">
+          <span class="text-sm font-medium text-n-slate-12">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.META.LABEL') }}
+          </span>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.META.HELP') }}
+          </span>
+        </div>
+        <Switch v-model="metaEnabled" />
+      </div>
+
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-0.5">
           <label class="text-sm font-medium text-n-slate-12">
@@ -288,6 +324,51 @@ const save = async () => {
               {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.REQUIRES_REASON') }}
             </span>
             <Switch v-model="state.requires_reason" />
+          </div>
+
+          <div
+            v-if="metaEnabled"
+            class="flex flex-col gap-3 sm:flex-row border-t border-n-weak pt-3"
+          >
+            <div class="flex flex-col gap-1 flex-1">
+              <label class="text-xs font-medium text-n-slate-11">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_EVENT') }}
+              </label>
+              <select
+                v-model="state.meta_event_type"
+                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              >
+                <option v-for="option in META_EVENTS" :key="option" :value="option">
+                  {{
+                    option ||
+                    $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NONE')
+                  }}
+                </option>
+              </select>
+            </div>
+            <div
+              v-if="state.meta_event_type === 'Purchase'"
+              class="flex flex-col gap-1 flex-1"
+            >
+              <label class="text-xs font-medium text-n-slate-11">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_ATTR') }}
+              </label>
+              <select
+                v-model="state.meta_value_attr"
+                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              >
+                <option value="">
+                  {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NO_VALUE') }}
+                </option>
+                <option
+                  v-for="option in metaAttributeOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
           </div>
 
           <div class="flex flex-col gap-2">
