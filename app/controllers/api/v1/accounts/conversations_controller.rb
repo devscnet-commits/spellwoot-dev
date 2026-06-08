@@ -155,9 +155,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     render json: { outcome: @conversation.result_none? ? nil : @conversation.result }, status: :ok
   end
 
+  def closing_flow
+    @operational_flow = @conversation.operational_flow
+  end
+
   def close_outcome
     outcome = params[:outcome].to_s
-    raise Pundit::NotAuthorizedError unless %w[won lost].include?(outcome)
+    raise Pundit::NotAuthorizedError unless valid_close_outcome?(outcome)
 
     attrs = params.permit(custom_attributes: {})[:custom_attributes]
     merged_attributes = (@conversation.custom_attributes || {}).merge(attrs || {})
@@ -241,6 +245,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   # Enforce account required-attributes config on the backend when a human agent resolves a
   # conversation. System actors (bots, automations, auto-resolve jobs) are intentionally exempt,
   # mirroring the frontend which only validates agent-initiated resolves.
+  # Accept the legacy won/lost outcomes plus any canonical_key defined on the resolved closing flow.
+  def valid_close_outcome?(outcome)
+    return true if %w[won lost].include?(outcome)
+
+    @conversation.operational_flow&.state_for(outcome).present?
+  end
+
   def resolving_blocked_by_required_attributes?(custom_attributes: nil, result: nil, force_resolve: false)
     return false unless Current.user.is_a?(User)
     return false unless force_resolve || resolving_to_resolved?

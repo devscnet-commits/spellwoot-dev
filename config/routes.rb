@@ -166,6 +166,7 @@ Rails.application.routes.draw do
               post :close_outcome
               post :set_outcome
               post :close_as_ai
+              get :closing_flow
               get :attachments
               get :inbox_assistant
               get :reporting_events if ChatwootApp.enterprise?
@@ -306,6 +307,7 @@ Rails.application.routes.draw do
           end
 
           resources :operational_flows
+          resources :flow_assignment_rules, only: [:index, :create, :update, :destroy]
 
           # Assignment V2 Routes
           resources :assignment_policies do

@@ -29,9 +29,11 @@ class Api::V1::Accounts::OperationalFlowsController < Api::V1::Accounts::BaseCon
 
   def operational_flow_params
     params.require(:operational_flow).permit(
-      :name, :require_reason, :active,
+      :name, :category, :require_reason, :active,
       inbox_ids: [],
-      reasons_attributes: [:id, :result, :label, :position, :active, :_destroy]
+      reasons_attributes: [:id, :result, :label, :position, :active, :resolution_state_id, :_destroy],
+      resolution_states_attributes: [:id, :canonical_key, :display_label, :polarity, :requires_reason, :sort_order, :_destroy],
+      closing_requirements_attributes: [:id, :attribute_key, :sort_order, :_destroy, { condition: {} }]
     )
   end
 end
