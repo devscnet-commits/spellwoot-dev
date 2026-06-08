@@ -14,17 +14,26 @@ module Reports
 
     # ── ActiveRecord scope helpers ──────────────────────────────────────────
 
+    # Conversation-metric events (FRT/resolution/reply time) are scoped to the same visible
+    # conversations as the list, so report numbers and averages match what the viewer can see
+    # (spec part 2, §13).
     def scope_reporting_events(scope)
       return scope if admin?
-      return scope.where(user_id: @user_id) if agent_only?
 
-      scope.where(team_id: accessible_team_ids)
+      scope.where(conversation_id: visible_conversation_ids)
     end
 
     # Conversation reports go through the same visibility source as the list and tab counters,
     # so the numbers can never diverge between screens (spec part 2, §13).
     def scope_conversations(scope)
       Conversations::VisibilityService.new(scope, @account_user.user, @account_user.account).perform
+    end
+
+    # Ids of the conversations the viewer can see, via the single visibility source.
+    def visible_conversation_ids
+      Conversations::VisibilityService.new(
+        @account_user.account.conversations, @account_user.user, @account_user.account
+      ).perform.select(:id)
     end
 
     # Scope account_users to only those visible to the current user.
