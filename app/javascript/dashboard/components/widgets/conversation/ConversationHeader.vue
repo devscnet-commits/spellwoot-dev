@@ -67,6 +67,10 @@ const currentContact = computed(() =>
 );
 
 const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
+
+const isReopened = computed(
+  () => !!props.chat?.additional_attributes?.was_reopened
+);
 </script>
 
 <template>
@@ -106,6 +110,12 @@ const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
             class="text-n-amber-10 my-0 mx-0 min-w-[14px] flex-shrink-0"
             icon="warning"
           />
+          <span
+            v-if="isReopened"
+            class="flex-shrink-0 px-1.5 py-0.5 text-xs font-medium leading-none rounded-md text-n-amber-11 bg-n-amber-3"
+          >
+            {{ $t('CONVERSATION.REOPENED_TAG') }}
+          </span>
         </div>
 
         <div
