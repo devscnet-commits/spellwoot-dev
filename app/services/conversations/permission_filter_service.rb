@@ -7,11 +7,10 @@ class Conversations::PermissionFilterService
     @account = account
   end
 
-  # Delegates to the single visibility source so the list, tab counters and reports stay in sync.
-  # VisibilityService handles administrator (account scope) and the legacy inbox ∪ elevated-team
-  # fallback for roles without an explicit visibility_scope.
   def perform
-    Conversations::VisibilityService.new(conversations, user, account).perform
+    return conversations if user_role == 'administrator'
+
+    accessible_conversations
   end
 
   private
