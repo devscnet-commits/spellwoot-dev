@@ -664,6 +664,10 @@
         "SUCCESS": "Meta conversion settings saved",
         "ERROR": "Could not save settings, please try again"
       },
+      "LEAD_ON_ARRIVAL": {
+        "LABEL": "Send Lead on arrival",
+        "DESC": "Fires a Lead event when a conversation arrives from a Click-to-WhatsApp ad. Independent from the closing conversion, which is now configured per flow (state \"Send to Meta as\")."
+      },
       "STRATEGY": {
         "LABEL": "When to send the conversion event?",
         "ON_ARRIVAL_LABEL": "Send Lead on arrival",
@@ -671,6 +675,7 @@
         "ON_CLOSE_LABEL": "Send conversion on close (manual action)",
         "ON_CLOSE_DESC": "No event is sent automatically. The agent clicks \"Mark as Won\" or \"Mark as Lost\" on the conversation to trigger the event. The modal fields are configured in Conversation Workflow → Required Attributes."
       },
+      "CLOSE_PER_FLOW_NOTE": "The conversion trigger now lives per flow — open a flow and set each state's \"Send to Meta as\". The fields below are the account-level status stamp and currency default.",
       "ON_CLOSE": {
         "SECTION_TITLE": "Outcome field configuration",
         "STATUS_FIELD": "Status attribute (list)",

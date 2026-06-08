@@ -656,6 +656,10 @@
         "SUCCESS": "Configurações de conversão Meta salvas",
         "ERROR": "Não foi possível salvar as configurações. Por favor, tente novamente"
       },
+      "LEAD_ON_ARRIVAL": {
+        "LABEL": "Enviar Lead na chegada",
+        "DESC": "Dispara um evento Lead quando a conversa chega de um anúncio Click-to-WhatsApp. Independente da conversão de fechamento, que agora é configurada por fluxo (estado \"Enviar à Meta como\")."
+      },
       "STRATEGY": {
         "LABEL": "Quando enviar o evento de conversão?",
         "ON_ARRIVAL_LABEL": "Enviar Lead na chegada",
@@ -663,6 +667,7 @@
         "ON_CLOSE_LABEL": "Enviar conversão no fechamento (ação manual)",
         "ON_CLOSE_DESC": "Nenhum evento é enviado automaticamente. O agente clica em \"Marcar como Ganho\" ou \"Marcar como Perdido\" na conversa para disparar o evento. Os campos obrigatórios do modal são configurados em Fluxo de Conversa → Atributos obrigatórios."
       },
+      "CLOSE_PER_FLOW_NOTE": "O gatilho da conversão agora fica por fluxo — abra um fluxo e defina o \"Enviar à Meta como\" de cada estado. Os campos abaixo são o carimbo de status e a moeda padrão, no nível da conta.",
       "ON_CLOSE": {
         "SECTION_TITLE": "Configuração do campo de resultado",
         "STATUS_FIELD": "Atributo de status (lista)",

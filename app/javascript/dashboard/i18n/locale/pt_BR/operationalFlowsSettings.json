@@ -9,6 +9,7 @@
       "EDIT_FLOW": "Editar fluxo",
       "REASONS_COUNT": "{count} motivo | {count} motivos",
       "REASON_REQUIRED": "Motivo obrigatório",
+      "META_ON": "Meta ativa",
       "ACTIVE": "Ativo",
       "INACTIVE": "Inativo"
     },
@@ -40,6 +41,10 @@
       "ACTIVE": {
         "LABEL": "Ativo"
       },
+      "META": {
+        "LABEL": "Enviar conversões para a Meta",
+        "HELP": "Interruptor mestre deste fluxo. Quando ligado, cada estado abaixo pode disparar um evento na Meta."
+      },
       "CATEGORY": {
         "LABEL": "Categoria",
         "HELP": "Dimensão para relatórios. Fechamentos de venda alimentam o funil; fechamentos de suporte ficam separados e nunca contam como conversão.",
@@ -59,7 +64,11 @@
           "negative": "Negativa",
           "neutral": "Neutra"
         },
-        "REQUIRES_REASON": "Exigir um motivo neste estado"
+        "REQUIRES_REASON": "Exigir um motivo neste estado",
+        "META_EVENT": "Enviar à Meta como",
+        "META_NONE": "Não enviar",
+        "META_VALUE_ATTR": "Valor da venda a partir do atributo",
+        "META_NO_VALUE": "Sem valor"
       },
       "WON_REASONS": "Motivos de Ganho",
       "LOST_REASONS": "Motivos de Perda",

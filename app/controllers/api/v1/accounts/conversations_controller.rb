@@ -239,15 +239,10 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     @conversation.snoozed_until = parse_date_time(params[:snoozed_until].to_s) if params[:snoozed_until]
   end
 
-  # Enforce account required-attributes config on the backend when a human agent resolves a
-  # conversation. System actors (bots, automations, auto-resolve jobs) are intentionally exempt,
-  # mirroring the frontend which only validates agent-initiated resolves.
-  # Meta conversion fires only for sales-category closings (nil flow = legacy/sales). Support
-  # closings never report a conversion, even when their positive state maps to the won result.
+  # The closing conversion is a human action and gated structurally by the resolved flow
+  # (meta_enabled) and the chosen state (meta_event_type) — never inferred from polarity/category.
   def fire_meta_close_event(outcome)
-    return if @conversation.operational_flow&.category == 'support'
-
-    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: outcome.to_sym).perform
+    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: outcome, user: Current.user).perform
   end
 
   # Accept the legacy won/lost outcomes plus any canonical_key defined on the resolved closing flow.
@@ -257,6 +252,9 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     @conversation.operational_flow&.state_for(outcome).present?
   end
 
+  # Enforce account required-attributes config on the backend when a human agent resolves a
+  # conversation. System actors (bots, automations, auto-resolve jobs) are intentionally exempt,
+  # mirroring the frontend which only validates agent-initiated resolves.
   def resolving_blocked_by_required_attributes?(custom_attributes: nil, result: nil, force_resolve: false)
     return false unless Current.user.is_a?(User)
     return false unless force_resolve || resolving_to_resolved?

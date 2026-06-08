@@ -9,6 +9,7 @@
       "EDIT_FLOW": "Edit flow",
       "REASONS_COUNT": "{count} reason | {count} reasons",
       "REASON_REQUIRED": "Reason required",
+      "META_ON": "Meta on",
       "ACTIVE": "Active",
       "INACTIVE": "Inactive"
     },
@@ -40,6 +41,10 @@
       "ACTIVE": {
         "LABEL": "Active"
       },
+      "META": {
+        "LABEL": "Send conversions to Meta",
+        "HELP": "Master switch for this flow. When on, each state below can fire a Meta event."
+      },
       "CATEGORY": {
         "LABEL": "Category",
         "HELP": "Reporting dimension. Sales closings feed the sales funnel; support closings are kept separate and never count as conversions.",
@@ -59,7 +64,11 @@
           "negative": "Negative",
           "neutral": "Neutral"
         },
-        "REQUIRES_REASON": "Require a reason for this state"
+        "REQUIRES_REASON": "Require a reason for this state",
+        "META_EVENT": "Send to Meta as",
+        "META_NONE": "Do not send",
+        "META_VALUE_ATTR": "Sale value from attribute",
+        "META_NO_VALUE": "No value"
       },
       "WON_REASONS": "Reasons for Won",
       "LOST_REASONS": "Reasons for Lost",
