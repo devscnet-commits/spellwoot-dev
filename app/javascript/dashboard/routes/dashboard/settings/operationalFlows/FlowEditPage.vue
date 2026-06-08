@@ -116,7 +116,7 @@ const save = async () => {
 </script>
 
 <template>
-  <div class="p-6 col-span-full w-full max-w-3xl flex flex-col gap-6">
+  <div class="p-6 col-span-full w-full max-w-3xl mx-auto flex flex-col gap-6">
     <div v-if="isLoading" class="flex justify-center py-8">
       <Spinner class="text-n-brand" />
     </div>
