@@ -25,9 +25,6 @@ const emptyForm = () => ({
   role_id: '',
   inbox_id: '',
   team_id: '',
-  conversation_origin: '',
-  priority: 0,
-  is_default: false,
 });
 
 const form = ref(emptyForm());
@@ -87,9 +84,6 @@ const openEdit = rule => {
     role_id: predicate.role_id || '',
     inbox_id: predicate.inbox_id || '',
     team_id: predicate.team_id || '',
-    conversation_origin: predicate.conversation_origin || '',
-    priority: rule.priority,
-    is_default: rule.is_default,
   };
   showForm.value = true;
 };
@@ -104,19 +98,19 @@ const buildPredicate = () => {
   if (form.value.role_id) predicate.role_id = form.value.role_id;
   if (form.value.inbox_id) predicate.inbox_id = form.value.inbox_id;
   if (form.value.team_id) predicate.team_id = form.value.team_id;
-  if (form.value.conversation_origin) {
-    predicate.conversation_origin = form.value.conversation_origin.trim();
-  }
   return predicate;
 };
 
 const save = async () => {
   if (!form.value.operational_flow_id) return;
+  const predicate = buildPredicate();
+  // The most specific rule wins automatically: more conditions => lower priority number =>
+  // evaluated first. No manual priority needed.
+  const priority = 3 - Object.keys(predicate).length;
   const payload = {
     operational_flow_id: form.value.operational_flow_id,
-    predicate: buildPredicate(),
-    priority: Number(form.value.priority) || 0,
-    is_default: form.value.is_default,
+    predicate,
+    priority,
   };
   try {
     if (form.value.id) {
@@ -189,11 +183,6 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         class="flex justify-between flex-row items-start gap-4 py-3"
       >
         <div class="flex items-start gap-3">
-          <span
-            class="px-1.5 py-0.5 text-xs font-mono rounded text-n-slate-11 bg-n-alpha-2 mt-0.5"
-          >
-            #{{ rule.priority }}
-          </span>
           <div class="flex flex-col gap-1">
             <span class="text-sm text-n-slate-12">
               {{ predicateSummary(rule) }}
@@ -244,6 +233,10 @@ const canSave = computed(() => !!form.value.operational_flow_id);
           </option>
         </select>
       </div>
+
+      <p class="text-xs text-n-slate-11">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.CONDITIONS_INTRO') }}
+      </p>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="flex flex-col gap-1">
@@ -296,20 +289,10 @@ const canSave = computed(() => !!form.value.operational_flow_id);
             </option>
           </select>
         </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium text-n-slate-11">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.PRIORITY') }}
-          </label>
-          <input
-            v-model="form.priority"
-            type="number"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          />
-        </div>
       </div>
 
       <p class="text-xs text-n-slate-11">
-        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.PRIORITY_HELP') }}
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.SPECIFICITY_HELP') }}
       </p>
 
       <div class="flex justify-end gap-2">
