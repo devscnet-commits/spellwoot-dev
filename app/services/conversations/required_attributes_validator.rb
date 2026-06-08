@@ -42,6 +42,9 @@ class Conversations::RequiredAttributesValidator
     return true unless config['rule'] == 'conditional'
 
     expected = config['condition_value']
+    # A half-configured conditional rule (no condition value) never requires the attribute.
+    return false if expected.nil? || expected == '' || (expected.is_a?(Array) && expected.empty?)
+
     actual = context[config['condition_field']]
     expected.is_a?(Array) ? expected.include?(actual) : actual == expected
   end
