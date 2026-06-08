@@ -9,18 +9,13 @@ import {
 } from 'dashboard/composables/store';
 import { useEmitter } from 'dashboard/composables/emitter';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
-import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 
 import wootConstants from 'dashboard/constants/globals';
 import {
   CMD_REOPEN_CONVERSATION,
   CMD_RESOLVE_CONVERSATION,
 } from 'dashboard/helper/commandbar/events';
-import {
-  SYSTEM_OUTCOME_FIELD,
-  OUTCOME_TO_SYSTEM_VALUE,
-  flowRequiredAttributes,
-} from 'dashboard/components-next/ConversationWorkflow/constants';
+import { flowRequiredAttributes } from 'dashboard/components-next/ConversationWorkflow/constants';
 
 import ButtonGroup from 'dashboard/components-next/buttonGroup/ButtonGroup.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
@@ -30,8 +25,6 @@ import ConversationOutcomeButtons from 'dashboard/components-next/ConversationWo
 const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
-const { requiredAttributes, checkMissingAttributes } =
-  useConversationRequiredAttributes();
 
 const isLoading = ref(false);
 const resolveAttributesModalRef = ref(null);
@@ -207,47 +200,27 @@ const onCmdResolveConversation = async () => {
     return;
   }
 
-  // Outcome set → check required attributes then resolve
+  // Outcome already set → collect the flow's required attributes (if any) for that outcome,
+  // then resolve. Requirements live only on the flow; no account-level fallback.
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
   const legacy = currentChat.value.additional_attributes?.outcome;
   const result = currentChat.value.result;
   const picked = legacy === 'won' || legacy === 'lost' ? legacy : result;
   const outcome = picked === 'won' || picked === 'lost' ? picked : null;
 
-  // Per-flow requirements take precedence when the resolved flow defines them, matching what the
-  // backend enforces for a won/lost resolution.
   await fetchClosingFlow();
-  const flowAttrs = outcome
-    ? flowRequiredAttributes(closingFlow.value, outcome, attributeOptions.value)
-    : null;
-
-  if (flowAttrs) {
-    const missing = missingFrom(flowAttrs, currentCustomAttributes);
-    if (missing.length) {
-      resolveAttributesModalRef.value?.open(flowAttrs, currentCustomAttributes, {
-        id: currentChat.value.id,
-        snoozedUntil: null,
-      });
-    } else {
-      toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
-    }
-    return;
-  }
-
-  const systemContext = outcome
-    ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
-    : {};
-  const { hasMissing } = checkMissingAttributes(
-    currentCustomAttributes,
-    systemContext
+  const flowAttrs = flowRequiredAttributes(
+    closingFlow.value,
+    outcome,
+    attributeOptions.value
   );
+  const missing = missingFrom(flowAttrs, currentCustomAttributes);
 
-  if (hasMissing) {
-    resolveAttributesModalRef.value?.open(
-      requiredAttributes.value,
-      currentCustomAttributes,
-      { id: currentChat.value.id, snoozedUntil: null }
-    );
+  if (missing.length) {
+    resolveAttributesModalRef.value?.open(flowAttrs, currentCustomAttributes, {
+      id: currentChat.value.id,
+      snoozedUntil: null,
+    });
   } else {
     toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
   }
@@ -255,8 +228,7 @@ const onCmdResolveConversation = async () => {
 
 const onSelectState = state => {
   showOutcomePrompt.value = false;
-  // When the resolved flow defines its own requirements, render those in the modal so the agent
-  // can satisfy them; otherwise openOutcome falls back to the account-level attributes.
+  // Render the flow's required attributes for the chosen state in the modal (empty = none).
   const flowAttrs = flowRequiredAttributes(
     closingFlow.value,
     state.outcome,
@@ -266,7 +238,7 @@ const onSelectState = state => {
     outcome: state.outcome,
     label: state.label,
     statusValue: state.label,
-    attributes: flowAttrs ?? undefined,
+    attributes: flowAttrs,
   });
 };
 
