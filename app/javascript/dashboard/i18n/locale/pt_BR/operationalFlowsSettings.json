@@ -82,7 +82,15 @@
       "SAVE": "Salvar fluxo",
       "CREATE_SUCCESS": "Fluxo operacional criado com sucesso",
       "UPDATE_SUCCESS": "Fluxo operacional atualizado com sucesso",
-      "ERROR_MESSAGE": "Não foi possível salvar o fluxo operacional"
+      "ERROR_MESSAGE": "Não foi possível salvar o fluxo operacional",
+      "REQUIREMENTS": {
+        "LABEL": "Atributos obrigatórios para fechar",
+        "HELP": "Atributos que o agente precisa preencher antes de resolver como um destes estados. Vinculados ao estado, então renomear um botão nunca os altera.",
+        "SELECT_ATTRIBUTE": "Selecione um atributo",
+        "ALWAYS": "Sempre obrigatório",
+        "WHEN_STATE": "Obrigatório quando: {state}",
+        "ADD": "Adicionar obrigatoriedade"
+      }
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Regras de atribuição",

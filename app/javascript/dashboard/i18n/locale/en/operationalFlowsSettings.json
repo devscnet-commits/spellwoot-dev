@@ -82,7 +82,15 @@
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Operational flow created successfully",
       "UPDATE_SUCCESS": "Operational flow updated successfully",
-      "ERROR_MESSAGE": "Could not save the operational flow"
+      "ERROR_MESSAGE": "Could not save the operational flow",
+      "REQUIREMENTS": {
+        "LABEL": "Required attributes to close",
+        "HELP": "Attributes the agent must fill before resolving as one of these states. Keyed on the state, so renaming a button never changes them.",
+        "SELECT_ATTRIBUTE": "Select an attribute",
+        "ALWAYS": "Always required",
+        "WHEN_STATE": "Required when: {state}",
+        "ADD": "Add requirement"
+      }
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Assignment rules",

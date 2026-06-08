@@ -67,7 +67,7 @@ const buildInitialValues = (statusValue, outcome) => {
 // Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
 // the editable display label. The system result field is seeded from the canonical key so
 // conditional required attributes keep evaluating against ganho/perdido.
-const openOutcome = ({ outcome, label, statusValue }) => {
+const openOutcome = ({ outcome, label, statusValue, attributes }) => {
   const seedValue = statusValue ?? label;
   const initialValues = buildInitialValues(seedValue, outcome);
   pendingStatusSeed.value = winStatusField.value
@@ -77,7 +77,9 @@ const openOutcome = ({ outcome, label, statusValue }) => {
     outcome,
     label,
     statusValue: seedValue,
-    attributes: requiredAttributes.value,
+    // When the flow defines its own requirements they are passed explicitly; otherwise fall
+    // back to the account-level required attributes.
+    attributes: attributes ?? requiredAttributes.value,
     initialValues,
   });
 };
