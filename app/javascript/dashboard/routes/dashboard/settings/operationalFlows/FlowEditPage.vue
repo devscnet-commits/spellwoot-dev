@@ -237,7 +237,7 @@ const save = async () => {
       await store.dispatch('operationalFlows/create', payload);
       useAlert(t('OPERATIONAL_FLOWS_SETTINGS.FORM.CREATE_SUCCESS'));
     }
-    router.push({ name: 'settings_operational_flows_list' });
+    router.push({ name: 'conversation_workflow_index' });
   } catch (error) {
     useAlert(t('OPERATIONAL_FLOWS_SETTINGS.FORM.ERROR_MESSAGE'));
   } finally {
