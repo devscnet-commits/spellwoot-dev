@@ -180,10 +180,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
     @conversation.update_columns(status: :resolved)
 
-    Meta::HandleCloseEventService.new(
-      conversation: @conversation,
-      outcome: outcome.to_sym
-    ).perform
+    fire_meta_close_event(outcome)
 
     render json: { outcome: outcome }, status: :ok
   end
@@ -245,6 +242,14 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   # Enforce account required-attributes config on the backend when a human agent resolves a
   # conversation. System actors (bots, automations, auto-resolve jobs) are intentionally exempt,
   # mirroring the frontend which only validates agent-initiated resolves.
+  # Meta conversion fires only for sales-category closings (nil flow = legacy/sales). Support
+  # closings never report a conversion, even when their positive state maps to the won result.
+  def fire_meta_close_event(outcome)
+    return if @conversation.operational_flow&.category == 'support'
+
+    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: outcome.to_sym).perform
+  end
+
   # Accept the legacy won/lost outcomes plus any canonical_key defined on the resolved closing flow.
   def valid_close_outcome?(outcome)
     return true if %w[won lost].include?(outcome)
