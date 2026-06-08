@@ -79,10 +79,10 @@ const yearOptions = computed(() => {
           </span>
         </div>
         <div class="flex items-center gap-2">
-          <button class="text-n-slate-9 hover:text-n-slate-12 transition-colors" @click="openEdit(idx)">
+          <button type="button" class="text-n-slate-9 hover:text-n-slate-12 transition-colors" @click="openEdit(idx)">
             <span class="i-lucide-pencil size-4" />
           </button>
-          <button class="text-n-slate-9 hover:text-n-ruby-9 transition-colors" @click="remove(idx)">
+          <button type="button" class="text-n-slate-9 hover:text-n-ruby-9 transition-colors" @click="remove(idx)">
             <span class="i-lucide-trash-2 size-4" />
           </button>
         </div>
@@ -167,7 +167,7 @@ const yearOptions = computed(() => {
       </div>
 
       <div class="flex items-center gap-2 justify-end">
-        <button class="text-body-main text-n-slate-10 hover:text-n-slate-12" @click="showForm = false">
+        <button type="button" class="text-body-main text-n-slate-10 hover:text-n-slate-12" @click="showForm = false">
           {{ $t('INBOX_MGMT.BUSINESS_HOURS.CANCEL') }}
         </button>
         <NextButton :label="$t('INBOX_MGMT.BUSINESS_HOURS.SAVE')" :disabled="!form.name" @click="save" />
