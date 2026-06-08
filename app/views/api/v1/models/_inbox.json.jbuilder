@@ -24,6 +24,7 @@ json.current_status resource.current_status
 json.callback_webhook_url resource.callback_webhook_url
 json.allow_messages_after_resolved resource.allow_messages_after_resolved
 json.lock_to_single_conversation resource.lock_to_single_conversation
+json.reopen_window_hours resource.reopen_window_hours
 json.sender_name_type resource.sender_name_type
 json.business_name resource.business_name
 

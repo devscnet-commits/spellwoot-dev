@@ -87,6 +87,7 @@ export default {
       senderNameType: 'friendly',
       businessName: '',
       locktoSingleConversation: false,
+      reopenWindowHours: 0,
       allowMessagesAfterResolved: true,
       continuityViaEmail: true,
       selectedInboxName: '',
@@ -418,6 +419,7 @@ export default {
       this.selectedFeatureFlags = this.inbox.selected_feature_flags || [];
       this.replyTime = this.inbox.reply_time;
       this.locktoSingleConversation = this.inbox.lock_to_single_conversation;
+      this.reopenWindowHours = this.inbox.reopen_window_hours || 0;
       this.selectedPortalSlug = this.inbox.help_center
         ? this.inbox.help_center.slug
         : '';
@@ -532,6 +534,7 @@ export default {
               )?.id || null
             : null,
           lock_to_single_conversation: this.locktoSingleConversation,
+          reopen_window_hours: Number(this.reopenWindowHours) || 0,
           sender_name_type: this.senderNameType,
           business_name: this.businessName || null,
           channel: {
@@ -812,6 +815,22 @@ export default {
                 <LockToSingleConversationPreview
                   :lock-to-single-conversation="locktoSingleConversation"
                   @update="toggleLockToSingleConversation"
+                />
+              </template>
+            </SettingsFieldSection>
+
+            <SettingsFieldSection
+              v-if="canLocktoSingleConversation"
+              :label="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.LABEL')"
+              :help-text="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HELP')"
+              class="[&>div>div]:justify-end [&>div>div]:flex lg:[&>div:first-child]:h-12 [&>div:first-child]:h-16"
+            >
+              <template #extra>
+                <input
+                  v-model.number="reopenWindowHours"
+                  type="number"
+                  min="0"
+                  class="w-24 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
                 />
               </template>
             </SettingsFieldSection>
