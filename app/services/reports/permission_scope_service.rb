@@ -23,10 +23,11 @@ module Reports
       scope.where(conversation_id: visible_conversation_ids)
     end
 
-    # Conversation reports go through the same visibility source as the list and tab counters,
-    # so the numbers can never diverge between screens (spec part 2, §13).
     def scope_conversations(scope)
-      Conversations::VisibilityService.new(scope, @account_user.user, @account_user.account).perform
+      return scope if admin?
+      return scope.where(assignee_id: @user_id) if agent_only?
+
+      scope.where(team_id: accessible_team_ids)
     end
 
     # Ids of the conversations the viewer can see, via the single visibility source.
