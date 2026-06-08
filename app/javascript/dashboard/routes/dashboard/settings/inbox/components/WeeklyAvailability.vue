@@ -43,6 +43,7 @@ export default {
   },
   data() {
     return {
+      DAY_NAMES,
       activeTab: 'hours',
       isBusinessHoursEnabled: false,
       outOfOfficeMessage: '',
