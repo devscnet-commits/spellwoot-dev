@@ -64,9 +64,33 @@ const active = ref(true);
 const metaEnabled = ref(false);
 const states = ref(defaultStates());
 const removedReasonIds = ref([]);
+const requirements = ref([]);
+const removedRequirementIds = ref([]);
 const selectedInboxIds = ref([]);
 const isSaving = ref(false);
 const isLoading = ref(false);
+
+// A requirement's `when` is either 'always' or a resolution state's canonical_key.
+const conditionToWhen = condition => {
+  if (condition?.always) return 'always';
+  return condition?.when?.canonical_key || 'always';
+};
+const whenToCondition = when =>
+  when === 'always' ? { always: true } : { when: { canonical_key: when } };
+
+// Condition choices: "always" plus one per resolution state (shown by its editable label).
+const conditionOptions = computed(() => [
+  {
+    value: 'always',
+    label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.ALWAYS'),
+  },
+  ...states.value.map(state => ({
+    value: state.canonical_key,
+    label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.WHEN_STATE', {
+      state: state.display_label,
+    }),
+  })),
+]);
 
 const populate = flow => {
   if (!flow) return;
@@ -96,6 +120,15 @@ const populate = flow => {
     meta_value_attr: s.meta_value_attr || '',
     reasons: reasonsForResult(s.canonical_key),
   }));
+
+  requirements.value = (flow.closing_requirements || [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(r => ({
+      id: r.id,
+      attribute_key: r.attribute_key,
+      when: conditionToWhen(r.condition),
+    }));
 };
 
 onMounted(async () => {
@@ -150,6 +183,30 @@ const buildReasonsAttributes = () => {
   return rows;
 };
 
+const addRequirement = () => {
+  requirements.value.push({ attribute_key: '', when: 'always' });
+};
+
+const removeRequirement = index => {
+  const [removed] = requirements.value.splice(index, 1);
+  if (removed?.id) removedRequirementIds.value.push(removed.id);
+};
+
+const buildRequirementsAttributes = () => {
+  const rows = [];
+  requirements.value.forEach((requirement, sortOrder) => {
+    if (!requirement.attribute_key) return;
+    rows.push({
+      ...(requirement.id ? { id: requirement.id } : {}),
+      attribute_key: requirement.attribute_key,
+      condition: whenToCondition(requirement.when),
+      sort_order: sortOrder,
+    });
+  });
+  removedRequirementIds.value.forEach(id => rows.push({ id, _destroy: true }));
+  return rows;
+};
+
 const isValid = computed(
   () =>
     name.value.trim() && states.value.every(s => s.display_label.trim().length)
@@ -167,6 +224,7 @@ const save = async () => {
     inbox_ids: selectedInboxIds.value,
     resolution_states_attributes: buildStatesAttributes(),
     reasons_attributes: buildReasonsAttributes(),
+    closing_requirements_attributes: buildRequirementsAttributes(),
   };
   try {
     if (isEdit.value) {
@@ -403,6 +461,67 @@ const save = async () => {
             />
           </div>
         </div>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-0.5">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.LABEL') }}
+          </label>
+          <p class="text-xs text-n-slate-11">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.HELP') }}
+          </p>
+        </div>
+        <div
+          v-for="(requirement, index) in requirements"
+          :key="index"
+          class="flex flex-col gap-2 sm:flex-row sm:items-center"
+        >
+          <select
+            v-model="requirement.attribute_key"
+            class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+          >
+            <option value="" disabled>
+              {{
+                $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.SELECT_ATTRIBUTE')
+              }}
+            </option>
+            <option
+              v-for="option in metaAttributeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+          <select
+            v-model="requirement.when"
+            class="sm:w-56 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+          >
+            <option
+              v-for="option in conditionOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+          <Button
+            icon="i-woot-bin"
+            slate
+            sm
+            class="hover:enabled:text-n-ruby-11 hover:enabled:bg-n-ruby-2"
+            @click="removeRequirement(index)"
+          />
+        </div>
+        <Button
+          faded
+          slate
+          size="sm"
+          icon="i-lucide-plus"
+          :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.ADD')"
+          @click="addRequirement"
+        />
       </div>
 
       <div class="flex flex-col gap-2">

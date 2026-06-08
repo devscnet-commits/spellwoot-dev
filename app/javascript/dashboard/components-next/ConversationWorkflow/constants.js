@@ -39,3 +39,36 @@ export const isAttrVisible = (attr, formValues) => {
   return matchesConditionValue(fieldValue, attr.condition_value);
 };
 
+// Whether a closing requirement applies to the chosen resolution state.
+const requirementApplies = (condition = {}, canonicalKey, polarity) => {
+  if (condition.always) return true;
+  const when = condition.when;
+  if (!when) return true;
+  if ('canonical_key' in when) return when.canonical_key === canonicalKey;
+  if ('polarity' in when) return when.polarity === polarity;
+  return true;
+};
+
+// Maps a closing flow's per-flow requirements to the attribute-definition shape the outcome modal
+// renders, keeping only the ones that apply to the chosen resolution state. Returns null when the
+// flow defines no requirements, signalling callers to fall back to the account-level config.
+export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => {
+  const requirements = flow?.closing_requirements || [];
+  if (!requirements.length) return null;
+
+  const state = (flow.resolution_states || []).find(
+    s => s.canonical_key === canonicalKey
+  );
+  const polarity = state?.polarity;
+
+  return requirements
+    .filter(req => requirementApplies(req.condition, canonicalKey, polarity))
+    .map(req => {
+      const def = (attributeOptions || []).find(
+        a => a.value === req.attribute_key
+      );
+      return def ? { ...def, key: req.attribute_key, rule: 'always' } : null;
+    })
+    .filter(Boolean);
+};
+

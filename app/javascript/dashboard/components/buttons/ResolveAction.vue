@@ -2,7 +2,11 @@
 import { ref, computed } from 'vue';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
-import { useStore, useStoreGetters } from 'dashboard/composables/store';
+import {
+  useStore,
+  useStoreGetters,
+  useMapGetter,
+} from 'dashboard/composables/store';
 import { useEmitter } from 'dashboard/composables/emitter';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
 import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
@@ -15,6 +19,7 @@ import {
 import {
   SYSTEM_OUTCOME_FIELD,
   OUTCOME_TO_SYSTEM_VALUE,
+  flowRequiredAttributes,
 } from 'dashboard/components-next/ConversationWorkflow/constants';
 
 import ButtonGroup from 'dashboard/components-next/buttonGroup/ButtonGroup.vue';
@@ -33,6 +38,25 @@ const resolveAttributesModalRef = ref(null);
 const outcomeButtonsRef = ref(null);
 const showOutcomePrompt = ref(false);
 const closingFlow = ref(null);
+
+const conversationAttributes = useMapGetter(
+  'attributes/getConversationAttributes'
+);
+const attributeOptions = computed(() =>
+  (conversationAttributes.value || []).map(a => ({
+    value: a.attributeKey,
+    label: a.attributeDisplayName,
+    type: a.attributeDisplayType,
+    attributeValues: a.attributeValues,
+  }))
+);
+
+const missingFrom = (attrs, customAttributes) =>
+  attrs.filter(a => {
+    const value = customAttributes[a.value];
+    if (a.type === 'checkbox') return !(a.value in customAttributes);
+    return value == null || String(value).trim() === '';
+  });
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 
@@ -168,7 +192,7 @@ const onCmdOpenConversation = () => {
   toggleStatus(wootConstants.STATUS_TYPE.OPEN);
 };
 
-const onCmdResolveConversation = () => {
+const onCmdResolveConversation = async () => {
   // AI-only conversation with no manual outcome → close as ai_closed.
   // If an agent already picked Won/Lost, respect it instead of overwriting with ai_closed.
   if (!wasHandledByHuman.value && !outcomeAlreadySet.value) {
@@ -189,6 +213,27 @@ const onCmdResolveConversation = () => {
   const result = currentChat.value.result;
   const picked = legacy === 'won' || legacy === 'lost' ? legacy : result;
   const outcome = picked === 'won' || picked === 'lost' ? picked : null;
+
+  // Per-flow requirements take precedence when the resolved flow defines them, matching what the
+  // backend enforces for a won/lost resolution.
+  await fetchClosingFlow();
+  const flowAttrs = outcome
+    ? flowRequiredAttributes(closingFlow.value, outcome, attributeOptions.value)
+    : null;
+
+  if (flowAttrs) {
+    const missing = missingFrom(flowAttrs, currentCustomAttributes);
+    if (missing.length) {
+      resolveAttributesModalRef.value?.open(flowAttrs, currentCustomAttributes, {
+        id: currentChat.value.id,
+        snoozedUntil: null,
+      });
+    } else {
+      toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
+    }
+    return;
+  }
+
   const systemContext = outcome
     ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
     : {};
@@ -210,10 +255,18 @@ const onCmdResolveConversation = () => {
 
 const onSelectState = state => {
   showOutcomePrompt.value = false;
+  // When the resolved flow defines its own requirements, render those in the modal so the agent
+  // can satisfy them; otherwise openOutcome falls back to the account-level attributes.
+  const flowAttrs = flowRequiredAttributes(
+    closingFlow.value,
+    state.outcome,
+    attributeOptions.value
+  );
   outcomeButtonsRef.value?.openOutcome({
     outcome: state.outcome,
     label: state.label,
     statusValue: state.label,
+    attributes: flowAttrs ?? undefined,
   });
 };
 
