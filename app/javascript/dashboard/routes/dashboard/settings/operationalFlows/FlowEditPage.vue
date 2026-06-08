@@ -533,7 +533,7 @@ const save = async () => {
         </p>
         <div
           v-if="inboxes.length"
-          class="flex flex-col gap-1 border border-n-weak rounded-xl p-3 max-h-60 overflow-y-auto"
+          class="flex flex-col gap-1 border border-n-weak rounded-xl p-3"
         >
           <label
             v-for="inbox in inboxes"
