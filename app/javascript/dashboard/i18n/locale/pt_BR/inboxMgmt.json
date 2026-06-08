@@ -826,8 +826,9 @@
       "LOCK_TO_SINGLE_CONVERSATION": "Bloquear para conversa única",
       "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Ativar ou desativar várias conversas para o mesmo contato nesta caixa de entrada",
       "REOPEN_WINDOW": {
-        "LABEL": "Janela de reabertura (horas)",
-        "HELP": "Se um contato enviar mensagem para uma conversa resolvida dentro desse número de horas, ela é reaberta em vez de criar uma nova. Use 0 para desativar."
+        "LABEL": "Janela de reabertura",
+        "HELP": "Quando ativada, uma mensagem para uma conversa resolvida dentro do tempo definido reabre a mesma conversa em vez de criar uma nova.",
+        "HOURS_SUFFIX": "horas"
       },
       "INBOX_UPDATE_TITLE": "Configurações da Caixa de Entrada",
       "INBOX_UPDATE_SUB_TEXT": "Atualize suas configurações de caixa de entrada",
