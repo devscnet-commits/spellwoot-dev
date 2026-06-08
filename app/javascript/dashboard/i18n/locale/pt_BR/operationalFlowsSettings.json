@@ -94,10 +94,10 @@
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Regras de atribuição",
-      "DESCRIPTION": "Define qual fluxo se aplica a uma conversa. As regras são avaliadas por prioridade (menor primeiro); a primeira que casa vence. Uma dimensão em branco significa \"qualquer\".",
+      "DESCRIPTION": "Decide qual fluxo se aplica a cada conversa, pela função de quem fecha, pela caixa e pelo time. A regra mais específica que casar vence.",
       "NEW_RULE": "Adicionar regra",
       "EMPTY": "Nenhuma regra de atribuição ainda. As conversas usam o fluxo vinculado à sua Caixa.",
-      "ANY": "Qualquer",
+      "ANY": "(qualquer)",
       "DEFAULT": "Padrão",
       "PRIORITY": "Prioridade",
       "PRIORITY_HELP": "Números menores são avaliados primeiro. A primeira regra que casa decide o fluxo.",
@@ -111,11 +111,13 @@
         "FLOW": "Fluxo a aplicar",
         "SELECT": "Selecione um fluxo",
         "SAVE": "Salvar regra",
-        "CANCEL": "Cancelar"
+        "CANCEL": "Cancelar",
+        "CONDITIONS_INTRO": "Defina só as condições que importam. O que ficar em \"(qualquer)\" não restringe aquela dimensão."
       },
       "SAVE_SUCCESS": "Regra de atribuição salva",
       "SAVE_ERROR": "Não foi possível salvar a regra de atribuição",
-      "DELETE_SUCCESS": "Regra de atribuição excluída"
+      "DELETE_SUCCESS": "Regra de atribuição excluída",
+      "SPECIFICITY_HELP": "A regra mais específica (com mais condições) que casar com a conversa vence. Sem nenhuma condição, ela vale para qualquer conversa."
     }
   }
 }

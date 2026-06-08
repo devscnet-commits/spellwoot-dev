@@ -94,10 +94,10 @@
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Assignment rules",
-      "DESCRIPTION": "Decide which flow applies to a conversation. Rules are evaluated by priority (lowest first); the first match wins. A missing dimension means \"any\".",
+      "DESCRIPTION": "Decides which flow applies to each conversation, by the closing agent's role, the inbox and the team. The most specific matching rule wins.",
       "NEW_RULE": "Add rule",
       "EMPTY": "No assignment rules yet. Conversations fall back to the flow attached to their Caixa.",
-      "ANY": "Any",
+      "ANY": "(any)",
       "DEFAULT": "Default",
       "PRIORITY": "Priority",
       "PRIORITY_HELP": "Lower numbers are evaluated first. The first rule that matches decides the flow.",
@@ -111,11 +111,13 @@
         "FLOW": "Flow to apply",
         "SELECT": "Select a flow",
         "SAVE": "Save rule",
-        "CANCEL": "Cancel"
+        "CANCEL": "Cancel",
+        "CONDITIONS_INTRO": "Set only the conditions that matter. Anything left as \"(any)\" does not restrict that dimension."
       },
       "SAVE_SUCCESS": "Assignment rule saved",
       "SAVE_ERROR": "Could not save the assignment rule",
-      "DELETE_SUCCESS": "Assignment rule deleted"
+      "DELETE_SUCCESS": "Assignment rule deleted",
+      "SPECIFICITY_HELP": "The most specific matching rule (the one with more conditions) wins. With no conditions, it applies to any conversation."
     }
   }
 }
