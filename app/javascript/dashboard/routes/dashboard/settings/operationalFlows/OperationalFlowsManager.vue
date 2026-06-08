@@ -134,6 +134,12 @@ const confirmDeleteTitle = computed(() =>
                 {{ $t('OPERATIONAL_FLOWS_SETTINGS.LIST.REASON_REQUIRED') }}
               </span>
               <span
+                v-if="flow.meta_enabled"
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-n-blue-3 text-n-blue-11"
+              >
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.LIST.META_ON') }}
+              </span>
+              <span
                 class="text-xs px-1.5 py-0.5 rounded-full font-medium"
                 :class="[
                   flow.active

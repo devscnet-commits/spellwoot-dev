@@ -9,6 +9,7 @@
       "EDIT_FLOW": "Edit flow",
       "REASONS_COUNT": "{count} reason | {count} reasons",
       "REASON_REQUIRED": "Reason required",
+      "META_ON": "Meta on",
       "ACTIVE": "Active",
       "INACTIVE": "Inactive"
     },
