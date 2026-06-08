@@ -62,11 +62,11 @@ onMounted(async () => {
 });
 
 const addReason = list => {
-  list.value.push({ label: '' });
+  list.push({ label: '' });
 };
 
 const removeReason = (list, index) => {
-  const [removed] = list.value.splice(index, 1);
+  const [removed] = list.splice(index, 1);
   if (removed?.id) removedReasonIds.value.push(removed.id);
 };
 

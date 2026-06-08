@@ -1,7 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useStore } from 'dashboard/composables/store';
-import { useMapGetter } from 'dashboard/composables/store';
 import { useI18n } from 'vue-i18n';
 import { useVuelidate } from '@vuelidate/core';
 import { required, minLength } from '@vuelidate/validators';
@@ -32,15 +31,9 @@ const emit = defineEmits(['close']);
 const store = useStore();
 const { t } = useI18n();
 
-const inboxList = useMapGetter('inboxes/getInboxes');
-const teamList = useMapGetter('teams/getTeams');
-
 const name = ref('');
 const description = ref('');
 const selectedPermissions = ref([]);
-const scopeType = ref('all');
-const scopeIds = ref([]);
-const scopeSearch = ref('');
 
 const nameInput = ref(null);
 
@@ -61,8 +54,6 @@ const resetForm = () => {
   name.value = '';
   description.value = '';
   selectedPermissions.value = [];
-  scopeType.value = 'all';
-  scopeIds.value = [];
   v$.value.$reset();
 };
 
@@ -70,8 +61,6 @@ const populateEditForm = () => {
   name.value = props.selectedRole.name || '';
   description.value = props.selectedRole.description || '';
   selectedPermissions.value = props.selectedRole.permissions || [];
-  scopeType.value = props.selectedRole.scope_type || 'all';
-  scopeIds.value = props.selectedRole.scope_ids || [];
 };
 
 watch(
@@ -124,31 +113,6 @@ const modalTitle = computed(() => t(getTranslationKey('TITLE')));
 const modalDescription = computed(() => t(getTranslationKey('DESC')));
 const submitButtonText = computed(() => t(getTranslationKey('SUBMIT')));
 
-watch(scopeType, () => {
-  scopeIds.value = [];
-  scopeSearch.value = '';
-});
-
-const scopeItems = computed(() => {
-  const list = scopeType.value === 'inboxes' ? inboxList.value : teamList.value;
-  const q = scopeSearch.value.toLowerCase();
-  if (!q) return list;
-  return list.filter(item => item.name.toLowerCase().includes(q));
-});
-
-const toggleScopeId = id => {
-  if (scopeIds.value.includes(id)) {
-    scopeIds.value = scopeIds.value.filter(x => x !== id);
-  } else {
-    scopeIds.value = [...scopeIds.value, id];
-  }
-};
-
-const scopeItemName = id => {
-  const list = scopeType.value === 'inboxes' ? inboxList.value : teamList.value;
-  return list.find(item => item.id === id)?.name ?? id;
-};
-
 const handleCustomRole = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;
@@ -159,8 +123,6 @@ const handleCustomRole = async () => {
       name: name.value,
       description: description.value,
       permissions: selectedPermissions.value,
-      scope_type: scopeType.value,
-      scope_ids: scopeType.value === 'all' ? [] : scopeIds.value.map(Number),
     };
 
     if (props.mode === 'edit') {
@@ -246,85 +208,6 @@ const isSubmitDisabled = computed(
             </label>
           </div>
         </div>
-      </div>
-
-      <!-- Scope de acesso -->
-      <div class="w-full mt-2">
-        <p class="text-sm font-medium text-n-slate-12 mb-2">Escopo de acesso</p>
-        <div class="flex flex-col gap-2 mb-3">
-          <label
-            v-for="opt in [
-              { value: 'all',     label: 'Todas as caixas' },
-              { value: 'inboxes', label: 'Caixas específicas' },
-              { value: 'teams',   label: 'Times específicos' },
-            ]"
-            :key="opt.value"
-            class="flex items-center gap-2 cursor-pointer"
-          >
-            <input
-              v-model="scopeType"
-              type="radio"
-              :value="opt.value"
-              name="scope_type"
-              class="ltr:mr-1 rtl:ml-1"
-            />
-            <span class="text-sm font-normal text-n-slate-12">{{ opt.label }}</span>
-          </label>
-        </div>
-
-        <template v-if="scopeType !== 'all'">
-          <!-- Search -->
-          <div class="relative mb-2">
-            <span
-              class="absolute left-2.5 top-1/2 -translate-y-1/2 i-lucide-search text-n-slate-9 text-sm pointer-events-none"
-            />
-            <input
-              v-model="scopeSearch"
-              type="text"
-              :placeholder="scopeType === 'inboxes' ? 'Buscar caixa...' : 'Buscar time...'"
-              class="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-n-weak bg-n-solid-2 text-n-slate-12 placeholder:text-n-slate-9 focus:outline-none focus:border-n-brand-8"
-            />
-          </div>
-
-          <!-- Checkable list -->
-          <div class="rounded-lg border border-n-weak max-h-40 overflow-y-auto">
-            <label
-              v-for="item in scopeItems"
-              :key="item.id"
-              class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-n-slate-1 border-b border-n-weak/50 last:border-0"
-            >
-              <input
-                type="checkbox"
-                :checked="scopeIds.includes(item.id)"
-                class="rounded shrink-0"
-                @change="toggleScopeId(item.id)"
-              />
-              <span class="text-sm text-n-slate-12 select-none">{{ item.name }}</span>
-            </label>
-            <div
-              v-if="scopeItems.length === 0"
-              class="px-3 py-3 text-sm text-n-slate-10 text-center"
-            >
-              Nenhum item encontrado
-            </div>
-          </div>
-
-          <!-- Selected tags -->
-          <div v-if="scopeIds.length > 0" class="flex flex-wrap gap-1.5 mt-2">
-            <span
-              v-for="id in scopeIds"
-              :key="id"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-n-brand-3 text-n-brand-11"
-            >
-              {{ scopeItemName(id) }}
-              <button
-                type="button"
-                class="i-lucide-x text-xs leading-none"
-                @click="toggleScopeId(id)"
-              />
-            </span>
-          </div>
-        </template>
       </div>
 
       <div class="flex flex-row justify-end w-full gap-2 px-0 py-2">
