@@ -731,18 +731,13 @@ const menuItems = computed(() => {
           name: 'Conversation Workflow',
           label: t('SIDEBAR.CONVERSATION_WORKFLOW'),
           icon: 'i-lucide-workflow',
-          to: accountScopedRoute('conversation_workflow_index'),
-        },
-        {
-          name: 'Settings Operational Flows',
-          label: t('SIDEBAR.OPERATIONAL_FLOWS'),
-          icon: 'i-lucide-route',
           activeOn: [
+            'conversation_workflow_index',
             'settings_operational_flows_list',
             'settings_operational_flows_new',
             'settings_operational_flows_edit',
           ],
-          to: accountScopedRoute('settings_operational_flows_list'),
+          to: accountScopedRoute('conversation_workflow_index'),
         },
         {
           name: 'Settings Security',
