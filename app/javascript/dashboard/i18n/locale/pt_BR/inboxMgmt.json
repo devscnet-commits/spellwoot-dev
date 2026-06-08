@@ -980,6 +980,9 @@
       "WEEKLY_TITLE": "Definir horas semanais",
       "TIMEZONE_LABEL": "Selecionar fuso horário",
       "UPDATE": "Atualizar configurações do horário comercial",
+      "SAVED": "Salvo",
+      "HOURS_HINT": "Cada período é um intervalo de funcionamento (Abre → Fecha). Use mais de um período para turnos com pausa — ex.: manhã 08:00–12:00 e tarde 13:30–18:00.",
+      "ADD_PERIOD": "Adicionar intervalo",
       "TOGGLE_AVAILABILITY": "Permitir a disponibilidade de negócios para essa caixa de entrada",
       "UNAVAILABLE_MESSAGE_LABEL": "Mensagem indisponível para visitantes",
       "TOGGLE_HELP": "Permitir a disponibilidade de negócios mostrará as horas disponíveis no widget de bate-papo ao vivo, mesmo que todos os agentes estejam offline. Os vistores disponíveis horários externos podem ser avisados com uma mensagem e um formulário de pré-bate-papo.",
@@ -988,7 +991,9 @@
         "UNAVAILABLE": "Indisponível",
         "HOURS": "horas",
         "VALIDATION_ERROR": "Hora inicial deve ser antes de hora de fechamento.",
-        "CHOOSE": "Selecione"
+        "CHOOSE": "Selecione",
+        "OPENS": "Abre",
+        "CLOSES": "Fecha"
       },
       "ALL_DAY": "O dia todo"
     },
