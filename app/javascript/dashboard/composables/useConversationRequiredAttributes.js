@@ -79,6 +79,14 @@ export function useConversationRequiredAttributes() {
 
   const isRequired = (attrConfig, context) => {
     if (attrConfig.rule === 'conditional') {
+      // A half-configured conditional rule (no condition value) must never require
+      // the attribute, otherwise undefined === undefined would wrongly match.
+      if (
+        attrConfig.condition_value == null ||
+        attrConfig.condition_value === ''
+      ) {
+        return false;
+      }
       const fieldValue = context[attrConfig.condition_field];
       return matchesConditionValue(fieldValue, attrConfig.condition_value);
     }
