@@ -667,6 +667,7 @@
         "ON_CLOSE_LABEL": "Enviar conversão no fechamento (ação manual)",
         "ON_CLOSE_DESC": "Nenhum evento é enviado automaticamente. O agente clica em \"Marcar como Ganho\" ou \"Marcar como Perdido\" na conversa para disparar o evento. Os campos obrigatórios do modal são configurados em Fluxo de Conversa → Atributos obrigatórios."
       },
+      "CLOSE_PER_FLOW_NOTE": "O gatilho da conversão agora fica por fluxo — abra um fluxo e defina o \"Enviar à Meta como\" de cada estado. Os campos abaixo são o carimbo de status e a moeda padrão, no nível da conta.",
       "ON_CLOSE": {
         "SECTION_TITLE": "Configuração do campo de resultado",
         "STATUS_FIELD": "Atributo de status (lista)",

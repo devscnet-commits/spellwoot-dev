@@ -215,68 +215,19 @@ const handleSave = async () => {
         </label>
       </div>
 
-      <!-- Strategy -->
-      <div class="px-5 py-4 flex flex-col gap-3">
-        <p class="text-body-para font-medium text-n-slate-12 mb-0">
-          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.LABEL') }}
-        </p>
-        <label class="flex items-start gap-3 cursor-pointer">
-          <input
-            v-model="strategy"
-            type="radio"
-            value="on_arrival"
-            class="mt-0.5"
-          />
-          <div>
-            <span class="text-body-para text-n-slate-12">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_ARRIVAL_LABEL'
-                )
-              }}
-            </span>
-            <p class="text-body-small text-n-slate-11 mb-0">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_ARRIVAL_DESC'
-                )
-              }}
-            </p>
-          </div>
-        </label>
-        <label class="flex items-start gap-3 cursor-pointer">
-          <input
-            v-model="strategy"
-            type="radio"
-            value="on_close"
-            class="mt-0.5"
-          />
-          <div>
-            <span class="text-body-para text-n-slate-12">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_CLOSE_LABEL'
-                )
-              }}
-            </span>
-            <p class="text-body-small text-n-slate-11 mb-0">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_CLOSE_DESC'
-                )
-              }}
-            </p>
-          </div>
-        </label>
-      </div>
-
-      <!-- on_close config -->
-      <div v-if="strategy === 'on_close'" class="px-5 py-4 flex flex-col gap-4">
-        <p class="text-body-para font-medium text-n-slate-12 mb-0">
-          {{
-            $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.SECTION_TITLE')
-          }}
-        </p>
+      <!-- Closing conversion is configured per flow/state now; only the account-level
+           status stamp and currency default remain here. -->
+      <div class="px-5 py-4 flex flex-col gap-4">
+        <div>
+          <p class="text-body-para font-medium text-n-slate-12 mb-0">
+            {{
+              $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.SECTION_TITLE')
+            }}
+          </p>
+          <p class="text-body-small text-n-slate-11 mb-0">
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CLOSE_PER_FLOW_NOTE') }}
+          </p>
+        </div>
 
         <!-- Status field -->
         <div class="flex flex-col gap-1">
