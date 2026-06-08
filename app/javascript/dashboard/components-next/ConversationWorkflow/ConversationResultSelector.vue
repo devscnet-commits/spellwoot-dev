@@ -13,8 +13,11 @@ const currentChat = computed(() => getters.getSelectedChat.value);
 const isDropdownOpen = ref(false);
 const isLoading = ref(false);
 
-// Read the first-class result column; only won/lost are selectable values here.
+// Prefer the dual-written additional_attributes.outcome (reliably preserved by the store on
+// reload); fall back to the native result column. Only won/lost are selectable values here.
 const outcome = computed(() => {
+  const legacy = currentChat.value?.additional_attributes?.outcome;
+  if (legacy === 'won' || legacy === 'lost') return legacy;
   const result = currentChat.value?.result;
   return result === 'won' || result === 'lost' ? result : null;
 });

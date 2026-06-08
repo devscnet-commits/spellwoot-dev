@@ -48,6 +48,8 @@ const wasHandledByHuman = computed(
 );
 
 const outcomeAlreadySet = computed(() => {
+  const legacy = currentChat.value?.additional_attributes?.outcome;
+  if (legacy === 'won' || legacy === 'lost') return true;
   const result = currentChat.value?.result;
   return !!result && result !== 'none';
 });
@@ -135,8 +137,10 @@ const onCmdResolveConversation = () => {
 
   // Outcome set → check required attributes then resolve
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
+  const legacy = currentChat.value.additional_attributes?.outcome;
   const result = currentChat.value.result;
-  const outcome = result === 'won' || result === 'lost' ? result : null;
+  const picked = legacy === 'won' || legacy === 'lost' ? legacy : result;
+  const outcome = picked === 'won' || picked === 'lost' ? picked : null;
   const systemContext = outcome
     ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
     : {};
