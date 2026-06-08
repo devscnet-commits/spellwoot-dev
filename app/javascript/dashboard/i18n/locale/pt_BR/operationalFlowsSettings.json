@@ -1,11 +1,11 @@
 {
   "OPERATIONAL_FLOWS_SETTINGS": {
-    "HEADER": "Fluxos Operacionais",
-    "DESCRIPTION": "Configure o fluxo operacional de cada Caixa: os motivos de resultado disponíveis ao resolver uma conversa como ganha ou perdida, e se o motivo é obrigatório.",
-    "LOADING": "Carregando fluxos operacionais...",
+    "HEADER": "Fluxos de Fechamento",
+    "DESCRIPTION": "Configure o fluxo de fechamento de cada Caixa: os motivos de resultado disponíveis ao resolver uma conversa como ganha ou perdida, e se o motivo é obrigatório.",
+    "LOADING": "Carregando fluxos de fechamento...",
     "NEW_FLOW": "Criar fluxo",
     "LIST": {
-      "404": "Nenhum fluxo operacional criado ainda",
+      "404": "Nenhum fluxo de fechamento criado ainda",
       "EDIT_FLOW": "Editar fluxo",
       "REASONS_COUNT": "{count} motivo | {count} motivos",
       "REASON_REQUIRED": "Motivo obrigatório",
@@ -16,19 +16,19 @@
     "DELETE": {
       "BUTTON_TEXT": "Excluir",
       "API": {
-        "SUCCESS_MESSAGE": "Fluxo operacional excluído com sucesso",
-        "ERROR_MESSAGE": "Não foi possível excluir o fluxo operacional"
+        "SUCCESS_MESSAGE": "Fluxo de fechamento excluído com sucesso",
+        "ERROR_MESSAGE": "Não foi possível excluir o fluxo de fechamento"
       },
       "CONFIRM": {
         "TITLE": "Excluir {flowName}?",
-        "MESSAGE": "Tem certeza de que deseja excluir este fluxo operacional? As Caixas que o utilizam ficarão sem fluxo.",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? As Caixas que o utilizam ficarão sem fluxo.",
         "YES": "Sim, excluir",
         "NO": "Cancelar"
       }
     },
     "FORM": {
-      "NEW_TITLE": "Novo fluxo operacional",
-      "EDIT_TITLE": "Editar fluxo operacional",
+      "NEW_TITLE": "Novo fluxo de fechamento",
+      "EDIT_TITLE": "Editar fluxo de fechamento",
       "SUBTITLE": "Defina os motivos que os agentes podem escolher ao resolver uma conversa.",
       "NAME": {
         "LABEL": "Nome do fluxo",
@@ -80,9 +80,9 @@
         "EMPTY": "Nenhuma caixa disponível."
       },
       "SAVE": "Salvar fluxo",
-      "CREATE_SUCCESS": "Fluxo operacional criado com sucesso",
-      "UPDATE_SUCCESS": "Fluxo operacional atualizado com sucesso",
-      "ERROR_MESSAGE": "Não foi possível salvar o fluxo operacional",
+      "CREATE_SUCCESS": "Fluxo de fechamento criado com sucesso",
+      "UPDATE_SUCCESS": "Fluxo de fechamento atualizado com sucesso",
+      "ERROR_MESSAGE": "Não foi possível salvar o fluxo de fechamento",
       "REQUIREMENTS": {
         "LABEL": "Atributos obrigatórios para fechar",
         "HELP": "Atributos que o agente precisa preencher antes de resolver como um destes estados. Vinculados ao estado, então renomear um botão nunca os altera.",
