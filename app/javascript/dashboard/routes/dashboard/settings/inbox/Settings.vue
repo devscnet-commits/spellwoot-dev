@@ -87,7 +87,8 @@ export default {
       senderNameType: 'friendly',
       businessName: '',
       locktoSingleConversation: false,
-      reopenWindowHours: 0,
+      reopenWindowEnabled: false,
+      reopenWindowHours: 24,
       allowMessagesAfterResolved: true,
       continuityViaEmail: true,
       selectedInboxName: '',
@@ -419,7 +420,8 @@ export default {
       this.selectedFeatureFlags = this.inbox.selected_feature_flags || [];
       this.replyTime = this.inbox.reply_time;
       this.locktoSingleConversation = this.inbox.lock_to_single_conversation;
-      this.reopenWindowHours = this.inbox.reopen_window_hours || 0;
+      this.reopenWindowEnabled = Number(this.inbox.reopen_window_hours) > 0;
+      this.reopenWindowHours = Number(this.inbox.reopen_window_hours) || 24;
       this.selectedPortalSlug = this.inbox.help_center
         ? this.inbox.help_center.slug
         : '';
@@ -534,7 +536,9 @@ export default {
               )?.id || null
             : null,
           lock_to_single_conversation: this.locktoSingleConversation,
-          reopen_window_hours: Number(this.reopenWindowHours) || 0,
+          reopen_window_hours: this.reopenWindowEnabled
+            ? Number(this.reopenWindowHours) || 0
+            : 0,
           sender_name_type: this.senderNameType,
           business_name: this.businessName || null,
           channel: {
@@ -819,21 +823,26 @@ export default {
               </template>
             </SettingsFieldSection>
 
-            <SettingsFieldSection
+            <SettingsToggleSection
               v-if="canLocktoSingleConversation"
-              :label="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.LABEL')"
-              :help-text="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HELP')"
-              class="[&>div>div]:justify-end [&>div>div]:flex lg:[&>div:first-child]:h-12 [&>div:first-child]:h-16"
+              v-model="reopenWindowEnabled"
+              :header="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.LABEL')"
+              :description="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HELP')"
             >
-              <template #extra>
-                <input
-                  v-model.number="reopenWindowHours"
-                  type="number"
-                  min="0"
-                  class="w-24 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-                />
+              <template v-if="reopenWindowEnabled" #editor>
+                <div class="flex items-center gap-2 mt-2">
+                  <input
+                    v-model.number="reopenWindowHours"
+                    type="number"
+                    min="1"
+                    class="w-24 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                  />
+                  <span class="text-body-main text-n-slate-11">
+                    {{ $t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HOURS_SUFFIX') }}
+                  </span>
+                </div>
               </template>
-            </SettingsFieldSection>
+            </SettingsToggleSection>
 
             <SettingsFieldSection
               v-if="isAWebWidgetInbox || isAnEmailChannel"
