@@ -1,0 +1,58 @@
+{
+  "OPERATIONAL_FLOWS_SETTINGS": {
+    "HEADER": "Fluxos Operacionais",
+    "DESCRIPTION": "Configure o fluxo operacional de cada Caixa: os motivos de resultado disponíveis ao resolver uma conversa como ganha ou perdida, e se o motivo é obrigatório.",
+    "LOADING": "Carregando fluxos operacionais...",
+    "NEW_FLOW": "Criar fluxo",
+    "LIST": {
+      "404": "Nenhum fluxo operacional criado ainda",
+      "EDIT_FLOW": "Editar fluxo",
+      "REASONS_COUNT": "{count} motivo | {count} motivos",
+      "REASON_REQUIRED": "Motivo obrigatório",
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "DELETE": {
+      "BUTTON_TEXT": "Excluir",
+      "API": {
+        "SUCCESS_MESSAGE": "Fluxo operacional excluído com sucesso",
+        "ERROR_MESSAGE": "Não foi possível excluir o fluxo operacional"
+      },
+      "CONFIRM": {
+        "TITLE": "Excluir {flowName}?",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo operacional? As Caixas que o utilizam ficarão sem fluxo.",
+        "YES": "Sim, excluir",
+        "NO": "Cancelar"
+      }
+    },
+    "FORM": {
+      "NEW_TITLE": "Novo fluxo operacional",
+      "EDIT_TITLE": "Editar fluxo operacional",
+      "SUBTITLE": "Defina os motivos que os agentes podem escolher ao resolver uma conversa.",
+      "NAME": {
+        "LABEL": "Nome do fluxo",
+        "PLACEHOLDER": "ex.: Vendas"
+      },
+      "REQUIRE_REASON": {
+        "LABEL": "Exigir um motivo",
+        "HELP": "Os agentes precisam escolher um motivo para resolver uma conversa como ganha ou perdida."
+      },
+      "ACTIVE": {
+        "LABEL": "Ativo"
+      },
+      "WON_REASONS": "Motivos de Ganho",
+      "LOST_REASONS": "Motivos de Perda",
+      "REASON_PLACEHOLDER": "ex.: Preço muito alto",
+      "ADD_REASON": "Adicionar motivo",
+      "INBOXES": {
+        "LABEL": "Caixas que usam este fluxo",
+        "HELP": "Uma Caixa usa apenas um fluxo. Selecioná-la aqui a move de qualquer fluxo anterior.",
+        "EMPTY": "Nenhuma caixa disponível."
+      },
+      "SAVE": "Salvar fluxo",
+      "CREATE_SUCCESS": "Fluxo operacional criado com sucesso",
+      "UPDATE_SUCCESS": "Fluxo operacional atualizado com sucesso",
+      "ERROR_MESSAGE": "Não foi possível salvar o fluxo operacional"
+    }
+  }
+}
