@@ -1,7 +1,7 @@
 # Validates that the custom attributes required before resolving a conversation are present.
 # Requirements come from the account-level configuration (settings.conversation_required_attributes).
-# Per-flow closing_requirements are staged in the schema/API and become the source once a per-flow
-# requirements editor ships; until then the account config stays the single editing surface.
+# Per-flow closing_requirements are staged in the schema/API; wiring them into validation needs the
+# close modal and every resolve path to render the flow's attributes, so it ships as its own change.
 class Conversations::RequiredAttributesValidator
   SYSTEM_OUTCOME_FIELD = '__resultado_conversa__'.freeze
   RESULT_TO_SYSTEM_VALUE = { 'won' => 'ganho', 'lost' => 'perdido' }.freeze
