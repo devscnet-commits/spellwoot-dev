@@ -34,6 +34,10 @@ const { t } = useI18n();
 const name = ref('');
 const description = ref('');
 const selectedPermissions = ref([]);
+// '' keeps the default (inbox + teams) visibility; the others anchor the role explicitly.
+const VISIBILITY_OPTIONS = ['', 'own', 'team', 'inbox', 'account'];
+const visibilityScope = ref('');
+const canViewUnassignedQueue = ref(true);
 
 const nameInput = ref(null);
 
@@ -54,6 +58,8 @@ const resetForm = () => {
   name.value = '';
   description.value = '';
   selectedPermissions.value = [];
+  visibilityScope.value = '';
+  canViewUnassignedQueue.value = true;
   v$.value.$reset();
 };
 
@@ -61,6 +67,9 @@ const populateEditForm = () => {
   name.value = props.selectedRole.name || '';
   description.value = props.selectedRole.description || '';
   selectedPermissions.value = props.selectedRole.permissions || [];
+  visibilityScope.value = props.selectedRole.visibility_scope || '';
+  canViewUnassignedQueue.value =
+    props.selectedRole.can_view_unassigned_queue ?? true;
 };
 
 watch(
@@ -123,6 +132,8 @@ const handleCustomRole = async () => {
       name: name.value,
       description: description.value,
       permissions: selectedPermissions.value,
+      visibility_scope: visibilityScope.value || null,
+      can_view_unassigned_queue: canViewUnassignedQueue.value,
     };
 
     if (props.mode === 'edit') {
@@ -207,6 +218,40 @@ const isSubmitDisabled = computed(
               {{ $t(`CUSTOM_ROLE.PERMISSIONS.${permission.toUpperCase()}`) }}
             </label>
           </div>
+        </div>
+      </div>
+
+      <div class="w-full">
+        <label>{{ $t('CUSTOM_ROLE.FORM.VISIBILITY.LABEL') }}</label>
+        <p class="text-sm text-n-slate-11 mt-1 mb-2">
+          {{ $t('CUSTOM_ROLE.FORM.VISIBILITY.HELP') }}
+        </p>
+        <select v-model="visibilityScope" class="w-full">
+          <option
+            v-for="option in VISIBILITY_OPTIONS"
+            :key="option"
+            :value="option"
+          >
+            {{
+              $t(
+                `CUSTOM_ROLE.FORM.VISIBILITY.OPTIONS.${option || 'default'}`
+              )
+            }}
+          </option>
+        </select>
+        <div
+          v-if="['own', 'team'].includes(visibilityScope)"
+          class="flex items-center mt-2"
+        >
+          <input
+            id="can_view_unassigned_queue"
+            v-model="canViewUnassignedQueue"
+            type="checkbox"
+            class="ltr:mr-2 rtl:ml-2"
+          />
+          <label for="can_view_unassigned_queue" class="text-sm font-normal">
+            {{ $t('CUSTOM_ROLE.FORM.VISIBILITY.UNASSIGNED_QUEUE') }}
+          </label>
         </div>
       </div>
 
