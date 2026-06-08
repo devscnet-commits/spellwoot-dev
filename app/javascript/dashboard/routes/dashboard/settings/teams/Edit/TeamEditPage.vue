@@ -181,7 +181,7 @@ async function saveMembers() {
 </script>
 
 <template>
-  <div class="p-6 col-span-full w-full max-w-3xl flex flex-col gap-6">
+  <div class="p-6 col-span-full w-full max-w-3xl mx-auto flex flex-col gap-6">
     <div class="flex flex-col gap-2">
       <div class="flex flex-col gap-0.5">
         <h2 class="text-heading-2 font-semibold text-n-slate-12 capitalize">
@@ -190,27 +190,6 @@ async function saveMembers() {
         <p v-if="team?.description" class="text-body-main text-n-slate-11">
           {{ team.description }}
         </p>
-      </div>
-
-      <!-- Operational summary -->
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="i-lucide-users size-3.5 text-n-slate-11" />
-          <span class="font-medium text-n-slate-12">{{ counts.total }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.MEMBERS') }}</span>
-        </span>
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="font-medium text-n-slate-12">{{ counts.coordinator }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.COORDINATORS') }}</span>
-        </span>
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="font-medium text-n-slate-12">{{ counts.manager }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.MANAGERS') }}</span>
-        </span>
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="font-medium text-n-slate-12">{{ counts.member }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.AGENTS') }}</span>
-        </span>
       </div>
     </div>
 
