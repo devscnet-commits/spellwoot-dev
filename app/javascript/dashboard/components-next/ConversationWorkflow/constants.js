@@ -50,11 +50,11 @@ const requirementApplies = (condition = {}, canonicalKey, polarity) => {
 };
 
 // Maps a closing flow's per-flow requirements to the attribute-definition shape the outcome modal
-// renders, keeping only the ones that apply to the chosen resolution state. Returns null when the
-// flow defines no requirements, signalling callers to fall back to the account-level config.
+// renders, keeping only the ones that apply to the chosen resolution state. Requirements live only
+// on the flow, so this always returns an array (empty when there is no flow or no requirements).
 export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => {
   const requirements = flow?.closing_requirements || [];
-  if (!requirements.length) return null;
+  if (!requirements.length) return [];
 
   const state = (flow.resolution_states || []).find(
     s => s.canonical_key === canonicalKey

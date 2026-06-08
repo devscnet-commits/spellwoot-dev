@@ -5,7 +5,6 @@ import { useAccount } from 'dashboard/composables/useAccount';
 import { FEATURE_FLAGS } from '../../../../featureFlags';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
-import ConversationRequiredAttributes from 'dashboard/components-next/ConversationWorkflow/ConversationRequiredAttributes.vue';
 import MetaConversionSettings from 'dashboard/components-next/ConversationWorkflow/MetaConversionSettings.vue';
 import OperationalFlowsManager from 'dashboard/routes/dashboard/settings/operationalFlows/OperationalFlowsManager.vue';
 import FlowAssignmentRulesManager from 'dashboard/routes/dashboard/settings/operationalFlows/FlowAssignmentRulesManager.vue';
@@ -20,13 +19,6 @@ const showAutoResolutionConfig = computed(() => {
   return isFeatureEnabledonAccount.value(
     accountId.value,
     FEATURE_FLAGS.AUTO_RESOLVE_CONVERSATIONS
-  );
-});
-
-const showRequiredAttributes = computed(() => {
-  return isFeatureEnabledonAccount.value(
-    accountId.value,
-    FEATURE_FLAGS.CONVERSATION_REQUIRED_ATTRIBUTES
   );
 });
 </script>
@@ -46,7 +38,6 @@ const showRequiredAttributes = computed(() => {
         <AutoResolve v-if="showAutoResolutionConfig" />
         <OperationalFlowsManager />
         <FlowAssignmentRulesManager />
-        <ConversationRequiredAttributes :is-enabled="showRequiredAttributes" />
         <MetaConversionSettings />
       </div>
     </template>

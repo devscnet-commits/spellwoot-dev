@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useStoreGetters } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { useAccount } from 'dashboard/composables/useAccount';
-import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
 import wootConstants from 'dashboard/constants/globals';
@@ -14,7 +13,6 @@ const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
 const { currentAccount } = useAccount();
-const { requiredAttributes } = useConversationRequiredAttributes();
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
@@ -77,9 +75,8 @@ const openOutcome = ({ outcome, label, statusValue, attributes }) => {
     outcome,
     label,
     statusValue: seedValue,
-    // When the flow defines its own requirements they are passed explicitly; otherwise fall
-    // back to the account-level required attributes.
-    attributes: attributes ?? requiredAttributes.value,
+    // Requirements come only from the resolved flow (empty array when the flow defines none).
+    attributes: attributes ?? [],
     initialValues,
   });
 };
