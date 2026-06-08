@@ -1,7 +1,7 @@
 # Validates that the custom attributes required before resolving a conversation are present.
-# When the conversation resolves under a Closing Flow, requirements come from that flow's
-# closing_requirements (keyed on the chosen resolution state). For conversations without a flow
-# it falls back to the legacy account-level configuration (settings.conversation_required_attributes).
+# Requirements come from the account-level configuration (settings.conversation_required_attributes).
+# Per-flow closing_requirements are staged in the schema/API and become the source once a per-flow
+# requirements editor ships; until then the account config stays the single editing surface.
 class Conversations::RequiredAttributesValidator
   SYSTEM_OUTCOME_FIELD = '__resultado_conversa__'.freeze
   RESULT_TO_SYSTEM_VALUE = { 'won' => 'ganho', 'lost' => 'perdido' }.freeze
@@ -18,41 +18,15 @@ class Conversations::RequiredAttributesValidator
   end
 
   def missing_keys
-    return flow_missing_keys if flow_requirements?
-
-    legacy_missing_keys
-  end
-
-  private
-
-  def flow
-    return @flow if @flow_loaded
-
-    @flow_loaded = true
-    @flow = @conversation.operational_flow
-  end
-
-  def flow_requirements?
-    flow.present? && flow.closing_requirements.any?
-  end
-
-  def flow_missing_keys
-    state = flow.state_for(@result)
-    flow.closing_requirements
-        .select { |req| req.applies_to?(state) && blank_value?(req.attribute_key) }
-        .map(&:attribute_key)
-  end
-
-  # --- Legacy account-level configuration (conversations without a closing flow) ---
-
-  def legacy_missing_keys
-    return [] unless legacy_enabled?
+    return [] unless enabled?
 
     configs.select { |config| required?(config) && blank_value?(config['key']) }
            .map { |config| config['key'] }
   end
 
-  def legacy_enabled?
+  private
+
+  def enabled?
     @account.feature_enabled?('conversation_required_attributes') && configs.any?
   end
 
