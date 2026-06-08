@@ -138,6 +138,10 @@ class ConversationApi extends ApiClient {
     return axios.post(`${this.url}/${conversationId}/close_as_ai`);
   }
 
+  getClosingFlow(conversationId) {
+    return axios.get(`${this.url}/${conversationId}/closing_flow`);
+  }
+
   fetchParticipants(conversationId) {
     return axios.get(`${this.url}/${conversationId}/participants`);
   }

@@ -64,33 +64,37 @@ const buildInitialValues = (statusValue, outcome) => {
   return base;
 };
 
-const openWon = () => {
-  const initialValues = buildInitialValues(winValue.value, 'won');
+// Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
+// the editable display label. The system result field is seeded from the canonical key so
+// conditional required attributes keep evaluating against ganho/perdido.
+const openOutcome = ({ outcome, label, statusValue }) => {
+  const seedValue = statusValue ?? label;
+  const initialValues = buildInitialValues(seedValue, outcome);
   pendingStatusSeed.value = winStatusField.value
-    ? { [winStatusField.value]: winValue.value }
+    ? { [winStatusField.value]: seedValue }
     : {};
   outcomeModalRef.value?.open({
-    outcome: 'won',
-    label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
-    statusValue: winValue.value,
+    outcome,
+    label,
+    statusValue: seedValue,
     attributes: requiredAttributes.value,
     initialValues,
   });
 };
 
-const openLost = () => {
-  const initialValues = buildInitialValues(lossValue.value, 'lost');
-  pendingStatusSeed.value = winStatusField.value
-    ? { [winStatusField.value]: lossValue.value }
-    : {};
-  outcomeModalRef.value?.open({
+const openWon = () =>
+  openOutcome({
+    outcome: 'won',
+    label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
+    statusValue: winValue.value,
+  });
+
+const openLost = () =>
+  openOutcome({
     outcome: 'lost',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
     statusValue: lossValue.value,
-    attributes: requiredAttributes.value,
-    initialValues,
   });
-};
 
 const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
   try {
@@ -129,7 +133,7 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
   }
 };
 
-defineExpose({ openWon, openLost });
+defineExpose({ openWon, openLost, openOutcome });
 </script>
 
 <template>

@@ -32,8 +32,54 @@ const isLoading = ref(false);
 const resolveAttributesModalRef = ref(null);
 const outcomeButtonsRef = ref(null);
 const showOutcomePrompt = ref(false);
+const closingFlow = ref(null);
 
 const currentChat = computed(() => getters.getSelectedChat.value);
+
+// Polarity drives the button color/icon regardless of the editable label.
+const POLARITY_STYLE = {
+  positive: { color: 'teal', icon: 'i-lucide-circle-check' },
+  negative: { color: 'ruby', icon: 'i-lucide-circle-x' },
+  neutral: { color: 'slate', icon: 'i-lucide-circle-dot' },
+};
+
+// Resolution states from the resolved closing flow, with a legacy won/lost fallback when the
+// conversation has no flow.
+const outcomeStates = computed(() => {
+  const states = closingFlow.value?.resolution_states;
+  if (states?.length) {
+    return [...states]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(s => ({
+        outcome: s.canonical_key,
+        label: s.display_label,
+        ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
+      }));
+  }
+  return [
+    {
+      outcome: 'won',
+      label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
+      ...POLARITY_STYLE.positive,
+    },
+    {
+      outcome: 'lost',
+      label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
+      ...POLARITY_STYLE.negative,
+    },
+  ];
+});
+
+const fetchClosingFlow = async () => {
+  try {
+    const ConversationApi = (await import('dashboard/api/inbox/conversation'))
+      .default;
+    const { data } = await ConversationApi.getClosingFlow(currentChat.value.id);
+    closingFlow.value = data || null;
+  } catch {
+    closingFlow.value = null;
+  }
+};
 
 const isOpen = computed(
   () => currentChat.value.status === wootConstants.STATUS_TYPE.OPEN
@@ -130,8 +176,9 @@ const onCmdResolveConversation = () => {
     return;
   }
 
-  // Human handled but no outcome yet → prompt for Won/Lost
+  // Human handled but no outcome yet → prompt for the flow's resolution states
   if (!outcomeAlreadySet.value) {
+    fetchClosingFlow();
     showOutcomePrompt.value = true;
     return;
   }
@@ -161,14 +208,13 @@ const onCmdResolveConversation = () => {
   }
 };
 
-const onSelectWon = () => {
+const onSelectState = state => {
   showOutcomePrompt.value = false;
-  outcomeButtonsRef.value?.openWon();
-};
-
-const onSelectLost = () => {
-  showOutcomePrompt.value = false;
-  outcomeButtonsRef.value?.openLost();
+  outcomeButtonsRef.value?.openOutcome({
+    outcome: state.outcome,
+    label: state.label,
+    statusValue: state.label,
+  });
 };
 
 const keyboardEvents = {
@@ -206,20 +252,14 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
         {{ $t('CONVERSATION_WORKFLOW.OUTCOME.PROMPT_RESOLVE') }}
       </p>
       <Button
+        v-for="state in outcomeStates"
+        :key="state.outcome"
         size="sm"
-        color="teal"
-        icon="i-lucide-circle-check"
-        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON')"
+        :color="state.color"
+        :icon="state.icon"
+        :label="state.label"
         class="w-full rounded-md"
-        @click="onSelectWon"
-      />
-      <Button
-        size="sm"
-        color="ruby"
-        icon="i-lucide-circle-x"
-        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST')"
-        class="w-full rounded-md"
-        @click="onSelectLost"
+        @click="onSelectState(state)"
       />
       <Button
         size="sm"

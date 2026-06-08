@@ -40,6 +40,27 @@
       "ACTIVE": {
         "LABEL": "Ativo"
       },
+      "CATEGORY": {
+        "LABEL": "Categoria",
+        "HELP": "Dimensão para relatórios. Fechamentos de venda alimentam o funil; fechamentos de suporte ficam separados e nunca contam como conversão.",
+        "OPTIONS": {
+          "sales": "Vendas",
+          "support": "Suporte"
+        }
+      },
+      "STATES": {
+        "LABEL": "Estados de resolução (botões de fechamento)",
+        "HELP": "Renomeie os botões à vontade — o rótulo é só apresentação. A chave fixa é o que os relatórios e integrações leem, então renomear nunca altera seus dados.",
+        "CANONICAL_FIXED": "chave fixa (usada nos relatórios)",
+        "DISPLAY_LABEL": "Rótulo do botão",
+        "POLARITY": "Polaridade",
+        "POLARITY_OPTIONS": {
+          "positive": "Positiva",
+          "negative": "Negativa",
+          "neutral": "Neutra"
+        },
+        "REQUIRES_REASON": "Exigir um motivo neste estado"
+      },
       "WON_REASONS": "Motivos de Ganho",
       "LOST_REASONS": "Motivos de Perda",
       "REASON_PLACEHOLDER": "ex.: Preço muito alto",
@@ -53,6 +74,31 @@
       "CREATE_SUCCESS": "Fluxo operacional criado com sucesso",
       "UPDATE_SUCCESS": "Fluxo operacional atualizado com sucesso",
       "ERROR_MESSAGE": "Não foi possível salvar o fluxo operacional"
+    },
+    "ASSIGNMENT_RULES": {
+      "HEADER": "Regras de atribuição",
+      "DESCRIPTION": "Define qual fluxo se aplica a uma conversa. As regras são avaliadas por prioridade (menor primeiro); a primeira que casa vence. Uma dimensão em branco significa \"qualquer\".",
+      "NEW_RULE": "Adicionar regra",
+      "EMPTY": "Nenhuma regra de atribuição ainda. As conversas usam o fluxo vinculado à sua Caixa.",
+      "ANY": "Qualquer",
+      "DEFAULT": "Padrão",
+      "PRIORITY": "Prioridade",
+      "PRIORITY_HELP": "Números menores são avaliados primeiro. A primeira regra que casa decide o fluxo.",
+      "DIMENSIONS": {
+        "ROLE": "Função",
+        "INBOX": "Caixa",
+        "TEAM": "Time",
+        "ORIGIN": "Origem"
+      },
+      "FORM": {
+        "FLOW": "Fluxo a aplicar",
+        "SELECT": "Selecione um fluxo",
+        "SAVE": "Salvar regra",
+        "CANCEL": "Cancelar"
+      },
+      "SAVE_SUCCESS": "Regra de atribuição salva",
+      "SAVE_ERROR": "Não foi possível salvar a regra de atribuição",
+      "DELETE_SUCCESS": "Regra de atribuição excluída"
     }
   }
 }

@@ -266,6 +266,9 @@ class Api::V2::Accounts::ReportsController < Api::V1::Accounts::BaseController
     scope = Reports::PermissionScopeService.new(Current.account_user).scope_conversations(
       Current.account.conversations.joins(reopen_join_sql)
     )
+    # Sales funnel only: support closings (result_category = 'support') never count here.
+    # NULL covers open conversations and legacy/no-flow closings, kept as sales for compatibility.
+    scope = scope.where("conversations.result_category IS NULL OR conversations.result_category = 'sales'")
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i))   if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i))   if params[:until].present?
     scope = scope.where(inbox_id: params[:inbox_id])                                           if params[:inbox_id].present?

@@ -40,6 +40,27 @@
       "ACTIVE": {
         "LABEL": "Active"
       },
+      "CATEGORY": {
+        "LABEL": "Category",
+        "HELP": "Reporting dimension. Sales closings feed the sales funnel; support closings are kept separate and never count as conversions.",
+        "OPTIONS": {
+          "sales": "Sales",
+          "support": "Support"
+        }
+      },
+      "STATES": {
+        "LABEL": "Resolution states (closing buttons)",
+        "HELP": "Rename the buttons freely — the label is presentation only. The fixed key is what reports and integrations read, so renaming never changes your data.",
+        "CANONICAL_FIXED": "fixed key (used by reports)",
+        "DISPLAY_LABEL": "Button label",
+        "POLARITY": "Polarity",
+        "POLARITY_OPTIONS": {
+          "positive": "Positive",
+          "negative": "Negative",
+          "neutral": "Neutral"
+        },
+        "REQUIRES_REASON": "Require a reason for this state"
+      },
       "WON_REASONS": "Reasons for Won",
       "LOST_REASONS": "Reasons for Lost",
       "REASON_PLACEHOLDER": "e.g., Price too high",
@@ -53,6 +74,31 @@
       "CREATE_SUCCESS": "Operational flow created successfully",
       "UPDATE_SUCCESS": "Operational flow updated successfully",
       "ERROR_MESSAGE": "Could not save the operational flow"
+    },
+    "ASSIGNMENT_RULES": {
+      "HEADER": "Assignment rules",
+      "DESCRIPTION": "Decide which flow applies to a conversation. Rules are evaluated by priority (lowest first); the first match wins. A missing dimension means \"any\".",
+      "NEW_RULE": "Add rule",
+      "EMPTY": "No assignment rules yet. Conversations fall back to the flow attached to their Caixa.",
+      "ANY": "Any",
+      "DEFAULT": "Default",
+      "PRIORITY": "Priority",
+      "PRIORITY_HELP": "Lower numbers are evaluated first. The first rule that matches decides the flow.",
+      "DIMENSIONS": {
+        "ROLE": "Role",
+        "INBOX": "Caixa",
+        "TEAM": "Team",
+        "ORIGIN": "Origin"
+      },
+      "FORM": {
+        "FLOW": "Flow to apply",
+        "SELECT": "Select a flow",
+        "SAVE": "Save rule",
+        "CANCEL": "Cancel"
+      },
+      "SAVE_SUCCESS": "Assignment rule saved",
+      "SAVE_ERROR": "Could not save the assignment rule",
+      "DELETE_SUCCESS": "Assignment rule deleted"
     }
   }
 }
