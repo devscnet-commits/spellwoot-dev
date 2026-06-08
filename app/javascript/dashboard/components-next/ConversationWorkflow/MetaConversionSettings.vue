@@ -18,6 +18,8 @@ const isDirty = ref(false);
 // Form state
 const enabled = ref(false);
 const strategy = ref('on_arrival');
+// Independent toggle: Lead on arrival can now run alongside the per-flow closing conversion.
+const leadOnArrival = ref(true);
 const winStatusField = ref('');
 const winValue = ref('');
 const lossValue = ref('');
@@ -83,6 +85,8 @@ watch(
     const s = account?.settings?.meta_conversion_settings || {};
     enabled.value = s.enabled ?? false;
     strategy.value = s.strategy ?? 'on_arrival';
+    leadOnArrival.value =
+      s.lead_on_arrival ?? (s.strategy == null || s.strategy === 'on_arrival');
     winStatusField.value = s.win_status_field ?? '';
     winValue.value = s.win_value ?? '';
     lossValue.value = s.loss_value ?? '';
@@ -105,6 +109,7 @@ watch(
   [
     enabled,
     strategy,
+    leadOnArrival,
     winStatusField,
     winValue,
     lossValue,
@@ -129,6 +134,7 @@ const handleSave = async () => {
         meta_conversion_settings: {
           enabled: enabled.value,
           strategy: strategy.value,
+          lead_on_arrival: leadOnArrival.value,
           win_status_field: winStatusField.value || null,
           win_value: winValue.value || null,
           loss_value: lossValue.value || null,
@@ -185,6 +191,30 @@ const handleSave = async () => {
     </div>
 
     <template v-if="enabled">
+      <!-- Lead on arrival (independent toggle) -->
+      <div class="px-5 py-4 flex items-center justify-between gap-3">
+        <div class="flex flex-col">
+          <p class="text-body-para font-medium text-n-slate-12 mb-0">
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.LEAD_ON_ARRIVAL.LABEL') }}
+          </p>
+          <p class="text-body-small text-n-slate-11 mb-0">
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.LEAD_ON_ARRIVAL.DESC') }}
+          </p>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer select-none shrink-0">
+          <div
+            class="relative w-10 h-5 rounded-full transition-colors"
+            :class="leadOnArrival ? 'bg-n-brand' : 'bg-n-slate-5'"
+          >
+            <input v-model="leadOnArrival" type="checkbox" class="sr-only" />
+            <div
+              class="absolute top-0.5 size-4 bg-white rounded-full shadow transition-transform"
+              :class="leadOnArrival ? 'translate-x-5' : 'translate-x-0.5'"
+            />
+          </div>
+        </label>
+      </div>
+
       <!-- Strategy -->
       <div class="px-5 py-4 flex flex-col gap-3">
         <p class="text-body-para font-medium text-n-slate-12 mb-0">

@@ -664,6 +664,10 @@
         "SUCCESS": "Meta conversion settings saved",
         "ERROR": "Could not save settings, please try again"
       },
+      "LEAD_ON_ARRIVAL": {
+        "LABEL": "Send Lead on arrival",
+        "DESC": "Fires a Lead event when a conversation arrives from a Click-to-WhatsApp ad. Independent from the closing conversion, which is now configured per flow (state \"Send to Meta as\")."
+      },
       "STRATEGY": {
         "LABEL": "When to send the conversion event?",
         "ON_ARRIVAL_LABEL": "Send Lead on arrival",
