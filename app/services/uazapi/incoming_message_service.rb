@@ -90,11 +90,13 @@ class Uazapi::IncomingMessageService
   def set_conversation
     Rails.logger.info "[UAZAPI] Setting conversation for contact_id=#{@contact.id}"
 
-    # if lock to single conversation is disabled, we will create a new conversation if previous conversation is resolved
+    # if lock to single conversation is disabled, we will create a new conversation if previous conversation is resolved,
+    # unless the last resolved conversation is still inside the inbox reopen window (in hours).
     @conversation = if inbox.lock_to_single_conversation
                       @contact_inbox.conversations.last
                     else
-                      @contact_inbox.conversations.where.not(status: :resolved).last
+                      @contact_inbox.conversations.where.not(status: :resolved).last ||
+                        reopenable_conversation_within_window
                     end
 
     if @conversation.blank?
@@ -109,6 +111,19 @@ class Uazapi::IncomingMessageService
     else
       Rails.logger.info "[UAZAPI] Found existing conversation: conversation_id=#{@conversation.id}"
     end
+  end
+
+  # Returns the last resolved conversation if it was resolved within the inbox reopen window (hours),
+  # so a new incoming message reopens it (via Message#reopen_conversation) instead of creating a new one.
+  def reopenable_conversation_within_window
+    hours = inbox.reopen_window_hours.to_i
+    return nil unless hours.positive?
+
+    last_conversation = @contact_inbox.conversations.last
+    return nil unless last_conversation&.resolved?
+
+    reference = last_conversation.last_activity_at || last_conversation.updated_at
+    last_conversation if reference.present? && reference >= hours.hours.ago
   end
 
   def create_message(message_data)

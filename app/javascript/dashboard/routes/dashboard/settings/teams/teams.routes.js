@@ -31,6 +31,15 @@ export default {
             permissions: ['administrator'],
           },
         },
+        {
+          path: ':teamId/edit',
+          name: 'settings_teams_edit',
+          component: TeamEditPage,
+          meta: {
+            featureFlag: FEATURE_FLAGS.TEAM_MANAGEMENT,
+            permissions: ['administrator'],
+          },
+        },
       ],
     },
     {
@@ -76,15 +85,6 @@ export default {
               component: AddAgents,
             },
           ],
-        },
-        {
-          path: ':teamId/edit',
-          name: 'settings_teams_edit',
-          component: TeamEditPage,
-          meta: {
-            featureFlag: FEATURE_FLAGS.TEAM_MANAGEMENT,
-            permissions: ['administrator'],
-          },
         },
       ],
     },
