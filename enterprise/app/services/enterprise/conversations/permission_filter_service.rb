@@ -1,11 +1,17 @@
 module Enterprise::Conversations::PermissionFilterService
   def perform
+    # An explicit visibility_scope on the role opts into the unified VisibilityService model.
+    return Conversations::VisibilityService.new(conversations, user, account).perform if custom_role_visibility_scope.present?
     return filter_by_permissions(permissions) if user_has_custom_role?
 
     super
   end
 
   private
+
+  def custom_role_visibility_scope
+    account_user&.custom_role&.visibility_scope
+  end
 
   def user_has_custom_role?
     user_role == 'agent' && account_user&.custom_role_id.present?

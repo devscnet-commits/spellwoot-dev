@@ -231,16 +231,46 @@ const userPermissions = computed(() => {
   return getUserPermissions(currentUser.value, currentAccountId.value);
 });
 
+const currentAccountRole = computed(() =>
+  (currentUser.value.accounts || []).find(
+    account => account.id === currentAccountId.value
+  )
+);
+
+// Effective visibility scope for tab display (spec part 2, §11.1). null/legacy and inbox/account
+// show every tab; only an explicit own/team scope can hide redundant tabs.
+const visibilityScope = computed(() => {
+  const account = currentAccountRole.value;
+  if (account?.role === 'administrator') return 'account';
+  return account?.custom_role?.visibility_scope || 'inbox';
+});
+
+const showUnassignedTab = computed(
+  () =>
+    (currentAccountRole.value?.custom_role?.can_view_unassigned_queue ?? true) ||
+    ['inbox', 'account'].includes(visibilityScope.value)
+);
+
+const showAllTab = computed(
+  () => visibilityScope.value !== 'own' || showUnassignedTab.value
+);
+
 const assigneeTabItems = computed(() => {
   const items = filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
     userPermissions.value,
     item => item.permissions
-  ).map(({ key, count: countKey }) => ({
-    key,
-    name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-    count: conversationStats.value[countKey] || 0,
-  }));
+  )
+    .filter(({ key }) => {
+      if (key === 'unassigned') return showUnassignedTab.value;
+      if (key === 'all') return showAllTab.value;
+      return true;
+    })
+    .map(({ key, count: countKey }) => ({
+      key,
+      name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
+      count: conversationStats.value[countKey] || 0,
+    }));
   items.push({
     key: 'resolved',
     name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'),
