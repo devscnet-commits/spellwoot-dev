@@ -121,8 +121,9 @@ const onCmdOpenConversation = () => {
 };
 
 const onCmdResolveConversation = () => {
-  // AI-only conversation → close as ai_closed
-  if (!wasHandledByHuman.value) {
+  // AI-only conversation with no manual outcome → close as ai_closed.
+  // If an agent already picked Won/Lost, respect it instead of overwriting with ai_closed.
+  if (!wasHandledByHuman.value && !outcomeAlreadySet.value) {
     closeAsAi();
     return;
   }
