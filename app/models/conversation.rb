@@ -139,7 +139,9 @@ class Conversation < ApplicationRecord
   # A conversation inherits its operational flow from its Caixa (inbox). Teams are only used to
   # organize agents, so they never own a flow.
   def operational_flow
-    inbox&.operational_flow
+    # Caixa (inbox) takes precedence; fall back to the assigned team. Inactive flows are ignored.
+    flow = inbox&.operational_flow || team&.operational_flow
+    flow if flow&.active
   end
 
   # Be aware: The precision of created_at and last_activity_at may differ from Ruby's Time precision.

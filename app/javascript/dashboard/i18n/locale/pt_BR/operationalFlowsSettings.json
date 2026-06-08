@@ -43,11 +43,18 @@
       "WON_REASONS": "Motivos de Ganho",
       "LOST_REASONS": "Motivos de Perda",
       "REASON_PLACEHOLDER": "ex.: Preço muito alto",
+      "WON_REASON_PLACEHOLDER": "ex.: Bom preço, Indicação",
+      "LOST_REASON_PLACEHOLDER": "ex.: Preço muito alto, Escolheu concorrente",
       "ADD_REASON": "Adicionar motivo",
       "INBOXES": {
         "LABEL": "Caixas que usam este fluxo",
         "HELP": "Uma Caixa usa apenas um fluxo. Selecioná-la aqui a move de qualquer fluxo anterior.",
         "EMPTY": "Nenhuma caixa disponível."
+      },
+      "TEAMS": {
+        "LABEL": "Times que usam este fluxo",
+        "HELP": "Aplicado só quando a Caixa da conversa não tem fluxo — o fluxo da Caixa sempre tem prioridade.",
+        "EMPTY": "Nenhum time disponível."
       },
       "SAVE": "Salvar fluxo",
       "CREATE_SUCCESS": "Fluxo operacional criado com sucesso",

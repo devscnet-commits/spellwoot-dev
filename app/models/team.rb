@@ -19,6 +19,7 @@ class Team < ApplicationRecord
   include AccountCacheRevalidator
 
   belongs_to :account
+  belongs_to :operational_flow, optional: true
   has_many :team_members, dependent: :destroy_async
   has_many :members, through: :team_members, source: :user
   has_many :team_inboxes, dependent: :destroy_async

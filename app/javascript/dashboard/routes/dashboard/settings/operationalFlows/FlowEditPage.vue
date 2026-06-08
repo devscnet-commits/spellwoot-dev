@@ -17,6 +17,7 @@ const { t } = useI18n();
 const getFlow = useMapGetter('operationalFlows/getFlow');
 const uiFlags = useMapGetter('operationalFlows/getUIFlags');
 const inboxes = useMapGetter('inboxes/getInboxes');
+const teams = useMapGetter('teams/getTeams');
 
 const flowId = computed(() =>
   route.params.flowId ? Number(route.params.flowId) : null
@@ -30,6 +31,7 @@ const wonReasons = ref([]);
 const lostReasons = ref([]);
 const removedReasonIds = ref([]);
 const selectedInboxIds = ref([]);
+const selectedTeamIds = ref([]);
 const isSaving = ref(false);
 const isLoading = ref(false);
 
@@ -39,6 +41,7 @@ const populate = flow => {
   requireReason.value = !!flow.require_reason;
   active.value = flow.active ?? true;
   selectedInboxIds.value = [...(flow.inbox_ids || [])];
+  selectedTeamIds.value = [...(flow.team_ids || [])];
   const reasons = flow.reasons || [];
   const byResult = result =>
     reasons
@@ -51,6 +54,7 @@ const populate = flow => {
 
 onMounted(async () => {
   store.dispatch('inboxes/get');
+  store.dispatch('teams/get');
   if (!isEdit.value) return;
   isLoading.value = true;
   try {
@@ -98,6 +102,7 @@ const save = async () => {
     require_reason: requireReason.value,
     active: active.value,
     inbox_ids: selectedInboxIds.value,
+    team_ids: selectedTeamIds.value,
     reasons_attributes: buildReasonsAttributes(),
   };
   try {
@@ -180,11 +185,13 @@ const save = async () => {
             key: 'won',
             list: wonReasons,
             label: $t('OPERATIONAL_FLOWS_SETTINGS.FORM.WON_REASONS'),
+            placeholder: $t('OPERATIONAL_FLOWS_SETTINGS.FORM.WON_REASON_PLACEHOLDER'),
           },
           {
             key: 'lost',
             list: lostReasons,
             label: $t('OPERATIONAL_FLOWS_SETTINGS.FORM.LOST_REASONS'),
+            placeholder: $t('OPERATIONAL_FLOWS_SETTINGS.FORM.LOST_REASON_PLACEHOLDER'),
           },
         ]"
         :key="group.key"
@@ -201,9 +208,7 @@ const save = async () => {
           <input
             v-model="reason.label"
             type="text"
-            :placeholder="
-              $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REASON_PLACEHOLDER')
-            "
+            :placeholder="group.placeholder"
             class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
           />
           <Button
@@ -250,6 +255,31 @@ const save = async () => {
         </div>
         <p v-else class="text-sm text-n-slate-11">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.INBOXES.EMPTY') }}
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-medium text-n-slate-12">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.TEAMS.LABEL') }}
+        </label>
+        <p class="text-xs text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.TEAMS.HELP') }}
+        </p>
+        <div
+          v-if="teams.length"
+          class="flex flex-col gap-1 border border-n-weak rounded-xl p-3 max-h-60 overflow-y-auto"
+        >
+          <label
+            v-for="team in teams"
+            :key="team.id"
+            class="flex items-center gap-2 py-1 cursor-pointer"
+          >
+            <input v-model="selectedTeamIds" type="checkbox" :value="team.id" />
+            <span class="text-sm text-n-slate-12">{{ team.name }}</span>
+          </label>
+        </div>
+        <p v-else class="text-sm text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.TEAMS.EMPTY') }}
         </p>
       </div>
 

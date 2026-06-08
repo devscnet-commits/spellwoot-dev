@@ -43,11 +43,18 @@
       "WON_REASONS": "Reasons for Won",
       "LOST_REASONS": "Reasons for Lost",
       "REASON_PLACEHOLDER": "e.g., Price too high",
+      "WON_REASON_PLACEHOLDER": "e.g., Good price, Referral",
+      "LOST_REASON_PLACEHOLDER": "e.g., Price too high, Chose competitor",
       "ADD_REASON": "Add reason",
       "INBOXES": {
         "LABEL": "Caixas using this flow",
         "HELP": "A Caixa uses only one flow. Selecting it here moves it from any previous flow.",
         "EMPTY": "No inboxes available."
+      },
+      "TEAMS": {
+        "LABEL": "Teams using this flow",
+        "HELP": "Applied only when the conversation's Caixa has no flow — the Caixa flow always takes precedence.",
+        "EMPTY": "No teams available."
       },
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Operational flow created successfully",
