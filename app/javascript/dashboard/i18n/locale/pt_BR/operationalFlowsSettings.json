@@ -40,6 +40,27 @@
       "ACTIVE": {
         "LABEL": "Ativo"
       },
+      "CATEGORY": {
+        "LABEL": "Categoria",
+        "HELP": "Dimensão para relatórios. Fechamentos de venda alimentam o funil; fechamentos de suporte ficam separados e nunca contam como conversão.",
+        "OPTIONS": {
+          "sales": "Vendas",
+          "support": "Suporte"
+        }
+      },
+      "STATES": {
+        "LABEL": "Estados de resolução (botões de fechamento)",
+        "HELP": "Renomeie os botões à vontade — o rótulo é só apresentação. A chave fixa é o que os relatórios e integrações leem, então renomear nunca altera seus dados.",
+        "CANONICAL_FIXED": "chave fixa (usada nos relatórios)",
+        "DISPLAY_LABEL": "Rótulo do botão",
+        "POLARITY": "Polaridade",
+        "POLARITY_OPTIONS": {
+          "positive": "Positiva",
+          "negative": "Negativa",
+          "neutral": "Neutra"
+        },
+        "REQUIRES_REASON": "Exigir um motivo neste estado"
+      },
       "WON_REASONS": "Motivos de Ganho",
       "LOST_REASONS": "Motivos de Perda",
       "REASON_PLACEHOLDER": "ex.: Preço muito alto",

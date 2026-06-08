@@ -19,11 +19,26 @@ class OperationalFlow < ApplicationRecord
   validates :name, presence: true, uniqueness: { scope: :account_id }
   validates :category, inclusion: { in: CATEGORIES }
 
+  after_save :sync_reason_state_links
+
   def reasons_for(result)
     reasons.where(active: true, result: result).order(:position)
   end
 
   def state_for(canonical_key)
     resolution_states.find_by(canonical_key: canonical_key)
+  end
+
+  private
+
+  # Keep won/lost reasons attached to their resolution state so the close UI can list reasons
+  # per state. Custom states manage their own reasons directly.
+  def sync_reason_state_links
+    OperationalFlowReason.results.each_key do |canonical|
+      state = resolution_states.find_by(canonical_key: canonical)
+      next unless state
+
+      reasons.where(result: OperationalFlowReason.results[canonical]).update_all(resolution_state_id: state.id)
+    end
   end
 end

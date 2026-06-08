@@ -40,6 +40,27 @@
       "ACTIVE": {
         "LABEL": "Active"
       },
+      "CATEGORY": {
+        "LABEL": "Category",
+        "HELP": "Reporting dimension. Sales closings feed the sales funnel; support closings are kept separate and never count as conversions.",
+        "OPTIONS": {
+          "sales": "Sales",
+          "support": "Support"
+        }
+      },
+      "STATES": {
+        "LABEL": "Resolution states (closing buttons)",
+        "HELP": "Rename the buttons freely — the label is presentation only. The fixed key is what reports and integrations read, so renaming never changes your data.",
+        "CANONICAL_FIXED": "fixed key (used by reports)",
+        "DISPLAY_LABEL": "Button label",
+        "POLARITY": "Polarity",
+        "POLARITY_OPTIONS": {
+          "positive": "Positive",
+          "negative": "Negative",
+          "neutral": "Neutral"
+        },
+        "REQUIRES_REASON": "Require a reason for this state"
+      },
       "WON_REASONS": "Reasons for Won",
       "LOST_REASONS": "Reasons for Lost",
       "REASON_PLACEHOLDER": "e.g., Price too high",

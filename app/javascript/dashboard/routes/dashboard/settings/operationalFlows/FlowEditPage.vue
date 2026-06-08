@@ -23,11 +23,31 @@ const flowId = computed(() =>
 );
 const isEdit = computed(() => !!flowId.value);
 
+const CATEGORIES = ['sales', 'support'];
+const POLARITIES = ['positive', 'negative', 'neutral'];
+
+// Each state mirrors a closing button: canonical_key is immutable, display_label is free text.
+const defaultStates = () => [
+  {
+    canonical_key: 'won',
+    display_label: 'Ganho',
+    polarity: 'positive',
+    requires_reason: false,
+    reasons: [],
+  },
+  {
+    canonical_key: 'lost',
+    display_label: 'Perdido',
+    polarity: 'negative',
+    requires_reason: false,
+    reasons: [],
+  },
+];
+
 const name = ref('');
-const requireReason = ref(false);
+const category = ref('sales');
 const active = ref(true);
-const wonReasons = ref([]);
-const lostReasons = ref([]);
+const states = ref(defaultStates());
 const removedReasonIds = ref([]);
 const selectedInboxIds = ref([]);
 const isSaving = ref(false);
@@ -36,17 +56,28 @@ const isLoading = ref(false);
 const populate = flow => {
   if (!flow) return;
   name.value = flow.name || '';
-  requireReason.value = !!flow.require_reason;
+  category.value = flow.category || 'sales';
   active.value = flow.active ?? true;
   selectedInboxIds.value = [...(flow.inbox_ids || [])];
+
   const reasons = flow.reasons || [];
-  const byResult = result =>
+  const reasonsForResult = result =>
     reasons
       .filter(r => r.result === result)
       .sort((a, b) => a.position - b.position)
       .map(r => ({ id: r.id, label: r.label }));
-  wonReasons.value = byResult('won');
-  lostReasons.value = byResult('lost');
+
+  const apiStates = (flow.resolution_states || []).sort(
+    (a, b) => a.sort_order - b.sort_order
+  );
+  states.value = (apiStates.length ? apiStates : defaultStates()).map(s => ({
+    id: s.id,
+    canonical_key: s.canonical_key,
+    display_label: s.display_label,
+    polarity: s.polarity || 'neutral',
+    requires_reason: !!s.requires_reason,
+    reasons: reasonsForResult(s.canonical_key),
+  }));
 };
 
 onMounted(async () => {
@@ -61,43 +92,58 @@ onMounted(async () => {
   }
 });
 
-const addReason = list => {
-  list.push({ label: '' });
+const addReason = state => {
+  state.reasons.push({ label: '' });
 };
 
-const removeReason = (list, index) => {
-  const [removed] = list.splice(index, 1);
+const removeReason = (state, index) => {
+  const [removed] = state.reasons.splice(index, 1);
   if (removed?.id) removedReasonIds.value.push(removed.id);
 };
 
+const buildStatesAttributes = () =>
+  states.value.map((state, sortOrder) => ({
+    ...(state.id ? { id: state.id } : {}),
+    canonical_key: state.canonical_key,
+    display_label: state.display_label.trim(),
+    polarity: state.polarity,
+    requires_reason: state.requires_reason,
+    sort_order: sortOrder,
+  }));
+
 const buildReasonsAttributes = () => {
   const rows = [];
-  const append = (list, result) => {
-    list.forEach((reason, position) => {
+  states.value.forEach(state => {
+    state.reasons.forEach((reason, position) => {
       if (!reason.label.trim()) return;
       rows.push({
         ...(reason.id ? { id: reason.id } : {}),
-        result,
+        result: state.canonical_key,
         label: reason.label.trim(),
         position,
         active: true,
       });
     });
-  };
-  append(wonReasons.value, 'won');
-  append(lostReasons.value, 'lost');
+  });
   removedReasonIds.value.forEach(id => rows.push({ id, _destroy: true }));
   return rows;
 };
 
+const isValid = computed(
+  () =>
+    name.value.trim() && states.value.every(s => s.display_label.trim().length)
+);
+
 const save = async () => {
-  if (!name.value.trim()) return;
+  if (!isValid.value) return;
   isSaving.value = true;
   const payload = {
     name: name.value.trim(),
-    require_reason: requireReason.value,
+    category: category.value,
+    require_reason: states.value.some(s => s.requires_reason),
     active: active.value,
     inbox_ids: selectedInboxIds.value,
+    resolution_states_attributes: buildStatesAttributes(),
     reasons_attributes: buildReasonsAttributes(),
   };
   try {
@@ -151,18 +197,21 @@ const save = async () => {
         />
       </div>
 
-      <div
-        class="flex items-center justify-between py-2 px-3 rounded-lg bg-n-alpha-2"
-      >
-        <div class="flex flex-col">
-          <span class="text-sm font-medium text-n-slate-12">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIRE_REASON.LABEL') }}
-          </span>
-          <span class="text-xs text-n-slate-11">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIRE_REASON.HELP') }}
-          </span>
-        </div>
-        <Switch v-model="requireReason" />
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-n-slate-12">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.LABEL') }}
+        </label>
+        <p class="text-xs text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.HELP') }}
+        </p>
+        <select
+          v-model="category"
+          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+        >
+          <option v-for="option in CATEGORIES" :key="option" :value="option">
+            {{ $t(`OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.OPTIONS.${option}`) }}
+          </option>
+        </select>
       </div>
 
       <div
@@ -174,54 +223,105 @@ const save = async () => {
         <Switch v-model="active" />
       </div>
 
-      <div
-        v-for="group in [
-          {
-            key: 'won',
-            list: wonReasons,
-            label: $t('OPERATIONAL_FLOWS_SETTINGS.FORM.WON_REASONS'),
-          },
-          {
-            key: 'lost',
-            list: lostReasons,
-            label: $t('OPERATIONAL_FLOWS_SETTINGS.FORM.LOST_REASONS'),
-          },
-        ]"
-        :key="group.key"
-        class="flex flex-col gap-2"
-      >
-        <label class="text-sm font-medium text-n-slate-12">{{
-          group.label
-        }}</label>
-        <div
-          v-for="(reason, index) in group.list"
-          :key="index"
-          class="flex items-center gap-2"
-        >
-          <input
-            v-model="reason.label"
-            type="text"
-            :placeholder="
-              $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REASON_PLACEHOLDER')
-            "
-            class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          />
-          <Button
-            icon="i-woot-bin"
-            slate
-            sm
-            class="hover:enabled:text-n-ruby-11 hover:enabled:bg-n-ruby-2"
-            @click="removeReason(group.list, index)"
-          />
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-0.5">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.LABEL') }}
+          </label>
+          <p class="text-xs text-n-slate-11">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.HELP') }}
+          </p>
         </div>
-        <Button
-          faded
-          slate
-          size="sm"
-          icon="i-lucide-plus"
-          :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.ADD_REASON')"
-          @click="addReason(group.list)"
-        />
+
+        <div
+          v-for="state in states"
+          :key="state.canonical_key"
+          class="flex flex-col gap-3 border border-n-weak rounded-xl p-4"
+        >
+          <div class="flex items-center gap-2">
+            <span
+              class="px-1.5 py-0.5 text-xs font-mono rounded text-n-slate-11 bg-n-alpha-2"
+            >
+              {{ state.canonical_key }}
+            </span>
+            <span class="text-xs text-n-slate-11">
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.CANONICAL_FIXED') }}
+            </span>
+          </div>
+
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <div class="flex flex-col gap-1 flex-1">
+              <label class="text-xs font-medium text-n-slate-11">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.DISPLAY_LABEL') }}
+              </label>
+              <input
+                v-model="state.display_label"
+                type="text"
+                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              />
+            </div>
+            <div class="flex flex-col gap-1 sm:w-40">
+              <label class="text-xs font-medium text-n-slate-11">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.POLARITY') }}
+              </label>
+              <select
+                v-model="state.polarity"
+                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              >
+                <option
+                  v-for="option in POLARITIES"
+                  :key="option"
+                  :value="option"
+                >
+                  {{
+                    $t(
+                      `OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.POLARITY_OPTIONS.${option}`
+                    )
+                  }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-n-slate-11">
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.REQUIRES_REASON') }}
+            </span>
+            <Switch v-model="state.requires_reason" />
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <div
+              v-for="(reason, index) in state.reasons"
+              :key="index"
+              class="flex items-center gap-2"
+            >
+              <input
+                v-model="reason.label"
+                type="text"
+                :placeholder="
+                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REASON_PLACEHOLDER')
+                "
+                class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              />
+              <Button
+                icon="i-woot-bin"
+                slate
+                sm
+                class="hover:enabled:text-n-ruby-11 hover:enabled:bg-n-ruby-2"
+                @click="removeReason(state, index)"
+              />
+            </div>
+            <Button
+              faded
+              slate
+              size="sm"
+              icon="i-lucide-plus"
+              :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.ADD_REASON')"
+              @click="addReason(state)"
+            />
+          </div>
+        </div>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -257,7 +357,7 @@ const save = async () => {
         <Button
           :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.SAVE')"
           :disabled="
-            !name.trim() || isSaving || uiFlags.isCreating || uiFlags.isUpdating
+            !isValid || isSaving || uiFlags.isCreating || uiFlags.isUpdating
           "
           :is-loading="isSaving"
           @click="save"
