@@ -106,21 +106,31 @@ function hasError(p) {
       <div class="flex-1 flex flex-col gap-1.5">
         <template v-if="enabled">
           <div v-for="(period, idx) in slot.periods" :key="idx" class="flex items-center gap-2">
-            <NextSelect
-              :model-value="period.from"
-              :groups="allTimeGroups"
-              :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
-              class="w-32"
-              @update:model-value="v => updatePeriod(idx, 'from', v)"
-            />
-            <span class="text-n-slate-11 text-sm">→</span>
-            <NextSelect
-              :model-value="period.to"
-              :groups="toTimeGroups"
-              :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
-              class="w-32"
-              @update:model-value="v => updatePeriod(idx, 'to', v)"
-            />
+            <div class="flex flex-col gap-0.5">
+              <span v-if="idx === 0" class="text-label-small text-n-slate-10">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.DAY.OPENS') }}
+              </span>
+              <NextSelect
+                :model-value="period.from"
+                :groups="allTimeGroups"
+                :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
+                class="w-32"
+                @update:model-value="v => updatePeriod(idx, 'from', v)"
+              />
+            </div>
+            <span class="text-n-slate-11 text-sm" :class="{ 'mt-5': idx === 0 }">→</span>
+            <div class="flex flex-col gap-0.5">
+              <span v-if="idx === 0" class="text-label-small text-n-slate-10">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.DAY.CLOSES') }}
+              </span>
+              <NextSelect
+                :model-value="period.to"
+                :groups="toTimeGroups"
+                :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
+                class="w-32"
+                @update:model-value="v => updatePeriod(idx, 'to', v)"
+              />
+            </div>
             <button
               type="button"
               v-if="slot.periods.length > 1"
