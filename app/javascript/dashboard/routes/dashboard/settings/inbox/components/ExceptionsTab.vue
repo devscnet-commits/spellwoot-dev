@@ -132,10 +132,10 @@ function summary(ex) {
           </span>
         </div>
         <div class="flex items-center gap-2">
-          <button class="text-n-slate-9 hover:text-n-slate-12 transition-colors" @click="openEdit(idx)">
+          <button type="button" class="text-n-slate-9 hover:text-n-slate-12 transition-colors" @click="openEdit(idx)">
             <span class="i-lucide-pencil size-4" />
           </button>
-          <button class="text-n-slate-9 hover:text-n-ruby-9 transition-colors" @click="remove(idx)">
+          <button type="button" class="text-n-slate-9 hover:text-n-ruby-9 transition-colors" @click="remove(idx)">
             <span class="i-lucide-trash-2 size-4" />
           </button>
         </div>
@@ -204,6 +204,7 @@ function summary(ex) {
             class="border border-n-weak rounded-lg px-3 py-2 text-body-main bg-n-solid-2 text-n-slate-12 focus:outline-none focus:ring-1 focus:ring-n-blue-8"
           />
           <button
+            type="button"
             v-if="form.periods.length > 1"
             class="text-n-slate-10 hover:text-n-ruby-9 transition-colors"
             @click="removePeriod(idx)"
@@ -212,6 +213,7 @@ function summary(ex) {
           </button>
         </div>
         <button
+          type="button"
           class="self-start text-label-small text-n-blue-9 hover:text-n-blue-11 flex items-center gap-1"
           @click="addPeriod"
         >
@@ -221,7 +223,7 @@ function summary(ex) {
       </div>
 
       <div class="flex items-center gap-2 justify-end">
-        <button class="text-body-main text-n-slate-10 hover:text-n-slate-12" @click="showForm = false">
+        <button type="button" class="text-body-main text-n-slate-10 hover:text-n-slate-12" @click="showForm = false">
           {{ $t('INBOX_MGMT.BUSINESS_HOURS.CANCEL') }}
         </button>
         <NextButton

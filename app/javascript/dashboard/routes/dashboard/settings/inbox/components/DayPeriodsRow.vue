@@ -122,6 +122,7 @@ function hasError(p) {
               @update:model-value="v => updatePeriod(idx, 'to', v)"
             />
             <button
+              type="button"
               v-if="slot.periods.length > 1"
               class="text-n-slate-10 hover:text-n-ruby-9 transition-colors"
               @click="removePeriod(idx)"
@@ -134,6 +135,7 @@ function hasError(p) {
           </div>
 
           <button
+            type="button"
             class="self-start text-label-small text-n-blue-9 hover:text-n-blue-11 flex items-center gap-1 mt-0.5"
             @click="addPeriod"
           >
@@ -151,6 +153,7 @@ function hasError(p) {
         <!-- Templates -->
         <div class="relative">
           <button
+            type="button"
             class="text-n-slate-10 hover:text-n-slate-12 transition-colors p-1 rounded"
             :title="$t('INBOX_MGMT.BUSINESS_HOURS.TEMPLATES')"
             @click="showTemplates = !showTemplates; showCopy = false"
@@ -162,6 +165,7 @@ function hasError(p) {
             class="absolute right-0 top-full mt-1 z-50 bg-n-solid-3 border border-n-weak rounded-xl shadow-lg min-w-52 py-1"
           >
             <button
+              type="button"
               v-for="tpl in scheduleTemplates"
               :key="tpl.label"
               class="w-full text-left px-4 py-2 text-body-main text-n-slate-12 hover:bg-n-alpha-black2 transition-colors"
@@ -175,6 +179,7 @@ function hasError(p) {
         <!-- Copy to -->
         <div class="relative">
           <button
+            type="button"
             class="text-n-slate-10 hover:text-n-slate-12 transition-colors p-1 rounded"
             :title="$t('INBOX_MGMT.BUSINESS_HOURS.COPY_TO')"
             @click="showCopy = !showCopy; showTemplates = false"
@@ -189,6 +194,7 @@ function hasError(p) {
               {{ $t('INBOX_MGMT.BUSINESS_HOURS.APPLY_TO') }}
             </p>
             <button
+              type="button"
               v-for="opt in COPY_OPTIONS"
               :key="opt.value"
               class="w-full text-left px-4 py-2 text-body-main text-n-slate-12 hover:bg-n-alpha-black2 transition-colors"
@@ -222,7 +228,7 @@ function hasError(p) {
         :label="$t('INBOX_MGMT.BUSINESS_HOURS.APPLY')"
         @click="applyCustomCopy"
       />
-      <button class="text-label-small text-n-slate-10" @click="showCustom = false">
+      <button type="button" class="text-label-small text-n-slate-10" @click="showCustom = false">
         {{ $t('INBOX_MGMT.BUSINESS_HOURS.CANCEL') }}
       </button>
     </div>
