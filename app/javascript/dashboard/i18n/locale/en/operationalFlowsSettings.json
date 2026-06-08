@@ -74,6 +74,31 @@
       "CREATE_SUCCESS": "Operational flow created successfully",
       "UPDATE_SUCCESS": "Operational flow updated successfully",
       "ERROR_MESSAGE": "Could not save the operational flow"
+    },
+    "ASSIGNMENT_RULES": {
+      "HEADER": "Assignment rules",
+      "DESCRIPTION": "Decide which flow applies to a conversation. Rules are evaluated by priority (lowest first); the first match wins. A missing dimension means \"any\".",
+      "NEW_RULE": "Add rule",
+      "EMPTY": "No assignment rules yet. Conversations fall back to the flow attached to their Caixa.",
+      "ANY": "Any",
+      "DEFAULT": "Default",
+      "PRIORITY": "Priority",
+      "PRIORITY_HELP": "Lower numbers are evaluated first. The first rule that matches decides the flow.",
+      "DIMENSIONS": {
+        "ROLE": "Role",
+        "INBOX": "Caixa",
+        "TEAM": "Team",
+        "ORIGIN": "Origin"
+      },
+      "FORM": {
+        "FLOW": "Flow to apply",
+        "SELECT": "Select a flow",
+        "SAVE": "Save rule",
+        "CANCEL": "Cancel"
+      },
+      "SAVE_SUCCESS": "Assignment rule saved",
+      "SAVE_ERROR": "Could not save the assignment rule",
+      "DELETE_SUCCESS": "Assignment rule deleted"
     }
   }
 }

@@ -8,6 +8,7 @@ import SettingsLayout from '../SettingsLayout.vue';
 import ConversationRequiredAttributes from 'dashboard/components-next/ConversationWorkflow/ConversationRequiredAttributes.vue';
 import MetaConversionSettings from 'dashboard/components-next/ConversationWorkflow/MetaConversionSettings.vue';
 import OperationalFlowsManager from 'dashboard/routes/dashboard/settings/operationalFlows/OperationalFlowsManager.vue';
+import FlowAssignmentRulesManager from 'dashboard/routes/dashboard/settings/operationalFlows/FlowAssignmentRulesManager.vue';
 import AutoResolve from 'dashboard/routes/dashboard/settings/account/components/AutoResolve.vue';
 
 const { accountId } = useAccount();
@@ -44,6 +45,7 @@ const showRequiredAttributes = computed(() => {
       <div class="flex flex-col gap-6 mt-4">
         <AutoResolve v-if="showAutoResolutionConfig" />
         <OperationalFlowsManager />
+        <FlowAssignmentRulesManager />
         <ConversationRequiredAttributes :is-enabled="showRequiredAttributes" />
         <MetaConversionSettings />
       </div>
