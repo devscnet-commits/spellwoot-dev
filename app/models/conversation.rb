@@ -116,6 +116,7 @@ class Conversation < ApplicationRecord
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
   has_many :result_events, class_name: 'ConversationResultEvent', dependent: :destroy_async
+  has_many :meta_conversion_events, dependent: :destroy_async
   belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset

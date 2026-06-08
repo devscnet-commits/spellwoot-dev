@@ -141,10 +141,28 @@ class Meta::ConversionsApiService
       Rails.logger.error "[CAPI] conv=#{@conversation.id} event=#{@event_name} status=failed body=#{response.body}"
     end
 
+    record_audit(payload, response.success? ? 'sent' : 'failed', response.body)
     response
   rescue StandardError => e
     Rails.logger.error "[CAPI] conv=#{@conversation.id} event=#{@event_name} status=error message=#{e.message}"
+    record_audit(payload, 'error', e.message)
     nil
+  end
+
+  # Persist an audit row per attempt. The payload here excludes the access token (added only at
+  # POST time). Never let auditing break the send path.
+  def record_audit(payload, status, response_body)
+    MetaConversionEvent.create!(
+      account_id: @conversation.account_id,
+      conversation_id: @conversation.id,
+      event_name: @event_name,
+      event_id: @event_id,
+      status: status,
+      payload: payload,
+      response: response_body.to_s
+    )
+  rescue StandardError => e
+    Rails.logger.error "[CAPI] conv=#{@conversation.id} audit_failed message=#{e.message}"
   end
 
   def mark_as_sent!
