@@ -138,8 +138,8 @@ class Conversation < ApplicationRecord
 
   # A conversation inherits its operational flow from its Caixa (inbox). Teams are only used to
   # organize agents, so they never own a flow.
-  def operational_flow
-    inbox&.operational_flow
+  def operational_flow(user = Current.user)
+    Conversations::FlowResolver.new(conversation: self, user: user).flow
   end
 
   # Be aware: The precision of created_at and last_activity_at may differ from Ruby's Time precision.

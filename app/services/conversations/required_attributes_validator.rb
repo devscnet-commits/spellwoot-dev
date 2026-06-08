@@ -1,7 +1,7 @@
-# Backend mirror of the frontend `checkMissingAttributes` logic. Validates that the
-# conversation custom attributes required by the account configuration are present before
-# a conversation is resolved. Conditional rules can trigger on the system result field
-# (__resultado_conversa__) derived from the conversation result.
+# Validates that the custom attributes required before resolving a conversation are present.
+# When the conversation resolves under a Closing Flow, requirements come from that flow's
+# closing_requirements (keyed on the chosen resolution state). For conversations without a flow
+# it falls back to the legacy account-level configuration (settings.conversation_required_attributes).
 class Conversations::RequiredAttributesValidator
   SYSTEM_OUTCOME_FIELD = '__resultado_conversa__'.freeze
   RESULT_TO_SYSTEM_VALUE = { 'won' => 'ganho', 'lost' => 'perdido' }.freeze
@@ -18,15 +18,41 @@ class Conversations::RequiredAttributesValidator
   end
 
   def missing_keys
-    return [] unless enabled?
+    return flow_missing_keys if flow_requirements?
+
+    legacy_missing_keys
+  end
+
+  private
+
+  def flow
+    return @flow if @flow_loaded
+
+    @flow_loaded = true
+    @flow = @conversation.operational_flow
+  end
+
+  def flow_requirements?
+    flow.present? && flow.closing_requirements.any?
+  end
+
+  def flow_missing_keys
+    state = flow.state_for(@result)
+    flow.closing_requirements
+        .select { |req| req.applies_to?(state) && blank_value?(req.attribute_key) }
+        .map(&:attribute_key)
+  end
+
+  # --- Legacy account-level configuration (conversations without a closing flow) ---
+
+  def legacy_missing_keys
+    return [] unless legacy_enabled?
 
     configs.select { |config| required?(config) && blank_value?(config['key']) }
            .map { |config| config['key'] }
   end
 
-  private
-
-  def enabled?
+  def legacy_enabled?
     @account.feature_enabled?('conversation_required_attributes') && configs.any?
   end
 
@@ -42,6 +68,8 @@ class Conversations::RequiredAttributesValidator
     return true unless config['rule'] == 'conditional'
 
     expected = config['condition_value']
+    return false if expected.nil? || expected == '' || (expected.is_a?(Array) && expected.empty?)
+
     actual = context[config['condition_field']]
     expected.is_a?(Array) ? expected.include?(actual) : actual == expected
   end
