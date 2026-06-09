@@ -96,6 +96,8 @@
       "NEW_RULE": "Adicionar regra",
       "EMPTY": "Nenhuma regra de atribuição ainda. As conversas usam o fluxo vinculado à sua Caixa.",
       "ANY": "(qualquer)",
+      "AND": "e",
+      "ANY_CONVERSATION": "qualquer conversa",
       "DEFAULT": "Padrão",
       "PRIORITY": "Prioridade",
       "PRIORITY_HELP": "Números menores são avaliados primeiro. A primeira regra que casa decide o fluxo.",
@@ -110,7 +112,8 @@
         "SELECT": "Selecione um fluxo",
         "SAVE": "Salvar regra",
         "CANCEL": "Cancelar",
-        "CONDITIONS_INTRO": "Defina só as condições que importam. O que ficar em \"(qualquer)\" não restringe aquela dimensão."
+        "CONDITIONS_INTRO": "Defina só as condições que importam. O que ficar em \"(qualquer)\" não restringe aquela dimensão.",
+        "MATCHES_PREFIX": "Esta regra casa com:"
       },
       "SAVE_SUCCESS": "Regra de atribuição salva",
       "SAVE_ERROR": "Não foi possível salvar a regra de atribuição",

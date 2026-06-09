@@ -42,9 +42,10 @@ onMounted(() => {
 const nameById = (list, id) => list.find(item => item.id === id)?.name || '';
 const flowName = id => nameById(flows.value, id);
 
-// Human-readable summary of the predicate dimensions that are set on a rule.
-const predicateSummary = rule => {
-  const predicate = rule.predicate || {};
+// Human-readable summary of the predicate. Dimensions are ANDed, so we join them with an
+// explicit "and" — leaving any dimension unset means it doesn't restrict that dimension.
+const summarizePredicate = predicate => {
+  const and = ` ${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.AND')} `;
   const parts = [];
   if (predicate.role_id) {
     parts.push(
@@ -67,9 +68,11 @@ const predicateSummary = rule => {
     );
   }
   return parts.length
-    ? parts.join(' · ')
-    : t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY');
+    ? parts.join(and)
+    : t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY_CONVERSATION');
 };
+
+const predicateSummary = rule => summarizePredicate(rule.predicate || {});
 
 const openCreate = () => {
   form.value = emptyForm();
@@ -100,6 +103,9 @@ const buildPredicate = () => {
   if (form.value.team_id) predicate.team_id = form.value.team_id;
   return predicate;
 };
+
+// Live, plain-language preview of who the rule currently targets.
+const formPreview = computed(() => summarizePredicate(buildPredicate()));
 
 const save = async () => {
   if (!form.value.operational_flow_id) return;
@@ -296,6 +302,11 @@ const canSave = computed(() => !!form.value.operational_flow_id);
       <p class="text-xs text-n-slate-11">
         {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.SPECIFICITY_HELP') }}
       </p>
+
+      <div class="rounded-lg bg-n-alpha-2 px-3 py-2 text-sm text-n-slate-12">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.MATCHES_PREFIX') }}
+        <span class="font-medium">{{ formPreview }}</span>
+      </div>
 
       <div class="flex justify-end gap-2">
         <Button

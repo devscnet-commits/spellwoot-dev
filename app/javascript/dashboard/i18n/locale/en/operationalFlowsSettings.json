@@ -96,6 +96,8 @@
       "NEW_RULE": "Add rule",
       "EMPTY": "No assignment rules yet. Conversations fall back to the flow attached to their Caixa.",
       "ANY": "(any)",
+      "AND": "and",
+      "ANY_CONVERSATION": "any conversation",
       "DEFAULT": "Default",
       "PRIORITY": "Priority",
       "PRIORITY_HELP": "Lower numbers are evaluated first. The first rule that matches decides the flow.",
@@ -110,7 +112,8 @@
         "SELECT": "Select a flow",
         "SAVE": "Save rule",
         "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "Set only the conditions that matter. Anything left as \"(any)\" does not restrict that dimension."
+        "CONDITIONS_INTRO": "Set only the conditions that matter. Anything left as \"(any)\" does not restrict that dimension.",
+        "MATCHES_PREFIX": "This rule matches:"
       },
       "SAVE_SUCCESS": "Assignment rule saved",
       "SAVE_ERROR": "Could not save the assignment rule",
