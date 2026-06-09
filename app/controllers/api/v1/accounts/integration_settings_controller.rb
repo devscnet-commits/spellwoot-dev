@@ -22,7 +22,7 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
       account_id: Current.account.id,
       provider: params[:provider]
     )
-    incoming = params.require(:config).permit!.to_h.reject { |_, v| v.blank? }
+    incoming = config_params.reject { |key, value| value.blank? || masked_sensitive?(key, value) }
     setting.config  = setting.config_hash.merge(incoming).to_json
     setting.enabled = params.fetch(:enabled, true)
     setting.save!
@@ -77,6 +77,18 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
                      else                            'env'
                      end
     end
+  end
+
+  # Permit any config keys, defaulting to empty so the integration can be toggled
+  # on/off without re-sending credentials.
+  def config_params
+    params.fetch(:config, ActionController::Parameters.new).permit!.to_h
+  end
+
+  # The UI loads sensitive values masked (e.g. "EAAB********************xyz"). When it
+  # echoes them back unchanged on save, skip them so the real stored secret is kept.
+  def masked_sensitive?(key, value)
+    SENSITIVE_KEYS.include?(key) && value.to_s.include?('*')
   end
 
   def mask_sensitive(config)
