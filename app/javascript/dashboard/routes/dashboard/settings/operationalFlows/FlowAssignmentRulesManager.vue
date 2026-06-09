@@ -184,21 +184,13 @@ const canSave = computed(() => !!form.value.operational_flow_id);
   <div
     class="flex flex-col gap-4 outline-1 outline outline-n-container rounded-xl bg-n-solid-2 p-5"
   >
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
-        <h3 class="text-base font-medium text-n-slate-12">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.HEADER') }}
-        </h3>
-        <p class="text-sm text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DESCRIPTION') }}
-        </p>
-      </div>
-      <Button
-        v-if="isAdmin"
-        :label="$t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.NEW_RULE')"
-        size="sm"
-        @click="openCreate"
-      />
+    <div class="flex flex-col gap-1">
+      <h3 class="text-base font-medium text-n-slate-12">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.HEADER') }}
+      </h3>
+      <p class="text-sm text-n-slate-11">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DESCRIPTION') }}
+      </p>
     </div>
 
     <div v-if="uiFlags.isFetching" class="flex justify-center py-6">
@@ -245,6 +237,17 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         </div>
       </div>
     </div>
+
+    <Button
+      v-if="isAdmin && !showForm"
+      faded
+      slate
+      size="sm"
+      icon="i-lucide-plus"
+      class="w-fit"
+      :label="$t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.NEW_RULE')"
+      @click="openCreate"
+    />
 
     <div
       v-if="showForm"
