@@ -34,8 +34,14 @@ const rulesUsingThisFlow = computed(() =>
 );
 const describeRuleUsage = rule => {
   const predicate = rule.predicate || {};
-  if (!predicate.team_id) return t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.ALL');
-  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${nameById(teams, Number(predicate.team_id))}`;
+  const teamIds = Array.isArray(predicate.team_id)
+    ? predicate.team_id
+    : predicate.team_id
+      ? [predicate.team_id]
+      : [];
+  if (!teamIds.length) return t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.ALL');
+  const names = teamIds.map(id => nameById(teams, Number(id))).filter(Boolean);
+  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${names.join(', ')}`;
   const excluded = (predicate.excluded_inbox_ids || [])
     .map(id => nameById(inboxes, Number(id)))
     .filter(Boolean);

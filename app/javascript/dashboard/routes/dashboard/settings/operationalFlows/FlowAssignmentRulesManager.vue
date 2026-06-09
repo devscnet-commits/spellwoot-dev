@@ -21,7 +21,7 @@ const teams = useMapGetter('teams/getTeams');
 const emptyForm = () => ({
   id: null,
   operational_flow_id: null,
-  team_id: '',
+  team_ids: [],
   excluded_inbox_ids: [],
 });
 
@@ -38,14 +38,31 @@ onMounted(() => {
 
 const nameById = (list, id) => list.find(item => item.id === id)?.name || '';
 const flowName = id => nameById(flows.value, id);
+const teamNames = ids =>
+  (ids || []).map(id => nameById(teams.value, Number(id))).filter(Boolean);
+const asArray = value =>
+  Array.isArray(value) ? value : value ? [value] : [];
 
-// Caixas that belong to the selected team — offered for exclusion. New caixas added to the
-// team later are NOT excluded by default, so they auto-join the flow (dynamic behavior).
+// Caixas offered for exclusion: the union of the selected teams' linked caixas.
+// If the selected teams have no linked caixas, fall back to all caixas so the
+// exclusion still works (the link is set in Settings → Teams).
 const teamInboxes = computed(() => {
-  const team = teams.value.find(tm => tm.id === Number(form.value.team_id));
-  const ids = team?.inbox_ids || [];
-  return inboxes.value.filter(inbox => ids.includes(inbox.id));
+  const ids = new Set();
+  teams.value.forEach(team => {
+    if (form.value.team_ids.includes(team.id)) {
+      (team.inbox_ids || []).forEach(id => ids.add(id));
+    }
+  });
+  const fromTeams = inboxes.value.filter(inbox => ids.has(inbox.id));
+  return fromTeams.length ? fromTeams : inboxes.value;
 });
+
+const isTeamSelected = id => form.value.team_ids.includes(id);
+const toggleTeam = id => {
+  form.value.team_ids = isTeamSelected(id)
+    ? form.value.team_ids.filter(x => x !== id)
+    : [...form.value.team_ids, id];
+};
 
 const isExcluded = id => form.value.excluded_inbox_ids.includes(id);
 const toggleExcluded = id => {
@@ -54,12 +71,13 @@ const toggleExcluded = id => {
     : [...form.value.excluded_inbox_ids, id];
 };
 
-// Compact summary for the rule list: "Time X" (+ "exceto: A, B").
+// Compact summary for the rule list: "Time: X, Y" (+ "exceto: A, B").
 const summarizePredicate = predicate => {
-  if (!predicate.team_id) {
+  const teamIds = asArray(predicate.team_id);
+  if (!teamIds.length) {
     return t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY_CONVERSATION');
   }
-  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${nameById(teams.value, Number(predicate.team_id))}`;
+  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${teamNames(teamIds).join(', ')}`;
   const excluded = (predicate.excluded_inbox_ids || [])
     .map(id => nameById(inboxes.value, Number(id)))
     .filter(Boolean);
@@ -79,7 +97,7 @@ const openEdit = rule => {
   form.value = {
     id: rule.id,
     operational_flow_id: rule.operational_flow_id,
-    team_id: predicate.team_id || '',
+    team_ids: asArray(predicate.team_id).map(Number),
     excluded_inbox_ids: (predicate.excluded_inbox_ids || []).map(Number),
   };
   showForm.value = true;
@@ -92,10 +110,11 @@ const closeForm = () => {
 
 const buildPredicate = () => {
   const predicate = {};
-  if (form.value.team_id) predicate.team_id = form.value.team_id;
-  // Only keep exclusions that still belong to the selected team.
+  if (form.value.team_ids.length) predicate.team_id = form.value.team_ids;
+  // Keep only exclusions still offered for the selected teams.
+  const offered = teamInboxes.value.map(inbox => inbox.id);
   const excluded = form.value.excluded_inbox_ids.filter(id =>
-    teamInboxes.value.some(inbox => inbox.id === id)
+    offered.includes(id)
   );
   if (excluded.length) predicate.excluded_inbox_ids = excluded;
   return predicate;
@@ -108,8 +127,8 @@ const tr = (key, args) =>
 const humanSummary = computed(() => {
   if (!form.value.operational_flow_id) return '';
   const apply = tr('APPLY', { flow: flowName(form.value.operational_flow_id) });
-  if (!form.value.team_id) return `${apply} ${tr('ANY')}`;
-  let sentence = `${apply} ${tr('WHEN')} ${tr('TEAM', { name: nameById(teams.value, Number(form.value.team_id)) })}`;
+  if (!form.value.team_ids.length) return `${apply} ${tr('ANY')}`;
+  let sentence = `${apply} ${tr('WHEN')} ${tr('TEAM', { name: teamNames(form.value.team_ids).join(', ') })}`;
   const excluded = teamInboxes.value
     .filter(inbox => isExcluded(inbox.id))
     .map(inbox => inbox.name);
@@ -252,27 +271,30 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.CONDITIONS_INTRO') }}
       </p>
 
-      <!-- Primary dimension: the team decides the flow -->
+      <!-- Primary dimension: one or more teams decide the flow -->
       <div class="flex flex-col gap-1">
         <label class="text-xs font-medium text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM') }}
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.TEAMS_LABEL') }}
         </label>
-        <select
-          v-model="form.team_id"
-          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-        >
-          <option value="">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
-          </option>
-          <option v-for="team in teams" :key="team.id" :value="team.id">
-            {{ team.name }}
-          </option>
-        </select>
+        <div class="flex flex-col gap-1 border border-n-weak rounded-lg p-3">
+          <label
+            v-for="team in teams"
+            :key="team.id"
+            class="flex items-center gap-2 py-1 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              :checked="isTeamSelected(team.id)"
+              @change="toggleTeam(team.id)"
+            />
+            <span class="text-sm text-n-slate-12">{{ team.name }}</span>
+          </label>
+        </div>
       </div>
 
-      <!-- Exclude caixas of the team (all included by default → dynamic) -->
+      <!-- Exclude caixas (all included by default → dynamic) -->
       <div
-        v-if="form.team_id && teamInboxes.length"
+        v-if="form.team_ids.length && teamInboxes.length"
         class="flex flex-col gap-1"
       >
         <label class="text-xs font-medium text-n-slate-11">

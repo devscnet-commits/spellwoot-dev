@@ -112,15 +112,16 @@
         "SELECT": "Select a flow",
         "SAVE": "Save rule",
         "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "The team decides the flow. By default it applies to all of the team's caixas — you can leave some out below.",
-        "EXCLUDE_CAIXAS_LABEL": "Caixas in this team that should NOT use this flow",
-        "EXCLUDE_CAIXAS_HELP": "By default every caixa in the team uses this flow. Check the ones to leave out — new caixas added to the team later join automatically."
+        "CONDITIONS_INTRO": "The teams decide the flow. By default it applies to all caixas of the selected teams — you can leave some out below.",
+        "TEAMS_LABEL": "Apply to which teams?",
+        "EXCLUDE_CAIXAS_LABEL": "Caixas that should NOT use this flow",
+        "EXCLUDE_CAIXAS_HELP": "By default every caixa of the selected teams uses this flow. Check the ones to leave out — new caixas join automatically. (If the team has no caixas linked, all caixas are shown.)"
       },
       "HUMAN": {
         "MEANS": "This rule means:",
         "APPLY": "Apply the \"{flow}\" flow",
         "WHEN": "when the conversation",
-        "TEAM": "belongs to the team \"{name}\"",
+        "TEAM": "belongs to the team(s): {name}",
         "EXCEPT_CAIXAS": "(except the caixas: {names})",
         "ANY": "to any conversation.",
         "PICK_FLOW": "Select a flow above."
