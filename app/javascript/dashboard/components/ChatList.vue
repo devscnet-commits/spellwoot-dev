@@ -685,7 +685,12 @@ function updateAssigneeTab(selectedTab) {
     activeAssigneeTab.value = selectedTab;
   }
 
-  if (!currentPage.value) fetchConversations();
+  // Refetch from scratch on every tab switch. The tab counters come from the
+  // server meta (counts all matching conversations), while the visible list is
+  // filtered from the locally-cached conversations — so reusing a stale/partial
+  // cache made the count and the list disagree (e.g. "Unassigned 1" but empty).
+  // Resetting + refetching makes both come from the same fresh response.
+  resetAndFetchData();
 }
 
 function onBasicFilterChange(value, type) {
