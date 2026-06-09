@@ -657,8 +657,18 @@
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
       "DESCRIPTION": "Send conversion events back to Meta to optimize your Click-to-WhatsApp ad campaigns.",
-      "ENABLED_LABEL": "Enable",
-      "DISABLE_LABEL": "Disable",
+      "MASTER_ON": "Ativado",
+      "MASTER_OFF": "Desativado",
+      "MASTER_DESCRIPTION": "Liga/desliga geral do envio para a Meta. Desligado, nada é enviado — nem o Lead na chegada, nem as conversões de fechamento. As credenciais ficam em Integrações; o evento e o valor da venda ficam por fluxo → estado (\"Enviar à Meta como\").",
+      "CHECKLIST": {
+        "TITLE": "O que está ativo",
+        "CREDENTIALS_OK": "Credenciais configuradas (Pixel + Token)",
+        "CREDENTIALS_MISSING": "Credenciais faltando — sem elas nada é enviado.",
+        "CONFIGURE_INTEGRATIONS": "Configurar em Integrações",
+        "LEAD_ON": "Lead na chegada: ativo",
+        "LEAD_OFF": "Lead na chegada: desativado",
+        "FLOWS_NOTE": "Conversões de fechamento são configuradas em cada Fluxo de Fechamento (estado \"Enviar à Meta como\")."
+      },
       "SAVE_BUTTON": "Save",
       "SAVING": "Saving...",
       "SAVE": {

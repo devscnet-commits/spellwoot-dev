@@ -1,19 +1,35 @@
 <script setup>
-import { ref, computed, watch, reactive } from 'vue';
+import { ref, computed, watch, reactive, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useAlert } from 'dashboard/composables';
+import integrationSettingsAPI from 'dashboard/api/integrationSettings';
 import { ATTRIBUTE_TYPES } from './constants';
 
 const { t } = useI18n();
-const { currentAccount, updateAccount } = useAccount();
+const { currentAccount, accountId, updateAccount } = useAccount();
 const conversationAttributes = useMapGetter(
   'attributes/getConversationAttributes'
 );
 
 const isSaving = ref(false);
 const isDirty = ref(false);
+
+// Credentials live in Integrations; surface their status here so the whole setup
+// can be checked from a single panel. null = still loading.
+const credentialsConfigured = ref(null);
+
+onMounted(async () => {
+  try {
+    const { data } = await integrationSettingsAPI.get(accountId.value, 'meta');
+    credentialsConfigured.value = !!(
+      data?.config?.pixelId && data?.config?.accessToken
+    );
+  } catch {
+    credentialsConfigured.value = false;
+  }
+});
 
 // Account-level Meta settings, shared by every flow. The conversion trigger and sale value live
 // per flow/state (inside each Closing Flow); here we keep only the master switch, Lead-on-arrival,
@@ -123,12 +139,17 @@ const handleSave = async () => {
           {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.TITLE') }}
         </h3>
         <p class="mb-0 text-body-para text-n-slate-11">
-          Configurações da Meta no nível da conta, compartilhadas por todos os
-          fluxos. O gatilho da conversão e o valor da venda ficam por fluxo →
-          estado ("Enviar à Meta como"). As credenciais ficam em Integrações.
+          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.MASTER_DESCRIPTION') }}
         </p>
       </div>
       <label class="flex items-center gap-2 cursor-pointer select-none">
+        <span class="text-body-para font-medium text-n-slate-12">
+          {{
+            enabled
+              ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.MASTER_ON')
+              : $t('CONVERSATION_WORKFLOW.META_CONVERSION.MASTER_OFF')
+          }}
+        </span>
         <div
           class="relative w-10 h-5 rounded-full transition-colors"
           :class="enabled ? 'bg-n-brand' : 'bg-n-slate-5'"
@@ -139,17 +160,64 @@ const handleSave = async () => {
             :class="enabled ? 'translate-x-5' : 'translate-x-0.5'"
           />
         </div>
-        <span class="text-body-para text-n-slate-12">
-          {{
-            enabled
-              ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.DISABLE_LABEL')
-              : $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENABLED_LABEL')
-          }}
-        </span>
       </label>
     </div>
 
     <template v-if="enabled">
+      <!-- Status checklist: single place to see what's needed for sending -->
+      <div class="px-5 py-4 flex flex-col gap-2">
+        <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">
+          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.TITLE') }}
+        </p>
+        <div class="flex items-center gap-2 text-body-small">
+          <span
+            :class="[
+              credentialsConfigured
+                ? 'i-lucide-check-circle-2 text-n-teal-11'
+                : 'i-lucide-alert-circle text-n-amber-11',
+              'size-4 shrink-0',
+            ]"
+          />
+          <span class="text-n-slate-12">
+            {{
+              credentialsConfigured
+                ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.CREDENTIALS_OK')
+                : $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.CREDENTIALS_MISSING')
+            }}
+          </span>
+          <router-link
+            v-if="credentialsConfigured === false"
+            :to="{ name: 'integrations_hub', params: { accountId } }"
+            class="text-n-blue-11 hover:underline"
+          >
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.CONFIGURE_INTEGRATIONS') }}
+          </router-link>
+        </div>
+        <div class="flex items-center gap-2 text-body-small">
+          <span
+            :class="[
+              leadOnArrival
+                ? 'i-lucide-check-circle-2 text-n-teal-11'
+                : 'i-lucide-circle text-n-slate-9',
+              'size-4 shrink-0',
+            ]"
+          />
+          <span class="text-n-slate-12">
+            {{
+              leadOnArrival
+                ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.LEAD_ON')
+                : $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.LEAD_OFF')
+            }}
+          </span>
+        </div>
+        <div class="flex items-center gap-2 text-body-small">
+          <span class="i-lucide-info size-4 shrink-0 text-n-slate-9" />
+          <span class="text-n-slate-11">
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.FLOWS_NOTE') }}
+          </span>
+        </div>
+      </div>
+
       <!-- Lead on arrival (independent toggle) -->
       <div class="px-5 py-4 flex items-center justify-between gap-3">
         <div class="flex flex-col">
