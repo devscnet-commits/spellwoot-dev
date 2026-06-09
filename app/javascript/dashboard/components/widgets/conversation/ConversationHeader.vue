@@ -66,6 +66,11 @@ const currentContact = computed(() =>
   store.getters['contacts/getContact'](props.chat.meta.sender.id)
 );
 
+// The inbox (Caixa) this conversation belongs to — shown under the contact name.
+const inbox = computed(() =>
+  store.getters['inboxes/getInbox'](props.chat?.inbox_id)
+);
+
 const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
 
 const isReopened = computed(
@@ -76,7 +81,7 @@ const isReopened = computed(
 <template>
   <div
     ref="conversationHeader"
-    class="flex flex-col gap-3 items-center justify-between flex-1 w-full min-w-0 xl:flex-row px-3 pt-3 pb-2 h-24 xl:h-12"
+    class="flex flex-col gap-3 items-center justify-between flex-1 w-full min-w-0 xl:flex-row px-4 py-3 h-28 xl:h-16"
   >
     <div
       class="flex items-center justify-start w-full xl:w-auto max-w-full min-w-0 xl:flex-1"
@@ -89,17 +94,17 @@ const isReopened = computed(
       <Avatar
         :name="currentContact.name"
         :src="currentContact.thumbnail"
-        :size="32"
+        :size="44"
         :status="currentContact.availability_status"
         hide-offline-status
         rounded-full
       />
       <div
-        class="flex flex-col items-start min-w-0 ml-2 overflow-hidden rtl:ml-0 rtl:mr-2"
+        class="flex flex-col items-start min-w-0 ml-3 overflow-hidden rtl:ml-0 rtl:mr-3"
       >
         <div class="flex flex-row items-center max-w-full gap-1 p-0 m-0">
           <span
-            class="text-sm font-medium truncate leading-tight text-n-slate-12"
+            class="text-base font-medium truncate leading-tight text-n-slate-12"
           >
             {{ currentContact.name }}
           </span>
@@ -119,8 +124,12 @@ const isReopened = computed(
         </div>
 
         <div
-          class="flex items-center gap-2 overflow-hidden text-xs conversation--header--actions text-ellipsis whitespace-nowrap"
-        />
+          v-if="inbox?.name"
+          class="flex items-center gap-1 overflow-hidden text-xs text-n-slate-11 conversation--header--actions text-ellipsis whitespace-nowrap"
+        >
+          <span class="i-lucide-inbox size-3 shrink-0" />
+          <span class="truncate">{{ inbox.name }}</span>
+        </div>
       </div>
     </div>
     <div

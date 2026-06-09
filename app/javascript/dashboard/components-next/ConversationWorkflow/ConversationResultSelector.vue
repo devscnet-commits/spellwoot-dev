@@ -98,7 +98,7 @@ const selectOutcome = async outcomeKey => {
   >
     <button
       type="button"
-      class="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-opacity"
+      class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-opacity"
       :class="[
         isResolved
           ? 'bg-n-slate-2 text-n-slate-9 cursor-not-allowed'

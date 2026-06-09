@@ -308,7 +308,7 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
       <Button
         v-if="isOpen"
         :label="t('CONVERSATION.HEADER.RESOLVE_ACTION')"
-        size="sm"
+        size="md"
         color="slate"
         no-animation
         :is-loading="isLoading"
@@ -317,7 +317,7 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
       <Button
         v-else-if="isResolved"
         :label="t('CONVERSATION.HEADER.REOPEN_ACTION')"
-        size="sm"
+        size="md"
         color="slate"
         no-animation
         :is-loading="isLoading"
