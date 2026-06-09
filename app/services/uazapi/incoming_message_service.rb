@@ -117,13 +117,25 @@ class Uazapi::IncomingMessageService
   # so a new incoming message reopens it (via Message#reopen_conversation) instead of creating a new one.
   def reopenable_conversation_within_window
     hours = inbox.reopen_window_hours.to_i
-    return nil unless hours.positive?
+    if hours <= 0
+      Rails.logger.info "[UAZAPI] reopen-window off reopen_window_hours=#{inbox.reopen_window_hours.inspect}"
+      return nil
+    end
 
     last_conversation = @contact_inbox.conversations.last
-    return nil unless last_conversation&.resolved?
+    unless last_conversation&.resolved?
+      Rails.logger.info "[UAZAPI] reopen-window no resolved conversation to reopen (last=#{last_conversation&.id} status=#{last_conversation&.status})"
+      return nil
+    end
 
     reference = last_conversation.last_activity_at || last_conversation.updated_at
-    last_conversation if reference.present? && reference >= hours.hours.ago
+    cutoff = hours.hours.ago
+    within = reference.present? && reference >= cutoff
+    Rails.logger.info(
+      "[UAZAPI] reopen-window conv=#{last_conversation.id} hours=#{hours} " \
+      "reference=#{reference} cutoff=#{cutoff} within=#{within}"
+    )
+    last_conversation if within
   end
 
   def create_message(message_data)

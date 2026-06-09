@@ -572,7 +572,7 @@ export default {
             : null,
           lock_to_single_conversation: this.locktoSingleConversation,
           reopen_window_hours: this.reopenWindowEnabled
-            ? Number(this.reopenWindowHours) || 0
+            ? Number(this.reopenWindowHours) || 1
             : 0,
           sender_name_type: this.senderNameType,
           business_name: this.businessName || null,
