@@ -76,21 +76,13 @@ const confirmDeleteTitle = computed(() =>
   <div
     class="flex flex-col gap-4 outline-1 outline outline-n-container rounded-xl bg-n-solid-2 p-5"
   >
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
-        <h3 class="text-base font-medium text-n-slate-12">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.HEADER') }}
-        </h3>
-        <p class="text-sm text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.DESCRIPTION') }}
-        </p>
-      </div>
-      <router-link
-        v-if="isAdmin"
-        :to="{ name: 'settings_operational_flows_new' }"
-      >
-        <Button :label="$t('OPERATIONAL_FLOWS_SETTINGS.NEW_FLOW')" size="sm" />
-      </router-link>
+    <div class="flex flex-col gap-1">
+      <h3 class="text-base font-medium text-n-slate-12">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.HEADER') }}
+      </h3>
+      <p class="text-sm text-n-slate-11">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.DESCRIPTION') }}
+      </p>
     </div>
 
     <div v-if="uiFlags.isFetching" class="flex justify-center py-6">
@@ -186,6 +178,20 @@ const confirmDeleteTitle = computed(() =>
         </div>
       </div>
     </div>
+
+    <router-link
+      v-if="isAdmin"
+      :to="{ name: 'settings_operational_flows_new' }"
+      class="w-fit"
+    >
+      <Button
+        faded
+        slate
+        size="sm"
+        icon="i-lucide-plus"
+        :label="$t('OPERATIONAL_FLOWS_SETTINGS.NEW_FLOW')"
+      />
+    </router-link>
 
     <woot-confirm-delete-modal
       v-if="showDeletePopup"
