@@ -55,8 +55,6 @@
       },
       "STATES": {
         "LABEL": "Resolution states (closing buttons)",
-        "HELP": "Rename the buttons freely — the label is presentation only. The fixed key is what reports and integrations read, so renaming never changes your data.",
-        "CANONICAL_FIXED": "fixed key (used by reports)",
         "DISPLAY_LABEL": "Button label",
         "POLARITY": "Polarity",
         "POLARITY_OPTIONS": {
@@ -85,7 +83,7 @@
       "ERROR_MESSAGE": "Could not save the closing flow",
       "REQUIREMENTS": {
         "LABEL": "Required attributes to close",
-        "HELP": "Attributes the agent must fill before resolving as one of these states. Keyed on the state, so renaming a button never changes them.",
+        "HELP": "Attributes the agent must fill before resolving as one of these states.",
         "SELECT_ATTRIBUTE": "Select an attribute",
         "ALWAYS": "Always required",
         "WHEN_STATE": "Required when: {state}",

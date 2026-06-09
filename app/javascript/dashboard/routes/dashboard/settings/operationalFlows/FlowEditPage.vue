@@ -252,14 +252,14 @@ const save = async () => {
       <Spinner class="text-n-brand" />
     </div>
     <template v-else>
-      <div class="flex flex-col gap-0.5">
-        <h2 class="text-heading-2 font-semibold text-n-slate-12">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-heading-1 text-n-slate-12">
           {{
             isEdit
               ? $t('OPERATIONAL_FLOWS_SETTINGS.FORM.EDIT_TITLE')
               : $t('OPERATIONAL_FLOWS_SETTINGS.FORM.NEW_TITLE')
           }}
-        </h2>
+        </h1>
         <p class="text-body-main text-n-slate-11">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.SUBTITLE') }}
         </p>
@@ -318,14 +318,9 @@ const save = async () => {
       </div>
 
       <div class="flex flex-col gap-3">
-        <div class="flex flex-col gap-0.5">
-          <label class="text-sm font-medium text-n-slate-12">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.LABEL') }}
-          </label>
-          <p class="text-xs text-n-slate-11">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.HELP') }}
-          </p>
-        </div>
+        <h3 class="text-base font-medium text-n-slate-12">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.LABEL') }}
+        </h3>
 
         <div
           v-for="state in states"
@@ -337,9 +332,6 @@ const save = async () => {
               class="px-1.5 py-0.5 text-xs font-mono rounded text-n-slate-11 bg-n-alpha-2"
             >
               {{ state.canonical_key }}
-            </span>
-            <span class="text-xs text-n-slate-11">
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.CANONICAL_FIXED') }}
             </span>
           </div>
 
@@ -464,11 +456,11 @@ const save = async () => {
       </div>
 
       <div class="flex flex-col gap-3">
-        <div class="flex flex-col gap-0.5">
-          <label class="text-sm font-medium text-n-slate-12">
+        <div class="flex flex-col gap-1">
+          <h3 class="text-base font-medium text-n-slate-12">
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.LABEL') }}
-          </label>
-          <p class="text-xs text-n-slate-11">
+          </h3>
+          <p class="text-sm text-n-slate-11">
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.HELP') }}
           </p>
         </div>
@@ -525,10 +517,10 @@ const save = async () => {
       </div>
 
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-medium text-n-slate-12">
+        <h3 class="text-base font-medium text-n-slate-12">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.INBOXES.LABEL') }}
-        </label>
-        <p class="text-xs text-n-slate-11">
+        </h3>
+        <p class="text-sm text-n-slate-11">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.INBOXES.HELP') }}
         </p>
         <div

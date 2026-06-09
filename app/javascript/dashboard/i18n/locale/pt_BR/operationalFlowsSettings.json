@@ -55,8 +55,6 @@
       },
       "STATES": {
         "LABEL": "Estados de resolução (botões de fechamento)",
-        "HELP": "Renomeie os botões à vontade — o rótulo é só apresentação. A chave fixa é o que os relatórios e integrações leem, então renomear nunca altera seus dados.",
-        "CANONICAL_FIXED": "chave fixa (usada nos relatórios)",
         "DISPLAY_LABEL": "Rótulo do botão",
         "POLARITY": "Polaridade",
         "POLARITY_OPTIONS": {
@@ -85,7 +83,7 @@
       "ERROR_MESSAGE": "Não foi possível salvar o fluxo de fechamento",
       "REQUIREMENTS": {
         "LABEL": "Atributos obrigatórios para fechar",
-        "HELP": "Atributos que o agente precisa preencher antes de resolver como um destes estados. Vinculados ao estado, então renomear um botão nunca os altera.",
+        "HELP": "Atributos que o agente precisa preencher antes de resolver como um destes estados.",
         "SELECT_ATTRIBUTE": "Selecione um atributo",
         "ALWAYS": "Sempre obrigatório",
         "WHEN_STATE": "Obrigatório quando: {state}",
