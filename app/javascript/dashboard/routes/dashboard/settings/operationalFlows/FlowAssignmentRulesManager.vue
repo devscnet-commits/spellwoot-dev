@@ -29,6 +29,9 @@ const emptyForm = () => ({
 
 const form = ref(emptyForm());
 const showForm = ref(false);
+// Progressive disclosure: Team is the primary dimension; Caixa and Role are opt-in exceptions.
+const showInboxException = ref(false);
+const showRoleException = ref(false);
 const loadingRow = ref({});
 
 onMounted(() => {
@@ -76,6 +79,8 @@ const predicateSummary = rule => summarizePredicate(rule.predicate || {});
 
 const openCreate = () => {
   form.value = emptyForm();
+  showInboxException.value = false;
+  showRoleException.value = false;
   showForm.value = true;
 };
 
@@ -88,7 +93,20 @@ const openEdit = rule => {
     inbox_id: predicate.inbox_id || '',
     team_id: predicate.team_id || '',
   };
+  // Reveal an exception section only when that dimension is already set.
+  showInboxException.value = !!predicate.inbox_id;
+  showRoleException.value = !!predicate.role_id;
   showForm.value = true;
+};
+
+const toggleInboxException = () => {
+  showInboxException.value = !showInboxException.value;
+  if (!showInboxException.value) form.value.inbox_id = '';
+};
+
+const toggleRoleException = () => {
+  showRoleException.value = !showRoleException.value;
+  if (!showRoleException.value) form.value.role_id = '';
 };
 
 const closeForm = () => {
@@ -246,58 +264,96 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.CONDITIONS_INTRO') }}
       </p>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="flex flex-col gap-1">
+      <!-- Primary dimension: the team usually decides the flow -->
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-medium text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM') }}
+        </label>
+        <select
+          v-model="form.team_id"
+          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+        >
+          <option value="">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
+          </option>
+          <option v-for="team in teams" :key="team.id" :value="team.id">
+            {{ team.name }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Exception: per Caixa (channel) -->
+      <div v-if="showInboxException" class="flex flex-col gap-1">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-medium text-n-slate-11">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.INBOX') }}
+          </label>
+          <button
+            type="button"
+            class="text-xs text-n-slate-11 hover:underline"
+            @click="toggleInboxException"
+          >
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.REMOVE_EXCEPTION') }}
+          </button>
+        </div>
+        <select
+          v-model="form.inbox_id"
+          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+        >
+          <option value="">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
+          </option>
+          <option v-for="inbox in inboxes" :key="inbox.id" :value="inbox.id">
+            {{ inbox.name }}
+          </option>
+        </select>
+      </div>
+      <button
+        v-else
+        type="button"
+        class="text-xs font-medium text-n-blue-11 hover:underline w-fit"
+        @click="toggleInboxException"
+      >
+        + {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ADD_INBOX_EXCEPTION') }}
+      </button>
+
+      <!-- Advanced exception: per Role (of whoever closes) -->
+      <div v-if="showRoleException" class="flex flex-col gap-1">
+        <div class="flex items-center justify-between">
           <label class="text-xs font-medium text-n-slate-11">
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.ROLE') }}
           </label>
-          <select
-            v-model="form.role_id"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+          <button
+            type="button"
+            class="text-xs text-n-slate-11 hover:underline"
+            @click="toggleRoleException"
           >
-            <option value="">
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
-            </option>
-            <option v-for="role in roles" :key="role.id" :value="role.id">
-              {{ role.name }}
-            </option>
-          </select>
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.REMOVE_EXCEPTION') }}
+          </button>
         </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium text-n-slate-11">
-            {{
-              $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.INBOX')
-            }}
-          </label>
-          <select
-            v-model="form.inbox_id"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          >
-            <option value="">
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
-            </option>
-            <option v-for="inbox in inboxes" :key="inbox.id" :value="inbox.id">
-              {{ inbox.name }}
-            </option>
-          </select>
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-xs font-medium text-n-slate-11">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM') }}
-          </label>
-          <select
-            v-model="form.team_id"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          >
-            <option value="">
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
-            </option>
-            <option v-for="team in teams" :key="team.id" :value="team.id">
-              {{ team.name }}
-            </option>
-          </select>
-        </div>
+        <select
+          v-model="form.role_id"
+          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+        >
+          <option value="">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
+          </option>
+          <option v-for="role in roles" :key="role.id" :value="role.id">
+            {{ role.name }}
+          </option>
+        </select>
+        <p class="text-xs text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ROLE_NOTE') }}
+        </p>
       </div>
+      <button
+        v-else
+        type="button"
+        class="text-xs font-medium text-n-slate-11 hover:underline w-fit"
+        @click="toggleRoleException"
+      >
+        + {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ADD_ROLE_EXCEPTION') }}
+      </button>
 
       <p class="text-xs text-n-slate-11">
         {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.SPECIFICITY_HELP') }}

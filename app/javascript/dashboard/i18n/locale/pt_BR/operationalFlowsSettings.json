@@ -92,9 +92,9 @@
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Regras de atribuição",
-      "DESCRIPTION": "Decide qual fluxo se aplica a cada conversa, pela função de quem fecha, pela caixa e pelo time. A regra mais específica que casar vence.",
+      "DESCRIPTION": "Decide qual fluxo se aplica a cada conversa — principalmente pelo time, e por exceção pelo canal (Caixa) ou função. A regra mais específica que casar vence.",
       "NEW_RULE": "Adicionar regra",
-      "EMPTY": "Nenhuma regra de atribuição ainda. As conversas usam o fluxo vinculado à sua Caixa.",
+      "EMPTY": "Nenhuma regra ainda. Crie ao menos uma (ex.: por time) para as conversas terem um fluxo. Conversa que não casar com nenhuma regra simplesmente não usa fluxo.",
       "ANY": "(qualquer)",
       "AND": "e",
       "ANY_CONVERSATION": "qualquer conversa",
@@ -112,8 +112,12 @@
         "SELECT": "Selecione um fluxo",
         "SAVE": "Salvar regra",
         "CANCEL": "Cancelar",
-        "CONDITIONS_INTRO": "Defina só as condições que importam. O que ficar em \"(qualquer)\" não restringe aquela dimensão.",
-        "MATCHES_PREFIX": "Esta regra casa com:"
+        "CONDITIONS_INTRO": "Normalmente o Time já decide o fluxo. Adicione uma exceção só quando um canal ou função específica precisar de outro.",
+        "MATCHES_PREFIX": "Esta regra casa com:",
+        "ADD_INBOX_EXCEPTION": "Exceção por caixa (canal)",
+        "ADD_ROLE_EXCEPTION": "Exceção avançada por função (de quem fecha)",
+        "REMOVE_EXCEPTION": "remover",
+        "ROLE_NOTE": "Raro — a função de quem fecha a conversa, avaliada no fechamento (não no nascimento)."
       },
       "SAVE_SUCCESS": "Regra de atribuição salva",
       "SAVE_ERROR": "Não foi possível salvar a regra de atribuição",

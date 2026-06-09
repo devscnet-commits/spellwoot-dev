@@ -92,9 +92,9 @@
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Assignment rules",
-      "DESCRIPTION": "Decides which flow applies to each conversation, by the closing agent's role, the inbox and the team. The most specific matching rule wins.",
+      "DESCRIPTION": "Decides which flow applies to each conversation — primarily by team, and by exception per channel (Caixa) or role. The most specific matching rule wins.",
       "NEW_RULE": "Add rule",
-      "EMPTY": "No assignment rules yet. Conversations fall back to the flow attached to their Caixa.",
+      "EMPTY": "No rules yet. Add at least one (e.g. per team) so conversations get a flow. A conversation that matches no rule simply uses no flow.",
       "ANY": "(any)",
       "AND": "and",
       "ANY_CONVERSATION": "any conversation",
@@ -112,8 +112,12 @@
         "SELECT": "Select a flow",
         "SAVE": "Save rule",
         "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "Set only the conditions that matter. Anything left as \"(any)\" does not restrict that dimension.",
-        "MATCHES_PREFIX": "This rule matches:"
+        "CONDITIONS_INTRO": "The team usually decides the flow. Add an exception only when a specific channel or role needs a different one.",
+        "MATCHES_PREFIX": "This rule matches:",
+        "ADD_INBOX_EXCEPTION": "Exception by Caixa (channel)",
+        "ADD_ROLE_EXCEPTION": "Advanced exception by role (of whoever closes)",
+        "REMOVE_EXCEPTION": "remove",
+        "ROLE_NOTE": "Rare — the role of whoever closes the conversation, evaluated at closing time (not at birth)."
       },
       "SAVE_SUCCESS": "Assignment rule saved",
       "SAVE_ERROR": "Could not save the assignment rule",

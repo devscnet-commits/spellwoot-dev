@@ -16,7 +16,6 @@ const { t } = useI18n();
 
 const getFlow = useMapGetter('operationalFlows/getFlow');
 const uiFlags = useMapGetter('operationalFlows/getUIFlags');
-const inboxes = useMapGetter('inboxes/getInboxes');
 const conversationAttributes = useMapGetter('attributes/getConversationAttributes');
 
 const flowId = computed(() =>
@@ -66,7 +65,6 @@ const states = ref(defaultStates());
 const removedReasonIds = ref([]);
 const requirements = ref([]);
 const removedRequirementIds = ref([]);
-const selectedInboxIds = ref([]);
 const isSaving = ref(false);
 const isLoading = ref(false);
 
@@ -98,7 +96,6 @@ const populate = flow => {
   category.value = flow.category || 'sales';
   active.value = flow.active ?? true;
   metaEnabled.value = !!flow.meta_enabled;
-  selectedInboxIds.value = [...(flow.inbox_ids || [])];
 
   const reasons = flow.reasons || [];
   const reasonsForResult = result =>
@@ -132,7 +129,6 @@ const populate = flow => {
 };
 
 onMounted(async () => {
-  store.dispatch('inboxes/get');
   store.dispatch('attributes/get');
   if (!isEdit.value) return;
   isLoading.value = true;
@@ -221,7 +217,6 @@ const save = async () => {
     require_reason: states.value.some(s => s.requires_reason),
     active: active.value,
     meta_enabled: metaEnabled.value,
-    inbox_ids: selectedInboxIds.value,
     resolution_states_attributes: buildStatesAttributes(),
     reasons_attributes: buildReasonsAttributes(),
     closing_requirements_attributes: buildRequirementsAttributes(),
@@ -514,35 +509,6 @@ const save = async () => {
           :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.ADD')"
           @click="addRequirement"
         />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <h3 class="text-base font-medium text-n-slate-12">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.INBOXES.LABEL') }}
-        </h3>
-        <p class="text-sm text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.INBOXES.HELP') }}
-        </p>
-        <div
-          v-if="inboxes.length"
-          class="flex flex-col gap-1 border border-n-weak rounded-xl p-3"
-        >
-          <label
-            v-for="inbox in inboxes"
-            :key="inbox.id"
-            class="flex items-center gap-2 py-1 cursor-pointer"
-          >
-            <input
-              v-model="selectedInboxIds"
-              type="checkbox"
-              :value="inbox.id"
-            />
-            <span class="text-sm text-n-slate-12">{{ inbox.name }}</span>
-          </label>
-        </div>
-        <p v-else class="text-sm text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.INBOXES.EMPTY') }}
-        </p>
       </div>
 
       <div class="flex justify-end">
