@@ -28,7 +28,7 @@ class Api::V1::Accounts::FlowAssignmentRulesController < Api::V1::Accounts::Base
   def rule_params
     params.require(:flow_assignment_rule).permit(
       :operational_flow_id, :priority, :is_default,
-      predicate: {}
+      predicate: [:role_id, :inbox_id, :team_id, :conversation_origin, { excluded_inbox_ids: [] }]
     )
   end
 end

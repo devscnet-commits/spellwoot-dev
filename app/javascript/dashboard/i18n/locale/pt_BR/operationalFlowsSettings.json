@@ -93,15 +93,14 @@
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Regras de atribuição",
-      "DESCRIPTION": "Decide qual fluxo se aplica a cada conversa — principalmente pelo time, e por exceção pelo canal (Caixa) ou função. A regra mais específica que casar vence.",
+      "DESCRIPTION": "Decide qual fluxo se aplica a cada conversa, pelo time — e, se quiser, excluindo algumas caixas desse time. A regra mais específica que casar vence.",
       "NEW_RULE": "Adicionar regra",
       "EMPTY": "Nenhuma regra ainda. Crie ao menos uma (ex.: por time) para as conversas terem um fluxo. Conversa que não casar com nenhuma regra simplesmente não usa fluxo.",
       "ANY": "(qualquer)",
       "AND": "e",
+      "EXCEPT": "exceto",
       "ANY_CONVERSATION": "qualquer conversa",
       "DEFAULT": "Padrão",
-      "PRIORITY": "Prioridade",
-      "PRIORITY_HELP": "Números menores são avaliados primeiro. A primeira regra que casa decide o fluxo.",
       "DIMENSIONS": {
         "ROLE": "Função",
         "INBOX": "Caixa",
@@ -113,20 +112,16 @@
         "SELECT": "Selecione um fluxo",
         "SAVE": "Salvar regra",
         "CANCEL": "Cancelar",
-        "CONDITIONS_INTRO": "Normalmente o Time já decide o fluxo. Restrinja por canal ou use uma exceção avançada só quando precisar.",
-        "RESTRICT_CHANNEL": "Restringir por canal (caixa)",
-        "REMOVE": "remover",
-        "ADVANCED_GROUP": "Exceções avançadas",
-        "ROLE_CHECKBOX": "Diferenciar pelo papel de quem encerra a conversa",
-        "ROLE_EXPLANATION": "Usado apenas quando coordenadores ou gerentes seguem processos diferentes."
+        "CONDITIONS_INTRO": "O Time decide o fluxo. Por padrão vale para todas as caixas do time — você pode deixar algumas de fora abaixo.",
+        "EXCLUDE_CAIXAS_LABEL": "Caixas deste time que NÃO devem usar este fluxo",
+        "EXCLUDE_CAIXAS_HELP": "Por padrão, todas as caixas do time usam este fluxo. Marque as que devem ficar de fora — caixas novas adicionadas ao time depois entram automaticamente."
       },
       "HUMAN": {
         "MEANS": "Esta regra significa:",
         "APPLY": "Aplicar o fluxo \"{flow}\"",
         "WHEN": "quando a conversa",
         "TEAM": "pertencer ao time \"{name}\"",
-        "INBOX": "vier pela caixa \"{name}\"",
-        "ROLE": "for encerrada por alguém com função \"{name}\"",
+        "EXCEPT_CAIXAS": "(exceto as caixas: {names})",
         "ANY": "para qualquer conversa.",
         "PICK_FLOW": "Selecione um fluxo acima."
       },

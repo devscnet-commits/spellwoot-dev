@@ -20,7 +20,6 @@ const conversationAttributes = useMapGetter('attributes/getConversationAttribute
 const assignmentRules = useMapGetter('flowAssignmentRules/getRules');
 const teams = useMapGetter('teams/getTeams');
 const inboxes = useMapGetter('inboxes/getInboxes');
-const roles = useMapGetter('customRole/getCustomRoles');
 
 const flowId = computed(() =>
   route.params.flowId ? Number(route.params.flowId) : null
@@ -35,18 +34,13 @@ const rulesUsingThisFlow = computed(() =>
 );
 const describeRuleUsage = rule => {
   const predicate = rule.predicate || {};
-  const and = ` ${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.AND')} `;
-  const parts = [];
-  if (predicate.team_id) {
-    parts.push(`${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${nameById(teams, Number(predicate.team_id))}`);
-  }
-  if (predicate.inbox_id) {
-    parts.push(`${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.INBOX')}: ${nameById(inboxes, Number(predicate.inbox_id))}`);
-  }
-  if (predicate.role_id) {
-    parts.push(`${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.ROLE')}: ${nameById(roles, Number(predicate.role_id))}`);
-  }
-  return parts.length ? parts.join(and) : t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.ALL');
+  if (!predicate.team_id) return t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.ALL');
+  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${nameById(teams, Number(predicate.team_id))}`;
+  const excluded = (predicate.excluded_inbox_ids || [])
+    .map(id => nameById(inboxes, Number(id)))
+    .filter(Boolean);
+  if (!excluded.length) return base;
+  return `${base} (${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.EXCEPT')} ${excluded.join(', ')})`;
 };
 
 const CATEGORIES = ['sales', 'support'];
@@ -157,11 +151,10 @@ const populate = flow => {
 onMounted(async () => {
   store.dispatch('attributes/get');
   if (!isEdit.value) return;
-  // Needed to describe which rules (team/caixa/role) currently point at this flow.
+  // Needed to describe which rules (team + excluded caixas) currently point at this flow.
   store.dispatch('flowAssignmentRules/get');
   store.dispatch('teams/get');
   store.dispatch('inboxes/get');
-  store.dispatch('customRole/getCustomRole');
   isLoading.value = true;
   try {
     await store.dispatch('operationalFlows/show', flowId.value);

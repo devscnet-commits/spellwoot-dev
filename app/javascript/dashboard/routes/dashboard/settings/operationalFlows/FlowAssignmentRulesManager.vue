@@ -17,23 +17,16 @@ const uiFlags = useMapGetter('flowAssignmentRules/getUIFlags');
 const flows = useMapGetter('operationalFlows/getFlows');
 const inboxes = useMapGetter('inboxes/getInboxes');
 const teams = useMapGetter('teams/getTeams');
-const roles = useMapGetter('customRole/getCustomRoles');
 
 const emptyForm = () => ({
   id: null,
   operational_flow_id: null,
-  role_id: '',
-  inbox_id: '',
   team_id: '',
+  excluded_inbox_ids: [],
 });
 
 const form = ref(emptyForm());
 const showForm = ref(false);
-// Progressive disclosure: Team is the primary dimension; channel (Caixa) is an opt-in
-// restriction; role lives behind an "advanced" group since it's a rare, close-time concern.
-const showInboxException = ref(false);
-const showRoleException = ref(false);
-const advancedOpen = ref(false);
 const loadingRow = ref({});
 
 onMounted(() => {
@@ -41,49 +34,43 @@ onMounted(() => {
   store.dispatch('operationalFlows/get');
   store.dispatch('inboxes/get');
   store.dispatch('teams/get');
-  store.dispatch('customRole/getCustomRole');
 });
 
 const nameById = (list, id) => list.find(item => item.id === id)?.name || '';
 const flowName = id => nameById(flows.value, id);
 
-// Human-readable summary of the predicate. Dimensions are ANDed, so we join them with an
-// explicit "and" — leaving any dimension unset means it doesn't restrict that dimension.
+// Caixas that belong to the selected team — offered for exclusion. New caixas added to the
+// team later are NOT excluded by default, so they auto-join the flow (dynamic behavior).
+const teamInboxes = computed(() => {
+  const team = teams.value.find(tm => tm.id === Number(form.value.team_id));
+  const ids = team?.inbox_ids || [];
+  return inboxes.value.filter(inbox => ids.includes(inbox.id));
+});
+
+const isExcluded = id => form.value.excluded_inbox_ids.includes(id);
+const toggleExcluded = id => {
+  form.value.excluded_inbox_ids = isExcluded(id)
+    ? form.value.excluded_inbox_ids.filter(x => x !== id)
+    : [...form.value.excluded_inbox_ids, id];
+};
+
+// Compact summary for the rule list: "Time X" (+ "exceto: A, B").
 const summarizePredicate = predicate => {
-  const and = ` ${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.AND')} `;
-  const parts = [];
-  if (predicate.role_id) {
-    parts.push(
-      `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.ROLE')}: ${nameById(roles.value, Number(predicate.role_id))}`
-    );
+  if (!predicate.team_id) {
+    return t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY_CONVERSATION');
   }
-  if (predicate.inbox_id) {
-    parts.push(
-      `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.INBOX')}: ${nameById(inboxes.value, Number(predicate.inbox_id))}`
-    );
-  }
-  if (predicate.team_id) {
-    parts.push(
-      `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${nameById(teams.value, Number(predicate.team_id))}`
-    );
-  }
-  if (predicate.conversation_origin) {
-    parts.push(
-      `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.ORIGIN')}: ${predicate.conversation_origin}`
-    );
-  }
-  return parts.length
-    ? parts.join(and)
-    : t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY_CONVERSATION');
+  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${nameById(teams.value, Number(predicate.team_id))}`;
+  const excluded = (predicate.excluded_inbox_ids || [])
+    .map(id => nameById(inboxes.value, Number(id)))
+    .filter(Boolean);
+  if (!excluded.length) return base;
+  return `${base} (${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.EXCEPT')} ${excluded.join(', ')})`;
 };
 
 const predicateSummary = rule => summarizePredicate(rule.predicate || {});
 
 const openCreate = () => {
   form.value = emptyForm();
-  showInboxException.value = false;
-  showRoleException.value = false;
-  advancedOpen.value = false;
   showForm.value = true;
 };
 
@@ -92,28 +79,10 @@ const openEdit = rule => {
   form.value = {
     id: rule.id,
     operational_flow_id: rule.operational_flow_id,
-    role_id: predicate.role_id || '',
-    inbox_id: predicate.inbox_id || '',
     team_id: predicate.team_id || '',
+    excluded_inbox_ids: (predicate.excluded_inbox_ids || []).map(Number),
   };
-  // Reveal a section only when that dimension is already set.
-  showInboxException.value = !!predicate.inbox_id;
-  showRoleException.value = !!predicate.role_id;
-  advancedOpen.value = !!predicate.role_id;
   showForm.value = true;
-};
-
-const toggleInboxException = () => {
-  showInboxException.value = !showInboxException.value;
-  if (!showInboxException.value) form.value.inbox_id = '';
-};
-
-const toggleAdvanced = () => {
-  advancedOpen.value = !advancedOpen.value;
-};
-
-const onRoleCheckboxChange = () => {
-  if (!showRoleException.value) form.value.role_id = '';
 };
 
 const closeForm = () => {
@@ -123,9 +92,12 @@ const closeForm = () => {
 
 const buildPredicate = () => {
   const predicate = {};
-  if (form.value.role_id) predicate.role_id = form.value.role_id;
-  if (form.value.inbox_id) predicate.inbox_id = form.value.inbox_id;
   if (form.value.team_id) predicate.team_id = form.value.team_id;
+  // Only keep exclusions that still belong to the selected team.
+  const excluded = form.value.excluded_inbox_ids.filter(id =>
+    teamInboxes.value.some(inbox => inbox.id === id)
+  );
+  if (excluded.length) predicate.excluded_inbox_ids = excluded;
   return predicate;
 };
 
@@ -133,26 +105,18 @@ const buildPredicate = () => {
 const tr = (key, args) =>
   t(`OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.HUMAN.${key}`, args);
 
-const humanClauses = computed(() => {
-  const clauses = [];
-  if (form.value.team_id) {
-    clauses.push(tr('TEAM', { name: nameById(teams.value, Number(form.value.team_id)) }));
-  }
-  if (form.value.inbox_id) {
-    clauses.push(tr('INBOX', { name: nameById(inboxes.value, Number(form.value.inbox_id)) }));
-  }
-  if (form.value.role_id) {
-    clauses.push(tr('ROLE', { name: nameById(roles.value, Number(form.value.role_id)) }));
-  }
-  return clauses;
-});
-
 const humanSummary = computed(() => {
   if (!form.value.operational_flow_id) return '';
   const apply = tr('APPLY', { flow: flowName(form.value.operational_flow_id) });
-  if (!humanClauses.value.length) return `${apply} ${tr('ANY')}`;
-  const and = ` ${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.AND')} `;
-  return `${apply} ${tr('WHEN')} ${humanClauses.value.join(and)}.`;
+  if (!form.value.team_id) return `${apply} ${tr('ANY')}`;
+  let sentence = `${apply} ${tr('WHEN')} ${tr('TEAM', { name: nameById(teams.value, Number(form.value.team_id)) })}`;
+  const excluded = teamInboxes.value
+    .filter(inbox => isExcluded(inbox.id))
+    .map(inbox => inbox.name);
+  if (excluded.length) {
+    sentence += ` ${tr('EXCEPT_CAIXAS', { names: excluded.join(', ') })}`;
+  }
+  return `${sentence}.`;
 });
 
 const save = async () => {
@@ -247,12 +211,6 @@ const canSave = computed(() => !!form.value.operational_flow_id);
                 flowName(rule.operational_flow_id)
               }}</span>
             </span>
-            <span
-              v-if="rule.is_default"
-              class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-n-slate-3 text-n-slate-11 w-fit"
-            >
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DEFAULT') }}
-            </span>
           </div>
         </div>
         <div v-if="isAdmin" class="flex justify-end gap-2">
@@ -294,7 +252,7 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.CONDITIONS_INTRO') }}
       </p>
 
-      <!-- Primary dimension: the team usually decides the flow -->
+      <!-- Primary dimension: the team decides the flow -->
       <div class="flex flex-col gap-1">
         <label class="text-xs font-medium text-n-slate-11">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM') }}
@@ -312,87 +270,40 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         </select>
       </div>
 
-      <!-- Restrict by channel (Caixa) -->
-      <div v-if="showInboxException" class="flex flex-col gap-1">
-        <div class="flex items-center justify-between">
-          <label class="text-xs font-medium text-n-slate-11">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.RESTRICT_CHANNEL') }}
-          </label>
-          <button
-            type="button"
-            class="text-xs text-n-slate-11 hover:underline"
-            @click="toggleInboxException"
-          >
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.REMOVE') }}
-          </button>
-        </div>
-        <select
-          v-model="form.inbox_id"
-          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-        >
-          <option value="">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
-          </option>
-          <option v-for="inbox in inboxes" :key="inbox.id" :value="inbox.id">
-            {{ inbox.name }}
-          </option>
-        </select>
-      </div>
-      <button
-        v-else
-        type="button"
-        class="text-xs font-medium text-n-blue-11 hover:underline w-fit"
-        @click="toggleInboxException"
+      <!-- Exclude caixas of the team (all included by default → dynamic) -->
+      <div
+        v-if="form.team_id && teamInboxes.length"
+        class="flex flex-col gap-1"
       >
-        + {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.RESTRICT_CHANNEL') }}
-      </button>
-
-      <!-- Advanced exceptions (collapsible): role of whoever closes -->
-      <div class="flex flex-col gap-2 border-t border-n-weak pt-3">
-        <button
-          type="button"
-          class="flex items-center gap-1 text-xs font-medium text-n-slate-11 hover:text-n-slate-12 w-fit"
-          @click="toggleAdvanced"
-        >
-          <span
-            :class="[
-              advancedOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right',
-              'size-3.5',
-            ]"
-          />
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ADVANCED_GROUP') }}
-        </button>
-        <label
-          v-if="advancedOpen"
-          class="flex items-start gap-2 cursor-pointer pl-1"
-        >
-          <input
-            v-model="showRoleException"
-            type="checkbox"
-            class="mt-0.5"
-            @change="onRoleCheckboxChange"
-          />
-          <span class="flex flex-col">
-            <span class="text-sm text-n-slate-12">
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ROLE_CHECKBOX') }}
-            </span>
-            <span class="text-xs text-n-slate-11">
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ROLE_EXPLANATION') }}
-            </span>
-          </span>
+        <label class="text-xs font-medium text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.EXCLUDE_CAIXAS_LABEL') }}
         </label>
-        <select
-          v-if="advancedOpen && showRoleException"
-          v-model="form.role_id"
-          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-        >
-          <option value="">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.ANY') }}
-          </option>
-          <option v-for="role in roles" :key="role.id" :value="role.id">
-            {{ role.name }}
-          </option>
-        </select>
+        <p class="text-xs text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.EXCLUDE_CAIXAS_HELP') }}
+        </p>
+        <div class="flex flex-col gap-1 border border-n-weak rounded-lg p-3 mt-1">
+          <label
+            v-for="inbox in teamInboxes"
+            :key="inbox.id"
+            class="flex items-center gap-2 py-1 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              :checked="isExcluded(inbox.id)"
+              @change="toggleExcluded(inbox.id)"
+            />
+            <span
+              class="text-sm"
+              :class="
+                isExcluded(inbox.id)
+                  ? 'text-n-slate-9 line-through'
+                  : 'text-n-slate-12'
+              "
+            >
+              {{ inbox.name }}
+            </span>
+          </label>
+        </div>
       </div>
 
       <!-- Natural-language summary of the rule being built -->

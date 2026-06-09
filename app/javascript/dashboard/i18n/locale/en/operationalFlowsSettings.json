@@ -93,15 +93,14 @@
     },
     "ASSIGNMENT_RULES": {
       "HEADER": "Assignment rules",
-      "DESCRIPTION": "Decides which flow applies to each conversation — primarily by team, and by exception per channel (Caixa) or role. The most specific matching rule wins.",
+      "DESCRIPTION": "Decides which flow applies to each conversation, by the team — and optionally excluding some of that team's caixas. The most specific matching rule wins.",
       "NEW_RULE": "Add rule",
       "EMPTY": "No rules yet. Add at least one (e.g. per team) so conversations get a flow. A conversation that matches no rule simply uses no flow.",
       "ANY": "(any)",
       "AND": "and",
+      "EXCEPT": "except",
       "ANY_CONVERSATION": "any conversation",
       "DEFAULT": "Default",
-      "PRIORITY": "Priority",
-      "PRIORITY_HELP": "Lower numbers are evaluated first. The first rule that matches decides the flow.",
       "DIMENSIONS": {
         "ROLE": "Role",
         "INBOX": "Caixa",
@@ -113,20 +112,16 @@
         "SELECT": "Select a flow",
         "SAVE": "Save rule",
         "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "The team usually decides the flow. Restrict by channel or use an advanced exception only when needed.",
-        "RESTRICT_CHANNEL": "Restrict by channel (Caixa)",
-        "REMOVE": "remove",
-        "ADVANCED_GROUP": "Advanced exceptions",
-        "ROLE_CHECKBOX": "Differentiate by the role of whoever closes the conversation",
-        "ROLE_EXPLANATION": "Used only when coordinators or managers follow different processes."
+        "CONDITIONS_INTRO": "The team decides the flow. By default it applies to all of the team's caixas — you can leave some out below.",
+        "EXCLUDE_CAIXAS_LABEL": "Caixas in this team that should NOT use this flow",
+        "EXCLUDE_CAIXAS_HELP": "By default every caixa in the team uses this flow. Check the ones to leave out — new caixas added to the team later join automatically."
       },
       "HUMAN": {
         "MEANS": "This rule means:",
         "APPLY": "Apply the \"{flow}\" flow",
         "WHEN": "when the conversation",
         "TEAM": "belongs to the team \"{name}\"",
-        "INBOX": "comes through the Caixa \"{name}\"",
-        "ROLE": "is closed by someone with the role \"{name}\"",
+        "EXCEPT_CAIXAS": "(except the caixas: {names})",
         "ANY": "to any conversation.",
         "PICK_FLOW": "Select a flow above."
       },
