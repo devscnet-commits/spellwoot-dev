@@ -72,10 +72,11 @@
       "LOST_REASONS": "Motivos de Perda",
       "REASON_PLACEHOLDER": "ex.: Preço muito alto",
       "ADD_REASON": "Adicionar motivo",
-      "INBOXES": {
-        "LABEL": "Caixas que usam este fluxo",
-        "HELP": "Uma Caixa usa apenas um fluxo. Selecioná-la aqui a move de qualquer fluxo anterior.",
-        "EMPTY": "Nenhuma caixa disponível."
+      "USED_BY": {
+        "TITLE": "Este fluxo está sendo utilizado por:",
+        "MANAGE": "Gerenciar regras →",
+        "EMPTY": "Nenhuma regra usa este fluxo ainda.",
+        "ALL": "Qualquer conversa (regra sem condição)"
       },
       "SAVE": "Salvar fluxo",
       "CREATE_SUCCESS": "Fluxo de fechamento criado com sucesso",
@@ -112,12 +113,22 @@
         "SELECT": "Selecione um fluxo",
         "SAVE": "Salvar regra",
         "CANCEL": "Cancelar",
-        "CONDITIONS_INTRO": "Normalmente o Time já decide o fluxo. Adicione uma exceção só quando um canal ou função específica precisar de outro.",
-        "MATCHES_PREFIX": "Esta regra casa com:",
-        "ADD_INBOX_EXCEPTION": "Exceção por caixa (canal)",
-        "ADD_ROLE_EXCEPTION": "Exceção avançada por função (de quem fecha)",
-        "REMOVE_EXCEPTION": "remover",
-        "ROLE_NOTE": "Raro — a função de quem fecha a conversa, avaliada no fechamento (não no nascimento)."
+        "CONDITIONS_INTRO": "Normalmente o Time já decide o fluxo. Restrinja por canal ou use uma exceção avançada só quando precisar.",
+        "RESTRICT_CHANNEL": "Restringir por canal (caixa)",
+        "REMOVE": "remover",
+        "ADVANCED_GROUP": "Exceções avançadas",
+        "ROLE_CHECKBOX": "Diferenciar pelo papel de quem encerra a conversa",
+        "ROLE_EXPLANATION": "Usado apenas quando coordenadores ou gerentes seguem processos diferentes."
+      },
+      "HUMAN": {
+        "MEANS": "Esta regra significa:",
+        "APPLY": "Aplicar o fluxo \"{flow}\"",
+        "WHEN": "quando a conversa",
+        "TEAM": "pertencer ao time \"{name}\"",
+        "INBOX": "vier pela caixa \"{name}\"",
+        "ROLE": "for encerrada por alguém com função \"{name}\"",
+        "ANY": "para qualquer conversa.",
+        "PICK_FLOW": "Selecione um fluxo acima."
       },
       "SAVE_SUCCESS": "Regra de atribuição salva",
       "SAVE_ERROR": "Não foi possível salvar a regra de atribuição",

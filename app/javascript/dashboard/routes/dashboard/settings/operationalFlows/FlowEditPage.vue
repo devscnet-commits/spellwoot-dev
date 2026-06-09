@@ -17,11 +17,37 @@ const { t } = useI18n();
 const getFlow = useMapGetter('operationalFlows/getFlow');
 const uiFlags = useMapGetter('operationalFlows/getUIFlags');
 const conversationAttributes = useMapGetter('attributes/getConversationAttributes');
+const assignmentRules = useMapGetter('flowAssignmentRules/getRules');
+const teams = useMapGetter('teams/getTeams');
+const inboxes = useMapGetter('inboxes/getInboxes');
+const roles = useMapGetter('customRole/getCustomRoles');
 
 const flowId = computed(() =>
   route.params.flowId ? Number(route.params.flowId) : null
 );
 const isEdit = computed(() => !!flowId.value);
+
+// Read-only "who uses this flow": the assignment rules that point at it, described in
+// plain language so the flow editor answers "quem usa isso?" without leaving the page.
+const nameById = (list, id) => (list.value || []).find(i => i.id === id)?.name || '';
+const rulesUsingThisFlow = computed(() =>
+  (assignmentRules.value || []).filter(r => r.operational_flow_id === flowId.value)
+);
+const describeRuleUsage = rule => {
+  const predicate = rule.predicate || {};
+  const and = ` ${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.AND')} `;
+  const parts = [];
+  if (predicate.team_id) {
+    parts.push(`${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${nameById(teams, Number(predicate.team_id))}`);
+  }
+  if (predicate.inbox_id) {
+    parts.push(`${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.INBOX')}: ${nameById(inboxes, Number(predicate.inbox_id))}`);
+  }
+  if (predicate.role_id) {
+    parts.push(`${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.ROLE')}: ${nameById(roles, Number(predicate.role_id))}`);
+  }
+  return parts.length ? parts.join(and) : t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.ALL');
+};
 
 const CATEGORIES = ['sales', 'support'];
 const POLARITIES = ['positive', 'negative', 'neutral'];
@@ -131,6 +157,11 @@ const populate = flow => {
 onMounted(async () => {
   store.dispatch('attributes/get');
   if (!isEdit.value) return;
+  // Needed to describe which rules (team/caixa/role) currently point at this flow.
+  store.dispatch('flowAssignmentRules/get');
+  store.dispatch('teams/get');
+  store.dispatch('inboxes/get');
+  store.dispatch('customRole/getCustomRole');
   isLoading.value = true;
   try {
     await store.dispatch('operationalFlows/show', flowId.value);
@@ -509,6 +540,39 @@ const save = async () => {
           :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.ADD')"
           @click="addRequirement"
         />
+      </div>
+
+      <div
+        v-if="isEdit"
+        class="flex flex-col gap-2 border-t border-n-weak pt-5"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <h3 class="text-base font-medium text-n-slate-12">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.TITLE') }}
+          </h3>
+          <router-link
+            :to="{ name: 'conversation_workflow_index' }"
+            class="text-sm font-medium text-n-blue-11 hover:underline shrink-0"
+          >
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.MANAGE') }}
+          </router-link>
+        </div>
+        <ul
+          v-if="rulesUsingThisFlow.length"
+          class="flex flex-col gap-1"
+        >
+          <li
+            v-for="rule in rulesUsingThisFlow"
+            :key="rule.id"
+            class="flex items-center gap-2 text-sm text-n-slate-12"
+          >
+            <span class="i-lucide-check size-3.5 text-n-teal-11 shrink-0" />
+            {{ describeRuleUsage(rule) }}
+          </li>
+        </ul>
+        <p v-else class="text-sm text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.EMPTY') }}
+        </p>
       </div>
 
       <div class="flex justify-end">

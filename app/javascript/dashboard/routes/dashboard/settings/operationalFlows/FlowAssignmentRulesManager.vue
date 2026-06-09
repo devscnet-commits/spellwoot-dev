@@ -29,9 +29,11 @@ const emptyForm = () => ({
 
 const form = ref(emptyForm());
 const showForm = ref(false);
-// Progressive disclosure: Team is the primary dimension; Caixa and Role are opt-in exceptions.
+// Progressive disclosure: Team is the primary dimension; channel (Caixa) is an opt-in
+// restriction; role lives behind an "advanced" group since it's a rare, close-time concern.
 const showInboxException = ref(false);
 const showRoleException = ref(false);
+const advancedOpen = ref(false);
 const loadingRow = ref({});
 
 onMounted(() => {
@@ -81,6 +83,7 @@ const openCreate = () => {
   form.value = emptyForm();
   showInboxException.value = false;
   showRoleException.value = false;
+  advancedOpen.value = false;
   showForm.value = true;
 };
 
@@ -93,9 +96,10 @@ const openEdit = rule => {
     inbox_id: predicate.inbox_id || '',
     team_id: predicate.team_id || '',
   };
-  // Reveal an exception section only when that dimension is already set.
+  // Reveal a section only when that dimension is already set.
   showInboxException.value = !!predicate.inbox_id;
   showRoleException.value = !!predicate.role_id;
+  advancedOpen.value = !!predicate.role_id;
   showForm.value = true;
 };
 
@@ -104,8 +108,11 @@ const toggleInboxException = () => {
   if (!showInboxException.value) form.value.inbox_id = '';
 };
 
-const toggleRoleException = () => {
-  showRoleException.value = !showRoleException.value;
+const toggleAdvanced = () => {
+  advancedOpen.value = !advancedOpen.value;
+};
+
+const onRoleCheckboxChange = () => {
   if (!showRoleException.value) form.value.role_id = '';
 };
 
@@ -122,8 +129,31 @@ const buildPredicate = () => {
   return predicate;
 };
 
-// Live, plain-language preview of who the rule currently targets.
-const formPreview = computed(() => summarizePredicate(buildPredicate()));
+// Live, natural-language description of the rule being built.
+const tr = (key, args) =>
+  t(`OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.HUMAN.${key}`, args);
+
+const humanClauses = computed(() => {
+  const clauses = [];
+  if (form.value.team_id) {
+    clauses.push(tr('TEAM', { name: nameById(teams.value, Number(form.value.team_id)) }));
+  }
+  if (form.value.inbox_id) {
+    clauses.push(tr('INBOX', { name: nameById(inboxes.value, Number(form.value.inbox_id)) }));
+  }
+  if (form.value.role_id) {
+    clauses.push(tr('ROLE', { name: nameById(roles.value, Number(form.value.role_id)) }));
+  }
+  return clauses;
+});
+
+const humanSummary = computed(() => {
+  if (!form.value.operational_flow_id) return '';
+  const apply = tr('APPLY', { flow: flowName(form.value.operational_flow_id) });
+  if (!humanClauses.value.length) return `${apply} ${tr('ANY')}`;
+  const and = ` ${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.AND')} `;
+  return `${apply} ${tr('WHEN')} ${humanClauses.value.join(and)}.`;
+});
 
 const save = async () => {
   if (!form.value.operational_flow_id) return;
@@ -282,18 +312,18 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         </select>
       </div>
 
-      <!-- Exception: per Caixa (channel) -->
+      <!-- Restrict by channel (Caixa) -->
       <div v-if="showInboxException" class="flex flex-col gap-1">
         <div class="flex items-center justify-between">
           <label class="text-xs font-medium text-n-slate-11">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.INBOX') }}
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.RESTRICT_CHANNEL') }}
           </label>
           <button
             type="button"
             class="text-xs text-n-slate-11 hover:underline"
             @click="toggleInboxException"
           >
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.REMOVE_EXCEPTION') }}
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.REMOVE') }}
           </button>
         </div>
         <select
@@ -314,24 +344,45 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         class="text-xs font-medium text-n-blue-11 hover:underline w-fit"
         @click="toggleInboxException"
       >
-        + {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ADD_INBOX_EXCEPTION') }}
+        + {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.RESTRICT_CHANNEL') }}
       </button>
 
-      <!-- Advanced exception: per Role (of whoever closes) -->
-      <div v-if="showRoleException" class="flex flex-col gap-1">
-        <div class="flex items-center justify-between">
-          <label class="text-xs font-medium text-n-slate-11">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.ROLE') }}
-          </label>
-          <button
-            type="button"
-            class="text-xs text-n-slate-11 hover:underline"
-            @click="toggleRoleException"
-          >
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.REMOVE_EXCEPTION') }}
-          </button>
-        </div>
+      <!-- Advanced exceptions (collapsible): role of whoever closes -->
+      <div class="flex flex-col gap-2 border-t border-n-weak pt-3">
+        <button
+          type="button"
+          class="flex items-center gap-1 text-xs font-medium text-n-slate-11 hover:text-n-slate-12 w-fit"
+          @click="toggleAdvanced"
+        >
+          <span
+            :class="[
+              advancedOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right',
+              'size-3.5',
+            ]"
+          />
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ADVANCED_GROUP') }}
+        </button>
+        <label
+          v-if="advancedOpen"
+          class="flex items-start gap-2 cursor-pointer pl-1"
+        >
+          <input
+            v-model="showRoleException"
+            type="checkbox"
+            class="mt-0.5"
+            @change="onRoleCheckboxChange"
+          />
+          <span class="flex flex-col">
+            <span class="text-sm text-n-slate-12">
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ROLE_CHECKBOX') }}
+            </span>
+            <span class="text-xs text-n-slate-11">
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ROLE_EXPLANATION') }}
+            </span>
+          </span>
+        </label>
         <select
+          v-if="advancedOpen && showRoleException"
           v-model="form.role_id"
           class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
         >
@@ -342,26 +393,19 @@ const canSave = computed(() => !!form.value.operational_flow_id);
             {{ role.name }}
           </option>
         </select>
-        <p class="text-xs text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ROLE_NOTE') }}
-        </p>
       </div>
-      <button
-        v-else
-        type="button"
-        class="text-xs font-medium text-n-slate-11 hover:underline w-fit"
-        @click="toggleRoleException"
-      >
-        + {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.ADD_ROLE_EXCEPTION') }}
-      </button>
 
-      <p class="text-xs text-n-slate-11">
-        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.SPECIFICITY_HELP') }}
-      </p>
-
-      <div class="rounded-lg bg-n-alpha-2 px-3 py-2 text-sm text-n-slate-12">
-        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.MATCHES_PREFIX') }}
-        <span class="font-medium">{{ formPreview }}</span>
+      <!-- Natural-language summary of the rule being built -->
+      <div class="rounded-lg bg-n-alpha-2 px-3 py-2 text-sm">
+        <p class="text-xs font-medium text-n-slate-11 mb-1">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.HUMAN.MEANS') }}
+        </p>
+        <p class="text-n-slate-12">
+          {{
+            humanSummary ||
+            $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.HUMAN.PICK_FLOW')
+          }}
+        </p>
       </div>
 
       <div class="flex justify-end gap-2">

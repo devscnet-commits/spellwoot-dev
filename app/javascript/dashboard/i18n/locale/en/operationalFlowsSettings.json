@@ -72,10 +72,11 @@
       "LOST_REASONS": "Reasons for Lost",
       "REASON_PLACEHOLDER": "e.g., Price too high",
       "ADD_REASON": "Add reason",
-      "INBOXES": {
-        "LABEL": "Caixas using this flow",
-        "HELP": "A Caixa uses only one flow. Selecting it here moves it from any previous flow.",
-        "EMPTY": "No inboxes available."
+      "USED_BY": {
+        "TITLE": "This flow is used by:",
+        "MANAGE": "Manage rules →",
+        "EMPTY": "No rule uses this flow yet.",
+        "ALL": "Any conversation (rule with no conditions)"
       },
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Closing flow created successfully",
@@ -112,12 +113,22 @@
         "SELECT": "Select a flow",
         "SAVE": "Save rule",
         "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "The team usually decides the flow. Add an exception only when a specific channel or role needs a different one.",
-        "MATCHES_PREFIX": "This rule matches:",
-        "ADD_INBOX_EXCEPTION": "Exception by Caixa (channel)",
-        "ADD_ROLE_EXCEPTION": "Advanced exception by role (of whoever closes)",
-        "REMOVE_EXCEPTION": "remove",
-        "ROLE_NOTE": "Rare — the role of whoever closes the conversation, evaluated at closing time (not at birth)."
+        "CONDITIONS_INTRO": "The team usually decides the flow. Restrict by channel or use an advanced exception only when needed.",
+        "RESTRICT_CHANNEL": "Restrict by channel (Caixa)",
+        "REMOVE": "remove",
+        "ADVANCED_GROUP": "Advanced exceptions",
+        "ROLE_CHECKBOX": "Differentiate by the role of whoever closes the conversation",
+        "ROLE_EXPLANATION": "Used only when coordinators or managers follow different processes."
+      },
+      "HUMAN": {
+        "MEANS": "This rule means:",
+        "APPLY": "Apply the \"{flow}\" flow",
+        "WHEN": "when the conversation",
+        "TEAM": "belongs to the team \"{name}\"",
+        "INBOX": "comes through the Caixa \"{name}\"",
+        "ROLE": "is closed by someone with the role \"{name}\"",
+        "ANY": "to any conversation.",
+        "PICK_FLOW": "Select a flow above."
       },
       "SAVE_SUCCESS": "Assignment rule saved",
       "SAVE_ERROR": "Could not save the assignment rule",
