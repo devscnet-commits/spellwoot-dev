@@ -12,6 +12,7 @@ import ConversationRequiredAttributeItem from 'dashboard/components-next/Convers
 import ConversationRequiredAttributeRulePicker from 'dashboard/components-next/ConversationWorkflow/ConversationRequiredAttributeRulePicker.vue';
 import ConversationRequiredEmpty from 'dashboard/components-next/Conversation/ConversationRequiredEmpty.vue';
 import BasePaywallModal from 'dashboard/routes/dashboard/settings/components/BasePaywallModal.vue';
+import { SYSTEM_CONDITION_FIELDS } from './constants';
 
 const props = defineProps({
   isEnabled: {
@@ -90,7 +91,10 @@ const conversationRequiredAttributes = computed(() => {
       const def = attrMap.get(attrConfig.key);
       if (!def) return null;
       const conditionFieldDef = attrConfig.condition_field
-        ? attrMap.get(attrConfig.condition_field)
+        ? (attrMap.get(attrConfig.condition_field) ||
+            SYSTEM_CONDITION_FIELDS.find(
+              s => s.value === attrConfig.condition_field
+            ))
         : null;
       return {
         ...def,

@@ -12,6 +12,14 @@ class Agents extends ApiClient {
       emails,
     });
   }
+
+  deactivate(agentId) {
+    return axios.post(`${this.url}/${agentId}/deactivate`);
+  }
+
+  reactivate(agentId) {
+    return axios.post(`${this.url}/${agentId}/reactivate`);
+  }
 }
 
 export default new Agents();

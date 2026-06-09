@@ -48,7 +48,25 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     inbox_params[:csat_config] = format_csat_config(permitted_params[:csat_config]) if permitted_params[:csat_config].present?
     @inbox.update!(inbox_params)
     update_inbox_working_hours
+    update_inbox_working_periods
+    update_inbox_holidays
+    update_inbox_exceptions
     update_channel if channel_update_required?
+  rescue StandardError => e
+    Rails.logger.error "[InboxUpdate] inbox_id=#{@inbox&.id} #{e.class}: #{e.message}\n#{e.backtrace.first(15).join("\n")}"
+    render json: { error: e.message, type: e.class.name }, status: :internal_server_error
+  end
+
+  def replicate_business_hours
+    result = Inboxes::BusinessHoursReplicationService.new(
+      source: @inbox,
+      scope: params[:scope],
+      inbox_ids: params[:inbox_ids]
+    ).perform
+    render json: result
+  rescue StandardError => e
+    Rails.logger.error "[BusinessHoursReplication] inbox_id=#{@inbox&.id} #{e.class}: #{e.message}"
+    render json: { error: e.message }, status: :unprocessable_entity
   end
 
   def agent_bot
@@ -322,47 +340,18 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def migrate
     target_inbox = Current.account.inboxes.find(params[:target_inbox_id])
-  
+
     unless @inbox.channel_type == target_inbox.channel_type
       return render json: { error: 'Só é possível migrar entre caixas do mesmo tipo' }, status: :unprocessable_entity
     end
-  
-    backup_migration_data(@inbox)
-    migrated_count = 0
-  
-    ActiveRecord::Base.transaction do
-      @inbox.conversations.find_each do |conversation|
-        source_id = conversation.contact_inbox&.source_id || SecureRandom.uuid
-  
-        target_contact_inbox = ContactInbox.find_by(
-          inbox_id: target_inbox.id,
-          source_id: source_id
-        ) || ContactInbox.find_or_create_by!(
-          contact_id: conversation.contact_id,
-          inbox_id: target_inbox.id
-        ) do |ci|
-          ci.source_id = source_id
-        end
-  
-        conversation.messages.update_all(inbox_id: target_inbox.id)
-        conversation.reporting_events.update_all(inbox_id: target_inbox.id)
-        conversation.sla_events.update_all(inbox_id: target_inbox.id)
-        conversation.update!(
-          inbox_id: target_inbox.id,
-          contact_inbox_id: target_contact_inbox.id
-        )
-        migrated_count += 1
-      end
-  
-      @inbox.contact_inboxes.destroy_all
-    end
-  
-    redirect_uazapi_to_target(@inbox, target_inbox)
-    render json: { success: true, migrated_count: migrated_count }
+
+    # Run the migration in the background so large inboxes never time out the request.
+    migrated_count = @inbox.conversations.count
+    Inboxes::MigrateConversationsJob.perform_later(@inbox, target_inbox, Current.user, params[:delete_source].present?)
+
+    render json: { success: true, status: 'processing', migrated_count: migrated_count }
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Target inbox not found' }, status: :not_found
-  rescue StandardError => e
-    render json: { error: e.message }, status: :unprocessable_entity
   end
 
   private
@@ -371,50 +360,6 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     @inbox = Current.account.inboxes.includes(:channel).find(params[:id])
   end
 
-  def backup_migration_data(inbox)
-    timestamp = Time.current.strftime('%Y%m%d%H%M%S')
-    key = "migration_backup_inbox_#{inbox.id}_#{timestamp}"
-    
-    data = {
-      inbox: inbox.attributes,
-      conversations: inbox.conversations.map(&:attributes),
-      contact_inboxes: inbox.contact_inboxes.map(&:attributes),
-      messages: Message.where(inbox_id: inbox.id).map(&:attributes),
-      migrated_at: Time.current,
-      migrated_by: Current.user&.id
-    }
-    
-    Redis::Alfred.set(key, data.to_json)
-    Redis::Alfred.expire(key, 30.days.to_i)
-  end
-  
-  def redirect_uazapi_to_target(source_inbox, target_inbox)
-    return unless source_inbox.channel.is_a?(Channel::Api)
-  
-    instance_token = source_inbox.channel.additional_attributes&.dig('uazapi_instance_token')
-    return unless instance_token.present?
-  
-    access_token = Current.user.access_token&.token
-    frontend_url = ENV.fetch('FRONTEND_URL', nil)
-    return unless access_token.present? && frontend_url.present?
-  
-    Whatsapp::Providers::UazapiService.configure_chatwoot_integration(
-      instance_token,
-      {
-        enabled: true,
-        url: frontend_url,
-        access_token: access_token,
-        account_id: Current.account.id,
-        inbox_id: target_inbox.id,
-        ignore_groups: false,
-        sign_messages: true,
-        create_new_conversation: true
-      }
-    )
-  rescue StandardError => e
-    Rails.logger.error "[MIGRATE] Falha ao redirecionar UazAPI: #{e.message}"
-  end
-  
   def fetch_inbox_for_migrate
     @inbox = Current.account.inboxes.find(params[:id])
   end
@@ -466,6 +411,29 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def update_inbox_working_hours
     @inbox.update_working_hours(params.permit(working_hours: Inbox::OFFISABLE_ATTRS)[:working_hours]) if params[:working_hours]
+  end
+
+  def update_inbox_working_periods
+    return unless params[:working_periods]
+
+    permitted = params.permit(working_periods: Inbox::PERIOD_ATTRS)[:working_periods]
+    @inbox.update_working_periods(permitted)
+  end
+
+  def update_inbox_holidays
+    return unless params[:holidays]
+
+    permitted = params.permit(holidays: Inbox::HOLIDAY_ATTRS)[:holidays]
+    @inbox.update_holidays(permitted)
+  end
+
+  def update_inbox_exceptions
+    return unless params[:exceptions]
+
+    permitted = params.permit(
+      exceptions: [:name, :exception_date, :closed, { periods: Inbox::EXCEPTION_PERIOD_ATTRS }]
+    )[:exceptions]
+    @inbox.update_exceptions(permitted)
   end
 
   def update_channel
@@ -522,8 +490,9 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def inbox_attributes
     [:name, :avatar, :greeting_enabled, :greeting_message, :enable_email_collect, :csat_survey_enabled,
-     :enable_auto_assignment, :working_hours_enabled, :out_of_office_message, :timezone, :allow_messages_after_resolved,
-     :lock_to_single_conversation, :portal_id, :sender_name_type, :business_name,
+     :enable_auto_assignment, :working_hours_enabled, :out_of_office_message, :interval_message, :holiday_message,
+     :timezone, :allow_messages_after_resolved, :lock_to_single_conversation, :reopen_window_hours, :portal_id, :sender_name_type, :business_name,
+     :operational_flow_id,
      { csat_config: [:display_type, :message, :button_text, :language,
                      { survey_rules: [:operator, { values: [] }],
                        template: [:name, :template_id, :friendly_name, :content_sid, :approval_sid, :created_at, :language, :status] }] }]

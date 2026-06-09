@@ -6,8 +6,11 @@ module InboxAgentAvailability
     return inbox_members.none if online_agent_ids.empty?
 
     inbox_members
+      .where(eligible_for_assignment: true)
       .joins(:user)
       .where(users: { id: online_agent_ids })
+      .joins("INNER JOIN account_users ON account_users.user_id = users.id AND account_users.account_id = #{account_id.to_i}")
+      .where(account_users: { active: true, receives_assignments: true })
       .includes(:user)
   end
 

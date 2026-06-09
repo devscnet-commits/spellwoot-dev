@@ -22,21 +22,19 @@ const { t } = useI18n();
 
 const loading = ref({});
 const showAddPopup = ref(false);
-const showDeletePopup = ref(false);
+const showDeactivatePopup = ref(false);
 const showEditPopup = ref(false);
 const agentAPI = ref({ message: '' });
 const currentAgent = ref({});
 const searchQuery = ref('');
 
-const deleteConfirmText = computed(
-  () => `${t('AGENT_MGMT.DELETE.CONFIRM.YES')} ${currentAgent.value.name}`
+const deactivateConfirmText = computed(
+  () => `${t('AGENT_MGMT.DEACTIVATE.CONFIRM.YES')} ${currentAgent.value.name}`
 );
-const deleteRejectText = computed(() => {
-  return `${t('AGENT_MGMT.DELETE.CONFIRM.NO')} ${currentAgent.value.name}`;
-});
-const deleteMessage = computed(() => {
-  return ` ${currentAgent.value.name}?`;
-});
+const deactivateRejectText = computed(
+  () => `${t('AGENT_MGMT.DEACTIVATE.CONFIRM.NO')} ${currentAgent.value.name}`
+);
+const deactivateMessage = computed(() => ` ${currentAgent.value.name}?`);
 
 const agentList = computed(() => getters['agents/getAgents'].value);
 
@@ -84,18 +82,9 @@ const showEditAction = agent => {
   return currentUserId.value !== agent.id;
 };
 
-const showDeleteAction = agent => {
-  if (currentUserId.value === agent.id) {
-    return false;
-  }
-
-  if (!agent.confirmed) {
-    return true;
-  }
-
-  if (agent.role === 'administrator') {
-    return verifiedAdministrators.value.length !== 1;
-  }
+const showDeactivateAction = agent => {
+  if (currentUserId.value === agent.id) return false;
+  if (agent.role === 'administrator' && verifiedAdministrators.value.length === 1) return false;
   return true;
 };
 
@@ -121,26 +110,36 @@ const hideEditPopup = () => {
   showEditPopup.value = false;
 };
 
-const openDeletePopup = agent => {
-  showDeletePopup.value = true;
+const openDeactivatePopup = agent => {
+  showDeactivatePopup.value = true;
   currentAgent.value = agent;
 };
-const closeDeletePopup = () => {
-  showDeletePopup.value = false;
+const closeDeactivatePopup = () => {
+  showDeactivatePopup.value = false;
 };
 
-const deleteAgent = async id => {
+const toggleAgentActive = async agent => {
   try {
-    await store.dispatch('agents/delete', id);
-    showAlertMessage(t('AGENT_MGMT.DELETE.API.SUCCESS_MESSAGE'));
+    if (agent.active === false) {
+      await store.dispatch('agents/reactivate', agent.id);
+      showAlertMessage(t('AGENT_MGMT.DEACTIVATE.API.REACTIVATE_SUCCESS_MESSAGE'));
+    } else {
+      loading.value[agent.id] = true;
+      closeDeactivatePopup();
+      await store.dispatch('agents/deactivate', agent.id);
+      showAlertMessage(t('AGENT_MGMT.DEACTIVATE.API.SUCCESS_MESSAGE'));
+    }
   } catch (error) {
-    showAlertMessage(t('AGENT_MGMT.DELETE.API.ERROR_MESSAGE'));
+    showAlertMessage(t('AGENT_MGMT.DEACTIVATE.API.ERROR_MESSAGE'));
+  } finally {
+    loading.value[currentAgent.value.id] = false;
+    currentAgent.value = {};
   }
 };
-const confirmDeletion = () => {
+
+const confirmDeactivation = () => {
   loading.value[currentAgent.value.id] = true;
-  closeDeletePopup();
-  deleteAgent(currentAgent.value.id);
+  toggleAgentActive(currentAgent.value);
 };
 </script>
 
@@ -196,9 +195,17 @@ const confirmDeletion = () => {
               hide-offline-status
             />
             <div class="flex flex-col gap-1.5 items-start">
-              <span class="block text-heading-3 text-n-slate-12 capitalize">
-                {{ agent.name }}
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="block text-heading-3 text-n-slate-12 capitalize">
+                  {{ agent.name }}
+                </span>
+                <span
+                  v-if="agent.active === false"
+                  class="inline-flex text-xs font-semibold text-n-slate-11 bg-n-alpha-2 border border-n-weak px-1.5 rounded leading-5"
+                >
+                  {{ $t('AGENT_MGMT.LIST.INACTIVE') }}
+                </span>
+              </div>
               <div class="flex items-center gap-2">
                 <span class="text-body-main text-n-slate-11">
                   {{ agent.email }}
@@ -263,14 +270,23 @@ const confirmDeletion = () => {
               @click="openEditPopup(agent)"
             />
             <Button
-              v-if="showDeleteAction(agent)"
-              v-tooltip.top="$t('AGENT_MGMT.DELETE.BUTTON_TEXT')"
-              icon="i-woot-bin"
+              v-if="showDeactivateAction(agent) && agent.active === false"
+              v-tooltip.top="$t('AGENT_MGMT.DEACTIVATE.REACTIVATE_BUTTON_TEXT')"
+              icon="i-lucide-user-check"
               slate
               sm
-              class="hover:enabled:text-n-ruby-11 hover:enabled:bg-n-ruby-2"
               :is-loading="loading[agent.id]"
-              @click="openDeletePopup(agent, index)"
+              @click="toggleAgentActive(agent)"
+            />
+            <Button
+              v-else-if="showDeactivateAction(agent)"
+              v-tooltip.top="$t('AGENT_MGMT.DEACTIVATE.BUTTON_TEXT')"
+              icon="i-lucide-user-x"
+              slate
+              sm
+              class="hover:enabled:text-n-amber-11 hover:enabled:bg-n-amber-2"
+              :is-loading="loading[agent.id]"
+              @click="openDeactivatePopup(agent)"
             />
           </div>
         </div>
@@ -289,21 +305,21 @@ const confirmDeletion = () => {
         :provider="currentAgent.provider"
         :type="currentAgent.role"
         :email="currentAgent.email"
-        :availability="currentAgent.availability_status"
+        :receives-assignments="currentAgent.receives_assignments !== false"
         :custom-role-id="currentAgent.custom_role_id"
         @close="hideEditPopup"
       />
     </woot-modal>
 
     <woot-delete-modal
-      v-model:show="showDeletePopup"
-      :on-close="closeDeletePopup"
-      :on-confirm="confirmDeletion"
-      :title="$t('AGENT_MGMT.DELETE.CONFIRM.TITLE')"
-      :message="$t('AGENT_MGMT.DELETE.CONFIRM.MESSAGE')"
-      :message-value="deleteMessage"
-      :confirm-text="deleteConfirmText"
-      :reject-text="deleteRejectText"
+      v-model:show="showDeactivatePopup"
+      :on-close="closeDeactivatePopup"
+      :on-confirm="confirmDeactivation"
+      :title="$t('AGENT_MGMT.DEACTIVATE.CONFIRM.TITLE')"
+      :message="$t('AGENT_MGMT.DEACTIVATE.CONFIRM.MESSAGE')"
+      :message-value="deactivateMessage"
+      :confirm-text="deactivateConfirmText"
+      :reject-text="deactivateRejectText"
     />
   </SettingsLayout>
 </template>

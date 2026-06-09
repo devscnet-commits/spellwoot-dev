@@ -6,9 +6,10 @@ class Inboxes extends CacheEnabledApiClient {
     super('inboxes', { accountScoped: true });
   }
 
-  migrateInbox(sourceInboxId, targetInboxId) {
+  migrateInbox(sourceInboxId, targetInboxId, deleteSource = false) {
     return axios.post(`${this.url}/${sourceInboxId}/migrate`, {
       target_inbox_id: targetInboxId,
+      delete_source: deleteSource,
     });
   }
 
@@ -37,6 +38,13 @@ class Inboxes extends CacheEnabledApiClient {
 
   syncTemplates(inboxId) {
     return axios.post(`${this.url}/${inboxId}/sync_templates`);
+  }
+
+  replicateBusinessHours(inboxId, { scope, inboxIds = [] }) {
+    return axios.post(`${this.url}/${inboxId}/replicate_business_hours`, {
+      scope,
+      inbox_ids: inboxIds,
+    });
   }
 
   // UazAPI methods

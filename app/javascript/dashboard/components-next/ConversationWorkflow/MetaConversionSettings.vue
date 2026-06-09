@@ -15,32 +15,16 @@ const conversationAttributes = useMapGetter(
 const isSaving = ref(false);
 const isDirty = ref(false);
 
-// Form state
+// Account-level Meta settings, shared by every flow. The conversion trigger and sale value live
+// per flow/state (inside each Closing Flow); here we keep only the master switch, Lead-on-arrival,
+// the default currency and the contact-data mapping. Credentials live in Integrations.
 const enabled = ref(false);
 const strategy = ref('on_arrival');
-const winStatusField = ref('');
-const winValue = ref('');
-const lossValue = ref('');
-const valueField = ref('');
+const leadOnArrival = ref(true);
 const currency = ref('BRL');
-const enrichmentFields = reactive({ em: '', ph: '', fn: '', zp: '' });
-
-// Attribute option lists
-const listAttributes = computed(() =>
-  (conversationAttributes.value || [])
-    .filter(a => a.attributeDisplayType === ATTRIBUTE_TYPES.LIST)
-    .map(a => ({
-      value: a.attributeKey,
-      label: a.attributeDisplayName,
-      attributeValues: a.attributeValues,
-    }))
-);
-
-const numberAttributes = computed(() =>
-  (conversationAttributes.value || [])
-    .filter(a => a.attributeDisplayType === ATTRIBUTE_TYPES.NUMBER)
-    .map(a => ({ value: a.attributeKey, label: a.attributeDisplayName }))
-);
+const enrichmentFields = reactive({
+  em: '', zp: '', ct: '', st: '', country: '', db: '', ge: '', external_id: '',
+});
 
 const allAttributeOptions = computed(() =>
   (conversationAttributes.value || []).map(a => ({
@@ -49,10 +33,25 @@ const allAttributeOptions = computed(() =>
   }))
 );
 
-const winStatusValues = computed(() => {
-  const attr = listAttributes.value.find(a => a.value === winStatusField.value);
-  return attr?.attributeValues || [];
-});
+const TEXT_LIKE = [ATTRIBUTE_TYPES.TEXT, ATTRIBUTE_TYPES.LINK];
+const ENRICHMENT_FIELD_TYPES = {
+  em: TEXT_LIKE,
+  zp: [...TEXT_LIKE, ATTRIBUTE_TYPES.NUMBER],
+  ct: TEXT_LIKE,
+  st: TEXT_LIKE,
+  country: TEXT_LIKE,
+  db: [ATTRIBUTE_TYPES.DATE, ...TEXT_LIKE],
+  ge: [ATTRIBUTE_TYPES.LIST, ...TEXT_LIKE],
+  external_id: [...TEXT_LIKE, ATTRIBUTE_TYPES.NUMBER],
+};
+
+function attributeOptionsFor(metaKey) {
+  const allowed = ENRICHMENT_FIELD_TYPES[metaKey];
+  if (!allowed) return allAttributeOptions.value;
+  return (conversationAttributes.value || [])
+    .filter(a => allowed.includes(a.attributeDisplayType))
+    .map(a => ({ value: a.attributeKey, label: a.attributeDisplayName }));
+}
 
 // Load from account settings
 watch(
@@ -61,31 +60,24 @@ watch(
     const s = account?.settings?.meta_conversion_settings || {};
     enabled.value = s.enabled ?? false;
     strategy.value = s.strategy ?? 'on_arrival';
-    winStatusField.value = s.win_status_field ?? '';
-    winValue.value = s.win_value ?? '';
-    lossValue.value = s.loss_value ?? '';
-    valueField.value = s.value_field ?? '';
+    leadOnArrival.value =
+      s.lead_on_arrival ?? (s.strategy == null || s.strategy === 'on_arrival');
     currency.value = s.currency ?? 'BRL';
     enrichmentFields.em = s.enrichment_fields?.em ?? '';
-    enrichmentFields.ph = s.enrichment_fields?.ph ?? '';
-    enrichmentFields.fn = s.enrichment_fields?.fn ?? '';
     enrichmentFields.zp = s.enrichment_fields?.zp ?? '';
+    enrichmentFields.ct = s.enrichment_fields?.ct ?? '';
+    enrichmentFields.st = s.enrichment_fields?.st ?? '';
+    enrichmentFields.country = s.enrichment_fields?.country ?? '';
+    enrichmentFields.db = s.enrichment_fields?.db ?? '';
+    enrichmentFields.ge = s.enrichment_fields?.ge ?? '';
+    enrichmentFields.external_id = s.enrichment_fields?.external_id ?? '';
     isDirty.value = false;
   },
   { immediate: true }
 );
 
 watch(
-  [
-    enabled,
-    strategy,
-    winStatusField,
-    winValue,
-    lossValue,
-    valueField,
-    currency,
-    enrichmentFields,
-  ],
+  [enabled, strategy, leadOnArrival, currency, enrichmentFields],
   () => {
     isDirty.value = true;
   },
@@ -103,10 +95,7 @@ const handleSave = async () => {
         meta_conversion_settings: {
           enabled: enabled.value,
           strategy: strategy.value,
-          win_status_field: winStatusField.value || null,
-          win_value: winValue.value || null,
-          loss_value: lossValue.value || null,
-          value_field: valueField.value || null,
+          lead_on_arrival: leadOnArrival.value,
           currency: currency.value || 'BRL',
           enrichment_fields: Object.keys(enrichment).length ? enrichment : null,
         },
@@ -134,7 +123,9 @@ const handleSave = async () => {
           {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.TITLE') }}
         </h3>
         <p class="mb-0 text-body-para text-n-slate-11">
-          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.DESCRIPTION') }}
+          Configurações da Meta no nível da conta, compartilhadas por todos os
+          fluxos. O gatilho da conversão e o valor da venda ficam por fluxo →
+          estado ("Enviar à Meta como"). As credenciais ficam em Integrações.
         </p>
       </div>
       <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -159,254 +150,121 @@ const handleSave = async () => {
     </div>
 
     <template v-if="enabled">
-      <!-- Strategy -->
-      <div class="px-5 py-4 flex flex-col gap-3">
-        <p class="text-body-para font-medium text-n-slate-12 mb-0">
-          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.LABEL') }}
-        </p>
-        <label class="flex items-start gap-3 cursor-pointer">
-          <input
-            v-model="strategy"
-            type="radio"
-            value="on_arrival"
-            class="mt-0.5"
-          />
-          <div>
-            <span class="text-body-para text-n-slate-12">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_ARRIVAL_LABEL'
-                )
-              }}
-            </span>
-            <p class="text-body-small text-n-slate-11 mb-0">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_ARRIVAL_DESC'
-                )
-              }}
-            </p>
-          </div>
-        </label>
-        <label class="flex items-start gap-3 cursor-pointer">
-          <input
-            v-model="strategy"
-            type="radio"
-            value="on_close"
-            class="mt-0.5"
-          />
-          <div>
-            <span class="text-body-para text-n-slate-12">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_CLOSE_LABEL'
-                )
-              }}
-            </span>
-            <p class="text-body-small text-n-slate-11 mb-0">
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.STRATEGY.ON_CLOSE_DESC'
-                )
-              }}
-            </p>
-          </div>
-        </label>
-      </div>
-
-      <!-- on_close config -->
-      <div v-if="strategy === 'on_close'" class="px-5 py-4 flex flex-col gap-4">
-        <p class="text-body-para font-medium text-n-slate-12 mb-0">
-          {{
-            $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.SECTION_TITLE')
-          }}
-        </p>
-
-        <!-- Status field -->
-        <div class="flex flex-col gap-1">
-          <label class="text-body-small font-medium text-n-slate-12">
-            {{
-              $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.STATUS_FIELD')
-            }}
-          </label>
-          <select
-            v-model="winStatusField"
-            class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2 w-full"
+      <!-- Lead on arrival (independent toggle) -->
+      <div class="px-5 py-4 flex items-center justify-between gap-3">
+        <div class="flex flex-col">
+          <p class="text-body-para font-medium text-n-slate-12 mb-0">
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.LEAD_ON_ARRIVAL.LABEL') }}
+          </p>
+          <p class="text-body-small text-n-slate-11 mb-0">
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.LEAD_ON_ARRIVAL.DESC') }}
+          </p>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer select-none shrink-0">
+          <div
+            class="relative w-10 h-5 rounded-full transition-colors"
+            :class="leadOnArrival ? 'bg-n-brand' : 'bg-n-slate-5'"
           >
-            <option value="" disabled>
-              {{
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.SELECT_FIELD'
-                )
-              }}
-            </option>
-            <option
-              v-for="attr in listAttributes"
-              :key="attr.value"
-              :value="attr.value"
-            >
-              {{ attr.label }}
-            </option>
-          </select>
-        </div>
-
-        <!-- Win / Loss values -->
-        <div v-if="winStatusField" class="grid grid-cols-2 gap-3">
-          <div class="flex flex-col gap-1">
-            <label class="text-body-small font-medium text-n-slate-12">
-              {{
-                $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.WIN_VALUE')
-              }}
-            </label>
-            <select
-              v-if="winStatusValues.length"
-              v-model="winValue"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
-            >
-              <option value="" disabled>
-                {{
-                  $t(
-                    'CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.SELECT_VALUE'
-                  )
-                }}
-              </option>
-              <option v-for="val in winStatusValues" :key="val" :value="val">
-                {{ val }}
-              </option>
-            </select>
-            <input
-              v-else
-              v-model="winValue"
-              type="text"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
+            <input v-model="leadOnArrival" type="checkbox" class="sr-only" />
+            <div
+              class="absolute top-0.5 size-4 bg-white rounded-full shadow transition-transform"
+              :class="leadOnArrival ? 'translate-x-5' : 'translate-x-0.5'"
             />
           </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-body-small font-medium text-n-slate-12">
-              {{
-                $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.LOSS_VALUE')
-              }}
-            </label>
-            <select
-              v-if="winStatusValues.length"
-              v-model="lossValue"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
-            >
-              <option value="" disabled>
-                {{
-                  $t(
-                    'CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.SELECT_VALUE'
-                  )
-                }}
-              </option>
-              <option v-for="val in winStatusValues" :key="val" :value="val">
-                {{ val }}
-              </option>
-            </select>
-            <input
-              v-else
-              v-model="lossValue"
-              type="text"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
-            />
-          </div>
-        </div>
-
-        <!-- Value field + currency -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="flex flex-col gap-1">
-            <label class="text-body-small font-medium text-n-slate-12">
-              {{
-                $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.VALUE_FIELD')
-              }}
-            </label>
-            <select
-              v-model="valueField"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
-            >
-              <option value="">
-                {{
-                  $t(
-                    'CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.NO_VALUE_FIELD'
-                  )
-                }}
-              </option>
-              <option
-                v-for="attr in numberAttributes"
-                :key="attr.value"
-                :value="attr.value"
-              >
-                {{ attr.label }}
-              </option>
-            </select>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-body-small font-medium text-n-slate-12">
-              {{
-                $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.CURRENCY')
-              }}
-            </label>
-            <input
-              v-model="currency"
-              type="text"
-              maxlength="3"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2 uppercase"
-              :placeholder="
-                $t(
-                  'CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.CURRENCY_PLACEHOLDER'
-                )
-              "
-            />
-          </div>
-        </div>
+        </label>
       </div>
 
-      <!-- Enrichment fields -->
-      <div class="px-5 py-4 flex flex-col gap-3">
+      <!-- Default currency (account-wide) -->
+      <div class="px-5 py-4 flex flex-col gap-2">
+        <label class="text-body-para font-medium text-n-slate-12 mb-0">
+          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.CURRENCY') }}
+        </label>
+        <p class="text-body-small text-n-slate-11 mb-0">
+          Moeda padrão das conversões, usada por todos os fluxos.
+        </p>
+        <input
+          v-model="currency"
+          type="text"
+          maxlength="3"
+          class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2 uppercase sm:w-40"
+          :placeholder="
+            $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.CURRENCY_PLACEHOLDER')
+          "
+        />
+      </div>
+
+      <!-- Contact data mapping -->
+      <div class="px-5 py-4 flex flex-col gap-4">
         <div>
           <p class="text-body-para font-medium text-n-slate-12 mb-0">
             {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.TITLE') }}
           </p>
           <p class="text-body-small text-n-slate-11 mb-0">
-            {{
-              $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.DESCRIPTION')
-            }}
+            Mapeie atributos da conversa para os campos de dados do contato
+            enviados à Meta. Todos os valores são protegidos por hash antes do
+            envio.
           </p>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div
-            v-for="(label, metaKey) in {
-              em: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EMAIL'),
-              ph: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.PHONE'),
-              fn: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.NAME'),
-              zp: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.ZIP'),
-            }"
-            :key="metaKey"
-            class="flex flex-col gap-1"
-          >
-            <label class="text-body-small font-medium text-n-slate-12">
-              {{ label }}
-            </label>
-            <select
-              v-model="enrichmentFields[metaKey]"
-              class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
+        <!-- Auto fields (read-only) -->
+        <div class="flex flex-col gap-2">
+          <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Enviados automaticamente do contato</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div
+              v-for="item in [
+                { label: 'Telefone (ph)', icon: 'i-lucide-phone' },
+                { label: 'Nome do contato (fn)', icon: 'i-lucide-user' },
+              ]"
+              :key="item.label"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-n-teal-2 border border-n-teal-4"
             >
-              <option value="">
-                {{
-                  $t(
-                    'CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.NOT_MAPPED'
-                  )
-                }}
-              </option>
-              <option
-                v-for="attr in allAttributeOptions"
-                :key="attr.value"
-                :value="attr.value"
+              <span :class="[item.icon, 'w-3.5 h-3.5 text-n-teal-11 shrink-0']" />
+              <span class="text-xs text-n-teal-11 font-medium">{{ item.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Configurable fields -->
+        <div class="flex flex-col gap-2">
+          <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Dados adicionais (opcional)</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div
+              v-for="(label, metaKey) in {
+                em: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EMAIL'),
+                zp: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.ZIP'),
+                ct: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.CITY'),
+                st: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.STATE'),
+                country: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.COUNTRY'),
+                db: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.DATE_OF_BIRTH'),
+                ge: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.GENDER'),
+                external_id: $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.EXTERNAL_ID'),
+              }"
+              :key="metaKey"
+              class="flex flex-col gap-1"
+            >
+              <label class="text-body-small font-medium text-n-slate-12">
+                {{ label }}
+              </label>
+              <select
+                v-model="enrichmentFields[metaKey]"
+                class="text-body-para text-n-slate-12 bg-n-solid-1 border border-n-weak rounded px-3 py-2"
               >
-                {{ attr.label }}
-              </option>
-            </select>
+                <option value="">
+                  {{
+                    $t(
+                      'CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.NOT_MAPPED'
+                    )
+                  }}
+                </option>
+                <option
+                  v-for="attr in attributeOptionsFor(metaKey)"
+                  :key="attr.value"
+                  :value="attr.value"
+                >
+                  {{ attr.label }}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
       </div>

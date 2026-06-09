@@ -15,6 +15,7 @@ import billing from './billing/billing.routes';
 import canned from './canned/canned.routes';
 import inbox from './inbox/inbox.routes';
 import integrations from './integrations/integrations.routes';
+import integrationsHub from './integrations/integrationsHub.routes';
 import labels from './labels/labels.routes';
 import macros from './macros/macros.routes';
 import reports from './reports/reports.routes';
@@ -25,6 +26,7 @@ import customRoles from './customRoles/customRole.routes';
 import profile from './profile/profile.routes';
 import security from './security/security.routes';
 import conversationWorkflow from './conversationWorkflow/conversationWorkflow.routes';
+import operationalFlows from './operationalFlows/operationalFlows.routes';
 import captain from './captain/captain.routes';
 
 export default {
@@ -57,6 +59,7 @@ export default {
     ...canned.routes,
     ...inbox.routes,
     ...integrations.routes,
+    ...integrationsHub.routes,
     ...labels.routes,
     ...macros.routes,
     ...reports.routes,
@@ -66,6 +69,7 @@ export default {
     ...profile.routes,
     ...security.routes,
     ...conversationWorkflow.routes,
+    ...operationalFlows.routes,
     ...captain.routes,
   ],
 };

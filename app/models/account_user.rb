@@ -34,6 +34,9 @@ class AccountUser < ApplicationRecord
   enum role: { agent: 0, administrator: 1 }
   enum availability: { online: 0, offline: 1, busy: 2 }
 
+  scope :active_agents, -> { where(active: true) }
+  scope :receiving_assignments, -> { where(receives_assignments: true) }
+
   accepts_nested_attributes_for :account
 
   after_create_commit :notify_creation, :create_notification_setting

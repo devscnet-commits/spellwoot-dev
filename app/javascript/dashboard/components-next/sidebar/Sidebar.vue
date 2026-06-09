@@ -503,6 +503,21 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.REPORTS_BOT'),
           to: accountScopedRoute('bot_reports'),
         },
+        {
+          name: 'Reports Leads',
+          label: t('SIDEBAR.REPORTS_LEADS'),
+          to: accountScopedRoute('leads_reports'),
+        },
+        {
+          name: 'Reports Marketing',
+          label: t('SIDEBAR.REPORTS_MARKETING'),
+          to: accountScopedRoute('marketing_reports'),
+        },
+        {
+          name: 'Reports Schedule',
+          label: t('SIDEBAR.REPORTS_SCHEDULE'),
+          to: accountScopedRoute('schedule_reports'),
+        },
       ],
     },
     {
@@ -689,6 +704,12 @@ const menuItems = computed(() => {
           to: accountScopedRoute('settings_applications'),
         },
         {
+          name: 'Settings Integrations Hub',
+          label: t('SIDEBAR.INTEGRATIONS_HUB'),
+          icon: 'i-lucide-key-round',
+          to: accountScopedRoute('integrations_hub'),
+        },
+        {
           name: 'Settings Audit Logs',
           label: t('SIDEBAR.AUDIT_LOGS'),
           icon: 'i-lucide-briefcase',
@@ -710,6 +731,12 @@ const menuItems = computed(() => {
           name: 'Conversation Workflow',
           label: t('SIDEBAR.CONVERSATION_WORKFLOW'),
           icon: 'i-lucide-workflow',
+          activeOn: [
+            'conversation_workflow_index',
+            'settings_operational_flows_list',
+            'settings_operational_flows_new',
+            'settings_operational_flows_edit',
+          ],
           to: accountScopedRoute('conversation_workflow_index'),
         },
         {

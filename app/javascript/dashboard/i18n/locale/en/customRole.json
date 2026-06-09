@@ -55,6 +55,18 @@
         "LABEL": "Permissions",
         "ERROR": "Permissions are required."
       },
+      "VISIBILITY": {
+        "LABEL": "Conversation visibility",
+        "HELP": "Which conversations this role can see across the list, tabs and reports. Default keeps the inbox + teams behavior.",
+        "UNASSIGNED_QUEUE": "Can also see the unassigned queue of their inboxes",
+        "OPTIONS": {
+          "default": "Default (inbox + teams)",
+          "own": "Own — only conversations assigned to them",
+          "team": "Team — conversations of their teams' members",
+          "inbox": "Inbox — all conversations in their inboxes",
+          "account": "Account — all conversations"
+        }
+      },
       "CANCEL_BUTTON_TEXT": "Cancel",
       "API": {
         "ERROR_MESSAGE": "Could not connect to Woot server. Please try again."

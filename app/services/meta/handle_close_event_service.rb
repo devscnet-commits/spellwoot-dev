@@ -1,33 +1,41 @@
 class Meta::HandleCloseEventService
-  # Called when an agent marks a conversation as Won or Lost (on_close strategy).
-  # Fires Purchase for "won", nothing for "lost" (no conversion to report).
-  # Idempotent: the ConversionsApiService checks already_sent? before posting.
-  def initialize(conversation:, outcome:)
+  # Fires a Meta conversion when a human resolves a conversation under a flow that has Meta enabled,
+  # using the resolution state the agent picked. The event is fully explicit (never inferred from
+  # polarity/category):
+  #   - closing_flow.meta_enabled == true
+  #   - resolution_state.meta_event_type present (null = never fire)
+  #   - the close was a human action
+  # event_id is deterministic (canonical_key + conversation) so Meta dedups close→reopen→close.
+  def initialize(conversation:, outcome:, user: nil)
     @conversation = conversation
-    @outcome = outcome # :won | :lost
-    @account = conversation.account
+    @outcome = outcome.to_s # canonical_key of the chosen resolution state
+    @user = user
   end
 
   def perform
-    return unless on_close_strategy?
+    return unless @user.is_a?(User)
 
-    return unless @outcome == :won
+    flow = @conversation.operational_flow(@user)
+    return unless flow&.meta_enabled
 
-    value = sale_value
-    Meta::TrackPurchaseJob.perform_later(@conversation.id, value: value)
+    state = flow.state_for(@outcome)
+    return if state.nil? || state.meta_event_type.blank?
+
+    Meta::TrackPurchaseJob.perform_later(
+      @conversation.id,
+      value: sale_value(state),
+      event_name: state.meta_event_type,
+      event_id: "#{@outcome}-#{@conversation.id}"
+    )
   end
 
   private
 
-  def on_close_strategy?
-    @account.settings&.dig('meta_conversion_settings', 'strategy') == 'on_close'
-  end
+  def sale_value(state)
+    attr_key = state.meta_value_attr
+    return nil if attr_key.blank?
 
-  def sale_value
-    value_field = @account.settings&.dig('meta_conversion_settings', 'value_field')
-    return nil if value_field.blank?
-
-    raw = @conversation.custom_attributes&.dig(value_field)
+    raw = @conversation.custom_attributes&.dig(attr_key)
     raw.present? ? raw.to_f : nil
   end
 end

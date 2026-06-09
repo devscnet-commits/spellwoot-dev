@@ -6,10 +6,14 @@ import { useWindowSize } from '@vueuse/core';
 import { vOnClickOutside } from '@vueuse/components';
 import wootConstants from 'dashboard/constants/globals';
 
-defineProps({
+const props = defineProps({
   currentChat: {
     required: true,
     type: Object,
+  },
+  panelWidth: {
+    type: Number,
+    default: null,
   },
 });
 
@@ -49,6 +53,7 @@ const closeContactPanel = () => {
         'md:hidden': activeTab !== 0,
       },
     ]"
+    :style="props.panelWidth ? { width: props.panelWidth + 'px', minWidth: props.panelWidth + 'px', maxWidth: props.panelWidth + 'px' } : {}"
   >
     <div class="flex flex-1 overflow-auto">
       <ContactPanel

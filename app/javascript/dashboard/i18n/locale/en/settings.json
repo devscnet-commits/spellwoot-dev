@@ -354,6 +354,9 @@
     "ONE_OFF": "One off",
     "REPORTS_SLA": "SLA",
     "REPORTS_BOT": "Bot",
+    "REPORTS_LEADS": "Leads",
+    "REPORTS_MARKETING": "Marketing",
+    "REPORTS_SCHEDULE": "Horários",
     "REPORTS_AGENT": "Agents",
     "REPORTS_LABEL": "Labels",
     "REPORTS_INBOX": "Inbox",
@@ -382,7 +385,9 @@
     "DOCS": "Read docs",
     "SECURITY": "Security",
     "CAPTAIN_AI": "Captain",
-    "CONVERSATION_WORKFLOW": "Conversation Workflow"
+    "CONVERSATION_WORKFLOW": "Conversation Workflow",
+    "OPERATIONAL_FLOWS": "Operational Flows",
+    "INTEGRATIONS_HUB": "APIs & Credentials"
   },
   "CAPTAIN_SETTINGS": {
     "TITLE": "Captain Settings",
@@ -621,15 +626,32 @@
         "LABEL_CONDITIONAL": "Required if {field} = {value}"
       }
     },
+    "LEADS_REPORT": {
+      "TITLE": "Leads",
+      "DESCRIPTION": "Acompanhe o resultado das suas conversas: ganhos, perdidos e fechados pela IA.",
+      "LOADING": "Carregando...",
+      "WON": "Ganho",
+      "LOST": "Perdido",
+      "AI_CLOSED": "Fechado pela IA",
+      "TOTAL": "Total",
+      "OF_TOTAL": "do total"
+    },
     "OUTCOME": {
-      "MARK_WON": "Mark as Won",
-      "MARK_LOST": "Mark as Lost",
-      "MODAL_DESCRIPTION": "Fill in the fields below before marking the outcome.",
-      "CONFIRM": "Confirm",
-      "CANCEL": "Cancel",
-      "NO_FIELDS": "No additional fields required.",
-      "SUCCESS": "Outcome recorded successfully",
-      "ERROR": "Could not record outcome, please try again"
+      "MARK_WON": "Marcar como Ganho",
+      "MARK_LOST": "Marcar como Perdido",
+      "MARK_NO_RESULT": "Sem resultado",
+      "MODAL_DESCRIPTION": "Preencha os campos abaixo antes de marcar o resultado.",
+      "CONFIRM": "Confirmar",
+      "CANCEL": "Cancelar",
+      "NO_FIELDS": "Nenhum campo adicional necessário.",
+      "SUCCESS": "Resultado registrado com sucesso",
+      "ERROR": "Não foi possível registrar o resultado, tente novamente",
+      "PROMPT_RESOLVE": "Antes de resolver, defina o resultado do lead:",
+      "RESULT_WON": "Ganho",
+      "RESULT_LOST": "Perdido",
+      "RESULT_NONE": "Sem resultado",
+      "RESULT_UPDATED": "Resultado atualizado",
+      "RESULT_LABEL": "Resultado"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
@@ -642,6 +664,10 @@
         "SUCCESS": "Meta conversion settings saved",
         "ERROR": "Could not save settings, please try again"
       },
+      "LEAD_ON_ARRIVAL": {
+        "LABEL": "Send Lead on arrival",
+        "DESC": "Fires a Lead event when a conversation arrives from a Click-to-WhatsApp ad. Independent from the closing conversion, which is now configured per flow (state \"Send to Meta as\")."
+      },
       "STRATEGY": {
         "LABEL": "When to send the conversion event?",
         "ON_ARRIVAL_LABEL": "Send Lead on arrival",
@@ -649,6 +675,7 @@
         "ON_CLOSE_LABEL": "Send conversion on close (manual action)",
         "ON_CLOSE_DESC": "No event is sent automatically. The agent clicks \"Mark as Won\" or \"Mark as Lost\" on the conversation to trigger the event. The modal fields are configured in Conversation Workflow → Required Attributes."
       },
+      "CLOSE_PER_FLOW_NOTE": "The conversion trigger now lives per flow — open a flow and set each state's \"Send to Meta as\". The fields below are the account-level status stamp and currency default.",
       "ON_CLOSE": {
         "SECTION_TITLE": "Outcome field configuration",
         "STATUS_FIELD": "Status attribute (list)",
@@ -664,10 +691,17 @@
       "ENRICHMENT": {
         "TITLE": "Contact data for matching (optional)",
         "DESCRIPTION": "Map conversation attributes to contact data fields sent to Meta. These values are sent automatically — protected by hash before sending.",
-        "EMAIL": "E-mail do contato (em)",
-        "PHONE": "Telefone do contato (ph)",
-        "NAME": "Primeiro nome do contato (fn)",
-        "ZIP": "CEP do contato (zp)",
+        "EMAIL": "Contact e-mail (em)",
+        "PHONE": "Contact phone (ph)",
+        "FIRST_NAME": "Contact first name (fn)",
+        "LAST_NAME": "Contact last name (ln)",
+        "ZIP": "Contact ZIP code (zp)",
+        "CITY": "Contact city (ct)",
+        "STATE": "Contact state (st)",
+        "COUNTRY": "Contact country (country)",
+        "DATE_OF_BIRTH": "Date of birth (db)",
+        "GENDER": "Gender (ge)",
+        "EXTERNAL_ID": "External ID (external_id)",
         "NOT_MAPPED": "Not mapped"
       }
     }
@@ -765,7 +799,11 @@
         "HEADER": {
           "TITLE": "Edit assignment policy"
         },
-        "EDIT_BUTTON": "Update policy",
+        "EDIT_BUTTON": "Atualizar política",
+        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "SAVED_BUTTON": "Tudo salvo",
+        "UNSAVED_INDICATOR": "Alterações não salvas",
+        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?",
         "CONFIRM_ADD_INBOX_DIALOG": {
           "TITLE": "Add inbox",
           "DESCRIPTION": "{inboxName} inbox is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",
@@ -833,24 +871,35 @@
           }
         },
         "FAIR_DISTRIBUTION": {
-          "LABEL": "Fair distribution policy",
-          "DESCRIPTION": "Set the maximum number of conversations that can be assigned per agent within a time window to avoid overloading any one agent. This required field defaults to 100 conversations per hour.",
+          "LABEL": "Conversation limit per agent",
+          "DESCRIPTION": "Maximum conversations assigned per agent in a time window. Prevents overloading. Defaults to 100 per hour.",
           "INPUT_MAX": "Assign max",
           "DURATION": "Conversations per agent in every"
         },
         "INBOXES": {
-          "LABEL": "Added inboxes",
-          "DESCRIPTION": "Add inboxes for which this policy will be applicable.",
+          "LABEL": "Participating inboxes",
+          "DESCRIPTION": "Select the inboxes where this policy will apply.",
           "ADD_BUTTON": "Add inbox",
+          "SEARCH_PLACEHOLDER": "Search inboxes...",
+          "SELECTED": "Selected",
+          "SELECTED_COUNT": "{count} inbox(es) selected",
+          "LOADING": "Loading inboxes...",
           "DROPDOWN": {
             "SEARCH_PLACEHOLDER": "Search and select inboxes to add",
             "ADD_BUTTON": "Add"
           },
-          "EMPTY_STATE": "No inboxes added to this policy, add an inbox to get started",
+          "EMPTY_STATE": "No inboxes found",
           "API": {
             "SUCCESS_MESSAGE": "Inbox successfully added to policy",
             "ERROR_MESSAGE": "Failed to add inbox to policy"
           }
+        },
+        "SUMMARY": {
+          "TITLE": "Summary",
+          "INBOXES": "{count} inbox(es) linked",
+          "STRATEGY": "Strategy",
+          "PRIORITY": "Priority",
+          "LIMIT": "Limit"
         }
       },
       "DELETE_POLICY": {
@@ -884,7 +933,11 @@
         "HEADER": {
           "TITLE": "Edit agent capacity policy"
         },
-        "EDIT_BUTTON": "Update policy",
+        "EDIT_BUTTON": "Atualizar política",
+        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "SAVED_BUTTON": "Tudo salvo",
+        "UNSAVED_INDICATOR": "Alterações não salvas",
+        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?",
         "CONFIRM_ADD_AGENT_DIALOG": {
           "TITLE": "Add agent",
           "DESCRIPTION": "{agentName} is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",
@@ -968,6 +1021,12 @@
             "SUCCESS_MESSAGE": "Agent successfully added to policy",
             "ERROR_MESSAGE": "Failed to add agent to policy"
           }
+        },
+        "SUMMARY": {
+          "TITLE": "Summary",
+          "INBOXES": "{count} inbox(es) selected",
+          "AGENTS": "{count} agent(s) selected",
+          "CAPACITY": "Total capacity: {total} conversations"
         }
       },
       "DELETE_POLICY": {
@@ -980,6 +1039,40 @@
       "DESCRIPTION": "Are you sure you want to delete this policy? This action cannot be undone.",
       "CONFIRM_BUTTON_LABEL": "Delete",
       "CANCEL_BUTTON_LABEL": "Cancel"
+    }
+  },
+  "INTEGRATIONS_HUB": {
+    "TITLE": "APIs & Credentials",
+    "DESCRIPTION": "Configure your account integrations. Changes apply immediately without server access.",
+    "CONFIGURE": "Configure",
+    "CLOSE": "Close",
+    "SAVE": "Save",
+    "SAVING": "Saving...",
+    "SAVED": "Integration saved successfully.",
+    "ERROR": "Error saving integration. Please try again.",
+    "CONFIGURED": "Configured",
+    "RESET": "Reset",
+    "HOW_TO": "How to find?",
+    "META": {
+      "DESCRIPTION": "Conversion tracking via CAPI for Facebook/Instagram ads.",
+      "PIXEL_ID": "Pixel ID",
+      "ACCESS_TOKEN": "Conversions API Access Token",
+      "TEST_EVENT_CODE": "Test Event Code (Optional)"
+    },
+    "OPENAI": {
+      "DESCRIPTION": "Integration with GPT models for automatic responses.",
+      "API_KEY": "API Key",
+      "MODEL": "Default model"
+    },
+    "N8N": {
+      "DESCRIPTION": "Workflow automation via N8N.",
+      "WEBHOOK_URL": "Webhook URL",
+      "TOKEN": "Authentication token"
+    },
+    "BITRIX": {
+      "DESCRIPTION": "Integration with Bitrix24 CRM.",
+      "WEBHOOK_URL": "Webhook URL",
+      "TOKEN": "Token"
     }
   }
 }

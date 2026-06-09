@@ -1,0 +1,123 @@
+{
+  "OPERATIONAL_FLOWS_SETTINGS": {
+    "HEADER": "Fluxos de Fechamento",
+    "DESCRIPTION": "Configure o fluxo de fechamento de cada Caixa: os motivos de resultado disponíveis ao resolver uma conversa como ganha ou perdida, e se o motivo é obrigatório.",
+    "LOADING": "Carregando fluxos de fechamento...",
+    "NEW_FLOW": "Criar fluxo",
+    "LIST": {
+      "404": "Nenhum fluxo de fechamento criado ainda",
+      "EDIT_FLOW": "Editar fluxo",
+      "REASONS_COUNT": "{count} motivo | {count} motivos",
+      "REASON_REQUIRED": "Motivo obrigatório",
+      "META_ON": "Meta ativa",
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "DELETE": {
+      "BUTTON_TEXT": "Excluir",
+      "API": {
+        "SUCCESS_MESSAGE": "Fluxo de fechamento excluído com sucesso",
+        "ERROR_MESSAGE": "Não foi possível excluir o fluxo de fechamento"
+      },
+      "CONFIRM": {
+        "TITLE": "Excluir {flowName}?",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? As Caixas que o utilizam ficarão sem fluxo.",
+        "YES": "Sim, excluir",
+        "NO": "Cancelar"
+      }
+    },
+    "FORM": {
+      "NEW_TITLE": "Novo fluxo de fechamento",
+      "EDIT_TITLE": "Editar fluxo de fechamento",
+      "SUBTITLE": "Defina os motivos que os agentes podem escolher ao resolver uma conversa.",
+      "NAME": {
+        "LABEL": "Nome do fluxo",
+        "PLACEHOLDER": "ex.: Vendas"
+      },
+      "REQUIRE_REASON": {
+        "LABEL": "Exigir um motivo",
+        "HELP": "Os agentes precisam escolher um motivo para resolver uma conversa como ganha ou perdida."
+      },
+      "ACTIVE": {
+        "LABEL": "Ativo"
+      },
+      "META": {
+        "LABEL": "Enviar conversões para a Meta",
+        "HELP": "Interruptor mestre deste fluxo. Quando ligado, cada estado abaixo pode disparar um evento na Meta."
+      },
+      "CATEGORY": {
+        "LABEL": "Categoria",
+        "HELP": "Dimensão para relatórios. Fechamentos de venda alimentam o funil; fechamentos de suporte ficam separados e nunca contam como conversão.",
+        "OPTIONS": {
+          "sales": "Vendas",
+          "support": "Suporte"
+        }
+      },
+      "STATES": {
+        "LABEL": "Estados de resolução (botões de fechamento)",
+        "HELP": "Renomeie os botões à vontade — o rótulo é só apresentação. A chave fixa é o que os relatórios e integrações leem, então renomear nunca altera seus dados.",
+        "CANONICAL_FIXED": "chave fixa (usada nos relatórios)",
+        "DISPLAY_LABEL": "Rótulo do botão",
+        "POLARITY": "Polaridade",
+        "POLARITY_OPTIONS": {
+          "positive": "Positiva",
+          "negative": "Negativa",
+          "neutral": "Neutra"
+        },
+        "REQUIRES_REASON": "Exigir um motivo neste estado",
+        "META_EVENT": "Enviar à Meta como",
+        "META_NONE": "Não enviar",
+        "META_VALUE_ATTR": "Valor da venda a partir do atributo",
+        "META_NO_VALUE": "Sem valor"
+      },
+      "WON_REASONS": "Motivos de Ganho",
+      "LOST_REASONS": "Motivos de Perda",
+      "REASON_PLACEHOLDER": "ex.: Preço muito alto",
+      "ADD_REASON": "Adicionar motivo",
+      "INBOXES": {
+        "LABEL": "Caixas que usam este fluxo",
+        "HELP": "Uma Caixa usa apenas um fluxo. Selecioná-la aqui a move de qualquer fluxo anterior.",
+        "EMPTY": "Nenhuma caixa disponível."
+      },
+      "SAVE": "Salvar fluxo",
+      "CREATE_SUCCESS": "Fluxo de fechamento criado com sucesso",
+      "UPDATE_SUCCESS": "Fluxo de fechamento atualizado com sucesso",
+      "ERROR_MESSAGE": "Não foi possível salvar o fluxo de fechamento",
+      "REQUIREMENTS": {
+        "LABEL": "Atributos obrigatórios para fechar",
+        "HELP": "Atributos que o agente precisa preencher antes de resolver como um destes estados. Vinculados ao estado, então renomear um botão nunca os altera.",
+        "SELECT_ATTRIBUTE": "Selecione um atributo",
+        "ALWAYS": "Sempre obrigatório",
+        "WHEN_STATE": "Obrigatório quando: {state}",
+        "ADD": "Adicionar obrigatoriedade"
+      }
+    },
+    "ASSIGNMENT_RULES": {
+      "HEADER": "Regras de atribuição",
+      "DESCRIPTION": "Decide qual fluxo se aplica a cada conversa, pela função de quem fecha, pela caixa e pelo time. A regra mais específica que casar vence.",
+      "NEW_RULE": "Adicionar regra",
+      "EMPTY": "Nenhuma regra de atribuição ainda. As conversas usam o fluxo vinculado à sua Caixa.",
+      "ANY": "(qualquer)",
+      "DEFAULT": "Padrão",
+      "PRIORITY": "Prioridade",
+      "PRIORITY_HELP": "Números menores são avaliados primeiro. A primeira regra que casa decide o fluxo.",
+      "DIMENSIONS": {
+        "ROLE": "Função",
+        "INBOX": "Caixa",
+        "TEAM": "Time",
+        "ORIGIN": "Origem"
+      },
+      "FORM": {
+        "FLOW": "Fluxo a aplicar",
+        "SELECT": "Selecione um fluxo",
+        "SAVE": "Salvar regra",
+        "CANCEL": "Cancelar",
+        "CONDITIONS_INTRO": "Defina só as condições que importam. O que ficar em \"(qualquer)\" não restringe aquela dimensão."
+      },
+      "SAVE_SUCCESS": "Regra de atribuição salva",
+      "SAVE_ERROR": "Não foi possível salvar a regra de atribuição",
+      "DELETE_SUCCESS": "Regra de atribuição excluída",
+      "SPECIFICITY_HELP": "A regra mais específica (com mais condições) que casar com a conversa vence. Sem nenhuma condição, ela vale para qualquer conversa."
+    }
+  }
+}

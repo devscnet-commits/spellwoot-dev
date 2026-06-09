@@ -10,6 +10,10 @@ class UazapiAPI extends ApiClient {
     return axios.post(this.url, data);
   }
 
+  fromInstance(data) {
+    return axios.post(`${this.url}/from_instance`, data);
+  }
+
   getStatus(inboxId) {
     return axios.get(`${this.baseUrl()}/inboxes/${inboxId}/uazapi_status`);
   }

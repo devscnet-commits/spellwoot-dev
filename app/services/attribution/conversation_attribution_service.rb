@@ -48,9 +48,8 @@ class Attribution::ConversationAttributionService
       return
     end
 
-    strategy = conversation.account.settings&.dig('meta_conversion_settings', 'strategy')
-    unless strategy.nil? || strategy == 'on_arrival'
-      Rails.logger.info "[CAPI] conv=#{conversation.id} lead_job skipped reason=strategy=#{strategy}"
+    unless lead_on_arrival_enabled?(conversation.account)
+      Rails.logger.info "[CAPI] conv=#{conversation.id} lead_job skipped reason=lead_on_arrival_disabled"
       return
     end
 
@@ -58,4 +57,15 @@ class Attribution::ConversationAttributionService
     Meta::TrackLeadJob.perform_later(conversation.id)
   end
   private_class_method :track_lead_on_arrival
+
+  # Lead-on-arrival is now an independent toggle so it can coexist with the closing conversion.
+  # The explicit flag wins; absent it, fall back to the legacy mutually-exclusive strategy radio.
+  def self.lead_on_arrival_enabled?(account)
+    settings = account.settings&.dig('meta_conversion_settings') || {}
+    return settings['lead_on_arrival'] == true if settings.key?('lead_on_arrival')
+
+    strategy = settings['strategy']
+    strategy.nil? || strategy == 'on_arrival'
+  end
+  private_class_method :lead_on_arrival_enabled?
 end

@@ -56,6 +56,13 @@ Rails.application.routes.draw do
           resource :bulk_actions, only: [:create]
           resources :agents, only: [:index, :create, :update, :destroy] do
             post :bulk_create, on: :collection
+            member do
+              post :deactivate
+              post :reactivate
+            end
+            resource :schedule, only: [:show, :update, :destroy],
+                                controller: 'agent_schedules',
+                                param: :agent_id
           end
           namespace :captain do
             resource :preferences, only: [:show, :update]
@@ -157,6 +164,9 @@ Rails.application.routes.draw do
               post :unread
               post :custom_attributes
               post :close_outcome
+              post :set_outcome
+              post :close_as_ai
+              get :closing_flow
               get :attachments
               get :inbox_assistant
               get :reporting_events if ChatwootApp.enterprise?
@@ -216,6 +226,15 @@ Rails.application.routes.draw do
           resources :reporting_events, only: [:index] if ChatwootApp.enterprise?
           resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy]
           resources :custom_filters, only: [:index, :show, :create, :update, :destroy]
+          resources :integration_settings, param: :provider, only: [:show, :update] do
+            collection do
+              post ':provider/import_from_env', action: :import_from_env, as: :import_from_env
+              post ':provider/test', action: :test_connection, as: :test_connection
+              post ':provider/sync_chatwoot', action: :sync_chatwoot, as: :sync_chatwoot
+              post ':provider/sync_instances', action: :sync_instances, as: :sync_instances
+            end
+          end
+          resources :provider_instances, only: [:index]
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do
             get :assignable_agents, on: :member
             get :campaigns, on: :member
@@ -226,6 +245,7 @@ Rails.application.routes.draw do
             get :health, on: :member
             post :register_webhook, on: :member
             post :reset_secret, on: :member
+            post :replicate_business_hours, on: :member
             # UazAPI WhatsApp endpoints
             get :uazapi_status, on: :member
             post :uazapi_connect, on: :member
@@ -242,7 +262,11 @@ Rails.application.routes.draw do
               post :analyze, on: :collection
             end
           end
-          resources :uazapi_inboxes, only: [:create]
+          resources :uazapi_inboxes, only: [:create] do
+            collection do
+              post :from_instance
+            end
+          end
           resources :inbox_members, only: [:create, :show], param: :inbox_id do
           end
 
@@ -272,9 +296,18 @@ Rails.application.routes.draw do
               collection do
                 delete :destroy
                 patch :update
+                patch :update_member_role
+              end
+            end
+            resources :team_inboxes, only: [:index] do
+              collection do
+                patch :update
               end
             end
           end
+
+          resources :operational_flows
+          resources :flow_assignment_rules, only: [:index, :create, :update, :destroy]
 
           # Assignment V2 Routes
           resources :assignment_policies do
@@ -468,6 +501,10 @@ Rails.application.routes.draw do
               get :inbox_label_matrix
               get :first_response_time_distribution
               get :outgoing_messages_count
+              get :leads_summary
+              get :marketing_summary
+              get :schedule_report
+              get :conversation_distribution
             end
           end
           resource :year_in_review, only: [:show]

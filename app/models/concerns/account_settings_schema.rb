@@ -23,7 +23,12 @@ module AccountSettingsSchema
                   'key': { 'type': 'string' },
                   'rule': { 'type': 'string', 'enum': %w[always conditional] },
                   'condition_field': { 'type': %w[string null] },
-                  'condition_value': { 'type': %w[string null] }
+                  'condition_value': {
+                    'oneOf': [
+                      { 'type': %w[string null] },
+                      { 'type': 'array', 'items': { 'type': 'string' } }
+                    ]
+                  }
                 },
                 'required': ['key']
               }
@@ -35,6 +40,7 @@ module AccountSettingsSchema
           'properties': {
             'enabled': { 'type': %w[boolean null] },
             'strategy': { 'type': %w[string null], 'enum': ['on_arrival', 'on_close', nil] },
+            'lead_on_arrival': { 'type': %w[boolean null] },
             'win_status_field': { 'type': %w[string null] },
             'win_value': { 'type': %w[string null] },
             'loss_value': { 'type': %w[string null] },

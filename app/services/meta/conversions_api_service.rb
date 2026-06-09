@@ -1,22 +1,29 @@
 class Meta::ConversionsApiService
   API_URL = 'https://graph.facebook.com/v19.0'
 
-  def initialize(conversation:, event_name: 'Lead', value: nil, currency: nil)
+  def initialize(conversation:, event_name: 'Lead', value: nil, currency: nil, event_id: nil)
     @conversation = conversation
     @account = conversation.account
     @event_name = event_name
     @value = value
+    @event_id = event_id
     @currency = currency || meta_settings.dig('currency') || 'BRL'
-    @pixel_id = ENV.fetch('META_PIXEL_ID', nil)
-    @access_token = ENV.fetch('META_CONVERSIONS_API_TOKEN', nil)
+    meta_config = IntegrationSettingsService.get_config(@conversation.account_id, 'meta')
+    @pixel_id = meta_config['pixelId']
+    @access_token = meta_config['accessToken']
+    @test_event_code = meta_config.fetch('testEventCode', ENV.fetch('META_TEST_EVENT_CODE', nil))
   end
 
   def self.track_lead(conversation)
-    new(conversation: conversation, event_name: 'Lead').perform
+    new(conversation: conversation, event_name: 'Lead', event_id: "lead-#{conversation.id}").perform
   end
 
-  def self.track_purchase(conversation, value: nil)
-    new(conversation: conversation, event_name: 'Purchase', value: value).perform
+  # event_name/event_id let the close flow fire a per-state conversion (e.g. Purchase keyed on the
+  # resolution state) so Lead-on-arrival and the closing conversion can coexist without deduping
+  # each other.
+  def self.track_purchase(conversation, value: nil, event_name: 'Purchase', event_id: nil)
+    new(conversation: conversation, event_name: event_name, value: value,
+        event_id: event_id || "#{event_name.to_s.downcase}-#{conversation.id}").perform
   end
 
   def perform
@@ -49,8 +56,17 @@ class Meta::ConversionsApiService
     return 'missing_ctwa_clid' if ctwa_clid.blank?
   end
 
+  # Dedup per event_id so different events (Lead vs the closing conversion) don't block each other,
+  # while re-firing the same event (e.g. close→reopen→close) stays idempotent. Falls back to the
+  # legacy single flag when no event_id is provided.
   def already_sent?
+    return sent_event_ids.include?(@event_id) if @event_id.present?
+
     @conversation.additional_attributes&.dig('meta_conversion', 'sent') == true
+  end
+
+  def sent_event_ids
+    Array(@conversation.additional_attributes&.dig('meta_conversion', 'sent_events'))
   end
 
   def ctwa_clid
@@ -60,6 +76,10 @@ class Meta::ConversionsApiService
 
   def contact_phone
     @conversation.contact&.phone_number&.gsub(/\D/, '')
+  end
+
+  def contact_first_name
+    @conversation.contact&.name&.split&.first
   end
 
   def meta_settings
@@ -72,8 +92,10 @@ class Meta::ConversionsApiService
     Digest::SHA256.hexdigest(value.to_s.downcase.strip)
   end
 
+  AUTO_CONTACT_FIELDS = %w[fn ph].freeze
+
   def enrichment_user_data
-    fields = meta_settings.dig('enrichment_fields') || {}
+    fields = (meta_settings.dig('enrichment_fields') || {}).reject { |k, _| AUTO_CONTACT_FIELDS.include?(k.to_s) }
     fields.each_with_object({}) do |(meta_key, attr_key), acc|
       raw = @conversation.custom_attributes&.dig(attr_key) ||
             @conversation.contact&.custom_attributes&.dig(attr_key)
@@ -82,10 +104,12 @@ class Meta::ConversionsApiService
   end
 
   def build_payload
-    user_data = {
+    auto_data = {
       ctwa_clid: ctwa_clid,
-      ph: [hashed(contact_phone)]
-    }.merge(enrichment_user_data).compact
+      ph: contact_phone.present? ? [hashed(contact_phone)] : nil,
+      fn: contact_first_name.present? ? [hashed(contact_first_name)] : nil,
+    }
+    user_data = enrichment_user_data.merge(auto_data).compact
 
     event = {
       event_name: @event_name,
@@ -95,11 +119,12 @@ class Meta::ConversionsApiService
       user_data: user_data
     }
 
+    # Deterministic event_id lets Meta deduplicate server-side (close→reopen→close counts once).
+    event[:event_id] = @event_id if @event_id.present?
     event[:custom_data] = { currency: @currency, value: @value.to_f } if @event_name == 'Purchase'
 
     body = { data: [event] }
-    test_code = ENV.fetch('META_TEST_EVENT_CODE', nil)
-    body[:test_event_code] = test_code if test_code.present?
+    body[:test_event_code] = @test_event_code if @test_event_code.present?
     body
   end
 
@@ -116,20 +141,41 @@ class Meta::ConversionsApiService
       Rails.logger.error "[CAPI] conv=#{@conversation.id} event=#{@event_name} status=failed body=#{response.body}"
     end
 
+    record_audit(payload, response.success? ? 'sent' : 'failed', response.body)
     response
   rescue StandardError => e
     Rails.logger.error "[CAPI] conv=#{@conversation.id} event=#{@event_name} status=error message=#{e.message}"
+    record_audit(payload, 'error', e.message)
     nil
   end
 
+  # Persist an audit row per attempt. The payload here excludes the access token (added only at
+  # POST time). Never let auditing break the send path.
+  def record_audit(payload, status, response_body)
+    MetaConversionEvent.create!(
+      account_id: @conversation.account_id,
+      conversation_id: @conversation.id,
+      event_name: @event_name,
+      event_id: @event_id,
+      status: status,
+      payload: payload,
+      response: response_body.to_s
+    )
+  rescue StandardError => e
+    Rails.logger.error "[CAPI] conv=#{@conversation.id} audit_failed message=#{e.message}"
+  end
+
   def mark_as_sent!
+    events = sent_event_ids
+    events |= [@event_id] if @event_id.present?
     @conversation.update!(
       additional_attributes: (@conversation.additional_attributes || {}).deep_merge(
         'meta_conversion' => {
           'sent' => true,
           'event_name' => @event_name,
           'sent_at' => Time.current.iso8601,
-          'ctwa_clid' => ctwa_clid
+          'ctwa_clid' => ctwa_clid,
+          'sent_events' => events
         }
       )
     )

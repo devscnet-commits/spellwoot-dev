@@ -55,6 +55,18 @@
         "LABEL": "Permissões",
         "ERROR": "Permissões são necessárias."
       },
+      "VISIBILITY": {
+        "LABEL": "Visibilidade de conversas",
+        "HELP": "Quais conversas esta função enxerga na lista, abas e relatórios. O padrão mantém o comportamento de caixa + times.",
+        "UNASSIGNED_QUEUE": "Também vê a fila não atribuída das suas caixas",
+        "OPTIONS": {
+          "default": "Padrão (caixa + times)",
+          "own": "Próprias — só conversas atribuídas a ela",
+          "team": "Time — conversas dos membros dos seus times",
+          "inbox": "Caixa — todas as conversas das suas caixas",
+          "account": "Conta — todas as conversas"
+        }
+      },
       "CANCEL_BUTTON_TEXT": "Cancelar",
       "API": {
         "ERROR_MESSAGE": "Não foi possível desconectar o agente robô. Por favor, tente novamente mais tarde."

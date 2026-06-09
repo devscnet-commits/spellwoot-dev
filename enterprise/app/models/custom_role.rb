@@ -37,6 +37,22 @@ class CustomRole < ApplicationRecord
     knowledge_base_manage
   ].freeze
 
+  SCOPE_TYPES = %w[all inboxes teams].freeze
+
+  # Conversation visibility anchor for this role (spec part 2). nil keeps the legacy
+  # inbox ∪ elevated-team behavior, so existing roles are unaffected.
+  VISIBILITY_SCOPES = %w[own team inbox account].freeze
+
   validates :name, presence: true
   validates :permissions, inclusion: { in: PERMISSIONS }
+  validates :scope_type, inclusion: { in: SCOPE_TYPES }
+  validates :visibility_scope, inclusion: { in: VISIBILITY_SCOPES }, allow_nil: true
+
+  def scoped_inboxes(account)
+    return account.inboxes if scope_type == 'all'
+    return account.inboxes.where(id: scope_ids) if scope_type == 'inboxes'
+    return account.teams.where(id: scope_ids).includes(:inboxes).flat_map(&:inboxes) if scope_type == 'teams'
+
+    account.inboxes
+  end
 end

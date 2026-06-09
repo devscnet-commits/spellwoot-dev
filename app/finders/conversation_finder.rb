@@ -85,6 +85,14 @@ class ConversationFinder
     filter_by_labels
     filter_by_query
     filter_by_source_id
+    filter_by_reopened
+    filter_by_campaign_id
+  end
+
+  def filter_by_reopened
+    return unless params[:was_reopened].to_s == 'true'
+
+    @conversations = @conversations.where("additional_attributes->>'was_reopened' = 'true'")
   end
 
   def set_inboxes
@@ -181,6 +189,12 @@ class ConversationFinder
 
     @conversations = @conversations.joins(:contact_inbox)
     @conversations = @conversations.where(contact_inboxes: { source_id: params[:source_id] })
+  end
+
+  def filter_by_campaign_id
+    return unless params[:campaign_id]
+
+    @conversations = @conversations.where(campaign_id: params[:campaign_id])
   end
 
   def set_count_for_all_conversations

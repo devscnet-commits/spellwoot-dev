@@ -7,6 +7,9 @@ export const actions = {
   create(_, { inboxId, agentList }) {
     return InboxMembersAPI.update({ inboxId, agentList });
   },
+  createWithEligibility(_, { inboxId, members }) {
+    return InboxMembersAPI.updateWithEligibility({ inboxId, members });
+  },
 };
 
 export default {

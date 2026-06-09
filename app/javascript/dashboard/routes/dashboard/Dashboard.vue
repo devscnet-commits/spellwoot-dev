@@ -94,8 +94,9 @@ export default {
             conversation_display_type: LAYOUT_TYPES.EXPANDED,
           });
         } else {
+          // Always condensed on desktop — resizable panels replace the toggle
           this.updateUISettings({
-            conversation_display_type: this.previouslyUsedDisplayType,
+            conversation_display_type: LAYOUT_TYPES.CONDENSED,
           });
         }
       },

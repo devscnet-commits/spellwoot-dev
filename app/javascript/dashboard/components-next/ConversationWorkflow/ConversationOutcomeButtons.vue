@@ -4,18 +4,19 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useStoreGetters } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { useAccount } from 'dashboard/composables/useAccount';
-import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
+import wootConstants from 'dashboard/constants/globals';
+import { SYSTEM_OUTCOME_FIELD, OUTCOME_TO_SYSTEM_VALUE } from './constants';
 
 const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
 const { currentAccount } = useAccount();
-const { requiredAttributes } = useConversationRequiredAttributes();
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
+const pendingStatusSeed = ref({});
 
 const metaSettings = computed(
   () => currentAccount.value?.settings?.meta_conversion_settings || {}
@@ -25,72 +26,103 @@ const isOnCloseStrategy = computed(
   () => metaSettings.value.strategy === 'on_close'
 );
 
-const hasCtwaClid = computed(
-  () => !!currentChat.value?.custom_attributes?.ctwa_clid
-);
+const outcomeAlreadySet = computed(() => {
+  const legacy = currentChat.value?.additional_attributes?.outcome;
+  if (legacy === 'won' || legacy === 'lost') return true;
+  const result = currentChat.value?.result;
+  return !!result && result !== 'none';
+});
 
-const alreadySent = computed(
-  () => currentChat.value?.additional_attributes?.meta_conversion?.sent === true
-);
-
+// Show buttons on all open conversations without outcome set
 const showButtons = computed(
-  () => isOnCloseStrategy.value && hasCtwaClid.value && !alreadySent.value
+  () =>
+    currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN &&
+    !outcomeAlreadySet.value
 );
 
-const winValue = computed(() => metaSettings.value.win_value || 'Won');
-const lossValue = computed(() => metaSettings.value.loss_value || 'Lost');
-const winStatusField = computed(() => metaSettings.value.win_status_field);
+const winValue = computed(() => metaSettings.value.win_value || 'Ganho');
+const lossValue = computed(() => metaSettings.value.loss_value || 'Perdido');
+const winStatusField = computed(
+  () => metaSettings.value.win_status_field || 'marcado_como_ganho_ou_perdido'
+);
 
-// Pre-filter attributes relevant to an outcome (condition_value matches win or loss)
-const attributesForOutcome = outcomeValue =>
-  requiredAttributes.value.filter(
-    attr =>
-      attr.rule === 'always' ||
-      (attr.rule === 'conditional' &&
-        attr.condition_field === winStatusField.value &&
-        attr.condition_value === outcomeValue)
-  );
+const hasCtwaClid = computed(
+  () =>
+    !!currentChat.value?.custom_attributes?.ctwa_clid ||
+    !!currentChat.value?.additional_attributes?.attribution?.ctwa_clid
+);
 
-const openWon = () => {
+const buildInitialValues = (statusValue, outcome) => {
+  const base = { ...(currentChat.value?.custom_attributes || {}) };
+  if (winStatusField.value) {
+    base[winStatusField.value] = statusValue;
+  }
+  // Inject system field so resultado_conversa conditions evaluate correctly in the modal
+  base[SYSTEM_OUTCOME_FIELD] = OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null;
+  return base;
+};
+
+// Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
+// the editable display label. The system result field is seeded from the canonical key so
+// conditional required attributes keep evaluating against ganho/perdido.
+const openOutcome = ({ outcome, label, statusValue, attributes }) => {
+  const seedValue = statusValue ?? label;
+  const initialValues = buildInitialValues(seedValue, outcome);
+  pendingStatusSeed.value = winStatusField.value
+    ? { [winStatusField.value]: seedValue }
+    : {};
   outcomeModalRef.value?.open({
+    outcome,
+    label,
+    statusValue: seedValue,
+    // Requirements come only from the resolved flow (empty array when the flow defines none).
+    attributes: attributes ?? [],
+    initialValues,
+  });
+};
+
+const openWon = () =>
+  openOutcome({
     outcome: 'won',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
     statusValue: winValue.value,
-    attributes: attributesForOutcome(winValue.value),
-    initialValues: currentChat.value?.custom_attributes || {},
   });
-};
 
-const openLost = () => {
-  outcomeModalRef.value?.open({
+const openLost = () =>
+  openOutcome({
     outcome: 'lost',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
     statusValue: lossValue.value,
-    attributes: attributesForOutcome(lossValue.value),
-    initialValues: currentChat.value?.custom_attributes || {},
   });
-};
 
 const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
   try {
     const ConversationApi = (await import('dashboard/api/inbox/conversation'))
       .default;
+    // Merge the seeded status field value so it's persisted alongside form fields
+    const mergedAttributes = {
+      ...pendingStatusSeed.value,
+      ...customAttributes,
+    };
     await ConversationApi.closeOutcome({
       conversationId: currentChat.value.id,
       outcome,
-      customAttributes,
+      customAttributes: mergedAttributes,
     });
 
-    // Refresh conversation so alreadySent computed re-evaluates
     await store.dispatch('updateConversation', {
       ...currentChat.value,
+      status: wootConstants.STATUS_TYPE.RESOLVED,
+      result: outcome,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
-        meta_conversion: { sent: true },
+        ...(isOnCloseStrategy.value && hasCtwaClid.value
+          ? { meta_conversion: { sent: true } }
+          : {}),
       },
       custom_attributes: {
         ...(currentChat.value.custom_attributes || {}),
-        ...customAttributes,
+        ...mergedAttributes,
       },
     });
 
@@ -99,6 +131,8 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
     useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
   }
 };
+
+defineExpose({ openWon, openLost, openOutcome });
 </script>
 
 <template>

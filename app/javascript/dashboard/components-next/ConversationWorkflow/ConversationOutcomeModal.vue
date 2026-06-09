@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, reactive } from 'vue';
+import { ref, computed, reactive, watch } from 'vue';
 import { useVuelidate } from '@vuelidate/core';
 import { required } from '@vuelidate/validators';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
@@ -7,20 +7,43 @@ import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'next/textarea/TextArea.vue';
 import ChoiceToggle from 'dashboard/components-next/input/ChoiceToggle.vue';
-import { ATTRIBUTE_TYPES } from './constants';
+import {
+  ATTRIBUTE_TYPES,
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+  isAttrVisible,
+} from './constants';
 
 const emit = defineEmits(['confirm']);
 
 const dialogRef = ref(null);
 const pendingOutcome = ref(null);
-const pendingAttributes = ref([]);
+const allAttributes = ref([]);
 const formValues = reactive({});
 
 const title = computed(() => pendingOutcome.value?.label || '');
 
+// Dynamically show attributes based on current form state
+// formValues includes __resultado_conversa__ for system-field conditions
+const visibleAttributes = computed(() =>
+  allAttributes.value.filter(attr => isAttrVisible(attr, formValues))
+);
+
+// When a conditional field disappears, clear its value
+watch(visibleAttributes, (newVisible, oldVisible) => {
+  if (!oldVisible) return;
+  const newKeys = new Set(newVisible.map(a => a.value));
+  oldVisible.forEach(attr => {
+    if (!newKeys.has(attr.value) && attr.rule === 'conditional') {
+      formValues[attr.value] =
+        attr.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
+    }
+  });
+});
+
 const validationRules = computed(() => {
   const rules = {};
-  pendingAttributes.value.forEach(attr => {
+  visibleAttributes.value.forEach(attr => {
     if (attr.type !== ATTRIBUTE_TYPES.CHECKBOX) {
       rules[attr.value] = { required };
     }
@@ -31,7 +54,7 @@ const validationRules = computed(() => {
 const v$ = useVuelidate(validationRules, formValues);
 
 const isFormComplete = computed(() =>
-  pendingAttributes.value.every(attr => {
+  visibleAttributes.value.every(attr => {
     const val = formValues[attr.value];
     if (attr.type === ATTRIBUTE_TYPES.CHECKBOX) return val !== null;
     return val !== undefined && val !== null && String(val).trim() !== '';
@@ -40,7 +63,7 @@ const isFormComplete = computed(() =>
 
 const comboOptions = computed(() => {
   const opts = {};
-  pendingAttributes.value.forEach(attr => {
+  visibleAttributes.value.forEach(attr => {
     if (attr.type === ATTRIBUTE_TYPES.LIST) {
       opts[attr.value] = (attr.attributeValues || []).map(v => ({
         value: v,
@@ -53,14 +76,26 @@ const comboOptions = computed(() => {
 
 const open = ({ outcome, label, statusValue, attributes, initialValues }) => {
   pendingOutcome.value = { outcome, label, statusValue };
-  pendingAttributes.value = attributes;
+  allAttributes.value = attributes;
 
   Object.keys(formValues).forEach(k => delete formValues[k]);
+
+  // Inject system outcome field so __resultado_conversa__ conditions evaluate correctly
+  if (outcome) {
+    formValues[SYSTEM_OUTCOME_FIELD] = OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null;
+  }
+
+  // Seed ALL conversation attributes so conditional rules evaluate correctly
+  Object.entries(initialValues).forEach(([key, value]) => {
+    formValues[key] = value;
+  });
+
+  // Seed required attribute fields (don't override initialValues)
   attributes.forEach(attr => {
-    const preset = initialValues[attr.value];
-    const hasPreset = preset !== undefined && preset !== null;
-    const emptyValue = attr.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
-    formValues[attr.value] = hasPreset ? preset : emptyValue;
+    if (!(attr.value in formValues)) {
+      formValues[attr.value] =
+        attr.type === ATTRIBUTE_TYPES.CHECKBOX ? null : '';
+    }
   });
 
   v$.value.$reset();
@@ -71,7 +106,12 @@ const handleConfirm = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;
 
-  const customAttributes = { ...formValues };
+  // Only emit values for visible required attributes
+  const customAttributes = {};
+  visibleAttributes.value.forEach(attr => {
+    customAttributes[attr.value] = formValues[attr.value];
+  });
+
   emit('confirm', {
     outcome: pendingOutcome.value.outcome,
     customAttributes,
@@ -93,9 +133,9 @@ defineExpose({ open });
     :disable-confirm-button="!isFormComplete"
     @confirm="handleConfirm"
   >
-    <div v-if="pendingAttributes.length" class="flex flex-col gap-4">
+    <div v-if="visibleAttributes.length" class="flex flex-col gap-4">
       <div
-        v-for="attr in pendingAttributes"
+        v-for="attr in visibleAttributes"
         :key="attr.value"
         class="flex flex-col gap-2"
       >

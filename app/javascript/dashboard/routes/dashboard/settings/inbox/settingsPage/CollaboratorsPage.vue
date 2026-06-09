@@ -13,7 +13,8 @@ import NextButton from 'dashboard/components-next/button/Button.vue';
 import SettingsToggleSection from 'dashboard/components-next/Settings/SettingsToggleSection.vue';
 import DropdownMenu from 'dashboard/components-next/dropdown-menu/DropdownMenu.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
-import TagInput from 'dashboard/components-next/taginput/TagInput.vue';
+import Switch from 'dashboard/components-next/switch/Switch.vue';
+import SearchInput from 'dashboard/components-next/input/SearchInput.vue';
 import assignmentPoliciesAPI from 'dashboard/api/assignmentPolicies';
 import { useI18n } from 'vue-i18n';
 
@@ -31,6 +32,9 @@ const { t } = useI18n();
 const { isEnterprise } = useConfig();
 
 const selectedAgentIds = ref([]);
+const agentEligibility = ref({});
+const addSearch = ref('');
+const showAddDropdown = ref(false);
 const isAgentListUpdating = ref(false);
 const enableAutoAssignment = ref(false);
 const maxAssignmentLimit = ref(null);
@@ -45,32 +49,45 @@ const isLinkingPolicy = ref(false);
 
 const agentList = computed(() => store.getters['agents/getAgents']);
 
-const selectedAgentNames = computed(() =>
-  selectedAgentIds.value.map(
-    id => agentList.value.find(a => a.id === id)?.name ?? ''
-  )
+// Agents currently in the inbox (in order they were added)
+const memberAgents = computed(() =>
+  selectedAgentIds.value
+    .map(id => agentList.value.find(a => a.id === id))
+    .filter(Boolean)
 );
 
-const agentMenuItems = computed(() =>
-  agentList.value
-    .filter(({ id }) => !selectedAgentIds.value.includes(id))
-    .map(({ id, name, thumbnail, avatar_url }) => ({
-      label: name,
-      value: id,
-      action: 'select',
-      thumbnail: { name, src: thumbnail || avatar_url || '' },
-    }))
-);
+// Agents NOT yet in inbox, filtered by search
+const addableAgents = computed(() => {
+  const q = addSearch.value.toLowerCase();
+  return agentList.value.filter(
+    a =>
+      !selectedAgentIds.value.includes(a.id) &&
+      (!q || a.name.toLowerCase().includes(q))
+  );
+});
 
-const handleAgentAdd = ({ value }) => {
-  if (!selectedAgentIds.value.includes(value)) {
-    selectedAgentIds.value.push(value);
-  }
+const addAgent = agent => {
+  selectedAgentIds.value = [...selectedAgentIds.value, agent.id];
+  agentEligibility.value = { ...agentEligibility.value, [agent.id]: true };
+  addSearch.value = '';
+  showAddDropdown.value = false;
 };
 
-const handleAgentRemove = index => {
-  selectedAgentIds.value.splice(index, 1);
+const removeAgent = agentId => {
+  selectedAgentIds.value = selectedAgentIds.value.filter(id => id !== agentId);
+  const updated = { ...agentEligibility.value };
+  delete updated[agentId];
+  agentEligibility.value = updated;
 };
+
+const toggleEligibility = agentId => {
+  agentEligibility.value = {
+    ...agentEligibility.value,
+    [agentId]: !agentEligibility.value[agentId],
+  };
+};
+
+const closeAddDropdown = () => { showAddDropdown.value = false; };
 
 const isFeatureEnabled = feature => {
   const accountId = Number(route.params.accountId);
@@ -153,6 +170,11 @@ const fetchAttachedAgents = async () => {
       data: { payload: inboxMembers },
     } = response;
     selectedAgentIds.value = inboxMembers.map(m => m.id);
+    const map = {};
+    inboxMembers.forEach(m => {
+      map[m.id] = m.eligible_for_assignment !== false;
+    });
+    agentEligibility.value = map;
   } catch (error) {
     //  Handle error
   }
@@ -264,9 +286,13 @@ const handleToggleAutoAssignment = async val => {
 const updateAgents = async () => {
   isAgentListUpdating.value = true;
   try {
-    await store.dispatch('inboxMembers/create', {
+    const members = selectedAgentIds.value.map(id => ({
+      user_id: id,
+      eligible_for_assignment: agentEligibility.value[id] !== false,
+    }));
+    await store.dispatch('inboxMembers/createWithEligibility', {
       inboxId: props.inbox.id,
-      agentList: selectedAgentIds.value,
+      members,
     });
     useAlert(t('AGENT_MGMT.EDIT.API.SUCCESS_MESSAGE'));
   } catch (error) {
@@ -367,19 +393,91 @@ onMounted(() => {
       :help-text="$t('INBOX_MGMT.SETTINGS_POPUP.INBOX_AGENTS_SUB_TEXT')"
       class="[&>div]:!items-start"
     >
-      <div
-        class="rounded-xl outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-strong px-2 py-2"
-      >
-        <TagInput
-          :model-value="selectedAgentNames"
-          :placeholder="$t('INBOX_MGMT.ADD.AGENTS.PICK_AGENTS')"
-          :menu-items="agentMenuItems"
-          show-dropdown
-          skip-label-dedup
-          :auto-open-dropdown="false"
-          @add="handleAgentAdd"
-          @remove="handleAgentRemove"
-        />
+      <div class="flex flex-col gap-2">
+        <!-- Add agent row -->
+        <div
+          v-on-click-outside="closeAddDropdown"
+          class="relative"
+        >
+          <div class="flex gap-2">
+            <SearchInput
+              v-model="addSearch"
+              class="flex-1"
+              placeholder="Buscar e adicionar agente..."
+              @focus="showAddDropdown = true"
+            />
+          </div>
+
+          <!-- Dropdown list of addable agents -->
+          <div
+            v-if="showAddDropdown && addableAgents.length > 0"
+            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg max-h-48 overflow-y-auto"
+          >
+            <button
+              v-for="agent in addableAgents"
+              :key="agent.id"
+              type="button"
+              class="w-full flex items-center gap-2 px-3 py-2 text-sm text-n-slate-12 hover:bg-n-slate-2 text-left"
+              @click="addAgent(agent)"
+            >
+              <span class="i-lucide-user-plus text-n-slate-9 shrink-0" />
+              {{ agent.name }}
+            </button>
+          </div>
+          <div
+            v-else-if="showAddDropdown && addSearch && addableAgents.length === 0"
+            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg px-3 py-3 text-sm text-n-slate-10"
+          >
+            Nenhum agente encontrado
+          </div>
+        </div>
+
+        <!-- Members table — only current inbox members -->
+        <div class="rounded-lg border border-n-weak overflow-hidden">
+          <div class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak">
+            <span class="text-xs font-medium text-n-slate-11 flex-1">Agente</span>
+            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">Recebe atribuições</span>
+            <span class="w-6" />
+          </div>
+          <div class="max-h-64 overflow-y-auto">
+            <div
+              v-for="agent in memberAgents"
+              :key="agent.id"
+              class="flex items-center px-3 py-2.5 border-b border-n-weak/50 last:border-0 hover:bg-n-slate-1 transition-colors"
+            >
+              <span class="text-sm text-n-slate-12 flex-1">{{ agent.name }}</span>
+
+              <!-- Eligibility toggle -->
+              <div class="w-36 flex justify-center">
+                <Switch
+                  :model-value="agentEligibility[agent.id]"
+                  @change="toggleEligibility(agent.id)"
+                />
+              </div>
+
+              <!-- Remove button -->
+              <button
+                type="button"
+                class="w-6 flex items-center justify-center text-n-slate-9 hover:text-n-ruby-9 transition-colors"
+                @click="removeAgent(agent.id)"
+              >
+                <span class="i-lucide-x text-sm" />
+              </button>
+            </div>
+
+            <div
+              v-if="memberAgents.length === 0"
+              class="px-3 py-5 text-sm text-n-slate-10 text-center"
+            >
+              Nenhum agente adicionado. Use o campo acima para adicionar.
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xs text-n-slate-10">
+          {{ memberAgents.length }}
+          {{ memberAgents.length === 1 ? 'agente nesta caixa' : 'agentes nesta caixa' }}
+        </p>
       </div>
 
       <template #extra>

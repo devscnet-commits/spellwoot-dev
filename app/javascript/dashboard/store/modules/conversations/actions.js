@@ -426,6 +426,10 @@ const actions = {
     commit(types.CHANGE_CHAT_SORT_FILTER, data);
   },
 
+  setChatReopenedFilter({ commit }, data) {
+    commit(types.CHANGE_CHAT_REOPENED_FILTER, data);
+  },
+
   updateAssignee({ commit }, data) {
     commit(types.UPDATE_ASSIGNEE, data);
   },

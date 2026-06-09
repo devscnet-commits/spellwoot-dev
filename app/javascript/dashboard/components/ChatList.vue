@@ -30,6 +30,10 @@ import TeleportWithDirection from 'dashboard/components-next/TeleportWithDirecti
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 import IntersectionObserver from 'dashboard/components/IntersectionObserver.vue';
 import ConversationResolveAttributesModal from 'dashboard/components-next/ConversationWorkflow/ConversationResolveAttributesModal.vue';
+import {
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+} from 'dashboard/components-next/ConversationWorkflow/constants';
 
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useAlert } from 'dashboard/composables';
@@ -72,6 +76,7 @@ const props = defineProps({
   teamId: { type: [String, Number], default: 0 },
   label: { type: String, default: '' },
   conversationType: { type: String, default: '' },
+  campaignId: { type: [String, Number], default: 0 },
   foldersId: { type: [String, Number], default: 0 },
   showConversationList: { default: true, type: Boolean },
   isOnExpandedLayout: { default: false, type: Boolean },
@@ -87,12 +92,44 @@ const store = useStore();
 const resolveAttributesModalRef = ref(null);
 const conversationListRef = ref(null);
 const virtualListRef = ref(null);
+const panelRef = ref(null);
 
 provide('contextMenuElementTarget', virtualListRef);
 
+const PANEL_WIDTH_KEY = 'cw_chat_list_width';
+const MIN_PANEL_WIDTH = 260;
+const MAX_PANEL_WIDTH = 600;
+const storedWidth = localStorage.getItem(PANEL_WIDTH_KEY);
+const panelWidth = ref(storedWidth ? parseInt(storedWidth, 10) : null);
+const isResizing = ref(false);
+
+function startResize(e) {
+  isResizing.value = true;
+  const startX = e.clientX;
+  const startWidth = panelRef.value?.offsetWidth || panelWidth.value || 340;
+
+  function onMove(ev) {
+    const newWidth = Math.min(
+      MAX_PANEL_WIDTH,
+      Math.max(MIN_PANEL_WIDTH, startWidth + ev.clientX - startX)
+    );
+    panelWidth.value = newWidth;
+  }
+  function onUp() {
+    isResizing.value = false;
+    localStorage.setItem(PANEL_WIDTH_KEY, panelWidth.value);
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
 const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
 const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
+const isResolvedTabActive = ref(false);
 const activeSortBy = ref(wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC);
+const activeOriginFilter = ref('all');
 const showAdvancedFilters = ref(false);
 // chatsOnView is to store the chats that are currently visible on the screen,
 // which mirrors the conversationList.
@@ -195,7 +232,7 @@ const userPermissions = computed(() => {
 });
 
 const assigneeTabItems = computed(() => {
-  return filterItemsByPermission(
+  const items = filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
     userPermissions.value,
     item => item.permissions
@@ -204,12 +241,23 @@ const assigneeTabItems = computed(() => {
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
     count: conversationStats.value[countKey] || 0,
   }));
+  items.push({
+    key: 'resolved',
+    name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'),
+    count: 0,
+  });
+  return items;
 });
+
+const activeDisplayTab = computed(() =>
+  isResolvedTabActive.value ? 'resolved' : activeAssigneeTab.value
+);
 
 const showAssigneeInConversationCard = computed(() => {
   return (
     hasAppliedFiltersOrActiveFolders.value ||
-    activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ALL
+    activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ALL ||
+    isResolvedTabActive.value
   );
 });
 
@@ -275,6 +323,8 @@ const conversationFilters = computed(() => {
     labels: props.label ? [props.label] : undefined,
     teamId: props.teamId || undefined,
     conversationType: props.conversationType || undefined,
+    campaignId: props.campaignId || undefined,
+    wasReopened: activeOriginFilter.value === 'reopened' ? true : undefined,
   };
 });
 
@@ -614,19 +664,35 @@ const intersectionObserverOptions = computed(() => ({
 }));
 
 function updateAssigneeTab(selectedTab) {
-  if (activeAssigneeTab.value !== selectedTab) {
-    resetBulkActions();
-    emitter.emit('clearSearchInput');
-    activeAssigneeTab.value = selectedTab;
-    if (!currentPage.value) {
-      fetchConversations();
+  const alreadyActive =
+    selectedTab === 'resolved'
+      ? isResolvedTabActive.value
+      : activeAssigneeTab.value === selectedTab;
+  if (alreadyActive) return;
+
+  resetBulkActions();
+  emitter.emit('clearSearchInput');
+
+  if (selectedTab === 'resolved') {
+    isResolvedTabActive.value = true;
+    activeStatus.value = wootConstants.STATUS_TYPE.RESOLVED;
+    activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.ALL;
+  } else {
+    isResolvedTabActive.value = false;
+    if (activeStatus.value === wootConstants.STATUS_TYPE.RESOLVED) {
+      activeStatus.value = wootConstants.STATUS_TYPE.OPEN;
     }
+    activeAssigneeTab.value = selectedTab;
   }
+
+  if (!currentPage.value) fetchConversations();
 }
 
 function onBasicFilterChange(value, type) {
   if (type === 'status') {
     activeStatus.value = value;
+  } else if (type === 'origin') {
+    activeOriginFilter.value = value;
   } else {
     activeSortBy.value = value;
   }
@@ -763,8 +829,16 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   // Check for required attributes before resolving
   const conversation = getConversationById.value(conversationId);
   const currentCustomAttributes = conversation?.custom_attributes || {};
+  const legacy = conversation?.additional_attributes?.outcome;
+  const result = conversation?.result;
+  const picked = legacy === 'won' || legacy === 'lost' ? legacy : result;
+  const outcome = picked === 'won' || picked === 'lost' ? picked : null;
+  const systemContext = outcome
+    ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
+    : {};
   const { hasMissing, missing } = checkMissingAttributes(
-    currentCustomAttributes
+    currentCustomAttributes,
+    systemContext
   );
 
   if (hasMissing) {
@@ -899,19 +973,32 @@ watch(conversationFilters, (newVal, oldVal) => {
 
 <template>
   <div
-    class="flex flex-col flex-shrink-0 conversations-list-wrap bg-n-surface-1"
+    ref="panelRef"
+    class="relative flex flex-col flex-shrink-0 conversations-list-wrap bg-n-surface-1"
     :class="[
       { hidden: !showConversationList },
-      isOnExpandedLayout ? 'basis-full' : 'w-[340px] 2xl:w-[412px]',
+      isOnExpandedLayout
+        ? 'basis-full'
+        : !panelWidth
+          ? 'w-[340px] 2xl:w-[412px]'
+          : '',
     ]"
+    :style="
+      !isOnExpandedLayout && panelWidth ? { width: panelWidth + 'px' } : {}
+    "
   >
+    <div
+      v-if="!isOnExpandedLayout && showConversationList"
+      class="absolute top-0 right-0 z-10 w-1 h-full cursor-col-resize hover:bg-n-brand/40 active:bg-n-brand/60 transition-colors"
+      :class="{ 'bg-n-brand/60': isResizing }"
+      @mousedown.prevent="startResize"
+    />
     <slot />
     <ChatListHeader
       :page-title="pageTitle"
       :has-applied-filters="hasAppliedFilters"
       :has-active-folders="hasActiveFolders"
       :active-status="activeStatus"
-      :is-on-expanded-layout="isOnExpandedLayout"
       :conversation-stats="conversationStats"
       :is-list-loading="chatListLoading && !conversationList.length"
       @add-folders="onClickOpenAddFoldersModal"
@@ -945,7 +1032,7 @@ watch(conversationFilters, (newVal, oldVal) => {
     <ChatTypeTabs
       v-if="!hasAppliedFiltersOrActiveFolders"
       :items="assigneeTabItems"
-      :active-tab="activeAssigneeTab"
+      :active-tab="activeDisplayTab"
       is-compact
       @chat-tab-change="updateAssigneeTab"
     />

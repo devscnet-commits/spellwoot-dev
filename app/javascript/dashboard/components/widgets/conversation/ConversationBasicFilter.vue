@@ -25,6 +25,7 @@ const { updateUISettings } = useUISettings();
 
 const chatStatusFilter = useMapGetter('getChatStatusFilter');
 const chatSortFilter = useMapGetter('getChatSortFilter');
+const chatReopenedFilter = useMapGetter('getChatReopenedFilter');
 
 const [showActionsDropdown, toggleDropdown] = useToggle();
 
@@ -37,6 +38,10 @@ const currentSortBy = computed(() => {
     chatSortFilter.value || wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC
   );
 });
+
+const currentOriginFilter = computed(
+  () => chatReopenedFilter.value || 'all'
+);
 
 const chatStatusOptions = computed(() => [
   {
@@ -104,6 +109,23 @@ const activeChatSortLabel = computed(
     ''
 );
 
+const chatOriginOptions = computed(() => [
+  {
+    label: t('CHAT_LIST.CHAT_ORIGIN_FILTER_ITEMS.all.TEXT'),
+    value: 'all',
+  },
+  {
+    label: t('CHAT_LIST.CHAT_ORIGIN_FILTER_ITEMS.reopened.TEXT'),
+    value: 'reopened',
+  },
+]);
+
+const activeOriginLabel = computed(
+  () =>
+    chatOriginOptions.value.find(m => m.value === currentOriginFilter.value)
+      ?.label || ''
+);
+
 const saveSelectedFilter = (type, value) => {
   updateUISettings({
     conversations_filter_by: {
@@ -123,6 +145,11 @@ const handleSortChange = value => {
   emit('changeFilter', value, 'sort');
   store.dispatch('setChatSortFilter', value);
   saveSelectedFilter('sort', value);
+};
+
+const handleOriginChange = value => {
+  emit('changeFilter', value, 'origin');
+  store.dispatch('setChatReopenedFilter', value);
 };
 </script>
 
@@ -167,6 +194,18 @@ const handleSortChange = value => {
           :label="activeChatSortLabel"
           :sub-menu-position="isOnExpandedLayout ? 'left' : 'right'"
           @update:model-value="handleSortChange"
+        />
+      </div>
+      <div class="flex items-center justify-between last:mt-4 gap-2">
+        <span class="text-sm truncate text-n-slate-12">
+          {{ $t('CHAT_LIST.CHAT_SORT.ORIGIN') }}
+        </span>
+        <SelectMenu
+          :model-value="currentOriginFilter"
+          :options="chatOriginOptions"
+          :label="activeOriginLabel"
+          :sub-menu-position="isOnExpandedLayout ? 'left' : 'right'"
+          @update:model-value="handleOriginChange"
         />
       </div>
     </div>

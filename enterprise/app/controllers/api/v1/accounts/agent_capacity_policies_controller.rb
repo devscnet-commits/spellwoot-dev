@@ -9,7 +9,11 @@ class Api::V1::Accounts::AgentCapacityPoliciesController < Api::V1::Accounts::En
   def show; end
 
   def create
-    @agent_capacity_policy = Current.account.agent_capacity_policies.create!(permitted_params)
+    ActiveRecord::Base.transaction do
+      @agent_capacity_policy = Current.account.agent_capacity_policies.create!(permitted_params)
+      create_inbox_limits
+      assign_agents
+    end
   end
 
   def update
@@ -22,6 +26,26 @@ class Api::V1::Accounts::AgentCapacityPoliciesController < Api::V1::Accounts::En
   end
 
   private
+
+  def create_inbox_limits
+    return unless params[:inbox_limits].present?
+
+    params.permit(inbox_limits: [:inbox_id, :conversation_limit])[:inbox_limits]&.each do |limit|
+      @agent_capacity_policy.inbox_capacity_limits.create!(
+        inbox_id: limit[:inbox_id],
+        conversation_limit: limit[:conversation_limit].to_i
+      )
+    end
+  end
+
+  def assign_agents
+    return unless params[:agent_ids].present?
+
+    params[:agent_ids].each do |agent_id|
+      account_user = Current.account.account_users.find_by(user_id: agent_id)
+      account_user&.update!(agent_capacity_policy: @agent_capacity_policy)
+    end
+  end
 
   def permitted_params
     params.require(:agent_capacity_policy).permit(

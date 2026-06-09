@@ -49,10 +49,18 @@ class WorkingHour < ApplicationRecord
   def open_at?(time)
     return false if closed_all_day?
 
-    open_time = Time.zone.now.in_time_zone(inbox.timezone).change({ hour: open_hour, min: open_minutes })
-    close_time = Time.zone.now.in_time_zone(inbox.timezone).change({ hour: close_hour, min: close_minutes })
+    tz = inbox.timezone
+    open_time  = time.in_time_zone(tz).change(hour: open_hour, min: open_minutes)
+    close_time = time.in_time_zone(tz).change(hour: close_hour, min: close_minutes)
+    return false unless time.between?(open_time, close_time)
 
-    time.between?(open_time, close_time)
+    if has_lunch_break? && lunch_start_hour.present? && lunch_end_hour.present?
+      lunch_start = time.in_time_zone(tz).change(hour: lunch_start_hour, min: lunch_start_minutes.to_i)
+      lunch_end   = time.in_time_zone(tz).change(hour: lunch_end_hour,   min: lunch_end_minutes.to_i)
+      return false if time.between?(lunch_start, lunch_end)
+    end
+
+    true
   end
 
   def open_now?

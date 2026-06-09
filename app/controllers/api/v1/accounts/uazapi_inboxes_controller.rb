@@ -34,10 +34,39 @@ class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseContro
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
+  # Link an existing synced instance (from provider_instances) to a new inbox
+  def from_instance
+    provider_instance = ProviderInstance.find_by!(
+      id: params[:provider_instance_id],
+      account_id: Current.account.id,
+      provider: 'uazapi'
+    )
+
+    result = Whatsapp::UazapiLinkInstanceService.new(
+      inbox_name:        params[:name],
+      provider_instance: provider_instance,
+      account:           Current.account
+    ).perform
+
+    if result[:success]
+      render json: {
+        inbox:       inbox_json(result[:inbox]),
+        webhook_url: result[:webhook_url]
+      }, status: :ok
+    else
+      render json: { error: result[:error] }, status: :unprocessable_entity
+    end
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Instância não encontrada.' }, status: :not_found
+  rescue StandardError => e
+    Rails.logger.error "[UAZAPI] from_instance error: #{e.message}"
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   private
 
   def permitted_params
-    params.permit(:name, :phone_number)
+    params.permit(:name, :phone_number, :provider_instance_id)
   end
 
   def check_authorization

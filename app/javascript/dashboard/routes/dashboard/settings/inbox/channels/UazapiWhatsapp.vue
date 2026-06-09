@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useVuelidate } from '@vuelidate/core';
@@ -185,10 +185,6 @@ const copyWebhookUrl = async () => {
     useAlert(t('INBOX_MGMT.ADD.WHATSAPP.UAZAPI.WEBHOOK_URL.COPY_ERROR'));
   }
 };
-
-onMounted(() => {
-  // Cleanup on mount just in case
-});
 
 onUnmounted(() => {
   stopStatusPolling();

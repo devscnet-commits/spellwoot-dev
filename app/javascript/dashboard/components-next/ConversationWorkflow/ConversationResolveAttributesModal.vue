@@ -9,7 +9,7 @@ import TextArea from 'next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import ChoiceToggle from 'dashboard/components-next/input/ChoiceToggle.vue';
-import { ATTRIBUTE_TYPES } from './constants';
+import { ATTRIBUTE_TYPES, SYSTEM_OUTCOME_FIELD, OUTCOME_TO_SYSTEM_VALUE, isAttrVisible } from './constants';
 
 const emit = defineEmits(['submit']);
 
@@ -34,13 +34,9 @@ const placeholders = computed(() => ({
 const getPlaceholder = type => placeholders.value[type] || '';
 
 // Compute which attributes should be visible given current form state
+// formValues may include __resultado_conversa__ injected from context
 const visibleAttributes = computed(() =>
-  allRequiredAttributes.value.filter(attr => {
-    if (attr.rule === 'conditional') {
-      return formValues[attr.condition_field] === attr.condition_value;
-    }
-    return true;
-  })
+  allRequiredAttributes.value.filter(attr => isAttrVisible(attr, formValues))
 );
 
 // When a conditional field disappears, clear its value so it doesn't linger
@@ -138,6 +134,12 @@ const open = (attributes = [], initialValues = {}, context = null) => {
   Object.keys(formValues).forEach(key => {
     delete formValues[key];
   });
+
+  // Inject system outcome field if context carries an outcome
+  if (context?.outcome) {
+    formValues[SYSTEM_OUTCOME_FIELD] =
+      OUTCOME_TO_SYSTEM_VALUE[context.outcome] ?? null;
+  }
 
   // Seed all conversation attributes so condition_field values are available
   // for the visibleAttributes filter (conditional rules check formValues)

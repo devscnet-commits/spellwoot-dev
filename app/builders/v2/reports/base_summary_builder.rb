@@ -23,7 +23,9 @@ class V2::Reports::BaseSummaryBuilder
                 "COUNT(CASE WHEN name = 'conversation_resolved' THEN 1 END) as resolved_count",
                 "AVG(CASE WHEN name = 'conversation_resolved' THEN #{average_value_key} END) as avg_resolution_time",
                 "AVG(CASE WHEN name = 'first_response' THEN #{average_value_key} END) as avg_first_response_time",
-                "AVG(CASE WHEN name = 'reply_time' THEN #{average_value_key} END) as avg_reply_time"
+                "AVG(CASE WHEN name = 'reply_time' THEN #{average_value_key} END) as avg_reply_time",
+                "COUNT(CASE WHEN name = 'conversation_opened' AND value > 0 THEN 1 END) as reopened_count",
+                "AVG(CASE WHEN name = 'conversation_opened' AND value > 0 THEN #{average_value_key} END) as avg_time_to_reopen"
               )
               .group(group_by_key)
               .index_by { |record| record.public_send(index_key) }
@@ -32,10 +34,21 @@ class V2::Reports::BaseSummaryBuilder
     @avg_resolution_time = results.transform_values(&:avg_resolution_time)
     @avg_first_response_time = results.transform_values(&:avg_first_response_time)
     @avg_reply_time = results.transform_values(&:avg_reply_time)
+    @reopened_count = results.transform_values(&:reopened_count)
+    @avg_time_to_reopen = results.transform_values(&:avg_time_to_reopen)
   end
 
   def reporting_events
-    @reporting_events ||= account.reporting_events.where(created_at: range)
+    @reporting_events ||= begin
+      base = account.reporting_events.where(created_at: range)
+      permission_scope ? permission_scope.scope_reporting_events(base) : base
+    end
+  end
+
+  def permission_scope
+    return @permission_scope if defined?(@permission_scope)
+
+    @permission_scope = params[:account_user] ? Reports::PermissionScopeService.new(params[:account_user]) : nil
   end
 
   def fetch_conversations_count

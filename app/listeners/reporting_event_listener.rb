@@ -14,6 +14,7 @@ class ReportingEventListener < BaseListener
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       user_id: conversation.assignee_id,
+      team_id: conversation.team_id,
       conversation_id: conversation.id,
       event_start_time: conversation.created_at,
       event_end_time: event_end_time
@@ -37,6 +38,7 @@ class ReportingEventListener < BaseListener
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       user_id: message.sender_id,
+      team_id: conversation.team_id,
       conversation_id: conversation.id,
       event_start_time: last_non_human_activity(conversation),
       event_end_time: message.created_at
@@ -63,6 +65,7 @@ class ReportingEventListener < BaseListener
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       user_id: conversation.assignee_id,
+      team_id: conversation.team_id,
       conversation_id: conversation.id,
       event_start_time: waiting_since,
       event_end_time: message.created_at
@@ -90,6 +93,7 @@ class ReportingEventListener < BaseListener
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       user_id: conversation.assignee_id,
+      team_id: conversation.team_id,
       conversation_id: conversation.id,
       event_start_time: conversation.created_at,
       event_end_time: event_end_time
@@ -141,6 +145,7 @@ class ReportingEventListener < BaseListener
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       user_id: conversation.assignee_id,
+      team_id: conversation.team_id,
       conversation_id: conversation.id,
       event_start_time: start_time,
       event_end_time: event_end_time
@@ -158,6 +163,7 @@ class ReportingEventListener < BaseListener
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       user_id: conversation.assignee_id,
+      team_id: conversation.team_id,
       conversation_id: conversation.id,
       event_start_time: conversation.created_at,
       event_end_time: event.timestamp

@@ -22,6 +22,7 @@ json.website_channel_config do
   json.widget_color @web_widget.widget_color
   json.working_hours @web_widget.inbox.working_hours
   json.working_hours_enabled @web_widget.inbox.working_hours_enabled
+  json.current_status @web_widget.inbox.current_status
 end
 
 json.contact do

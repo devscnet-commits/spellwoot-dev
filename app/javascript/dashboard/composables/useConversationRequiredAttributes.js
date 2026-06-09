@@ -2,7 +2,14 @@ import { computed } from 'vue';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
-import { ATTRIBUTE_TYPES } from 'dashboard/components-next/ConversationWorkflow/constants';
+import {
+  ATTRIBUTE_TYPES,
+  SYSTEM_CONDITION_FIELDS,
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+  matchesConditionValue,
+  isAttrVisible,
+} from 'dashboard/components-next/ConversationWorkflow/constants';
 
 // Normalize legacy string format to object format
 const normalizeAttrConfig = item =>
@@ -48,6 +55,8 @@ export function useConversationRequiredAttributes() {
   );
 
   // Full attribute definitions merged with rule config
+  // System fields (e.g. __resultado_conversa__) are not in allAttributeOptions —
+  // they appear as condition triggers but not as required fields themselves.
   const requiredAttributes = computed(() =>
     selectedAttributes.value
       .map(attrConfig => {
@@ -60,23 +69,41 @@ export function useConversationRequiredAttributes() {
       .filter(Boolean)
   );
 
-  const isRequired = (attrConfig, conversationCustomAttributes) => {
+  // All custom attributes available as condition fields (for the rule picker)
+  const conditionFieldOptions = computed(() => [
+    ...SYSTEM_CONDITION_FIELDS,
+    ...allAttributeOptions.value.filter(a =>
+      [ATTRIBUTE_TYPES.LIST, ATTRIBUTE_TYPES.TEXT].includes(a.type)
+    ),
+  ]);
+
+  const isRequired = (attrConfig, context) => {
     if (attrConfig.rule === 'conditional') {
-      return (
-        conversationCustomAttributes[attrConfig.condition_field] ===
-        attrConfig.condition_value
-      );
+      // A half-configured conditional rule (no condition value) must never require
+      // the attribute, otherwise undefined === undefined would wrongly match.
+      if (
+        attrConfig.condition_value == null ||
+        attrConfig.condition_value === ''
+      ) {
+        return false;
+      }
+      const fieldValue = context[attrConfig.condition_field];
+      return matchesConditionValue(fieldValue, attrConfig.condition_value);
     }
     return true;
   };
 
-  const checkMissingAttributes = (conversationCustomAttributes = {}) => {
+  // systemContext: optional dict with system field values (e.g. __resultado_conversa__)
+  // derived from additional_attributes, since system fields are not in custom_attributes
+  const checkMissingAttributes = (conversationCustomAttributes = {}, systemContext = {}) => {
     if (!requiredAttributes.value.length) {
       return { hasMissing: false, missing: [] };
     }
 
+    const fullContext = { ...conversationCustomAttributes, ...systemContext };
+
     const missing = requiredAttributes.value.filter(attribute => {
-      if (!isRequired(attribute, conversationCustomAttributes)) return false;
+      if (!isRequired(attribute, fullContext)) return false;
 
       const value = conversationCustomAttributes[attribute.value];
 
@@ -98,6 +125,9 @@ export function useConversationRequiredAttributes() {
     selectedAttributes,
     requiredAttributeKeys,
     requiredAttributes,
+    conditionFieldOptions,
     checkMissingAttributes,
+    isAttrVisible,
+    SYSTEM_OUTCOME_FIELD,
   };
 }

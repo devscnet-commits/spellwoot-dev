@@ -53,6 +53,10 @@ en:
         invalid: is not a valid timezone
       support_email:
         invalid: is not a valid email address
+    conversations:
+      required_attributes_missing: 'Required attributes must be filled before resolving this conversation.'
+      reason_required: 'A reason is required to resolve this conversation with this result.'
+      reason_invalid: 'The selected reason is not valid for this conversation flow.'
     validations:
       presence: must not be blank
     webhook:

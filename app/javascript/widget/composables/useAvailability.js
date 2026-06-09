@@ -1,9 +1,10 @@
 import { computed, unref } from 'vue';
-import {
-  isOnline as checkIsOnline,
-  isInWorkingHours as checkInWorkingHours,
-} from 'widget/helpers/availabilityHelpers';
+import { isInWorkingHours as checkInWorkingHours } from 'widget/helpers/availabilityHelpers';
 import { useCamelCase } from 'dashboard/composables/useTransformKeys';
+
+// Backend current_status values (see OutOfOffisable#current_status) that mean the
+// inbox is open right now. Everything else (interval/closed/holiday) is closed.
+const OPEN_STATUSES = ['open'];
 
 const DEFAULT_TIMEZONE = 'UTC';
 const DEFAULT_REPLY_TIME = 'in_a_few_minutes';
@@ -31,6 +32,9 @@ export function useAvailability(agents = []) {
       channelConfig.value.timezone ||
       DEFAULT_TIMEZONE,
     replyTime: channelConfig.value.replyTime || DEFAULT_REPLY_TIME,
+    // Server-computed status that already accounts for holidays, exceptions and
+    // multi-period schedules. Preferred over the client-side calculation when present.
+    currentStatus: channelConfig.value.currentStatus || null,
   }));
 
   const currentTime = computed(() => new Date());
@@ -40,24 +44,29 @@ export function useAvailability(agents = []) {
     return Array.isArray(agentList) ? agentList.length > 0 : false;
   });
 
-  const isInWorkingHours = computed(() =>
-    checkInWorkingHours(
+  // When the backend provides a concrete status (anything but :disabled) we trust
+  // it, since it knows about holidays/exceptions the client schedule does not.
+  const backendStatus = computed(() => {
+    const status = inboxConfig.value.currentStatus?.status;
+    return status && status !== 'disabled' ? status : null;
+  });
+
+  const isInWorkingHours = computed(() => {
+    if (backendStatus.value) return OPEN_STATUSES.includes(backendStatus.value);
+
+    return checkInWorkingHours(
       currentTime.value,
       inboxConfig.value.utcOffset,
       inboxConfig.value.workingHours
-    )
-  );
+    );
+  });
 
   // Check if online (considering both working hours and agents)
-  const isOnline = computed(() =>
-    checkIsOnline(
-      inboxConfig.value.workingHoursEnabled,
-      currentTime.value,
-      inboxConfig.value.utcOffset,
-      inboxConfig.value.workingHours,
-      hasOnlineAgents.value
-    )
-  );
+  const isOnline = computed(() => {
+    if (!inboxConfig.value.workingHoursEnabled) return hasOnlineAgents.value;
+
+    return isInWorkingHours.value && hasOnlineAgents.value;
+  });
 
   return {
     channelConfig,

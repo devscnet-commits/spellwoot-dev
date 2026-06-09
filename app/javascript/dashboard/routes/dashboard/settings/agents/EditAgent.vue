@@ -7,7 +7,6 @@ import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Auth from '../../../../api/auth';
-import wootConstants from 'dashboard/constants/globals';
 
 const props = defineProps({
   id: {
@@ -26,9 +25,9 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  availability: {
-    type: String,
-    default: '',
+  receivesAssignments: {
+    type: Boolean,
+    default: true,
   },
   provider: {
     type: String,
@@ -42,26 +41,22 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-const { AVAILABILITY_STATUS_KEYS } = wootConstants;
-
 const store = useStore();
 const { t } = useI18n();
 
 const agentName = ref(props.name);
-const agentAvailability = ref(props.availability);
+const agentReceivesAssignments = ref(props.receivesAssignments);
 const selectedRoleId = ref(props.customRoleId || props.type);
 const agentCredentials = ref({ email: props.email });
 
 const rules = {
   agentName: { required, minLength: minLength(1) },
   selectedRoleId: { required },
-  agentAvailability: { required },
 };
 
 const v$ = useVuelidate(rules, {
   agentName,
   selectedRoleId,
-  agentAvailability,
 });
 
 const pageTitle = computed(
@@ -125,7 +120,7 @@ const editAgent = async () => {
     const payload = {
       id: props.id,
       name: agentName.value,
-      availability: agentAvailability.value,
+      receives_assignments: agentReceivesAssignments.value,
     };
 
     if (selectedRole.value.name.startsWith('custom_')) {
@@ -183,25 +178,20 @@ const resetPassword = async () => {
         </label>
       </div>
 
-      <div class="w-full">
-        <label :class="{ error: v$.agentAvailability.$error }">
-          {{ $t('PROFILE_SETTINGS.FORM.AVAILABILITY.LABEL') }}
-          <select
-            v-model="agentAvailability"
-            @change="v$.agentAvailability.$touch"
-          >
-            <option
-              v-for="status in availabilityStatuses"
-              :key="status.value"
-              :value="status.value"
-            >
-              {{ status.label }}
-            </option>
-          </select>
-          <span v-if="v$.agentAvailability.$error" class="message">
-            {{ $t('AGENT_MGMT.EDIT.FORM.AGENT_AVAILABILITY.ERROR') }}
+      <div class="w-full flex items-start justify-between gap-4 py-2">
+        <div class="flex flex-col gap-0.5">
+          <span class="text-sm font-medium text-n-slate-12">
+            {{ $t('AGENT_MGMT.EDIT.FORM.RECEIVES_ASSIGNMENTS.LABEL') }}
           </span>
-        </label>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AGENT_MGMT.EDIT.FORM.RECEIVES_ASSIGNMENTS.DESCRIPTION') }}
+          </span>
+        </div>
+        <input
+          v-model="agentReceivesAssignments"
+          type="checkbox"
+          class="mt-1 flex-shrink-0"
+        />
       </div>
 
       <div class="flex flex-row justify-start w-full gap-2 px-0 py-2">

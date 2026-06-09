@@ -225,15 +225,6 @@ export default {
               class="mt-0.5"
             />
           </span>
-          <NextButton
-            v-if="showActions && hasValue"
-            v-tooltip.left="$t('CUSTOM_ATTRIBUTES.ACTIONS.DELETE')"
-            slate
-            sm
-            link
-            icon="i-lucide-trash-2"
-            @click="onDelete"
-          />
         </div>
       </h4>
     </div>
@@ -287,7 +278,7 @@ export default {
           {{ displayValue }}
         </p>
         <div
-          class="flex items-center max-w-[2rem] gap-1 ml-1 rtl:mr-1 rtl:ml-0"
+          class="flex items-center max-w-[4rem] gap-1 ml-1 rtl:mr-1 rtl:ml-0"
         >
           <NextButton
             v-if="showActions && hasValue"
@@ -309,27 +300,51 @@ export default {
             class="hidden group-hover:flex flex-shrink-0"
             @click="onEdit"
           />
+          <NextButton
+            v-if="showActions && hasValue"
+            v-tooltip.right="$t('CUSTOM_ATTRIBUTES.ACTIONS.DELETE')"
+            xs
+            slate
+            ghost
+            icon="i-lucide-x"
+            class="hidden group-hover:flex flex-shrink-0"
+            @click="onDelete"
+          />
         </div>
       </div>
     </div>
     <div v-if="isAttributeTypeList">
-      <MultiselectDropdown
-        :options="listOptions"
-        :selected-item="selectedItem"
-        :has-thumbnail="false"
-        :multiselector-placeholder="
-          $t('CUSTOM_ATTRIBUTES.FORM.ATTRIBUTE_TYPE.LIST.PLACEHOLDER')
-        "
-        :no-search-result="
-          $t('CUSTOM_ATTRIBUTES.FORM.ATTRIBUTE_TYPE.LIST.NO_RESULT')
-        "
-        :input-placeholder="
-          $t(
-            'CUSTOM_ATTRIBUTES.FORM.ATTRIBUTE_TYPE.LIST.SEARCH_INPUT_PLACEHOLDER'
-          )
-        "
-        @select="onUpdateListValue"
-      />
+      <div class="flex items-center gap-1 group">
+        <div class="flex-1">
+          <MultiselectDropdown
+            :options="listOptions"
+            :selected-item="selectedItem"
+            :has-thumbnail="false"
+            :multiselector-placeholder="
+              $t('CUSTOM_ATTRIBUTES.FORM.ATTRIBUTE_TYPE.LIST.PLACEHOLDER')
+            "
+            :no-search-result="
+              $t('CUSTOM_ATTRIBUTES.FORM.ATTRIBUTE_TYPE.LIST.NO_RESULT')
+            "
+            :input-placeholder="
+              $t(
+                'CUSTOM_ATTRIBUTES.FORM.ATTRIBUTE_TYPE.LIST.SEARCH_INPUT_PLACEHOLDER'
+              )
+            "
+            @select="onUpdateListValue"
+          />
+        </div>
+        <NextButton
+          v-if="showActions && hasValue"
+          v-tooltip.right="$t('CUSTOM_ATTRIBUTES.ACTIONS.DELETE')"
+          xs
+          slate
+          ghost
+          icon="i-lucide-x"
+          class="flex-shrink-0"
+          @click="onDelete"
+        />
+      </div>
     </div>
   </div>
 </template>

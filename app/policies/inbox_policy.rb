@@ -26,7 +26,7 @@ class InboxPolicy < ApplicationPolicy
 
   def migrate?
       Current.user&.administrator?
-    end  
+    end
 
     Current.user.assigned_inboxes.include? record
   end
@@ -84,6 +84,10 @@ class InboxPolicy < ApplicationPolicy
   end
 
   def uazapi_reconfigure?
+    admin?
+  end
+
+  def replicate_business_hours?
     admin?
   end
 

@@ -16,6 +16,10 @@ module Enterprise::MessageTemplates::HookExecutionService
   end
 
   def should_send_out_of_office_message?
+    # Outside business hours Captain is skipped (see should_process_captain_response?),
+    # so the standard out-of-office message must be allowed to go out even when an
+    # assistant is configured. In hours, Captain handles the reply and OOO is suppressed.
+    return super if inbox.out_of_office?
     return false if captain_handling_conversation?
 
     super
@@ -50,6 +54,11 @@ module Enterprise::MessageTemplates::HookExecutionService
   end
 
   def should_process_captain_response?
+    # Respect business hours: when the inbox is closed (working hours enabled and
+    # currently out of office), Captain should not auto-respond. The out-of-office
+    # message takes over instead. Inboxes without working hours are unaffected.
+    return false if inbox.out_of_office?
+
     conversation.pending? && message.incoming? && inbox.captain_assistant.present?
   end
 

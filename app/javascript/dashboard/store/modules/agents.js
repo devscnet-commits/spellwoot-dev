@@ -93,6 +93,22 @@ export const actions = {
       throw new Error(error);
     }
   },
+  deactivate: async ({ commit }, agentId) => {
+    try {
+      await AgentAPI.deactivate(agentId);
+      commit(types.default.UPDATE_AGENT_ACTIVE_STATUS, { id: agentId, active: false });
+    } catch (error) {
+      throw new Error(error);
+    }
+  },
+  reactivate: async ({ commit }, agentId) => {
+    try {
+      await AgentAPI.reactivate(agentId);
+      commit(types.default.UPDATE_AGENT_ACTIVE_STATUS, { id: agentId, active: true });
+    } catch (error) {
+      throw new Error(error);
+    }
+  },
 };
 
 export const mutations = {
@@ -113,6 +129,10 @@ export const mutations = {
   [types.default.ADD_AGENT]: MutationHelpers.create,
   [types.default.EDIT_AGENT]: MutationHelpers.update,
   [types.default.DELETE_AGENT]: MutationHelpers.destroy,
+  [types.default.UPDATE_AGENT_ACTIVE_STATUS]($state, { id, active }) {
+    const agent = $state.records.find(r => r.id === id);
+    if (agent) agent.active = active;
+  },
   [types.default.UPDATE_AGENTS_PRESENCE]: MutationHelpers.updatePresence,
   [types.default.UPDATE_SINGLE_AGENT_PRESENCE]: (
     $state,

@@ -12,6 +12,13 @@ class InboxMembers extends ApiClient {
       user_ids: agentList,
     });
   }
+
+  updateWithEligibility({ inboxId, members }) {
+    return axios.patch(this.url, {
+      inbox_id: inboxId,
+      members,
+    });
+  }
 }
 
 export default new InboxMembers();

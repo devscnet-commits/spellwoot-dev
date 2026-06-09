@@ -69,9 +69,19 @@ export const actions = {
   create: async function create({ commit }, policyObj) {
     commit(types.SET_AGENT_CAPACITY_POLICIES_UI_FLAG, { isCreating: true });
     try {
-      const response = await AgentCapacityPoliciesAPI.create(
-        snakecaseKeys(policyObj)
-      );
+      // Extract inbox_limits and agent_ids before generic snake_case conversion
+      const { inboxLimits = [], agentIds = [], ...rest } = policyObj;
+
+      const payload = {
+        ...snakecaseKeys(rest),
+        inbox_limits: inboxLimits.map(l => ({
+          inbox_id: l.inboxId,
+          conversation_limit: l.conversationLimit,
+        })),
+        agent_ids: agentIds,
+      };
+
+      const response = await AgentCapacityPoliciesAPI.create(payload);
       commit(
         types.ADD_AGENT_CAPACITY_POLICY,
         camelcaseKeys(response.data, { deep: true })
