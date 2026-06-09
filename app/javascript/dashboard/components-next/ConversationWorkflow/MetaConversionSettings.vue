@@ -1,16 +1,31 @@
 <script setup>
 import { ref, computed, watch, reactive, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useMapGetter } from 'dashboard/composables/store';
+import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useAlert } from 'dashboard/composables';
 import integrationSettingsAPI from 'dashboard/api/integrationSettings';
 import { ATTRIBUTE_TYPES } from './constants';
 
 const { t } = useI18n();
+const store = useStore();
 const { currentAccount, accountId, updateAccount } = useAccount();
 const conversationAttributes = useMapGetter(
   'attributes/getConversationAttributes'
+);
+const flows = useMapGetter('operationalFlows/getFlows');
+
+// Surface the per-flow closing conversion state here, so the account panel reflects
+// what each flow actually sends without having to open every flow.
+const metaFlows = computed(() =>
+  (flows.value || [])
+    .filter(flow => flow.meta_enabled)
+    .map(flow => ({
+      name: flow.name,
+      events: (flow.resolution_states || [])
+        .filter(state => state.meta_event_type)
+        .map(state => `${state.display_label} → ${state.meta_event_type}`),
+    }))
 );
 
 const isSaving = ref(false);
@@ -21,6 +36,7 @@ const isDirty = ref(false);
 const credentialsConfigured = ref(null);
 
 onMounted(async () => {
+  store.dispatch('operationalFlows/get');
   try {
     const { data } = await integrationSettingsAPI.get(accountId.value, 'meta');
     credentialsConfigured.value = !!(
@@ -210,11 +226,37 @@ const handleSave = async () => {
             }}
           </span>
         </div>
-        <div class="flex items-center gap-2 text-body-small">
-          <span class="i-lucide-info size-4 shrink-0 text-n-slate-9" />
-          <span class="text-n-slate-11">
-            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.FLOWS_NOTE') }}
-          </span>
+        <div class="flex items-start gap-2 text-body-small">
+          <span
+            :class="[
+              metaFlows.length
+                ? 'i-lucide-check-circle-2 text-n-teal-11'
+                : 'i-lucide-circle text-n-slate-9',
+              'size-4 shrink-0 mt-0.5',
+            ]"
+          />
+          <div class="flex flex-col gap-0.5">
+            <span class="text-n-slate-12">
+              {{
+                metaFlows.length
+                  ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.FLOWS_ACTIVE', { count: metaFlows.length })
+                  : $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.FLOWS_NONE')
+              }}
+            </span>
+            <span
+              v-for="flow in metaFlows"
+              :key="flow.name"
+              class="text-n-slate-11"
+            >
+              <span class="font-medium text-n-slate-12">{{ flow.name }}</span>
+              —
+              {{
+                flow.events.length
+                  ? flow.events.join(', ')
+                  : $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.FLOW_NO_EVENT')
+              }}
+            </span>
+          </div>
         </div>
       </div>
 

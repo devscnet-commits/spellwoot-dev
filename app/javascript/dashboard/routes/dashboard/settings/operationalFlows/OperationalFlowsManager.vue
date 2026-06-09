@@ -73,7 +73,9 @@ const confirmDeleteTitle = computed(() =>
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div
+    class="flex flex-col gap-4 outline-1 outline outline-n-container rounded-xl bg-n-solid-2 p-5"
+  >
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
         <h3 class="text-base font-medium text-n-slate-12">

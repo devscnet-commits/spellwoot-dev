@@ -667,7 +667,9 @@
         "CONFIGURE_INTEGRATIONS": "Configurar em Integrações",
         "LEAD_ON": "Lead na chegada: ativo",
         "LEAD_OFF": "Lead na chegada: desativado",
-        "FLOWS_NOTE": "Conversões de fechamento são configuradas em cada Fluxo de Fechamento (estado \"Enviar à Meta como\")."
+        "FLOWS_ACTIVE": "Conversões de fechamento: {count} fluxo(s) com Meta ativa",
+        "FLOWS_NONE": "Nenhum fluxo com conversão de fechamento ativa (ligue no Fluxo de Fechamento → estado \"Enviar à Meta como\").",
+        "FLOW_NO_EVENT": "Meta ligada, mas nenhum estado enviando"
       },
       "SAVE_BUTTON": "Save",
       "SAVING": "Saving...",
