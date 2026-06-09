@@ -108,6 +108,8 @@ export default {
       widgetBubblePosition: 'right',
       widgetBubbleType: 'standard',
       widgetBubbleLauncherTitle: '',
+      // JSON snapshot of the editable fields at load/after save, to drive the dirty state.
+      savedFormState: '',
     };
   },
   computed: {
@@ -117,6 +119,11 @@ export default {
       uiFlags: 'inboxes/getUIFlags',
       portals: 'portals/allPortals',
     }),
+    // True when the form differs from the last loaded/saved state. Drives the save button
+    // so it's only enabled (and not greyed out) when there is something to save.
+    isDirty() {
+      return this.savedFormState !== this.serializeFormState();
+    },
     selectedTabKey() {
       return this.tabs[this.selectedTabIndex]?.key;
     },
@@ -400,6 +407,32 @@ export default {
       this.$store.dispatch('labels/get');
       this.$store.dispatch('portals/index');
     },
+    serializeFormState() {
+      return JSON.stringify({
+        selectedInboxName: this.selectedInboxName,
+        webhookUrl: this.webhookUrl,
+        greetingEnabled: this.greetingEnabled,
+        greetingMessage: this.greetingMessage,
+        emailCollectEnabled: this.emailCollectEnabled,
+        senderNameType: this.senderNameType,
+        businessName: this.businessName,
+        allowMessagesAfterResolved: this.allowMessagesAfterResolved,
+        continuityViaEmail: this.continuityViaEmail,
+        channelWebsiteUrl: this.channelWebsiteUrl,
+        channelWelcomeTitle: this.channelWelcomeTitle,
+        channelWelcomeTagline: this.channelWelcomeTagline,
+        selectedFeatureFlags: this.selectedFeatureFlags,
+        replyTime: this.replyTime,
+        locktoSingleConversation: this.locktoSingleConversation,
+        reopenWindowEnabled: this.reopenWindowEnabled,
+        reopenWindowHours: this.reopenWindowHours,
+        selectedPortalSlug: this.selectedPortalSlug,
+        widgetBubblePosition: this.widgetBubblePosition,
+        widgetBubbleType: this.widgetBubbleType,
+        widgetBubbleLauncherTitle: this.widgetBubbleLauncherTitle,
+        hasAvatarChange: !!this.avatarFile,
+      });
+    },
     syncInboxData() {
       if (!this.inbox || !this.inbox.id) return;
 
@@ -439,6 +472,8 @@ export default {
         this.widgetBubbleType = 'standard';
         this.widgetBubbleLauncherTitle = '';
       }
+
+      this.savedFormState = this.serializeFormState();
     },
     async fetchHealthData() {
       if (!this.inbox) return;
@@ -558,6 +593,9 @@ export default {
         await this.$store.dispatch('inboxes/updateInbox', payload);
         useAlert(this.$t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
         this.showBusinessNameInput = false;
+        this.avatarFile = null;
+        // Re-baseline so the button greys out again until the next change.
+        this.savedFormState = this.serializeFormState();
       } catch (error) {
         useAlert(error.message || this.$t('INBOX_MGMT.EDIT.API.ERROR_MESSAGE'));
       }
@@ -1193,7 +1231,7 @@ export default {
               <NextButton
                 v-if="isAPIInbox"
                 type="submit"
-                :disabled="v$.webhookUrl.$invalid"
+                :disabled="v$.webhookUrl.$invalid || !isDirty"
                 :label="$t('INBOX_MGMT.SETTINGS_POPUP.UPDATE')"
                 :is-loading="uiFlags.isUpdating"
                 @click="updateInbox"
@@ -1201,7 +1239,7 @@ export default {
               <NextButton
                 v-else
                 type="submit"
-                :disabled="v$.$invalid"
+                :disabled="v$.$invalid || !isDirty"
                 :label="$t('INBOX_MGMT.SETTINGS_POPUP.UPDATE')"
                 :is-loading="uiFlags.isUpdating"
                 @click="updateInbox"
