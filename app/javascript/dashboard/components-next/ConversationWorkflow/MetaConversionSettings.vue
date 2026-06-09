@@ -4,12 +4,11 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useAlert } from 'dashboard/composables';
-import integrationSettingsAPI from 'dashboard/api/integrationSettings';
 import { ATTRIBUTE_TYPES } from './constants';
 
 const { t } = useI18n();
 const store = useStore();
-const { currentAccount, accountId, updateAccount } = useAccount();
+const { currentAccount, updateAccount } = useAccount();
 const conversationAttributes = useMapGetter(
   'attributes/getConversationAttributes'
 );
@@ -31,20 +30,8 @@ const metaFlows = computed(() =>
 const isSaving = ref(false);
 const isDirty = ref(false);
 
-// Credentials live in Integrations; surface their status here so the whole setup
-// can be checked from a single panel. null = still loading.
-const credentialsConfigured = ref(null);
-
-onMounted(async () => {
+onMounted(() => {
   store.dispatch('operationalFlows/get');
-  try {
-    const { data } = await integrationSettingsAPI.get(accountId.value, 'meta');
-    credentialsConfigured.value = !!(
-      data?.config?.pixelId && data?.config?.accessToken
-    );
-  } catch {
-    credentialsConfigured.value = false;
-  }
 });
 
 // Account-level Meta settings, shared by every flow. The conversion trigger and sale value live
@@ -186,28 +173,10 @@ const handleSave = async () => {
           {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.TITLE') }}
         </p>
         <div class="flex items-center gap-2 text-body-small">
-          <span
-            :class="[
-              credentialsConfigured
-                ? 'i-lucide-check-circle-2 text-n-teal-11'
-                : 'i-lucide-alert-circle text-n-amber-11',
-              'size-4 shrink-0',
-            ]"
-          />
+          <span class="i-lucide-server size-4 shrink-0 text-n-slate-9" />
           <span class="text-n-slate-12">
-            {{
-              credentialsConfigured
-                ? $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.CREDENTIALS_OK')
-                : $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.CREDENTIALS_MISSING')
-            }}
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.CREDENTIALS_ENV') }}
           </span>
-          <router-link
-            v-if="credentialsConfigured === false"
-            :to="{ name: 'integrations_hub', params: { accountId } }"
-            class="text-n-blue-11 hover:underline"
-          >
-            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CHECKLIST.CONFIGURE_INTEGRATIONS') }}
-          </router-link>
         </div>
         <div class="flex items-center gap-2 text-body-small">
           <span

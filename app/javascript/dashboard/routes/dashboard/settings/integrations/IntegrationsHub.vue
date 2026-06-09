@@ -90,6 +90,12 @@ const SOURCE_LABELS = {
   env:     { label: 'Servidor',  color: 'bg-n-slate-3 text-n-slate-11' },
 };
 
+// Temporary safe mode: serve every integration as environment-managed (read-only),
+// so credentials come from server ENV vars and the UI never writes integration_settings.
+// Flip to false to re-enable per-account editing once the settings endpoint is sorted.
+const FORCE_ENV_MANAGED = true;
+const isEnvManaged = provider => FORCE_ENV_MANAGED || provider.managedByEnv;
+
 const getConfigSource = providerKey => {
   const sources = state[providerKey].sources;
   if (!sources || Object.keys(sources).length === 0) return null;
@@ -147,9 +153,10 @@ const loadInstances = async providerKey => {
 const toggleOpen = async providerKey => {
   const s = state[providerKey];
   s.open = !s.open;
-  if (s.open && !s.dirty) {
+  const provider = PROVIDERS.find(p => p.key === providerKey);
+  // Env-managed providers are read-only — don't hit integration_settings at all.
+  if (s.open && !s.dirty && !isEnvManaged(provider)) {
     await loadProvider(providerKey);
-    const provider = PROVIDERS.find(p => p.key === providerKey);
     if (provider?.syncInstances) loadInstances(providerKey);
   }
 };
@@ -283,7 +290,7 @@ const testConnection = async providerKey => {
 
         <!-- Managed by environment variables (read-only) -->
         <div
-          v-else-if="provider.managedByEnv"
+          v-else-if="isEnvManaged(provider)"
           class="flex items-start gap-3 px-4 py-3 rounded-lg bg-n-slate-2 border border-n-weak"
         >
           <span class="i-lucide-server w-4 h-4 text-n-slate-9 shrink-0 mt-0.5" />
