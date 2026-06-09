@@ -244,7 +244,7 @@ const assigneeTabItems = computed(() => {
   items.push({
     key: 'resolved',
     name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'),
-    count: 0,
+    count: conversationStats.value.resolvedCount || 0,
   });
   return items;
 });
@@ -667,7 +667,7 @@ function updateAssigneeTab(selectedTab) {
   const alreadyActive =
     selectedTab === 'resolved'
       ? isResolvedTabActive.value
-      : activeAssigneeTab.value === selectedTab;
+      : !isResolvedTabActive.value && activeAssigneeTab.value === selectedTab;
   if (alreadyActive) return;
 
   resetBulkActions();
