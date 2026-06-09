@@ -238,16 +238,14 @@ const canSave = computed(() => !!form.value.operational_flow_id);
       </div>
     </div>
 
-    <Button
-      v-if="isAdmin && !showForm"
-      faded
-      slate
-      size="sm"
-      icon="i-lucide-plus"
-      class="w-fit"
-      :label="$t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.NEW_RULE')"
-      @click="openCreate"
-    />
+    <div v-if="isAdmin && !showForm" class="flex justify-end">
+      <Button
+        size="sm"
+        icon="i-lucide-plus"
+        :label="$t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.NEW_RULE')"
+        @click="openCreate"
+      />
+    </div>
 
     <div
       v-if="showForm"

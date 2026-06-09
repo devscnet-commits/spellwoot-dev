@@ -179,19 +179,15 @@ const confirmDeleteTitle = computed(() =>
       </div>
     </div>
 
-    <router-link
-      v-if="isAdmin"
-      :to="{ name: 'settings_operational_flows_new' }"
-      class="w-fit"
-    >
-      <Button
-        faded
-        slate
-        size="sm"
-        icon="i-lucide-plus"
-        :label="$t('OPERATIONAL_FLOWS_SETTINGS.NEW_FLOW')"
-      />
-    </router-link>
+    <div v-if="isAdmin" class="flex justify-end">
+      <router-link :to="{ name: 'settings_operational_flows_new' }">
+        <Button
+          size="sm"
+          icon="i-lucide-plus"
+          :label="$t('OPERATIONAL_FLOWS_SETTINGS.NEW_FLOW')"
+        />
+      </router-link>
+    </div>
 
     <woot-confirm-delete-modal
       v-if="showDeletePopup"
