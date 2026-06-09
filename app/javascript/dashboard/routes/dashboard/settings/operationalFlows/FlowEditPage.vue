@@ -51,8 +51,28 @@ const describeRuleUsage = rule => {
 
 const CATEGORIES = ['sales', 'support'];
 const POLARITIES = ['positive', 'negative', 'neutral'];
-// Standard Meta event names a state can fire ('' = do not send). value only matters for Purchase.
-const META_EVENTS = ['', 'Purchase', 'Lead', 'CompleteRegistration'];
+// Standard Meta Conversions API event names a state can fire ('' = do not send).
+// `value` is only sent for Purchase. Full standard catalog so any funnel can be mapped.
+const META_EVENTS = [
+  '',
+  'Purchase',
+  'Lead',
+  'CompleteRegistration',
+  'Contact',
+  'Schedule',
+  'SubmitApplication',
+  'StartTrial',
+  'Subscribe',
+  'InitiateCheckout',
+  'AddPaymentInfo',
+  'AddToCart',
+  'AddToWishlist',
+  'ViewContent',
+  'Search',
+  'FindLocation',
+  'CustomizeProduct',
+  'Donate',
+];
 
 const metaAttributeOptions = computed(() =>
   (conversationAttributes.value || []).map(attribute => ({
