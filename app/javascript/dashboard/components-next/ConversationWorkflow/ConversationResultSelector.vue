@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useStoreGetters } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { vOnClickOutside } from '@vueuse/components';
+import wootConstants from 'dashboard/constants/globals';
 
 const store = useStore();
 const getters = useStoreGetters();
@@ -12,6 +13,12 @@ const { t } = useI18n();
 const currentChat = computed(() => getters.getSelectedChat.value);
 const isDropdownOpen = ref(false);
 const isLoading = ref(false);
+
+// A resolved conversation's result is locked: the status can only change after reopening.
+// Reflect that visually so it reads as non-editable until the conversation is reopened.
+const isResolved = computed(
+  () => currentChat.value?.status === wootConstants.STATUS_TYPE.RESOLVED
+);
 
 // Prefer the dual-written additional_attributes.outcome (reliably preserved by the store on
 // reload); fall back to the native result column. Only won/lost are selectable values here.
@@ -93,16 +100,24 @@ const selectOutcome = async outcomeKey => {
       type="button"
       class="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-opacity"
       :class="[
-        currentResult.bgClass,
-        currentResult.colorClass,
-        isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80',
+        isResolved
+          ? 'bg-n-slate-2 text-n-slate-9 cursor-not-allowed'
+          : [
+              currentResult.bgClass,
+              currentResult.colorClass,
+              isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80',
+            ],
       ]"
-      :disabled="isLoading"
+      :disabled="isLoading || isResolved"
+      :title="isResolved ? $t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_LOCKED') : null"
       @click="isDropdownOpen = !isDropdownOpen"
     >
       <span class="size-3.5" :class="[currentResult.icon]" />
       {{ labelFor(currentResult.key) }}
-      <span class="i-lucide-chevron-down size-3 opacity-70" />
+      <span
+        v-if="!isResolved"
+        class="i-lucide-chevron-down size-3 opacity-70"
+      />
     </button>
 
     <div
