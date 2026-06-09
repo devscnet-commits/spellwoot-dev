@@ -36,6 +36,8 @@ const agentEligibility = ref({});
 const addSearch = ref('');
 const showAddDropdown = ref(false);
 const isAgentListUpdating = ref(false);
+// Snapshot of the agent membership/eligibility at load/after save, for the dirty state.
+const savedAgentsState = ref('');
 const enableAutoAssignment = ref(false);
 const maxAssignmentLimit = ref(null);
 const assignmentPolicy = ref(null);
@@ -88,6 +90,17 @@ const toggleEligibility = agentId => {
 };
 
 const closeAddDropdown = () => { showAddDropdown.value = false; };
+
+// Stable representation of the agent list + eligibility, so the Update button only
+// enables when something actually changed (and greys out again after saving).
+const serializeAgents = () => {
+  const ids = [...selectedAgentIds.value].sort((a, b) => a - b);
+  const elig = ids.map(id => [id, agentEligibility.value[id] !== false]);
+  return JSON.stringify({ ids, elig });
+};
+const isAgentsDirty = computed(
+  () => savedAgentsState.value !== serializeAgents()
+);
 
 const isFeatureEnabled = feature => {
   const accountId = Number(route.params.accountId);
@@ -175,6 +188,7 @@ const fetchAttachedAgents = async () => {
       map[m.id] = m.eligible_for_assignment !== false;
     });
     agentEligibility.value = map;
+    savedAgentsState.value = serializeAgents();
   } catch (error) {
     //  Handle error
   }
@@ -294,6 +308,7 @@ const updateAgents = async () => {
       inboxId: props.inbox.id,
       members,
     });
+    savedAgentsState.value = serializeAgents();
     useAlert(t('AGENT_MGMT.EDIT.API.SUCCESS_MESSAGE'));
   } catch (error) {
     useAlert(t('AGENT_MGMT.EDIT.API.ERROR_MESSAGE'));
@@ -487,6 +502,7 @@ onMounted(() => {
             <NextButton
               :label="$t('INBOX_MGMT.SETTINGS_POPUP.UPDATE')"
               :is-loading="isAgentListUpdating"
+              :disabled="!isAgentsDirty"
               @click="updateAgents"
             />
           </div>
