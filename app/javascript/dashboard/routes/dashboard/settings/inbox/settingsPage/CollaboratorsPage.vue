@@ -75,6 +75,46 @@ const addAgent = agent => {
   showAddDropdown.value = false;
 };
 
+// Teams as a shortcut: picking one adds all its members at once (agents can still
+// be removed individually afterwards).
+const teamsList = computed(() => store.getters['teams/getTeams'] || []);
+const addableTeams = computed(() => {
+  const q = addSearch.value.toLowerCase();
+  return teamsList.value.filter(
+    team => !q || team.name.toLowerCase().includes(q)
+  );
+});
+
+const addTeam = async team => {
+  try {
+    const TeamsAPI = (await import('dashboard/api/teams')).default;
+    const { data } = await TeamsAPI.getAgents({ teamId: team.id });
+    const memberIds = (data || []).map(member => member.id);
+    const newIds = memberIds.filter(
+      id =>
+        !selectedAgentIds.value.includes(id) &&
+        agentList.value.some(agent => agent.id === id)
+    );
+    if (newIds.length) {
+      selectedAgentIds.value = [...selectedAgentIds.value, ...newIds];
+      const eligibility = { ...agentEligibility.value };
+      newIds.forEach(id => {
+        eligibility[id] = true;
+      });
+      agentEligibility.value = eligibility;
+    }
+    useAlert(
+      newIds.length
+        ? `${newIds.length} agente(s) do time "${team.name}" adicionado(s)`
+        : `Todos os agentes do time "${team.name}" já estão na caixa`
+    );
+  } catch {
+    useAlert('Não foi possível carregar os agentes do time');
+  }
+  addSearch.value = '';
+  showAddDropdown.value = false;
+};
+
 const removeAgent = agentId => {
   selectedAgentIds.value = selectedAgentIds.value.filter(id => id !== agentId);
   const updated = { ...agentEligibility.value };
@@ -398,6 +438,7 @@ watch(() => props.inbox.id, setDefaults);
 
 onMounted(() => {
   setDefaults();
+  store.dispatch('teams/get');
 });
 </script>
 
@@ -423,11 +464,37 @@ onMounted(() => {
             />
           </div>
 
-          <!-- Dropdown list of addable agents -->
+          <!-- Dropdown: whole teams as shortcuts, then individual agents -->
           <div
-            v-if="showAddDropdown && addableAgents.length > 0"
-            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg max-h-48 overflow-y-auto"
+            v-if="
+              showAddDropdown && (addableAgents.length || addableTeams.length)
+            "
+            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg max-h-56 overflow-y-auto"
           >
+            <template v-if="addableTeams.length">
+              <p
+                class="px-3 pt-2 pb-1 text-xs font-medium uppercase text-n-slate-10"
+              >
+                Adicionar time inteiro
+              </p>
+              <button
+                v-for="team in addableTeams"
+                :key="`team-${team.id}`"
+                type="button"
+                class="w-full flex items-center gap-2 px-3 py-2 text-sm text-n-slate-12 hover:bg-n-slate-2 text-left"
+                @click="addTeam(team)"
+              >
+                <span class="i-lucide-users text-n-slate-9 shrink-0" />
+                {{ team.name }}
+              </button>
+              <div class="border-t border-n-weak my-1" />
+            </template>
+            <p
+              v-if="addableAgents.length"
+              class="px-3 pt-2 pb-1 text-xs font-medium uppercase text-n-slate-10"
+            >
+              Agentes
+            </p>
             <button
               v-for="agent in addableAgents"
               :key="agent.id"
@@ -440,10 +507,10 @@ onMounted(() => {
             </button>
           </div>
           <div
-            v-else-if="showAddDropdown && addSearch && addableAgents.length === 0"
+            v-else-if="showAddDropdown && addSearch"
             class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg px-3 py-3 text-sm text-n-slate-10"
           >
-            Nenhum agente encontrado
+            Nenhum agente ou time encontrado
           </div>
         </div>
 
