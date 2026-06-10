@@ -44,9 +44,9 @@ const teamNames = ids =>
 const asArray = value =>
   Array.isArray(value) ? value : value ? [value] : [];
 
-// Caixas offered for exclusion: the union of the selected teams' linked caixas.
-// If the selected teams have no linked caixas, fall back to all caixas so the
-// exclusion still works (the link is set in Settings → Teams).
+// Caixas offered for exclusion: the union of the selected teams' linked caixas. Teams
+// without linked caixas contribute nothing — their inline link panel handles that case,
+// so we never show a misleading list of every caixa in the account here.
 const teamInboxes = computed(() => {
   const ids = new Set();
   teams.value.forEach(team => {
@@ -54,8 +54,7 @@ const teamInboxes = computed(() => {
       (team.inbox_ids || []).forEach(id => ids.add(id));
     }
   });
-  const fromTeams = inboxes.value.filter(inbox => ids.has(inbox.id));
-  return fromTeams.length ? fromTeams : inboxes.value;
+  return inboxes.value.filter(inbox => ids.has(inbox.id));
 });
 
 // Selected teams with no linked caixas: the rule would only match conversations with the
@@ -404,30 +403,31 @@ const canSave = computed(() => !!form.value.operational_flow_id);
             }}
           </p>
         </div>
-        <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+        <div
+          class="flex flex-col gap-1 border border-n-amber-6 rounded-lg p-3 max-h-48 overflow-y-auto bg-n-solid-1"
+        >
           <label
             v-for="inbox in inboxes"
             :key="inbox.id"
-            class="flex items-center gap-1.5 text-sm text-n-slate-12 cursor-pointer"
+            class="flex items-center gap-2 py-1 cursor-pointer"
           >
             <input
               type="checkbox"
               :checked="isLinkSelected(team.id, inbox.id)"
               @change="toggleLinkInbox(team.id, inbox.id)"
             />
-            {{ inbox.name }}
+            <span class="text-sm text-n-slate-12">{{ inbox.name }}</span>
           </label>
         </div>
         <div class="flex justify-end">
           <Button
+            v-if="(linkSelections[team.id] || []).length"
             size="sm"
             :label="
               $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.LINK_CTA', {
                 count: (linkSelections[team.id] || []).length,
-                team: team.name,
               })
             "
-            :disabled="!(linkSelections[team.id] || []).length"
             :is-loading="linkingTeamId === team.id"
             @click="linkTeamInboxes(team)"
           />

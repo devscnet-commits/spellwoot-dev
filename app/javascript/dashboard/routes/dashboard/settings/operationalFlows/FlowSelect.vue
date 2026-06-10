@@ -12,7 +12,7 @@ const model = defineModel({ type: null, default: '' });
   <div class="relative">
     <select
       v-model="model"
-      class="w-full appearance-none px-3 ltr:pr-9 rtl:pl-9 py-2.5 rounded-lg border border-n-weak text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+      class="w-full appearance-none bg-none px-3 ltr:pr-9 rtl:pl-9 py-2.5 rounded-lg border border-n-weak text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
       :class="selectClass"
     >
       <slot />
