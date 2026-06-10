@@ -69,6 +69,32 @@ const teamsWithoutInboxes = computed(() =>
     .map(team => team.name)
 );
 
+// Rules are evaluated in this order (most specific first, then oldest); the first match wins.
+const sortedRules = computed(() =>
+  [...rules.value].sort(
+    (a, b) => a.priority - b.priority || a.id - b.id
+  )
+);
+
+// Selected teams already covered by ANOTHER rule: duplicated team rules are almost always a
+// mistake — the older rule keeps winning and the new one silently never applies.
+const conflictingTeams = computed(() =>
+  form.value.team_ids.flatMap(teamId => {
+    const other = sortedRules.value.find(
+      rule =>
+        rule.id !== form.value.id &&
+        asArray((rule.predicate || {}).team_id).map(Number).includes(teamId)
+    );
+    if (!other) return [];
+    return [
+      {
+        team: nameById(teams.value, teamId),
+        flow: flowName(other.operational_flow_id),
+      },
+    ];
+  })
+);
+
 const isTeamSelected = id => form.value.team_ids.includes(id);
 const toggleTeam = id => {
   form.value.team_ids = isTeamSelected(id)
@@ -220,12 +246,20 @@ const canSave = computed(() => !!form.value.operational_flow_id);
       v-else-if="rules.length"
       class="divide-y divide-n-weak border-t border-n-weak"
     >
+      <p class="text-xs text-n-slate-11 pt-2">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.SPECIFICITY_HELP') }}
+      </p>
       <div
-        v-for="rule in rules"
+        v-for="(rule, index) in sortedRules"
         :key="rule.id"
         class="flex justify-between flex-row items-start gap-4 py-3"
       >
         <div class="flex items-start gap-3">
+          <span
+            class="flex items-center justify-center size-6 shrink-0 rounded-full bg-n-alpha-2 text-xs font-medium text-n-slate-11 mt-0.5"
+          >
+            {{ index + 1 }}
+          </span>
           <div class="flex flex-col gap-1">
             <span class="text-sm text-n-slate-12">
               {{ predicateSummary(rule) }}
@@ -300,6 +334,23 @@ const canSave = computed(() => !!form.value.operational_flow_id);
             <span class="text-sm text-n-slate-12">{{ team.name }}</span>
           </label>
         </div>
+      </div>
+
+      <!-- Loud warning: another rule already covers this team — the older one keeps winning -->
+      <div
+        v-for="conflict in conflictingTeams"
+        :key="conflict.team"
+        class="flex items-start gap-2 rounded-lg bg-n-amber-3 px-3 py-2"
+      >
+        <span class="i-lucide-alert-triangle size-4 text-n-amber-11 shrink-0 mt-0.5" />
+        <p class="text-sm text-n-amber-11">
+          {{
+            $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.TEAM_CONFLICT', {
+              team: conflict.team,
+              flow: conflict.flow,
+            })
+          }}
+        </p>
       </div>
 
       <!-- Loud warning: a team rule without linked caixas almost never matches -->
