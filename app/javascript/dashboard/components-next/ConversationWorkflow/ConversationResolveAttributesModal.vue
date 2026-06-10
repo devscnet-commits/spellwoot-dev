@@ -199,7 +199,7 @@ defineExpose({ open, close });
       t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.DESCRIPTION')
     "
     :disable-confirm-button="!isFormComplete"
-    @confirm="handleConfirm"
+    @confirm="handleSaveOnly"
   >
     <template #footer>
       <div class="flex items-center justify-between w-full gap-3">
@@ -217,17 +217,17 @@ defineExpose({ open, close });
           variant="outline"
           color="blue"
           :label="
-            t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.SAVE')
+            t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.RESOLVE')
           "
           class="w-full"
           type="button"
           :disabled="!isFormComplete"
-          @click="handleSaveOnly"
+          @click="handleConfirm"
         />
         <Button
           color="blue"
           :label="
-            t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.RESOLVE')
+            t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.SAVE')
           "
           class="w-full"
           :disabled="!isFormComplete"
