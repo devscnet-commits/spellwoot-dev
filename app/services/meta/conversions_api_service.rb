@@ -1,5 +1,5 @@
 class Meta::ConversionsApiService
-  API_URL = 'https://graph.facebook.com/v19.0'
+  API_URL = 'https://graph.facebook.com/v23.0'
 
   def initialize(conversation:, event_name: 'Lead', value: nil, currency: nil, event_id: nil)
     @conversation = conversation
