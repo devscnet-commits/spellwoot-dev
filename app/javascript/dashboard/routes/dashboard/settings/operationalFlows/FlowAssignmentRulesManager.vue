@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 
 import Button from 'dashboard/components-next/button/Button.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import FlowSelect from './FlowSelect.vue';
 
 const store = useStore();
 const { t } = useI18n();
@@ -266,17 +267,14 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         <label class="text-xs font-medium text-n-slate-11">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.FLOW') }}
         </label>
-        <select
-          v-model="form.operational_flow_id"
-          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-        >
+        <FlowSelect v-model="form.operational_flow_id">
           <option :value="null" disabled>
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.SELECT') }}
           </option>
           <option v-for="flow in flows" :key="flow.id" :value="flow.id">
             {{ flow.name }}
           </option>
-        </select>
+        </FlowSelect>
       </div>
 
       <p class="text-xs text-n-slate-11">

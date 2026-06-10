@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n';
 import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import FlowSelect from './FlowSelect.vue';
 
 const store = useStore();
 const route = useRoute();
@@ -347,7 +348,7 @@ const save = async () => {
 </script>
 
 <template>
-  <div class="p-6 col-span-full w-full max-w-3xl mx-auto flex flex-col gap-6">
+  <div class="p-6 col-span-full w-full max-w-5xl mx-auto flex flex-col gap-6">
     <div v-if="isLoading" class="flex justify-center py-8">
       <Spinner class="text-n-brand" />
     </div>
@@ -373,7 +374,7 @@ const save = async () => {
           v-model="name"
           type="text"
           :placeholder="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.NAME.PLACEHOLDER')"
-          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+          class="w-full px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
         />
       </div>
 
@@ -381,17 +382,14 @@ const save = async () => {
         <label class="text-sm font-medium text-n-slate-12">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.LABEL') }}
         </label>
-        <p class="text-xs text-n-slate-11">
+        <p class="text-sm text-n-slate-11">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.HELP') }}
         </p>
-        <select
-          v-model="category"
-          class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-        >
+        <FlowSelect v-model="category">
           <option v-for="option in CATEGORIES" :key="option" :value="option">
             {{ $t(`OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.OPTIONS.${option}`) }}
           </option>
-        </select>
+        </FlowSelect>
       </div>
 
       <div
@@ -410,7 +408,7 @@ const save = async () => {
           <span class="text-sm font-medium text-n-slate-12">
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.META.LABEL') }}
           </span>
-          <span class="text-xs text-n-slate-11">
+          <span class="text-sm text-n-slate-11">
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.META.HELP') }}
           </span>
         </div>
@@ -418,7 +416,7 @@ const save = async () => {
       </div>
 
       <div class="flex flex-col gap-3">
-        <h3 class="text-base font-medium text-n-slate-12">
+        <h3 class="text-lg font-medium text-n-slate-12">
           {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.LABEL') }}
         </h3>
 
@@ -437,23 +435,20 @@ const save = async () => {
 
           <div class="flex flex-col gap-3 sm:flex-row">
             <div class="flex flex-col gap-1 flex-1">
-              <label class="text-xs font-medium text-n-slate-11">
+              <label class="text-sm font-medium text-n-slate-11">
                 {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.DISPLAY_LABEL') }}
               </label>
               <input
                 v-model="state.display_label"
                 type="text"
-                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                class="w-full px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
               />
             </div>
             <div class="flex flex-col gap-1 sm:w-40">
-              <label class="text-xs font-medium text-n-slate-11">
+              <label class="text-sm font-medium text-n-slate-11">
                 {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.POLARITY') }}
               </label>
-              <select
-                v-model="state.polarity"
-                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-              >
+              <FlowSelect v-model="state.polarity">
                 <option
                   v-for="option in POLARITIES"
                   :key="option"
@@ -465,7 +460,7 @@ const save = async () => {
                     )
                   }}
                 </option>
-              </select>
+              </FlowSelect>
             </div>
           </div>
 
@@ -475,13 +470,10 @@ const save = async () => {
           >
             <div class="flex flex-col gap-3 sm:flex-row">
               <div class="flex flex-col gap-1 flex-1">
-                <label class="text-xs font-medium text-n-slate-11">
+                <label class="text-sm font-medium text-n-slate-11">
                   {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_EVENT') }}
                 </label>
-                <select
-                  v-model="state.meta_event_type"
-                  class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-                >
+                <FlowSelect v-model="state.meta_event_type">
                   <option
                     v-for="option in metaEventOptions"
                     :key="option.value"
@@ -489,19 +481,16 @@ const save = async () => {
                   >
                     {{ option.label }}
                   </option>
-                </select>
+                </FlowSelect>
               </div>
               <div
                 v-if="state.meta_event_type === 'Purchase'"
                 class="flex flex-col gap-1 flex-1"
               >
-                <label class="text-xs font-medium text-n-slate-11">
+                <label class="text-sm font-medium text-n-slate-11">
                   {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_ATTR') }}
                 </label>
-                <select
-                  v-model="state.meta_value_attr"
-                  class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-                >
+                <FlowSelect v-model="state.meta_value_attr">
                   <option value="">
                     {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NO_VALUE') }}
                   </option>
@@ -512,18 +501,18 @@ const save = async () => {
                   >
                     {{ option.label }}
                   </option>
-                </select>
+                </FlowSelect>
               </div>
             </div>
             <p
               v-if="state.meta_event_type === 'Purchase' && !state.meta_value_attr"
-              class="text-xs text-n-amber-11"
+              class="text-sm text-n-amber-11"
             >
               {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NEED_VALUE_ATTR') }}
             </p>
             <p
               v-else-if="state.meta_event_type === 'Purchase'"
-              class="text-xs text-n-slate-11"
+              class="text-sm text-n-slate-11"
             >
               {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_HELP') }}
             </p>
@@ -534,7 +523,7 @@ const save = async () => {
 
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-1">
-          <h3 class="text-base font-medium text-n-slate-12">
+          <h3 class="text-lg font-medium text-n-slate-12">
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.LABEL') }}
           </h3>
           <p class="text-sm text-n-slate-11">
@@ -547,10 +536,7 @@ const save = async () => {
           class="flex flex-col gap-2"
         >
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              v-model="requirement.attribute_key"
-              class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-            >
+            <FlowSelect v-model="requirement.attribute_key" class="flex-1">
               <option value="" disabled>
                 {{
                   $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.SELECT_ATTRIBUTE')
@@ -563,11 +549,8 @@ const save = async () => {
               >
                 {{ option.label }}
               </option>
-            </select>
-            <select
-              v-model="requirement.when"
-              class="sm:w-56 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-            >
+            </FlowSelect>
+            <FlowSelect v-model="requirement.when" class="sm:w-56">
               <option
                 v-for="option in conditionOptions"
                 :key="option.value"
@@ -575,7 +558,7 @@ const save = async () => {
               >
                 {{ option.label }}
               </option>
-            </select>
+            </FlowSelect>
             <Button
               icon="i-woot-bin"
               slate
@@ -590,12 +573,12 @@ const save = async () => {
             v-if="requirement.when === 'if'"
             class="flex flex-col gap-2 rounded-lg border border-n-weak bg-n-solid-1 p-3 sm:ml-4"
           >
-            <label class="text-xs font-medium text-n-slate-11">
+            <label class="text-sm font-medium text-n-slate-11">
               {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD') }}
             </label>
-            <select
+            <FlowSelect
               v-model="requirement.condition_field"
-              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              select-class="bg-n-solid-2"
               @change="onTriggerFieldChange(requirement)"
             >
               <option value="" disabled>
@@ -610,16 +593,16 @@ const save = async () => {
               >
                 {{ option.label }}
               </option>
-            </select>
+            </FlowSelect>
             <p
               v-if="!listAttributeOptions.length"
-              class="text-xs text-n-amber-11"
+              class="text-sm text-n-amber-11"
             >
               {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_NO_LIST_ATTRS') }}
             </p>
 
             <template v-if="requirement.condition_field">
-              <label class="text-xs font-medium text-n-slate-11 mt-1">
+              <label class="text-sm font-medium text-n-slate-11 mt-1">
                 {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUES') }}
               </label>
               <div class="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -655,7 +638,7 @@ const save = async () => {
         class="flex flex-col gap-2 border-t border-n-weak pt-5"
       >
         <div class="flex items-start justify-between gap-4">
-          <h3 class="text-base font-medium text-n-slate-12">
+          <h3 class="text-lg font-medium text-n-slate-12">
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.TITLE') }}
           </h3>
           <router-link
