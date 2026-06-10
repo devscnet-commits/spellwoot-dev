@@ -74,6 +74,27 @@ const META_EVENTS = [
   'Donate',
 ];
 
+// Canonical Meta event names with a translated description; the canonical name is what gets sent.
+const metaEventOptions = computed(() => [
+  { value: '', label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NONE') },
+  ...META_EVENTS.filter(Boolean).map(event => ({
+    value: event,
+    label: `${event} — ${t(`OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_EVENT_DESC.${event}`)}`,
+  })),
+]);
+
+// Purchase value must be numeric-ish: offer number/text attributes only.
+const valueAttributeOptions = computed(() =>
+  (conversationAttributes.value || [])
+    .filter(attribute =>
+      ['number', 'text'].includes(attribute.attributeDisplayType)
+    )
+    .map(attribute => ({
+      value: attribute.attributeKey,
+      label: attribute.attributeDisplayName,
+    }))
+);
+
 const metaAttributeOptions = computed(() =>
   (conversationAttributes.value || []).map(attribute => ({
     value: attribute.attributeKey,
@@ -265,6 +286,25 @@ const buildRequirementsAttributes = () => {
     });
   });
   removedRequirementIds.value.forEach(id => rows.push({ id, _destroy: true }));
+  return withValueRequirements(rows);
+};
+
+// A Purchase needs its value at closing time: when a state sends Purchase with a value attribute,
+// make that attribute a closing requirement for the state so the agent is asked when resolving.
+const withValueRequirements = rows => {
+  const present = new Set(
+    rows.filter(r => !r._destroy).map(r => r.attribute_key)
+  );
+  states.value.forEach(state => {
+    if (state.meta_event_type !== 'Purchase' || !state.meta_value_attr) return;
+    if (present.has(state.meta_value_attr)) return;
+    rows.push({
+      attribute_key: state.meta_value_attr,
+      condition: { when: { canonical_key: state.canonical_key } },
+      sort_order: rows.length,
+    });
+    present.add(state.meta_value_attr);
+  });
   return rows;
 };
 
@@ -431,47 +471,62 @@ const save = async () => {
 
           <div
             v-if="metaEnabled"
-            class="flex flex-col gap-3 sm:flex-row border-t border-n-weak pt-3"
+            class="flex flex-col gap-3 border-t border-n-weak pt-3"
           >
-            <div class="flex flex-col gap-1 flex-1">
-              <label class="text-xs font-medium text-n-slate-11">
-                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_EVENT') }}
-              </label>
-              <select
-                v-model="state.meta_event_type"
-                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-              >
-                <option v-for="option in META_EVENTS" :key="option" :value="option">
-                  {{
-                    option ||
-                    $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NONE')
-                  }}
-                </option>
-              </select>
-            </div>
-            <div
-              v-if="state.meta_event_type === 'Purchase'"
-              class="flex flex-col gap-1 flex-1"
-            >
-              <label class="text-xs font-medium text-n-slate-11">
-                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_ATTR') }}
-              </label>
-              <select
-                v-model="state.meta_value_attr"
-                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-              >
-                <option value="">
-                  {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NO_VALUE') }}
-                </option>
-                <option
-                  v-for="option in metaAttributeOptions"
-                  :key="option.value"
-                  :value="option.value"
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <div class="flex flex-col gap-1 flex-1">
+                <label class="text-xs font-medium text-n-slate-11">
+                  {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_EVENT') }}
+                </label>
+                <select
+                  v-model="state.meta_event_type"
+                  class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
                 >
-                  {{ option.label }}
-                </option>
-              </select>
+                  <option
+                    v-for="option in metaEventOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+              <div
+                v-if="state.meta_event_type === 'Purchase'"
+                class="flex flex-col gap-1 flex-1"
+              >
+                <label class="text-xs font-medium text-n-slate-11">
+                  {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_ATTR') }}
+                </label>
+                <select
+                  v-model="state.meta_value_attr"
+                  class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                >
+                  <option value="">
+                    {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NO_VALUE') }}
+                  </option>
+                  <option
+                    v-for="option in valueAttributeOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
             </div>
+            <p
+              v-if="state.meta_event_type === 'Purchase' && !state.meta_value_attr"
+              class="text-xs text-n-amber-11"
+            >
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NEED_VALUE_ATTR') }}
+            </p>
+            <p
+              v-else-if="state.meta_event_type === 'Purchase'"
+              class="text-xs text-n-slate-11"
+            >
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_HELP') }}
+            </p>
           </div>
 
         </div>

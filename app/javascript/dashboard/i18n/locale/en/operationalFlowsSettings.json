@@ -59,7 +59,28 @@
         "META_EVENT": "Send to Meta as",
         "META_NONE": "Do not send",
         "META_VALUE_ATTR": "Sale value from attribute",
-        "META_NO_VALUE": "No value"
+        "META_NO_VALUE": "No value",
+        "META_NEED_VALUE_ATTR": "The Purchase event requires a value. Create a conversation custom attribute of type Number (e.g. \"Sale value\") under Settings → Custom attributes and select it here.",
+        "META_VALUE_HELP": "On save, this attribute becomes required for this state: the agent will be asked to fill it when closing the conversation.",
+        "META_EVENT_DESC": {
+          "Purchase": "Completed sale (requires value)",
+          "Lead": "New lead",
+          "CompleteRegistration": "Registration completed",
+          "Contact": "Contact made",
+          "Schedule": "Appointment booked",
+          "SubmitApplication": "Application submitted",
+          "StartTrial": "Trial started",
+          "Subscribe": "Subscription started",
+          "InitiateCheckout": "Checkout started",
+          "AddPaymentInfo": "Payment info added",
+          "AddToCart": "Added to cart",
+          "AddToWishlist": "Added to wishlist",
+          "ViewContent": "Viewed content/product",
+          "Search": "Searched something",
+          "FindLocation": "Looked for a location/store",
+          "CustomizeProduct": "Customized a product",
+          "Donate": "Donation made"
+        }
       },
       "USED_BY": {
         "TITLE": "This flow is used by:",

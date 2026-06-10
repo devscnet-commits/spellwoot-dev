@@ -59,7 +59,28 @@
         "META_EVENT": "Enviar à Meta como",
         "META_NONE": "Não enviar",
         "META_VALUE_ATTR": "Valor da venda a partir do atributo",
-        "META_NO_VALUE": "Sem valor"
+        "META_NO_VALUE": "Sem valor",
+        "META_NEED_VALUE_ATTR": "O evento Purchase exige um valor. Crie um atributo personalizado de conversa do tipo Número (ex.: \"Valor da venda\") em Configurações → Atributos personalizados e selecione-o aqui.",
+        "META_VALUE_HELP": "Ao salvar, este atributo vira obrigatório neste estado: o agente será solicitado a preenchê-lo ao fechar a conversa.",
+        "META_EVENT_DESC": {
+          "Purchase": "Venda concluída (exige valor)",
+          "Lead": "Novo lead",
+          "CompleteRegistration": "Cadastro concluído",
+          "Contact": "Contato realizado",
+          "Schedule": "Agendamento marcado",
+          "SubmitApplication": "Proposta/inscrição enviada",
+          "StartTrial": "Início de período de teste",
+          "Subscribe": "Assinatura contratada",
+          "InitiateCheckout": "Checkout iniciado",
+          "AddPaymentInfo": "Dados de pagamento informados",
+          "AddToCart": "Adicionou ao carrinho",
+          "AddToWishlist": "Adicionou à lista de desejos",
+          "ViewContent": "Visualizou conteúdo/produto",
+          "Search": "Pesquisou algo",
+          "FindLocation": "Buscou localização/loja",
+          "CustomizeProduct": "Personalizou produto",
+          "Donate": "Doação realizada"
+        }
       },
       "USED_BY": {
         "TITLE": "Este fluxo está sendo utilizado por:",
