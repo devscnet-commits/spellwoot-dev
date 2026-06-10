@@ -55,6 +55,9 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def update_message_with_status(message, status)
+    # An incoming message can never "fail to send" — ignore stray failed acks for it.
+    return if message.incoming? && status[:status] == 'failed'
+
     message.status = status[:status]
     if status[:status] == 'failed' && status[:errors].present?
       error = status[:errors]&.first
