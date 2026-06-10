@@ -20,8 +20,20 @@ class FlowAssignmentRule < ApplicationRecord
   def inclusion_match?(context)
     PREDICATE_KEYS.all? do |key|
       value = (predicate || {})[key]
-      value.blank? || Array(value).map(&:to_s).include?(context[key.to_sym].to_s)
+      next true if value.blank?
+      next team_match?(value, context) if key == 'team_id'
+
+      Array(value).map(&:to_s).include?(context[key.to_sym].to_s)
     end
+  end
+
+  # Conversations usually reach closing without a team assigned, so a team rule also matches
+  # when the conversation's caixa is linked to one of the rule's teams.
+  def team_match?(value, context)
+    team_ids = Array(value).map(&:to_s)
+    return true if team_ids.include?(context[:team_id].to_s)
+
+    context[:inbox_id].present? && TeamInbox.exists?(team_id: team_ids, inbox_id: context[:inbox_id])
   end
 
   def excluded?(context)
