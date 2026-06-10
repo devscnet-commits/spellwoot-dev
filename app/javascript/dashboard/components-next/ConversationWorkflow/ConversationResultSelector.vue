@@ -101,9 +101,18 @@ const persistOutcome = async (outcomeKey, customAttributes = null) => {
       outcome: outcomeKey,
       customAttributes,
     });
+    // The chip prefers the dual-written additional_attributes.outcome, so the local copy
+    // must be refreshed too — otherwise the stale legacy value keeps the old label on screen.
+    const additionalAttributes = {
+      ...(currentChat.value.additional_attributes || {}),
+    };
+    if (outcomeKey) additionalAttributes.outcome = outcomeKey;
+    else delete additionalAttributes.outcome;
+
     await store.dispatch('updateConversation', {
       ...currentChat.value,
       result: outcomeKey || 'none',
+      additional_attributes: additionalAttributes,
       custom_attributes: {
         ...(currentChat.value.custom_attributes || {}),
         ...(customAttributes || {}),

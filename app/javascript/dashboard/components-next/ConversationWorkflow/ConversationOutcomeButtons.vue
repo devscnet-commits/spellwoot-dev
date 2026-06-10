@@ -128,6 +128,8 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
       result: outcome,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
+        // Keep the dual-written legacy outcome in sync so the result chip updates live.
+        outcome,
         ...(isOnCloseStrategy.value && hasCtwaClid.value
           ? { meta_conversion: { sent: true } }
           : {}),
