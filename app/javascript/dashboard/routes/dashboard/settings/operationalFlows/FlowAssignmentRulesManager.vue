@@ -59,15 +59,50 @@ const teamInboxes = computed(() => {
 });
 
 // Selected teams with no linked caixas: the rule would only match conversations with the
-// team manually assigned — almost always a configuration mistake worth flagging loudly.
+// team manually assigned — almost always a configuration mistake. Instead of sending the
+// user to another screen, offer linking the caixas right here.
 const teamsWithoutInboxes = computed(() =>
-  teams.value
-    .filter(
-      team =>
-        form.value.team_ids.includes(team.id) && !(team.inbox_ids || []).length
-    )
-    .map(team => team.name)
+  teams.value.filter(
+    team =>
+      form.value.team_ids.includes(team.id) && !(team.inbox_ids || []).length
+  )
 );
+
+const linkSelections = ref({});
+const linkingTeamId = ref(null);
+
+const isLinkSelected = (teamId, inboxId) =>
+  (linkSelections.value[teamId] || []).includes(inboxId);
+
+const toggleLinkInbox = (teamId, inboxId) => {
+  const current = linkSelections.value[teamId] || [];
+  linkSelections.value = {
+    ...linkSelections.value,
+    [teamId]: current.includes(inboxId)
+      ? current.filter(id => id !== inboxId)
+      : [...current, inboxId],
+  };
+};
+
+const linkTeamInboxes = async team => {
+  const inboxIds = linkSelections.value[team.id] || [];
+  if (!inboxIds.length) return;
+  linkingTeamId.value = team.id;
+  try {
+    const TeamsAPI = (await import('dashboard/api/teams')).default;
+    await TeamsAPI.updateInboxes({ teamId: team.id, inboxIds });
+    await store.dispatch('teams/get');
+    useAlert(
+      t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.LINK_SUCCESS', {
+        team: team.name,
+      })
+    );
+  } catch (error) {
+    useAlert(t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.LINK_ERROR'));
+  } finally {
+    linkingTeamId.value = null;
+  }
+};
 
 // Rules are evaluated in this order (most specific first, then oldest); the first match wins.
 const sortedRules = computed(() =>
@@ -353,19 +388,50 @@ const canSave = computed(() => !!form.value.operational_flow_id);
         </p>
       </div>
 
-      <!-- Loud warning: a team rule without linked caixas almost never matches -->
+      <!-- Actionable warning: link the team's caixas right here, no detour to Times -->
       <div
-        v-if="teamsWithoutInboxes.length"
-        class="flex items-start gap-2 rounded-lg bg-n-amber-3 px-3 py-2"
+        v-for="team in teamsWithoutInboxes"
+        :key="`link-${team.id}`"
+        class="flex flex-col gap-2 rounded-lg bg-n-amber-3 px-3 py-3"
       >
-        <span class="i-lucide-alert-triangle size-4 text-n-amber-11 shrink-0 mt-0.5" />
-        <p class="text-xs text-n-amber-11">
-          {{
-            $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.TEAM_NO_CAIXAS', {
-              names: teamsWithoutInboxes.join(', '),
-            })
-          }}
-        </p>
+        <div class="flex items-start gap-2">
+          <span class="i-lucide-alert-triangle size-4 text-n-amber-11 shrink-0 mt-0.5" />
+          <p class="text-sm text-n-amber-11">
+            {{
+              $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.TEAM_NO_CAIXAS', {
+                names: team.name,
+              })
+            }}
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+          <label
+            v-for="inbox in inboxes"
+            :key="inbox.id"
+            class="flex items-center gap-1.5 text-sm text-n-slate-12 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              :checked="isLinkSelected(team.id, inbox.id)"
+              @change="toggleLinkInbox(team.id, inbox.id)"
+            />
+            {{ inbox.name }}
+          </label>
+        </div>
+        <div class="flex justify-end">
+          <Button
+            size="sm"
+            :label="
+              $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.LINK_CTA', {
+                count: (linkSelections[team.id] || []).length,
+                team: team.name,
+              })
+            "
+            :disabled="!(linkSelections[team.id] || []).length"
+            :is-loading="linkingTeamId === team.id"
+            @click="linkTeamInboxes(team)"
+          />
+        </div>
       </div>
 
       <!-- Exclude caixas (all included by default → dynamic) -->

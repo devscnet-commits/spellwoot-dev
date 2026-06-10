@@ -130,7 +130,10 @@
         "CONDITIONS_INTRO": "The teams decide the flow. By default it applies to all caixas of the selected teams — you can leave some out below.",
         "TEAMS_LABEL": "Apply to which teams?",
         "TEAM_CONFLICT": "Warning: team {team} is already in another rule (flow \"{flow}\"). Two rules for the same team do not stack — the older one wins and this one will never apply. Edit or delete the other rule instead of adding a new one.",
-        "TEAM_NO_CAIXAS": "Warning: the team(s) {names} have no linked caixas. Without that, this rule only applies to conversations with the team manually assigned. Link the caixas under Settings → Teams → edit → Caixas.",
+        "LINK_CTA": "Link {count} caixa(s) to team {team}",
+        "LINK_SUCCESS": "Caixas linked to team {team}",
+        "LINK_ERROR": "Could not link the caixas to the team",
+        "TEAM_NO_CAIXAS": "Team {names} has no linked caixas — without that, this rule only applies to conversations with the team manually assigned. Check the team's caixas below and click Link.",
         "EXCLUDE_CAIXAS_LABEL": "Caixas that should NOT use this flow",
         "EXCLUDE_CAIXAS_HELP": "By default every caixa of the selected teams uses this flow. Check the ones to leave out — new caixas join automatically. (If the team has no caixas linked, all caixas are shown.)"
       },

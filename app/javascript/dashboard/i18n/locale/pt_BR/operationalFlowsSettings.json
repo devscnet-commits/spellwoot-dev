@@ -130,7 +130,10 @@
         "CONDITIONS_INTRO": "Os Times decidem o fluxo. Por padrão vale para todas as caixas dos times selecionados — você pode deixar algumas de fora abaixo.",
         "TEAMS_LABEL": "Aplicar a quais times?",
         "TEAM_CONFLICT": "Atenção: o time {team} já está em outra regra (fluxo \"{flow}\"). Duas regras para o mesmo time não somam — a mais antiga vence e esta nunca será usada. Edite ou exclua a outra regra em vez de criar uma nova.",
-        "TEAM_NO_CAIXAS": "Atenção: o(s) time(s) {names} não tem(têm) nenhuma caixa vinculada. Sem isso, esta regra só vale para conversas com o time atribuído manualmente. Vincule as caixas em Configurações → Times → editar → Caixas.",
+        "LINK_CTA": "Vincular {count} caixa(s) ao time {team}",
+        "LINK_SUCCESS": "Caixas vinculadas ao time {team}",
+        "LINK_ERROR": "Não foi possível vincular as caixas ao time",
+        "TEAM_NO_CAIXAS": "O time {names} não tem nenhuma caixa vinculada — sem isso, a regra só vale para conversas com o time atribuído manualmente. Marque abaixo as caixas desse time e clique em Vincular.",
         "EXCLUDE_CAIXAS_LABEL": "Caixas que NÃO devem usar este fluxo",
         "EXCLUDE_CAIXAS_HELP": "Por padrão, todas as caixas dos times selecionados usam este fluxo. Marque as que devem ficar de fora — caixas novas entram automaticamente. (Se o time não tiver caixas vinculadas, são mostradas todas as caixas.)"
       },
