@@ -110,15 +110,27 @@ const removedRequirementIds = ref([]);
 const isSaving = ref(false);
 const isLoading = ref(false);
 
-// A requirement's `when` is either 'always' or a resolution state's canonical_key.
+// A requirement's `when` is 'always', a resolution state's canonical_key, or 'if'
+// (required only when a trigger attribute holds one of the selected answers).
 const conditionToWhen = condition => {
+  if (condition?.if) return 'if';
   if (condition?.always) return 'always';
   return condition?.when?.canonical_key || 'always';
 };
-const whenToCondition = when =>
-  when === 'always' ? { always: true } : { when: { canonical_key: when } };
+const buildCondition = requirement => {
+  if (requirement.when === 'if') {
+    return {
+      if: {
+        attribute_key: requirement.condition_field,
+        values: requirement.condition_values,
+      },
+    };
+  }
+  if (requirement.when === 'always') return { always: true };
+  return { when: { canonical_key: requirement.when } };
+};
 
-// Condition choices: "always" plus one per resolution state (shown by its editable label).
+// Condition choices: "always", one per resolution state, and "required if attribute = answer".
 const conditionOptions = computed(() => [
   {
     value: 'always',
@@ -130,7 +142,31 @@ const conditionOptions = computed(() => [
       state: state.display_label,
     }),
   })),
+  {
+    value: 'if',
+    label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF'),
+  },
 ]);
+
+// Trigger attributes for "if" conditions: multiple-choice (list) attributes only.
+const listAttributeOptions = computed(() =>
+  (conversationAttributes.value || [])
+    .filter(attribute => attribute.attributeDisplayType === 'list')
+    .map(attribute => ({
+      value: attribute.attributeKey,
+      label: attribute.attributeDisplayName,
+      attributeValues: attribute.attributeValues || [],
+    }))
+);
+
+const triggerValuesFor = key =>
+  listAttributeOptions.value.find(option => option.value === key)
+    ?.attributeValues || [];
+
+// Changing the trigger attribute invalidates the previously selected answers.
+const onTriggerFieldChange = requirement => {
+  requirement.condition_values = [];
+};
 
 const populate = flow => {
   if (!flow) return;
@@ -162,6 +198,8 @@ const populate = flow => {
       id: r.id,
       attribute_key: r.attribute_key,
       when: conditionToWhen(r.condition),
+      condition_field: r.condition?.if?.attribute_key || '',
+      condition_values: [...(r.condition?.if?.values || [])],
     }));
 };
 
@@ -197,7 +235,12 @@ const buildReasonsAttributes = () =>
   removedReasonIds.value.map(id => ({ id, _destroy: true }));
 
 const addRequirement = () => {
-  requirements.value.push({ attribute_key: '', when: 'always' });
+  requirements.value.push({
+    attribute_key: '',
+    when: 'always',
+    condition_field: '',
+    condition_values: [],
+  });
 };
 
 const removeRequirement = index => {
@@ -209,10 +252,15 @@ const buildRequirementsAttributes = () => {
   const rows = [];
   requirements.value.forEach((requirement, sortOrder) => {
     if (!requirement.attribute_key) return;
+    if (
+      requirement.when === 'if' &&
+      (!requirement.condition_field || !requirement.condition_values.length)
+    )
+      return;
     rows.push({
       ...(requirement.id ? { id: requirement.id } : {}),
       attribute_key: requirement.attribute_key,
-      condition: whenToCondition(requirement.when),
+      condition: buildCondition(requirement),
       sort_order: sortOrder,
     });
   });
@@ -441,44 +489,101 @@ const save = async () => {
         <div
           v-for="(requirement, index) in requirements"
           :key="index"
-          class="flex flex-col gap-2 sm:flex-row sm:items-center"
+          class="flex flex-col gap-2"
         >
-          <select
-            v-model="requirement.attribute_key"
-            class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          >
-            <option value="" disabled>
-              {{
-                $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.SELECT_ATTRIBUTE')
-              }}
-            </option>
-            <option
-              v-for="option in metaAttributeOptions"
-              :key="option.value"
-              :value="option.value"
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              v-model="requirement.attribute_key"
+              class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
             >
-              {{ option.label }}
-            </option>
-          </select>
-          <select
-            v-model="requirement.when"
-            class="sm:w-56 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          >
-            <option
-              v-for="option in conditionOptions"
-              :key="option.value"
-              :value="option.value"
+              <option value="" disabled>
+                {{
+                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.SELECT_ATTRIBUTE')
+                }}
+              </option>
+              <option
+                v-for="option in metaAttributeOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            <select
+              v-model="requirement.when"
+              class="sm:w-56 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
             >
-              {{ option.label }}
-            </option>
-          </select>
-          <Button
-            icon="i-woot-bin"
-            slate
-            sm
-            class="hover:enabled:text-n-ruby-11 hover:enabled:bg-n-ruby-2"
-            @click="removeRequirement(index)"
-          />
+              <option
+                v-for="option in conditionOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            <Button
+              icon="i-woot-bin"
+              slate
+              sm
+              class="hover:enabled:text-n-ruby-11 hover:enabled:bg-n-ruby-2"
+              @click="removeRequirement(index)"
+            />
+          </div>
+
+          <!-- "Obrigatório se": trigger attribute + the answers that activate the requirement -->
+          <div
+            v-if="requirement.when === 'if'"
+            class="flex flex-col gap-2 rounded-lg border border-n-weak bg-n-solid-1 p-3 sm:ml-4"
+          >
+            <label class="text-xs font-medium text-n-slate-11">
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD') }}
+            </label>
+            <select
+              v-model="requirement.condition_field"
+              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              @change="onTriggerFieldChange(requirement)"
+            >
+              <option value="" disabled>
+                {{
+                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD_PLACEHOLDER')
+                }}
+              </option>
+              <option
+                v-for="option in listAttributeOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            <p
+              v-if="!listAttributeOptions.length"
+              class="text-xs text-n-amber-11"
+            >
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_NO_LIST_ATTRS') }}
+            </p>
+
+            <template v-if="requirement.condition_field">
+              <label class="text-xs font-medium text-n-slate-11 mt-1">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUES') }}
+              </label>
+              <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+                <label
+                  v-for="value in triggerValuesFor(requirement.condition_field)"
+                  :key="value"
+                  class="flex items-center gap-1.5 text-sm text-n-slate-12 cursor-pointer"
+                >
+                  <input
+                    v-model="requirement.condition_values"
+                    type="checkbox"
+                    :value="value"
+                    class="m-0"
+                  />
+                  {{ value }}
+                </label>
+              </div>
+            </template>
+          </div>
         </div>
         <Button
           faded

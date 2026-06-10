@@ -77,6 +77,11 @@
         "SELECT_ATTRIBUTE": "Selecione um atributo",
         "ALWAYS": "Sempre obrigatório",
         "WHEN_STATE": "Obrigatório quando: {state}",
+        "IF": "Obrigatório se...",
+        "IF_FIELD": "Quando o atributo",
+        "IF_FIELD_PLACEHOLDER": "Selecione o atributo gatilho",
+        "IF_VALUES": "For uma destas respostas",
+        "IF_NO_LIST_ATTRS": "Nenhum atributo de múltipla escolha (lista) disponível. Crie um em Atributos personalizados.",
         "ADD": "Adicionar obrigatoriedade"
       }
     },

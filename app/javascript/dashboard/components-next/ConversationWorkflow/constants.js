@@ -48,8 +48,10 @@ export const isAttrVisible = (attr, formValues) => {
   return matchesConditionValue(fieldValue, attr.condition_value);
 };
 
-// Whether a closing requirement applies to the chosen resolution state.
+// Whether a closing requirement applies to the chosen resolution state. "if attribute = value"
+// conditions pass through here: their evaluation is value-based and happens live in the modal.
 const requirementApplies = (condition = {}, canonicalKey, polarity) => {
+  if (condition.if) return true;
   if (condition.always) return true;
   const when = condition.when;
   if (!when) return true;
@@ -59,8 +61,8 @@ const requirementApplies = (condition = {}, canonicalKey, polarity) => {
 };
 
 // Maps a closing flow's per-flow requirements to the attribute-definition shape the outcome modal
-// renders, keeping only the ones that apply to the chosen resolution state. Requirements live only
-// on the flow, so this always returns an array (empty when there is no flow or no requirements).
+// renders, keeping only the ones that apply to the chosen resolution state. "if" conditions are
+// mapped to the conditional rule shape so the modal shows/hides them as the trigger value changes.
 export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => {
   const requirements = flow?.closing_requirements || [];
   if (!requirements.length) return [];
@@ -76,7 +78,18 @@ export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => 
       const def = (attributeOptions || []).find(
         a => a.value === req.attribute_key
       );
-      return def ? { ...def, key: req.attribute_key, rule: 'always' } : null;
+      if (!def) return null;
+      const ifClause = req.condition?.if;
+      if (ifClause?.attribute_key) {
+        return {
+          ...def,
+          key: req.attribute_key,
+          rule: 'conditional',
+          condition_field: ifClause.attribute_key,
+          condition_value: ifClause.values || [],
+        };
+      }
+      return { ...def, key: req.attribute_key, rule: 'always' };
     })
     .filter(Boolean);
 };

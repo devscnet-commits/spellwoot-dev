@@ -35,7 +35,7 @@ class Conversations::RequiredAttributesValidator
 
     state = flow.state_for(@result)
     flow.closing_requirements
-        .select { |requirement| requirement.applies_to?(state) && blank_value?(requirement.attribute_key) }
+        .select { |requirement| requirement.applies_to?(state, @custom_attributes) && blank_value?(requirement.attribute_key) }
         .map(&:attribute_key)
   end
 
