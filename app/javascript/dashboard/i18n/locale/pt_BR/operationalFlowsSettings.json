@@ -1,14 +1,12 @@
 {
   "OPERATIONAL_FLOWS_SETTINGS": {
     "HEADER": "Fluxos de Fechamento",
-    "DESCRIPTION": "Configure o fluxo de fechamento de cada Caixa: os motivos de resultado disponíveis ao resolver uma conversa como ganha ou perdida, e se o motivo é obrigatório.",
+    "DESCRIPTION": "Configure os fluxos de fechamento: os botões de resolução (ex.: Ganho/Perdido), os atributos obrigatórios ao fechar e os eventos enviados à Meta. As Regras de atribuição decidem qual fluxo cada conversa usa.",
     "LOADING": "Carregando fluxos de fechamento...",
     "NEW_FLOW": "Criar fluxo",
     "LIST": {
       "404": "Nenhum fluxo de fechamento criado ainda",
       "EDIT_FLOW": "Editar fluxo",
-      "REASONS_COUNT": "{count} motivo | {count} motivos",
-      "REASON_REQUIRED": "Motivo obrigatório",
       "META_ON": "Meta ativa",
       "ACTIVE": "Ativo",
       "INACTIVE": "Inativo"
@@ -21,7 +19,7 @@
       },
       "CONFIRM": {
         "TITLE": "Excluir {flowName}?",
-        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? As Caixas que o utilizam ficarão sem fluxo.",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? As regras que o utilizam ficarão sem fluxo.",
         "YES": "Sim, excluir",
         "NO": "Cancelar"
       }
@@ -29,14 +27,10 @@
     "FORM": {
       "NEW_TITLE": "Novo fluxo de fechamento",
       "EDIT_TITLE": "Editar fluxo de fechamento",
-      "SUBTITLE": "Defina os motivos que os agentes podem escolher ao resolver uma conversa.",
+      "SUBTITLE": "Defina os botões de fechamento e o que é obrigatório ao resolver uma conversa.",
       "NAME": {
         "LABEL": "Nome do fluxo",
         "PLACEHOLDER": "ex.: Vendas"
-      },
-      "REQUIRE_REASON": {
-        "LABEL": "Exigir um motivo",
-        "HELP": "Os agentes precisam escolher um motivo para resolver uma conversa como ganha ou perdida."
       },
       "ACTIVE": {
         "LABEL": "Ativo"
@@ -62,16 +56,11 @@
           "negative": "Negativa",
           "neutral": "Neutra"
         },
-        "REQUIRES_REASON": "Exigir um motivo neste estado",
         "META_EVENT": "Enviar à Meta como",
         "META_NONE": "Não enviar",
         "META_VALUE_ATTR": "Valor da venda a partir do atributo",
         "META_NO_VALUE": "Sem valor"
       },
-      "WON_REASONS": "Motivos de Ganho",
-      "LOST_REASONS": "Motivos de Perda",
-      "REASON_PLACEHOLDER": "ex.: Preço muito alto",
-      "ADD_REASON": "Adicionar motivo",
       "USED_BY": {
         "TITLE": "Este fluxo está sendo utilizado por:",
         "MANAGE": "Gerenciar regras →",

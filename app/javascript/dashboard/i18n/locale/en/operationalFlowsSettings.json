@@ -1,14 +1,12 @@
 {
   "OPERATIONAL_FLOWS_SETTINGS": {
     "HEADER": "Closing Flows",
-    "DESCRIPTION": "Configure the closing flow for each Caixa (inbox): the result reasons available when resolving a conversation as won or lost, and whether a reason is required.",
+    "DESCRIPTION": "Configure the closing flows: the resolution buttons (e.g. Won/Lost), the attributes required at closing time and the events sent to Meta. Assignment rules decide which flow each conversation uses.",
     "LOADING": "Loading closing flows...",
     "NEW_FLOW": "Create flow",
     "LIST": {
       "404": "No closing flows created yet",
       "EDIT_FLOW": "Edit flow",
-      "REASONS_COUNT": "{count} reason | {count} reasons",
-      "REASON_REQUIRED": "Reason required",
       "META_ON": "Meta on",
       "ACTIVE": "Active",
       "INACTIVE": "Inactive"
@@ -21,7 +19,7 @@
       },
       "CONFIRM": {
         "TITLE": "Delete {flowName}?",
-        "MESSAGE": "Are you sure you want to delete this closing flow? Caixas using it will fall back to no flow.",
+        "MESSAGE": "Are you sure you want to delete this closing flow? Rules using it will fall back to no flow.",
         "YES": "Yes, delete",
         "NO": "Cancel"
       }
@@ -29,14 +27,10 @@
     "FORM": {
       "NEW_TITLE": "New closing flow",
       "EDIT_TITLE": "Edit closing flow",
-      "SUBTITLE": "Define the reasons agents can pick when resolving a conversation.",
+      "SUBTITLE": "Define the closing buttons and what is required when resolving a conversation.",
       "NAME": {
         "LABEL": "Flow name",
         "PLACEHOLDER": "e.g., Sales"
-      },
-      "REQUIRE_REASON": {
-        "LABEL": "Require a reason",
-        "HELP": "Agents must pick a reason to resolve a conversation as won or lost."
       },
       "ACTIVE": {
         "LABEL": "Active"
@@ -62,16 +56,11 @@
           "negative": "Negative",
           "neutral": "Neutral"
         },
-        "REQUIRES_REASON": "Require a reason for this state",
         "META_EVENT": "Send to Meta as",
         "META_NONE": "Do not send",
         "META_VALUE_ATTR": "Sale value from attribute",
         "META_NO_VALUE": "No value"
       },
-      "WON_REASONS": "Reasons for Won",
-      "LOST_REASONS": "Reasons for Lost",
-      "REASON_PLACEHOLDER": "e.g., Price too high",
-      "ADD_REASON": "Add reason",
       "USED_BY": {
         "TITLE": "This flow is used by:",
         "MANAGE": "Manage rules →",

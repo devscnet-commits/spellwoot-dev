@@ -26,8 +26,6 @@ onMounted(() => {
   store.dispatch('operationalFlows/get');
 });
 
-const reasonsCount = flow => (flow.reasons || []).length;
-
 const showDeletePopup = ref(false);
 const selectedFlow = ref({});
 
@@ -113,20 +111,6 @@ const confirmDeleteTitle = computed(() =>
               {{ flow.name }}
             </span>
             <div class="flex items-center gap-3 mt-1">
-              <span class="flex items-center gap-1 text-xs text-n-slate-11">
-                <span class="i-lucide-list size-3" />
-                {{
-                  $t('OPERATIONAL_FLOWS_SETTINGS.LIST.REASONS_COUNT', {
-                    count: reasonsCount(flow),
-                  })
-                }}
-              </span>
-              <span
-                v-if="flow.require_reason"
-                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-n-amber-3 text-n-amber-11"
-              >
-                {{ $t('OPERATIONAL_FLOWS_SETTINGS.LIST.REASON_REQUIRED') }}
-              </span>
               <span
                 v-if="flow.meta_enabled"
                 class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-n-blue-3 text-n-blue-11"
