@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useStoreGetters } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
 import wootConstants from 'dashboard/constants/globals';
@@ -13,6 +14,8 @@ const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
 const { currentAccount } = useAccount();
+const { requiredAttributes: accountRequiredAttributes } =
+  useConversationRequiredAttributes();
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
@@ -62,6 +65,16 @@ const buildInitialValues = (statusValue, outcome) => {
   return base;
 };
 
+// Flow requirements plus the account-level required attributes (always + conditional rules);
+// the modal decides visibility per condition, so conditional ones can be passed as-is.
+const mergeWithAccountAttributes = (attributes = []) => {
+  const seen = new Set(attributes.map(a => a.value));
+  return [
+    ...attributes,
+    ...accountRequiredAttributes.value.filter(a => !seen.has(a.value)),
+  ];
+};
+
 // Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
 // the editable display label. The system result field is seeded from the canonical key so
 // conditional required attributes keep evaluating against ganho/perdido.
@@ -75,8 +88,7 @@ const openOutcome = ({ outcome, label, statusValue, attributes }) => {
     outcome,
     label,
     statusValue: seedValue,
-    // Requirements come only from the resolved flow (empty array when the flow defines none).
-    attributes: attributes ?? [],
+    attributes: mergeWithAccountAttributes(attributes ?? []),
     initialValues,
   });
 };

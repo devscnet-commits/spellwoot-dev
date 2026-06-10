@@ -15,7 +15,13 @@ import {
   CMD_REOPEN_CONVERSATION,
   CMD_RESOLVE_CONVERSATION,
 } from 'dashboard/helper/commandbar/events';
-import { flowRequiredAttributes } from 'dashboard/components-next/ConversationWorkflow/constants';
+import {
+  flowRequiredAttributes,
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+  isAttrVisible,
+} from 'dashboard/components-next/ConversationWorkflow/constants';
+import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 
 import ButtonGroup from 'dashboard/components-next/buttonGroup/ButtonGroup.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
@@ -25,6 +31,8 @@ import ConversationOutcomeButtons from 'dashboard/components-next/ConversationWo
 const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
+const { requiredAttributes: accountRequiredAttributes } =
+  useConversationRequiredAttributes();
 
 const isLoading = ref(false);
 const resolveAttributesModalRef = ref(null);
@@ -200,8 +208,8 @@ const onCmdResolveConversation = async () => {
     return;
   }
 
-  // Outcome already set → collect the flow's required attributes (if any) for that outcome,
-  // then resolve. Requirements live only on the flow; no account-level fallback.
+  // Outcome already set → collect the required attributes for that outcome — the flow's
+  // closing requirements plus the account-level ones (always + conditional) — then resolve.
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
   const legacy = currentChat.value.additional_attributes?.outcome;
   const result = currentChat.value.result;
@@ -214,12 +222,26 @@ const onCmdResolveConversation = async () => {
     outcome,
     attributeOptions.value
   );
-  const missing = missingFrom(flowAttrs, currentCustomAttributes);
+  const seen = new Set(flowAttrs.map(a => a.value));
+  const allAttrs = [
+    ...flowAttrs,
+    ...accountRequiredAttributes.value.filter(a => !seen.has(a.value)),
+  ];
+  // Conditional account rules only count when their condition matches the current context.
+  const conditionContext = {
+    ...currentCustomAttributes,
+    [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null,
+  };
+  const applicableAttrs = allAttrs.filter(a =>
+    isAttrVisible(a, conditionContext)
+  );
+  const missing = missingFrom(applicableAttrs, currentCustomAttributes);
 
   if (missing.length) {
-    resolveAttributesModalRef.value?.open(flowAttrs, currentCustomAttributes, {
+    resolveAttributesModalRef.value?.open(allAttrs, currentCustomAttributes, {
       id: currentChat.value.id,
       snoozedUntil: null,
+      outcome,
     });
   } else {
     toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);

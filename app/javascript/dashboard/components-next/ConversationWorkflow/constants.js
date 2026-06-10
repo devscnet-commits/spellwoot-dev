@@ -35,6 +35,15 @@ export const matchesConditionValue = (fieldValue, conditionValue) => {
 // Returns true if an attribute should be visible given current form values
 export const isAttrVisible = (attr, formValues) => {
   if (attr.rule !== 'conditional') return true;
+  // A half-configured conditional rule (no condition value) never applies,
+  // otherwise undefined === undefined would wrongly match.
+  if (
+    attr.condition_value == null ||
+    attr.condition_value === '' ||
+    (Array.isArray(attr.condition_value) && !attr.condition_value.length)
+  ) {
+    return false;
+  }
   const fieldValue = formValues[attr.condition_field];
   return matchesConditionValue(fieldValue, attr.condition_value);
 };
