@@ -451,7 +451,7 @@ onMounted(() => {
         <div class="rounded-lg border border-n-weak overflow-hidden">
           <div class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak">
             <span class="text-xs font-medium text-n-slate-11 flex-1">Agente</span>
-            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">Recebe atribuições</span>
+            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">Receber atendimentos</span>
             <span class="w-6" />
           </div>
           <div class="max-h-64 overflow-y-auto">
