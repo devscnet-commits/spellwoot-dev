@@ -1,14 +1,40 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useStore, useStoreGetters } from 'dashboard/composables/store';
+import {
+  useStore,
+  useStoreGetters,
+  useMapGetter,
+} from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { vOnClickOutside } from '@vueuse/components';
 import wootConstants from 'dashboard/constants/globals';
+import ConversationResolveAttributesModal from './ConversationResolveAttributesModal.vue';
+import {
+  flowRequiredAttributes,
+  SYSTEM_OUTCOME_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+  isAttrVisible,
+} from './constants';
+import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 
 const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
+const { requiredAttributes: accountRequiredAttributes } =
+  useConversationRequiredAttributes();
+
+const conversationAttributes = useMapGetter(
+  'attributes/getConversationAttributes'
+);
+const attributeOptions = computed(() =>
+  (conversationAttributes.value || []).map(a => ({
+    value: a.attributeKey,
+    label: a.attributeDisplayName,
+    type: a.attributeDisplayType,
+    attributeValues: a.attributeValues,
+  }))
+);
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const isDropdownOpen = ref(false);
@@ -63,12 +89,9 @@ const labelFor = key => {
   return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_NONE');
 };
 
-const selectOutcome = async outcomeKey => {
-  if (isLoading.value || outcomeKey === outcome.value) {
-    isDropdownOpen.value = false;
-    return;
-  }
-  isDropdownOpen.value = false;
+const resolveAttributesModalRef = ref(null);
+
+const persistOutcome = async (outcomeKey, customAttributes = null) => {
   isLoading.value = true;
   try {
     const ConversationApi = (await import('dashboard/api/inbox/conversation'))
@@ -76,10 +99,15 @@ const selectOutcome = async outcomeKey => {
     await ConversationApi.setOutcome({
       conversationId: currentChat.value.id,
       outcome: outcomeKey,
+      customAttributes,
     });
     await store.dispatch('updateConversation', {
       ...currentChat.value,
       result: outcomeKey || 'none',
+      custom_attributes: {
+        ...(currentChat.value.custom_attributes || {}),
+        ...(customAttributes || {}),
+      },
     });
     useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_UPDATED'));
   } catch {
@@ -87,6 +115,69 @@ const selectOutcome = async outcomeKey => {
   } finally {
     isLoading.value = false;
   }
+};
+
+// Marking a result is gated like closing: collect the flow's requirements for the chosen state
+// plus the account-level required attributes, prompt for whatever is missing, then persist.
+const selectOutcome = async outcomeKey => {
+  if (isLoading.value || outcomeKey === outcome.value) {
+    isDropdownOpen.value = false;
+    return;
+  }
+  isDropdownOpen.value = false;
+
+  if (!outcomeKey) {
+    persistOutcome(outcomeKey);
+    return;
+  }
+
+  isLoading.value = true;
+  let closingFlow = null;
+  try {
+    const ConversationApi = (await import('dashboard/api/inbox/conversation'))
+      .default;
+    const { data } = await ConversationApi.getClosingFlow(currentChat.value.id);
+    closingFlow = data || null;
+  } catch {
+    closingFlow = null;
+  } finally {
+    isLoading.value = false;
+  }
+
+  const currentCustomAttributes = currentChat.value.custom_attributes || {};
+  const flowAttrs = flowRequiredAttributes(
+    closingFlow,
+    outcomeKey,
+    attributeOptions.value
+  );
+  const seen = new Set(flowAttrs.map(a => a.value));
+  const allAttrs = [
+    ...flowAttrs,
+    ...accountRequiredAttributes.value.filter(a => !seen.has(a.value)),
+  ];
+  const conditionContext = {
+    ...currentCustomAttributes,
+    [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcomeKey] ?? null,
+  };
+  const missing = allAttrs.filter(a => {
+    if (!isAttrVisible(a, conditionContext)) return false;
+    const value = currentCustomAttributes[a.value];
+    if (a.type === 'checkbox') return !(a.value in currentCustomAttributes);
+    return value == null || String(value).trim() === '';
+  });
+
+  if (missing.length) {
+    resolveAttributesModalRef.value?.open(allAttrs, currentCustomAttributes, {
+      outcome: outcomeKey,
+    });
+  } else {
+    persistOutcome(outcomeKey);
+  }
+};
+
+const handleOutcomeAttributes = ({ attributes, context }) => {
+  if (!context?.outcome) return;
+  persistOutcome(context.outcome, attributes);
 };
 </script>
 
@@ -143,5 +234,10 @@ const selectOutcome = async outcomeKey => {
         {{ labelFor(option.key) }}
       </button>
     </div>
+
+    <ConversationResolveAttributesModal
+      ref="resolveAttributesModalRef"
+      @submit="handleOutcomeAttributes"
+    />
   </div>
 </template>

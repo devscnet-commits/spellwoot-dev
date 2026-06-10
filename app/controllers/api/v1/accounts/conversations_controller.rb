@@ -143,14 +143,29 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     @conversation.save!
   end
 
+  # Marking a result (Ganho/Perdido selector) goes through the same gates as closing: required
+  # attributes are validated for the chosen result and the flow's Meta event fires right away
+  # (event_id dedup keeps a later close from re-sending). Clearing the result skips both.
   def set_outcome
+    outcome = params[:outcome].to_s
+    attrs = params.permit(custom_attributes: {})[:custom_attributes]
+    merged_attributes = (@conversation.custom_attributes || {}).merge(attrs || {})
+
+    if outcome.present? && valid_close_outcome?(outcome)
+      return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
+    end
+
+    @conversation.update!(custom_attributes: merged_attributes) if attrs.present?
+
     Conversations::ResultService.new(
       conversation: @conversation,
-      outcome: params[:outcome].to_s,
+      outcome: outcome,
       user: Current.user,
       reason: params[:reason],
       ip_address: request.ip
     ).perform
+
+    fire_meta_close_event(outcome) if outcome.present? && valid_close_outcome?(outcome)
 
     render json: { outcome: @conversation.result_none? ? nil : @conversation.result }, status: :ok
   end

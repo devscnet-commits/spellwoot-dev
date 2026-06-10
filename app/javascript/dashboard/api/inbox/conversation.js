@@ -123,8 +123,11 @@ class ConversationApi extends ApiClient {
     });
   }
 
-  setOutcome({ conversationId, outcome }) {
-    return axios.post(`${this.url}/${conversationId}/set_outcome`, { outcome });
+  setOutcome({ conversationId, outcome, customAttributes = null }) {
+    return axios.post(`${this.url}/${conversationId}/set_outcome`, {
+      outcome,
+      ...(customAttributes ? { custom_attributes: customAttributes } : {}),
+    });
   }
 
   closeOutcome({ conversationId, outcome, customAttributes = {} }) {
