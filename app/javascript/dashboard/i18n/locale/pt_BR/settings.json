@@ -593,10 +593,12 @@
         "ERROR": "Não foi possível atualizar os atributos obrigatórios. Por favor, tente novamente"
       },
       "MODAL": {
-        "TITLE": "Resolver conversa",
-        "DESCRIPTION": "Por favor, preencha os seguintes atributos personalizados antes de resolver esta conversa",
+        "TITLE": "Atributos da conversa",
+        "DESCRIPTION": "Preencha os atributos abaixo. Você pode apenas salvar (a conversa continua aberta) ou salvar e resolver agora.",
+        "SAVED": "Atributos salvos",
         "ACTIONS": {
-          "RESOLVE": "Resolver conversa",
+          "SAVE": "Salvar",
+          "RESOLVE": "Salvar e resolver",
           "CANCEL": "Cancelar"
         },
         "PLACEHOLDERS": {

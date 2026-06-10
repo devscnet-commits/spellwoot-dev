@@ -175,18 +175,26 @@ const closeAsAi = async () => {
   }
 };
 
-const handleResolveWithAttributes = ({ attributes, context }) => {
-  if (context) {
-    const mergedAttributes = {
-      ...(currentChat.value.custom_attributes || {}),
-      ...attributes,
-    };
-    toggleStatus(
-      wootConstants.STATUS_TYPE.RESOLVED,
-      context.snoozedUntil,
-      mergedAttributes
-    );
+const handleResolveWithAttributes = ({ attributes, context, resolve }) => {
+  if (!context) return;
+  const mergedAttributes = {
+    ...(currentChat.value.custom_attributes || {}),
+    ...attributes,
+  };
+  // "Salvar" only persists the attributes and keeps the conversation open.
+  if (resolve === false) {
+    store.dispatch('updateCustomAttributes', {
+      conversationId: currentChat.value.id,
+      customAttributes: mergedAttributes,
+    });
+    useAlert(t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.SAVED'));
+    return;
   }
+  toggleStatus(
+    wootConstants.STATUS_TYPE.RESOLVED,
+    context.snoozedUntil,
+    mergedAttributes
+  );
 };
 
 const onCmdOpenConversation = () => {

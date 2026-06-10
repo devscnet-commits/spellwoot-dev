@@ -175,9 +175,18 @@ const selectOutcome = async outcomeKey => {
   }
 };
 
-const handleOutcomeAttributes = ({ attributes, context }) => {
+// "Salvar" keeps the conversation open (result + attributes + Meta);
+// "Salvar e resolver" additionally resolves it right away.
+const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
   if (!context?.outcome) return;
-  persistOutcome(context.outcome, attributes);
+  await persistOutcome(context.outcome, attributes);
+  if (resolve) {
+    await store.dispatch('toggleStatus', {
+      conversationId: currentChat.value.id,
+      status: wootConstants.STATUS_TYPE.RESOLVED,
+      snoozedUntil: null,
+    });
+  }
 };
 </script>
 

@@ -57,6 +57,17 @@ const teamInboxes = computed(() => {
   return fromTeams.length ? fromTeams : inboxes.value;
 });
 
+// Selected teams with no linked caixas: the rule would only match conversations with the
+// team manually assigned — almost always a configuration mistake worth flagging loudly.
+const teamsWithoutInboxes = computed(() =>
+  teams.value
+    .filter(
+      team =>
+        form.value.team_ids.includes(team.id) && !(team.inbox_ids || []).length
+    )
+    .map(team => team.name)
+);
+
 const isTeamSelected = id => form.value.team_ids.includes(id);
 const toggleTeam = id => {
   form.value.team_ids = isTeamSelected(id)
@@ -291,6 +302,21 @@ const canSave = computed(() => !!form.value.operational_flow_id);
             <span class="text-sm text-n-slate-12">{{ team.name }}</span>
           </label>
         </div>
+      </div>
+
+      <!-- Loud warning: a team rule without linked caixas almost never matches -->
+      <div
+        v-if="teamsWithoutInboxes.length"
+        class="flex items-start gap-2 rounded-lg bg-n-amber-3 px-3 py-2"
+      >
+        <span class="i-lucide-alert-triangle size-4 text-n-amber-11 shrink-0 mt-0.5" />
+        <p class="text-xs text-n-amber-11">
+          {{
+            $t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.TEAM_NO_CAIXAS', {
+              names: teamsWithoutInboxes.join(', '),
+            })
+          }}
+        </p>
       </div>
 
       <!-- Exclude caixas (all included by default → dynamic) -->

@@ -862,20 +862,28 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   }
 }
 
-function handleResolveWithAttributes({ attributes, context }) {
-  if (context) {
-    const existingConversation = getConversationById.value(context.id);
-    const currentCustomAttributes =
-      existingConversation?.custom_attributes || {};
-    const mergedAttributes = { ...currentCustomAttributes, ...attributes };
+function handleResolveWithAttributes({ attributes, context, resolve }) {
+  if (!context) return;
+  const existingConversation = getConversationById.value(context.id);
+  const currentCustomAttributes =
+    existingConversation?.custom_attributes || {};
+  const mergedAttributes = { ...currentCustomAttributes, ...attributes };
 
-    toggleConversationStatus(
-      context.id,
-      wootConstants.STATUS_TYPE.RESOLVED,
-      context.snoozedUntil,
-      mergedAttributes
-    );
+  // "Salvar" only persists the attributes and keeps the conversation open.
+  if (resolve === false) {
+    store.dispatch('updateCustomAttributes', {
+      conversationId: context.id,
+      customAttributes: mergedAttributes,
+    });
+    return;
   }
+
+  toggleConversationStatus(
+    context.id,
+    wootConstants.STATUS_TYPE.RESOLVED,
+    context.snoozedUntil,
+    mergedAttributes
+  );
 }
 
 function allSelectedConversationsStatus(status) {

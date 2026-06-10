@@ -129,6 +129,7 @@
         "CANCEL": "Cancelar",
         "CONDITIONS_INTRO": "Os Times decidem o fluxo. Por padrão vale para todas as caixas dos times selecionados — você pode deixar algumas de fora abaixo.",
         "TEAMS_LABEL": "Aplicar a quais times?",
+        "TEAM_NO_CAIXAS": "Atenção: o(s) time(s) {names} não tem(têm) nenhuma caixa vinculada. Sem isso, esta regra só vale para conversas com o time atribuído manualmente. Vincule as caixas em Configurações → Times → editar → Caixas.",
         "EXCLUDE_CAIXAS_LABEL": "Caixas que NÃO devem usar este fluxo",
         "EXCLUDE_CAIXAS_HELP": "Por padrão, todas as caixas dos times selecionados usam este fluxo. Marque as que devem ficar de fora — caixas novas entram automaticamente. (Se o time não tiver caixas vinculadas, são mostradas todas as caixas.)"
       },

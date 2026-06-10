@@ -583,10 +583,12 @@
         "ERROR": "Could not update required attributes, please try again"
       },
       "MODAL": {
-        "TITLE": "Resolve conversation",
-        "DESCRIPTION": "Please fill in the following custom attributes before resolving this conversation",
+        "TITLE": "Conversation attributes",
+        "DESCRIPTION": "Fill in the attributes below. You can save only (the conversation stays open) or save and resolve now.",
+        "SAVED": "Attributes saved",
         "ACTIONS": {
-          "RESOLVE": "Resolve conversation",
+          "SAVE": "Save",
+          "RESOLVE": "Save and resolve",
           "CANCEL": "Cancel"
         },
         "PLACEHOLDERS": {
