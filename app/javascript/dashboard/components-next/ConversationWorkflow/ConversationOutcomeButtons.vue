@@ -150,7 +150,7 @@ defineExpose({ openWon, openLost, openOutcome });
 <template>
   <div v-if="showButtons" class="flex items-center gap-1">
     <Button
-      size="sm"
+      size="md"
       variant="ghost"
       color="teal"
       icon="i-lucide-circle-check"
@@ -159,7 +159,7 @@ defineExpose({ openWon, openLost, openOutcome });
       @click="openWon"
     />
     <Button
-      size="sm"
+      size="md"
       variant="ghost"
       color="ruby"
       icon="i-lucide-circle-x"
