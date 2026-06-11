@@ -82,6 +82,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def toggle_status
     # FIXME: move this logic into a service object
+    return if resolving_blocked_by_missing_result?
     return if resolving_blocked_by_required_attributes?
 
     if pending_to_open_by_bot?
@@ -288,6 +289,17 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       error: I18n.t('errors.conversations.required_attributes_missing'),
       missing_attributes: validator.missing_keys
     }, status: :unprocessable_entity
+    true
+  end
+
+  # A human agent can never resolve a conversation without a result picked first; system
+  # actors (bots, automations, auto-resolve jobs, close_as_ai) are intentionally exempt.
+  def resolving_blocked_by_missing_result?
+    return false unless Current.user.is_a?(User)
+    return false unless resolving_to_resolved?
+    return false unless @conversation.result_none?
+
+    render json: { error: I18n.t('errors.conversations.result_required') }, status: :unprocessable_entity
     true
   end
 

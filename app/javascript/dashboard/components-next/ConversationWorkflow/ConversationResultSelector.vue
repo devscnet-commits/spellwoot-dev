@@ -17,6 +17,8 @@ import {
   isAttrVisible,
 } from './constants';
 import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
+import { useEmitter } from 'dashboard/composables/emitter';
+import { BUS_EVENTS } from 'shared/constants/busEvents';
 
 const store = useStore();
 const getters = useStoreGetters();
@@ -39,6 +41,18 @@ const attributeOptions = computed(() =>
 const currentChat = computed(() => getters.getSelectedChat.value);
 const isDropdownOpen = ref(false);
 const isLoading = ref(false);
+
+// Resolver without a result flashes this field in red: humans must pick a result first.
+const isFlashing = ref(false);
+let flashTimer = null;
+useEmitter(BUS_EVENTS.FLASH_RESULT_SELECTOR, () => {
+  isFlashing.value = true;
+  isDropdownOpen.value = true;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    isFlashing.value = false;
+  }, 3000);
+});
 
 // A resolved conversation's result is locked: the status can only change after reopening.
 // Reflect that visually so it reads as non-editable until the conversation is reopened.
@@ -291,12 +305,14 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
   >
     <button
       type="button"
-      class="flex items-center gap-1.5 h-10 px-3 rounded-lg text-sm font-medium transition-opacity"
+      class="flex items-center gap-1.5 h-10 px-3 rounded-lg text-sm font-medium transition-opacity border bg-n-solid-1"
       :class="[
+        isFlashing
+          ? 'border-n-ruby-9 ring-2 ring-n-ruby-9 animate-pulse'
+          : 'border-n-weak',
         isResolved
-          ? 'bg-n-slate-2 text-n-slate-9 cursor-not-allowed'
+          ? 'text-n-slate-9 cursor-not-allowed'
           : [
-              currentResult.bgClass,
               currentResult.colorClass,
               isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80',
             ],

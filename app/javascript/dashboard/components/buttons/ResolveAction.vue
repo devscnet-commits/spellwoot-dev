@@ -8,6 +8,8 @@ import {
   useMapGetter,
 } from 'dashboard/composables/store';
 import { useEmitter } from 'dashboard/composables/emitter';
+import { emitter } from 'shared/helpers/mitt';
+import { BUS_EVENTS } from 'shared/constants/busEvents';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
 
 import wootConstants from 'dashboard/constants/globals';
@@ -210,10 +212,12 @@ const onCmdResolveConversation = async () => {
     return;
   }
 
-  // Human handled but no outcome yet → prompt for the flow's resolution states
+  // Human handled but no outcome yet → a human can never resolve without a result:
+  // prompt for the flow's resolution states and flash the result selector in red.
   if (!outcomeAlreadySet.value) {
     fetchClosingFlow();
     showOutcomePrompt.value = true;
+    emitter.emit(BUS_EVENTS.FLASH_RESULT_SELECTOR);
     return;
   }
 
@@ -320,20 +324,6 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
         :label="state.label"
         class="w-full rounded-md"
         @click="onSelectState(state)"
-      />
-      <Button
-        size="sm"
-        variant="ghost"
-        color="slate"
-        icon="i-lucide-minus-circle"
-        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_NO_RESULT')"
-        class="w-full rounded-md"
-        @click="
-          () => {
-            showOutcomePrompt = false;
-            toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
-          }
-        "
       />
     </div>
 
