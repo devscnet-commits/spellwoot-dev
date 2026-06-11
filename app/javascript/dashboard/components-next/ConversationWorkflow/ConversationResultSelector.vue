@@ -118,6 +118,7 @@ const resultOptions = computed(() => {
         .map(s => ({
           key: s.canonical_key,
           label: s.display_label,
+          stateId: s.id,
           ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
         })),
       NONE_OPTION,
@@ -145,6 +146,31 @@ const labelFor = option => {
   return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_NONE');
 };
 
+// Chip label for a set result: the pinned state's CURRENT label (renames inside the same
+// flow update history), then the text snapshot taken at closing time (state/flow gone),
+// then the live lookup against the caixa's flow (conversations closed before pinning).
+const allFlows = useMapGetter('operationalFlows/getFlows');
+// Flows (with their states) are needed to resolve pinned labels; fetch once if absent.
+if (!(allFlows.value || []).length) store.dispatch('operationalFlows/get');
+const pinnedStateLabel = computed(() => {
+  const stateId = currentChat.value?.additional_attributes?.outcome_state_id;
+  if (!stateId) return null;
+  return (
+    (allFlows.value || [])
+      .flatMap(flow => flow.resolution_states || [])
+      .find(st => st.id === stateId)?.display_label || null
+  );
+});
+
+const chipLabel = computed(() => {
+  if (!outcome.value) return labelFor(currentResult.value);
+  return (
+    pinnedStateLabel.value ||
+    currentChat.value?.additional_attributes?.outcome_label ||
+    labelFor(currentResult.value)
+  );
+});
+
 const resolveAttributesModalRef = ref(null);
 
 const persistOutcome = async (outcomeKey, customAttributes = null) => {
@@ -162,8 +188,19 @@ const persistOutcome = async (outcomeKey, customAttributes = null) => {
     const additionalAttributes = {
       ...(currentChat.value.additional_attributes || {}),
     };
-    if (outcomeKey) additionalAttributes.outcome = outcomeKey;
-    else delete additionalAttributes.outcome;
+    const chosen = resultOptions.value.find(o => o.key === outcomeKey);
+    if (outcomeKey) {
+      additionalAttributes.outcome = outcomeKey;
+      if (chosen?.label) additionalAttributes.outcome_label = chosen.label;
+      else delete additionalAttributes.outcome_label;
+      if (chosen?.stateId)
+        additionalAttributes.outcome_state_id = chosen.stateId;
+      else delete additionalAttributes.outcome_state_id;
+    } else {
+      delete additionalAttributes.outcome;
+      delete additionalAttributes.outcome_label;
+      delete additionalAttributes.outcome_state_id;
+    }
 
     await store.dispatch('updateConversation', {
       ...currentChat.value,
@@ -271,7 +308,7 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
       @click="isDropdownOpen = !isDropdownOpen"
     >
       <span class="size-3.5" :class="[currentResult.icon]" />
-      {{ labelFor(currentResult) }}
+      {{ chipLabel }}
       <span
         v-if="!isResolved"
         class="i-lucide-chevron-down size-3 opacity-70"

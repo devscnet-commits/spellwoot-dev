@@ -20,6 +20,10 @@ const { requiredAttributes: accountRequiredAttributes } =
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
 const pendingStatusSeed = ref({});
+// Flow state being closed with — pinned into additional_attributes (outcome_state_id +
+// outcome_label snapshot) so the result chip keeps showing the exact button used.
+const pendingOutcomeLabel = ref(null);
+const pendingOutcomeStateId = ref(null);
 
 const metaSettings = computed(
   () => currentAccount.value?.settings?.meta_conversion_settings || {}
@@ -78,9 +82,18 @@ const mergeWithAccountAttributes = (attributes = []) => {
 // Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
 // the editable display label. The system result field is seeded from the canonical key so
 // conditional required attributes keep evaluating against ganho/perdido.
-const openOutcome = ({ outcome, label, statusValue, attributes }) => {
+const openOutcome = ({
+  outcome,
+  label,
+  statusValue,
+  attributes,
+  outcomeLabel,
+  outcomeStateId,
+}) => {
   const seedValue = statusValue ?? label;
   const initialValues = buildInitialValues(seedValue, outcome);
+  pendingOutcomeLabel.value = outcomeLabel || null;
+  pendingOutcomeStateId.value = outcomeStateId || null;
   pendingStatusSeed.value = winStatusField.value
     ? { [winStatusField.value]: seedValue }
     : {};
@@ -130,6 +143,12 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
         ...(currentChat.value.additional_attributes || {}),
         // Keep the dual-written legacy outcome in sync so the result chip updates live.
         outcome,
+        ...(pendingOutcomeLabel.value
+          ? { outcome_label: pendingOutcomeLabel.value }
+          : {}),
+        ...(pendingOutcomeStateId.value
+          ? { outcome_state_id: pendingOutcomeStateId.value }
+          : {}),
         ...(isOnCloseStrategy.value && hasCtwaClid.value
           ? { meta_conversion: { sent: true } }
           : {}),

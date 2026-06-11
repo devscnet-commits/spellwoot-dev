@@ -90,9 +90,17 @@ class Conversations::ResultService
   def synced_attributes
     attrs = @conversation.additional_attributes || {}
     if @recognized
-      attrs.merge('outcome' => @outcome, 'outcome_set_at' => Time.current.iso8601)
+      attrs = attrs.merge('outcome' => @outcome, 'outcome_set_at' => Time.current.iso8601)
+      # Pin the resolution state used at closing time: the UI renders the state's CURRENT
+      # label (so renames inside the same flow update history), and falls back to the text
+      # snapshot if the state/flow is gone. Swapping the caixa's flow never re-labels history.
+      if @state
+        attrs.merge('outcome_label' => @state.display_label, 'outcome_state_id' => @state.id)
+      else
+        attrs.except('outcome_label', 'outcome_state_id')
+      end
     else
-      attrs.except('outcome', 'outcome_set_at')
+      attrs.except('outcome', 'outcome_set_at', 'outcome_label', 'outcome_state_id')
     end
   end
 

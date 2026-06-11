@@ -78,6 +78,7 @@ const outcomeStates = computed(() => {
       .map(s => ({
         outcome: s.canonical_key,
         label: s.display_label,
+        stateId: s.id,
         ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
       }));
   }
@@ -269,6 +270,10 @@ const onSelectState = state => {
     label: state.label,
     statusValue: state.label,
     attributes: flowAttrs,
+    outcomeLabel: closingFlow.value?.resolution_states?.length
+      ? state.label
+      : null,
+    outcomeStateId: state.stateId || null,
   });
 };
 
