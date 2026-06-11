@@ -34,7 +34,7 @@ onMounted(() => {
   store.dispatch('flowAssignmentRules/get');
   store.dispatch('operationalFlows/get');
   store.dispatch('inboxes/get');
-  store.dispatch('teams/get');
+  store.dispatch('teams/get', { cache: false });
 });
 
 const nameById = (list, id) => list.find(item => item.id === id)?.name || '';
@@ -90,7 +90,7 @@ const linkTeamInboxes = async team => {
   try {
     const TeamsAPI = (await import('dashboard/api/teams')).default;
     await TeamsAPI.updateInboxes({ teamId: team.id, inboxIds });
-    await store.dispatch('teams/get');
+    await store.dispatch('teams/get', { cache: false });
     useAlert(
       t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.FORM.LINK_SUCCESS', {
         team: team.name,

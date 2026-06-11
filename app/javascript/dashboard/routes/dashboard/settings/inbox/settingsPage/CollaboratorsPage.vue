@@ -195,7 +195,7 @@ const addTeam = async team => {
         teamId: team.id,
         inboxIds: [...linkedInboxIds, props.inbox.id],
       });
-      store.dispatch('teams/get');
+      store.dispatch('teams/get', { cache: false });
       linkedNow = true;
     }
     const agentsPart = newIds.length
@@ -559,7 +559,7 @@ watch(() => props.inbox.id, setDefaults);
 
 onMounted(() => {
   setDefaults();
-  store.dispatch('teams/get');
+  store.dispatch('teams/get', { cache: false });
   // Needed by the flow-conflict warning when adding an agent. Never dispatch
   // 'inboxes/get' here: Settings.vue unmounts this tab while inboxes are
   // fetching, so refetching from onMounted causes an infinite remount loop.
