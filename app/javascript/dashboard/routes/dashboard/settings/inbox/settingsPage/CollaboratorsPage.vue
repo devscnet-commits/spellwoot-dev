@@ -103,13 +103,26 @@ const addTeam = async team => {
       });
       agentEligibility.value = eligibility;
     }
+    // Also link this caixa to the team (TeamInbox) — flow assignment rules match
+    // conversations by this link, not by which agents are inbox members.
+    const linkedInboxIds = team.inbox_ids || [];
+    let linkedNow = false;
+    if (!linkedInboxIds.includes(props.inbox.id)) {
+      await TeamsAPI.updateInboxes({
+        teamId: team.id,
+        inboxIds: [...linkedInboxIds, props.inbox.id],
+      });
+      store.dispatch('teams/get');
+      linkedNow = true;
+    }
+    const agentsPart = newIds.length
+      ? `${newIds.length} agente(s) do time "${team.name}" adicionado(s)`
+      : `Todos os agentes do time "${team.name}" já estão na caixa`;
     useAlert(
-      newIds.length
-        ? `${newIds.length} agente(s) do time "${team.name}" adicionado(s)`
-        : `Todos os agentes do time "${team.name}" já estão na caixa`
+      linkedNow ? `${agentsPart}. Caixa vinculada ao time` : agentsPart
     );
   } catch {
-    useAlert('Não foi possível carregar os agentes do time');
+    useAlert('Não foi possível adicionar o time à caixa');
   }
   addSearch.value = '';
   showAddDropdown.value = false;
