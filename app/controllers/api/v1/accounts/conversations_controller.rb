@@ -193,7 +193,10 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       ip_address: request.ip
     ).perform
 
-    @conversation.update_columns(status: :resolved)
+    # Resolve through the normal path so resolution side effects run: waiting_since is
+    # cleared (keeps SLA from logging a bogus NRT miss after closing), and reporting
+    # events, CSAT, automations and webhooks fire like the native resolve button.
+    @conversation.update!(status: :resolved)
 
     fire_meta_close_event(outcome)
 
@@ -208,7 +211,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       ip_address: request.ip
     ).perform
 
-    @conversation.update_columns(status: :resolved)
+    @conversation.update!(status: :resolved)
     render json: { outcome: 'ai_closed' }, status: :ok
   end
 
