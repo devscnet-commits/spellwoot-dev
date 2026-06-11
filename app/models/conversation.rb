@@ -139,8 +139,8 @@ class Conversation < ApplicationRecord
     additional_attributes&.dig('conversation_language')
   end
 
-  # A conversation inherits its operational flow from its Caixa (inbox). Teams are only used to
-  # organize agents, so they never own a flow.
+  # The operational flow follows the conversation's team (or the assignee's team), with the
+  # Caixa's flow as fallback for dedicated channels. See Conversations::FlowResolver.
   def operational_flow(user = Current.user)
     Conversations::FlowResolver.new(conversation: self, user: user).flow
   end

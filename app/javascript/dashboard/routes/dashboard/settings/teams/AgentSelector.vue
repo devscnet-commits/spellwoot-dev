@@ -29,16 +29,27 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  // agentId -> team name: agents already in another team are shown greyed-out and cannot
+  // be selected (an agent belongs to a single team).
+  lockedAgents: {
+    type: Object,
+    default: () => ({}),
+  },
 });
 
 const { t } = useI18n();
 
 const selectedAgentCount = computed(() => props.selectedAgents.length);
 
+const isLocked = agentId => !!props.lockedAgents[agentId];
+const selectableAgents = computed(() =>
+  props.agentList.filter(agent => !isLocked(agent.id))
+);
+
 const allAgentsSelected = computed(
   () =>
-    props.selectedAgents.length === props.agentList.length &&
-    props.agentList.length > 0
+    props.selectedAgents.length === selectableAgents.value.length &&
+    selectableAgents.value.length > 0
 );
 
 const someAgentsSelected = computed(
@@ -52,6 +63,7 @@ const isAgentSelected = agentId => {
 };
 
 const handleSelectAgent = agentId => {
+  if (isLocked(agentId)) return;
   const shouldRemove = isAgentSelected(agentId);
 
   let result = [];
@@ -68,7 +80,7 @@ const toggleSelectAll = () => {
   if (allAgentsSelected.value) {
     props.updateSelectedAgents([]);
   } else {
-    const result = props.agentList.map(item => item.id);
+    const result = selectableAgents.value.map(item => item.id);
     props.updateSelectedAgents(result);
   }
 };
@@ -99,6 +111,7 @@ const headers = computed(() => [
           <BaseTableCell class="w-5">
             <div class="flex items-center">
               <Checkbox
+                v-if="!isLocked(agent.id)"
                 :model-value="isAgentSelected(agent.id)"
                 @change="() => handleSelectAgent(agent.id)"
               />
@@ -116,16 +129,38 @@ const headers = computed(() => [
                 rounded-full
                 class="flex-shrink-0"
               />
-              <h4 class="text-heading-3 mb-0 text-n-slate-12 truncate">
+              <h4
+                class="text-heading-3 mb-0 truncate"
+                :class="
+                  isLocked(agent.id) ? 'text-n-slate-9' : 'text-n-slate-12'
+                "
+              >
                 {{ agent.name }}
               </h4>
             </div>
           </BaseTableCell>
 
           <BaseTableCell class="min-w-0">
-            <span class="text-body-main text-n-slate-11 truncate block">
-              {{ agent.email || '---' }}
-            </span>
+            <div class="flex items-center justify-between gap-2 min-w-0">
+              <span
+                class="text-body-main truncate"
+                :class="
+                  isLocked(agent.id) ? 'text-n-slate-9' : 'text-n-slate-11'
+                "
+              >
+                {{ agent.email || '---' }}
+              </span>
+              <span
+                v-if="isLocked(agent.id)"
+                class="text-xs text-n-slate-9 shrink-0"
+              >
+                {{
+                  $t('TEAMS_SETTINGS.AGENTS.ALREADY_IN_TEAM', {
+                    team: lockedAgents[agent.id],
+                  })
+                }}
+              </span>
+            </div>
           </BaseTableCell>
         </template>
       </BaseTableRow>

@@ -7,6 +7,7 @@ import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import MetaConversionSettings from 'dashboard/components-next/ConversationWorkflow/MetaConversionSettings.vue';
 import OperationalFlowsManager from 'dashboard/routes/dashboard/settings/operationalFlows/OperationalFlowsManager.vue';
+import TimeFlowMapper from 'dashboard/routes/dashboard/settings/operationalFlows/TimeFlowMapper.vue';
 import CaixaFlowMapper from 'dashboard/routes/dashboard/settings/operationalFlows/CaixaFlowMapper.vue';
 import AutoResolve from 'dashboard/routes/dashboard/settings/account/components/AutoResolve.vue';
 
@@ -37,6 +38,7 @@ const showAutoResolutionConfig = computed(() => {
       <div class="flex flex-col gap-6 mt-4">
         <AutoResolve v-if="showAutoResolutionConfig" />
         <OperationalFlowsManager />
+        <TimeFlowMapper />
         <CaixaFlowMapper />
         <MetaConversionSettings />
       </div>

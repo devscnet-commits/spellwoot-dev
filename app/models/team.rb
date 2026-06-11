@@ -19,6 +19,8 @@ class Team < ApplicationRecord
   include AccountCacheRevalidator
 
   belongs_to :account
+  # The closing flow conversations of this team follow; the caixa's flow is only a fallback.
+  belongs_to :operational_flow, optional: true
   has_many :team_members, dependent: :destroy_async
   has_many :members, through: :team_members, source: :user
   has_many :team_inboxes, dependent: :destroy_async
