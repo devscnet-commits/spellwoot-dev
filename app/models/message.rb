@@ -346,6 +346,9 @@ class Message < ApplicationRecord
     conversation.update_columns(
       additional_attributes: (conversation.additional_attributes || {}).merge('was_handled_by_human' => true)
     )
+    # update_columns skips callbacks, so broadcast explicitly — the dashboard needs the flag
+    # right away or the Resolver button still offers the AI shortcut to a stale client.
+    conversation.dispatch_conversation_updated_event
   end
 
   def update_waiting_since

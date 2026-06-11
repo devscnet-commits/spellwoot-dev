@@ -171,8 +171,15 @@ const closeAsAi = async () => {
       closed_by_ai: true,
     });
     useAlert(t('CONVERSATION.CHANGE_STATUS'));
-  } catch {
-    useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
+  } catch (error) {
+    if (error?.response?.status === 422) {
+      // Backend refused the AI shortcut (human-handled conversation): ask for a result.
+      await fetchClosingFlow();
+      showOutcomePrompt.value = true;
+      emitter.emit(BUS_EVENTS.FLASH_RESULT_SELECTOR);
+    } else {
+      useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
+    }
   } finally {
     isLoading.value = false;
   }

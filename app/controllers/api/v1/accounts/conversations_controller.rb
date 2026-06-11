@@ -205,6 +205,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def close_as_ai
+    return if ai_close_blocked_for_human?
+
     Conversations::ResultService.new(
       conversation: @conversation,
       outcome: 'ai_closed',
@@ -289,6 +291,16 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       error: I18n.t('errors.conversations.required_attributes_missing'),
       missing_attributes: validator.missing_keys
     }, status: :unprocessable_entity
+    true
+  end
+
+  # The ai_closed shortcut is only for conversations the AI handled alone: a human resolving
+  # a human-handled conversation must pick a result like everywhere else.
+  def ai_close_blocked_for_human?
+    return false unless Current.user.is_a?(User)
+    return false unless @conversation.additional_attributes&.dig('was_handled_by_human')
+
+    render json: { error: I18n.t('errors.conversations.result_required') }, status: :unprocessable_entity
     true
   end
 
