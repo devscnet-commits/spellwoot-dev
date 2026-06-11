@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   useStore,
@@ -47,45 +47,100 @@ const isResolved = computed(
 );
 
 // Prefer the dual-written additional_attributes.outcome (reliably preserved by the store on
-// reload); fall back to the native result column. Only won/lost are selectable values here.
+// reload); fall back to the native result column. Stored value is the state's canonical key.
 const outcome = computed(() => {
   const legacy = currentChat.value?.additional_attributes?.outcome;
-  if (legacy === 'won' || legacy === 'lost') return legacy;
+  if (legacy && legacy !== 'ai_closed') return legacy;
   const result = currentChat.value?.result;
-  return result === 'won' || result === 'lost' ? result : null;
+  return result && result !== 'none' ? result : null;
 });
 
-const RESULT_OPTIONS = [
-  {
-    key: 'won',
+// The caixa's closing flow defines the selectable states and their editable labels;
+// fetched once per conversation and reused by selectOutcome.
+const closingFlow = ref(null);
+const closingFlowForId = ref(null);
+
+const ensureClosingFlow = async () => {
+  const id = currentChat.value?.id;
+  if (!id) return null;
+  if (closingFlowForId.value === id) return closingFlow.value;
+  try {
+    const ConversationApi = (await import('dashboard/api/inbox/conversation'))
+      .default;
+    const { data } = await ConversationApi.getClosingFlow(id);
+    closingFlow.value = data || null;
+  } catch {
+    closingFlow.value = null;
+  }
+  closingFlowForId.value = id;
+  return closingFlow.value;
+};
+
+watch(() => currentChat.value?.id, ensureClosingFlow, { immediate: true });
+
+// Polarity drives color/icon regardless of the editable label, mirroring ResolveAction.
+const POLARITY_STYLE = {
+  positive: {
     icon: 'i-lucide-circle-check',
     colorClass: 'text-n-teal-11',
     bgClass: 'bg-n-teal-3',
     hoverClass: 'hover:bg-n-teal-3',
   },
-  {
-    key: 'lost',
+  negative: {
     icon: 'i-lucide-circle-x',
     colorClass: 'text-n-ruby-11',
     bgClass: 'bg-n-ruby-3',
     hoverClass: 'hover:bg-n-ruby-3',
   },
-  {
-    key: null,
-    icon: 'i-lucide-minus-circle',
-    colorClass: 'text-n-slate-9',
+  neutral: {
+    icon: 'i-lucide-circle-dot',
+    colorClass: 'text-n-slate-11',
     bgClass: 'bg-n-slate-3',
     hoverClass: 'hover:bg-n-alpha-black2',
   },
-];
+};
+
+const NONE_OPTION = {
+  key: null,
+  label: null,
+  icon: 'i-lucide-minus-circle',
+  colorClass: 'text-n-slate-9',
+  bgClass: 'bg-n-slate-3',
+  hoverClass: 'hover:bg-n-alpha-black2',
+};
+
+const resultOptions = computed(() => {
+  const states = closingFlow.value?.resolution_states;
+  if (states?.length) {
+    return [
+      ...[...states]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(s => ({
+          key: s.canonical_key,
+          label: s.display_label,
+          ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
+        })),
+      NONE_OPTION,
+    ];
+  }
+  return [
+    { key: 'won', label: null, ...POLARITY_STYLE.positive },
+    { key: 'lost', label: null, ...POLARITY_STYLE.negative },
+    NONE_OPTION,
+  ];
+});
 
 const currentResult = computed(
-  () => RESULT_OPTIONS.find(o => o.key === outcome.value) || RESULT_OPTIONS[2]
+  () =>
+    resultOptions.value.find(o => o.key === outcome.value) ||
+    resultOptions.value[resultOptions.value.length - 1]
 );
 
-const labelFor = key => {
-  if (key === 'won') return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_WON');
-  if (key === 'lost') return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_LOST');
+const labelFor = option => {
+  if (option.label) return option.label;
+  if (option.key === 'won') return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_WON');
+  if (option.key === 'lost')
+    return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_LOST');
   return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_NONE');
 };
 
@@ -141,21 +196,12 @@ const selectOutcome = async outcomeKey => {
   }
 
   isLoading.value = true;
-  let closingFlow = null;
-  try {
-    const ConversationApi = (await import('dashboard/api/inbox/conversation'))
-      .default;
-    const { data } = await ConversationApi.getClosingFlow(currentChat.value.id);
-    closingFlow = data || null;
-  } catch {
-    closingFlow = null;
-  } finally {
-    isLoading.value = false;
-  }
+  const flow = await ensureClosingFlow();
+  isLoading.value = false;
 
   const currentCustomAttributes = currentChat.value.custom_attributes || {};
   const flowAttrs = flowRequiredAttributes(
-    closingFlow,
+    flow,
     outcomeKey,
     attributeOptions.value
   );
@@ -222,7 +268,7 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
       @click="isDropdownOpen = !isDropdownOpen"
     >
       <span class="size-3.5" :class="[currentResult.icon]" />
-      {{ labelFor(currentResult.key) }}
+      {{ labelFor(currentResult) }}
       <span
         v-if="!isResolved"
         class="i-lucide-chevron-down size-3 opacity-70"
@@ -234,7 +280,7 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
       class="absolute top-full mt-1 right-0 z-50 flex flex-col gap-0.5 p-1 rounded-lg border border-n-weak bg-n-solid-1 shadow-lg min-w-36"
     >
       <button
-        v-for="option in RESULT_OPTIONS"
+        v-for="option in resultOptions"
         :key="String(option.key)"
         type="button"
         class="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition-colors text-left"
@@ -249,7 +295,7 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
           class="size-4 shrink-0"
           :class="[option.icon, option.colorClass]"
         />
-        {{ labelFor(option.key) }}
+        {{ labelFor(option) }}
       </button>
     </div>
 
