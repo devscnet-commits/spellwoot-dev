@@ -355,7 +355,7 @@ export const mutations = {
 
   [types.CLEAR_CONTACT_CONVERSATIONS](_state, contactId) {
     const chats = _state.allConversations.filter(
-      c => c.meta.sender.id !== contactId
+      c => c.meta.sender?.id !== contactId
     );
     _state.allConversations = chats;
   },

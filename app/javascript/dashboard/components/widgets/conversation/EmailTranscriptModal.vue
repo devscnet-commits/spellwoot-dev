@@ -61,7 +61,7 @@ export default {
       const { meta } = this.currentChat;
       switch (this.selectedType) {
         case 'contact':
-          return meta.sender.email;
+          return meta.sender?.email;
         case 'assignee':
           return meta.assignee.email;
         case 'other_email_address':

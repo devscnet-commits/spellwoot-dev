@@ -63,7 +63,7 @@ const isHMACVerified = computed(() => {
 });
 
 const currentContact = computed(() =>
-  store.getters['contacts/getContact'](props.chat.meta.sender.id)
+  store.getters['contacts/getContact'](props.chat.meta.sender?.id)
 );
 
 // The inbox (Caixa) this conversation belongs to — shown under the contact name.
