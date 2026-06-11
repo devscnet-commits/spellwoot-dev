@@ -18,8 +18,6 @@ const { t } = useI18n();
 const getFlow = useMapGetter('operationalFlows/getFlow');
 const uiFlags = useMapGetter('operationalFlows/getUIFlags');
 const conversationAttributes = useMapGetter('attributes/getConversationAttributes');
-const assignmentRules = useMapGetter('flowAssignmentRules/getRules');
-const teams = useMapGetter('teams/getTeams');
 const inboxes = useMapGetter('inboxes/getInboxes');
 
 const flowId = computed(() =>
@@ -27,28 +25,11 @@ const flowId = computed(() =>
 );
 const isEdit = computed(() => !!flowId.value);
 
-// Read-only "who uses this flow": the assignment rules that point at it, described in
-// plain language so the flow editor answers "quem usa isso?" without leaving the page.
-const nameById = (list, id) => (list.value || []).find(i => i.id === id)?.name || '';
-const rulesUsingThisFlow = computed(() =>
-  (assignmentRules.value || []).filter(r => r.operational_flow_id === flowId.value)
+// Read-only "who uses this flow": the caixas directly linked to it, so the flow editor
+// answers "quem usa isso?" without leaving the page.
+const caixasUsingThisFlow = computed(() =>
+  (inboxes.value || []).filter(i => i.operational_flow_id === flowId.value)
 );
-const describeRuleUsage = rule => {
-  const predicate = rule.predicate || {};
-  const teamIds = Array.isArray(predicate.team_id)
-    ? predicate.team_id
-    : predicate.team_id
-      ? [predicate.team_id]
-      : [];
-  if (!teamIds.length) return t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.ALL');
-  const names = teamIds.map(id => nameById(teams, Number(id))).filter(Boolean);
-  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${names.join(', ')}`;
-  const excluded = (predicate.excluded_inbox_ids || [])
-    .map(id => nameById(inboxes, Number(id)))
-    .filter(Boolean);
-  if (!excluded.length) return base;
-  return `${base} (${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.EXCEPT')} ${excluded.join(', ')})`;
-};
 
 const CATEGORIES = ['sales', 'support'];
 const POLARITIES = ['positive', 'negative', 'neutral'];
@@ -229,7 +210,6 @@ onMounted(async () => {
   store.dispatch('attributes/get');
   if (!isEdit.value) return;
   // Needed to describe which rules (team + excluded caixas) currently point at this flow.
-  store.dispatch('flowAssignmentRules/get');
   store.dispatch('teams/get');
   store.dispatch('inboxes/get');
   isLoading.value = true;
@@ -649,16 +629,16 @@ const save = async () => {
           </router-link>
         </div>
         <ul
-          v-if="rulesUsingThisFlow.length"
+          v-if="caixasUsingThisFlow.length"
           class="flex flex-col gap-1"
         >
           <li
-            v-for="rule in rulesUsingThisFlow"
-            :key="rule.id"
+            v-for="caixa in caixasUsingThisFlow"
+            :key="caixa.id"
             class="flex items-center gap-2 text-sm text-n-slate-12"
           >
             <span class="i-lucide-check size-3.5 text-n-teal-11 shrink-0" />
-            {{ describeRuleUsage(rule) }}
+            {{ caixa.name }}
           </li>
         </ul>
         <p v-else class="text-sm text-n-slate-11">

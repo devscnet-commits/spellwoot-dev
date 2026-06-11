@@ -84,9 +84,8 @@
       },
       "USED_BY": {
         "TITLE": "This flow is used by:",
-        "MANAGE": "Manage rules →",
-        "EMPTY": "No rule uses this flow yet.",
-        "ALL": "Any conversation (rule with no conditions)"
+        "MANAGE": "Gerenciar caixas →",
+        "EMPTY": "Nenhuma caixa usa este fluxo ainda."
       },
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Closing flow created successfully",
@@ -106,50 +105,14 @@
         "ADD": "Add requirement"
       }
     },
-    "ASSIGNMENT_RULES": {
-      "HEADER": "Assignment rules",
-      "DESCRIPTION": "Decides which flow applies to each conversation, by the team — and optionally excluding some of that team's caixas. The most specific matching rule wins.",
-      "NEW_RULE": "Add rule",
-      "EMPTY": "No rules yet. Add at least one (e.g. per team) so conversations get a flow. A conversation that matches no rule simply uses no flow.",
-      "ANY": "(any)",
-      "AND": "and",
-      "EXCEPT": "except",
-      "ANY_CONVERSATION": "any conversation",
-      "DEFAULT": "Default",
-      "DIMENSIONS": {
-        "ROLE": "Role",
-        "INBOX": "Caixa",
-        "TEAM": "Team",
-        "ORIGIN": "Origin"
-      },
-      "FORM": {
-        "FLOW": "Flow to apply",
-        "SELECT": "Select a flow",
-        "SAVE": "Save rule",
-        "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "The teams decide the flow. By default it applies to all caixas of the selected teams — you can leave some out below.",
-        "TEAMS_LABEL": "Apply to which teams?",
-        "TEAM_CONFLICT": "Warning: team {team} is already in another rule (flow \"{flow}\"). Two rules for the same team do not stack — the older one wins and this one will never apply. Edit or delete the other rule instead of adding a new one.",
-        "LINK_CTA": "Link {count} caixa(s)",
-        "LINK_SUCCESS": "Caixas linked to team {team}",
-        "LINK_ERROR": "Could not link the caixas to the team",
-        "TEAM_NO_CAIXAS": "Team \"{names}\" has no linked caixas yet — without that, this rule only applies to conversations with the team manually assigned. Check the caixas that belong to it below:",
-        "EXCLUDE_CAIXAS_LABEL": "Caixas that should NOT use this flow",
-        "EXCLUDE_CAIXAS_HELP": "By default every caixa of the selected teams uses this flow. Check the ones to leave out — new team caixas join automatically."
-      },
-      "HUMAN": {
-        "MEANS": "This rule means:",
-        "APPLY": "Apply the \"{flow}\" flow",
-        "WHEN": "when the conversation",
-        "TEAM": "belongs to the team(s): {name}",
-        "EXCEPT_CAIXAS": "(except the caixas: {names})",
-        "ANY": "to any conversation.",
-        "PICK_FLOW": "Select a flow above."
-      },
-      "SAVE_SUCCESS": "Assignment rule saved",
-      "SAVE_ERROR": "Could not save the assignment rule",
-      "DELETE_SUCCESS": "Assignment rule deleted",
-      "SPECIFICITY_HELP": "The most specific matching rule (the one with more conditions) wins. With no conditions, it applies to any conversation."
+    "CAIXA_FLOWS": {
+      "HEADER": "Caixas → Fluxo de fechamento",
+      "DESCRIPTION": "Cada caixa usa um fluxo de fechamento. Times organizam as pessoas; a caixa define o processo — todo agente que atender nela cai no fluxo dela.",
+      "NONE": "Sem fluxo",
+      "INACTIVE": "inativo",
+      "EMPTY": "Nenhuma caixa de entrada encontrada.",
+      "SAVE_SUCCESS": "Fluxo da caixa atualizado",
+      "SAVE_ERROR": "Não foi possível atualizar o fluxo da caixa"
     }
   }
 }

@@ -83,33 +83,18 @@ const stageAgent = agent => {
   agentEligibility.value = { ...agentEligibility.value, [agent.id]: true };
 };
 
-// Flow-conflict warning: closing flows attach to caixas via team rules, so an agent
-// "participates" in a flow through the caixas where they attend. Mirror of the backend
-// resolver's team dimension: first rule (priority asc, id asc) covering the caixa wins.
-const flowRules = computed(
-  () => store.getters['flowAssignmentRules/getRules'] || []
-);
+// Flow-conflict warning: the closing flow is a direct attribute of each caixa, so an
+// agent "participates" in a flow through the caixas where they attend.
 const flowsList = computed(
   () => store.getters['operationalFlows/getFlows'] || []
 );
 const inboxList = computed(() => store.getters['inboxes/getInboxes'] || []);
 
 const flowForInbox = inboxId => {
-  const rule = [...flowRules.value]
-    .sort((a, b) => a.priority - b.priority || a.id - b.id)
-    .find(r => {
-      const predicate = r.predicate || {};
-      const excluded = (predicate.excluded_inbox_ids || []).map(Number);
-      if (excluded.includes(inboxId)) return false;
-      const teamIds = [].concat(predicate.team_id || []).map(Number);
-      if (!teamIds.length) return true;
-      return teamsList.value.some(
-        team =>
-          teamIds.includes(team.id) && (team.inbox_ids || []).includes(inboxId)
-      );
-    });
-  if (!rule) return null;
-  return flowsList.value.find(f => f.id === rule.operational_flow_id) || null;
+  const flowId = inboxList.value.find(i => i.id === inboxId)
+    ?.operational_flow_id;
+  if (!flowId) return null;
+  return flowsList.value.find(f => f.id === flowId) || null;
 };
 
 // Pending conflict: { agent, currentFlow, previousFlows: [names], inboxes: [{id, name}] }
@@ -186,8 +171,8 @@ const addTeam = async team => {
       });
       agentEligibility.value = eligibility;
     }
-    // Also link this caixa to the team (TeamInbox) — flow assignment rules match
-    // conversations by this link, not by which agents are inbox members.
+    // Also link this caixa to the team (TeamInbox), so team membership and caixa
+    // access stay mirrored — the closing flow itself lives on the caixa.
     const linkedInboxIds = team.inbox_ids || [];
     let linkedNow = false;
     if (!linkedInboxIds.includes(props.inbox.id)) {
@@ -563,7 +548,6 @@ onMounted(() => {
   // Needed by the flow-conflict warning when adding an agent. Never dispatch
   // 'inboxes/get' here: Settings.vue unmounts this tab while inboxes are
   // fetching, so refetching from onMounted causes an infinite remount loop.
-  store.dispatch('flowAssignmentRules/get');
   store.dispatch('operationalFlows/get');
 });
 </script>
