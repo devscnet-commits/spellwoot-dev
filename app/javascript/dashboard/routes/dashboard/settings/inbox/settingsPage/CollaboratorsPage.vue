@@ -648,7 +648,7 @@ onMounted(() => {
             <span class="text-xs font-medium text-n-slate-11 w-36 text-center"
               >Receber atendimentos</span
             >
-            <span class="w-6" />
+            <span class="w-16" />
           </div>
           <div class="max-h-64 overflow-y-auto">
             <div
@@ -671,10 +671,12 @@ onMounted(() => {
               <!-- Remove button -->
               <button
                 type="button"
-                class="w-6 flex items-center justify-center text-n-slate-9 hover:text-n-ruby-9 transition-colors"
+                class="w-16 flex items-center justify-center gap-1 text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors"
+                title="Remover agente da caixa"
                 @click="removeAgent(agent.id)"
               >
-                <span class="i-lucide-x text-sm" />
+                <span class="i-lucide-trash-2 size-3.5 shrink-0" />
+                Remover
               </button>
             </div>
 
