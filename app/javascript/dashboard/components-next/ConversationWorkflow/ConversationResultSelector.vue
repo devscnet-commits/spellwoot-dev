@@ -138,7 +138,8 @@ const currentResult = computed(
 
 const labelFor = option => {
   if (option.label) return option.label;
-  if (option.key === 'won') return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_WON');
+  if (option.key === 'won')
+    return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_WON');
   if (option.key === 'lost')
     return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_LOST');
   return t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_NONE');
@@ -264,7 +265,9 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
             ],
       ]"
       :disabled="isLoading || isResolved"
-      :title="isResolved ? $t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_LOCKED') : null"
+      :title="
+        isResolved ? $t('CONVERSATION_WORKFLOW.OUTCOME.RESULT_LOCKED') : null
+      "
       @click="isDropdownOpen = !isDropdownOpen"
     >
       <span class="size-3.5" :class="[currentResult.icon]" />
