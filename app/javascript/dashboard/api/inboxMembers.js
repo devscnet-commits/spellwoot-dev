@@ -19,6 +19,12 @@ class InboxMembers extends ApiClient {
       members,
     });
   }
+
+  removeAgents({ inboxId, agentIds }) {
+    return axios.delete(this.url, {
+      data: { inbox_id: inboxId, user_ids: agentIds },
+    });
+  }
 }
 
 export default new InboxMembers();

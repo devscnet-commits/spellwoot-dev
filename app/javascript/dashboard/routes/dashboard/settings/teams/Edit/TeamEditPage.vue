@@ -167,11 +167,51 @@ async function persistMembers(userIds, successKey) {
   }
 }
 
+// New member of a team with linked caixas: offer adding them as agent of those caixas
+// too, so they are covered by the team's closing flow without a manual second step.
+const pendingCaixasAgent = ref(null);
+const isAddingToCaixas = ref(false);
+
+const linkedInboxNames = computed(() =>
+  (allInboxes.value || [])
+    .filter(ibx => linkedInboxIds.value.includes(ibx.id))
+    .map(ibx => ibx.name)
+);
+
 function addAgent(agent) {
   const ids = [...members.value.map(m => m.id), agent.id];
   agentSearch.value = '';
   showAddPanel.value = false;
   persistMembers(ids, 'MEMBER_ADDED');
+  if (linkedInboxIds.value.length) pendingCaixasAgent.value = agent;
+}
+
+function skipAddToCaixas() {
+  pendingCaixasAgent.value = null;
+}
+
+async function addPendingAgentToCaixas() {
+  const agent = pendingCaixasAgent.value;
+  isAddingToCaixas.value = true;
+  try {
+    const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
+      .default;
+    await Promise.all(
+      linkedInboxIds.value.map(inboxId =>
+        InboxMembersAPI.create({ inbox_id: inboxId, user_ids: [agent.id] })
+      )
+    );
+    useAlert(
+      t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.SUCCESS', {
+        agent: agent.name,
+      })
+    );
+  } catch {
+    useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
+  } finally {
+    isAddingToCaixas.value = false;
+    pendingCaixasAgent.value = null;
+  }
 }
 
 function removeMember(agentId) {
@@ -467,6 +507,39 @@ async function saveDetails() {
           </template>
         </div>
       </div>
+
+      <woot-modal
+        v-if="pendingCaixasAgent"
+        :show="!!pendingCaixasAgent"
+        :on-close="skipAddToCaixas"
+      >
+        <div class="p-6">
+          <h3 class="text-lg font-medium text-n-slate-12 mb-4">
+            {{ t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.TITLE') }}
+          </h3>
+          <p class="text-sm text-n-slate-11 mb-6">
+            {{
+              t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.MESSAGE', {
+                agent: pendingCaixasAgent.name,
+                inboxes: linkedInboxNames.join(', '),
+              })
+            }}
+          </p>
+          <div class="flex justify-end gap-2">
+            <Button
+              slate
+              :label="t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.SKIP')"
+              :disabled="isAddingToCaixas"
+              @click="skipAddToCaixas"
+            />
+            <Button
+              :label="t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.CONFIRM')"
+              :is-loading="isAddingToCaixas"
+              @click="addPendingAgentToCaixas"
+            />
+          </div>
+        </div>
+      </woot-modal>
     </template>
   </SettingsLayout>
 </template>

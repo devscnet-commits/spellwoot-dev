@@ -54,6 +54,13 @@
       "MEMBERS_SUBTITLE": "Gerencie os agentes deste time. A função é definida no cadastro do agente.",
       "MEMBER_ADDED": "Integrante adicionado ao time.",
       "MEMBER_REMOVED": "Integrante removido do time.",
+      "ADD_TO_CAIXAS": {
+        "TITLE": "Adicionar também nas caixas do time?",
+        "MESSAGE": "{agent} entrou no time. Deseja adicioná-lo também como agente das caixas vinculadas ao time ({inboxes})? Assim ele já atende e participa do fluxo de fechamento dessas caixas.",
+        "CONFIRM": "Sim, adicionar nas caixas",
+        "SKIP": "Agora não",
+        "SUCCESS": "{agent} adicionado nas caixas do time."
+      },
       "ACCOUNT_ROLES": {
         "agent": "Agente",
         "administrator": "Administrador"

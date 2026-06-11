@@ -68,13 +68,6 @@ const addableAgents = computed(() => {
   );
 });
 
-const addAgent = agent => {
-  selectedAgentIds.value = [...selectedAgentIds.value, agent.id];
-  agentEligibility.value = { ...agentEligibility.value, [agent.id]: true };
-  addSearch.value = '';
-  showAddDropdown.value = false;
-};
-
 // Teams as a shortcut: picking one adds all its members at once (agents can still
 // be removed individually afterwards).
 const teamsList = computed(() => store.getters['teams/getTeams'] || []);
@@ -84,6 +77,123 @@ const addableTeams = computed(() => {
     team => !q || team.name.toLowerCase().includes(q)
   );
 });
+
+const stageAgent = agent => {
+  selectedAgentIds.value = [...selectedAgentIds.value, agent.id];
+  agentEligibility.value = { ...agentEligibility.value, [agent.id]: true };
+};
+
+// Flow-conflict warning: closing flows attach to caixas via team rules, so an agent
+// "participates" in a flow through the caixas where they attend. Mirror of the backend
+// resolver's team dimension: first rule (priority asc, id asc) covering the caixa wins.
+const flowRules = computed(
+  () => store.getters['flowAssignmentRules/getRules'] || []
+);
+const flowsList = computed(
+  () => store.getters['operationalFlows/getFlows'] || []
+);
+const inboxList = computed(() => store.getters['inboxes/getInboxes'] || []);
+
+const flowForInbox = inboxId => {
+  const rule = [...flowRules.value]
+    .sort((a, b) => a.priority - b.priority || a.id - b.id)
+    .find(r => {
+      const predicate = r.predicate || {};
+      const excluded = (predicate.excluded_inbox_ids || []).map(Number);
+      if (excluded.includes(inboxId)) return false;
+      const teamIds = [].concat(predicate.team_id || []).map(Number);
+      if (!teamIds.length) return true;
+      return teamsList.value.some(
+        team =>
+          teamIds.includes(team.id) && (team.inbox_ids || []).includes(inboxId)
+      );
+    });
+  if (!rule) return null;
+  return flowsList.value.find(f => f.id === rule.operational_flow_id) || null;
+};
+
+// Pending conflict: { agent, currentFlow, previousFlows: [names], inboxes: [{id, name}] }
+const flowConflict = ref(null);
+const isMovingAgent = ref(false);
+
+const addAgent = async agent => {
+  addSearch.value = '';
+  showAddDropdown.value = false;
+  const currentFlow = flowForInbox(props.inbox.id);
+  if (currentFlow) {
+    // Caixas of a DIFFERENT closing flow where this agent already attends.
+    const candidates = inboxList.value.filter(ibx => {
+      if (ibx.id === props.inbox.id) return false;
+      const flow = flowForInbox(ibx.id);
+      return flow && flow.id !== currentFlow.id;
+    });
+    if (candidates.length) {
+      try {
+        const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
+          .default;
+        const memberships = await Promise.all(
+          candidates.map(async ibx => {
+            const { data } = await InboxMembersAPI.show(ibx.id);
+            const isMember = (data.payload || []).some(m => m.id === agent.id);
+            return isMember ? ibx : null;
+          })
+        );
+        const conflicting = memberships.filter(Boolean);
+        if (conflicting.length) {
+          flowConflict.value = {
+            agent,
+            currentFlow,
+            previousFlows: [
+              ...new Set(
+                conflicting.map(ibx => flowForInbox(ibx.id)?.name)
+              ),
+            ].filter(Boolean),
+            inboxes: conflicting,
+          };
+          return;
+        }
+      } catch {
+        // Lookup failure must not block adding the agent.
+      }
+    }
+  }
+  stageAgent(agent);
+};
+
+const closeFlowConflict = () => {
+  flowConflict.value = null;
+};
+
+// "Não": add here too — the agent stays in both flows.
+const keepAgentInBothFlows = () => {
+  stageAgent(flowConflict.value.agent);
+  closeFlowConflict();
+};
+
+// "Sim": remove from the previous flow's caixas, add here and persist right away.
+const moveAgentToThisFlow = async () => {
+  const { agent, inboxes: oldInboxes } = flowConflict.value;
+  isMovingAgent.value = true;
+  try {
+    const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
+      .default;
+    await Promise.all(
+      oldInboxes.map(ibx =>
+        InboxMembersAPI.removeAgents({ inboxId: ibx.id, agentIds: [agent.id] })
+      )
+    );
+    stageAgent(agent);
+    await updateAgents();
+    useAlert(
+      `${agent.name} desvinculado de: ${oldInboxes.map(i => i.name).join(', ')}`
+    );
+    closeFlowConflict();
+  } catch {
+    useAlert('Não foi possível mover o agente entre os fluxos');
+  } finally {
+    isMovingAgent.value = false;
+  }
+};
 
 const addTeam = async team => {
   try {
@@ -350,7 +460,7 @@ const handleToggleAutoAssignment = async val => {
   }
 };
 
-const updateAgents = async () => {
+async function updateAgents() {
   isAgentListUpdating.value = true;
   try {
     const members = selectedAgentIds.value.map(id => ({
@@ -367,7 +477,7 @@ const updateAgents = async () => {
     useAlert(t('AGENT_MGMT.EDIT.API.ERROR_MESSAGE'));
   }
   isAgentListUpdating.value = false;
-};
+}
 
 const updateInbox = async () => {
   try {
@@ -452,6 +562,10 @@ watch(() => props.inbox.id, setDefaults);
 onMounted(() => {
   setDefaults();
   store.dispatch('teams/get');
+  // Needed by the flow-conflict warning when adding an agent.
+  store.dispatch('inboxes/get');
+  store.dispatch('flowAssignmentRules/get');
+  store.dispatch('operationalFlows/get');
 });
 </script>
 
@@ -861,6 +975,43 @@ onMounted(() => {
         </template>
       </SettingsToggleSection>
     </SettingsAccordion>
+
+    <woot-modal
+      v-if="flowConflict"
+      :show="!!flowConflict"
+      :on-close="closeFlowConflict"
+    >
+      <div class="p-6">
+        <h3 class="text-lg font-medium text-n-slate-12 mb-4">
+          Atenção: agente em outro fluxo de fechamento
+        </h3>
+        <p class="text-sm text-n-slate-11 mb-2">
+          <span class="font-medium">{{ flowConflict.agent.name }}</span>
+          já participa do fluxo
+          <span class="font-medium">"{{ flowConflict.previousFlows.join('", "') }}"</span>
+          pelas caixas:
+          {{ flowConflict.inboxes.map(i => i.name).join(', ') }}.
+        </p>
+        <p class="text-sm text-n-slate-11 mb-6">
+          Ao incluir nesta caixa ele passa a participar do fluxo
+          <span class="font-medium">"{{ flowConflict.currentFlow.name }}"</span>.
+          Deseja desvinculá-lo das caixas do fluxo anterior?
+        </p>
+        <div class="flex justify-end gap-2">
+          <NextButton
+            slate
+            label="Não, manter nos dois"
+            :disabled="isMovingAgent"
+            @click="keepAgentInBothFlows"
+          />
+          <NextButton
+            label="Sim, atualizar"
+            :is-loading="isMovingAgent"
+            @click="moveAgentToThisFlow"
+          />
+        </div>
+      </div>
+    </woot-modal>
 
     <woot-modal
       v-if="showDeleteConfirmModal"
