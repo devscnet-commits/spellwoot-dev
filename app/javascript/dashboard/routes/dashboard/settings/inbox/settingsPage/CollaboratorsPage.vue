@@ -144,9 +144,7 @@ const addAgent = async agent => {
             agent,
             currentFlow,
             previousFlows: [
-              ...new Set(
-                conflicting.map(ibx => flowForInbox(ibx.id)?.name)
-              ),
+              ...new Set(conflicting.map(ibx => flowForInbox(ibx.id)?.name)),
             ].filter(Boolean),
             inboxes: conflicting,
           };
@@ -168,31 +166,6 @@ const closeFlowConflict = () => {
 const keepAgentInBothFlows = () => {
   stageAgent(flowConflict.value.agent);
   closeFlowConflict();
-};
-
-// "Sim": remove from the previous flow's caixas, add here and persist right away.
-const moveAgentToThisFlow = async () => {
-  const { agent, inboxes: oldInboxes } = flowConflict.value;
-  isMovingAgent.value = true;
-  try {
-    const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
-      .default;
-    await Promise.all(
-      oldInboxes.map(ibx =>
-        InboxMembersAPI.removeAgents({ inboxId: ibx.id, agentIds: [agent.id] })
-      )
-    );
-    stageAgent(agent);
-    await updateAgents();
-    useAlert(
-      `${agent.name} desvinculado de: ${oldInboxes.map(i => i.name).join(', ')}`
-    );
-    closeFlowConflict();
-  } catch {
-    useAlert('Não foi possível mover o agente entre os fluxos');
-  } finally {
-    isMovingAgent.value = false;
-  }
 };
 
 const addTeam = async team => {
@@ -228,9 +201,7 @@ const addTeam = async team => {
     const agentsPart = newIds.length
       ? `${newIds.length} agente(s) do time "${team.name}" adicionado(s)`
       : `Todos os agentes do time "${team.name}" já estão na caixa`;
-    useAlert(
-      linkedNow ? `${agentsPart}. Caixa vinculada ao time` : agentsPart
-    );
+    useAlert(linkedNow ? `${agentsPart}. Caixa vinculada ao time` : agentsPart);
   } catch {
     useAlert('Não foi possível adicionar o time à caixa');
   }
@@ -252,7 +223,9 @@ const toggleEligibility = agentId => {
   };
 };
 
-const closeAddDropdown = () => { showAddDropdown.value = false; };
+const closeAddDropdown = () => {
+  showAddDropdown.value = false;
+};
 
 // Stable representation of the agent list + eligibility, so the Update button only
 // enables when something actually changed (and greys out again after saving).
@@ -479,6 +452,31 @@ async function updateAgents() {
   isAgentListUpdating.value = false;
 }
 
+// "Sim": remove from the previous flow's caixas, add here and persist right away.
+const moveAgentToThisFlow = async () => {
+  const { agent, inboxes: oldInboxes } = flowConflict.value;
+  isMovingAgent.value = true;
+  try {
+    const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
+      .default;
+    await Promise.all(
+      oldInboxes.map(ibx =>
+        InboxMembersAPI.removeAgents({ inboxId: ibx.id, agentIds: [agent.id] })
+      )
+    );
+    stageAgent(agent);
+    await updateAgents();
+    useAlert(
+      `${agent.name} desvinculado de: ${oldInboxes.map(i => i.name).join(', ')}`
+    );
+    closeFlowConflict();
+  } catch {
+    useAlert('Não foi possível mover o agente entre os fluxos');
+  } finally {
+    isMovingAgent.value = false;
+  }
+};
+
 const updateInbox = async () => {
   try {
     const payload = {
@@ -562,8 +560,9 @@ watch(() => props.inbox.id, setDefaults);
 onMounted(() => {
   setDefaults();
   store.dispatch('teams/get');
-  // Needed by the flow-conflict warning when adding an agent.
-  store.dispatch('inboxes/get');
+  // Needed by the flow-conflict warning when adding an agent. Never dispatch
+  // 'inboxes/get' here: Settings.vue unmounts this tab while inboxes are
+  // fetching, so refetching from onMounted causes an infinite remount loop.
   store.dispatch('flowAssignmentRules/get');
   store.dispatch('operationalFlows/get');
 });
@@ -578,10 +577,7 @@ onMounted(() => {
     >
       <div class="flex flex-col gap-2">
         <!-- Add agent row -->
-        <div
-          v-on-click-outside="closeAddDropdown"
-          class="relative"
-        >
+        <div v-on-click-outside="closeAddDropdown" class="relative">
           <div class="flex gap-2">
             <SearchInput
               v-model="addSearch"
@@ -643,9 +639,15 @@ onMounted(() => {
 
         <!-- Members table — only current inbox members -->
         <div class="rounded-lg border border-n-weak overflow-hidden">
-          <div class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak">
-            <span class="text-xs font-medium text-n-slate-11 flex-1">Agente</span>
-            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">Receber atendimentos</span>
+          <div
+            class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak"
+          >
+            <span class="text-xs font-medium text-n-slate-11 flex-1"
+              >Agente</span
+            >
+            <span class="text-xs font-medium text-n-slate-11 w-36 text-center"
+              >Receber atendimentos</span
+            >
             <span class="w-6" />
           </div>
           <div class="max-h-64 overflow-y-auto">
@@ -654,7 +656,9 @@ onMounted(() => {
               :key="agent.id"
               class="flex items-center px-3 py-2.5 border-b border-n-weak/50 last:border-0 hover:bg-n-slate-1 transition-colors"
             >
-              <span class="text-sm text-n-slate-12 flex-1">{{ agent.name }}</span>
+              <span class="text-sm text-n-slate-12 flex-1">{{
+                agent.name
+              }}</span>
 
               <!-- Eligibility toggle -->
               <div class="w-36 flex justify-center">
@@ -685,7 +689,11 @@ onMounted(() => {
 
         <p class="text-xs text-n-slate-10">
           {{ memberAgents.length }}
-          {{ memberAgents.length === 1 ? 'agente nesta caixa' : 'agentes nesta caixa' }}
+          {{
+            memberAgents.length === 1
+              ? 'agente nesta caixa'
+              : 'agentes nesta caixa'
+          }}
         </p>
       </div>
 
@@ -988,14 +996,16 @@ onMounted(() => {
         <p class="text-sm text-n-slate-11 mb-2">
           <span class="font-medium">{{ flowConflict.agent.name }}</span>
           já participa do fluxo
-          <span class="font-medium">"{{ flowConflict.previousFlows.join('", "') }}"</span>
+          <span class="font-medium"
+            >"{{ flowConflict.previousFlows.join('", "') }}"</span
+          >
           pelas caixas:
           {{ flowConflict.inboxes.map(i => i.name).join(', ') }}.
         </p>
         <p class="text-sm text-n-slate-11 mb-6">
           Ao incluir nesta caixa ele passa a participar do fluxo
-          <span class="font-medium">"{{ flowConflict.currentFlow.name }}"</span>.
-          Deseja desvinculá-lo das caixas do fluxo anterior?
+          <span class="font-medium">"{{ flowConflict.currentFlow.name }}"</span
+          >. Deseja desvinculá-lo das caixas do fluxo anterior?
         </p>
         <div class="flex justify-end gap-2">
           <NextButton

@@ -24,7 +24,10 @@ const getTeam = useMapGetter('teams/getTeam');
 const team = computed(() => getTeam.value(teamId.value));
 // Team names are stored lowercase; display them title-cased to match the teams list.
 const teamTitle = computed(() =>
-  (team.value?.name || '').replace(/(^|\s)(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase())
+  (team.value?.name || '').replace(
+    /(^|\s)(\p{L})/gu,
+    (_, sep, ch) => sep + ch.toUpperCase()
+  )
 );
 const getTeamMembers = useMapGetter('teamMembers/getTeamMembers');
 const members = computed(() => getTeamMembers.value(teamId.value) || []);
