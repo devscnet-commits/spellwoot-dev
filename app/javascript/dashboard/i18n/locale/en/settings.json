@@ -648,7 +648,7 @@
       "NO_FIELDS": "Nenhum campo adicional necessário.",
       "SUCCESS": "Resultado registrado com sucesso",
       "ERROR": "Não foi possível registrar o resultado, tente novamente",
-      "PROMPT_RESOLVE": "Antes de resolver, defina o resultado do lead:",
+      "PROMPT_RESOLVE": "Antes de resolver, selecione uma das opções abaixo:",
       "RESULT_WON": "Ganho",
       "RESULT_LOST": "Perdido",
       "RESULT_NONE": "Sem resultado",
