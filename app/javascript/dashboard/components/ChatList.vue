@@ -1037,25 +1037,30 @@ watch(conversationFilters, (newVal, oldVal) => {
       @chat-tab-change="updateAssigneeTab"
     />
 
-    <!-- Status axis, independent from the assignee tabs -->
+    <!-- Status axis, independent from the assignee tabs: a segmented control so the two
+         questions read separately — "which conversations?" (tabs) and "which status?" -->
     <div
       v-if="!hasAppliedFiltersOrActiveFolders"
-      class="flex items-center gap-1 px-3 pb-2"
+      class="flex items-center px-3 pb-2"
     >
-      <button
-        v-for="statusOption in ['open', 'resolved']"
-        :key="statusOption"
-        type="button"
-        class="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
-        :class="
-          activeStatus === statusOption
-            ? 'bg-n-brand/15 text-n-blue-11'
-            : 'text-n-slate-11 hover:bg-n-alpha-2'
-        "
-        @click="updateListStatus(statusOption)"
+      <div
+        class="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-n-alpha-2"
       >
-        {{ $t(`CHAT_LIST.STATUS_TOGGLE.${statusOption}`) }}
-      </button>
+        <button
+          v-for="statusOption in ['open', 'resolved']"
+          :key="statusOption"
+          type="button"
+          class="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+          :class="
+            activeStatus === statusOption
+              ? 'bg-n-solid-1 text-n-slate-12 shadow-sm'
+              : 'text-n-slate-11 hover:text-n-slate-12'
+          "
+          @click="updateListStatus(statusOption)"
+        >
+          {{ $t(`CHAT_LIST.STATUS_TOGGLE.${statusOption}`) }}
+        </button>
+      </div>
     </div>
 
     <p
