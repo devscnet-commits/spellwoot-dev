@@ -24,7 +24,6 @@ const PROVIDERS = [
   {
     key: 'openai',
     name: 'OpenAI',
-    managedByEnv: true,
     description: 'Integração com modelos GPT para respostas automáticas.',
     icon: 'i-lucide-brain',
     fields: [
@@ -35,7 +34,6 @@ const PROVIDERS = [
   {
     key: 'evolution_api',
     name: 'Evolution API',
-    managedByEnv: true,
     description: 'Integração com Evolution API para WhatsApp.',
     icon: 'i-lucide-message-square',
     testable: true,
@@ -50,13 +48,16 @@ const PROVIDERS = [
     name: 'UazAPI',
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
-    managedByEnv: true,
-    fields: [],
+    testable: true,
+    fields: [
+      { key: 'apiUrl', label: 'URL do servidor', sensitive: false, placeholder: 'https://seu-servidor.uazapi.com', help: null },
+      { key: 'token', label: 'Admin Token', sensitive: true, placeholder: '', help: null },
+      { key: 'webhookBaseUrl', label: 'URL base de webhooks (opcional)', sensitive: false, placeholder: 'https://sandbox.suaempresa.com.br', help: null },
+    ],
   },
   {
     key: 'bitrix',
     name: 'Bitrix24',
-    managedByEnv: true,
     description: 'Integração com CRM Bitrix24.',
     icon: 'i-lucide-building-2',
     fields: [
@@ -67,7 +68,6 @@ const PROVIDERS = [
   {
     key: 'n8n',
     name: 'N8N',
-    managedByEnv: true,
     description: 'Automação de fluxos via N8N.',
     icon: 'i-lucide-workflow',
     fields: [
@@ -516,7 +516,7 @@ const testConnection = async providerKey => {
             </div>
             <button
               class="px-4 py-1.5 rounded-lg bg-n-brand text-white text-body-small font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              :disabled="state[provider.key].saving"
+              :disabled="state[provider.key].saving || !state[provider.key].dirty"
               @click="saveProvider(provider.key)"
             >
               {{ state[provider.key].saving ? t('INTEGRATIONS_HUB.SAVING') : t('INTEGRATIONS_HUB.SAVE') }}
