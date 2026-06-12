@@ -8,7 +8,6 @@ import SettingsLayout from '../SettingsLayout.vue';
 import MetaConversionSettings from 'dashboard/components-next/ConversationWorkflow/MetaConversionSettings.vue';
 import OperationalFlowsManager from 'dashboard/routes/dashboard/settings/operationalFlows/OperationalFlowsManager.vue';
 import TimeFlowMapper from 'dashboard/routes/dashboard/settings/operationalFlows/TimeFlowMapper.vue';
-import CaixaFlowMapper from 'dashboard/routes/dashboard/settings/operationalFlows/CaixaFlowMapper.vue';
 import AutoResolve from 'dashboard/routes/dashboard/settings/account/components/AutoResolve.vue';
 
 const { accountId } = useAccount();
@@ -39,7 +38,6 @@ const showAutoResolutionConfig = computed(() => {
         <AutoResolve v-if="showAutoResolutionConfig" />
         <OperationalFlowsManager />
         <TimeFlowMapper />
-        <CaixaFlowMapper />
         <MetaConversionSettings />
       </div>
     </template>

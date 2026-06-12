@@ -1,7 +1,6 @@
 # Resolves which OperationalFlow (Closing Flow) applies to a conversation. Teams carry the
-# flow: the conversation's assigned team decides; without a team, the assignee's (single)
-# team decides; the caixa's flow is the fallback for dedicated channels. Returns the flow
-# only when it is active.
+# flow: the conversation's assigned team decides; without a team, the (single) team of the
+# assignee decides. Returns the flow only when it is active.
 class Conversations::FlowResolver
   def initialize(conversation:, user: nil)
     @conversation = conversation
@@ -9,7 +8,7 @@ class Conversations::FlowResolver
   end
 
   def flow
-    resolved = team_flow || assignee_team_flow || @conversation.inbox&.operational_flow
+    resolved = team_flow || assignee_team_flow
     resolved if resolved&.active
   end
 

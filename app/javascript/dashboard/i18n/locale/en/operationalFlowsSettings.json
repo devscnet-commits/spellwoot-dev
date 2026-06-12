@@ -106,15 +106,6 @@
         "ADD": "Add requirement"
       }
     },
-    "CAIXA_FLOWS": {
-      "HEADER": "Caixas → Fluxo de fechamento (reserva)",
-      "DESCRIPTION": "Usado apenas quando a conversa não tem time nem agente de um time: vale o fluxo da caixa. Útil pra números dedicados a uma única função.",
-      "NONE": "Sem fluxo",
-      "INACTIVE": "inativo",
-      "EMPTY": "Nenhuma caixa de entrada encontrada.",
-      "SAVE_SUCCESS": "Fluxo da caixa atualizado",
-      "SAVE_ERROR": "Não foi possível atualizar o fluxo da caixa"
-    },
     "TIME_FLOWS": {
       "HEADER": "Times → Fluxo de fechamento",
       "DESCRIPTION": "O fluxo segue o time da conversa: time atribuído à conversa ou, sem ele, o time do agente que atendeu. Configure aqui qual fluxo cada time usa.",
