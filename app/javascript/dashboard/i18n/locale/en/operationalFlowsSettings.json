@@ -48,7 +48,7 @@
         }
       },
       "STATES": {
-        "LABEL": "Resolution states (closing buttons)",
+        "LABEL": "Estados do fluxo",
         "DISPLAY_LABEL": "Button label",
         "POLARITY": "Polarity",
         "POLARITY_OPTIONS": {
@@ -84,15 +84,15 @@
       },
       "USED_BY": {
         "TITLE": "This flow is used by:",
-        "MANAGE": "Gerenciar caixas →",
-        "EMPTY": "Nenhuma caixa usa este fluxo ainda."
+        "MANAGE": "Gerenciar times →",
+        "EMPTY": "Nenhum time usa este fluxo ainda."
       },
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Closing flow created successfully",
       "UPDATE_SUCCESS": "Closing flow updated successfully",
       "ERROR_MESSAGE": "Could not save the closing flow",
       "REQUIREMENTS": {
-        "LABEL": "Required attributes to close",
+        "LABEL": "Atributos obrigatórios do fluxo",
         "HELP": "Attributes the agent must fill before resolving as one of these states.",
         "SELECT_ATTRIBUTE": "Select an attribute",
         "ALWAYS": "Always required",
