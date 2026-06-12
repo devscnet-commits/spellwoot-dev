@@ -46,8 +46,9 @@ const isLoading = ref(false);
 const isFlashing = ref(false);
 let flashTimer = null;
 useEmitter(BUS_EVENTS.FLASH_RESULT_SELECTOR, () => {
+  // Flash only: the resolve prompt is already open as the picker — opening this
+  // dropdown too showed two competing menus (and this one offers 'Sem resultado').
   isFlashing.value = true;
-  isDropdownOpen.value = true;
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => {
     isFlashing.value = false;

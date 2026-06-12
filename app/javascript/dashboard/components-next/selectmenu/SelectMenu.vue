@@ -67,19 +67,26 @@ const handleSelect = value => {
         'top-full mt-1 ltr:right-0 rtl:left-0': subMenuPosition === 'bottom',
       }"
     >
-      <Button
-        v-for="option in options"
-        :key="option.value"
-        :label="option.label"
-        :icon="option.value === modelValue ? 'i-lucide-check' : ''"
-        size="sm"
-        variant="ghost"
-        color="slate"
-        trailing-icon
-        class="!justify-end !px-2.5 !h-7"
-        :class="{ '!bg-n-alpha-2': option.value === modelValue }"
-        @click="handleSelect(option.value)"
-      />
+      <template v-for="option in options" :key="option.value">
+        <span
+          v-if="option.type === 'header'"
+          class="px-2.5 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-n-slate-10 text-right"
+        >
+          {{ option.label }}
+        </span>
+        <Button
+          v-else
+          :label="option.label"
+          :icon="option.value === modelValue ? 'i-lucide-check' : ''"
+          size="sm"
+          variant="ghost"
+          color="slate"
+          trailing-icon
+          class="!justify-end !px-2.5 !h-7"
+          :class="{ '!bg-n-alpha-2': option.value === modelValue }"
+          @click="handleSelect(option.value)"
+        />
+      </template>
     </div>
   </div>
 </template>

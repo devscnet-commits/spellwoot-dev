@@ -89,7 +89,7 @@
         "TEXT": "Pending Response: Shortest first"
       },
       "priority_desc_created_at_asc": {
-        "TEXT": "Priority: Highest first, Created: Oldest first"
+        "TEXT": "Prioridade: Altas primeiro, antigas no topo"
       }
     },
     "ATTACHMENTS": {
@@ -155,6 +155,23 @@
     "STATUS_TOGGLE": {
       "open": "Em aberto",
       "resolved": "Resolvidas"
+    },
+    "SORT_GROUPS": {
+      "last_activity": "Última atividade",
+      "created_at": "Criado em",
+      "priority": "Prioridade",
+      "waiting_since": "Resposta pendente"
+    },
+    "SORT_SHORT": {
+      "last_activity_at_desc": "Recentes primeiro",
+      "last_activity_at_asc": "Mais antigas primeiro",
+      "created_at_desc": "Recentes primeiro",
+      "created_at_asc": "Antigas primeiro",
+      "priority_desc": "Altas primeiro",
+      "priority_asc": "Baixas primeiro",
+      "priority_desc_created_at_asc": "Altas primeiro, antigas no topo",
+      "waiting_since_asc": "Mais longas primeiro",
+      "waiting_since_desc": "Mais curtas primeiro"
     }
   }
 }
