@@ -75,6 +75,8 @@ class IntegrationSettingsService
       test_uazapi(config)
     when 'evolution_api'
       test_evolution_api(config)
+    when 'openai'
+      test_openai(config)
     else
       { ok: false, message: 'Teste de conexão não disponível para este provedor.' }
     end
@@ -143,6 +145,27 @@ class IntegrationSettingsService
       { ok: false, message: "#{success.size} ok, #{failed.size} com erro: #{failed.map { |f| f[:instance] }.join(', ')}" }
     else
       { ok: false, message: "Falha em todas as conexões: #{failed.map { |f| "#{f[:instance]}: #{f[:message]}" }.join(' | ')}" }
+    end
+  end
+
+  def self.test_openai(config)
+    api_key = config['apiKey']
+    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
+
+    response = HTTParty.get('https://api.openai.com/v1/models',
+                            headers: { 'Authorization' => "Bearer #{api_key}" }, timeout: 10)
+    if response.success?
+      model = config['model'].presence
+      known = Array(response.parsed_response['data']).map { |m| m['id'] }
+      if model.present? && known.exclude?(model)
+        { ok: true, message: "Chave válida, mas o modelo \"#{model}\" não foi encontrado na sua conta." }
+      else
+        { ok: true, message: 'Conexão bem-sucedida. Chave válida.' }
+      end
+    elsif response.code == 401
+      { ok: false, message: 'Chave inválida ou revogada (401).' }
+    else
+      { ok: false, message: "Erro #{response.code}: #{response.message}" }
     end
   end
 

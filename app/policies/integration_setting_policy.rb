@@ -1,4 +1,9 @@
 class IntegrationSettingPolicy < ApplicationPolicy
+  # Covers ProviderInstancesController#index, which authorizes against this policy.
+  def index?
+    @account_user.administrator?
+  end
+
   def show?
     @account_user.administrator?
   end

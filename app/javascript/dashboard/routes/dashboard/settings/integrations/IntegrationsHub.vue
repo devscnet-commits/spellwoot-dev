@@ -26,6 +26,7 @@ const PROVIDERS = [
     name: 'OpenAI',
     description: 'Integração com modelos GPT para respostas automáticas.',
     icon: 'i-lucide-brain',
+    testable: true,
     fields: [
       { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: 'sk-...', help: 'https://platform.openai.com/api-keys' },
       { key: 'model', label: 'Modelo padrão', sensitive: false, placeholder: 'gpt-4o', help: null },
@@ -49,6 +50,7 @@ const PROVIDERS = [
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
     testable: true,
+    syncInstances: true,
     fields: [
       { key: 'apiUrl', label: 'URL do servidor', sensitive: false, placeholder: 'https://seu-servidor.uazapi.com', help: null },
       { key: 'token', label: 'Admin Token', sensitive: true, placeholder: '', help: null },
