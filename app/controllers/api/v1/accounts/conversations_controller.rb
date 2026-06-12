@@ -156,14 +156,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
     end
 
-    @conversation.update!(custom_attributes: merged_attributes) if attrs.present?
-
     Conversations::ResultService.new(
       conversation: @conversation,
       outcome: outcome,
       user: Current.user,
       reason: params[:reason],
-      ip_address: request.ip
+      ip_address: request.ip,
+      custom_attributes: (attrs.present? ? merged_attributes : nil)
     ).perform
 
     fire_meta_close_event(outcome) if outcome.present? && valid_close_outcome?(outcome)
@@ -184,14 +183,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
     return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
 
-    @conversation.custom_attributes = merged_attributes if attrs.present?
-
     Conversations::ResultService.new(
       conversation: @conversation,
       outcome: outcome,
       user: Current.user,
       reason: params[:reason],
-      ip_address: request.ip
+      ip_address: request.ip,
+      custom_attributes: (attrs.present? ? merged_attributes : nil)
     ).perform
 
     # Resolve through the normal path so resolution side effects run: waiting_since is

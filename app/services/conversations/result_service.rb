@@ -8,12 +8,16 @@ class Conversations::ResultService
   # resolution state's canonical_key (a support "resolved"/positive still aggregates as a win).
   RESULT_BY_POLARITY = { 'positive' => 'won', 'negative' => 'lost', 'neutral' => 'none' }.freeze
 
-  def initialize(conversation:, outcome:, user: nil, reason: nil, ip_address: nil)
+  def initialize(conversation:, outcome:, user: nil, reason: nil, ip_address: nil, custom_attributes: nil)
     @conversation = conversation
     @outcome = outcome.to_s
     @user = user
     @reason = reason.presence
     @ip_address = ip_address
+    # Persisted in the same commit as the result: a separate custom_attributes update fires
+    # a conversation.updated event with the result still unset, and that stale payload can
+    # arrive after the optimistic UI update and wipe the chip until a refresh.
+    @custom_attributes = custom_attributes
     @flow = @conversation.operational_flow(user)
     @state = @flow&.state_for(@outcome) unless @outcome == AI_CLOSED
     @result = compute_result
@@ -51,6 +55,7 @@ class Conversations::ResultService
 
   def update_attributes
     {
+      **(@custom_attributes.present? ? { custom_attributes: @custom_attributes } : {}),
       result: @result,
       result_reason: @reason,
       result_category: category,
