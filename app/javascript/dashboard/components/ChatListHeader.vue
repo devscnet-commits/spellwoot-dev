@@ -21,7 +21,6 @@ const emit = defineEmits([
   'filtersModal',
 ]);
 
-
 const onBasicFilterChange = (value, type) => {
   emit('basicFilterChange', value, type);
 };
@@ -32,7 +31,6 @@ const hasAppliedFiltersOrActiveFolders = computed(() => {
 
 const allCount = computed(() => props.conversationStats?.allCount || 0);
 const formattedAllCount = computed(() => formatNumber(allCount.value));
-
 </script>
 
 <template>
@@ -70,10 +68,7 @@ const formattedAllCount = computed(() => formatNumber(allCount.value));
             faded
             @click="emit('addFolders')"
           />
-          <div
-            id="saveFilterTeleportTarget"
-            class="absolute z-50 mt-2"
-          />
+          <div id="saveFilterTeleportTarget" class="absolute z-50 mt-2" />
         </div>
         <NextButton
           v-tooltip.top-end="$t('FILTER.CLEAR_BUTTON_LABEL')"
@@ -120,10 +115,7 @@ const formattedAllCount = computed(() => formatNumber(allCount.value));
           faded
           @click="emit('filtersModal')"
         />
-        <div
-          id="conversationFilterTeleportTarget"
-          class="absolute z-50 mt-2"
-        />
+        <div id="conversationFilterTeleportTarget" class="absolute z-50 mt-2" />
       </div>
       <ConversationBasicFilter
         v-if="!hasAppliedFiltersOrActiveFolders"
