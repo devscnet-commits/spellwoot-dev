@@ -877,7 +877,6 @@ onMounted(() => {
       </SettingsToggleSection>
     </SettingsAccordion>
 
-
     <woot-modal
       v-if="showDeleteConfirmModal"
       :show="showDeleteConfirmModal"
