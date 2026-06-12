@@ -59,7 +59,9 @@ const allAttributeOptions = computed(() =>
   }))
 );
 
-const TEXT_LIKE = [ATTRIBUTE_TYPES.TEXT, ATTRIBUTE_TYPES.LINK];
+// Lists count as text: Chatwoot stores the selected option's text as the attribute value,
+// so it can be hashed and sent to Meta as-is (e.g. Cidade configured as a list).
+const TEXT_LIKE = [ATTRIBUTE_TYPES.TEXT, ATTRIBUTE_TYPES.LINK, ATTRIBUTE_TYPES.LIST];
 const ENRICHMENT_FIELD_TYPES = {
   em: TEXT_LIKE,
   zp: [...TEXT_LIKE, ATTRIBUTE_TYPES.NUMBER],

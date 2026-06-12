@@ -41,7 +41,8 @@
     "SORT_TOOLTIP_LABEL": "Ordenar conversas",
     "CHAT_SORT": {
       "STATUS": "Status",
-      "ORDER_BY": "Ordenar por"
+      "ORDER_BY": "Ordenar por",
+      "ORIGIN": "Origem"
     },
     "CHAT_TIME_STAMP": {
       "CREATED": {
@@ -145,6 +146,14 @@
     "STATUS_TOGGLE": {
       "open": "Em aberto",
       "resolved": "Resolvidas"
+    },
+    "CHAT_ORIGIN_FILTER_ITEMS": {
+      "all": {
+        "TEXT": "Todas"
+      },
+      "reopened": {
+        "TEXT": "Reabertas"
+      }
     }
   }
 }

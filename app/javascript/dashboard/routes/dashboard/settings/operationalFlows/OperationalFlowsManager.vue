@@ -63,6 +63,11 @@ const deleteConfirmText = computed(
 const deleteRejectText = computed(() =>
   t('OPERATIONAL_FLOWS_SETTINGS.DELETE.CONFIRM.NO')
 );
+const confirmPlaceHolderText = computed(() =>
+  t('OPERATIONAL_FLOWS_SETTINGS.DELETE.CONFIRM.PLACE_HOLDER', {
+    name: selectedFlow.value?.name,
+  })
+);
 const confirmDeleteTitle = computed(() =>
   t('OPERATIONAL_FLOWS_SETTINGS.DELETE.CONFIRM.TITLE', {
     flowName: selectedFlow.value.name,
@@ -181,6 +186,7 @@ const confirmDeleteTitle = computed(() =>
       :confirm-text="deleteConfirmText"
       :reject-text="deleteRejectText"
       :confirm-value="selectedFlow.name"
+      :confirm-place-holder-text="confirmPlaceHolderText"
       @on-confirm="confirmDeletion"
       @on-close="closeDelete"
     />

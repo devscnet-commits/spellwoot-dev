@@ -42,14 +42,14 @@
     "CHAT_SORT": {
       "STATUS": "Status",
       "ORDER_BY": "Order by",
-      "ORIGIN": "Origin"
+      "ORIGIN": "Origem"
     },
     "CHAT_ORIGIN_FILTER_ITEMS": {
       "all": {
-        "TEXT": "All"
+        "TEXT": "Todas"
       },
       "reopened": {
-        "TEXT": "Reopened"
+        "TEXT": "Reabertas"
       }
     },
     "REOPENED_BADGE": "REABERTA",

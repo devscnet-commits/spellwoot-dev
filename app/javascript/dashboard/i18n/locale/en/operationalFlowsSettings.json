@@ -19,9 +19,10 @@
       },
       "CONFIRM": {
         "TITLE": "Delete {flowName}?",
-        "MESSAGE": "Are you sure you want to delete this closing flow? Rules using it will fall back to no flow.",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
         "YES": "Yes, delete",
-        "NO": "Cancel"
+        "NO": "Cancel",
+        "PLACE_HOLDER": "Escreva {name} para confirmar"
       }
     },
     "FORM": {

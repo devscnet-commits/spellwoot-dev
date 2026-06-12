@@ -19,9 +19,10 @@
       },
       "CONFIRM": {
         "TITLE": "Excluir {flowName}?",
-        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? As regras que o utilizam ficarão sem fluxo.",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
         "YES": "Sim, excluir",
-        "NO": "Cancelar"
+        "NO": "Cancelar",
+        "PLACE_HOLDER": "Escreva {name} para confirmar"
       }
     },
     "FORM": {
