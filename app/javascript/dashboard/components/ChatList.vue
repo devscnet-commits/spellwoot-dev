@@ -242,7 +242,9 @@ const assigneeTabItems = computed(() =>
   ).map(({ key, count: countKey }) => ({
     key,
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-    count: conversationStats.value[countKey] || 0,
+    // 'Todas' next to identical sub-counts reads as a contradiction — the counter only
+    // earns its place on the scoped tabs.
+    count: key === 'all' ? 0 : conversationStats.value[countKey] || 0,
   }))
 );
 
@@ -1037,24 +1039,27 @@ watch(conversationFilters, (newVal, oldVal) => {
       @chat-tab-change="updateAssigneeTab"
     />
 
-    <!-- Status axis, independent from the assignee tabs: a segmented control so the two
-         questions read separately — "which conversations?" (tabs) and "which status?" -->
+    <!-- Status axis, independent from the assignee tabs: labelled and breathing room apart,
+         underline style on the active option — two clearly separate decisions. -->
     <div
       v-if="!hasAppliedFiltersOrActiveFolders"
-      class="flex items-center px-3 pb-2"
+      class="flex flex-col gap-0.5 px-3 mt-2 pb-2"
     >
-      <div
-        class="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-n-alpha-2"
+      <span
+        class="text-[10px] font-semibold uppercase tracking-wide text-n-slate-10"
       >
+        {{ $t('CHAT_LIST.STATUS_TOGGLE.LABEL') }}
+      </span>
+      <div class="flex items-center gap-4">
         <button
           v-for="statusOption in ['open', 'resolved']"
           :key="statusOption"
           type="button"
-          class="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+          class="pb-1 text-xs font-medium border-b-2 transition-colors"
           :class="
             activeStatus === statusOption
-              ? 'bg-n-solid-1 text-n-slate-12 shadow-sm'
-              : 'text-n-slate-11 hover:text-n-slate-12'
+              ? 'text-n-blue-11 border-n-brand'
+              : 'text-n-slate-11 border-transparent hover:text-n-slate-12'
           "
           @click="updateListStatus(statusOption)"
         >
