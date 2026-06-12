@@ -1226,7 +1226,8 @@
       "CANCEL": "Cancelar",
       "CONFIRM_DELETE": "Excluir",
       "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
-      "DELETE_ERROR": "Falha ao remover política de atribuição"
+      "DELETE_ERROR": "Falha ao remover política de atribuição",
+      "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
     }
   }
 }
