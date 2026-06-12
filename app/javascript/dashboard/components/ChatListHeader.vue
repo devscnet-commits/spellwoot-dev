@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue';
-import { useUISettings } from 'dashboard/composables/useUISettings';
 import { formatNumber } from '@chatwoot/utils';
 
 import ConversationBasicFilter from './widgets/conversation/ConversationBasicFilter.vue';
@@ -10,7 +9,6 @@ const props = defineProps({
   pageTitle: { type: String, required: true },
   hasAppliedFilters: { type: Boolean, required: true },
   hasActiveFolders: { type: Boolean, required: true },
-  activeStatus: { type: String, required: true },
   conversationStats: { type: Object, required: true },
   isListLoading: { type: Boolean, required: true },
 });
@@ -23,7 +21,6 @@ const emit = defineEmits([
   'filtersModal',
 ]);
 
-const { uiSettings, updateUISettings } = useUISettings();
 
 const onBasicFilterChange = (value, type) => {
   emit('basicFilterChange', value, type);

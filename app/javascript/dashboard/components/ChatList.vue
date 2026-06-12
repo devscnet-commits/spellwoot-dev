@@ -1000,7 +1000,6 @@ watch(conversationFilters, (newVal, oldVal) => {
       :page-title="pageTitle"
       :has-applied-filters="hasAppliedFilters"
       :has-active-folders="hasActiveFolders"
-      :active-status="activeStatus"
       :conversation-stats="conversationStats"
       :is-list-loading="chatListLoading && !conversationList.length"
       @add-folders="onClickOpenAddFoldersModal"
