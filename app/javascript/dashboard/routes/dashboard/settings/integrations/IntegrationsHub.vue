@@ -24,6 +24,7 @@ const PROVIDERS = [
   {
     key: 'openai',
     name: 'OpenAI',
+    managedByEnv: true,
     description: 'Integração com modelos GPT para respostas automáticas.',
     icon: 'i-lucide-brain',
     fields: [
@@ -34,6 +35,7 @@ const PROVIDERS = [
   {
     key: 'evolution_api',
     name: 'Evolution API',
+    managedByEnv: true,
     description: 'Integração com Evolution API para WhatsApp.',
     icon: 'i-lucide-message-square',
     testable: true,
@@ -54,6 +56,7 @@ const PROVIDERS = [
   {
     key: 'bitrix',
     name: 'Bitrix24',
+    managedByEnv: true,
     description: 'Integração com CRM Bitrix24.',
     icon: 'i-lucide-building-2',
     fields: [
@@ -64,6 +67,7 @@ const PROVIDERS = [
   {
     key: 'n8n',
     name: 'N8N',
+    managedByEnv: true,
     description: 'Automação de fluxos via N8N.',
     icon: 'i-lucide-workflow',
     fields: [
@@ -74,6 +78,7 @@ const PROVIDERS = [
   {
     key: 'google',
     name: 'Google',
+    managedByEnv: true,
     description: 'Integração com APIs Google.',
     icon: 'i-lucide-search',
     fields: [
@@ -90,10 +95,9 @@ const SOURCE_LABELS = {
   env:     { label: 'Servidor',  color: 'bg-n-slate-3 text-n-slate-11' },
 };
 
-// Temporary safe mode: serve every integration as environment-managed (read-only),
-// so credentials come from server ENV vars and the UI never writes integration_settings.
-// Flip to false to re-enable per-account editing once the settings endpoint is sorted.
-const FORCE_ENV_MANAGED = true;
+// Per-account editing rolls out provider by provider: those still marked managedByEnv
+// stay read-only (credentials from server ENV) until their flows are validated.
+const FORCE_ENV_MANAGED = false;
 const isEnvManaged = provider => FORCE_ENV_MANAGED || provider.managedByEnv;
 
 const getConfigSource = providerKey => {

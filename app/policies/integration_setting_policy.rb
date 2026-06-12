@@ -18,4 +18,8 @@ class IntegrationSettingPolicy < ApplicationPolicy
   def sync_chatwoot?
     @account_user.administrator?
   end
+
+  def sync_instances?
+    @account_user.administrator?
+  end
 end
