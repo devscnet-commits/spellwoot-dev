@@ -310,6 +310,9 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     return false unless Current.user.is_a?(User)
     return false unless resolving_to_resolved?
     return false unless @conversation.result_none?
+    # No flow configured for this conversation -> there is nothing to pick; resolving
+    # plainly is allowed (the UI shows the "nenhum fluxo configurado" warning instead).
+    return false if @conversation.operational_flow.blank?
 
     render json: { error: I18n.t('errors.conversations.result_required') }, status: :unprocessable_entity
     true

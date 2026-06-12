@@ -298,7 +298,13 @@
       "JOIN_CALL": "Join call",
       "END_CALL": "End call"
     },
-    "REOPENED_TAG": "Reopened"
+    "REOPENED_TAG": "Reopened",
+    "TEAM_CHANGE_WARNING": {
+      "TITLE": "⚠️ Esta conversa já tem resultado de fechamento",
+      "MESSAGE": "O resultado e os atributos preenchidos pertencem ao fluxo do time atual. Ao trocar o time, o fluxo muda e essas informações podem perder o sentido nos relatórios. Se o cliente trouxe um assunto novo, prefira criar uma nova conversa em vez de reaproveitar esta.",
+      "CONFIRM": "Trocar mesmo assim",
+      "CANCEL": "Cancelar"
+    }
   },
   "EMAIL_TRANSCRIPT": {
     "TITLE": "Send conversation transcript",

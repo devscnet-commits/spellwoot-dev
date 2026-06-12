@@ -72,30 +72,19 @@ const POLARITY_STYLE = {
 
 // Resolution states from the resolved closing flow, with a legacy won/lost fallback when the
 // conversation has no flow.
+// Resolution states from the resolved closing flow. No fallback pair: a conversation
+// without a flow shows the "nenhum fluxo configurado" warning and resolves plainly.
 const outcomeStates = computed(() => {
   const states = closingFlow.value?.resolution_states;
-  if (states?.length) {
-    return [...states]
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(s => ({
-        outcome: s.canonical_key,
-        label: s.display_label,
-        stateId: s.id,
-        ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
-      }));
-  }
-  return [
-    {
-      outcome: 'won',
-      label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
-      ...POLARITY_STYLE.positive,
-    },
-    {
-      outcome: 'lost',
-      label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
-      ...POLARITY_STYLE.negative,
-    },
-  ];
+  if (!states?.length) return [];
+  return [...states]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(s => ({
+      outcome: s.canonical_key,
+      label: s.display_label,
+      stateId: s.id,
+      ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
+    }));
 });
 
 const fetchClosingFlow = async () => {
@@ -221,8 +210,13 @@ const onCmdResolveConversation = async () => {
 
   // Human handled but no outcome yet → a human can never resolve without a result:
   // prompt for the flow's resolution states and flash the result selector in red.
+  // Without a configured flow there is nothing to pick, so resolve plainly.
   if (!outcomeAlreadySet.value) {
-    fetchClosingFlow();
+    await fetchClosingFlow();
+    if (!closingFlow.value?.resolution_states?.length) {
+      toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
+      return;
+    }
     showOutcomePrompt.value = true;
     emitter.emit(BUS_EVENTS.FLASH_RESULT_SELECTOR);
     return;

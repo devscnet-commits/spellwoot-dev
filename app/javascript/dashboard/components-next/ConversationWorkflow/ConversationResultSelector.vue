@@ -123,24 +123,28 @@ const NONE_OPTION = {
   hoverClass: 'hover:bg-n-alpha-black2',
 };
 
+// Whether this conversation's closing flow is known yet / configured at all. Without a
+// flow we never show a fake Ganho/Perdido pair — a warning chip takes the field's place.
+const flowLoaded = computed(
+  () => closingFlowForId.value === currentChat.value?.id
+);
+const hasFlow = computed(() => !!closingFlow.value?.resolution_states?.length);
+const showNoFlowWarning = computed(
+  () => flowLoaded.value && !hasFlow.value && !outcome.value
+);
+
 const resultOptions = computed(() => {
   const states = closingFlow.value?.resolution_states;
-  if (states?.length) {
-    return [
-      ...[...states]
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map(s => ({
-          key: s.canonical_key,
-          label: s.display_label,
-          stateId: s.id,
-          ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
-        })),
-      NONE_OPTION,
-    ];
-  }
+  if (!states?.length) return [NONE_OPTION];
   return [
-    { key: 'won', label: null, ...POLARITY_STYLE.positive },
-    { key: 'lost', label: null, ...POLARITY_STYLE.negative },
+    ...[...states]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(s => ({
+        key: s.canonical_key,
+        label: s.display_label,
+        stateId: s.id,
+        ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
+      })),
     NONE_OPTION,
   ];
 });
@@ -303,7 +307,15 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
     v-on-click-outside="() => (isDropdownOpen = false)"
     class="relative"
   >
+    <span
+      v-if="showNoFlowWarning"
+      class="flex items-center gap-1.5 h-10 px-3 rounded-lg text-sm font-medium border border-n-weak bg-n-solid-1 text-n-slate-11"
+      :title="$t('CONVERSATION_WORKFLOW.OUTCOME.NO_FLOW_HINT')"
+    >
+      ⚠️ {{ $t('CONVERSATION_WORKFLOW.OUTCOME.NO_FLOW') }}
+    </span>
     <button
+      v-else
       type="button"
       class="flex items-center gap-1.5 h-10 px-3 rounded-lg text-sm font-medium transition-opacity border bg-n-solid-1"
       :class="[
