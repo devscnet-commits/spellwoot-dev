@@ -877,32 +877,23 @@ onMounted(() => {
       </SettingsToggleSection>
     </SettingsAccordion>
 
-    <woot-modal
+    <!-- Unlinking the assignment policy changes how every conversation in the caixa is
+         distributed — big-impact unlinks require typing the name to confirm. -->
+    <woot-confirm-delete-modal
       v-if="showDeleteConfirmModal"
-      :show="showDeleteConfirmModal"
-      :on-close="cancelDeletePolicy"
-    >
-      <div class="p-6">
-        <h3 class="text-lg font-medium text-n-slate-12 mb-4">
-          {{ $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_TITLE') }}
-        </h3>
-        <p class="text-sm text-n-slate-11 mb-6 ml-13">
-          {{ $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_MESSAGE') }}
-        </p>
-        <div class="flex justify-end gap-2">
-          <NextButton
-            color="slate"
-            :label="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CANCEL')"
-            @click="cancelDeletePolicy"
-          />
-          <NextButton
-            color="ruby"
-            :label="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CONFIRM_DELETE')"
-            :is-loading="isDeletingPolicy"
-            @click="deleteAssignmentPolicy"
-          />
-        </div>
-      </div>
-    </woot-modal>
+      v-model:show="showDeleteConfirmModal"
+      :title="$t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_TITLE')"
+      :message="$t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_MESSAGE')"
+      :confirm-text="`${$t('INBOX_MGMT.ASSIGNMENT_POLICY.CONFIRM_DELETE')} ${assignmentPolicy?.name}`"
+      :reject-text="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CANCEL')"
+      :confirm-value="assignmentPolicy?.name"
+      :confirm-place-holder-text="
+        $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_PLACE_HOLDER', {
+          name: assignmentPolicy?.name,
+        })
+      "
+      @on-confirm="deleteAssignmentPolicy"
+      @on-close="cancelDeletePolicy"
+    />
   </div>
 </template>
