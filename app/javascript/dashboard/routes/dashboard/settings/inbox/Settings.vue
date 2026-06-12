@@ -878,7 +878,7 @@ export default {
                     class="!w-24 flex-none px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
                   />
                   <span
-                    class="text-sm leading-none text-n-slate-11 flex-none self-center"
+                    class="text-sm text-n-slate-11 flex-none self-stretch inline-flex items-center"
                   >
                     {{
                       $t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HOURS_SUFFIX')
