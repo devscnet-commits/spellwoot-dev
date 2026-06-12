@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useAlert } from 'dashboard/composables';
@@ -125,6 +125,14 @@ const state = reactive(
     ])
   )
 );
+
+// Load every editable provider's status on entry so the Configurado badges show
+// without having to expand each card.
+onMounted(() => {
+  PROVIDERS.forEach(provider => {
+    if (!isEnvManaged(provider)) loadProvider(provider.key);
+  });
+});
 
 const loadProvider = async providerKey => {
   const s = state[providerKey];
