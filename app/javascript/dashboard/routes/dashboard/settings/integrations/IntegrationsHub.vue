@@ -449,7 +449,13 @@ const testConnection = async providerKey => {
                     inst.status === 'connected' ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-slate-3 text-n-slate-11'
                   ]"
                 >
-                  {{ inst.status === 'connected' ? 'Conectada' : inst.status }}
+                  {{
+                    inst.status === 'connected'
+                      ? 'Conectada'
+                      : inst.status === 'disconnected'
+                        ? 'Desconectada'
+                        : inst.status
+                  }}
                 </span>
               </div>
             </div>

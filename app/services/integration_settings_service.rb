@@ -234,7 +234,8 @@ class IntegrationSettingsService
       )
       pi.assign_attributes(
         instance_id:  (inst['id'] || inst['instanceId']).to_s.presence,
-        phone_number: inst['phone'] || inst['phoneNumber'],
+        # UazAPI exposes the number as owner/jid ("5549...@s.whatsapp.net") on /instance/all.
+        phone_number: (inst['phone'] || inst['phoneNumber'] || inst['owner'] || inst['jid']).to_s.split('@').first.presence,
         status:       inst['status'] || 'unknown',
         raw_data:     inst
       )
