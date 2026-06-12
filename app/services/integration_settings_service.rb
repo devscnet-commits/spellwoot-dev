@@ -175,7 +175,9 @@ class IntegrationSettingsService
     return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
     return { ok: false, message: 'Token não configurado.' } if token.blank?
 
-    response = HTTParty.get("#{api_url}/instance", headers: { 'token' => token, 'Accept' => 'application/json' }, timeout: 10)
+    # Admin listing on UazAPI is GET /instance/all with the admintoken header — the
+    # instance-level 'token' header on /instance 404s.
+    response = HTTParty.get("#{api_url}/instance/all", headers: { 'admintoken' => token, 'Accept' => 'application/json' }, timeout: 10)
     if response.success?
       instances = Array(response.parsed_response)
       { ok: true, message: "Conexão bem-sucedida. #{instances.size} instância(s) encontrada(s)." }
@@ -209,8 +211,8 @@ class IntegrationSettingsService
     return { ok: false, message: 'Token não configurado.' }           if token.blank?
 
     response = HTTParty.get(
-      "#{api_url}/instance",
-      headers: { 'token' => token, 'Accept' => 'application/json' },
+      "#{api_url}/instance/all",
+      headers: { 'admintoken' => token, 'Accept' => 'application/json' },
       timeout: 15
     )
 
