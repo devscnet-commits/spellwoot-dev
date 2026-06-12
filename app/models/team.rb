@@ -23,7 +23,9 @@ class Team < ApplicationRecord
   belongs_to :operational_flow, optional: true
   has_many :team_members, dependent: :destroy_async
   has_many :members, through: :team_members, source: :user
-  has_many :team_inboxes, dependent: :destroy_async
+  # team_inboxes carries a NOT NULL foreign key to teams, so the async cleanup would leave
+  # the team delete blocked by the constraint — delete the links in-line instead.
+  has_many :team_inboxes, dependent: :delete_all
   has_many :inboxes, through: :team_inboxes
   has_many :conversations, dependent: :nullify
 
