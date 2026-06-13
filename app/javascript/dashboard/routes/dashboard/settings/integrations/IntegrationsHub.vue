@@ -117,7 +117,7 @@ const state = reactive(
     PROVIDERS.map(p => [
       p.key,
       {
-        open: false, loading: false, saving: false, importing: false,
+        open: false, loading: false, saving: false,
         testing: false, syncing: false, loadingInstances: false, clearing: false,
         testResult: null, syncResult: null, instances: [],
         enabled: true, config: {}, sources: {}, reset: {}, dirty: false,
@@ -197,24 +197,6 @@ const saveProvider = async providerKey => {
     useAlert(t('INTEGRATIONS_HUB.ERROR'));
   } finally {
     s.saving = false;
-  }
-};
-
-const importFromEnv = async providerKey => {
-  const s = state[providerKey];
-  s.importing = true;
-  try {
-    const { data } = await integrationSettingsAPI.importFromEnv(accountId.value, providerKey);
-    if (data.imported > 0) {
-      await loadProvider(providerKey);
-      useAlert(`${data.imported} variáveis importadas do servidor.`);
-    } else {
-      useAlert('Nenhuma variável de ambiente encontrada para este provedor.');
-    }
-  } catch {
-    useAlert(t('INTEGRATIONS_HUB.ERROR'));
-  } finally {
-    s.importing = false;
   }
 };
 
@@ -522,14 +504,6 @@ const testConnection = async providerKey => {
           <!-- Action buttons -->
           <div class="flex items-center justify-between pt-2 border-t border-n-weak/50">
             <div class="flex items-center gap-3">
-              <button
-                class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
-                :disabled="state[provider.key].importing"
-                @click="importFromEnv(provider.key)"
-              >
-                <span class="i-lucide-download w-3.5 h-3.5" />
-                {{ state[provider.key].importing ? 'Importando...' : 'Importar do servidor' }}
-              </button>
               <button
                 v-if="provider.testable"
                 class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
