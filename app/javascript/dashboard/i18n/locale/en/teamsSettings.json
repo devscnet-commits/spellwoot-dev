@@ -3,7 +3,7 @@
     "NEW_TEAM": "Criar novo time",
     "HEADER": "Times",
     "LOADING": "Buscando times",
-    "DESCRIPTION": "Os times permitem organizar os agentes em grupos de acordo com suas responsabilidades. Um agente pode pertencer a vários times. Trabalhando em conjunto, você pode atribuir conversas a times específicos.",
+    "DESCRIPTION": "Os times organizam os agentes por função (ex.: vendas, suporte) e definem o fluxo de fechamento das conversas que eles atendem. Cada agente pertence a um único time.",
     "LEARN_MORE": "Saiba mais sobre times",
     "COUNT": "{n} time | {n} times",
     "SEARCH_PLACEHOLDER": "Buscar times...",
@@ -56,7 +56,7 @@
       "MEMBER_REMOVED": "Integrante removido do time.",
       "ADD_TO_CAIXAS": {
         "TITLE": "Adicionar também nas caixas do time?",
-        "MESSAGE": "{agent} entrou no time. Deseja adicioná-lo também como agente das caixas vinculadas ao time ({inboxes})? Assim ele já atende e participa do fluxo de fechamento dessas caixas.",
+        "MESSAGE": "{agent} entrou no time. Deseja adicioná-lo também como agente das caixas vinculadas ao time ({inboxes})? Assim ele já atende nessas caixas com o fluxo do time.",
         "CONFIRM": "Sim, adicionar nas caixas",
         "SKIP": "Agora não",
         "SUCCESS": "{agent} adicionado nas caixas do time."
@@ -117,7 +117,8 @@
       "ADD_AGENTS": "Adicionando agentes ao seu time...",
       "SELECT": "selecionar",
       "SELECT_ALL": "selecionar todos os agentes",
-      "SELECTED_COUNT": "{selected} de {total} agentes selecionados."
+      "SELECTED_COUNT": "{selected} de {total} agentes selecionados.",
+      "ALREADY_IN_TEAM": "Já está no time {team}"
     },
     "ADD": {
       "TITLE": "Adicionar agentes ao time - {teamName}",

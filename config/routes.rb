@@ -307,7 +307,6 @@ Rails.application.routes.draw do
           end
 
           resources :operational_flows
-          resources :flow_assignment_rules, only: [:index, :create, :update, :destroy]
 
           # Assignment V2 Routes
           resources :assignment_policies do

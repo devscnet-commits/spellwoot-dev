@@ -75,6 +75,8 @@ class IntegrationSettingsService
       test_uazapi(config)
     when 'evolution_api'
       test_evolution_api(config)
+    when 'openai'
+      test_openai(config)
     else
       { ok: false, message: 'Teste de conexão não disponível para este provedor.' }
     end
@@ -146,13 +148,36 @@ class IntegrationSettingsService
     end
   end
 
+  def self.test_openai(config)
+    api_key = config['apiKey']
+    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
+
+    response = HTTParty.get('https://api.openai.com/v1/models',
+                            headers: { 'Authorization' => "Bearer #{api_key}" }, timeout: 10)
+    if response.success?
+      model = config['model'].presence
+      known = Array(response.parsed_response['data']).map { |m| m['id'] }
+      if model.present? && known.exclude?(model)
+        { ok: true, message: "Chave válida, mas o modelo \"#{model}\" não foi encontrado na sua conta." }
+      else
+        { ok: true, message: 'Conexão bem-sucedida. Chave válida.' }
+      end
+    elsif response.code == 401
+      { ok: false, message: 'Chave inválida ou revogada (401).' }
+    else
+      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+    end
+  end
+
   def self.test_uazapi(config)
     api_url = config['apiUrl'].to_s.chomp('/')
     token   = config['token']
     return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
     return { ok: false, message: 'Token não configurado.' } if token.blank?
 
-    response = HTTParty.get("#{api_url}/instance", headers: { 'token' => token, 'Accept' => 'application/json' }, timeout: 10)
+    # Admin listing on UazAPI is GET /instance/all with the admintoken header — the
+    # instance-level 'token' header on /instance 404s.
+    response = HTTParty.get("#{api_url}/instance/all", headers: { 'admintoken' => token, 'Accept' => 'application/json' }, timeout: 10)
     if response.success?
       instances = Array(response.parsed_response)
       { ok: true, message: "Conexão bem-sucedida. #{instances.size} instância(s) encontrada(s)." }
@@ -186,8 +211,8 @@ class IntegrationSettingsService
     return { ok: false, message: 'Token não configurado.' }           if token.blank?
 
     response = HTTParty.get(
-      "#{api_url}/instance",
-      headers: { 'token' => token, 'Accept' => 'application/json' },
+      "#{api_url}/instance/all",
+      headers: { 'admintoken' => token, 'Accept' => 'application/json' },
       timeout: 15
     )
 
@@ -209,7 +234,8 @@ class IntegrationSettingsService
       )
       pi.assign_attributes(
         instance_id:  (inst['id'] || inst['instanceId']).to_s.presence,
-        phone_number: inst['phone'] || inst['phoneNumber'],
+        # UazAPI exposes the number as owner/jid ("5549...@s.whatsapp.net") on /instance/all.
+        phone_number: (inst['phone'] || inst['phoneNumber'] || inst['owner'] || inst['jid']).to_s.split('@').first.presence,
         status:       inst['status'] || 'unknown',
         raw_data:     inst
       )

@@ -42,7 +42,7 @@ const contactConversations = computed(() =>
       v-for="conversation in contactConversations"
       :key="conversation.id"
       :conversation="conversation"
-      :contact="contactsById(conversation.meta.sender.id)"
+      :contact="contactsById(conversation.meta.sender?.id)"
       :state-inbox="stateInbox(conversation.inboxId)"
       :account-labels="accountLabelsValue"
       class="rounded-none hover:rounded-xl hover:bg-n-alpha-1 dark:hover:bg-n-alpha-3"

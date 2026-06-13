@@ -82,6 +82,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def toggle_status
     # FIXME: move this logic into a service object
+    return if resolving_blocked_by_missing_result?
     return if resolving_blocked_by_required_attributes?
 
     if pending_to_open_by_bot?
@@ -155,14 +156,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
     end
 
-    @conversation.update!(custom_attributes: merged_attributes) if attrs.present?
-
     Conversations::ResultService.new(
       conversation: @conversation,
       outcome: outcome,
       user: Current.user,
       reason: params[:reason],
-      ip_address: request.ip
+      ip_address: request.ip,
+      custom_attributes: (attrs.present? ? merged_attributes : nil)
     ).perform
 
     fire_meta_close_event(outcome) if outcome.present? && valid_close_outcome?(outcome)
@@ -183,14 +183,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
     return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
 
-    @conversation.custom_attributes = merged_attributes if attrs.present?
-
     Conversations::ResultService.new(
       conversation: @conversation,
       outcome: outcome,
       user: Current.user,
       reason: params[:reason],
-      ip_address: request.ip
+      ip_address: request.ip,
+      custom_attributes: (attrs.present? ? merged_attributes : nil)
     ).perform
 
     # Resolve through the normal path so resolution side effects run: waiting_since is
@@ -204,6 +203,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def close_as_ai
+    return if ai_close_blocked_for_human?
+
     Conversations::ResultService.new(
       conversation: @conversation,
       outcome: 'ai_closed',
@@ -288,6 +289,30 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       error: I18n.t('errors.conversations.required_attributes_missing'),
       missing_attributes: validator.missing_keys
     }, status: :unprocessable_entity
+    true
+  end
+
+  # The ai_closed shortcut is only for conversations the AI handled alone: a human resolving
+  # a human-handled conversation must pick a result like everywhere else.
+  def ai_close_blocked_for_human?
+    return false unless Current.user.is_a?(User)
+    return false unless @conversation.additional_attributes&.dig('was_handled_by_human')
+
+    render json: { error: I18n.t('errors.conversations.result_required') }, status: :unprocessable_entity
+    true
+  end
+
+  # A human agent can never resolve a conversation without a result picked first; system
+  # actors (bots, automations, auto-resolve jobs, close_as_ai) are intentionally exempt.
+  def resolving_blocked_by_missing_result?
+    return false unless Current.user.is_a?(User)
+    return false unless resolving_to_resolved?
+    return false unless @conversation.result_none?
+    # No flow configured for this conversation -> there is nothing to pick; resolving
+    # plainly is allowed (the UI shows the "nenhum fluxo configurado" warning instead).
+    return false if @conversation.operational_flow.blank?
+
+    render json: { error: I18n.t('errors.conversations.result_required') }, status: :unprocessable_entity
     true
   end
 

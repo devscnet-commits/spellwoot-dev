@@ -8,6 +8,8 @@ import {
   useMapGetter,
 } from 'dashboard/composables/store';
 import { useEmitter } from 'dashboard/composables/emitter';
+import { emitter } from 'shared/helpers/mitt';
+import { BUS_EVENTS } from 'shared/constants/busEvents';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
 
 import wootConstants from 'dashboard/constants/globals';
@@ -70,29 +72,19 @@ const POLARITY_STYLE = {
 
 // Resolution states from the resolved closing flow, with a legacy won/lost fallback when the
 // conversation has no flow.
+// Resolution states from the resolved closing flow. No fallback pair: a conversation
+// without a flow shows the "nenhum fluxo configurado" warning and resolves plainly.
 const outcomeStates = computed(() => {
   const states = closingFlow.value?.resolution_states;
-  if (states?.length) {
-    return [...states]
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(s => ({
-        outcome: s.canonical_key,
-        label: s.display_label,
-        ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
-      }));
-  }
-  return [
-    {
-      outcome: 'won',
-      label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
-      ...POLARITY_STYLE.positive,
-    },
-    {
-      outcome: 'lost',
-      label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
-      ...POLARITY_STYLE.negative,
-    },
-  ];
+  if (!states?.length) return [];
+  return [...states]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(s => ({
+      outcome: s.canonical_key,
+      label: s.display_label,
+      stateId: s.id,
+      ...(POLARITY_STYLE[s.polarity] || POLARITY_STYLE.neutral),
+    }));
 });
 
 const fetchClosingFlow = async () => {
@@ -168,8 +160,15 @@ const closeAsAi = async () => {
       closed_by_ai: true,
     });
     useAlert(t('CONVERSATION.CHANGE_STATUS'));
-  } catch {
-    useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
+  } catch (error) {
+    if (error?.response?.status === 422) {
+      // Backend refused the AI shortcut (human-handled conversation): ask for a result.
+      await fetchClosingFlow();
+      showOutcomePrompt.value = true;
+      emitter.emit(BUS_EVENTS.FLASH_RESULT_SELECTOR);
+    } else {
+      useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
+    }
   } finally {
     isLoading.value = false;
   }
@@ -209,10 +208,17 @@ const onCmdResolveConversation = async () => {
     return;
   }
 
-  // Human handled but no outcome yet → prompt for the flow's resolution states
+  // Human handled but no outcome yet → a human can never resolve without a result:
+  // prompt for the flow's resolution states and flash the result selector in red.
+  // Without a configured flow there is nothing to pick, so resolve plainly.
   if (!outcomeAlreadySet.value) {
-    fetchClosingFlow();
+    await fetchClosingFlow();
+    if (!closingFlow.value?.resolution_states?.length) {
+      toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
+      return;
+    }
     showOutcomePrompt.value = true;
+    emitter.emit(BUS_EVENTS.FLASH_RESULT_SELECTOR);
     return;
   }
 
@@ -269,6 +275,10 @@ const onSelectState = state => {
     label: state.label,
     statusValue: state.label,
     attributes: flowAttrs,
+    outcomeLabel: closingFlow.value?.resolution_states?.length
+      ? state.label
+      : null,
+    outcomeStateId: state.stateId || null,
   });
 };
 
@@ -301,7 +311,7 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
     <!-- Outcome prompt overlay -->
     <div
       v-if="showOutcomePrompt"
-      class="absolute bottom-full mb-2 right-0 z-50 flex flex-col gap-2 p-3 rounded-xl bg-n-solid-3 shadow-lg border border-n-weak min-w-48"
+      class="absolute top-full mt-2 right-0 z-50 flex flex-col gap-2 p-3 rounded-xl bg-n-solid-3 shadow-lg border border-n-weak min-w-48"
     >
       <p class="text-body-small text-n-slate-11 mb-1">
         {{ $t('CONVERSATION_WORKFLOW.OUTCOME.PROMPT_RESOLVE') }}
@@ -315,20 +325,6 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
         :label="state.label"
         class="w-full rounded-md"
         @click="onSelectState(state)"
-      />
-      <Button
-        size="sm"
-        variant="ghost"
-        color="slate"
-        icon="i-lucide-minus-circle"
-        :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_NO_RESULT')"
-        class="w-full rounded-md"
-        @click="
-          () => {
-            showOutcomePrompt = false;
-            toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
-          }
-        "
       />
     </div>
 

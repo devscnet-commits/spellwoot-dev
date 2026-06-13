@@ -10,6 +10,7 @@ import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import FlowSelect from 'dashboard/routes/dashboard/settings/operationalFlows/FlowSelect.vue';
 import TeamsAPI from 'dashboard/api/teams';
 
 const { t } = useI18n();
@@ -24,12 +25,17 @@ const getTeam = useMapGetter('teams/getTeam');
 const team = computed(() => getTeam.value(teamId.value));
 // Team names are stored lowercase; display them title-cased to match the teams list.
 const teamTitle = computed(() =>
-  (team.value?.name || '').replace(/(^|\s)(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase())
+  (team.value?.name || '').replace(
+    /(^|\s)(\p{L})/gu,
+    (_, sep, ch) => sep + ch.toUpperCase()
+  )
 );
 const getTeamMembers = useMapGetter('teamMembers/getTeamMembers');
 const members = computed(() => getTeamMembers.value(teamId.value) || []);
 const agentList = useMapGetter('agents/getAgents');
 const allInboxes = useMapGetter('inboxes/getInboxes');
+const allTeams = useMapGetter('teams/getTeams');
+const flows = useMapGetter('operationalFlows/getFlows');
 const membersUiFlags = useMapGetter('teamMembers/getUIFlags');
 const teamsUiFlags = useMapGetter('teams/getUIFlags');
 
@@ -43,6 +49,7 @@ const isFetchingTeam = computed(() => teamsUiFlags.value?.isFetching);
 const formName = ref('');
 const formDescription = ref('');
 const formAllowAutoAssign = ref(true);
+const formFlowId = ref('');
 const isSavingDetails = ref(false);
 
 // Members tab state
@@ -103,6 +110,19 @@ const filteredMembers = computed(() => {
   });
 });
 
+// agentId -> team name for agents already in ANOTHER team (single-team rule): they are
+// listed greyed-out so it's clear why they cannot be added here.
+const lockedAgents = computed(() => {
+  const locked = {};
+  (allTeams.value || []).forEach(other => {
+    if (other.id === teamId.value) return;
+    (other.member_ids || []).forEach(id => {
+      locked[id] = other.name;
+    });
+  });
+  return locked;
+});
+
 // Agents not yet in the team, filtered by the add-panel search.
 const availableAgents = computed(() => {
   const memberIds = new Set(members.value.map(m => m.id));
@@ -129,6 +149,7 @@ function syncFromTeam(teamData) {
   formName.value = teamData.name || '';
   formDescription.value = teamData.description || '';
   formAllowAutoAssign.value = teamData.allow_auto_assign ?? true;
+  formFlowId.value = teamData.operational_flow_id || '';
 }
 
 async function loadInboxes() {
@@ -146,7 +167,8 @@ async function loadInboxes() {
 
 onMounted(() => {
   store.dispatch('agents/get');
-  if (!team.value) store.dispatch('teams/get');
+  store.dispatch('teams/get', { cache: false });
+  store.dispatch('operationalFlows/get');
   store.dispatch('teamMembers/get', { teamId: teamId.value });
   loadInboxes();
 });
@@ -160,7 +182,7 @@ async function persistMembers(userIds, successKey) {
       teamId: teamId.value,
       agentsList: userIds,
     });
-    store.dispatch('teams/get');
+    store.dispatch('teams/get', { cache: false });
     useAlert(t(`TEAMS_SETTINGS.EDIT_FLOW.${successKey}`));
   } catch {
     useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
@@ -242,6 +264,7 @@ async function saveDetails() {
       name: formName.value,
       description: formDescription.value,
       allow_auto_assign: formAllowAutoAssign.value,
+      operational_flow_id: formFlowId.value || null,
     });
     useAlert(t('TEAMS_SETTINGS.EDIT_FLOW.UPDATE_SUCCESS'));
   } catch {
@@ -335,23 +358,46 @@ async function saveDetails() {
               class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
             />
             <div class="max-h-48 overflow-y-auto divide-y divide-n-weak">
-              <button
+              <component
+                :is="lockedAgents[agent.id] ? 'div' : 'button'"
                 v-for="agent in availableAgents"
                 :key="agent.id"
-                type="button"
-                class="w-full flex items-center gap-3 px-2 py-2 hover:bg-n-alpha-2 rounded-lg text-left transition-colors"
-                @click="addAgent(agent)"
+                :type="lockedAgents[agent.id] ? undefined : 'button'"
+                class="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left"
+                :class="
+                  lockedAgents[agent.id]
+                    ? 'opacity-60 cursor-not-allowed'
+                    : 'hover:bg-n-alpha-2 transition-colors'
+                "
+                @click="lockedAgents[agent.id] ? null : addAgent(agent)"
               >
                 <Avatar :src="agent.thumbnail" :name="agent.name" :size="28" />
-                <div class="min-w-0">
-                  <p class="text-sm font-medium text-n-slate-12 truncate">
+                <div class="min-w-0 flex-1">
+                  <p
+                    class="text-sm font-medium truncate"
+                    :class="
+                      lockedAgents[agent.id]
+                        ? 'text-n-slate-9'
+                        : 'text-n-slate-12'
+                    "
+                  >
                     {{ agent.name }}
                   </p>
                   <p class="text-xs text-n-slate-11 truncate">
                     {{ agent.email }}
                   </p>
                 </div>
-              </button>
+                <span
+                  v-if="lockedAgents[agent.id]"
+                  class="text-xs text-n-slate-9 shrink-0"
+                >
+                  {{
+                    t('TEAMS_SETTINGS.AGENTS.ALREADY_IN_TEAM', {
+                      team: lockedAgents[agent.id],
+                    })
+                  }}
+                </span>
+              </component>
               <p
                 v-if="!availableAgents.length"
                 class="text-sm text-n-slate-11 text-center py-3"
@@ -454,6 +500,22 @@ async function saveDetails() {
                 :placeholder="t('TEAMS_SETTINGS.FORM.DESCRIPTION.PLACEHOLDER')"
                 class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand resize-none"
               />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-sm font-medium text-n-slate-12">
+                {{ t('OPERATIONAL_FLOWS_SETTINGS.TIME_FLOWS.HEADER') }}
+              </label>
+              <p class="text-xs text-n-slate-11">
+                {{ t('OPERATIONAL_FLOWS_SETTINGS.TIME_FLOWS.DESCRIPTION') }}
+              </p>
+              <FlowSelect v-model="formFlowId" class="mt-1">
+                <option value="">
+                  {{ t('OPERATIONAL_FLOWS_SETTINGS.TIME_FLOWS.NONE') }}
+                </option>
+                <option v-for="flow in flows" :key="flow.id" :value="flow.id">
+                  {{ flow.name }}
+                </option>
+              </FlowSelect>
             </div>
             <div
               class="flex items-center justify-between py-2 px-3 rounded-lg bg-n-alpha-2"

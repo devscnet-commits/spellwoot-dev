@@ -1229,6 +1229,15 @@
       "INSTAGRAM": "Instagram",
       "TIKTOK": "TikTok",
       "VOICE": "Voice"
+    },
+    "ASSIGNMENT_POLICY": {
+      "DELETE_CONFIRM_TITLE": "Excluir política de atribuição?",
+      "DELETE_CONFIRM_MESSAGE": "Tem certeza que deseja remover esta política de atribuição desta caixa de entrada? A caixa voltará a usar as regras de atribuição padrão.",
+      "CANCEL": "Cancelar",
+      "CONFIRM_DELETE": "Excluir",
+      "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
+      "DELETE_ERROR": "Falha ao remover política de atribuição",
+      "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
     }
   }
 }

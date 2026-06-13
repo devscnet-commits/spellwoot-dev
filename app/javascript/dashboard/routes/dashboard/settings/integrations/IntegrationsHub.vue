@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useAlert } from 'dashboard/composables';
@@ -26,6 +26,7 @@ const PROVIDERS = [
     name: 'OpenAI',
     description: 'Integração com modelos GPT para respostas automáticas.',
     icon: 'i-lucide-brain',
+    testable: true,
     fields: [
       { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: 'sk-...', help: 'https://platform.openai.com/api-keys' },
       { key: 'model', label: 'Modelo padrão', sensitive: false, placeholder: 'gpt-4o', help: null },
@@ -48,8 +49,13 @@ const PROVIDERS = [
     name: 'UazAPI',
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
-    managedByEnv: true,
-    fields: [],
+    testable: true,
+    syncInstances: true,
+    fields: [
+      { key: 'apiUrl', label: 'URL do servidor', sensitive: false, placeholder: 'https://seu-servidor.uazapi.com', help: null },
+      { key: 'token', label: 'Admin Token', sensitive: true, placeholder: '', help: null },
+      { key: 'webhookBaseUrl', label: 'URL base de webhooks (opcional)', sensitive: false, placeholder: 'https://sandbox.suaempresa.com.br', help: null },
+    ],
   },
   {
     key: 'bitrix',
@@ -74,6 +80,7 @@ const PROVIDERS = [
   {
     key: 'google',
     name: 'Google',
+    managedByEnv: true,
     description: 'Integração com APIs Google.',
     icon: 'i-lucide-search',
     fields: [
@@ -90,10 +97,9 @@ const SOURCE_LABELS = {
   env:     { label: 'Servidor',  color: 'bg-n-slate-3 text-n-slate-11' },
 };
 
-// Temporary safe mode: serve every integration as environment-managed (read-only),
-// so credentials come from server ENV vars and the UI never writes integration_settings.
-// Flip to false to re-enable per-account editing once the settings endpoint is sorted.
-const FORCE_ENV_MANAGED = true;
+// Per-account editing rolls out provider by provider: those still marked managedByEnv
+// stay read-only (credentials from server ENV) until their flows are validated.
+const FORCE_ENV_MANAGED = false;
 const isEnvManaged = provider => FORCE_ENV_MANAGED || provider.managedByEnv;
 
 const getConfigSource = providerKey => {
@@ -119,6 +125,14 @@ const state = reactive(
     ])
   )
 );
+
+// Load every editable provider's status on entry so the Configurado badges show
+// without having to expand each card.
+onMounted(() => {
+  PROVIDERS.forEach(provider => {
+    if (!isEnvManaged(provider)) loadProvider(provider.key);
+  });
+});
 
 const loadProvider = async providerKey => {
   const s = state[providerKey];
@@ -443,7 +457,13 @@ const testConnection = async providerKey => {
                     inst.status === 'connected' ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-slate-3 text-n-slate-11'
                   ]"
                 >
-                  {{ inst.status === 'connected' ? 'Conectada' : inst.status }}
+                  {{
+                    inst.status === 'connected'
+                      ? 'Conectada'
+                      : inst.status === 'disconnected'
+                        ? 'Desconectada'
+                        : inst.status
+                  }}
                 </span>
               </div>
             </div>
@@ -512,7 +532,7 @@ const testConnection = async providerKey => {
             </div>
             <button
               class="px-4 py-1.5 rounded-lg bg-n-brand text-white text-body-small font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              :disabled="state[provider.key].saving"
+              :disabled="state[provider.key].saving || !state[provider.key].dirty"
               @click="saveProvider(provider.key)"
             >
               {{ state[provider.key].saving ? t('INTEGRATIONS_HUB.SAVING') : t('INTEGRATIONS_HUB.SAVE') }}

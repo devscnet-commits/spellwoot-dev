@@ -17,41 +17,26 @@ const { t } = useI18n();
 
 const getFlow = useMapGetter('operationalFlows/getFlow');
 const uiFlags = useMapGetter('operationalFlows/getUIFlags');
-const conversationAttributes = useMapGetter('attributes/getConversationAttributes');
-const assignmentRules = useMapGetter('flowAssignmentRules/getRules');
+const conversationAttributes = useMapGetter(
+  'attributes/getConversationAttributes'
+);
 const teams = useMapGetter('teams/getTeams');
-const inboxes = useMapGetter('inboxes/getInboxes');
 
 const flowId = computed(() =>
   route.params.flowId ? Number(route.params.flowId) : null
 );
 const isEdit = computed(() => !!flowId.value);
 
-// Read-only "who uses this flow": the assignment rules that point at it, described in
-// plain language so the flow editor answers "quem usa isso?" without leaving the page.
-const nameById = (list, id) => (list.value || []).find(i => i.id === id)?.name || '';
-const rulesUsingThisFlow = computed(() =>
-  (assignmentRules.value || []).filter(r => r.operational_flow_id === flowId.value)
+// Read-only "who uses this flow": the times linked to it, so the flow editor answers
+// "quem usa isso?" without leaving the page.
+const teamsUsingThisFlow = computed(() =>
+  (teams.value || []).filter(team => team.operational_flow_id === flowId.value)
 );
-const describeRuleUsage = rule => {
-  const predicate = rule.predicate || {};
-  const teamIds = Array.isArray(predicate.team_id)
-    ? predicate.team_id
-    : predicate.team_id
-      ? [predicate.team_id]
-      : [];
-  if (!teamIds.length) return t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.ALL');
-  const names = teamIds.map(id => nameById(teams, Number(id))).filter(Boolean);
-  const base = `${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.DIMENSIONS.TEAM')}: ${names.join(', ')}`;
-  const excluded = (predicate.excluded_inbox_ids || [])
-    .map(id => nameById(inboxes, Number(id)))
-    .filter(Boolean);
-  if (!excluded.length) return base;
-  return `${base} (${t('OPERATIONAL_FLOWS_SETTINGS.ASSIGNMENT_RULES.EXCEPT')} ${excluded.join(', ')})`;
-};
 
 const CATEGORIES = ['sales', 'support'];
-const POLARITIES = ['positive', 'negative', 'neutral'];
+// Polarity is fixed per canonical state (won=positive, lost=negative) — not user-editable,
+// so reports can never be inverted by a mislabelled state.
+const POLARITY_BY_CANONICAL = { won: 'positive', lost: 'negative' };
 // Standard Meta Conversions API event names a state can fire ('' = do not send).
 // `value` is only sent for Purchase. Full standard catalog so any funnel can be mapped.
 const META_EVENTS = [
@@ -228,10 +213,8 @@ const populate = flow => {
 onMounted(async () => {
   store.dispatch('attributes/get');
   if (!isEdit.value) return;
-  // Needed to describe which rules (team + excluded caixas) currently point at this flow.
-  store.dispatch('flowAssignmentRules/get');
-  store.dispatch('teams/get');
-  store.dispatch('inboxes/get');
+  // Needed to list the times currently using this flow.
+  store.dispatch('teams/get', { cache: false });
   isLoading.value = true;
   try {
     await store.dispatch('operationalFlows/show', flowId.value);
@@ -246,7 +229,8 @@ const buildStatesAttributes = () =>
     ...(state.id ? { id: state.id } : {}),
     canonical_key: state.canonical_key,
     display_label: state.display_label.trim(),
-    polarity: state.polarity,
+    polarity:
+      POLARITY_BY_CANONICAL[state.canonical_key] || state.polarity || 'neutral',
     requires_reason: false,
     meta_event_type: state.meta_event_type || null,
     meta_value_attr: state.meta_value_attr || null,
@@ -387,7 +371,9 @@ const save = async () => {
         </p>
         <FlowSelect v-model="category">
           <option v-for="option in CATEGORIES" :key="option" :value="option">
-            {{ $t(`OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.OPTIONS.${option}`) }}
+            {{
+              $t(`OPERATIONAL_FLOWS_SETTINGS.FORM.CATEGORY.OPTIONS.${option}`)
+            }}
           </option>
         </FlowSelect>
       </div>
@@ -433,35 +419,15 @@ const save = async () => {
             </span>
           </div>
 
-          <div class="flex flex-col gap-3 sm:flex-row">
-            <div class="flex flex-col gap-1 flex-1">
-              <label class="text-sm font-medium text-n-slate-11">
-                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.DISPLAY_LABEL') }}
-              </label>
-              <input
-                v-model="state.display_label"
-                type="text"
-                class="w-full px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-              />
-            </div>
-            <div class="flex flex-col gap-1 sm:w-40">
-              <label class="text-sm font-medium text-n-slate-11">
-                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.POLARITY') }}
-              </label>
-              <FlowSelect v-model="state.polarity">
-                <option
-                  v-for="option in POLARITIES"
-                  :key="option"
-                  :value="option"
-                >
-                  {{
-                    $t(
-                      `OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.POLARITY_OPTIONS.${option}`
-                    )
-                  }}
-                </option>
-              </FlowSelect>
-            </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-sm font-medium text-n-slate-11">
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.DISPLAY_LABEL') }}
+            </label>
+            <input
+              v-model="state.display_label"
+              type="text"
+              class="w-full px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+            />
           </div>
 
           <div
@@ -488,11 +454,15 @@ const save = async () => {
                 class="flex flex-col gap-1 flex-1"
               >
                 <label class="text-sm font-medium text-n-slate-11">
-                  {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_ATTR') }}
+                  {{
+                    $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_ATTR')
+                  }}
                 </label>
                 <FlowSelect v-model="state.meta_value_attr">
                   <option value="">
-                    {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NO_VALUE') }}
+                    {{
+                      $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NO_VALUE')
+                    }}
                   </option>
                   <option
                     v-for="option in valueAttributeOptions"
@@ -505,10 +475,16 @@ const save = async () => {
               </div>
             </div>
             <p
-              v-if="state.meta_event_type === 'Purchase' && !state.meta_value_attr"
+              v-if="
+                state.meta_event_type === 'Purchase' && !state.meta_value_attr
+              "
               class="text-sm text-n-amber-11"
             >
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NEED_VALUE_ATTR') }}
+              {{
+                $t(
+                  'OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_NEED_VALUE_ATTR'
+                )
+              }}
             </p>
             <p
               v-else-if="state.meta_event_type === 'Purchase'"
@@ -517,7 +493,6 @@ const save = async () => {
               {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.META_VALUE_HELP') }}
             </p>
           </div>
-
         </div>
       </div>
 
@@ -539,7 +514,9 @@ const save = async () => {
             <FlowSelect v-model="requirement.attribute_key" class="flex-1">
               <option value="" disabled>
                 {{
-                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.SELECT_ATTRIBUTE')
+                  $t(
+                    'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.SELECT_ATTRIBUTE'
+                  )
                 }}
               </option>
               <option
@@ -583,7 +560,9 @@ const save = async () => {
             >
               <option value="" disabled>
                 {{
-                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD_PLACEHOLDER')
+                  $t(
+                    'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD_PLACEHOLDER'
+                  )
                 }}
               </option>
               <option
@@ -598,12 +577,18 @@ const save = async () => {
               v-if="!listAttributeOptions.length"
               class="text-sm text-n-amber-11"
             >
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_NO_LIST_ATTRS') }}
+              {{
+                $t(
+                  'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_NO_LIST_ATTRS'
+                )
+              }}
             </p>
 
             <template v-if="requirement.condition_field">
               <label class="text-sm font-medium text-n-slate-11 mt-1">
-                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUES') }}
+                {{
+                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUES')
+                }}
               </label>
               <div class="flex flex-wrap gap-x-4 gap-y-1.5">
                 <label
@@ -648,17 +633,14 @@ const save = async () => {
             {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.MANAGE') }}
           </router-link>
         </div>
-        <ul
-          v-if="rulesUsingThisFlow.length"
-          class="flex flex-col gap-1"
-        >
+        <ul v-if="teamsUsingThisFlow.length" class="flex flex-col gap-1">
           <li
-            v-for="rule in rulesUsingThisFlow"
-            :key="rule.id"
+            v-for="team in teamsUsingThisFlow"
+            :key="team.id"
             class="flex items-center gap-2 text-sm text-n-slate-12"
           >
             <span class="i-lucide-check size-3.5 text-n-teal-11 shrink-0" />
-            {{ describeRuleUsage(rule) }}
+            {{ team.name }}
           </li>
         </ul>
         <p v-else class="text-sm text-n-slate-11">

@@ -373,7 +373,7 @@
       "LOCALES": "Localidades",
       "SETTINGS": "Configurações"
     },
-    "CHANNELS": "Canais",
+    "CHANNELS": "Caixas",
     "SET_AUTO_OFFLINE": {
       "TEXT": "Marcar offline automaticamente",
       "INFO_TEXT": "Deixe o sistema marcar você automaticamente quando você não estiver usando o app ou o painel de controle.",
@@ -645,7 +645,10 @@
       "CANCEL": "Cancelar",
       "NO_FIELDS": "Nenhum campo adicional necessário.",
       "SUCCESS": "Resultado registrado com sucesso",
-      "ERROR": "Não foi possível registrar o resultado, tente novamente"
+      "ERROR": "Não foi possível registrar o resultado, tente novamente",
+      "NO_FLOW": "Nenhum fluxo configurado",
+      "NO_FLOW_HINT": "Configure um fluxo de fechamento para o time desta conversa em Configurações → Fluxo de Conversa.",
+      "PROMPT_RESOLVE": "Antes de resolver, selecione uma das opções abaixo:"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",

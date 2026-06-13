@@ -160,7 +160,9 @@ class Message < ApplicationRecord
       assignee_id: conversation.assignee_id,
       unread_count: conversation.unread_incoming_messages.count,
       last_activity_at: conversation.last_activity_at.to_i,
-      contact_inbox: { source_id: conversation.contact_inbox.source_id }
+      # contact_inbox vanishes while a deleted contact's cleanup job runs; a nil source_id
+      # is harmless, a NoMethodError here 500s every conversation list rendering this message.
+      contact_inbox: { source_id: conversation.contact_inbox&.source_id }
     }
   end
 
@@ -344,6 +346,9 @@ class Message < ApplicationRecord
     conversation.update_columns(
       additional_attributes: (conversation.additional_attributes || {}).merge('was_handled_by_human' => true)
     )
+    # update_columns skips callbacks, so broadcast explicitly — the dashboard needs the flag
+    # right away or the Resolver button still offers the AI shortcut to a stale client.
+    conversation.dispatch_conversation_updated_event
   end
 
   def update_waiting_since
@@ -440,7 +445,24 @@ class Message < ApplicationRecord
       'reopened_at' => Time.current.iso8601
     )
     conversation.update_columns(additional_attributes: attrs)
+    release_assignee_unless_online
     conversation.open!
+  end
+
+  # On reopen, keep the conversation with the previous agent only while they are online.
+  # If they are busy/offline/away, release the assignee: with auto-assignment the status
+  # change redistributes to an available agent; without it the conversation simply lands in
+  # "Não atribuídas / Em aberto" to be picked up later — never stuck with an absent agent.
+  def release_assignee_unless_online
+    assignee = conversation.assignee
+    return if assignee.blank?
+    return if assignee_online?(assignee.id)
+
+    conversation.update!(assignee_id: nil)
+  end
+
+  def assignee_online?(agent_id)
+    OnlineStatusTracker.get_available_users(conversation.account_id)[agent_id.to_s] == 'online'
   end
 
   def reopen_resolved_conversation_for_human_agent

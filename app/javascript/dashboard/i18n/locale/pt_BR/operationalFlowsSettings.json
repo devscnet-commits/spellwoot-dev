@@ -19,9 +19,10 @@
       },
       "CONFIRM": {
         "TITLE": "Excluir {flowName}?",
-        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? As regras que o utilizam ficarão sem fluxo.",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
         "YES": "Sim, excluir",
-        "NO": "Cancelar"
+        "NO": "Cancelar",
+        "PLACE_HOLDER": "Escreva {name} para confirmar"
       }
     },
     "FORM": {
@@ -48,7 +49,7 @@
         }
       },
       "STATES": {
-        "LABEL": "Estados de resolução (botões de fechamento)",
+        "LABEL": "Estados do fluxo",
         "DISPLAY_LABEL": "Rótulo do botão",
         "POLARITY": "Polaridade",
         "POLARITY_OPTIONS": {
@@ -84,16 +85,15 @@
       },
       "USED_BY": {
         "TITLE": "Este fluxo está sendo utilizado por:",
-        "MANAGE": "Gerenciar regras →",
-        "EMPTY": "Nenhuma regra usa este fluxo ainda.",
-        "ALL": "Qualquer conversa (regra sem condição)"
+        "MANAGE": "Gerenciar times →",
+        "EMPTY": "Nenhum time usa este fluxo ainda."
       },
       "SAVE": "Salvar fluxo",
       "CREATE_SUCCESS": "Fluxo de fechamento criado com sucesso",
       "UPDATE_SUCCESS": "Fluxo de fechamento atualizado com sucesso",
       "ERROR_MESSAGE": "Não foi possível salvar o fluxo de fechamento",
       "REQUIREMENTS": {
-        "LABEL": "Atributos obrigatórios para fechar",
+        "LABEL": "Atributos obrigatórios do fluxo",
         "HELP": "Atributos que o agente precisa preencher antes de resolver como um destes estados.",
         "SELECT_ATTRIBUTE": "Selecione um atributo",
         "ALWAYS": "Sempre obrigatório",
@@ -106,50 +106,14 @@
         "ADD": "Adicionar obrigatoriedade"
       }
     },
-    "ASSIGNMENT_RULES": {
-      "HEADER": "Regras de atribuição",
-      "DESCRIPTION": "Decide qual fluxo se aplica a cada conversa, pelo time — e, se quiser, excluindo algumas caixas desse time. A regra mais específica que casar vence.",
-      "NEW_RULE": "Adicionar regra",
-      "EMPTY": "Nenhuma regra ainda. Crie ao menos uma (ex.: por time) para as conversas terem um fluxo. Conversa que não casar com nenhuma regra simplesmente não usa fluxo.",
-      "ANY": "(qualquer)",
-      "AND": "e",
-      "EXCEPT": "exceto",
-      "ANY_CONVERSATION": "qualquer conversa",
-      "DEFAULT": "Padrão",
-      "DIMENSIONS": {
-        "ROLE": "Função",
-        "INBOX": "Caixa",
-        "TEAM": "Time",
-        "ORIGIN": "Origem"
-      },
-      "FORM": {
-        "FLOW": "Fluxo a aplicar",
-        "SELECT": "Selecione um fluxo",
-        "SAVE": "Salvar regra",
-        "CANCEL": "Cancelar",
-        "CONDITIONS_INTRO": "Os Times decidem o fluxo. Por padrão vale para todas as caixas dos times selecionados — você pode deixar algumas de fora abaixo.",
-        "TEAMS_LABEL": "Aplicar a quais times?",
-        "TEAM_CONFLICT": "Atenção: o time {team} já está em outra regra (fluxo \"{flow}\"). Duas regras para o mesmo time não somam — a mais antiga vence e esta nunca será usada. Edite ou exclua a outra regra em vez de criar uma nova.",
-        "LINK_CTA": "Vincular {count} caixa(s)",
-        "LINK_SUCCESS": "Caixas vinculadas ao time {team}",
-        "LINK_ERROR": "Não foi possível vincular as caixas ao time",
-        "TEAM_NO_CAIXAS": "O time \"{names}\" ainda não tem caixas vinculadas — sem isso, a regra só vale para conversas com o time atribuído manualmente. Marque abaixo as caixas que pertencem a ele:",
-        "EXCLUDE_CAIXAS_LABEL": "Caixas que NÃO devem usar este fluxo",
-        "EXCLUDE_CAIXAS_HELP": "Por padrão, todas as caixas dos times selecionados usam este fluxo. Marque as que devem ficar de fora — caixas novas do time entram automaticamente."
-      },
-      "HUMAN": {
-        "MEANS": "Esta regra significa:",
-        "APPLY": "Aplicar o fluxo \"{flow}\"",
-        "WHEN": "quando a conversa",
-        "TEAM": "pertencer ao(s) time(s): {name}",
-        "EXCEPT_CAIXAS": "(exceto as caixas: {names})",
-        "ANY": "para qualquer conversa.",
-        "PICK_FLOW": "Selecione um fluxo acima."
-      },
-      "SAVE_SUCCESS": "Regra de atribuição salva",
-      "SAVE_ERROR": "Não foi possível salvar a regra de atribuição",
-      "DELETE_SUCCESS": "Regra de atribuição excluída",
-      "SPECIFICITY_HELP": "A regra mais específica (com mais condições) que casar com a conversa vence. Sem nenhuma condição, ela vale para qualquer conversa."
+    "TIME_FLOWS": {
+      "HEADER": "Times → Fluxo de fechamento",
+      "DESCRIPTION": "O fluxo segue o time da conversa: time atribuído à conversa ou, sem ele, o time do agente que atendeu. Configure aqui qual fluxo cada time usa.",
+      "NONE": "Sem fluxo",
+      "INACTIVE": "inativo",
+      "EMPTY": "Nenhum time encontrado.",
+      "SAVE_SUCCESS": "Fluxo do time atualizado",
+      "SAVE_ERROR": "Não foi possível atualizar o fluxo do time"
     }
   }
 }

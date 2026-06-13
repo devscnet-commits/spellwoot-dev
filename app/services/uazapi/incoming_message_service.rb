@@ -3,15 +3,31 @@
 class Uazapi::IncomingMessageService
   pattr_initialize [:inbox!, :params!]
 
+  # Webhook events that are not user messages: connection/presence/instance updates carry
+  # the instance's own number and were creating a daily ghost contact + empty conversation.
+  NON_MESSAGE_EVENTS = %w[connection presence qrcode status instance chats contacts history sync token].freeze
+
   def perform
     Rails.logger.info "[UAZAPI] Processing incoming message for inbox_id=#{inbox.id}"
     Rails.logger.info "[UAZAPI] Params keys: #{params.keys.join(', ')}"
 
     # UazAPI sends messages in different formats depending on the webhook configuration
     # The payload structure may vary, so we need to handle different formats
+    if non_message_event?
+      Rails.logger.info "[UAZAPI] Skipping non-message event type=#{event_type}"
+      return
+    end
+
     message_data = extract_message_data(params)
 
     return unless message_data.present?
+
+    # A genuine message always has text or media; connection/status payloads have neither —
+    # without this, they materialize a ghost contact and an empty conversation.
+    if message_data[:body].blank? && message_data[:media_url].blank?
+      Rails.logger.info "[UAZAPI] Skipping event without message content from=#{message_data[:from]}"
+      return
+    end
 
     Rails.logger.info "[UAZAPI] Message data extracted: type=#{message_data[:type]}, from=#{message_data[:from]}"
 
@@ -41,6 +57,17 @@ class Uazapi::IncomingMessageService
   end
 
   private
+
+  def event_type
+    (params[:EventType] || params[:eventType] || params[:event]).to_s.downcase
+  end
+
+  def non_message_event?
+    type = event_type
+    return false if type.blank?
+
+    NON_MESSAGE_EVENTS.any? { |non_message| type.include?(non_message) }
+  end
 
   def extract_message_data(params)
     # UazAPI webhook format can vary, try to extract common fields

@@ -127,7 +127,10 @@ function startResize(e) {
 
 const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
 const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
-const isResolvedTabActive = ref(false);
+// Status is an independent axis from the assignee tabs: 'em aberto' | 'resolvidas'.
+const isResolvedTabActive = computed(
+  () => activeStatus.value === wootConstants.STATUS_TYPE.RESOLVED
+);
 const activeSortBy = ref(wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC);
 const activeOriginFilter = ref('all');
 const showAdvancedFilters = ref(false);
@@ -231,26 +234,18 @@ const userPermissions = computed(() => {
   return getUserPermissions(currentUser.value, currentAccountId.value);
 });
 
-const assigneeTabItems = computed(() => {
-  const items = filterItemsByPermission(
+const assigneeTabItems = computed(() =>
+  filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
     userPermissions.value,
     item => item.permissions
   ).map(({ key, count: countKey }) => ({
     key,
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-    count: conversationStats.value[countKey] || 0,
-  }));
-  items.push({
-    key: 'resolved',
-    name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'),
-    count: conversationStats.value.resolvedCount || 0,
-  });
-  return items;
-});
-
-const activeDisplayTab = computed(() =>
-  isResolvedTabActive.value ? 'resolved' : activeAssigneeTab.value
+    // 'Todas' next to identical sub-counts reads as a contradiction — the counter only
+    // earns its place on the scoped tabs.
+    count: key === 'all' ? 0 : conversationStats.value[countKey] || 0,
+  }))
 );
 
 const showAssigneeInConversationCard = computed(() => {
@@ -433,8 +428,9 @@ const uniqueInboxes = computed(() => {
 // ---------------------- Methods -----------------------
 function setFiltersFromUISettings() {
   const { conversations_filter_by: filterBy = {} } = uiSettings.value;
-  const { status, order_by: orderBy } = filterBy;
-  activeStatus.value = status || wootConstants.STATUS_TYPE.OPEN;
+  const { order_by: orderBy } = filterBy;
+  // Login default is always Minhas + em aberto; only the sort preference is restored.
+  activeStatus.value = wootConstants.STATUS_TYPE.OPEN;
   activeSortBy.value = Object.values(wootConstants.SORT_BY_TYPE).includes(
     orderBy
   )
@@ -664,32 +660,26 @@ const intersectionObserverOptions = computed(() => ({
 }));
 
 function updateAssigneeTab(selectedTab) {
-  const alreadyActive =
-    selectedTab === 'resolved'
-      ? isResolvedTabActive.value
-      : !isResolvedTabActive.value && activeAssigneeTab.value === selectedTab;
-  if (alreadyActive) return;
+  if (activeAssigneeTab.value === selectedTab) return;
 
   resetBulkActions();
   emitter.emit('clearSearchInput');
-
-  if (selectedTab === 'resolved') {
-    isResolvedTabActive.value = true;
-    activeStatus.value = wootConstants.STATUS_TYPE.RESOLVED;
-    activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.ALL;
-  } else {
-    isResolvedTabActive.value = false;
-    if (activeStatus.value === wootConstants.STATUS_TYPE.RESOLVED) {
-      activeStatus.value = wootConstants.STATUS_TYPE.OPEN;
-    }
-    activeAssigneeTab.value = selectedTab;
-  }
+  activeAssigneeTab.value = selectedTab;
 
   // Refetch from scratch on every tab switch. The tab counters come from the
   // server meta (counts all matching conversations), while the visible list is
   // filtered from the locally-cached conversations — so reusing a stale/partial
   // cache made the count and the list disagree (e.g. "Unassigned 1" but empty).
   // Resetting + refetching makes both come from the same fresh response.
+  resetAndFetchData();
+}
+
+// 'em aberto' | 'resolvidas' toggle: same refetch semantics as switching tabs.
+function updateListStatus(status) {
+  if (activeStatus.value === status) return;
+  resetBulkActions();
+  emitter.emit('clearSearchInput');
+  activeStatus.value = status;
   resetAndFetchData();
 }
 
@@ -865,8 +855,7 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
 function handleResolveWithAttributes({ attributes, context, resolve }) {
   if (!context) return;
   const existingConversation = getConversationById.value(context.id);
-  const currentCustomAttributes =
-    existingConversation?.custom_attributes || {};
+  const currentCustomAttributes = existingConversation?.custom_attributes || {};
   const mergedAttributes = { ...currentCustomAttributes, ...attributes };
 
   // "Salvar" only persists the attributes and keeps the conversation open.
@@ -1011,7 +1000,6 @@ watch(conversationFilters, (newVal, oldVal) => {
       :page-title="pageTitle"
       :has-applied-filters="hasAppliedFilters"
       :has-active-folders="hasActiveFolders"
-      :active-status="activeStatus"
       :conversation-stats="conversationStats"
       :is-list-loading="chatListLoading && !conversationList.length"
       @add-folders="onClickOpenAddFoldersModal"
@@ -1045,10 +1033,39 @@ watch(conversationFilters, (newVal, oldVal) => {
     <ChatTypeTabs
       v-if="!hasAppliedFiltersOrActiveFolders"
       :items="assigneeTabItems"
-      :active-tab="activeDisplayTab"
+      :active-tab="activeAssigneeTab"
       is-compact
       @chat-tab-change="updateAssigneeTab"
     />
+
+    <!-- Status axis, independent from the assignee tabs: labelled and breathing room apart,
+         underline style on the active option — two clearly separate decisions. -->
+    <div
+      v-if="!hasAppliedFiltersOrActiveFolders"
+      class="flex flex-col gap-0.5 px-3 mt-2 pb-2"
+    >
+      <span
+        class="text-[10px] font-semibold uppercase tracking-wide text-n-slate-10"
+      >
+        {{ $t('CHAT_LIST.STATUS_TOGGLE.LABEL') }}
+      </span>
+      <div class="flex items-center gap-4">
+        <button
+          v-for="statusOption in ['open', 'resolved']"
+          :key="statusOption"
+          type="button"
+          class="pb-1 text-xs font-medium border-b-2 transition-colors"
+          :class="
+            activeStatus === statusOption
+              ? 'text-n-blue-11 border-n-brand'
+              : 'text-n-slate-11 border-transparent hover:text-n-slate-12'
+          "
+          @click="updateListStatus(statusOption)"
+        >
+          {{ $t(`CHAT_LIST.STATUS_TOGGLE.${statusOption}`) }}
+        </button>
+      </div>
+    </div>
 
     <p
       v-if="!chatListLoading && !conversationList.length"

@@ -78,121 +78,13 @@ const addableTeams = computed(() => {
   );
 });
 
-const stageAgent = agent => {
+// The closing flow follows the agent's team, so adding someone to a caixa never
+// changes which flow they use — no conflict to warn about here.
+const addAgent = agent => {
   selectedAgentIds.value = [...selectedAgentIds.value, agent.id];
   agentEligibility.value = { ...agentEligibility.value, [agent.id]: true };
-};
-
-// Flow-conflict warning: closing flows attach to caixas via team rules, so an agent
-// "participates" in a flow through the caixas where they attend. Mirror of the backend
-// resolver's team dimension: first rule (priority asc, id asc) covering the caixa wins.
-const flowRules = computed(
-  () => store.getters['flowAssignmentRules/getRules'] || []
-);
-const flowsList = computed(
-  () => store.getters['operationalFlows/getFlows'] || []
-);
-const inboxList = computed(() => store.getters['inboxes/getInboxes'] || []);
-
-const flowForInbox = inboxId => {
-  const rule = [...flowRules.value]
-    .sort((a, b) => a.priority - b.priority || a.id - b.id)
-    .find(r => {
-      const predicate = r.predicate || {};
-      const excluded = (predicate.excluded_inbox_ids || []).map(Number);
-      if (excluded.includes(inboxId)) return false;
-      const teamIds = [].concat(predicate.team_id || []).map(Number);
-      if (!teamIds.length) return true;
-      return teamsList.value.some(
-        team =>
-          teamIds.includes(team.id) && (team.inbox_ids || []).includes(inboxId)
-      );
-    });
-  if (!rule) return null;
-  return flowsList.value.find(f => f.id === rule.operational_flow_id) || null;
-};
-
-// Pending conflict: { agent, currentFlow, previousFlows: [names], inboxes: [{id, name}] }
-const flowConflict = ref(null);
-const isMovingAgent = ref(false);
-
-const addAgent = async agent => {
   addSearch.value = '';
   showAddDropdown.value = false;
-  const currentFlow = flowForInbox(props.inbox.id);
-  if (currentFlow) {
-    // Caixas of a DIFFERENT closing flow where this agent already attends.
-    const candidates = inboxList.value.filter(ibx => {
-      if (ibx.id === props.inbox.id) return false;
-      const flow = flowForInbox(ibx.id);
-      return flow && flow.id !== currentFlow.id;
-    });
-    if (candidates.length) {
-      try {
-        const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
-          .default;
-        const memberships = await Promise.all(
-          candidates.map(async ibx => {
-            const { data } = await InboxMembersAPI.show(ibx.id);
-            const isMember = (data.payload || []).some(m => m.id === agent.id);
-            return isMember ? ibx : null;
-          })
-        );
-        const conflicting = memberships.filter(Boolean);
-        if (conflicting.length) {
-          flowConflict.value = {
-            agent,
-            currentFlow,
-            previousFlows: [
-              ...new Set(
-                conflicting.map(ibx => flowForInbox(ibx.id)?.name)
-              ),
-            ].filter(Boolean),
-            inboxes: conflicting,
-          };
-          return;
-        }
-      } catch {
-        // Lookup failure must not block adding the agent.
-      }
-    }
-  }
-  stageAgent(agent);
-};
-
-const closeFlowConflict = () => {
-  flowConflict.value = null;
-};
-
-// "Não": add here too — the agent stays in both flows.
-const keepAgentInBothFlows = () => {
-  stageAgent(flowConflict.value.agent);
-  closeFlowConflict();
-};
-
-// "Sim": remove from the previous flow's caixas, add here and persist right away.
-const moveAgentToThisFlow = async () => {
-  const { agent, inboxes: oldInboxes } = flowConflict.value;
-  isMovingAgent.value = true;
-  try {
-    const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
-      .default;
-    await Promise.all(
-      oldInboxes.map(ibx =>
-        InboxMembersAPI.removeAgents({ inboxId: ibx.id, agentIds: [agent.id] })
-      )
-    );
-    stageAgent(agent);
-    await updateAgents();
-    useAlert(
-      `${agent.name} desvinculado de: ${oldInboxes.map(i => i.name).join(', ')}`
-    );
-    closeFlowConflict();
-  } catch {
-    useAlert('Não foi possível mover o agente entre os fluxos');
-  } finally {
-    isMovingAgent.value = false;
-  }
 };
 
 const addTeam = async team => {
@@ -213,8 +105,8 @@ const addTeam = async team => {
       });
       agentEligibility.value = eligibility;
     }
-    // Also link this caixa to the team (TeamInbox) — flow assignment rules match
-    // conversations by this link, not by which agents are inbox members.
+    // Also link this caixa to the team (TeamInbox), so team membership and caixa
+    // access stay mirrored — the closing flow itself lives on the caixa.
     const linkedInboxIds = team.inbox_ids || [];
     let linkedNow = false;
     if (!linkedInboxIds.includes(props.inbox.id)) {
@@ -222,15 +114,13 @@ const addTeam = async team => {
         teamId: team.id,
         inboxIds: [...linkedInboxIds, props.inbox.id],
       });
-      store.dispatch('teams/get');
+      store.dispatch('teams/get', { cache: false });
       linkedNow = true;
     }
     const agentsPart = newIds.length
       ? `${newIds.length} agente(s) do time "${team.name}" adicionado(s)`
       : `Todos os agentes do time "${team.name}" já estão na caixa`;
-    useAlert(
-      linkedNow ? `${agentsPart}. Caixa vinculada ao time` : agentsPart
-    );
+    useAlert(linkedNow ? `${agentsPart}. Caixa vinculada ao time` : agentsPart);
   } catch {
     useAlert('Não foi possível adicionar o time à caixa');
   }
@@ -252,7 +142,9 @@ const toggleEligibility = agentId => {
   };
 };
 
-const closeAddDropdown = () => { showAddDropdown.value = false; };
+const closeAddDropdown = () => {
+  showAddDropdown.value = false;
+};
 
 // Stable representation of the agent list + eligibility, so the Update button only
 // enables when something actually changed (and greys out again after saving).
@@ -561,11 +453,9 @@ watch(() => props.inbox.id, setDefaults);
 
 onMounted(() => {
   setDefaults();
-  store.dispatch('teams/get');
-  // Needed by the flow-conflict warning when adding an agent.
-  store.dispatch('inboxes/get');
-  store.dispatch('flowAssignmentRules/get');
-  store.dispatch('operationalFlows/get');
+  // Never dispatch 'inboxes/get' here: Settings.vue unmounts this tab while inboxes
+  // are fetching, so refetching from onMounted causes an infinite remount loop.
+  store.dispatch('teams/get', { cache: false });
 });
 </script>
 
@@ -578,10 +468,7 @@ onMounted(() => {
     >
       <div class="flex flex-col gap-2">
         <!-- Add agent row -->
-        <div
-          v-on-click-outside="closeAddDropdown"
-          class="relative"
-        >
+        <div v-on-click-outside="closeAddDropdown" class="relative">
           <div class="flex gap-2">
             <SearchInput
               v-model="addSearch"
@@ -643,10 +530,16 @@ onMounted(() => {
 
         <!-- Members table — only current inbox members -->
         <div class="rounded-lg border border-n-weak overflow-hidden">
-          <div class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak">
-            <span class="text-xs font-medium text-n-slate-11 flex-1">Agente</span>
-            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">Receber atendimentos</span>
-            <span class="w-6" />
+          <div
+            class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak"
+          >
+            <span class="text-xs font-medium text-n-slate-11 flex-1"
+              >Agente</span
+            >
+            <span class="text-xs font-medium text-n-slate-11 w-36 text-center"
+              >Receber atendimentos</span
+            >
+            <span class="w-16" />
           </div>
           <div class="max-h-64 overflow-y-auto">
             <div
@@ -654,7 +547,9 @@ onMounted(() => {
               :key="agent.id"
               class="flex items-center px-3 py-2.5 border-b border-n-weak/50 last:border-0 hover:bg-n-slate-1 transition-colors"
             >
-              <span class="text-sm text-n-slate-12 flex-1">{{ agent.name }}</span>
+              <span class="text-sm text-n-slate-12 flex-1">{{
+                agent.name
+              }}</span>
 
               <!-- Eligibility toggle -->
               <div class="w-36 flex justify-center">
@@ -667,10 +562,12 @@ onMounted(() => {
               <!-- Remove button -->
               <button
                 type="button"
-                class="w-6 flex items-center justify-center text-n-slate-9 hover:text-n-ruby-9 transition-colors"
+                class="w-16 flex items-center justify-center gap-1 text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors"
+                title="Remover agente da caixa"
                 @click="removeAgent(agent.id)"
               >
-                <span class="i-lucide-x text-sm" />
+                <span class="i-lucide-trash-2 size-3.5 shrink-0" />
+                Remover
               </button>
             </div>
 
@@ -685,7 +582,11 @@ onMounted(() => {
 
         <p class="text-xs text-n-slate-10">
           {{ memberAgents.length }}
-          {{ memberAgents.length === 1 ? 'agente nesta caixa' : 'agentes nesta caixa' }}
+          {{
+            memberAgents.length === 1
+              ? 'agente nesta caixa'
+              : 'agentes nesta caixa'
+          }}
         </p>
       </div>
 
@@ -976,69 +877,23 @@ onMounted(() => {
       </SettingsToggleSection>
     </SettingsAccordion>
 
-    <woot-modal
-      v-if="flowConflict"
-      :show="!!flowConflict"
-      :on-close="closeFlowConflict"
-    >
-      <div class="p-6">
-        <h3 class="text-lg font-medium text-n-slate-12 mb-4">
-          Atenção: agente em outro fluxo de fechamento
-        </h3>
-        <p class="text-sm text-n-slate-11 mb-2">
-          <span class="font-medium">{{ flowConflict.agent.name }}</span>
-          já participa do fluxo
-          <span class="font-medium">"{{ flowConflict.previousFlows.join('", "') }}"</span>
-          pelas caixas:
-          {{ flowConflict.inboxes.map(i => i.name).join(', ') }}.
-        </p>
-        <p class="text-sm text-n-slate-11 mb-6">
-          Ao incluir nesta caixa ele passa a participar do fluxo
-          <span class="font-medium">"{{ flowConflict.currentFlow.name }}"</span>.
-          Deseja desvinculá-lo das caixas do fluxo anterior?
-        </p>
-        <div class="flex justify-end gap-2">
-          <NextButton
-            slate
-            label="Não, manter nos dois"
-            :disabled="isMovingAgent"
-            @click="keepAgentInBothFlows"
-          />
-          <NextButton
-            label="Sim, atualizar"
-            :is-loading="isMovingAgent"
-            @click="moveAgentToThisFlow"
-          />
-        </div>
-      </div>
-    </woot-modal>
-
-    <woot-modal
+    <!-- Unlinking the assignment policy changes how every conversation in the caixa is
+         distributed — big-impact unlinks require typing the name to confirm. -->
+    <woot-confirm-delete-modal
       v-if="showDeleteConfirmModal"
-      :show="showDeleteConfirmModal"
-      :on-close="cancelDeletePolicy"
-    >
-      <div class="p-6">
-        <h3 class="text-lg font-medium text-n-slate-12 mb-4">
-          {{ $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_TITLE') }}
-        </h3>
-        <p class="text-sm text-n-slate-11 mb-6 ml-13">
-          {{ $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_MESSAGE') }}
-        </p>
-        <div class="flex justify-end gap-2">
-          <NextButton
-            color="slate"
-            :label="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CANCEL')"
-            @click="cancelDeletePolicy"
-          />
-          <NextButton
-            color="ruby"
-            :label="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CONFIRM_DELETE')"
-            :is-loading="isDeletingPolicy"
-            @click="deleteAssignmentPolicy"
-          />
-        </div>
-      </div>
-    </woot-modal>
+      v-model:show="showDeleteConfirmModal"
+      :title="$t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_TITLE')"
+      :message="$t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_MESSAGE')"
+      :confirm-text="`${$t('INBOX_MGMT.ASSIGNMENT_POLICY.CONFIRM_DELETE')} ${assignmentPolicy?.name}`"
+      :reject-text="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CANCEL')"
+      :confirm-value="assignmentPolicy?.name"
+      :confirm-place-holder-text="
+        $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_PLACE_HOLDER', {
+          name: assignmentPolicy?.name,
+        })
+      "
+      @on-confirm="deleteAssignmentPolicy"
+      @on-close="cancelDeletePolicy"
+    />
   </div>
 </template>

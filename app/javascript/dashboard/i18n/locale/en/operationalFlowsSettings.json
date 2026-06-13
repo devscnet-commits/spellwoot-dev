@@ -19,9 +19,10 @@
       },
       "CONFIRM": {
         "TITLE": "Delete {flowName}?",
-        "MESSAGE": "Are you sure you want to delete this closing flow? Rules using it will fall back to no flow.",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
         "YES": "Yes, delete",
-        "NO": "Cancel"
+        "NO": "Cancel",
+        "PLACE_HOLDER": "Escreva {name} para confirmar"
       }
     },
     "FORM": {
@@ -48,7 +49,7 @@
         }
       },
       "STATES": {
-        "LABEL": "Resolution states (closing buttons)",
+        "LABEL": "Estados do fluxo",
         "DISPLAY_LABEL": "Button label",
         "POLARITY": "Polarity",
         "POLARITY_OPTIONS": {
@@ -84,16 +85,15 @@
       },
       "USED_BY": {
         "TITLE": "This flow is used by:",
-        "MANAGE": "Manage rules →",
-        "EMPTY": "No rule uses this flow yet.",
-        "ALL": "Any conversation (rule with no conditions)"
+        "MANAGE": "Gerenciar times →",
+        "EMPTY": "Nenhum time usa este fluxo ainda."
       },
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Closing flow created successfully",
       "UPDATE_SUCCESS": "Closing flow updated successfully",
       "ERROR_MESSAGE": "Could not save the closing flow",
       "REQUIREMENTS": {
-        "LABEL": "Required attributes to close",
+        "LABEL": "Atributos obrigatórios do fluxo",
         "HELP": "Attributes the agent must fill before resolving as one of these states.",
         "SELECT_ATTRIBUTE": "Select an attribute",
         "ALWAYS": "Always required",
@@ -106,50 +106,14 @@
         "ADD": "Add requirement"
       }
     },
-    "ASSIGNMENT_RULES": {
-      "HEADER": "Assignment rules",
-      "DESCRIPTION": "Decides which flow applies to each conversation, by the team — and optionally excluding some of that team's caixas. The most specific matching rule wins.",
-      "NEW_RULE": "Add rule",
-      "EMPTY": "No rules yet. Add at least one (e.g. per team) so conversations get a flow. A conversation that matches no rule simply uses no flow.",
-      "ANY": "(any)",
-      "AND": "and",
-      "EXCEPT": "except",
-      "ANY_CONVERSATION": "any conversation",
-      "DEFAULT": "Default",
-      "DIMENSIONS": {
-        "ROLE": "Role",
-        "INBOX": "Caixa",
-        "TEAM": "Team",
-        "ORIGIN": "Origin"
-      },
-      "FORM": {
-        "FLOW": "Flow to apply",
-        "SELECT": "Select a flow",
-        "SAVE": "Save rule",
-        "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "The teams decide the flow. By default it applies to all caixas of the selected teams — you can leave some out below.",
-        "TEAMS_LABEL": "Apply to which teams?",
-        "TEAM_CONFLICT": "Warning: team {team} is already in another rule (flow \"{flow}\"). Two rules for the same team do not stack — the older one wins and this one will never apply. Edit or delete the other rule instead of adding a new one.",
-        "LINK_CTA": "Link {count} caixa(s)",
-        "LINK_SUCCESS": "Caixas linked to team {team}",
-        "LINK_ERROR": "Could not link the caixas to the team",
-        "TEAM_NO_CAIXAS": "Team \"{names}\" has no linked caixas yet — without that, this rule only applies to conversations with the team manually assigned. Check the caixas that belong to it below:",
-        "EXCLUDE_CAIXAS_LABEL": "Caixas that should NOT use this flow",
-        "EXCLUDE_CAIXAS_HELP": "By default every caixa of the selected teams uses this flow. Check the ones to leave out — new team caixas join automatically."
-      },
-      "HUMAN": {
-        "MEANS": "This rule means:",
-        "APPLY": "Apply the \"{flow}\" flow",
-        "WHEN": "when the conversation",
-        "TEAM": "belongs to the team(s): {name}",
-        "EXCEPT_CAIXAS": "(except the caixas: {names})",
-        "ANY": "to any conversation.",
-        "PICK_FLOW": "Select a flow above."
-      },
-      "SAVE_SUCCESS": "Assignment rule saved",
-      "SAVE_ERROR": "Could not save the assignment rule",
-      "DELETE_SUCCESS": "Assignment rule deleted",
-      "SPECIFICITY_HELP": "The most specific matching rule (the one with more conditions) wins. With no conditions, it applies to any conversation."
+    "TIME_FLOWS": {
+      "HEADER": "Times → Fluxo de fechamento",
+      "DESCRIPTION": "O fluxo segue o time da conversa: time atribuído à conversa ou, sem ele, o time do agente que atendeu. Configure aqui qual fluxo cada time usa.",
+      "NONE": "Sem fluxo",
+      "INACTIVE": "inativo",
+      "EMPTY": "Nenhum time encontrado.",
+      "SAVE_SUCCESS": "Fluxo do time atualizado",
+      "SAVE_ERROR": "Não foi possível atualizar o fluxo do time"
     }
   }
 }

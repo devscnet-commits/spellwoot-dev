@@ -37,6 +37,12 @@ export default {
         this.currentInboxId
       );
     },
+    // Atualizar only enables when the selection differs from the saved bot.
+    isDirty() {
+      return (
+        (this.selectedAgentBotId || null) !== (this.activeAgentBot?.id || null)
+      );
+    },
   },
   watch: {
     activeAgentBot() {
@@ -105,6 +111,7 @@ export default {
                 type="submit"
                 :label="$t('AGENT_BOTS.BOT_CONFIGURATION.SUBMIT')"
                 :is-loading="uiFlags.isSettingAgentBot"
+                :disabled="!isDirty"
               />
               <NextButton
                 type="button"

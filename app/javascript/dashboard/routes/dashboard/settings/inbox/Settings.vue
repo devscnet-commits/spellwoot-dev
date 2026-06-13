@@ -861,8 +861,10 @@ export default {
               </template>
             </SettingsFieldSection>
 
+            <!-- With single-conversation lock ON the previous conversation always reopens,
+                 so the reopen window is meaningless — only offer it when the lock is OFF. -->
             <SettingsToggleSection
-              v-if="canLocktoSingleConversation"
+              v-if="canLocktoSingleConversation && !locktoSingleConversation"
               v-model="reopenWindowEnabled"
               :header="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.LABEL')"
               :description="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HELP')"
@@ -873,10 +875,14 @@ export default {
                     v-model.number="reopenWindowHours"
                     type="number"
                     min="1"
-                    class="w-24 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                    class="!w-24 flex-none px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
                   />
-                  <span class="text-body-main text-n-slate-11">
-                    {{ $t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HOURS_SUFFIX') }}
+                  <span
+                    class="text-sm text-n-slate-11 flex-none self-stretch inline-flex items-center"
+                  >
+                    {{
+                      $t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HOURS_SUFFIX')
+                    }}
                   </span>
                 </div>
               </template>
