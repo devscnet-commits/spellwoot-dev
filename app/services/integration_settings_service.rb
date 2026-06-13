@@ -186,10 +186,11 @@ class IntegrationSettingsService
     end
   end
 
-  # UazAPI rejects a token that belongs to a different server with 401/403. After switching
-  # the server URL the token must be re-entered, so spell that out instead of a raw "Erro 401".
+  # A 401/403 means the UazAPI server refused the token: it may be the wrong token for this
+  # server, OR a valid token without admin rights to list instances (free/shared servers
+  # block /instance/all for non-admin tokens). Cover both instead of blaming the token.
   def self.uazapi_error_message(response)
-    return "Token rejeitado pelo servidor (#{response.code}). Confirme o Admin Token deste servidor — ao trocar a URL, reenvie o token (Redefinir)." if [401, 403].include?(response.code)
+    return "O servidor recusou o Admin Token (#{response.code}). Confirme se o token é deste servidor e tem permissão de administrador — servidores grátis/compartilhados costumam bloquear a listagem de instâncias." if [401, 403].include?(response.code)
 
     "Erro #{response.code}: #{response.message}"
   end
