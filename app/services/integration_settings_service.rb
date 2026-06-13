@@ -182,8 +182,16 @@ class IntegrationSettingsService
       instances = Array(response.parsed_response)
       { ok: true, message: "Conexão bem-sucedida. #{instances.size} instância(s) encontrada(s)." }
     else
-      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+      { ok: false, message: uazapi_error_message(response) }
     end
+  end
+
+  # UazAPI rejects a token that belongs to a different server with 401/403. After switching
+  # the server URL the token must be re-entered, so spell that out instead of a raw "Erro 401".
+  def self.uazapi_error_message(response)
+    return "Token rejeitado pelo servidor (#{response.code}). Confirme o Admin Token deste servidor — ao trocar a URL, reenvie o token (Redefinir)." if [401, 403].include?(response.code)
+
+    "Erro #{response.code}: #{response.message}"
   end
 
   def self.test_evolution_api(config)
@@ -217,7 +225,7 @@ class IntegrationSettingsService
     )
 
     unless response.success?
-      return { ok: false, message: "Erro #{response.code}: #{response.message}" }
+      return { ok: false, message: uazapi_error_message(response) }
     end
 
     instances = Array(response.parsed_response)
