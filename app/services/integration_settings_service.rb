@@ -222,6 +222,7 @@ class IntegrationSettingsService
 
     instances = Array(response.parsed_response)
     synced = 0
+    synced_names = []
 
     instances.each do |inst|
       instance_name = inst['instanceName'] || inst['name'] || inst['id'].to_s
@@ -241,7 +242,14 @@ class IntegrationSettingsService
       )
       pi.save!
       synced += 1
+      synced_names << instance_name
     end
+
+    # Reconcile: drop cached instances the current server no longer reports (e.g. after
+    # switching the server URL) so the list mirrors the server instead of accumulating.
+    stale = ProviderInstance.where(account_id: account_id, provider: 'uazapi')
+    stale = stale.where.not(instance_name: synced_names) if synced_names.any?
+    stale.delete_all
 
     { ok: true, message: "#{synced} instância(s) sincronizada(s).", count: synced }
   end
