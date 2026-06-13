@@ -449,13 +449,11 @@ class Message < ApplicationRecord
     conversation.open!
   end
 
-  # On reopen, hand the conversation back to the previous agent only while they are online.
-  # If they are busy/offline/away and the inbox auto-assigns, release them so the status
-  # change redistributes the conversation to an available agent through the assignment
-  # policy. With auto-assignment off there is nowhere to redistribute, so we keep the agent.
+  # On reopen, keep the conversation with the previous agent only while they are online.
+  # If they are busy/offline/away, release the assignee: with auto-assignment the status
+  # change redistributes to an available agent; without it the conversation simply lands in
+  # "Não atribuídas / Em aberto" to be picked up later — never stuck with an absent agent.
   def release_assignee_unless_online
-    return unless conversation.inbox.enable_auto_assignment?
-
     assignee = conversation.assignee
     return if assignee.blank?
     return if assignee_online?(assignee.id)
