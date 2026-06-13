@@ -445,7 +445,26 @@ class Message < ApplicationRecord
       'reopened_at' => Time.current.iso8601
     )
     conversation.update_columns(additional_attributes: attrs)
+    release_assignee_unless_online
     conversation.open!
+  end
+
+  # On reopen, hand the conversation back to the previous agent only while they are online.
+  # If they are busy/offline/away and the inbox auto-assigns, release them so the status
+  # change redistributes the conversation to an available agent through the assignment
+  # policy. With auto-assignment off there is nowhere to redistribute, so we keep the agent.
+  def release_assignee_unless_online
+    return unless conversation.inbox.enable_auto_assignment?
+
+    assignee = conversation.assignee
+    return if assignee.blank?
+    return if assignee_online?(assignee.id)
+
+    conversation.update!(assignee_id: nil)
+  end
+
+  def assignee_online?(agent_id)
+    OnlineStatusTracker.get_available_users(conversation.account_id)[agent_id.to_s] == 'online'
   end
 
   def reopen_resolved_conversation_for_human_agent
