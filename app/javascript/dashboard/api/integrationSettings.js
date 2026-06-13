@@ -37,4 +37,9 @@ export default {
       `/api/v1/accounts/${accountId}/integration_settings/${provider}/sync_instances`
     );
   },
+  clearAccount(accountId, provider) {
+    return axios.delete(
+      `/api/v1/accounts/${accountId}/integration_settings/${provider}`
+    );
+  },
 };

@@ -35,6 +35,19 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
+  # Removes the account-level config so the integration falls back to the global/server
+  # (ENV) values — the way to undo an account override without knowing the server secrets.
+  def destroy
+    IntegrationSetting.find_by(account_id: Current.account.id, provider: params[:provider])&.destroy
+    effective = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
+    render json: {
+      provider: params[:provider],
+      cleared: true,
+      config: mask_sensitive(effective),
+      sources: config_sources(params[:provider], effective)
+    }
+  end
+
   def sync_instances
     result = IntegrationSettingsService.sync_instances(Current.account.id, params[:provider])
     status = result[:ok] ? :ok : :unprocessable_entity

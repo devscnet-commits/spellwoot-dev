@@ -118,7 +118,7 @@ const state = reactive(
       p.key,
       {
         open: false, loading: false, saving: false, importing: false,
-        testing: false, syncing: false, loadingInstances: false,
+        testing: false, syncing: false, loadingInstances: false, clearing: false,
         testResult: null, syncResult: null, instances: [],
         enabled: true, config: {}, sources: {}, reset: {}, dirty: false,
       },
@@ -215,6 +215,25 @@ const importFromEnv = async providerKey => {
     useAlert(t('INTEGRATIONS_HUB.ERROR'));
   } finally {
     s.importing = false;
+  }
+};
+
+// Removes this account's override so the integration falls back to the server/global
+// config — the way out of a bad account-level value without knowing the server secrets.
+const clearAccountConfig = async providerKey => {
+  const s = state[providerKey];
+  s.clearing = true;
+  try {
+    await integrationSettingsAPI.clearAccount(accountId.value, providerKey);
+    await loadProvider(providerKey);
+    if (PROVIDERS.find(p => p.key === providerKey)?.syncInstances) {
+      loadInstances(providerKey);
+    }
+    useAlert('Configuração da conta removida — usando a do servidor.');
+  } catch {
+    useAlert('Não foi possível limpar a configuração da conta.');
+  } finally {
+    s.clearing = false;
   }
 };
 
@@ -528,6 +547,15 @@ const testConnection = async providerKey => {
               >
                 <span class="i-lucide-refresh-cw w-3.5 h-3.5" />
                 {{ state[provider.key].syncing ? 'Sincronizando...' : 'Sincronizar Instâncias' }}
+              </button>
+              <button
+                v-if="getConfigSource(provider.key) === 'account'"
+                class="text-body-small text-n-slate-11 hover:text-n-ruby-11 flex items-center gap-1 disabled:opacity-50"
+                :disabled="state[provider.key].clearing"
+                @click="clearAccountConfig(provider.key)"
+              >
+                <span class="i-lucide-eraser w-3.5 h-3.5" />
+                {{ state[provider.key].clearing ? 'Limpando...' : 'Usar configuração do servidor' }}
               </button>
             </div>
             <button
