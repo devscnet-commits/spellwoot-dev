@@ -665,12 +665,63 @@ const intersectionObserverOptions = computed(() => ({
   rootMargin: '100px 0px 100px 0px',
 }));
 
+function redirectToConversationList() {
+  const {
+    params: { accountId, inbox_id: inboxId, label, teamId },
+    name,
+  } = route;
+
+  let conversationType = '';
+  if (isOnMentionsView({ route: { name } })) {
+    conversationType = wootConstants.CONVERSATION_TYPE.MENTION;
+  } else if (isOnParticipatingView({ route: { name } })) {
+    conversationType = wootConstants.CONVERSATION_TYPE.PARTICIPATING;
+  } else if (isOnUnattendedView({ route: { name } })) {
+    conversationType = wootConstants.CONVERSATION_TYPE.UNATTENDED;
+  }
+  router.push(
+    conversationListPageURL({
+      accountId,
+      conversationType: conversationType,
+      customViewId: props.foldersId,
+      inboxId,
+      label,
+      teamId,
+    })
+  );
+}
+
+// When the filters change, an open conversation that no longer matches them should not
+// linger in the reading pane (e.g. an OPEN conversation still shown after switching to
+// Resolvidas). Clear it back to the empty state; matching conversations stay open.
+function selectedConversationMatchesFilters() {
+  const chat = store.getters.getSelectedChat;
+  if (!chat || !chat.id) return true;
+  if (chat.status !== activeStatus.value) return false;
+
+  const assigneeId = chat.meta?.assignee?.id;
+  if (activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ME) {
+    return assigneeId === currentUser.value?.id;
+  }
+  if (activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.UNASSIGNED) {
+    return !assigneeId;
+  }
+  return true;
+}
+
+function clearOpenConversationIfUnmatched() {
+  if (!selectedConversationMatchesFilters()) {
+    redirectToConversationList();
+  }
+}
+
 function updateAssigneeTab(selectedTab) {
   if (activeAssigneeTab.value === selectedTab) return;
 
   resetBulkActions();
   emitter.emit('clearSearchInput');
   activeAssigneeTab.value = selectedTab;
+  clearOpenConversationIfUnmatched();
 
   // Refetch from scratch on every tab switch. The tab counters come from the
   // server meta (counts all matching conversations), while the visible list is
@@ -686,6 +737,7 @@ function updateListStatus(status) {
   resetBulkActions();
   emitter.emit('clearSearchInput');
   activeStatus.value = status;
+  clearOpenConversationIfUnmatched();
   resetAndFetchData();
 }
 
@@ -716,32 +768,6 @@ function openLastItemAfterDeleteInFolder() {
     router.push({ name: 'home' });
     fetchConversations();
   }
-}
-
-function redirectToConversationList() {
-  const {
-    params: { accountId, inbox_id: inboxId, label, teamId },
-    name,
-  } = route;
-
-  let conversationType = '';
-  if (isOnMentionsView({ route: { name } })) {
-    conversationType = wootConstants.CONVERSATION_TYPE.MENTION;
-  } else if (isOnParticipatingView({ route: { name } })) {
-    conversationType = wootConstants.CONVERSATION_TYPE.PARTICIPATING;
-  } else if (isOnUnattendedView({ route: { name } })) {
-    conversationType = wootConstants.CONVERSATION_TYPE.UNATTENDED;
-  }
-  router.push(
-    conversationListPageURL({
-      accountId,
-      conversationType: conversationType,
-      customViewId: props.foldersId,
-      inboxId,
-      label,
-      teamId,
-    })
-  );
 }
 
 async function assignPriority(priority, conversationId = null) {
@@ -1056,7 +1082,7 @@ watch(conversationFilters, (newVal, oldVal) => {
           "
           @click="updateAssigneeTab(item.key)"
         >
-          <span :class="[ASSIGNEE_TAB_ICONS[item.key], 'size-4 shrink-0']" />
+          <span class="size-4 shrink-0" :class="ASSIGNEE_TAB_ICONS[item.key]" />
           {{ item.name }}
           <span
             v-if="item.count"
