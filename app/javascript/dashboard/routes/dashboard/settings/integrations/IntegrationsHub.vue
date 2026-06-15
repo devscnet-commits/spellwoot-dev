@@ -249,6 +249,17 @@ const testConnection = async providerKey => {
     s.testing = false;
   }
 };
+
+// Header badge reflects the ON/OFF state, not just whether a config exists:
+// a configured-but-disabled provider should read "Desativado", not "Configurado".
+const providerBadge = providerKey => {
+  const s = state[providerKey];
+  const configured = s.sources && Object.keys(s.sources).length;
+  if (!configured) return null;
+  return s.enabled
+    ? { label: 'Ativo', class: 'bg-n-teal-3 text-n-teal-11' }
+    : { label: 'Desativado', class: 'bg-n-slate-3 text-n-slate-11' };
+};
 </script>
 
 <template>
@@ -281,10 +292,11 @@ const testConnection = async providerKey => {
         </div>
         <div class="flex items-center gap-2">
           <span
-            v-if="state[provider.key].sources && Object.keys(state[provider.key].sources).length"
-            class="text-xs px-2 py-0.5 rounded-full bg-n-teal-3 text-n-teal-11"
+            v-if="providerBadge(provider.key)"
+            class="text-xs px-2 py-0.5 rounded-full"
+            :class="providerBadge(provider.key).class"
           >
-            Configurado
+            {{ providerBadge(provider.key).label }}
           </span>
           <span
             :class="[
