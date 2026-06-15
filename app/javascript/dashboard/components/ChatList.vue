@@ -544,8 +544,11 @@ function setParamsForEditFolderModal() {
 }
 
 function initializeExistingFilterToModal() {
+  // Status is now driven solely by the Abertas/Finalizadas toggle, so we no
+  // longer seed a status row in the advanced filter modal. Passing an empty
+  // status falls back to the assignee filter for the "Minhas" tab only.
   const statusFilter = initializeStatusAndAssigneeFilterToModal(
-    activeStatus.value,
+    '',
     currentUserDetails.value,
     activeAssigneeTab.value
   );
