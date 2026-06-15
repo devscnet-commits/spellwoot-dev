@@ -145,7 +145,7 @@
     "SENDING": "Enviando",
     "STATUS_TOGGLE": {
       "open": "Em aberto",
-      "resolved": "Resolvidas",
+      "resolved": "Finalizadas",
       "LABEL": "Status"
     },
     "CHAT_ORIGIN_FILTER_ITEMS": {

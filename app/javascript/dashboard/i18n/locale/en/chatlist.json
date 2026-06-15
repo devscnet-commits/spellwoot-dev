@@ -154,7 +154,7 @@
     "SENDING": "Sending",
     "STATUS_TOGGLE": {
       "open": "Em aberto",
-      "resolved": "Resolvidas",
+      "resolved": "Finalizadas",
       "LABEL": "Status"
     },
     "SORT_GROUPS": {
