@@ -53,9 +53,9 @@
         "DISPLAY_LABEL": "Rótulo do botão",
         "POLARITY": "Polaridade",
         "POLARITY_OPTIONS": {
-          "positive": "Positiva",
-          "negative": "Negativa",
-          "neutral": "Neutra"
+          "positive": "Positivo",
+          "negative": "Negativo",
+          "neutral": "Neutro"
         },
         "META_EVENT": "Enviar à Meta como",
         "META_NONE": "Não enviar",
