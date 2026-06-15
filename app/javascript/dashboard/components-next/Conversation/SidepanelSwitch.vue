@@ -12,16 +12,11 @@ const isContactSidebarOpen = computed(
   () => uiSettings.value.is_contact_sidebar_open
 );
 
+// Single toggle: opens the contact panel when closed, closes it when open (so the button
+// doubles as the X). Shared by the click and the Alt+O shortcut.
 const toggleConversationSidebarToggle = () => {
   updateUISettings({
     is_contact_sidebar_open: !isContactSidebarOpen.value,
-    is_copilot_panel_open: false,
-  });
-};
-
-const handleConversationSidebarToggle = () => {
-  updateUISettings({
-    is_contact_sidebar_open: true,
     is_copilot_panel_open: false,
   });
 };
@@ -48,7 +43,7 @@ useKeyboardEvents(keyboardEvents);
         '!bg-n-brand/20 !text-n-blue-11': isContactSidebarOpen,
       }"
       icon="i-ph-user-bold"
-      @click="handleConversationSidebarToggle"
+      @click="toggleConversationSidebarToggle"
     />
   </ButtonGroup>
 </template>
