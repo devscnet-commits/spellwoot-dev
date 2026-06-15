@@ -3,9 +3,10 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
 
   SENSITIVE_KEYS = %w[accessToken apiKey clientSecret refreshToken authToken token].freeze
 
-  # Returns the effective (merged) config — what is actually being used right now
+  # Returns the merged config for the settings form. Uses for_display so a disabled account
+  # still sees the values it would use once re-enabled (the runtime callers stay gated).
   def show
-    effective = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
+    effective = IntegrationSettingsService.get_config(Current.account.id, params[:provider], for_display: true)
     setting   = IntegrationSetting.find_by(account_id: Current.account.id, provider: params[:provider])
     render json: {
       provider: params[:provider],

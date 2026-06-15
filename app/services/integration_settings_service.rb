@@ -38,7 +38,17 @@ class IntegrationSettingsService
 
   # 3-tier resolution: account config → global config → ENV
   # Each tier fills only keys absent from higher tiers.
-  def self.get_config(account_id, provider)
+  #
+  # An explicit account-level opt-out (a row for this account with enabled=false) turns the
+  # provider OFF for the account, even when a global/server config exists — otherwise the
+  # toggle would be a no-op and the integration would keep running via the global fallback.
+  # `for_display: true` skips this hard-stop so the settings form can still show the values.
+  def self.get_config(account_id, provider, for_display: false)
+    unless for_display
+      account_setting = IntegrationSetting.find_by(account_id: account_id, provider: provider)
+      return {} if account_setting && !account_setting.enabled?
+    end
+
     account_cfg = load_db(account_id, provider)
     global_cfg  = load_db(nil, provider)
     env_cfg     = load_env(provider)
