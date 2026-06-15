@@ -1048,7 +1048,7 @@ watch(conversationFilters, (newVal, oldVal) => {
           v-for="item in assigneeTabItems"
           :key="item.key"
           type="button"
-          class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors"
+          class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
           :class="
             activeAssigneeTab === item.key
               ? 'bg-n-solid-1 text-n-slate-12 shadow-sm'
