@@ -1,24 +1,14 @@
 <script>
-import { ref } from 'vue';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
-import { useCaptain } from 'dashboard/composables/useCaptain';
-import { useTrack } from 'dashboard/composables';
-import { vOnClickOutside } from '@vueuse/components';
 import { REPLY_EDITOR_MODES, CHAR_LENGTH_WARNING } from './constants';
-import { CAPTAIN_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import EditorModeToggle from './EditorModeToggle.vue';
-import CopilotMenuBar from './CopilotMenuBar.vue';
 
 export default {
   name: 'ReplyTopPanel',
   components: {
     NextButton,
     EditorModeToggle,
-    CopilotMenuBar,
-  },
-  directives: {
-    OnClickOutside: vOnClickOutside,
   },
   props: {
     mode: {
@@ -54,7 +44,7 @@ export default {
       default: undefined,
     },
   },
-  emits: ['setReplyMode', 'toggleEditorSize', 'executeCopilotAction'],
+  emits: ['setReplyMode', 'toggleEditorSize'],
   setup(props, { emit }) {
     const setReplyMode = mode => {
       emit('setReplyMode', mode);
@@ -74,29 +64,6 @@ export default {
       setReplyMode(newMode);
     };
 
-    const { captainTasksEnabled } = useCaptain();
-    const showCopilotMenu = ref(false);
-
-    const handleCopilotAction = (actionKey, data) => {
-      emit('executeCopilotAction', actionKey, data || props.editorContent);
-      showCopilotMenu.value = false;
-    };
-
-    const toggleCopilotMenu = () => {
-      const isOpening = !showCopilotMenu.value;
-      if (isOpening) {
-        useTrack(CAPTAIN_EVENTS.EDITOR_AI_MENU_OPENED, {
-          conversationId: props.conversationId,
-          entryPoint: 'top_panel',
-        });
-      }
-      showCopilotMenu.value = isOpening;
-    };
-
-    const handleClickOutside = () => {
-      showCopilotMenu.value = false;
-    };
-
     const keyboardEvents = {
       'Alt+KeyP': {
         action: () => handleNoteClick(),
@@ -114,11 +81,6 @@ export default {
       handleReplyClick,
       handleNoteClick,
       REPLY_EDITOR_MODES,
-      captainTasksEnabled,
-      handleCopilotAction,
-      showCopilotMenu,
-      toggleCopilotMenu,
-      handleClickOutside,
     };
   },
   computed: {
@@ -161,29 +123,7 @@ export default {
         </span>
       </div>
     </div>
-    <div v-if="captainTasksEnabled" class="flex items-center gap-2">
-      <div class="relative">
-        <NextButton
-          ghost
-          :disabled="disabled || isEditorDisabled"
-          :class="{
-            'text-n-violet-9 hover:enabled:!bg-n-violet-3': !showCopilotMenu,
-            'text-n-violet-9 bg-n-violet-3': showCopilotMenu,
-          }"
-          sm
-          icon="i-ph-sparkle-fill"
-          @click="toggleCopilotMenu"
-        />
-        <CopilotMenuBar
-          v-if="showCopilotMenu"
-          v-on-click-outside="handleClickOutside"
-          :has-selection="false"
-          :editor-content="editorContent"
-          :conversation-id="conversationId"
-          class="ltr:right-0 rtl:left-0 bottom-full mb-2"
-          @execute-copilot-action="handleCopilotAction"
-        />
-      </div>
+    <div class="flex items-center gap-2">
       <NextButton
         ghost
         class="text-n-slate-11"

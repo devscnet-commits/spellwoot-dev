@@ -36,6 +36,8 @@ const agentEligibility = ref({});
 const addSearch = ref('');
 const showAddDropdown = ref(false);
 const isAgentListUpdating = ref(false);
+// Snapshot of the agent membership/eligibility at load/after save, for the dirty state.
+const savedAgentsState = ref('');
 const enableAutoAssignment = ref(false);
 const maxAssignmentLimit = ref(null);
 const assignmentPolicy = ref(null);
@@ -66,9 +68,62 @@ const addableAgents = computed(() => {
   );
 });
 
+// Teams as a shortcut: picking one adds all its members at once (agents can still
+// be removed individually afterwards).
+const teamsList = computed(() => store.getters['teams/getTeams'] || []);
+const addableTeams = computed(() => {
+  const q = addSearch.value.toLowerCase();
+  return teamsList.value.filter(
+    team => !q || team.name.toLowerCase().includes(q)
+  );
+});
+
+// The closing flow follows the agent's team, so adding someone to a caixa never
+// changes which flow they use — no conflict to warn about here.
 const addAgent = agent => {
   selectedAgentIds.value = [...selectedAgentIds.value, agent.id];
   agentEligibility.value = { ...agentEligibility.value, [agent.id]: true };
+  addSearch.value = '';
+  showAddDropdown.value = false;
+};
+
+const addTeam = async team => {
+  try {
+    const TeamsAPI = (await import('dashboard/api/teams')).default;
+    const { data } = await TeamsAPI.getAgents({ teamId: team.id });
+    const memberIds = (data || []).map(member => member.id);
+    const newIds = memberIds.filter(
+      id =>
+        !selectedAgentIds.value.includes(id) &&
+        agentList.value.some(agent => agent.id === id)
+    );
+    if (newIds.length) {
+      selectedAgentIds.value = [...selectedAgentIds.value, ...newIds];
+      const eligibility = { ...agentEligibility.value };
+      newIds.forEach(id => {
+        eligibility[id] = true;
+      });
+      agentEligibility.value = eligibility;
+    }
+    // Also link this caixa to the team (TeamInbox), so team membership and caixa
+    // access stay mirrored — the closing flow itself lives on the caixa.
+    const linkedInboxIds = team.inbox_ids || [];
+    let linkedNow = false;
+    if (!linkedInboxIds.includes(props.inbox.id)) {
+      await TeamsAPI.updateInboxes({
+        teamId: team.id,
+        inboxIds: [...linkedInboxIds, props.inbox.id],
+      });
+      store.dispatch('teams/get', { cache: false });
+      linkedNow = true;
+    }
+    const agentsPart = newIds.length
+      ? `${newIds.length} agente(s) do time "${team.name}" adicionado(s)`
+      : `Todos os agentes do time "${team.name}" já estão na caixa`;
+    useAlert(linkedNow ? `${agentsPart}. Caixa vinculada ao time` : agentsPart);
+  } catch {
+    useAlert('Não foi possível adicionar o time à caixa');
+  }
   addSearch.value = '';
   showAddDropdown.value = false;
 };
@@ -87,7 +142,20 @@ const toggleEligibility = agentId => {
   };
 };
 
-const closeAddDropdown = () => { showAddDropdown.value = false; };
+const closeAddDropdown = () => {
+  showAddDropdown.value = false;
+};
+
+// Stable representation of the agent list + eligibility, so the Update button only
+// enables when something actually changed (and greys out again after saving).
+const serializeAgents = () => {
+  const ids = [...selectedAgentIds.value].sort((a, b) => a - b);
+  const elig = ids.map(id => [id, agentEligibility.value[id] !== false]);
+  return JSON.stringify({ ids, elig });
+};
+const isAgentsDirty = computed(
+  () => savedAgentsState.value !== serializeAgents()
+);
 
 const isFeatureEnabled = feature => {
   const accountId = Number(route.params.accountId);
@@ -175,6 +243,7 @@ const fetchAttachedAgents = async () => {
       map[m.id] = m.eligible_for_assignment !== false;
     });
     agentEligibility.value = map;
+    savedAgentsState.value = serializeAgents();
   } catch (error) {
     //  Handle error
   }
@@ -283,7 +352,7 @@ const handleToggleAutoAssignment = async val => {
   }
 };
 
-const updateAgents = async () => {
+async function updateAgents() {
   isAgentListUpdating.value = true;
   try {
     const members = selectedAgentIds.value.map(id => ({
@@ -294,12 +363,13 @@ const updateAgents = async () => {
       inboxId: props.inbox.id,
       members,
     });
+    savedAgentsState.value = serializeAgents();
     useAlert(t('AGENT_MGMT.EDIT.API.SUCCESS_MESSAGE'));
   } catch (error) {
     useAlert(t('AGENT_MGMT.EDIT.API.ERROR_MESSAGE'));
   }
   isAgentListUpdating.value = false;
-};
+}
 
 const updateInbox = async () => {
   try {
@@ -383,6 +453,9 @@ watch(() => props.inbox.id, setDefaults);
 
 onMounted(() => {
   setDefaults();
+  // Never dispatch 'inboxes/get' here: Settings.vue unmounts this tab while inboxes
+  // are fetching, so refetching from onMounted causes an infinite remount loop.
+  store.dispatch('teams/get', { cache: false });
 });
 </script>
 
@@ -395,10 +468,7 @@ onMounted(() => {
     >
       <div class="flex flex-col gap-2">
         <!-- Add agent row -->
-        <div
-          v-on-click-outside="closeAddDropdown"
-          class="relative"
-        >
+        <div v-on-click-outside="closeAddDropdown" class="relative">
           <div class="flex gap-2">
             <SearchInput
               v-model="addSearch"
@@ -408,11 +478,37 @@ onMounted(() => {
             />
           </div>
 
-          <!-- Dropdown list of addable agents -->
+          <!-- Dropdown: whole teams as shortcuts, then individual agents -->
           <div
-            v-if="showAddDropdown && addableAgents.length > 0"
-            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg max-h-48 overflow-y-auto"
+            v-if="
+              showAddDropdown && (addableAgents.length || addableTeams.length)
+            "
+            class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg max-h-56 overflow-y-auto"
           >
+            <template v-if="addableTeams.length">
+              <p
+                class="px-3 pt-2 pb-1 text-xs font-medium uppercase text-n-slate-10"
+              >
+                Adicionar time inteiro
+              </p>
+              <button
+                v-for="team in addableTeams"
+                :key="`team-${team.id}`"
+                type="button"
+                class="w-full flex items-center gap-2 px-3 py-2 text-sm text-n-slate-12 hover:bg-n-slate-2 text-left"
+                @click="addTeam(team)"
+              >
+                <span class="i-lucide-users text-n-slate-9 shrink-0" />
+                {{ team.name }}
+              </button>
+              <div class="border-t border-n-weak my-1" />
+            </template>
+            <p
+              v-if="addableAgents.length"
+              class="px-3 pt-2 pb-1 text-xs font-medium uppercase text-n-slate-10"
+            >
+              Agentes
+            </p>
             <button
               v-for="agent in addableAgents"
               :key="agent.id"
@@ -425,19 +521,25 @@ onMounted(() => {
             </button>
           </div>
           <div
-            v-else-if="showAddDropdown && addSearch && addableAgents.length === 0"
+            v-else-if="showAddDropdown && addSearch"
             class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg px-3 py-3 text-sm text-n-slate-10"
           >
-            Nenhum agente encontrado
+            Nenhum agente ou time encontrado
           </div>
         </div>
 
         <!-- Members table — only current inbox members -->
         <div class="rounded-lg border border-n-weak overflow-hidden">
-          <div class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak">
-            <span class="text-xs font-medium text-n-slate-11 flex-1">Agente</span>
-            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">Recebe atribuições</span>
-            <span class="w-6" />
+          <div
+            class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak"
+          >
+            <span class="text-xs font-medium text-n-slate-11 flex-1"
+              >Agente</span
+            >
+            <span class="text-xs font-medium text-n-slate-11 w-36 text-center"
+              >Receber atendimentos</span
+            >
+            <span class="w-16" />
           </div>
           <div class="max-h-64 overflow-y-auto">
             <div
@@ -445,7 +547,9 @@ onMounted(() => {
               :key="agent.id"
               class="flex items-center px-3 py-2.5 border-b border-n-weak/50 last:border-0 hover:bg-n-slate-1 transition-colors"
             >
-              <span class="text-sm text-n-slate-12 flex-1">{{ agent.name }}</span>
+              <span class="text-sm text-n-slate-12 flex-1">{{
+                agent.name
+              }}</span>
 
               <!-- Eligibility toggle -->
               <div class="w-36 flex justify-center">
@@ -458,10 +562,12 @@ onMounted(() => {
               <!-- Remove button -->
               <button
                 type="button"
-                class="w-6 flex items-center justify-center text-n-slate-9 hover:text-n-ruby-9 transition-colors"
+                class="w-16 flex items-center justify-center gap-1 text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors"
+                title="Remover agente da caixa"
                 @click="removeAgent(agent.id)"
               >
-                <span class="i-lucide-x text-sm" />
+                <span class="i-lucide-trash-2 size-3.5 shrink-0" />
+                Remover
               </button>
             </div>
 
@@ -476,7 +582,11 @@ onMounted(() => {
 
         <p class="text-xs text-n-slate-10">
           {{ memberAgents.length }}
-          {{ memberAgents.length === 1 ? 'agente nesta caixa' : 'agentes nesta caixa' }}
+          {{
+            memberAgents.length === 1
+              ? 'agente nesta caixa'
+              : 'agentes nesta caixa'
+          }}
         </p>
       </div>
 
@@ -487,6 +597,7 @@ onMounted(() => {
             <NextButton
               :label="$t('INBOX_MGMT.SETTINGS_POPUP.UPDATE')"
               :is-loading="isAgentListUpdating"
+              :disabled="!isAgentsDirty"
               @click="updateAgents"
             />
           </div>
@@ -766,32 +877,23 @@ onMounted(() => {
       </SettingsToggleSection>
     </SettingsAccordion>
 
-    <woot-modal
+    <!-- Unlinking the assignment policy changes how every conversation in the caixa is
+         distributed — big-impact unlinks require typing the name to confirm. -->
+    <woot-confirm-delete-modal
       v-if="showDeleteConfirmModal"
-      :show="showDeleteConfirmModal"
-      :on-close="cancelDeletePolicy"
-    >
-      <div class="p-6">
-        <h3 class="text-lg font-medium text-n-slate-12 mb-4">
-          {{ $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_TITLE') }}
-        </h3>
-        <p class="text-sm text-n-slate-11 mb-6 ml-13">
-          {{ $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_MESSAGE') }}
-        </p>
-        <div class="flex justify-end gap-2">
-          <NextButton
-            color="slate"
-            :label="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CANCEL')"
-            @click="cancelDeletePolicy"
-          />
-          <NextButton
-            color="ruby"
-            :label="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CONFIRM_DELETE')"
-            :is-loading="isDeletingPolicy"
-            @click="deleteAssignmentPolicy"
-          />
-        </div>
-      </div>
-    </woot-modal>
+      v-model:show="showDeleteConfirmModal"
+      :title="$t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_TITLE')"
+      :message="$t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_CONFIRM_MESSAGE')"
+      :confirm-text="`${$t('INBOX_MGMT.ASSIGNMENT_POLICY.CONFIRM_DELETE')} ${assignmentPolicy?.name}`"
+      :reject-text="$t('INBOX_MGMT.ASSIGNMENT_POLICY.CANCEL')"
+      :confirm-value="assignmentPolicy?.name"
+      :confirm-place-holder-text="
+        $t('INBOX_MGMT.ASSIGNMENT_POLICY.DELETE_PLACE_HOLDER', {
+          name: assignmentPolicy?.name,
+        })
+      "
+      @on-confirm="deleteAssignmentPolicy"
+      @on-close="cancelDeletePolicy"
+    />
   </div>
 </template>

@@ -5,3 +5,6 @@ json.allow_auto_assign resource.allow_auto_assign
 json.account_id resource.account_id
 json.is_member Current.user.teams.include?(resource)
 json.agents_count resource.team_members.count
+json.inbox_ids resource.inbox_ids
+json.operational_flow_id resource.operational_flow_id
+json.member_ids resource.team_members.pluck(:user_id)

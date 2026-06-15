@@ -1,14 +1,12 @@
 {
   "OPERATIONAL_FLOWS_SETTINGS": {
     "HEADER": "Closing Flows",
-    "DESCRIPTION": "Configure the closing flow for each Caixa (inbox): the result reasons available when resolving a conversation as won or lost, and whether a reason is required.",
+    "DESCRIPTION": "Configure the closing flows: the resolution buttons (e.g. Won/Lost), the attributes required at closing time and the events sent to Meta. Assignment rules decide which flow each conversation uses.",
     "LOADING": "Loading closing flows...",
     "NEW_FLOW": "Create flow",
     "LIST": {
       "404": "No closing flows created yet",
       "EDIT_FLOW": "Edit flow",
-      "REASONS_COUNT": "{count} reason | {count} reasons",
-      "REASON_REQUIRED": "Reason required",
       "META_ON": "Meta on",
       "ACTIVE": "Active",
       "INACTIVE": "Inactive"
@@ -21,22 +19,19 @@
       },
       "CONFIRM": {
         "TITLE": "Delete {flowName}?",
-        "MESSAGE": "Are you sure you want to delete this closing flow? Caixas using it will fall back to no flow.",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
         "YES": "Yes, delete",
-        "NO": "Cancel"
+        "NO": "Cancel",
+        "PLACE_HOLDER": "Escreva {name} para confirmar"
       }
     },
     "FORM": {
       "NEW_TITLE": "New closing flow",
       "EDIT_TITLE": "Edit closing flow",
-      "SUBTITLE": "Define the reasons agents can pick when resolving a conversation.",
+      "SUBTITLE": "Define the closing buttons and what is required when resolving a conversation.",
       "NAME": {
         "LABEL": "Flow name",
         "PLACEHOLDER": "e.g., Sales"
-      },
-      "REQUIRE_REASON": {
-        "LABEL": "Require a reason",
-        "HELP": "Agents must pick a reason to resolve a conversation as won or lost."
       },
       "ACTIVE": {
         "LABEL": "Active"
@@ -54,9 +49,7 @@
         }
       },
       "STATES": {
-        "LABEL": "Resolution states (closing buttons)",
-        "HELP": "Rename the buttons freely — the label is presentation only. The fixed key is what reports and integrations read, so renaming never changes your data.",
-        "CANONICAL_FIXED": "fixed key (used by reports)",
+        "LABEL": "Estados do fluxo",
         "DISPLAY_LABEL": "Button label",
         "POLARITY": "Polarity",
         "POLARITY_OPTIONS": {
@@ -64,60 +57,63 @@
           "negative": "Negative",
           "neutral": "Neutral"
         },
-        "REQUIRES_REASON": "Require a reason for this state",
         "META_EVENT": "Send to Meta as",
         "META_NONE": "Do not send",
         "META_VALUE_ATTR": "Sale value from attribute",
-        "META_NO_VALUE": "No value"
+        "META_NO_VALUE": "No value",
+        "META_NEED_VALUE_ATTR": "The Purchase event requires a value. Create a conversation custom attribute of type Number (e.g. \"Sale value\") under Settings → Custom attributes and select it here.",
+        "META_VALUE_HELP": "On save, this attribute becomes required for this state: the agent will be asked to fill it when closing the conversation.",
+        "META_EVENT_DESC": {
+          "Purchase": "Completed sale (requires value)",
+          "Lead": "New lead",
+          "CompleteRegistration": "Registration completed",
+          "Contact": "Contact made",
+          "Schedule": "Appointment booked",
+          "SubmitApplication": "Application submitted",
+          "StartTrial": "Trial started",
+          "Subscribe": "Subscription started",
+          "InitiateCheckout": "Checkout started",
+          "AddPaymentInfo": "Payment info added",
+          "AddToCart": "Added to cart",
+          "AddToWishlist": "Added to wishlist",
+          "ViewContent": "Viewed content/product",
+          "Search": "Searched something",
+          "FindLocation": "Looked for a location/store",
+          "CustomizeProduct": "Customized a product",
+          "Donate": "Donation made"
+        }
       },
-      "WON_REASONS": "Reasons for Won",
-      "LOST_REASONS": "Reasons for Lost",
-      "REASON_PLACEHOLDER": "e.g., Price too high",
-      "ADD_REASON": "Add reason",
-      "INBOXES": {
-        "LABEL": "Caixas using this flow",
-        "HELP": "A Caixa uses only one flow. Selecting it here moves it from any previous flow.",
-        "EMPTY": "No inboxes available."
+      "USED_BY": {
+        "TITLE": "This flow is used by:",
+        "MANAGE": "Gerenciar times →",
+        "EMPTY": "Nenhum time usa este fluxo ainda."
       },
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Closing flow created successfully",
       "UPDATE_SUCCESS": "Closing flow updated successfully",
       "ERROR_MESSAGE": "Could not save the closing flow",
       "REQUIREMENTS": {
-        "LABEL": "Required attributes to close",
-        "HELP": "Attributes the agent must fill before resolving as one of these states. Keyed on the state, so renaming a button never changes them.",
+        "LABEL": "Atributos obrigatórios do fluxo",
+        "HELP": "Attributes the agent must fill before resolving as one of these states.",
         "SELECT_ATTRIBUTE": "Select an attribute",
         "ALWAYS": "Always required",
         "WHEN_STATE": "Required when: {state}",
+        "IF": "Required if...",
+        "IF_FIELD": "When the attribute",
+        "IF_FIELD_PLACEHOLDER": "Select the trigger attribute",
+        "IF_VALUES": "Is one of these answers",
+        "IF_NO_LIST_ATTRS": "No multiple-choice (list) attribute available. Create one under Custom attributes.",
         "ADD": "Add requirement"
       }
     },
-    "ASSIGNMENT_RULES": {
-      "HEADER": "Assignment rules",
-      "DESCRIPTION": "Decides which flow applies to each conversation, by the closing agent's role, the inbox and the team. The most specific matching rule wins.",
-      "NEW_RULE": "Add rule",
-      "EMPTY": "No assignment rules yet. Conversations fall back to the flow attached to their Caixa.",
-      "ANY": "(any)",
-      "DEFAULT": "Default",
-      "PRIORITY": "Priority",
-      "PRIORITY_HELP": "Lower numbers are evaluated first. The first rule that matches decides the flow.",
-      "DIMENSIONS": {
-        "ROLE": "Role",
-        "INBOX": "Caixa",
-        "TEAM": "Team",
-        "ORIGIN": "Origin"
-      },
-      "FORM": {
-        "FLOW": "Flow to apply",
-        "SELECT": "Select a flow",
-        "SAVE": "Save rule",
-        "CANCEL": "Cancel",
-        "CONDITIONS_INTRO": "Set only the conditions that matter. Anything left as \"(any)\" does not restrict that dimension."
-      },
-      "SAVE_SUCCESS": "Assignment rule saved",
-      "SAVE_ERROR": "Could not save the assignment rule",
-      "DELETE_SUCCESS": "Assignment rule deleted",
-      "SPECIFICITY_HELP": "The most specific matching rule (the one with more conditions) wins. With no conditions, it applies to any conversation."
+    "TIME_FLOWS": {
+      "HEADER": "Times → Fluxo de fechamento",
+      "DESCRIPTION": "O fluxo segue o time da conversa: time atribuído à conversa ou, sem ele, o time do agente que atendeu. Configure aqui qual fluxo cada time usa.",
+      "NONE": "Sem fluxo",
+      "INACTIVE": "inativo",
+      "EMPTY": "Nenhum time encontrado.",
+      "SAVE_SUCCESS": "Fluxo do time atualizado",
+      "SAVE_ERROR": "Não foi possível atualizar o fluxo do time"
     }
   }
 }

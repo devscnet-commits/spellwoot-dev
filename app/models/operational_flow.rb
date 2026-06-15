@@ -7,7 +7,6 @@ class OperationalFlow < ApplicationRecord
   has_many :reasons, class_name: 'OperationalFlowReason', dependent: :destroy, inverse_of: :operational_flow
   has_many :resolution_states, -> { order(:sort_order) }, dependent: :destroy, inverse_of: :operational_flow
   has_many :closing_requirements, -> { order(:sort_order) }, dependent: :destroy, inverse_of: :operational_flow
-  has_many :assignment_rules, class_name: 'FlowAssignmentRule', dependent: :destroy
   has_many :inboxes, dependent: :nullify
 
   CATEGORIES = %w[sales support].freeze

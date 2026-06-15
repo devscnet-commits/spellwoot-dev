@@ -47,7 +47,6 @@ import summaryReports from './modules/summaryReports';
 import teamMembers from './modules/teamMembers';
 import teams from './modules/teams';
 import operationalFlows from './modules/operationalFlows';
-import flowAssignmentRules from './modules/flowAssignmentRules';
 import userNotificationSettings from './modules/userNotificationSettings';
 import webhooks from './modules/webhooks';
 import captainAssistants from './captain/assistant';
@@ -112,7 +111,6 @@ export default createStore({
     teamMembers,
     teams,
     operationalFlows,
-    flowAssignmentRules,
     userNotificationSettings,
     webhooks,
     captainAssistants,

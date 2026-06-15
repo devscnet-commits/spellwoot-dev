@@ -8,12 +8,16 @@ class Conversations::ResultService
   # resolution state's canonical_key (a support "resolved"/positive still aggregates as a win).
   RESULT_BY_POLARITY = { 'positive' => 'won', 'negative' => 'lost', 'neutral' => 'none' }.freeze
 
-  def initialize(conversation:, outcome:, user: nil, reason: nil, ip_address: nil)
+  def initialize(conversation:, outcome:, user: nil, reason: nil, ip_address: nil, custom_attributes: nil)
     @conversation = conversation
     @outcome = outcome.to_s
     @user = user
     @reason = reason.presence
     @ip_address = ip_address
+    # Persisted in the same commit as the result: a separate custom_attributes update fires
+    # a conversation.updated event with the result still unset, and that stale payload can
+    # arrive after the optimistic UI update and wipe the chip until a refresh.
+    @custom_attributes = custom_attributes
     @flow = @conversation.operational_flow(user)
     @state = @flow&.state_for(@outcome) unless @outcome == AI_CLOSED
     @result = compute_result
@@ -51,6 +55,7 @@ class Conversations::ResultService
 
   def update_attributes
     {
+      **(@custom_attributes.present? ? { custom_attributes: @custom_attributes } : {}),
       result: @result,
       result_reason: @reason,
       result_category: category,
@@ -90,9 +95,17 @@ class Conversations::ResultService
   def synced_attributes
     attrs = @conversation.additional_attributes || {}
     if @recognized
-      attrs.merge('outcome' => @outcome, 'outcome_set_at' => Time.current.iso8601)
+      attrs = attrs.merge('outcome' => @outcome, 'outcome_set_at' => Time.current.iso8601)
+      # Pin the resolution state used at closing time: the UI renders the state's CURRENT
+      # label (so renames inside the same flow update history), and falls back to the text
+      # snapshot if the state/flow is gone. Swapping the caixa's flow never re-labels history.
+      if @state
+        attrs.merge('outcome_label' => @state.display_label, 'outcome_state_id' => @state.id)
+      else
+        attrs.except('outcome_label', 'outcome_state_id')
+      end
     else
-      attrs.except('outcome', 'outcome_set_at')
+      attrs.except('outcome', 'outcome_set_at', 'outcome_label', 'outcome_state_id')
     end
   end
 

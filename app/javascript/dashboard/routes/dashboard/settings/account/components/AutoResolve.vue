@@ -42,6 +42,18 @@ const selectedLabelName = computed(() => {
   return labelToApply.value?.name ?? null;
 });
 
+// Snapshot of the persisted form state: the save button only enables when something
+// actually changed, and greys out again after saving.
+const savedState = ref('');
+const serializeForm = () =>
+  JSON.stringify({
+    duration: duration.value ?? null,
+    message: message.value || '',
+    ignoreWaiting: !!ignoreWaiting.value,
+    label: selectedLabelName.value || null,
+  });
+const isDirty = computed(() => savedState.value !== serializeForm());
+
 watch(
   [currentAccount, labelOptions],
   () => {
@@ -76,6 +88,8 @@ watch(
     if (duration.value) {
       isEnabled.value = true;
     }
+
+    savedState.value = serializeForm();
   },
   { deep: true, immediate: true }
 );
@@ -84,6 +98,7 @@ const updateAccountSettings = async settings => {
   try {
     isSubmitting.value = true;
     await updateAccount(settings, { silent: true });
+    savedState.value = serializeForm();
     useAlert(t('GENERAL_SETTINGS.FORM.AUTO_RESOLVE.DURATION.API.SUCCESS'));
   } catch (error) {
     useAlert(t('GENERAL_SETTINGS.FORM.AUTO_RESOLVE.DURATION.API.ERROR'));
@@ -204,6 +219,7 @@ const toggleAutoResolve = async () => {
             blue
             type="submit"
             :is-loading="isSubmitting"
+            :disabled="!isDirty"
             :label="t('GENERAL_SETTINGS.FORM.AUTO_RESOLVE.UPDATE_BUTTON')"
           />
         </div>

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useStoreGetters } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
 import wootConstants from 'dashboard/constants/globals';
@@ -13,10 +14,16 @@ const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
 const { currentAccount } = useAccount();
+const { requiredAttributes: accountRequiredAttributes } =
+  useConversationRequiredAttributes();
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
 const pendingStatusSeed = ref({});
+// Flow state being closed with — pinned into additional_attributes (outcome_state_id +
+// outcome_label snapshot) so the result chip keeps showing the exact button used.
+const pendingOutcomeLabel = ref(null);
+const pendingOutcomeStateId = ref(null);
 
 const metaSettings = computed(
   () => currentAccount.value?.settings?.meta_conversion_settings || {}
@@ -62,12 +69,31 @@ const buildInitialValues = (statusValue, outcome) => {
   return base;
 };
 
+// Flow requirements plus the account-level required attributes (always + conditional rules);
+// the modal decides visibility per condition, so conditional ones can be passed as-is.
+const mergeWithAccountAttributes = (attributes = []) => {
+  const seen = new Set(attributes.map(a => a.value));
+  return [
+    ...attributes,
+    ...accountRequiredAttributes.value.filter(a => !seen.has(a.value)),
+  ];
+};
+
 // Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
 // the editable display label. The system result field is seeded from the canonical key so
 // conditional required attributes keep evaluating against ganho/perdido.
-const openOutcome = ({ outcome, label, statusValue, attributes }) => {
+const openOutcome = ({
+  outcome,
+  label,
+  statusValue,
+  attributes,
+  outcomeLabel,
+  outcomeStateId,
+}) => {
   const seedValue = statusValue ?? label;
   const initialValues = buildInitialValues(seedValue, outcome);
+  pendingOutcomeLabel.value = outcomeLabel || null;
+  pendingOutcomeStateId.value = outcomeStateId || null;
   pendingStatusSeed.value = winStatusField.value
     ? { [winStatusField.value]: seedValue }
     : {};
@@ -75,8 +101,7 @@ const openOutcome = ({ outcome, label, statusValue, attributes }) => {
     outcome,
     label,
     statusValue: seedValue,
-    // Requirements come only from the resolved flow (empty array when the flow defines none).
-    attributes: attributes ?? [],
+    attributes: mergeWithAccountAttributes(attributes ?? []),
     initialValues,
   });
 };
@@ -116,6 +141,14 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
       result: outcome,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
+        // Keep the dual-written legacy outcome in sync so the result chip updates live.
+        outcome,
+        ...(pendingOutcomeLabel.value
+          ? { outcome_label: pendingOutcomeLabel.value }
+          : {}),
+        ...(pendingOutcomeStateId.value
+          ? { outcome_state_id: pendingOutcomeStateId.value }
+          : {}),
         ...(isOnCloseStrategy.value && hasCtwaClid.value
           ? { meta_conversion: { sent: true } }
           : {}),
@@ -138,7 +171,7 @@ defineExpose({ openWon, openLost, openOutcome });
 <template>
   <div v-if="showButtons" class="flex items-center gap-1">
     <Button
-      size="sm"
+      size="md"
       variant="ghost"
       color="teal"
       icon="i-lucide-circle-check"
@@ -147,7 +180,7 @@ defineExpose({ openWon, openLost, openOutcome });
       @click="openWon"
     />
     <Button
-      size="sm"
+      size="md"
       variant="ghost"
       color="ruby"
       icon="i-lucide-circle-x"

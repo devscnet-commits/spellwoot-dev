@@ -79,33 +79,6 @@ export const periodsToApi = (daySlots = []) => {
   return out;
 };
 
-// ── Schedule templates ────────────────────────────────────────────────────────
-
-export const scheduleTemplates = [
-  {
-    label: '08:00 → 18:00',
-    periods: [{ from: '08:00 AM', to: '06:00 PM' }],
-  },
-  {
-    label: '08:00 → 12:00 / 13:00 → 18:00',
-    periods: [
-      { from: '08:00 AM', to: '12:00 PM' },
-      { from: '01:00 PM', to: '06:00 PM' },
-    ],
-  },
-  {
-    label: '07:30 → 12:00 / 13:30 → 18:00',
-    periods: [
-      { from: '07:30 AM', to: '12:00 PM' },
-      { from: '01:30 PM', to: '06:00 PM' },
-    ],
-  },
-  {
-    label: '24 horas',
-    periods: [{ from: '12:00 AM', to: '11:59 PM' }],
-  },
-];
-
 // ── Status computation ────────────────────────────────────────────────────────
 
 const parseTimeInZone = (timeStr, refDate) =>

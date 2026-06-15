@@ -26,8 +26,6 @@ onMounted(() => {
   store.dispatch('operationalFlows/get');
 });
 
-const reasonsCount = flow => (flow.reasons || []).length;
-
 const showDeletePopup = ref(false);
 const selectedFlow = ref({});
 
@@ -65,6 +63,11 @@ const deleteConfirmText = computed(
 const deleteRejectText = computed(() =>
   t('OPERATIONAL_FLOWS_SETTINGS.DELETE.CONFIRM.NO')
 );
+const confirmPlaceHolderText = computed(() =>
+  t('OPERATIONAL_FLOWS_SETTINGS.DELETE.CONFIRM.PLACE_HOLDER', {
+    name: selectedFlow.value?.name,
+  })
+);
 const confirmDeleteTitle = computed(() =>
   t('OPERATIONAL_FLOWS_SETTINGS.DELETE.CONFIRM.TITLE', {
     flowName: selectedFlow.value.name,
@@ -73,22 +76,16 @@ const confirmDeleteTitle = computed(() =>
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
-        <h3 class="text-base font-medium text-n-slate-12">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.HEADER') }}
-        </h3>
-        <p class="text-sm text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.DESCRIPTION') }}
-        </p>
-      </div>
-      <router-link
-        v-if="isAdmin"
-        :to="{ name: 'settings_operational_flows_new' }"
-      >
-        <Button :label="$t('OPERATIONAL_FLOWS_SETTINGS.NEW_FLOW')" size="sm" />
-      </router-link>
+  <div
+    class="flex flex-col gap-4 outline-1 outline outline-n-container rounded-xl bg-n-solid-2 p-5"
+  >
+    <div class="flex flex-col gap-1">
+      <h3 class="text-base font-medium text-n-slate-12">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.HEADER') }}
+      </h3>
+      <p class="text-sm text-n-slate-11">
+        {{ $t('OPERATIONAL_FLOWS_SETTINGS.DESCRIPTION') }}
+      </p>
     </div>
 
     <div v-if="uiFlags.isFetching" class="flex justify-center py-6">
@@ -119,20 +116,6 @@ const confirmDeleteTitle = computed(() =>
               {{ flow.name }}
             </span>
             <div class="flex items-center gap-3 mt-1">
-              <span class="flex items-center gap-1 text-xs text-n-slate-11">
-                <span class="i-lucide-list size-3" />
-                {{
-                  $t('OPERATIONAL_FLOWS_SETTINGS.LIST.REASONS_COUNT', {
-                    count: reasonsCount(flow),
-                  })
-                }}
-              </span>
-              <span
-                v-if="flow.require_reason"
-                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-n-amber-3 text-n-amber-11"
-              >
-                {{ $t('OPERATIONAL_FLOWS_SETTINGS.LIST.REASON_REQUIRED') }}
-              </span>
               <span
                 v-if="flow.meta_enabled"
                 class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-n-blue-3 text-n-blue-11"
@@ -185,6 +168,16 @@ const confirmDeleteTitle = computed(() =>
       </div>
     </div>
 
+    <div v-if="isAdmin" class="flex justify-end">
+      <router-link :to="{ name: 'settings_operational_flows_new' }">
+        <Button
+          size="sm"
+          icon="i-lucide-plus"
+          :label="$t('OPERATIONAL_FLOWS_SETTINGS.NEW_FLOW')"
+        />
+      </router-link>
+    </div>
+
     <woot-confirm-delete-modal
       v-if="showDeletePopup"
       v-model:show="showDeletePopup"
@@ -193,6 +186,7 @@ const confirmDeleteTitle = computed(() =>
       :confirm-text="deleteConfirmText"
       :reject-text="deleteRejectText"
       :confirm-value="selectedFlow.name"
+      :confirm-place-holder-text="confirmPlaceHolderText"
       @on-confirm="confirmDeletion"
       @on-close="closeDelete"
     />

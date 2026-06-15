@@ -10,7 +10,10 @@ export const setPageFilter = ({ dispatch, filter, page, markEndReached }) => {
 export const setContacts = (commit, chatList) => {
   commit(
     `contacts/${types.SET_CONTACTS}`,
-    chatList.map(chat => chat.meta.sender)
+    // An orphaned conversation (deleted contact) has a null sender; letting it through
+    // throws inside the mutation and skips the pagination bookkeeping that follows,
+    // which left the chat list refetching the same page forever.
+    chatList.map(chat => chat.meta.sender).filter(Boolean)
   );
 };
 

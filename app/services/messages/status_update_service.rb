@@ -26,6 +26,10 @@ class Messages::StatusUpdateService
   def valid_status_transition?
     return false unless Message.statuses.key?(status)
 
+    # An incoming message can never "fail to send" — bridges sometimes echo delivery
+    # acks for the contact's own messages, which must not mark them failed.
+    return false if message.incoming? && status == 'failed'
+
     # Don't allow changing from 'read' to 'delivered'
     return false if message.read? && status == 'delivered'
 

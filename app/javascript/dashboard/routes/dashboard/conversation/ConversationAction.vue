@@ -32,6 +32,7 @@ export default {
   },
   data() {
     return {
+      pendingTeamChange: null,
       priorityOptions: [
         {
           id: null,
@@ -104,15 +105,22 @@ export default {
         return this.currentChat.meta.team;
       },
       set(team) {
-        const conversationId = this.currentChat.id;
-        const teamId = team ? team.id : 0;
-        this.$store.dispatch('setCurrentChatTeam', { team, conversationId });
-        this.$store
-          .dispatch('assignTeam', { conversationId, teamId })
-          .then(() => {
-            useAlert(this.$t('CONVERSATION.CHANGE_TEAM'));
-          });
+        // Changing the team changes the closing flow. If a result is already set, its
+        // states/attributes belong to the old flow — warn before scrambling the history.
+        const newTeamId = team ? team.id : 0;
+        const currentTeamId = this.currentChat?.meta?.team?.id || 0;
+        if (this.conversationHasResult && newTeamId !== currentTeamId) {
+          this.pendingTeamChange = { team };
+          return;
+        }
+        this.applyTeamChange(team);
       },
+    },
+    conversationHasResult() {
+      const legacy = this.currentChat?.additional_attributes?.outcome;
+      if (legacy && legacy !== 'ai_closed') return true;
+      const { result } = this.currentChat || {};
+      return !!result && result !== 'none';
     },
     assignedPriority: {
       get() {
@@ -159,6 +167,23 @@ export default {
     },
   },
   methods: {
+    applyTeamChange(team) {
+      const conversationId = this.currentChat.id;
+      const teamId = team ? team.id : 0;
+      this.$store.dispatch('setCurrentChatTeam', { team, conversationId });
+      this.$store
+        .dispatch('assignTeam', { conversationId, teamId })
+        .then(() => {
+          useAlert(this.$t('CONVERSATION.CHANGE_TEAM'));
+        });
+    },
+    confirmTeamChange() {
+      this.applyTeamChange(this.pendingTeamChange.team);
+      this.pendingTeamChange = null;
+    },
+    cancelTeamChange() {
+      this.pendingTeamChange = null;
+    },
     onSelfAssign() {
       const {
         account_id,
@@ -285,4 +310,31 @@ export default {
     />
     <ConversationLabels :conversation-id="conversationId" />
   </div>
+
+  <woot-modal
+    v-if="pendingTeamChange"
+    :show="!!pendingTeamChange"
+    :on-close="cancelTeamChange"
+  >
+    <div class="p-6">
+      <h3 class="text-lg font-medium text-n-slate-12 mb-4">
+        {{ $t('CONVERSATION.TEAM_CHANGE_WARNING.TITLE') }}
+      </h3>
+      <p class="text-sm text-n-slate-11 mb-6">
+        {{ $t('CONVERSATION.TEAM_CHANGE_WARNING.MESSAGE') }}
+      </p>
+      <div class="flex justify-end gap-2">
+        <woot-button
+          variant="clear"
+          color-scheme="secondary"
+          @click="cancelTeamChange"
+        >
+          {{ $t('CONVERSATION.TEAM_CHANGE_WARNING.CANCEL') }}
+        </woot-button>
+        <woot-button color-scheme="alert" @click="confirmTeamChange">
+          {{ $t('CONVERSATION.TEAM_CHANGE_WARNING.CONFIRM') }}
+        </woot-button>
+      </div>
+    </div>
+  </woot-modal>
 </template>

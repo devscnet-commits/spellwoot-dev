@@ -8,9 +8,25 @@ class ConversationBuilder
   private
 
   def look_up_exising_conversation
-    return unless @contact_inbox.inbox.lock_to_single_conversation?
+    return @contact_inbox.conversations.last if @contact_inbox.inbox.lock_to_single_conversation?
 
-    @contact_inbox.conversations.last
+    reopenable_conversation_within_window
+  end
+
+  # When the inbox is NOT locked to a single conversation, a new message normally creates a
+  # brand-new conversation. But if a reopen window (in hours) is configured, the last resolved
+  # conversation is reused (and thus reopened) when it was resolved within that window — so a
+  # quick follow-up continues the same thread instead of spawning a new one. Outside the window
+  # (or when no window is set) this returns nil and a new conversation is created.
+  def reopenable_conversation_within_window
+    hours = @contact_inbox.inbox.reopen_window_hours.to_i
+    return nil unless hours.positive?
+
+    last_conversation = @contact_inbox.conversations.last
+    return nil unless last_conversation&.resolved?
+
+    reference = last_conversation.last_activity_at || last_conversation.updated_at
+    last_conversation if reference.present? && reference >= hours.hours.ago
   end
 
   def create_new_conversation

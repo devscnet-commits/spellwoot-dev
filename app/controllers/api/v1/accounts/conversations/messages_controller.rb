@@ -26,7 +26,8 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
   end
 
   def retry
-    return if message.blank?
+    # Only messages we sent can be retried; an incoming message has nothing to resend.
+    return if message.blank? || message.incoming?
 
     # Limpa só o external_error, mantém outros atributos
     updated_attrs = message.content_attributes.except('external_error')

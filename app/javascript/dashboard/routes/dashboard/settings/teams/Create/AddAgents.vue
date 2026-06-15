@@ -34,7 +34,20 @@ export default {
   computed: {
     ...mapGetters({
       agentList: 'agents/getAgents',
+      teamsList: 'teams/getTeams',
     }),
+
+    // agentId -> team name for agents already in another team (single-team rule).
+    lockedAgents() {
+      const locked = {};
+      (this.teamsList || []).forEach(team => {
+        if (team.id === Number(this.teamId)) return;
+        (team.member_ids || []).forEach(id => {
+          locked[id] = team.name;
+        });
+      });
+      return locked;
+    },
 
     teamId() {
       return this.$route.params.teamId;
@@ -51,6 +64,7 @@ export default {
 
   mounted() {
     this.$store.dispatch('agents/get');
+    this.$store.dispatch('teams/get', { cache: false });
   },
 
   methods: {
@@ -107,6 +121,7 @@ export default {
           :update-selected-agents="updateSelectedAgents"
           :is-working="isCreating"
           :submit-button-text="$t('TEAMS_SETTINGS.ADD.BUTTON_TEXT')"
+          :locked-agents="lockedAgents"
         />
       </div>
     </form>

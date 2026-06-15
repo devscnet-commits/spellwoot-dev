@@ -84,22 +84,6 @@ export function useConversationFilterContext() {
    */
   const filterTypes = computed(() => [
     {
-      attributeKey: CONVERSATION_ATTRIBUTES.STATUS,
-      value: CONVERSATION_ATTRIBUTES.STATUS,
-      attributeName: t('FILTER.ATTRIBUTES.STATUS'),
-      label: t('FILTER.ATTRIBUTES.STATUS'),
-      inputType: 'multiSelect',
-      options: ['open', 'resolved', 'all'].map(id => {
-        return {
-          id,
-          name: t(`CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.${id}.TEXT`),
-        };
-      }),
-      dataType: 'text',
-      filterOperators: equalityOperators.value,
-      attributeModel: 'standard',
-    },
-    {
       attributeKey: CONVERSATION_ATTRIBUTES.PRIORITY,
       value: CONVERSATION_ATTRIBUTES.PRIORITY,
       attributeName: t('FILTER.ATTRIBUTES.PRIORITY'),

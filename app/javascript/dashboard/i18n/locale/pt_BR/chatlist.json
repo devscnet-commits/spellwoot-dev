@@ -18,14 +18,14 @@
       "all": "Todas",
       "unassigned": "Não atribuídas",
       "me": "Minhas",
-      "resolved": "Resolvidas"
+      "resolved": "Finalizadas"
     },
     "CHAT_STATUS_FILTER_ITEMS": {
       "open": {
         "TEXT": "Abertas"
       },
       "resolved": {
-        "TEXT": "Resolvidas"
+        "TEXT": "Finalizadas"
       },
       "pending": {
         "TEXT": "Pendentes"
@@ -41,7 +41,8 @@
     "SORT_TOOLTIP_LABEL": "Ordenar conversas",
     "CHAT_SORT": {
       "STATUS": "Status",
-      "ORDER_BY": "Ordenar por"
+      "ORDER_BY": "Ordenar por",
+      "ORIGIN": "Origem"
     },
     "CHAT_TIME_STAMP": {
       "CREATED": {
@@ -67,19 +68,19 @@
         "TEXT": "Criado em: Antigos primeiro"
       },
       "priority_desc": {
-        "TEXT": "Prioridade: Altas primeiro"
+        "TEXT": "Prioridade: Maior primeiro"
       },
       "priority_asc": {
-        "TEXT": "Prioridade: Baixas primeiro"
+        "TEXT": "Prioridade: Menor primeiro"
       },
       "waiting_since_asc": {
-        "TEXT": "Resposta pendente: Longas primeiro"
+        "TEXT": "Resposta pendente: Antigas primeiro"
       },
       "waiting_since_desc": {
-        "TEXT": "Resposta pendente: Curtas primeiro"
+        "TEXT": "Resposta pendente: Recentes primeiro"
       },
       "priority_desc_created_at_asc": {
-        "TEXT": "Prioridade: Maior primeiro, Criação: Mais antiga primeiro"
+        "TEXT": "Prioridade: Maior primeiro, antigas no topo"
       }
     },
     "ATTACHMENTS": {
@@ -141,6 +142,36 @@
     "HIDE_QUOTED_TEXT": "Ocultar Texto Citado",
     "SHOW_QUOTED_TEXT": "Mostrar Texto Citado",
     "MESSAGE_READ": "Lida",
-    "SENDING": "Enviando"
+    "SENDING": "Enviando",
+    "STATUS_TOGGLE": {
+      "open": "Em aberto",
+      "resolved": "Finalizadas",
+      "LABEL": "Status"
+    },
+    "CHAT_ORIGIN_FILTER_ITEMS": {
+      "all": {
+        "TEXT": "Todas"
+      },
+      "reopened": {
+        "TEXT": "Reabertas"
+      }
+    },
+    "SORT_GROUPS": {
+      "last_activity": "Última atividade",
+      "created_at": "Criado em",
+      "priority": "Prioridade",
+      "waiting_since": "Resposta pendente"
+    },
+    "SORT_SHORT": {
+      "last_activity_at_desc": "Recentes primeiro",
+      "last_activity_at_asc": "Mais antigas primeiro",
+      "created_at_desc": "Recentes primeiro",
+      "created_at_asc": "Antigas primeiro",
+      "priority_desc": "Maior prioridade primeiro",
+      "priority_asc": "Menor prioridade primeiro",
+      "priority_desc_created_at_asc": "Maior prioridade, antigas no topo",
+      "waiting_since_asc": "Antigas primeiro",
+      "waiting_since_desc": "Recentes primeiro"
+    }
   }
 }

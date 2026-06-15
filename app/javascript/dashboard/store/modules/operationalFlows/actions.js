@@ -30,7 +30,11 @@ export const actions = {
   create: async ({ commit }, flowInfo) => {
     commit(SET_FLOW_UI_FLAG, { isCreating: true });
     try {
-      const response = await OperationalFlowsAPI.create(flowInfo);
+      // Wrap explicitly so Rails' wrap_parameters doesn't strip non-column keys
+      // (e.g. inbox_ids, a has_many setter) when auto-wrapping by model attributes.
+      const response = await OperationalFlowsAPI.create({
+        operational_flow: flowInfo,
+      });
       commit(SET_FLOW_ITEM, response.data);
       return response.data;
     } finally {
@@ -40,7 +44,9 @@ export const actions = {
   update: async ({ commit }, { id, ...flowInfo }) => {
     commit(SET_FLOW_UI_FLAG, { isUpdating: true });
     try {
-      const response = await OperationalFlowsAPI.update(id, flowInfo);
+      const response = await OperationalFlowsAPI.update(id, {
+        operational_flow: flowInfo,
+      });
       commit(SET_FLOW_ITEM, response.data);
       return response.data;
     } finally {

@@ -5,6 +5,7 @@ import { useVuelidate } from '@vuelidate/core';
 import { required, url, helpers } from '@vuelidate/validators';
 import { getRegexp } from 'shared/helpers/Validators';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
+import Button from 'dashboard/components-next/button/Button.vue';
 import TextArea from 'next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
@@ -161,7 +162,9 @@ const open = (attributes = [], initialValues = {}, context = null) => {
   dialogRef.value?.open();
 };
 
-const handleConfirm = async () => {
+// resolve: true closes the conversation after saving; false only saves the
+// attributes (and fires whatever the result triggers, e.g. Meta), keeping it open.
+const submitWith = resolve => {
   v$.value.$touch();
   if (v$.value.$invalid) {
     return;
@@ -176,9 +179,13 @@ const handleConfirm = async () => {
   emit('submit', {
     attributes: visibleValues,
     context: conversationContext.value,
+    resolve,
   });
   close();
 };
+
+const handleConfirm = () => submitWith(true);
+const handleSaveOnly = () => submitWith(false);
 
 defineExpose({ open, close });
 </script>
@@ -191,15 +198,43 @@ defineExpose({ open, close });
     :description="
       t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.DESCRIPTION')
     "
-    :confirm-button-label="
-      t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.RESOLVE')
-    "
-    :cancel-button-label="
-      t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.CANCEL')
-    "
     :disable-confirm-button="!isFormComplete"
-    @confirm="handleConfirm"
+    @confirm="handleSaveOnly"
   >
+    <template #footer>
+      <div class="flex items-center justify-between w-full gap-3">
+        <Button
+          variant="faded"
+          color="slate"
+          :label="
+            t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.CANCEL')
+          "
+          class="w-full"
+          type="button"
+          @click="close"
+        />
+        <Button
+          variant="outline"
+          color="blue"
+          :label="
+            t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.RESOLVE')
+          "
+          class="w-full"
+          type="button"
+          :disabled="!isFormComplete"
+          @click="handleConfirm"
+        />
+        <Button
+          color="blue"
+          :label="
+            t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.ACTIONS.SAVE')
+          "
+          class="w-full"
+          :disabled="!isFormComplete"
+          type="submit"
+        />
+      </div>
+    </template>
     <div class="flex flex-col gap-4">
       <div
         v-for="attribute in visibleAttributes"

@@ -1,5 +1,5 @@
 class Meta::ConversionsApiService
-  API_URL = 'https://graph.facebook.com/v19.0'
+  API_URL = 'https://graph.facebook.com/v23.0'
 
   def initialize(conversation:, event_name: 'Lead', value: nil, currency: nil, event_id: nil)
     @conversation = conversation
@@ -45,6 +45,7 @@ class Meta::ConversionsApiService
   private
 
   def trackable?
+    return false unless master_enabled?
     return false if @pixel_id.blank? || @access_token.blank?
     return false if ctwa_clid.blank?
 
@@ -52,8 +53,15 @@ class Meta::ConversionsApiService
   end
 
   def skip_reason
+    return 'master_disabled' unless master_enabled?
     return 'missing_pixel_or_token' if @pixel_id.blank? || @access_token.blank?
     return 'missing_ctwa_clid' if ctwa_clid.blank?
+  end
+
+  # Account-level master switch. When off, nothing is sent to Meta — neither the
+  # Lead-on-arrival event nor any per-flow closing conversion.
+  def master_enabled?
+    meta_settings['enabled'] == true
   end
 
   # Dedup per event_id so different events (Lead vs the closing conversion) don't block each other,

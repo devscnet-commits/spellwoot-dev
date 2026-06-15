@@ -4,7 +4,5 @@ json.description custom_role.description
 json.permissions custom_role.permissions
 json.scope_type custom_role.scope_type
 json.scope_ids custom_role.scope_ids
-json.visibility_scope custom_role.visibility_scope
-json.can_view_unassigned_queue custom_role.can_view_unassigned_queue
 json.created_at custom_role.created_at
 json.updated_at custom_role.updated_at

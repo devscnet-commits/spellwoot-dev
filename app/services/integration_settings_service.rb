@@ -38,7 +38,17 @@ class IntegrationSettingsService
 
   # 3-tier resolution: account config → global config → ENV
   # Each tier fills only keys absent from higher tiers.
-  def self.get_config(account_id, provider)
+  #
+  # An explicit account-level opt-out (a row for this account with enabled=false) turns the
+  # provider OFF for the account, even when a global/server config exists — otherwise the
+  # toggle would be a no-op and the integration would keep running via the global fallback.
+  # `for_display: true` skips this hard-stop so the settings form can still show the values.
+  def self.get_config(account_id, provider, for_display: false)
+    unless for_display
+      account_setting = IntegrationSetting.find_by(account_id: account_id, provider: provider)
+      return {} if account_setting && !account_setting.enabled?
+    end
+
     account_cfg = load_db(account_id, provider)
     global_cfg  = load_db(nil, provider)
     env_cfg     = load_env(provider)
@@ -75,6 +85,8 @@ class IntegrationSettingsService
       test_uazapi(config)
     when 'evolution_api'
       test_evolution_api(config)
+    when 'openai'
+      test_openai(config)
     else
       { ok: false, message: 'Teste de conexão não disponível para este provedor.' }
     end
@@ -146,19 +158,51 @@ class IntegrationSettingsService
     end
   end
 
+  def self.test_openai(config)
+    api_key = config['apiKey']
+    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
+
+    response = HTTParty.get('https://api.openai.com/v1/models',
+                            headers: { 'Authorization' => "Bearer #{api_key}" }, timeout: 10)
+    if response.success?
+      model = config['model'].presence
+      known = Array(response.parsed_response['data']).map { |m| m['id'] }
+      if model.present? && known.exclude?(model)
+        { ok: true, message: "Chave válida, mas o modelo \"#{model}\" não foi encontrado na sua conta." }
+      else
+        { ok: true, message: 'Conexão bem-sucedida. Chave válida.' }
+      end
+    elsif response.code == 401
+      { ok: false, message: 'Chave inválida ou revogada (401).' }
+    else
+      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+    end
+  end
+
   def self.test_uazapi(config)
     api_url = config['apiUrl'].to_s.chomp('/')
     token   = config['token']
     return { ok: false, message: 'URL da API não configurada.' } if api_url.blank?
     return { ok: false, message: 'Token não configurado.' } if token.blank?
 
-    response = HTTParty.get("#{api_url}/instance", headers: { 'token' => token, 'Accept' => 'application/json' }, timeout: 10)
+    # Admin listing on UazAPI is GET /instance/all with the admintoken header — the
+    # instance-level 'token' header on /instance 404s.
+    response = HTTParty.get("#{api_url}/instance/all", headers: { 'admintoken' => token, 'Accept' => 'application/json' }, timeout: 10)
     if response.success?
       instances = Array(response.parsed_response)
       { ok: true, message: "Conexão bem-sucedida. #{instances.size} instância(s) encontrada(s)." }
     else
-      { ok: false, message: "Erro #{response.code}: #{response.message}" }
+      { ok: false, message: uazapi_error_message(response) }
     end
+  end
+
+  # A 401/403 means the UazAPI server refused the token: it may be the wrong token for this
+  # server, OR a valid token without admin rights to list instances (free/shared servers
+  # block /instance/all for non-admin tokens). Cover both instead of blaming the token.
+  def self.uazapi_error_message(response)
+    return "O servidor recusou o Admin Token (#{response.code}). Confirme se o token é deste servidor e tem permissão de administrador — servidores grátis/compartilhados costumam bloquear a listagem de instâncias." if [401, 403].include?(response.code)
+
+    "Erro #{response.code}: #{response.message}"
   end
 
   def self.test_evolution_api(config)
@@ -186,17 +230,18 @@ class IntegrationSettingsService
     return { ok: false, message: 'Token não configurado.' }           if token.blank?
 
     response = HTTParty.get(
-      "#{api_url}/instance",
-      headers: { 'token' => token, 'Accept' => 'application/json' },
+      "#{api_url}/instance/all",
+      headers: { 'admintoken' => token, 'Accept' => 'application/json' },
       timeout: 15
     )
 
     unless response.success?
-      return { ok: false, message: "Erro #{response.code}: #{response.message}" }
+      return { ok: false, message: uazapi_error_message(response) }
     end
 
     instances = Array(response.parsed_response)
     synced = 0
+    synced_names = []
 
     instances.each do |inst|
       instance_name = inst['instanceName'] || inst['name'] || inst['id'].to_s
@@ -209,13 +254,21 @@ class IntegrationSettingsService
       )
       pi.assign_attributes(
         instance_id:  (inst['id'] || inst['instanceId']).to_s.presence,
-        phone_number: inst['phone'] || inst['phoneNumber'],
+        # UazAPI exposes the number as owner/jid ("5549...@s.whatsapp.net") on /instance/all.
+        phone_number: (inst['phone'] || inst['phoneNumber'] || inst['owner'] || inst['jid']).to_s.split('@').first.presence,
         status:       inst['status'] || 'unknown',
         raw_data:     inst
       )
       pi.save!
       synced += 1
+      synced_names << instance_name
     end
+
+    # Reconcile: drop cached instances the current server no longer reports (e.g. after
+    # switching the server URL) so the list mirrors the server instead of accumulating.
+    stale = ProviderInstance.where(account_id: account_id, provider: 'uazapi')
+    stale = stale.where.not(instance_name: synced_names) if synced_names.any?
+    stale.delete_all
 
     { ok: true, message: "#{synced} instância(s) sincronizada(s).", count: synced }
   end
