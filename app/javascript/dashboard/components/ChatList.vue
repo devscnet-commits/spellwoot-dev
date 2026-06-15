@@ -22,7 +22,6 @@ import ChatListHeader from './ChatListHeader.vue';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import ConversationFilter from 'next/filter/ConversationFilter.vue';
 import SaveCustomView from 'next/filter/SaveCustomView.vue';
-import ChatTypeTabs from './widgets/ChatTypeTabs.vue';
 import ConversationItem from './ConversationItem.vue';
 import DeleteCustomViews from 'dashboard/routes/dashboard/customviews/DeleteCustomViews.vue';
 import ConversationBulkActions from './widgets/conversation/conversationBulkActions/Index.vue';
@@ -1030,39 +1029,66 @@ watch(conversationFilters, (newVal, oldVal) => {
       @close="onCloseDeleteFoldersModal"
     />
 
-    <ChatTypeTabs
-      v-if="!hasAppliedFiltersOrActiveFolders"
-      :items="assigneeTabItems"
-      :active-tab="activeAssigneeTab"
-      is-compact
-      @chat-tab-change="updateAssigneeTab"
-    />
-
-    <!-- Status axis, independent from the assignee tabs: labelled and breathing room apart,
-         underline style on the active option — two clearly separate decisions. -->
+    <!-- Two-level filter, segmented style: "which conversations?" (Minhas/Não atribuídas/
+         Todas) in a highlighted segmented control, then "which status?" as two prominent
+         buttons (Abertas/Resolvidas) so the active selection reads at a glance. -->
     <div
       v-if="!hasAppliedFiltersOrActiveFolders"
-      class="flex flex-col gap-0.5 px-3 mt-2 pb-2"
+      class="flex flex-col gap-2 px-3 py-2"
     >
-      <span
-        class="text-[10px] font-semibold uppercase tracking-wide text-n-slate-10"
-      >
-        {{ $t('CHAT_LIST.STATUS_TOGGLE.LABEL') }}
-      </span>
-      <div class="flex items-center gap-4">
+      <div class="inline-flex items-stretch gap-1 p-1 rounded-xl bg-n-alpha-2">
         <button
-          v-for="statusOption in ['open', 'resolved']"
-          :key="statusOption"
+          v-for="item in assigneeTabItems"
+          :key="item.key"
           type="button"
-          class="pb-1 text-xs font-medium border-b-2 transition-colors"
+          class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors"
           :class="
-            activeStatus === statusOption
-              ? 'text-n-blue-11 border-n-brand'
-              : 'text-n-slate-11 border-transparent hover:text-n-slate-12'
+            activeAssigneeTab === item.key
+              ? 'bg-n-solid-1 text-n-slate-12 shadow-sm'
+              : 'text-n-slate-11 hover:text-n-slate-12'
           "
-          @click="updateListStatus(statusOption)"
+          @click="updateAssigneeTab(item.key)"
         >
-          {{ $t(`CHAT_LIST.STATUS_TOGGLE.${statusOption}`) }}
+          {{ item.name }}
+          <span
+            v-if="item.count"
+            class="rounded-full px-1.5 min-w-[1.25rem] text-center text-[10px] leading-4 font-semibold"
+            :class="
+              activeAssigneeTab === item.key
+                ? 'bg-n-blue-3 text-n-blue-11'
+                : 'bg-n-alpha-1 text-n-slate-10'
+            "
+          >
+            {{ item.count }}
+          </span>
+        </button>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors"
+          :class="
+            activeStatus === 'open'
+              ? 'border-n-amber-9 text-n-amber-11 bg-n-amber-3'
+              : 'border-n-weak text-n-slate-11 hover:text-n-slate-12'
+          "
+          @click="updateListStatus('open')"
+        >
+          <span class="i-lucide-message-circle size-4" />
+          {{ $t('CHAT_LIST.STATUS_TOGGLE.open') }}
+        </button>
+        <button
+          type="button"
+          class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors"
+          :class="
+            activeStatus === 'resolved'
+              ? 'border-n-teal-9 text-n-teal-11 bg-n-teal-3'
+              : 'border-n-weak text-n-slate-11 hover:text-n-slate-12'
+          "
+          @click="updateListStatus('resolved')"
+        >
+          <span class="i-lucide-circle-check size-4" />
+          {{ $t('CHAT_LIST.STATUS_TOGGLE.resolved') }}
         </button>
       </div>
     </div>

@@ -369,7 +369,7 @@ const deleteConversation = () => {
           />
         </span>
         <span
-          class="shadow-lg rounded-full text-xxs font-semibold h-4 leading-4 ltr:ml-auto rtl:mr-auto mt-1 min-w-[1rem] px-1 py-0 text-center text-white bg-n-teal-9"
+          class="shadow-lg rounded-md text-xxs font-semibold h-5 leading-5 ltr:ml-auto rtl:mr-auto mt-1 min-w-[1.25rem] px-1 py-0 text-center text-white bg-n-teal-9"
           :class="hasUnread ? 'block' : 'hidden'"
         >
           {{ unreadCount > 9 ? '9+' : unreadCount }}
