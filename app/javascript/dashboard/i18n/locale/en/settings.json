@@ -304,7 +304,7 @@
     "ALL_CONVERSATIONS": "All Conversations",
     "MENTIONED_CONVERSATIONS": "Mentions",
     "PARTICIPATING_CONVERSATIONS": "Participating",
-    "UNATTENDED_CONVERSATIONS": "Unattended",
+    "UNATTENDED_CONVERSATIONS": "Pending reply",
     "REPORTS": "Reports",
     "SETTINGS": "Settings",
     "CONTACTS": "Contacts",
@@ -376,7 +376,8 @@
       "LOCALES": "Locales",
       "SETTINGS": "Settings"
     },
-    "CHANNELS": "Caixas",
+    "CHANNELS": "Conversations by inboxes",
+    "CONVERSATIONS_BY_LABELS": "Conversations by labels",
     "SET_AUTO_OFFLINE": {
       "TEXT": "Mark offline automatically",
       "INFO_TEXT": "Let the system automatically mark you offline when you aren't using the app or dashboard.",

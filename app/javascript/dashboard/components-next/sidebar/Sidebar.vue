@@ -245,18 +245,6 @@ const menuItems = computed(() => {
           to: accountScopedRoute('home'),
         },
         {
-          name: 'Mentions',
-          label: t('SIDEBAR.MENTIONED_CONVERSATIONS'),
-          activeOn: ['conversation_through_mentions'],
-          to: accountScopedRoute('conversation_mentions'),
-        },
-        {
-          name: 'Participating',
-          label: t('SIDEBAR.PARTICIPATING_CONVERSATIONS'),
-          activeOn: ['conversation_through_participating'],
-          to: accountScopedRoute('conversation_participating'),
-        },
-        {
           name: 'Unattended',
           activeOn: ['conversation_through_unattended'],
           label: t('SIDEBAR.UNATTENDED_CONVERSATIONS'),
@@ -304,7 +292,7 @@ const menuItems = computed(() => {
         },
         {
           name: 'Labels',
-          label: t('SIDEBAR.LABELS'),
+          label: t('SIDEBAR.CONVERSATIONS_BY_LABELS'),
           icon: 'i-lucide-tag',
           activeOn: ['conversations_through_label'],
           children: labels.value.map(label => ({

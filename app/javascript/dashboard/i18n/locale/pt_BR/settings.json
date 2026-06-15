@@ -304,7 +304,7 @@
     "ALL_CONVERSATIONS": "Todas as conversas",
     "MENTIONED_CONVERSATIONS": "Menções",
     "PARTICIPATING_CONVERSATIONS": "Participantes",
-    "UNATTENDED_CONVERSATIONS": "Não atendidas",
+    "UNATTENDED_CONVERSATIONS": "Resposta pendente",
     "REPORTS": "Relatórios",
     "SETTINGS": "Configurações",
     "CONTACTS": "Contatos",
@@ -373,7 +373,8 @@
       "LOCALES": "Localidades",
       "SETTINGS": "Configurações"
     },
-    "CHANNELS": "Caixas",
+    "CHANNELS": "Conversas por caixas",
+    "CONVERSATIONS_BY_LABELS": "Conversas por etiquetas",
     "SET_AUTO_OFFLINE": {
       "TEXT": "Marcar offline automaticamente",
       "INFO_TEXT": "Deixe o sistema marcar você automaticamente quando você não estiver usando o app ou o painel de controle.",
