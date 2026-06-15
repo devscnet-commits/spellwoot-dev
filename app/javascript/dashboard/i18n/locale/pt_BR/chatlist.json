@@ -18,14 +18,14 @@
       "all": "Todas",
       "unassigned": "Não atribuídas",
       "me": "Minhas",
-      "resolved": "Resolvidas"
+      "resolved": "Finalizadas"
     },
     "CHAT_STATUS_FILTER_ITEMS": {
       "open": {
         "TEXT": "Abertas"
       },
       "resolved": {
-        "TEXT": "Resolvidas"
+        "TEXT": "Finalizadas"
       },
       "pending": {
         "TEXT": "Pendentes"
@@ -68,19 +68,19 @@
         "TEXT": "Criado em: Antigos primeiro"
       },
       "priority_desc": {
-        "TEXT": "Prioridade: Altas primeiro"
+        "TEXT": "Prioridade: Maior primeiro"
       },
       "priority_asc": {
-        "TEXT": "Prioridade: Baixas primeiro"
+        "TEXT": "Prioridade: Menor primeiro"
       },
       "waiting_since_asc": {
-        "TEXT": "Resposta pendente: Longas primeiro"
+        "TEXT": "Resposta pendente: Antigas primeiro"
       },
       "waiting_since_desc": {
-        "TEXT": "Resposta pendente: Curtas primeiro"
+        "TEXT": "Resposta pendente: Recentes primeiro"
       },
       "priority_desc_created_at_asc": {
-        "TEXT": "Prioridade: Altas primeiro, antigas no topo"
+        "TEXT": "Prioridade: Maior primeiro, antigas no topo"
       }
     },
     "ATTACHMENTS": {
@@ -145,7 +145,7 @@
     "SENDING": "Enviando",
     "STATUS_TOGGLE": {
       "open": "Em aberto",
-      "resolved": "Resolvidas",
+      "resolved": "Finalizadas",
       "LABEL": "Status"
     },
     "CHAT_ORIGIN_FILTER_ITEMS": {
@@ -167,11 +167,11 @@
       "last_activity_at_asc": "Mais antigas primeiro",
       "created_at_desc": "Recentes primeiro",
       "created_at_asc": "Antigas primeiro",
-      "priority_desc": "Altas primeiro",
-      "priority_asc": "Baixas primeiro",
-      "priority_desc_created_at_asc": "Altas primeiro, antigas no topo",
-      "waiting_since_asc": "Mais longas primeiro",
-      "waiting_since_desc": "Mais curtas primeiro"
+      "priority_desc": "Maior prioridade primeiro",
+      "priority_asc": "Menor prioridade primeiro",
+      "priority_desc_created_at_asc": "Maior prioridade, antigas no topo",
+      "waiting_since_asc": "Antigas primeiro",
+      "waiting_since_desc": "Recentes primeiro"
     }
   }
 }

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
+import { vOnClickOutside } from '@vueuse/components';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import {
@@ -308,9 +309,11 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
     <!-- Hidden outcome buttons used programmatically when prompted -->
     <ConversationOutcomeButtons ref="outcomeButtonsRef" class="hidden" />
 
-    <!-- Outcome prompt overlay -->
+    <!-- Outcome prompt overlay — dismisses on click outside (agent went to do something
+         else without picking a result); reopens next time they hit Resolver. -->
     <div
       v-if="showOutcomePrompt"
+      v-on-click-outside="() => (showOutcomePrompt = false)"
       class="absolute top-full mt-2 right-0 z-50 flex flex-col gap-2 p-3 rounded-xl bg-n-solid-3 shadow-lg border border-n-weak min-w-48"
     >
       <p class="text-body-small text-n-slate-11 mb-1">

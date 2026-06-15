@@ -35,8 +35,16 @@ const teamsUsingThisFlow = computed(() =>
 
 const CATEGORIES = ['sales', 'support'];
 // Polarity is fixed per canonical state (won=positive, lost=negative) — not user-editable,
-// so reports can never be inverted by a mislabelled state.
+// so reports can never be inverted by a mislabelled state. The badge shows the polarity
+// (Positivo/Negativo) instead of the raw won/lost key kept in the backend.
 const POLARITY_BY_CANONICAL = { won: 'positive', lost: 'negative' };
+const statePolarity = state =>
+  POLARITY_BY_CANONICAL[state.canonical_key] || state.polarity || 'neutral';
+const POLARITY_BADGE_CLASS = {
+  positive: 'text-n-teal-11 bg-n-teal-3',
+  negative: 'text-n-ruby-11 bg-n-ruby-3',
+  neutral: 'text-n-slate-11 bg-n-alpha-2',
+};
 // Standard Meta Conversions API event names a state can fire ('' = do not send).
 // `value` is only sent for Purchase. Full standard catalog so any funnel can be mapped.
 const META_EVENTS = [
@@ -413,9 +421,16 @@ const save = async () => {
         >
           <div class="flex items-center gap-2">
             <span
-              class="px-1.5 py-0.5 text-xs font-mono rounded text-n-slate-11 bg-n-alpha-2"
+              class="px-1.5 py-0.5 text-xs font-medium rounded"
+              :class="POLARITY_BADGE_CLASS[statePolarity(state)]"
             >
-              {{ state.canonical_key }}
+              {{
+                $t(
+                  `OPERATIONAL_FLOWS_SETTINGS.FORM.STATES.POLARITY_OPTIONS.${statePolarity(
+                    state
+                  )}`
+                )
+              }}
             </span>
           </div>
 

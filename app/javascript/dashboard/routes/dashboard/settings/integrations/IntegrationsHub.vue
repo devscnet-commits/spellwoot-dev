@@ -117,8 +117,8 @@ const state = reactive(
     PROVIDERS.map(p => [
       p.key,
       {
-        open: false, loading: false, saving: false, importing: false,
-        testing: false, syncing: false, loadingInstances: false,
+        open: false, loading: false, saving: false,
+        testing: false, syncing: false, loadingInstances: false, clearing: false,
         testResult: null, syncResult: null, instances: [],
         enabled: true, config: {}, sources: {}, reset: {}, dirty: false,
       },
@@ -200,21 +200,22 @@ const saveProvider = async providerKey => {
   }
 };
 
-const importFromEnv = async providerKey => {
+// Removes this account's override so the integration falls back to the server/global
+// config — the way out of a bad account-level value without knowing the server secrets.
+const clearAccountConfig = async providerKey => {
   const s = state[providerKey];
-  s.importing = true;
+  s.clearing = true;
   try {
-    const { data } = await integrationSettingsAPI.importFromEnv(accountId.value, providerKey);
-    if (data.imported > 0) {
-      await loadProvider(providerKey);
-      useAlert(`${data.imported} variáveis importadas do servidor.`);
-    } else {
-      useAlert('Nenhuma variável de ambiente encontrada para este provedor.');
+    await integrationSettingsAPI.clearAccount(accountId.value, providerKey);
+    await loadProvider(providerKey);
+    if (PROVIDERS.find(p => p.key === providerKey)?.syncInstances) {
+      loadInstances(providerKey);
     }
+    useAlert('Configuração da conta removida — usando a do servidor.');
   } catch {
-    useAlert(t('INTEGRATIONS_HUB.ERROR'));
+    useAlert('Não foi possível limpar a configuração da conta.');
   } finally {
-    s.importing = false;
+    s.clearing = false;
   }
 };
 
@@ -248,6 +249,17 @@ const testConnection = async providerKey => {
     s.testing = false;
   }
 };
+
+// Header badge reflects the ON/OFF state, not just whether a config exists:
+// a configured-but-disabled provider should read "Desativado", not "Configurado".
+const providerBadge = providerKey => {
+  const s = state[providerKey];
+  const configured = s.sources && Object.keys(s.sources).length;
+  if (!configured) return null;
+  return s.enabled
+    ? { label: 'Ativo', class: 'bg-n-teal-3 text-n-teal-11' }
+    : { label: 'Desativado', class: 'bg-n-slate-3 text-n-slate-11' };
+};
 </script>
 
 <template>
@@ -280,10 +292,11 @@ const testConnection = async providerKey => {
         </div>
         <div class="flex items-center gap-2">
           <span
-            v-if="state[provider.key].sources && Object.keys(state[provider.key].sources).length"
-            class="text-xs px-2 py-0.5 rounded-full bg-n-teal-3 text-n-teal-11"
+            v-if="providerBadge(provider.key)"
+            class="text-xs px-2 py-0.5 rounded-full"
+            :class="providerBadge(provider.key).class"
           >
-            Configurado
+            {{ providerBadge(provider.key).label }}
           </span>
           <span
             :class="[
@@ -504,14 +517,6 @@ const testConnection = async providerKey => {
           <div class="flex items-center justify-between pt-2 border-t border-n-weak/50">
             <div class="flex items-center gap-3">
               <button
-                class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
-                :disabled="state[provider.key].importing"
-                @click="importFromEnv(provider.key)"
-              >
-                <span class="i-lucide-download w-3.5 h-3.5" />
-                {{ state[provider.key].importing ? 'Importando...' : 'Importar do servidor' }}
-              </button>
-              <button
                 v-if="provider.testable"
                 class="text-body-small text-n-slate-11 hover:text-n-slate-12 flex items-center gap-1 disabled:opacity-50"
                 :disabled="state[provider.key].testing"
@@ -528,6 +533,15 @@ const testConnection = async providerKey => {
               >
                 <span class="i-lucide-refresh-cw w-3.5 h-3.5" />
                 {{ state[provider.key].syncing ? 'Sincronizando...' : 'Sincronizar Instâncias' }}
+              </button>
+              <button
+                v-if="getConfigSource(provider.key) === 'account'"
+                class="text-body-small text-n-slate-11 hover:text-n-ruby-11 flex items-center gap-1 disabled:opacity-50"
+                :disabled="state[provider.key].clearing"
+                @click="clearAccountConfig(provider.key)"
+              >
+                <span class="i-lucide-eraser w-3.5 h-3.5" />
+                {{ state[provider.key].clearing ? 'Limpando...' : 'Usar configuração do servidor' }}
               </button>
             </div>
             <button

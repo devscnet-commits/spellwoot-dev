@@ -5,6 +5,9 @@ class Webhooks::UazapiController < ActionController::API
     identifier = params[:identifier]
     Rails.logger.info "[UAZAPI] Received webhook for identifier=#{identifier}"
     Rails.logger.info "[UAZAPI] Payload keys: #{params.keys.join(', ')}"
+    # DIAGNOSTIC (temporary): full payload so a recurring ghost event reveals its real
+    # EventType/sender. Remove once the offending event is identified and guarded.
+    Rails.logger.info "[UAZAPI][diagnostic] Full payload: #{params.to_unsafe_hash.except('identifier', 'controller', 'action').to_json}"
 
     channel = Channel::Api.find_by(identifier: identifier)
     unless channel

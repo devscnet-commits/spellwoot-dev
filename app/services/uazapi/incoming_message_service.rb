@@ -59,7 +59,11 @@ class Uazapi::IncomingMessageService
   private
 
   def event_type
-    (params[:EventType] || params[:eventType] || params[:event]).to_s.downcase
+    # ActiveJob serializes the payload to JSON, so keys arrive as strings — symbol-only
+    # lookups returned nil and silently disabled the blocklist below. Read both.
+    (params[:EventType] || params['EventType'] ||
+     params[:eventType] || params['eventType'] ||
+     params[:event] || params['event']).to_s.downcase
   end
 
   def non_message_event?
@@ -112,6 +116,16 @@ class Uazapi::IncomingMessageService
     @contact = contact_inbox.contact
 
     Rails.logger.info "[UAZAPI] Contact set: contact_id=#{@contact.id}, contact_inbox_id=#{@contact_inbox.id}"
+
+    # DIAGNOSTIC (temporary): when a brand-new contact is created, dump the event that
+    # caused it — this is exactly the ghost-creation moment we want to identify.
+    return unless @contact.previously_new_record? || @contact_inbox.previously_new_record?
+
+    Rails.logger.warn(
+      "[UAZAPI][diagnostic] NEW contact created via webhook — name=#{@contact.name} " \
+      "phone=#{@contact.phone_number} source_id=#{source_id} event_type=#{event_type.presence || '(blank)'} " \
+      "from=#{message_data[:from]} payload=#{params.to_json}"
+    )
   end
 
   def set_conversation

@@ -28,6 +28,10 @@ class Team < ApplicationRecord
   has_many :team_inboxes, dependent: :delete_all
   has_many :inboxes, through: :team_inboxes
   has_many :conversations, dependent: :nullify
+  # Reporting/outcome rows only reference the team for attribution and carry no FK constraint,
+  # so deleting a team must keep the historical events but detach them instead of blocking.
+  has_many :reporting_events, dependent: :nullify
+  has_many :conversation_result_events, dependent: :nullify
 
   validates :name,
             presence: { message: I18n.t('errors.validations.presence') },

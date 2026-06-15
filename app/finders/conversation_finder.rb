@@ -183,15 +183,23 @@ class ConversationFinder
     @conversations = @conversations.where(campaign_id: params[:campaign_id])
   end
 
-  # Stable tab counters. The open assignee tabs always count open conversations; the
-  # resolved tab always gets the resolved total — independent of the active status/tab.
+  # Assignee tab counters follow the status the list is showing, so toggling between
+  # 'em aberto' and 'finalizadas' recounts Minhas/Não atribuídas/Todas for that status.
+  # resolved_count stays the resolved total for the status toggle itself.
   def tab_counts
-    open_scope = @scoped_conversations.where(status: :open)
-    unassigned_count = open_scope.unassigned.count
-    all_count = open_scope.count
+    status_scope = case params[:status]
+                   when 'all'
+                     @scoped_conversations
+                   when 'resolved'
+                     @scoped_conversations.where(status: :resolved)
+                   else
+                     @scoped_conversations.where(status: :open)
+                   end
+    unassigned_count = status_scope.unassigned.count
+    all_count = status_scope.count
 
     {
-      mine_count: open_scope.assigned_to(current_user).count,
+      mine_count: status_scope.assigned_to(current_user).count,
       assigned_count: all_count - unassigned_count,
       unassigned_count: unassigned_count,
       all_count: all_count,

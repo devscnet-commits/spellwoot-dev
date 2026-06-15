@@ -268,10 +268,9 @@ const deleteConversation = () => {
         v-if="!hideThumbnail"
         :name="currentContact.name"
         :src="currentContact.thumbnail"
-        :size="32"
-        :status="currentContact.availability_status"
+        :size="40"
+        :inbox="inbox"
         :class="!showInboxName ? 'mt-4' : 'mt-8'"
-        hide-offline-status
         rounded-full
       >
         <template #overlay="{ size }">
@@ -370,7 +369,7 @@ const deleteConversation = () => {
           />
         </span>
         <span
-          class="shadow-lg rounded-full text-xxs font-semibold h-4 leading-4 ltr:ml-auto rtl:mr-auto mt-1 min-w-[1rem] px-1 py-0 text-center text-white bg-n-teal-9"
+          class="shadow-lg rounded-md text-xxs font-semibold h-5 leading-5 ltr:ml-auto rtl:mr-auto mt-1 min-w-[1.25rem] px-1 py-0 text-center text-white bg-n-teal-9"
           :class="hasUnread ? 'block' : 'hidden'"
         >
           {{ unreadCount > 9 ? '9+' : unreadCount }}

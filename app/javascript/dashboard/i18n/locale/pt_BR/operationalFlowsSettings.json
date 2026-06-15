@@ -28,7 +28,7 @@
     "FORM": {
       "NEW_TITLE": "Novo fluxo de fechamento",
       "EDIT_TITLE": "Editar fluxo de fechamento",
-      "SUBTITLE": "Defina os botões de fechamento e o que é obrigatório ao resolver uma conversa.",
+      "SUBTITLE": "Defina os botões de fechamento e o que é obrigatório ao finalizar uma conversa.",
       "NAME": {
         "LABEL": "Nome do fluxo",
         "PLACEHOLDER": "ex.: Vendas"
@@ -53,9 +53,9 @@
         "DISPLAY_LABEL": "Rótulo do botão",
         "POLARITY": "Polaridade",
         "POLARITY_OPTIONS": {
-          "positive": "Positiva",
-          "negative": "Negativa",
-          "neutral": "Neutra"
+          "positive": "Positivo",
+          "negative": "Negativo",
+          "neutral": "Neutro"
         },
         "META_EVENT": "Enviar à Meta como",
         "META_NONE": "Não enviar",
@@ -94,7 +94,7 @@
       "ERROR_MESSAGE": "Não foi possível salvar o fluxo de fechamento",
       "REQUIREMENTS": {
         "LABEL": "Atributos obrigatórios do fluxo",
-        "HELP": "Atributos que o agente precisa preencher antes de resolver como um destes estados.",
+        "HELP": "Atributos que o agente precisa preencher antes de finalizar como um destes estados.",
         "SELECT_ATTRIBUTE": "Selecione um atributo",
         "ALWAYS": "Sempre obrigatório",
         "WHEN_STATE": "Obrigatório quando: {state}",

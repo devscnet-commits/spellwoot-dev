@@ -27,4 +27,8 @@ class IntegrationSettingPolicy < ApplicationPolicy
   def sync_instances?
     @account_user.administrator?
   end
+
+  def destroy?
+    @account_user.administrator?
+  end
 end
