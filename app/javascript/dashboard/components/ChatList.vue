@@ -233,6 +233,13 @@ const userPermissions = computed(() => {
   return getUserPermissions(currentUser.value, currentAccountId.value);
 });
 
+// Icon per assignee tab, mirroring the segmented filter mockup.
+const ASSIGNEE_TAB_ICONS = {
+  me: 'i-lucide-user',
+  unassigned: 'i-lucide-users',
+  all: 'i-lucide-list',
+};
+
 const assigneeTabItems = computed(() =>
   filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
@@ -1049,6 +1056,7 @@ watch(conversationFilters, (newVal, oldVal) => {
           "
           @click="updateAssigneeTab(item.key)"
         >
+          <span :class="[ASSIGNEE_TAB_ICONS[item.key], 'size-4 shrink-0']" />
           {{ item.name }}
           <span
             v-if="item.count"
