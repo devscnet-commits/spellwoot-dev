@@ -1074,7 +1074,7 @@ watch(conversationFilters, (newVal, oldVal) => {
           v-for="item in assigneeTabItems"
           :key="item.key"
           type="button"
-          class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-sm font-medium transition-colors"
           :class="
             activeAssigneeTab === item.key
               ? 'bg-n-solid-1 text-n-slate-12 shadow-sm'
@@ -1083,10 +1083,10 @@ watch(conversationFilters, (newVal, oldVal) => {
           @click="updateAssigneeTab(item.key)"
         >
           <span class="size-4 shrink-0" :class="ASSIGNEE_TAB_ICONS[item.key]" />
-          {{ item.name }}
+          <span class="truncate">{{ item.name }}</span>
           <span
             v-if="item.count"
-            class="rounded-full px-1.5 min-w-[1.25rem] text-center text-[10px] leading-4 font-semibold"
+            class="shrink-0 rounded-full px-1.5 min-w-[1.25rem] text-center text-[10px] leading-4 font-semibold"
             :class="
               activeAssigneeTab === item.key
                 ? 'bg-n-blue-3 text-n-blue-11'

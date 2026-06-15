@@ -18,14 +18,14 @@
       "all": "Todas",
       "unassigned": "Não atribuídas",
       "me": "Minhas",
-      "resolved": "Resolvidas"
+      "resolved": "Finalizadas"
     },
     "CHAT_STATUS_FILTER_ITEMS": {
       "open": {
         "TEXT": "Abertas"
       },
       "resolved": {
-        "TEXT": "Resolvidas"
+        "TEXT": "Finalizadas"
       },
       "pending": {
         "TEXT": "Pendentes"
