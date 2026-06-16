@@ -74,6 +74,10 @@ const outcome = computed(() => {
   return result && result !== 'none' ? result : null;
 });
 
+// No result picked yet — the chip turns amber with a glow so agents notice the
+// conversation is still pending a result.
+const isPending = computed(() => !isResolved.value && !outcome.value);
+
 // The caixa's closing flow defines the selectable states and their editable labels;
 // fetched once per conversation and reused by selectOutcome.
 const closingFlow = ref(null);
@@ -122,10 +126,10 @@ const POLARITY_STYLE = {
 const NONE_OPTION = {
   key: null,
   label: null,
-  icon: 'i-lucide-minus-circle',
-  colorClass: 'text-n-slate-9',
-  bgClass: 'bg-n-slate-3',
-  hoverClass: 'hover:bg-n-alpha-black2',
+  icon: 'i-lucide-activity',
+  colorClass: 'text-n-amber-11',
+  bgClass: 'bg-n-amber-3',
+  hoverClass: 'hover:bg-n-amber-3',
 };
 
 // Whether this conversation's closing flow is known yet / configured at all. Without a
@@ -326,7 +330,9 @@ const handleOutcomeAttributes = async ({ attributes, context, resolve }) => {
       :class="[
         isFlashing
           ? 'border-n-ruby-9 ring-2 ring-n-ruby-9 animate-pulse'
-          : 'border-n-weak',
+          : isPending
+            ? 'border-n-amber-9 ring-2 ring-n-amber-9/40'
+            : 'border-n-weak',
         isResolved
           ? 'text-n-slate-9 cursor-not-allowed'
           : [

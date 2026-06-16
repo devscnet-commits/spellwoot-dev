@@ -652,7 +652,7 @@
       "PROMPT_RESOLVE": "Antes de resolver, selecione uma das opções abaixo:",
       "RESULT_WON": "Ganho",
       "RESULT_LOST": "Perdido",
-      "RESULT_NONE": "Sem resultado",
+      "RESULT_NONE": "Status da conversa pendente",
       "RESULT_UPDATED": "Resultado atualizado",
       "RESULT_LOCKED": "Reabra a conversa para alterar o resultado",
       "RESULT_LABEL": "Resultado",
