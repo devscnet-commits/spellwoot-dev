@@ -43,21 +43,21 @@ class Inboxes::BusinessHoursReplicationService
   def copy_working_periods(inbox)
     inbox.working_periods.delete_all
     @source.working_periods.find_each do |period|
-      inbox.working_periods.create!(period.slice(*Inbox::PERIOD_ATTRS))
+      inbox.working_periods.create!(period.slice(*Inbox::PERIOD_ATTRS).merge('inbox_id' => inbox.id))
     end
   end
 
   def copy_holidays(inbox)
     inbox.inbox_holidays.delete_all
     @source.inbox_holidays.find_each do |holiday|
-      inbox.inbox_holidays.create!(holiday.slice(*Inbox::HOLIDAY_ATTRS))
+      inbox.inbox_holidays.create!(holiday.slice(*Inbox::HOLIDAY_ATTRS).merge('inbox_id' => inbox.id))
     end
   end
 
   def copy_exceptions(inbox)
     inbox.inbox_exceptions.delete_all
     @source.inbox_exceptions.find_each do |exception|
-      inbox.inbox_exceptions.create!(exception.slice('name', 'exception_date', 'closed', 'periods'))
+      inbox.inbox_exceptions.create!(exception.slice('name', 'exception_date', 'closed', 'periods').merge('inbox_id' => inbox.id))
     end
   end
 end

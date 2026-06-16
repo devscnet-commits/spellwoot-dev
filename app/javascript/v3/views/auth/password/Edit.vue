@@ -45,6 +45,17 @@ export default {
       password: {
         required,
         minLength: minLength(6),
+        // Mirror the backend (devise_secure_password) rules so the user gets immediate,
+        // translated feedback instead of an untranslated server error only at submit.
+        complexity(value) {
+          if (!value) return false;
+          return (
+            /[a-z]/.test(value) &&
+            /[A-Z]/.test(value) &&
+            /\d/.test(value) &&
+            /[^A-Za-z0-9]/.test(value)
+          );
+        },
       },
       confirmPassword: {
         required,
@@ -100,16 +111,20 @@ export default {
       </h1>
 
       <div class="space-y-5">
-        <FormInput
-          v-model="credentials.password"
-          class="mt-3"
-          name="password"
-          type="password"
-          :has-error="v$.credentials.password.$error"
-          :error-message="$t('SET_NEW_PASSWORD.PASSWORD.ERROR')"
-          :placeholder="$t('SET_NEW_PASSWORD.PASSWORD.PLACEHOLDER')"
-          @blur="v$.credentials.password.$touch"
-        />
+        <div class="mt-3">
+          <FormInput
+            v-model="credentials.password"
+            name="password"
+            type="password"
+            :has-error="v$.credentials.password.$error"
+            :error-message="$t('SET_NEW_PASSWORD.PASSWORD.REQUIREMENTS')"
+            :placeholder="$t('SET_NEW_PASSWORD.PASSWORD.PLACEHOLDER')"
+            @blur="v$.credentials.password.$touch"
+          />
+          <p class="mt-1 text-sm text-n-slate-11">
+            {{ $t('SET_NEW_PASSWORD.PASSWORD.REQUIREMENTS') }}
+          </p>
+        </div>
         <FormInput
           v-model="credentials.confirmPassword"
           class="mt-3"
