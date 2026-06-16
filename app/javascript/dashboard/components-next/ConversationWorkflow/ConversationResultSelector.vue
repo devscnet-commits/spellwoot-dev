@@ -35,6 +35,10 @@ const attributeOptions = computed(() =>
     label: a.attributeDisplayName,
     type: a.attributeDisplayType,
     attributeValues: a.attributeValues,
+    // Carry the regex so the resolve modal can validate (e.g. e-mail) and show
+    // the custom cue instead of only the generic "required" message.
+    regexPattern: a.regexPattern,
+    regexCue: a.regexCue,
   }))
 );
 
