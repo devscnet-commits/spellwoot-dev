@@ -6,6 +6,12 @@ class Whatsapp::SendOnUazapiService < Base::SendOnChannelService
   end
 
   def perform_reply
+    # When the inbox runs on the native UazAPI<->Chatwoot bridge (its webhook_url points at the
+    # bridge), UazAPI itself already delivers the agent's reply. Sending again here would both
+    # duplicate the message on the customer's side and stamp a false "failed" status. Let the
+    # bridge handle delivery and leave the message as "sent".
+    return if native_bridge_delivers?
+
     instance_token = channel.additional_attributes&.dig('uazapi_instance_token')
 
     channel_wrapper = OpenStruct.new(
@@ -14,6 +20,13 @@ class Whatsapp::SendOnUazapiService < Base::SendOnChannelService
 
     uazapi_service = Whatsapp::Providers::UazapiService.new(whatsapp_channel: channel_wrapper)
     uazapi_service.send_message(recipient_identifier, message)
+  end
+
+  # The native bridge's webhook_url looks like https://<server>.uazapi.com/chatwoot/webhook/<uuid>.
+  # Our own integration points the channel webhook at /webhooks/uazapi/<identifier> instead, so the
+  # presence of "/chatwoot/webhook" tells us UazAPI is the one delivering outgoing messages.
+  def native_bridge_delivers?
+    channel.webhook_url.to_s.include?('/chatwoot/webhook')
   end
 
   # The recipient must be the WhatsApp phone number. contact_inbox.source_id holds the number
