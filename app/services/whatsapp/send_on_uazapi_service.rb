@@ -22,7 +22,13 @@ class Whatsapp::SendOnUazapiService < Base::SendOnChannelService
   # it as a group id and fail ("failed to get group members"). Prefer the contact's phone
   # number, which is the canonical WhatsApp number, and fall back to source_id.
   def recipient_identifier
-    conversation.contact&.phone_number.presence || conversation.contact_inbox.source_id
+    source_id = conversation.contact_inbox.source_id.to_s
+    # Groups/JIDs contain '@' (e.g. "1203...@g.us") and must be addressed exactly as-is.
+    # Individuals use the contact phone number (covers UUID source_ids created by the
+    # native bridge), falling back to source_id.
+    return source_id if source_id.include?('@')
+
+    conversation.contact&.phone_number.presence || source_id
   end
 
   def validate_target_channel
