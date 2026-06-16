@@ -2,6 +2,7 @@ json.id resource.id
 json.avatar_url resource.try(:avatar_url)
 json.channel_id resource.channel_id
 json.name resource.name
+json.operational_flow_id resource.operational_flow_id
 json.channel_type resource.channel_type
 json.greeting_enabled resource.greeting_enabled
 json.greeting_message resource.greeting_message
@@ -12,11 +13,18 @@ json.csat_config resource.csat_config
 json.enable_auto_assignment resource.enable_auto_assignment
 json.auto_assignment_config resource.auto_assignment_config
 json.out_of_office_message resource.out_of_office_message
+json.interval_message resource.interval_message
+json.holiday_message resource.holiday_message
 json.working_hours resource.weekly_schedule
+json.working_periods resource.working_periods_schedule
+json.holidays resource.holidays_schedule
+json.exceptions resource.exceptions_schedule
 json.timezone resource.timezone
+json.current_status resource.current_status
 json.callback_webhook_url resource.callback_webhook_url
 json.allow_messages_after_resolved resource.allow_messages_after_resolved
 json.lock_to_single_conversation resource.lock_to_single_conversation
+json.reopen_window_hours resource.reopen_window_hours
 json.sender_name_type resource.sender_name_type
 json.business_name resource.business_name
 

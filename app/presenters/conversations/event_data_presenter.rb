@@ -11,6 +11,10 @@ class Conversations::EventDataPresenter < SimpleDelegator
       labels: label_list,
       meta: push_meta,
       status: status,
+      result: result,
+      result_reason: result_reason,
+      result_set_at: result_set_at&.to_i,
+      closed_by_ai: closed_by_ai,
       custom_attributes: custom_attributes,
       snoozed_until: snoozed_until,
       unread_count: unread_incoming_messages.count,
@@ -38,7 +42,7 @@ class Conversations::EventDataPresenter < SimpleDelegator
 
   def push_meta
     {
-      sender: contact.push_event_data,
+      sender: contact&.push_event_data,
       assignee: assigned_entity&.push_event_data,
       assignee_type: assignee_type,
       team: team&.push_event_data,

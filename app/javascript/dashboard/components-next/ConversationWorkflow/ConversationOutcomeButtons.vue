@@ -1,0 +1,196 @@
+<script setup>
+import { ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useStore, useStoreGetters } from 'dashboard/composables/store';
+import { useAlert } from 'dashboard/composables';
+import { useAccount } from 'dashboard/composables/useAccount';
+import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
+import Button from 'dashboard/components-next/button/Button.vue';
+import ConversationOutcomeModal from './ConversationOutcomeModal.vue';
+import wootConstants from 'dashboard/constants/globals';
+import { SYSTEM_OUTCOME_FIELD, OUTCOME_TO_SYSTEM_VALUE } from './constants';
+
+const store = useStore();
+const getters = useStoreGetters();
+const { t } = useI18n();
+const { currentAccount } = useAccount();
+const { requiredAttributes: accountRequiredAttributes } =
+  useConversationRequiredAttributes();
+
+const currentChat = computed(() => getters.getSelectedChat.value);
+const outcomeModalRef = ref(null);
+const pendingStatusSeed = ref({});
+// Flow state being closed with — pinned into additional_attributes (outcome_state_id +
+// outcome_label snapshot) so the result chip keeps showing the exact button used.
+const pendingOutcomeLabel = ref(null);
+const pendingOutcomeStateId = ref(null);
+
+const metaSettings = computed(
+  () => currentAccount.value?.settings?.meta_conversion_settings || {}
+);
+
+const isOnCloseStrategy = computed(
+  () => metaSettings.value.strategy === 'on_close'
+);
+
+const outcomeAlreadySet = computed(() => {
+  const legacy = currentChat.value?.additional_attributes?.outcome;
+  if (legacy === 'won' || legacy === 'lost') return true;
+  const result = currentChat.value?.result;
+  return !!result && result !== 'none';
+});
+
+// Show buttons on all open conversations without outcome set
+const showButtons = computed(
+  () =>
+    currentChat.value?.status === wootConstants.STATUS_TYPE.OPEN &&
+    !outcomeAlreadySet.value
+);
+
+const winValue = computed(() => metaSettings.value.win_value || 'Ganho');
+const lossValue = computed(() => metaSettings.value.loss_value || 'Perdido');
+const winStatusField = computed(
+  () => metaSettings.value.win_status_field || 'marcado_como_ganho_ou_perdido'
+);
+
+const hasCtwaClid = computed(
+  () =>
+    !!currentChat.value?.custom_attributes?.ctwa_clid ||
+    !!currentChat.value?.additional_attributes?.attribution?.ctwa_clid
+);
+
+const buildInitialValues = (statusValue, outcome) => {
+  const base = { ...(currentChat.value?.custom_attributes || {}) };
+  if (winStatusField.value) {
+    base[winStatusField.value] = statusValue;
+  }
+  // Inject system field so resultado_conversa conditions evaluate correctly in the modal
+  base[SYSTEM_OUTCOME_FIELD] = OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null;
+  return base;
+};
+
+// Flow requirements plus the account-level required attributes (always + conditional rules);
+// the modal decides visibility per condition, so conditional ones can be passed as-is.
+const mergeWithAccountAttributes = (attributes = []) => {
+  const seen = new Set(attributes.map(a => a.value));
+  return [
+    ...attributes,
+    ...accountRequiredAttributes.value.filter(a => !seen.has(a.value)),
+  ];
+};
+
+// Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
+// the editable display label. The system result field is seeded from the canonical key so
+// conditional required attributes keep evaluating against ganho/perdido.
+const openOutcome = ({
+  outcome,
+  label,
+  statusValue,
+  attributes,
+  outcomeLabel,
+  outcomeStateId,
+}) => {
+  const seedValue = statusValue ?? label;
+  const initialValues = buildInitialValues(seedValue, outcome);
+  pendingOutcomeLabel.value = outcomeLabel || null;
+  pendingOutcomeStateId.value = outcomeStateId || null;
+  pendingStatusSeed.value = winStatusField.value
+    ? { [winStatusField.value]: seedValue }
+    : {};
+  outcomeModalRef.value?.open({
+    outcome,
+    label,
+    statusValue: seedValue,
+    attributes: mergeWithAccountAttributes(attributes ?? []),
+    initialValues,
+  });
+};
+
+const openWon = () =>
+  openOutcome({
+    outcome: 'won',
+    label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
+    statusValue: winValue.value,
+  });
+
+const openLost = () =>
+  openOutcome({
+    outcome: 'lost',
+    label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
+    statusValue: lossValue.value,
+  });
+
+const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
+  try {
+    const ConversationApi = (await import('dashboard/api/inbox/conversation'))
+      .default;
+    // Merge the seeded status field value so it's persisted alongside form fields
+    const mergedAttributes = {
+      ...pendingStatusSeed.value,
+      ...customAttributes,
+    };
+    await ConversationApi.closeOutcome({
+      conversationId: currentChat.value.id,
+      outcome,
+      customAttributes: mergedAttributes,
+    });
+
+    await store.dispatch('updateConversation', {
+      ...currentChat.value,
+      status: wootConstants.STATUS_TYPE.RESOLVED,
+      result: outcome,
+      additional_attributes: {
+        ...(currentChat.value.additional_attributes || {}),
+        // Keep the dual-written legacy outcome in sync so the result chip updates live.
+        outcome,
+        ...(pendingOutcomeLabel.value
+          ? { outcome_label: pendingOutcomeLabel.value }
+          : {}),
+        ...(pendingOutcomeStateId.value
+          ? { outcome_state_id: pendingOutcomeStateId.value }
+          : {}),
+        ...(isOnCloseStrategy.value && hasCtwaClid.value
+          ? { meta_conversion: { sent: true } }
+          : {}),
+      },
+      custom_attributes: {
+        ...(currentChat.value.custom_attributes || {}),
+        ...mergedAttributes,
+      },
+    });
+
+    useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.SUCCESS'));
+  } catch {
+    useAlert(t('CONVERSATION_WORKFLOW.OUTCOME.ERROR'));
+  }
+};
+
+defineExpose({ openWon, openLost, openOutcome });
+</script>
+
+<template>
+  <div v-if="showButtons" class="flex items-center gap-1">
+    <Button
+      size="md"
+      variant="ghost"
+      color="teal"
+      icon="i-lucide-circle-check"
+      :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON')"
+      class="rounded-md"
+      @click="openWon"
+    />
+    <Button
+      size="md"
+      variant="ghost"
+      color="ruby"
+      icon="i-lucide-circle-x"
+      :label="$t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST')"
+      class="rounded-md"
+      @click="openLost"
+    />
+    <ConversationOutcomeModal
+      ref="outcomeModalRef"
+      @confirm="handleOutcomeConfirm"
+    />
+  </div>
+</template>

@@ -27,6 +27,16 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     @agent.current_account_user.update!(agent_params.slice(*account_user_attributes).compact)
   end
 
+  def deactivate
+    @agent.current_account_user.update!(active: false, receives_assignments: false)
+    head :ok
+  end
+
+  def reactivate
+    @agent.current_account_user.update!(active: true)
+    head :ok
+  end
+
   def destroy
     @agent.current_account_user.destroy!
     delete_user_record(@agent)
@@ -68,11 +78,11 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
   end
 
   def account_user_attributes
-    [:role, :availability, :auto_offline]
+    [:role, :auto_offline, :receives_assignments]
   end
 
   def allowed_agent_params
-    [:name, :email, :role, :availability, :auto_offline]
+    [:name, :email, :role, :auto_offline, :receives_assignments]
   end
 
   def agent_params

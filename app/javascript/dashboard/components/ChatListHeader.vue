@@ -1,19 +1,14 @@
 <script setup>
 import { computed } from 'vue';
-import { useUISettings } from 'dashboard/composables/useUISettings';
 import { formatNumber } from '@chatwoot/utils';
-import wootConstants from 'dashboard/constants/globals';
 
 import ConversationBasicFilter from './widgets/conversation/ConversationBasicFilter.vue';
-import SwitchLayout from 'dashboard/routes/dashboard/conversation/search/SwitchLayout.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 
 const props = defineProps({
   pageTitle: { type: String, required: true },
   hasAppliedFilters: { type: Boolean, required: true },
   hasActiveFolders: { type: Boolean, required: true },
-  activeStatus: { type: String, required: true },
-  isOnExpandedLayout: { type: Boolean, required: true },
   conversationStats: { type: Object, required: true },
   isListLoading: { type: Boolean, required: true },
 });
@@ -26,8 +21,6 @@ const emit = defineEmits([
   'filtersModal',
 ]);
 
-const { uiSettings, updateUISettings } = useUISettings();
-
 const onBasicFilterChange = (value, type) => {
   emit('basicFilterChange', value, type);
 };
@@ -38,21 +31,6 @@ const hasAppliedFiltersOrActiveFolders = computed(() => {
 
 const allCount = computed(() => props.conversationStats?.allCount || 0);
 const formattedAllCount = computed(() => formatNumber(allCount.value));
-
-const toggleConversationLayout = () => {
-  const { LAYOUT_TYPES } = wootConstants;
-  const {
-    conversation_display_type: conversationDisplayType = LAYOUT_TYPES.CONDENSED,
-  } = uiSettings.value;
-  const newViewType =
-    conversationDisplayType === LAYOUT_TYPES.CONDENSED
-      ? LAYOUT_TYPES.EXPANDED
-      : LAYOUT_TYPES.CONDENSED;
-  updateUISettings({
-    conversation_display_type: newViewType,
-    previously_used_conversation_display_type: newViewType,
-  });
-};
 </script>
 
 <template>
@@ -78,12 +56,6 @@ const toggleConversationLayout = () => {
       >
         {{ formattedAllCount }}
       </span>
-      <span
-        v-if="!hasAppliedFiltersOrActiveFolders"
-        class="px-2 py-1 my-0.5 mx-1 rounded-md capitalize bg-n-slate-3 text-xxs text-n-slate-12 shrink-0"
-      >
-        {{ $t(`CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.${activeStatus}.TEXT`) }}
-      </span>
     </div>
     <div class="flex items-center gap-1">
       <template v-if="hasAppliedFilters && !hasActiveFolders">
@@ -96,11 +68,7 @@ const toggleConversationLayout = () => {
             faded
             @click="emit('addFolders')"
           />
-          <div
-            id="saveFilterTeleportTarget"
-            class="absolute z-50 mt-2"
-            :class="{ 'ltr:right-0 rtl:left-0': isOnExpandedLayout }"
-          />
+          <div id="saveFilterTeleportTarget" class="absolute z-50 mt-2" />
         </div>
         <NextButton
           v-tooltip.top-end="$t('FILTER.CLEAR_BUTTON_LABEL')"
@@ -125,7 +93,6 @@ const toggleConversationLayout = () => {
           <div
             id="conversationFilterTeleportTarget"
             class="absolute z-50 mt-2"
-            :class="{ 'ltr:right-0 rtl:left-0': isOnExpandedLayout }"
           />
         </div>
         <NextButton
@@ -148,20 +115,12 @@ const toggleConversationLayout = () => {
           faded
           @click="emit('filtersModal')"
         />
-        <div
-          id="conversationFilterTeleportTarget"
-          class="absolute z-50 mt-2"
-          :class="{ 'ltr:right-0 rtl:left-0': isOnExpandedLayout }"
-        />
+        <div id="conversationFilterTeleportTarget" class="absolute z-50 mt-2" />
       </div>
       <ConversationBasicFilter
         v-if="!hasAppliedFiltersOrActiveFolders"
-        :is-on-expanded-layout="isOnExpandedLayout"
+        :is-on-expanded-layout="false"
         @change-filter="onBasicFilterChange"
-      />
-      <SwitchLayout
-        :is-on-expanded-layout="isOnExpandedLayout"
-        @toggle="toggleConversationLayout"
       />
     </div>
   </div>

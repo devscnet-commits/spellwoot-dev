@@ -45,10 +45,6 @@ export default {
       type: Boolean,
       default: false,
     },
-    showSnoozedAction: {
-      type: Boolean,
-      default: false,
-    },
   },
   emits: [
     'selectAllConversations',
@@ -224,7 +220,6 @@ export default {
           :conversation-count="conversations.length"
           :show-resolve="!showResolvedAction"
           :show-reopen="!showOpenAction"
-          :show-snooze="!showSnoozedAction"
           @update="updateConversations"
           @close="showUpdateActions = false"
         />

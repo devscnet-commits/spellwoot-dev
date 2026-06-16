@@ -118,7 +118,7 @@ describe('useConversationRequiredAttributes', () => {
       const { requiredAttributes } = useConversationRequiredAttributes();
 
       expect(requiredAttributes.value).toHaveLength(3);
-      expect(requiredAttributes.value[0]).toEqual({
+      expect(requiredAttributes.value[0]).toMatchObject({
         attributeKey: 'priority',
         attributeDisplayName: 'Priority',
         attributeDisplayType: 'list',
@@ -126,6 +126,8 @@ describe('useConversationRequiredAttributes', () => {
         value: 'priority',
         label: 'Priority',
         type: 'list',
+        key: 'priority',
+        rule: 'always',
       });
     });
 
@@ -328,6 +330,65 @@ describe('useConversationRequiredAttributes', () => {
 
       expect(result.hasMissing).toBe(false);
       expect(result.missing).toEqual([]);
+    });
+
+    it('should skip conditional attribute when condition is not met', () => {
+      setupMocks(
+        [
+          { key: 'status', rule: 'always' },
+          {
+            key: 'sale_value',
+            rule: 'conditional',
+            condition_field: 'status',
+            condition_value: 'Won',
+          },
+          {
+            key: 'loss_reason',
+            rule: 'conditional',
+            condition_field: 'status',
+            condition_value: 'Lost',
+          },
+        ],
+        {
+          attributes: [
+            {
+              attributeKey: 'status',
+              attributeDisplayName: 'Status',
+              attributeDisplayType: 'list',
+              attributeValues: ['Won', 'Lost'],
+            },
+            {
+              attributeKey: 'sale_value',
+              attributeDisplayName: 'Sale Value',
+              attributeDisplayType: 'number',
+              attributeValues: [],
+            },
+            {
+              attributeKey: 'loss_reason',
+              attributeDisplayName: 'Loss Reason',
+              attributeDisplayType: 'text',
+              attributeValues: [],
+            },
+          ],
+        }
+      );
+
+      const { checkMissingAttributes } = useConversationRequiredAttributes();
+
+      // status = Won → sale_value is required, loss_reason is not
+      const resultWon = checkMissingAttributes({ status: 'Won' });
+      expect(resultWon.hasMissing).toBe(true);
+      expect(resultWon.missing.map(a => a.value)).toEqual(['sale_value']);
+
+      // status = Lost → loss_reason is required, sale_value is not
+      const resultLost = checkMissingAttributes({ status: 'Lost' });
+      expect(resultLost.hasMissing).toBe(true);
+      expect(resultLost.missing.map(a => a.value)).toEqual(['loss_reason']);
+
+      // status empty → no conditional required
+      const resultEmpty = checkMissingAttributes({});
+      expect(resultEmpty.hasMissing).toBe(true);
+      expect(resultEmpty.missing.map(a => a.value)).toEqual(['status']);
     });
 
     it('should handle whitespace-only values as missing', () => {

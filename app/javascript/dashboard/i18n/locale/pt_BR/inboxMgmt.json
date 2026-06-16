@@ -119,6 +119,14 @@
         "SUBMIT_BUTTON": "Criar caixa de entrada",
         "API": {
           "ERROR_MESSAGE": "Não conseguimos criar um canal de site, por favor, tente novamente"
+        },
+        "CHANNEL_WEBHOOK_SECRET": {
+          "LABEL": "Webhook Secret",
+          "COPY": "Copiar secret para área de transferência",
+          "COPY_SUCCESS": "Secret copiado para área de transferência",
+          "TOGGLE": "Mostrar/ocultar secret",
+          "RESET_SUCCESS": "Webhook secret regenerado com sucesso",
+          "RESET_ERROR": "Não foi possível regenerar o webhook secret. Tente novamente"
         }
       },
       "TWILIO": {
@@ -585,15 +593,15 @@
       "MESSENGER_QR_INSTRUCTION": "Escaneie o código QR acima para testar rapidamente sua caixa de entrada do Facebook Messenger",
       "TELEGRAM_QR_INSTRUCTION": "Escaneie o código QR acima para testar rapidamente sua caixa de entrada do Telegram"
     },
-    "REAUTH": "Reautorizar",  
+    "REAUTH": "Reautorizar",
     "VIEW": "Visualizar",
-      "EDIT": {
-        "LOCK_TO_SINGLE_CONVERSATION": {  
-          "ENABLED": "Ativado",
-          "ENABLED_DESCRIPTION": "Quando um contato enviar mensagem novamente, a conversa anterior será reaberta.",
-          "DISABLED": "Desativado",
-          "DISABLED_DESCRIPTION": "Uma nova conversa será criada cada vez após a anterior ser resolvida."
-        },
+    "EDIT": {
+      "LOCK_TO_SINGLE_CONVERSATION": {
+        "ENABLED": "Ativado",
+        "ENABLED_DESCRIPTION": "Quando um contato enviar mensagem novamente, a conversa anterior será reaberta.",
+        "DISABLED": "Desativado",
+        "DISABLED_DESCRIPTION": "Uma nova conversa será criada cada vez após a anterior ser resolvida."
+      },
       "API": {
         "SUCCESS_MESSAGE": "Configurações de caixa de entrada atualizadas com sucesso",
         "AUTO_ASSIGNMENT_SUCCESS_MESSAGE": "Agente atualizado com sucesso",
@@ -639,6 +647,30 @@
       }
     },
     "CHANNEL_PREFERENCES": "Preferências do canal",
+    "MIGRATE": {
+      "BUTTON_TEXT": "Migrar caixa",
+      "TITLE": "Migrar conversas",
+      "DESCRIPTION": "Mover todas as conversas da caixa \"{name}\" para outra caixa de entrada.",
+      "TARGET_LABEL": "Caixa de destino",
+      "SELECT_PLACEHOLDER": "Selecione a caixa de destino",
+      "CANCEL": "Cancelar",
+      "CONFIRM": "Migrar agora",
+      "SUCCESS": "Conversas migradas com sucesso.",
+      "STARTED": "Migração iniciada. As conversas estão sendo movidas em segundo plano e a caixa de origem será removida ao concluir — atualize a página em instantes.",
+      "ERROR": "Erro ao migrar conversas. Tente novamente.",
+      "DELETE_TITLE": "Excluir caixa de origem?",
+      "DELETE_WARNING_TITLE": "Atenção — ação irreversível",
+      "DELETE_WARNING_BODY": "A caixa \"{name}\" ainda existe. Se não excluída, contatos que chamarem esse número criarão novas conversas desvinculadas do histórico migrado.",
+      "DELETE_KEEP": "Manter caixa",
+      "DELETE_CONFIRM": "Excluir caixa",
+      "DELETE_SUCCESS": "Caixa excluída com sucesso.",
+      "DELETE_ERROR": "Erro ao excluir a caixa.",
+      "KEEP_SUCCESS": "Caixa mantida. A instância UazAPI já foi redirecionada para a nova caixa.",
+      "KEEP_WARNING": "A instância UazAPI já foi redirecionada para a nova caixa. Reconfigurar a caixa antiga pode reverter o redirecionamento.",
+      "CONFIRM_AND_DELETE": "As conversas serão migradas e a caixa \"{name}\" será excluída permanentemente. Deseja continuar?",
+      "SUCCESS_AND_DELETED": "Conversas migradas e caixa excluída com sucesso.",
+      "WIDGET_FEATURES": "Funcionalidades do Widget"
+    },
     "DELETE": {
       "BUTTON_TEXT": "Excluir",
       "AVATAR_DELETE_BUTTON_TEXT": "Apagar Avatar",
@@ -764,7 +796,20 @@
       "ALLOWED_DOMAINS": {
         "TITLE": "Domínios permitidos",
         "SUBTITLE": "Adicione coringa ou domínios separados por vírgula (deixe em branco para permitir todos), ex: *.chatwoot.dev, chatwoot.com.",
-        "PLACEHOLDER": "Insira domínios separados por vírgula (ex: *.chatwoot.dev, chatwoot.com)"
+        "PLACEHOLDER": "Insira domínios separados por vírgula (ex: *.chatwoot.dev, chatwoot.com)",
+        "DESCRIPTION": "Especifique os domínios onde este widget pode ser incorporado. Deixe em branco para permitir todos os domínios."
+      },
+      "ALLOW_MOBILE_WEBVIEW": {
+        "LABEL": "Permitir em visualização mobile",
+        "SUBTITLE": "Habilitar o widget em webviews mobile como aplicativos nativos"
+      },
+      "IDENTITY_VALIDATION": {
+        "TITLE": "Validação de Identidade",
+        "DESCRIPTION": "Para validar a identidade do usuário, você pode passar um `identifier_hash` para cada usuário. Você pode gerar um hash HMAC sha256 usando o `identifier` com a chave mostrada aqui.",
+        "SECRET_KEY": "Chave secreta",
+        "VIEW_DOCS": "Ver documentação",
+        "REQUIRE_LABEL": "Forçar validação de identidade",
+        "REQUIRE_DESCRIPTION": "Se ativado, as solicitações sem o `identifier_hash` serão rejeitadas."
       },
       "INBOX_AGENTS": "Agentes",
       "INBOX_AGENTS_SUB_TEXT": "Adicionar ou remover agentes dessa caixa de entrada",
@@ -780,6 +825,11 @@
       "ENABLE_CONTINUITY_VIA_EMAIL_SUB_TEXT": "As conversas continuarão sobre o e-mail se o endereço de e-mail de contato estiver disponível.",
       "LOCK_TO_SINGLE_CONVERSATION": "Bloquear para conversa única",
       "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Ativar ou desativar várias conversas para o mesmo contato nesta caixa de entrada",
+      "REOPEN_WINDOW": {
+        "LABEL": "Janela de reabertura",
+        "HELP": "Quando ativada, uma mensagem para uma conversa resolvida dentro do tempo definido reabre a mesma conversa em vez de criar uma nova.",
+        "HOURS_SUFFIX": "horas"
+      },
       "INBOX_UPDATE_TITLE": "Configurações da Caixa de Entrada",
       "INBOX_UPDATE_SUB_TEXT": "Atualize suas configurações de caixa de entrada",
       "AUTO_ASSIGNMENT_SUB_TEXT": "Ativar ou desativar a atribuição automática de novas conversas aos agentes adicionados a essa caixa de entrada.",
@@ -829,7 +879,8 @@
       "PLACEHOLDER": "Selecionar Centro de Ajuda",
       "SELECT_PLACEHOLDER": "Selecionar Centro de Ajuda",
       "REMOVE": "Remover Centro de Ajuda",
-      "SUB_TEXT": "Anexe um Centro de Ajuda com a caixa de entrada"
+      "SUB_TEXT": "Anexe um Centro de Ajuda com a caixa de entrada",
+      "NONE": "Nenhum"
     },
     "AUTO_ASSIGNMENT": {
       "MAX_ASSIGNMENT_LIMIT": "Limite de atribuição automática",
@@ -930,6 +981,9 @@
       "WEEKLY_TITLE": "Definir horas semanais",
       "TIMEZONE_LABEL": "Selecionar fuso horário",
       "UPDATE": "Atualizar configurações do horário comercial",
+      "SAVED": "Salvo",
+      "HOURS_HINT": "Cada período é um intervalo de funcionamento (Abre → Fecha). Use mais de um período para turnos com pausa — ex.: manhã 08:00–12:00 e tarde 13:30–18:00.",
+      "ADD_PERIOD": "Adicionar intervalo",
       "TOGGLE_AVAILABILITY": "Permitir a disponibilidade de negócios para essa caixa de entrada",
       "UNAVAILABLE_MESSAGE_LABEL": "Mensagem indisponível para visitantes",
       "TOGGLE_HELP": "Permitir a disponibilidade de negócios mostrará as horas disponíveis no widget de bate-papo ao vivo, mesmo que todos os agentes estejam offline. Os vistores disponíveis horários externos podem ser avisados com uma mensagem e um formulário de pré-bate-papo.",
@@ -938,7 +992,9 @@
         "UNAVAILABLE": "Indisponível",
         "HOURS": "horas",
         "VALIDATION_ERROR": "Hora inicial deve ser antes de hora de fechamento.",
-        "CHOOSE": "Selecione"
+        "CHOOSE": "Selecione",
+        "OPENS": "Abre",
+        "CLOSES": "Fecha"
       },
       "ALL_DAY": "O dia todo"
     },
@@ -1043,6 +1099,7 @@
           "IN_A_DAY": "Em um dia"
         },
         "WIDGET_COLOR_LABEL": "Cor do Widget",
+        "WIDGET_BUBBLE": "Configurações do Balão do Widget",
         "WIDGET_BUBBLE_POSITION_LABEL": "Posição do Balão do Widget",
         "WIDGET_BUBBLE_TYPE_LABEL": "Tipo de Balão do Widget",
         "WIDGET_BUBBLE_LAUNCHER_TITLE": {
@@ -1122,6 +1179,55 @@
       "INSTAGRAM": "Instagram",
       "TIKTOK": "TikTok",
       "VOICE": "Voz"
+    },
+    "WIDGET_FEATURES": "Funcionalidades do Widget",
+    "ASSIGNMENT": {
+      "TITLE": "Atribuição de conversa",
+      "DESCRIPTION": "Atribuir automaticamente conversas recebidas a agentes disponíveis com base em políticas de atribuição",
+      "ENABLE_AUTO_ASSIGNMENT": "Ativar atribuição automática de conversa",
+      "DEFAULT_RULES_TITLE": "Regras de atribuição padrão",
+      "DEFAULT_RULES_DESCRIPTION": "Usando o comportamento de atribuição padrão para todas as conversas",
+      "DEFAULT_RULE_1": "Conversas criadas mais cedo primeiro",
+      "DEFAULT_RULE_2": "Distribuição round robin",
+      "CUSTOMIZE_WITH_POLICY": "Personalizar com política de atribuição",
+      "USING_POLICY": "Usando política de atribuição personalizada para esta caixa de entrada",
+      "CUSTOMIZE_POLICY": "Personalizar com política de atribuição",
+      "DELETE_POLICY": "Excluir política",
+      "POLICY_LABEL": "Política de atribuição",
+      "ASSIGNMENT_ORDER_LABEL": "Ordem de atribuição",
+      "ASSIGNMENT_METHOD_LABEL": "Método de atribuição",
+      "POLICY_STATUS": {
+        "ACTIVE": "Ativo",
+        "INACTIVE": "Inativo"
+      },
+      "PRIORITY": {
+        "EARLIEST_CREATED": "Criado mais cedo",
+        "LONGEST_WAITING": "Esperando há mais tempo"
+      },
+      "METHOD": {
+        "ROUND_ROBIN": "Round robin",
+        "BALANCED": "Atribuição balanceada"
+      },
+      "UPGRADE_PROMPT": "Políticas de atribuição personalizadas estão disponíveis no plano Business",
+      "UPGRADE_TO_BUSINESS": "Fazer upgrade para Business",
+      "DEFAULT_POLICY_LINKED": "Política padrão vinculada",
+      "DEFAULT_POLICY_DESCRIPTION": "Vincule uma política de atribuição personalizada para definir como as conversas são atribuídas aos agentes nesta caixa de entrada.",
+      "LINK_EXISTING_POLICY": "Vincular política existente",
+      "CREATE_NEW_POLICY": "Criar nova política",
+      "NO_POLICIES": "Nenhuma política de atribuição encontrada",
+      "VIEW_ALL_POLICIES": "Ver todas as políticas",
+      "CURRENT_BEHAVIOR": "Usando atualmente o comportamento de atribuição padrão:",
+      "LINK_SUCCESS": "Política de atribuição vinculada com sucesso",
+      "LINK_ERROR": "Falha ao vincular política de atribuição"
+    },
+    "ASSIGNMENT_POLICY": {
+      "DELETE_CONFIRM_TITLE": "Excluir política de atribuição?",
+      "DELETE_CONFIRM_MESSAGE": "Tem certeza que deseja remover esta política de atribuição desta caixa de entrada? A caixa voltará a usar as regras de atribuição padrão.",
+      "CANCEL": "Cancelar",
+      "CONFIRM_DELETE": "Excluir",
+      "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
+      "DELETE_ERROR": "Falha ao remover política de atribuição",
+      "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
     }
   }
 }

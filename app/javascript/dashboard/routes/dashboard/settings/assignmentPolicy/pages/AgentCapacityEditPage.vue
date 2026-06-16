@@ -1,9 +1,10 @@
 <script setup>
-import { computed, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
+import { useUnsavedChangesGuard } from 'dashboard/composables/useUnsavedChangesGuard';
 import camelcaseKeys from 'camelcase-keys';
 import { getInboxIconByType } from 'dashboard/helper/inbox';
 
@@ -31,6 +32,9 @@ const inboxesUiFlags = useMapGetter('inboxes/getUIFlags');
 const routeId = computed(() => route.params.id);
 const selectedPolicy = computed(() => selectedPolicyById.value(routeId.value));
 const selectedPolicyId = computed(() => selectedPolicy.value?.id);
+const isFormDirty = ref(false);
+
+useUnsavedChangesGuard(isFormDirty, `${BASE_KEY}.EDIT.UNSAVED_LEAVE_CONFIRM`);
 
 const breadcrumbItems = computed(() => [
   {
@@ -190,7 +194,9 @@ onMounted(() => store.dispatch('agents/get'));
   >
     <template #header>
       <div class="flex items-center gap-2 w-full justify-between mb-4 min-h-10">
-        <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+        <div class="flex items-center gap-3">
+          <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+        </div>
       </div>
     </template>
 
@@ -214,6 +220,7 @@ onMounted(() => store.dispatch('agents/get'));
         @add-inbox-limit="handleAddInboxLimit"
         @update-inbox-limit="handleLimitChange"
         @delete-inbox-limit="handleDeleteInboxLimit"
+        @dirty-change="isFormDirty = $event"
       />
     </template>
   </SettingsLayout>

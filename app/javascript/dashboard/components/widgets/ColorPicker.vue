@@ -65,7 +65,7 @@ export default {
 
   ::v-deep {
     input {
-      @apply bg-white dark:bg-white;
+      @apply bg-[#12030a] dark:bg-[#12030a];
     }
   }
 }

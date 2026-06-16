@@ -1,0 +1,119 @@
+{
+  "OPERATIONAL_FLOWS_SETTINGS": {
+    "HEADER": "Closing Flows",
+    "DESCRIPTION": "Configure the closing flows: the resolution buttons (e.g. Won/Lost), the attributes required at closing time and the events sent to Meta. Assignment rules decide which flow each conversation uses.",
+    "LOADING": "Loading closing flows...",
+    "NEW_FLOW": "Create flow",
+    "LIST": {
+      "404": "No closing flows created yet",
+      "EDIT_FLOW": "Edit flow",
+      "META_ON": "Meta on",
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive"
+    },
+    "DELETE": {
+      "BUTTON_TEXT": "Delete",
+      "API": {
+        "SUCCESS_MESSAGE": "Closing flow deleted successfully",
+        "ERROR_MESSAGE": "Could not delete the closing flow"
+      },
+      "CONFIRM": {
+        "TITLE": "Delete {flowName}?",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
+        "YES": "Yes, delete",
+        "NO": "Cancel",
+        "PLACE_HOLDER": "Escreva {name} para confirmar"
+      }
+    },
+    "FORM": {
+      "NEW_TITLE": "New closing flow",
+      "EDIT_TITLE": "Edit closing flow",
+      "SUBTITLE": "Define the closing buttons and what is required when resolving a conversation.",
+      "NAME": {
+        "LABEL": "Flow name",
+        "PLACEHOLDER": "e.g., Sales"
+      },
+      "ACTIVE": {
+        "LABEL": "Active"
+      },
+      "META": {
+        "LABEL": "Send conversions to Meta",
+        "HELP": "Master switch for this flow. When on, each state below can fire a Meta event."
+      },
+      "CATEGORY": {
+        "LABEL": "Category",
+        "HELP": "Reporting dimension. Sales closings feed the sales funnel; support closings are kept separate and never count as conversions.",
+        "OPTIONS": {
+          "sales": "Sales",
+          "support": "Support"
+        }
+      },
+      "STATES": {
+        "LABEL": "Estados do fluxo",
+        "DISPLAY_LABEL": "Button label",
+        "POLARITY": "Polarity",
+        "POLARITY_OPTIONS": {
+          "positive": "Positive",
+          "negative": "Negative",
+          "neutral": "Neutral"
+        },
+        "META_EVENT": "Send to Meta as",
+        "META_NONE": "Do not send",
+        "META_VALUE_ATTR": "Sale value from attribute",
+        "META_NO_VALUE": "No value",
+        "META_NEED_VALUE_ATTR": "The Purchase event requires a value. Create a conversation custom attribute of type Number (e.g. \"Sale value\") under Settings → Custom attributes and select it here.",
+        "META_VALUE_HELP": "On save, this attribute becomes required for this state: the agent will be asked to fill it when closing the conversation.",
+        "META_EVENT_DESC": {
+          "Purchase": "Completed sale (requires value)",
+          "Lead": "New lead",
+          "CompleteRegistration": "Registration completed",
+          "Contact": "Contact made",
+          "Schedule": "Appointment booked",
+          "SubmitApplication": "Application submitted",
+          "StartTrial": "Trial started",
+          "Subscribe": "Subscription started",
+          "InitiateCheckout": "Checkout started",
+          "AddPaymentInfo": "Payment info added",
+          "AddToCart": "Added to cart",
+          "AddToWishlist": "Added to wishlist",
+          "ViewContent": "Viewed content/product",
+          "Search": "Searched something",
+          "FindLocation": "Looked for a location/store",
+          "CustomizeProduct": "Customized a product",
+          "Donate": "Donation made"
+        }
+      },
+      "USED_BY": {
+        "TITLE": "This flow is used by:",
+        "MANAGE": "Gerenciar times →",
+        "EMPTY": "Nenhum time usa este fluxo ainda."
+      },
+      "SAVE": "Save flow",
+      "CREATE_SUCCESS": "Closing flow created successfully",
+      "UPDATE_SUCCESS": "Closing flow updated successfully",
+      "ERROR_MESSAGE": "Could not save the closing flow",
+      "REQUIREMENTS": {
+        "LABEL": "Atributos obrigatórios do fluxo",
+        "HELP": "Attributes the agent must fill before resolving as one of these states.",
+        "SELECT_ATTRIBUTE": "Select an attribute",
+        "ALWAYS": "Always required",
+        "WHEN_STATE": "Required when: {state}",
+        "IF": "Required if...",
+        "IF_FIELD": "When the attribute",
+        "IF_FIELD_PLACEHOLDER": "Select the trigger attribute",
+        "IF_VALUES": "Is one of these answers",
+        "IF_NO_LIST_ATTRS": "No multiple-choice (list) attribute available. Create one under Custom attributes.",
+        "ADD": "Add requirement"
+      }
+    },
+    "TIME_FLOWS": {
+      "HEADER": "Times → Fluxo de fechamento",
+      "DESCRIPTION": "O fluxo segue o time da conversa: time atribuído à conversa ou, sem ele, o time do agente que atendeu. Configure aqui qual fluxo cada time usa.",
+      "NONE": "Sem fluxo",
+      "INACTIVE": "inativo",
+      "EMPTY": "Nenhum time encontrado.",
+      "SAVE_SUCCESS": "Fluxo do time atualizado",
+      "SAVE_ERROR": "Não foi possível atualizar o fluxo do time"
+    }
+  }
+}

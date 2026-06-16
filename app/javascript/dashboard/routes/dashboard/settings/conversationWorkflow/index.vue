@@ -5,7 +5,9 @@ import { useAccount } from 'dashboard/composables/useAccount';
 import { FEATURE_FLAGS } from '../../../../featureFlags';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
-import ConversationRequiredAttributes from 'dashboard/components-next/ConversationWorkflow/ConversationRequiredAttributes.vue';
+import MetaConversionSettings from 'dashboard/components-next/ConversationWorkflow/MetaConversionSettings.vue';
+import OperationalFlowsManager from 'dashboard/routes/dashboard/settings/operationalFlows/OperationalFlowsManager.vue';
+import TimeFlowMapper from 'dashboard/routes/dashboard/settings/operationalFlows/TimeFlowMapper.vue';
 import AutoResolve from 'dashboard/routes/dashboard/settings/account/components/AutoResolve.vue';
 
 const { accountId } = useAccount();
@@ -17,13 +19,6 @@ const showAutoResolutionConfig = computed(() => {
   return isFeatureEnabledonAccount.value(
     accountId.value,
     FEATURE_FLAGS.AUTO_RESOLVE_CONVERSATIONS
-  );
-});
-
-const showRequiredAttributes = computed(() => {
-  return isFeatureEnabledonAccount.value(
-    accountId.value,
-    FEATURE_FLAGS.CONVERSATION_REQUIRED_ATTRIBUTES
   );
 });
 </script>
@@ -41,7 +36,9 @@ const showRequiredAttributes = computed(() => {
     <template #body>
       <div class="flex flex-col gap-6 mt-4">
         <AutoResolve v-if="showAutoResolutionConfig" />
-        <ConversationRequiredAttributes :is-enabled="showRequiredAttributes" />
+        <OperationalFlowsManager />
+        <TimeFlowMapper />
+        <MetaConversionSettings />
       </div>
     </template>
   </SettingsLayout>

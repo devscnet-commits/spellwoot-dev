@@ -20,9 +20,6 @@ const FloatingCallWidget = defineAsyncComponent(
   () => import('dashboard/components/widgets/FloatingCallWidget.vue')
 );
 
-import CopilotLauncher from 'dashboard/components-next/copilot/CopilotLauncher.vue';
-import CopilotContainer from 'dashboard/components/copilot/CopilotContainer.vue';
-
 import MobileSidebarLauncher from 'dashboard/components-next/sidebar/MobileSidebarLauncher.vue';
 import { useCallsStore } from 'dashboard/stores/calls';
 
@@ -33,8 +30,6 @@ export default {
     WootKeyShortcutModal,
     AddAccountModal,
     UpgradePage,
-    CopilotLauncher,
-    CopilotContainer,
     FloatingCallWidget,
     MobileSidebarLauncher,
   },
@@ -94,8 +89,9 @@ export default {
             conversation_display_type: LAYOUT_TYPES.EXPANDED,
           });
         } else {
+          // Always condensed on desktop — resizable panels replace the toggle
           this.updateUISettings({
-            conversation_display_type: this.previouslyUsedDisplayType,
+            conversation_display_type: LAYOUT_TYPES.CONDENSED,
           });
         }
       },
@@ -156,12 +152,10 @@ export default {
       <template v-if="!showUpgradePage">
         <router-view />
         <CommandBar />
-        <CopilotLauncher />
         <MobileSidebarLauncher
           :is-mobile-sidebar-open="isMobileSidebarOpen"
           @toggle="toggleMobileSidebar"
         />
-        <CopilotContainer />
         <FloatingCallWidget v-if="hasActiveCall || hasIncomingCall" />
       </template>
       <AddAccountModal

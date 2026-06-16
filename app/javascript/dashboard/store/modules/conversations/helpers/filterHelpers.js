@@ -77,6 +77,8 @@ const getValueFromConversation = (conversation, attributeKey) => {
       return conversation.inbox_id;
     case 'team_id':
       return conversation.meta?.team?.id;
+    case 'campaign_id':
+      return conversation.campaign_id;
     case 'browser_language':
     case 'referer':
       return conversation.additional_attributes?.[attributeKey];

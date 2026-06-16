@@ -74,6 +74,8 @@ class Conversation < ApplicationRecord
 
   enum status: { open: 0, resolved: 1, pending: 2, snoozed: 3 }
   enum priority: { low: 0, medium: 1, high: 2, urgent: 3 }
+  # _prefix avoids generating a `Conversation.none` scope that would shadow ActiveRecord's `none`.
+  enum result: { none: 0, won: 1, lost: 2 }, _prefix: :result
 
   scope :unassigned, -> { where(assignee_id: nil) }
   scope :assigned, -> { where.not(assignee_id: nil) }
@@ -113,6 +115,11 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
+  # These two carry NOT NULL foreign keys to conversations, so destroy_async would leave the
+  # parent delete blocked by the constraint (the cleanup job runs after). Delete them in-line.
+  has_many :result_events, class_name: 'ConversationResultEvent', dependent: :delete_all
+  has_many :meta_conversion_events, dependent: :delete_all
+  belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status
@@ -130,6 +137,12 @@ class Conversation < ApplicationRecord
 
   def language
     additional_attributes&.dig('conversation_language')
+  end
+
+  # The operational flow follows the conversation's team — or, without one, the team of the
+  # assignee / acting agent. See Conversations::FlowResolver.
+  def operational_flow(user = Current.user)
+    Conversations::FlowResolver.new(conversation: self, user: user).flow
   end
 
   # Be aware: The precision of created_at and last_activity_at may differ from Ruby's Time precision.
@@ -220,10 +233,29 @@ class Conversation < ApplicationRecord
 
   def execute_after_update_commit_callbacks
     handle_resolved_status_change
+    record_result_reopen_event
     notify_status_change
     create_activity
     notify_conversation_updation
   end
+
+  # When a resolved conversation with a business result is reopened, keep the result intact
+  # but append a history event so reporting can account for the reopen.
+  def record_result_reopen_event
+    return unless saved_change_to_status? && open?
+    return if result_none?
+
+    result_events.create!(
+      account_id: account_id,
+      inbox_id: inbox_id,
+      team_id: team_id,
+      user_id: Current.user&.id,
+      result: result,
+      previous_result: result,
+      event_type: 'reopened'
+    )
+  end
+
 
   def handle_resolved_status_change
     # When conversation is resolved, clear waiting_since using update_column to avoid callbacks
@@ -258,12 +290,12 @@ class Conversation < ApplicationRecord
     return handle_campaign_status if campaign.present?
 
     # TODO: make this an inbox config instead of assuming bot conversations should start as pending
-    self.status = :pending if inbox.active_bot?
+    # status pending removido � conversas iniciam como open
   end
 
   def handle_campaign_status
     # If campaign has no sender (bot-initiated) and inbox has active bot, let bot handle it
-    self.status = :pending if campaign.sender_id.nil? && inbox.active_bot?
+    # status pending removido � conversas iniciam como open
   end
 
   def notify_conversation_creation
@@ -278,7 +310,7 @@ class Conversation < ApplicationRecord
 
   def list_of_keys
     %w[team_id assignee_id assignee_agent_bot_id status snoozed_until custom_attributes label_list waiting_since
-       first_reply_created_at priority]
+       first_reply_created_at priority result]
   end
 
   def allowed_keys?
@@ -346,3 +378,4 @@ end
 Conversation.include_mod_with('Audit::Conversation')
 Conversation.include_mod_with('Concerns::Conversation')
 Conversation.prepend_mod_with('Conversation')
+

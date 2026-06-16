@@ -29,6 +29,8 @@ export const REPORTS_PERMISSIONS = 'report_manage';
 
 export const PORTAL_PERMISSIONS = 'knowledge_base_manage';
 
+// Order defines tab order in the chat list: Minhas first (the login default).
+// 'all' and 'unassigned' only appear when the user's role/custom role grants them.
 export const ASSIGNEE_TYPE_TAB_PERMISSIONS = {
   me: {
     count: 'mineCount',

@@ -4,13 +4,10 @@ import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
 import { useElementSize } from '@vueuse/core';
 import BackButton from '../BackButton.vue';
-import InboxName from '../InboxName.vue';
 import MoreActions from './MoreActions.vue';
 import Avatar from 'next/avatar/Avatar.vue';
 import SLACardLabel from './components/SLACardLabel.vue';
-import wootConstants from 'dashboard/constants/globals';
 import { conversationListPageURL } from 'dashboard/helper/URLHelper';
-import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
 import { useInbox } from 'dashboard/composables/useInbox';
 import { useI18n } from 'vue-i18n';
 
@@ -25,7 +22,7 @@ const props = defineProps({
   },
 });
 
-const { t } = useI18n();
+useI18n();
 const store = useStore();
 const route = useRoute();
 const conversationHeader = ref(null);
@@ -66,37 +63,25 @@ const isHMACVerified = computed(() => {
 });
 
 const currentContact = computed(() =>
-  store.getters['contacts/getContact'](props.chat.meta.sender.id)
+  store.getters['contacts/getContact'](props.chat.meta.sender?.id)
 );
 
-const isSnoozed = computed(
-  () => currentChat.value.status === wootConstants.STATUS_TYPE.SNOOZED
-);
-
-const snoozedDisplayText = computed(() => {
-  const { snoozed_until: snoozedUntil } = currentChat.value;
-  if (snoozedUntil) {
-    return `${t('CONVERSATION.HEADER.SNOOZED_UNTIL')} ${snoozedReopenTime(snoozedUntil)}`;
-  }
-  return t('CONVERSATION.HEADER.SNOOZED_UNTIL_NEXT_REPLY');
-});
-
-const inbox = computed(() => {
-  const { inbox_id: inboxId } = props.chat;
-  return store.getters['inboxes/getInbox'](inboxId);
-});
-
-const hasMultipleInboxes = computed(
-  () => store.getters['inboxes/getInboxes'].length > 1
+// The inbox (Caixa) this conversation belongs to — shown under the contact name.
+const inbox = computed(() =>
+  store.getters['inboxes/getInbox'](props.chat?.inbox_id)
 );
 
 const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
+
+const isReopened = computed(
+  () => !!props.chat?.additional_attributes?.was_reopened
+);
 </script>
 
 <template>
   <div
     ref="conversationHeader"
-    class="flex flex-col gap-3 items-center justify-between flex-1 w-full min-w-0 xl:flex-row px-3 pt-3 pb-2 h-24 xl:h-12"
+    class="flex flex-col gap-3 items-center justify-between flex-1 w-full min-w-0 xl:flex-row px-4 py-3 h-28 xl:h-16"
   >
     <div
       class="flex items-center justify-start w-full xl:w-auto max-w-full min-w-0 xl:flex-1"
@@ -109,17 +94,17 @@ const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
       <Avatar
         :name="currentContact.name"
         :src="currentContact.thumbnail"
-        :size="32"
+        :size="44"
         :status="currentContact.availability_status"
         hide-offline-status
         rounded-full
       />
       <div
-        class="flex flex-col items-start min-w-0 ml-2 overflow-hidden rtl:ml-0 rtl:mr-2"
+        class="flex flex-col items-start min-w-0 ml-3 overflow-hidden rtl:ml-0 rtl:mr-3"
       >
         <div class="flex flex-row items-center max-w-full gap-1 p-0 m-0">
           <span
-            class="text-sm font-medium truncate leading-tight text-n-slate-12"
+            class="text-base font-medium truncate leading-tight text-n-slate-12"
           >
             {{ currentContact.name }}
           </span>
@@ -130,15 +115,20 @@ const hasSlaPolicyId = computed(() => props.chat?.sla_policy_id);
             class="text-n-amber-10 my-0 mx-0 min-w-[14px] flex-shrink-0"
             icon="warning"
           />
+          <span
+            v-if="isReopened"
+            class="flex-shrink-0 px-1.5 py-0.5 text-xs font-medium leading-none rounded-md text-n-amber-11 bg-n-amber-3"
+          >
+            {{ $t('CONVERSATION.REOPENED_TAG') }}
+          </span>
         </div>
 
         <div
-          class="flex items-center gap-2 overflow-hidden text-xs conversation--header--actions text-ellipsis whitespace-nowrap"
+          v-if="inbox?.name"
+          class="flex items-center gap-1 overflow-hidden text-xs text-n-slate-11 conversation--header--actions text-ellipsis whitespace-nowrap"
         >
-          <InboxName v-if="hasMultipleInboxes" :inbox="inbox" class="!mx-0" />
-          <span v-if="isSnoozed" class="font-medium text-n-amber-10">
-            {{ snoozedDisplayText }}
-          </span>
+          <span class="i-lucide-inbox size-3 shrink-0" />
+          <span class="truncate">{{ inbox.name }}</span>
         </div>
       </div>
     </div>

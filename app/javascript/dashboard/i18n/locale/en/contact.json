@@ -204,7 +204,7 @@
     "SHOW_LESS": "Show less attributes",
     "ACTIONS": {
       "COPY": "Copy attribute",
-      "DELETE": "Delete attribute",
+      "DELETE": "Clear value",
       "EDIT": "Edit attribute"
     },
     "ADD": {

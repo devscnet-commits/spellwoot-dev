@@ -1,0 +1,119 @@
+{
+  "OPERATIONAL_FLOWS_SETTINGS": {
+    "HEADER": "Fluxos de Fechamento",
+    "DESCRIPTION": "Configure os fluxos de fechamento: os botões de resolução (ex.: Ganho/Perdido), os atributos obrigatórios ao fechar e os eventos enviados à Meta. As Regras de atribuição decidem qual fluxo cada conversa usa.",
+    "LOADING": "Carregando fluxos de fechamento...",
+    "NEW_FLOW": "Criar fluxo",
+    "LIST": {
+      "404": "Nenhum fluxo de fechamento criado ainda",
+      "EDIT_FLOW": "Editar fluxo",
+      "META_ON": "Meta ativa",
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "DELETE": {
+      "BUTTON_TEXT": "Excluir",
+      "API": {
+        "SUCCESS_MESSAGE": "Fluxo de fechamento excluído com sucesso",
+        "ERROR_MESSAGE": "Não foi possível excluir o fluxo de fechamento"
+      },
+      "CONFIRM": {
+        "TITLE": "Excluir {flowName}?",
+        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
+        "YES": "Sim, excluir",
+        "NO": "Cancelar",
+        "PLACE_HOLDER": "Escreva {name} para confirmar"
+      }
+    },
+    "FORM": {
+      "NEW_TITLE": "Novo fluxo de fechamento",
+      "EDIT_TITLE": "Editar fluxo de fechamento",
+      "SUBTITLE": "Defina os botões de fechamento e o que é obrigatório ao finalizar uma conversa.",
+      "NAME": {
+        "LABEL": "Nome do fluxo",
+        "PLACEHOLDER": "ex.: Vendas"
+      },
+      "ACTIVE": {
+        "LABEL": "Ativo"
+      },
+      "META": {
+        "LABEL": "Enviar conversões para a Meta",
+        "HELP": "Interruptor mestre deste fluxo. Quando ligado, cada estado abaixo pode disparar um evento na Meta."
+      },
+      "CATEGORY": {
+        "LABEL": "Categoria",
+        "HELP": "Dimensão para relatórios. Fechamentos de venda alimentam o funil; fechamentos de suporte ficam separados e nunca contam como conversão.",
+        "OPTIONS": {
+          "sales": "Vendas",
+          "support": "Suporte"
+        }
+      },
+      "STATES": {
+        "LABEL": "Estados do fluxo",
+        "DISPLAY_LABEL": "Rótulo do botão",
+        "POLARITY": "Polaridade",
+        "POLARITY_OPTIONS": {
+          "positive": "Positivo",
+          "negative": "Negativo",
+          "neutral": "Neutro"
+        },
+        "META_EVENT": "Enviar à Meta como",
+        "META_NONE": "Não enviar",
+        "META_VALUE_ATTR": "Valor da venda a partir do atributo",
+        "META_NO_VALUE": "Sem valor",
+        "META_NEED_VALUE_ATTR": "O evento Purchase exige um valor. Crie um atributo personalizado de conversa do tipo Número (ex.: \"Valor da venda\") em Configurações → Atributos personalizados e selecione-o aqui.",
+        "META_VALUE_HELP": "Ao salvar, este atributo vira obrigatório neste estado: o agente será solicitado a preenchê-lo ao fechar a conversa.",
+        "META_EVENT_DESC": {
+          "Purchase": "Venda concluída (exige valor)",
+          "Lead": "Novo lead",
+          "CompleteRegistration": "Cadastro concluído",
+          "Contact": "Contato realizado",
+          "Schedule": "Agendamento marcado",
+          "SubmitApplication": "Proposta/inscrição enviada",
+          "StartTrial": "Início de período de teste",
+          "Subscribe": "Assinatura contratada",
+          "InitiateCheckout": "Checkout iniciado",
+          "AddPaymentInfo": "Dados de pagamento informados",
+          "AddToCart": "Adicionou ao carrinho",
+          "AddToWishlist": "Adicionou à lista de desejos",
+          "ViewContent": "Visualizou conteúdo/produto",
+          "Search": "Pesquisou algo",
+          "FindLocation": "Buscou localização/loja",
+          "CustomizeProduct": "Personalizou produto",
+          "Donate": "Doação realizada"
+        }
+      },
+      "USED_BY": {
+        "TITLE": "Este fluxo está sendo utilizado por:",
+        "MANAGE": "Gerenciar times →",
+        "EMPTY": "Nenhum time usa este fluxo ainda."
+      },
+      "SAVE": "Salvar fluxo",
+      "CREATE_SUCCESS": "Fluxo de fechamento criado com sucesso",
+      "UPDATE_SUCCESS": "Fluxo de fechamento atualizado com sucesso",
+      "ERROR_MESSAGE": "Não foi possível salvar o fluxo de fechamento",
+      "REQUIREMENTS": {
+        "LABEL": "Atributos obrigatórios do fluxo",
+        "HELP": "Atributos que o agente precisa preencher antes de finalizar como um destes estados.",
+        "SELECT_ATTRIBUTE": "Selecione um atributo",
+        "ALWAYS": "Sempre obrigatório",
+        "WHEN_STATE": "Obrigatório quando: {state}",
+        "IF": "Obrigatório se...",
+        "IF_FIELD": "Quando o atributo",
+        "IF_FIELD_PLACEHOLDER": "Selecione o atributo gatilho",
+        "IF_VALUES": "For uma destas respostas",
+        "IF_NO_LIST_ATTRS": "Nenhum atributo de múltipla escolha (lista) disponível. Crie um em Atributos personalizados.",
+        "ADD": "Adicionar obrigatoriedade"
+      }
+    },
+    "TIME_FLOWS": {
+      "HEADER": "Times → Fluxo de fechamento",
+      "DESCRIPTION": "O fluxo segue o time da conversa: time atribuído à conversa ou, sem ele, o time do agente que atendeu. Configure aqui qual fluxo cada time usa.",
+      "NONE": "Sem fluxo",
+      "INACTIVE": "inativo",
+      "EMPTY": "Nenhum time encontrado.",
+      "SAVE_SUCCESS": "Fluxo do time atualizado",
+      "SAVE_ERROR": "Não foi possível atualizar o fluxo do time"
+    }
+  }
+}

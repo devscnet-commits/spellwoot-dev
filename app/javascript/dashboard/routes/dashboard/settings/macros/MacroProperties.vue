@@ -23,7 +23,7 @@ export default {
     isActive(key) {
       return this.macroVisibility === key
         ? 'bg-n-blue-2 dark:bg-n-blue-1 border-n-blue-3 dark:border-n-blue-4'
-        : 'bg-white dark:bg-n-solid-2 border-n-weak dark:border-n-strong';
+        : 'bg-[#12030a] dark:bg-n-solid-2 border-n-weak dark:border-n-strong';
     },
     onUpdateName(value) {
       this.$emit('update:name', value);

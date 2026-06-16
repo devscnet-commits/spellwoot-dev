@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
+import { useUnsavedChangesGuard } from 'dashboard/composables/useUnsavedChangesGuard';
 import { getInboxIconByType } from 'dashboard/helper/inbox';
 import {
   ROUND_ROBIN,
@@ -34,8 +35,10 @@ const routeId = computed(() => route.params.id);
 const selectedPolicy = computed(() => selectedPolicyById.value(routeId.value));
 
 const confirmInboxDialogRef = ref(null);
-// Store the policy linked to the inbox when adding a new inbox
 const inboxLinkedPolicy = ref(null);
+const isFormDirty = ref(false);
+
+useUnsavedChangesGuard(isFormDirty, `${BASE_KEY}.EDIT.UNSAVED_LEAVE_CONFIRM`);
 
 // Inbox linking prompt from create flow
 const inboxIdFromQuery = computed(() => {
@@ -257,7 +260,9 @@ watch(routeId, fetchPolicyData, { immediate: true });
   >
     <template #header>
       <div class="flex items-center gap-2 w-full justify-between mb-4 min-h-10">
-        <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+        <div class="flex items-center gap-3">
+          <Breadcrumb :items="breadcrumbItems" @click="handleBreadcrumbClick" />
+        </div>
       </div>
     </template>
 
@@ -275,6 +280,7 @@ watch(routeId, fetchPolicyData, { immediate: true });
         @add-inbox="handleAddInbox"
         @delete-inbox="handleDeleteInbox"
         @navigate-to-inbox="handleNavigateToInbox"
+        @dirty-change="isFormDirty = $event"
       />
     </template>
 

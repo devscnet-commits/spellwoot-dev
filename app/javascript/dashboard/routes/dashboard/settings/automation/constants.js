@@ -123,16 +123,8 @@ export const AUTOMATIONS = {
         name: 'MUTE_CONVERSATION',
       },
       {
-        key: 'snooze_conversation',
-        name: 'SNOOZE_CONVERSATION',
-      },
-      {
         key: 'open_conversation',
         name: 'OPEN_CONVERSATION',
-      },
-      {
-        key: 'pending_conversation',
-        name: 'PENDING_CONVERSATION',
       },
       {
         key: 'resolve_conversation',
@@ -253,14 +245,6 @@ export const AUTOMATIONS = {
       {
         key: 'mute_conversation',
         name: 'MUTE_CONVERSATION',
-      },
-      {
-        key: 'snooze_conversation',
-        name: 'SNOOZE_CONVERSATION',
-      },
-      {
-        key: 'pending_conversation',
-        name: 'PENDING_CONVERSATION',
       },
       {
         key: 'resolve_conversation',
@@ -395,14 +379,6 @@ export const AUTOMATIONS = {
         name: 'MUTE_CONVERSATION',
       },
       {
-        key: 'snooze_conversation',
-        name: 'SNOOZE_CONVERSATION',
-      },
-      {
-        key: 'pending_conversation',
-        name: 'PENDING_CONVERSATION',
-      },
-      {
         key: 'resolve_conversation',
         name: 'RESOLVE_CONVERSATION',
       },
@@ -527,14 +503,6 @@ export const AUTOMATIONS = {
       {
         key: 'mute_conversation',
         name: 'MUTE_CONVERSATION',
-      },
-      {
-        key: 'snooze_conversation',
-        name: 'SNOOZE_CONVERSATION',
-      },
-      {
-        key: 'pending_conversation',
-        name: 'PENDING_CONVERSATION',
       },
       {
         key: 'send_webhook_event',
@@ -726,11 +694,6 @@ export const AUTOMATION_ACTION_TYPES = [
     inputType: null,
   },
   {
-    key: 'snooze_conversation',
-    label: 'SNOOZE_CONVERSATION',
-    inputType: null,
-  },
-  {
     key: 'resolve_conversation',
     label: 'RESOLVE_CONVERSATION',
     inputType: null,
@@ -738,11 +701,6 @@ export const AUTOMATION_ACTION_TYPES = [
   {
     key: 'open_conversation',
     label: 'OPEN_CONVERSATION',
-    inputType: null,
-  },
-  {
-    key: 'pending_conversation',
-    label: 'PENDING_CONVERSATION',
     inputType: null,
   },
   {

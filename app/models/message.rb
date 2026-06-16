@@ -100,7 +100,7 @@ class Message < ApplicationRecord
     sticker: 11,
     voice_call: 12
   }
-  enum status: { sent: 0, delivered: 1, read: 2, failed: 3 }
+  enum status: { sent: 0, delivered: 1, read: 2, failed: 3, progress: 4 }
   # [:submitted_email, :items, :submitted_values] : Used for bot message types
   # [:email] : Used by conversation_continuity incoming email messages
   # [:in_reply_to] : Used to reply to a particular tweet in threads
@@ -160,7 +160,9 @@ class Message < ApplicationRecord
       assignee_id: conversation.assignee_id,
       unread_count: conversation.unread_incoming_messages.count,
       last_activity_at: conversation.last_activity_at.to_i,
-      contact_inbox: { source_id: conversation.contact_inbox.source_id }
+      # contact_inbox vanishes while a deleted contact's cleanup job runs; a nil source_id
+      # is harmless, a NoMethodError here 500s every conversation list rendering this message.
+      contact_inbox: { source_id: conversation.contact_inbox&.source_id }
     }
   end
 
@@ -330,10 +332,23 @@ class Message < ApplicationRecord
     send_reply
     execute_message_template_hooks
     update_contact_activity
+    mark_conversation_handled_by_human
   end
 
   def update_contact_activity
     sender.update(last_activity_at: DateTime.now) if sender.is_a?(Contact)
+  end
+
+  def mark_conversation_handled_by_human
+    return unless human_response?
+    return if conversation.additional_attributes&.dig('was_handled_by_human')
+
+    conversation.update_columns(
+      additional_attributes: (conversation.additional_attributes || {}).merge('was_handled_by_human' => true)
+    )
+    # update_columns skips callbacks, so broadcast explicitly — the dashboard needs the flag
+    # right away or the Resolver button still offers the AI shortcut to a stale client.
+    conversation.dispatch_conversation_updated_event
   end
 
   def update_waiting_since
@@ -402,11 +417,13 @@ class Message < ApplicationRecord
 
   def reopen_conversation
     return if conversation.muted?
-    return unless incoming?
 
-    conversation.open! if conversation.snoozed?
+    conversation.open! if conversation.snoozed? && incoming?
 
-    reopen_resolved_conversation if conversation.resolved?
+    if conversation.resolved?
+      reopen_resolved_conversation if incoming?
+      reopen_resolved_conversation_for_human_agent if outgoing_human_agent?
+    end
   end
 
   def mark_pending_conversation_as_open_for_human_response
@@ -422,15 +439,38 @@ class Message < ApplicationRecord
   end
 
   def reopen_resolved_conversation
-    # mark resolved bot conversation as pending to be reopened by bot processor service
-    if conversation.inbox.active_bot?
-      conversation.pending!
-    elsif conversation.inbox.api?
-      Current.executed_by = sender if reopened_by_contact?
-      conversation.open!
-    else
-      conversation.open!
-    end
+    Current.executed_by = sender if conversation.inbox.api? && reopened_by_contact?
+    attrs = (conversation.additional_attributes || {}).merge(
+      'was_reopened' => true,
+      'reopened_at' => Time.current.iso8601
+    )
+    conversation.update_columns(additional_attributes: attrs)
+    release_assignee_unless_online
+    conversation.open!
+  end
+
+  # On reopen, keep the conversation with the previous agent only while they are online.
+  # If they are busy/offline/away, release the assignee: with auto-assignment the status
+  # change redistributes to an available agent; without it the conversation simply lands in
+  # "Não atribuídas / Em aberto" to be picked up later — never stuck with an absent agent.
+  def release_assignee_unless_online
+    assignee = conversation.assignee
+    return if assignee.blank?
+    return if assignee_online?(assignee.id)
+
+    conversation.update!(assignee_id: nil)
+  end
+
+  def assignee_online?(agent_id)
+    OnlineStatusTracker.get_available_users(conversation.account_id)[agent_id.to_s] == 'online'
+  end
+
+  def reopen_resolved_conversation_for_human_agent
+    conversation.open!
+  end
+
+  def outgoing_human_agent?
+    outgoing? && !private? && sender.instance_of?(User)
   end
 
   def reopened_by_contact?

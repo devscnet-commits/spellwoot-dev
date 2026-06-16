@@ -27,6 +27,19 @@ const attributeIcon = computed(() => {
   return iconByType[typeKey] || 'i-lucide-align-justify';
 });
 
+const ruleLabel = computed(() => {
+  if (props.attribute.rule === 'conditional') {
+    const field =
+      props.attribute.conditionFieldLabel || props.attribute.condition_field;
+    const rawValue = props.attribute.condition_value;
+    const valueStr = Array.isArray(rawValue)
+      ? rawValue.join(' OU ')
+      : rawValue;
+    return `${field} = ${valueStr}`;
+  }
+  return null;
+});
+
 const handleDelete = () => {
   emit('delete', props.attribute);
 };
@@ -34,7 +47,7 @@ const handleDelete = () => {
 
 <template>
   <div class="flex justify-between items-center px-4 py-3 w-full">
-    <div class="flex gap-3 items-center">
+    <div class="flex gap-3 items-center flex-wrap">
       <h5 class="text-heading-3 text-n-slate-12 line-clamp-1">
         {{ attribute.label }}
       </h5>
@@ -49,6 +62,25 @@ const handleDelete = () => {
         <span class="text-body-para text-n-slate-11">{{
           attribute.value
         }}</span>
+      </div>
+      <div class="w-px h-2.5 bg-n-slate-5" />
+      <div class="flex gap-1.5 items-center">
+        <Icon
+          :icon="ruleLabel ? 'i-lucide-git-branch' : 'i-lucide-check-circle-2'"
+          class="size-4 text-n-slate-11"
+        />
+        <span class="text-body-small text-n-slate-11">
+          {{
+            ruleLabel
+              ? $t(
+                  'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.LABEL_CONDITIONAL',
+                  { field: ruleLabel }
+                )
+              : $t(
+                  'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.LABEL_ALWAYS'
+                )
+          }}
+        </span>
       </div>
     </div>
     <div class="flex gap-2 items-center">

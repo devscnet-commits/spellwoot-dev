@@ -10,7 +10,7 @@ export default {
 </script>
 
 <template>
-  <div class="bg-white h-full">
+  <div class="bg-[#12030a] h-full">
     <IframeLoader :url="$route.query.link" />
   </div>
 </template>

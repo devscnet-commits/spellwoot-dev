@@ -225,10 +225,10 @@ const handleToggleWidget = () => {
             </div>
             <div v-if="isWidgetVisible" class="relative">
               <div
-                class="absolute w-0.5 h-8 rotate-45 -translate-y-1/2 bg-white"
+                class="absolute w-0.5 h-8 rotate-45 -translate-y-1/2 bg-[#12030a]"
               />
               <div
-                class="absolute w-0.5 h-8 -rotate-45 -translate-y-1/2 bg-white"
+                class="absolute w-0.5 h-8 -rotate-45 -translate-y-1/2 bg-[#12030a]"
               />
             </div>
           </button>

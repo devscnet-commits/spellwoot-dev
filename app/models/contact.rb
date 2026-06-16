@@ -1,4 +1,3 @@
-# rubocop:disable Layout/LineLength
 
 # == Schema Information
 #
@@ -39,7 +38,6 @@
 #  uniq_identifier_per_account_contact                   (identifier,account_id) UNIQUE
 #
 
-# rubocop:enable Layout/LineLength
 
 class Contact < ApplicationRecord
   include Avatarable

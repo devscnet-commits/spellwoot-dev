@@ -219,7 +219,7 @@ watch(
             </p>
             <p class="mt-2 text-sm text-n-slate-11">{{ error }}</p>
             <button
-              class="mt-4 px-4 py-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors"
+              class="mt-4 px-4 py-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-[#12030a] bg-opacity-20 hover:bg-opacity-30 transition-colors"
               @click="close"
             >
               <span class="text-sm font-medium">{{
@@ -315,7 +315,7 @@ watch(
           >
             <button
               v-if="currentSlide > 0"
-              class="px-4 py-2 flex items-center gap-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors"
+              class="px-4 py-2 flex items-center gap-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-[#12030a] bg-opacity-20 hover:bg-opacity-30 transition-colors"
               @click="previousSlide"
             >
               <i class="i-lucide-chevron-left w-5 h-5" />
@@ -332,15 +332,15 @@ watch(
                 class="w-2 h-2 rounded-full transition-all"
                 :class="
                   currentVisualSlide === index - 1
-                    ? 'bg-white w-8'
-                    : 'bg-white bg-opacity-50'
+                    ? 'bg-[#12030a] w-8'
+                    : 'bg-[#12030a] bg-opacity-50'
                 "
                 @click="goToSlide(index - 1)"
               />
             </div>
 
             <button
-              class="px-4 py-2 flex items-center gap-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors"
+              class="px-4 py-2 flex items-center gap-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-[#12030a] bg-opacity-20 hover:bg-opacity-30 transition-colors"
               :class="{ invisible: currentVisualSlide === totalSlides - 1 }"
               @click="nextSlide"
             >
@@ -358,7 +358,7 @@ watch(
           </div>
 
           <button
-            class="absolute top-4 left-4 px-4 py-2 flex items-center gap-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors"
+            class="absolute top-4 left-4 px-4 py-2 flex items-center gap-2 rounded-full text-n-slate-12 dark:text-n-slate-1 bg-[#12030a] bg-opacity-20 hover:bg-opacity-30 transition-colors"
             @click="shareCurrentSlide"
           >
             <i class="i-lucide-share-2 w-5 h-5" />
@@ -368,7 +368,7 @@ watch(
           </button>
 
           <button
-            class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full text-n-slate-12 dark:text-n-slate-1 hover:bg-white hover:bg-opacity-20 transition-colors"
+            class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full text-n-slate-12 dark:text-n-slate-1 hover:bg-[#12030a] hover:bg-opacity-20 transition-colors"
             @click="close"
           >
             <i class="i-lucide-x w-6 h-6" />

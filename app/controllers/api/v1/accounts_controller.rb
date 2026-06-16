@@ -117,7 +117,10 @@ class Api::V1::AccountsController < Api::BaseController
   end
 
   def permitted_settings_attributes
-    [:auto_resolve_after, :auto_resolve_message, :auto_resolve_ignore_waiting, :audio_transcriptions, :auto_resolve_label]
+    [:auto_resolve_after, :auto_resolve_message, :auto_resolve_ignore_waiting, :audio_transcriptions, :auto_resolve_label,
+     { meta_conversion_settings: [:enabled, :strategy, :lead_on_arrival, :win_status_field, :win_value, :loss_value, :value_field, :currency,
+                                  { enrichment_fields: [:em, :ph, :fn, :zp, :ct, :st, :country, :db, :ge, :external_id] }] },
+     { conversation_required_attributes: [:key, :rule, :condition_field, :condition_value] }]
   end
 
   def check_signup_enabled

@@ -39,37 +39,18 @@ class ConversationFinder
 
   def perform
     set_up
-
-    mine_count, unassigned_count, all_count, = set_count_for_all_conversations
-    assigned_count = all_count - unassigned_count
-
     filter_by_assignee_type
 
     {
       conversations: conversations,
-      count: {
-        mine_count: mine_count,
-        assigned_count: assigned_count,
-        unassigned_count: unassigned_count,
-        all_count: all_count
-      }
+      count: tab_counts
     }
   end
 
   def perform_meta_only
     set_up
 
-    mine_count, unassigned_count, all_count, = set_count_for_all_conversations
-    assigned_count = all_count - unassigned_count
-
-    {
-      count: {
-        mine_count: mine_count,
-        assigned_count: assigned_count,
-        unassigned_count: unassigned_count,
-        all_count: all_count
-      }
-    }
+    { count: tab_counts }
   end
 
   private
@@ -80,11 +61,24 @@ class ConversationFinder
     set_assignee_type
 
     find_all_conversations
-    filter_by_status unless params[:q]
     filter_by_team
     filter_by_labels
     filter_by_query
     filter_by_source_id
+    filter_by_reopened
+    filter_by_campaign_id
+
+    # Snapshot the fully-scoped set BEFORE applying the status filter. Tab counters are
+    # derived from this so they stay stable — open mine/unassigned/all plus a resolved
+    # total — no matter which status the list itself is currently showing.
+    @scoped_conversations = @conversations
+    filter_by_status unless params[:q]
+  end
+
+  def filter_by_reopened
+    return unless params[:was_reopened].to_s == 'true'
+
+    @conversations = @conversations.where("additional_attributes->>'was_reopened' = 'true'")
   end
 
   def set_inboxes
@@ -183,12 +177,34 @@ class ConversationFinder
     @conversations = @conversations.where(contact_inboxes: { source_id: params[:source_id] })
   end
 
-  def set_count_for_all_conversations
-    [
-      @conversations.assigned_to(current_user).count,
-      @conversations.unassigned.count,
-      @conversations.count
-    ]
+  def filter_by_campaign_id
+    return unless params[:campaign_id]
+
+    @conversations = @conversations.where(campaign_id: params[:campaign_id])
+  end
+
+  # Assignee tab counters follow the status the list is showing, so toggling between
+  # 'em aberto' and 'finalizadas' recounts Minhas/Não atribuídas/Todas for that status.
+  # resolved_count stays the resolved total for the status toggle itself.
+  def tab_counts
+    status_scope = case params[:status]
+                   when 'all'
+                     @scoped_conversations
+                   when 'resolved'
+                     @scoped_conversations.where(status: :resolved)
+                   else
+                     @scoped_conversations.where(status: :open)
+                   end
+    unassigned_count = status_scope.unassigned.count
+    all_count = status_scope.count
+
+    {
+      mine_count: status_scope.assigned_to(current_user).count,
+      assigned_count: all_count - unassigned_count,
+      unassigned_count: unassigned_count,
+      all_count: all_count,
+      resolved_count: @scoped_conversations.where(status: :resolved).count
+    }
   end
 
   def current_page

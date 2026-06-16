@@ -33,10 +33,12 @@ export const actions = {
       // Ignore error
     }
   },
-  get: async ({ commit }) => {
+  // cache: false forces a network fetch — screens that depend on fresh inbox_ids
+  // (flow assignment rules, caixa Agentes tab) must not trust the IndexedDB copy.
+  get: async ({ commit }, { cache = true } = {}) => {
     commit(SET_TEAM_UI_FLAG, { isFetching: true });
     try {
-      const { data } = await TeamsAPI.get(true);
+      const { data } = await TeamsAPI.get(cache);
       commit(CLEAR_TEAMS);
       commit(SET_TEAMS, data);
     } catch (error) {

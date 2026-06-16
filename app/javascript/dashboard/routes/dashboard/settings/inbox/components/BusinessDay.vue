@@ -32,6 +32,9 @@ export default {
       default: () => ({
         from: '',
         to: '',
+        hasLunchBreak: false,
+        lunchFrom: '',
+        lunchTo: '',
       }),
     },
   },
@@ -62,6 +65,9 @@ export default {
               to: '',
               valid: false,
               openAllDay: false,
+              hasLunchBreak: false,
+              lunchFrom: '',
+              lunchTo: '',
             };
         this.$emit('update', newSlot);
       },
@@ -102,6 +108,22 @@ export default {
         }
       },
     },
+    lunchFromTime: {
+      get() {
+        return this.timeSlot.lunchFrom;
+      },
+      set(value) {
+        this.$emit('update', { ...this.timeSlot, lunchFrom: value });
+      },
+    },
+    lunchToTime: {
+      get() {
+        return this.timeSlot.lunchTo;
+      },
+      set(value) {
+        this.$emit('update', { ...this.timeSlot, lunchTo: value });
+      },
+    },
     fromDate() {
       return parse(this.fromTime, 'hh:mm a', new Date());
     },
@@ -112,7 +134,17 @@ export default {
       if (this.timeSlot.openAllDay) return '24h';
 
       const totalMinutes = differenceInMinutes(this.toDate, this.fromDate);
-      const [h, m] = [Math.floor(totalMinutes / 60), totalMinutes % 60];
+      const lunchMinutes =
+        this.timeSlot.hasLunchBreak &&
+        this.timeSlot.lunchFrom &&
+        this.timeSlot.lunchTo
+          ? differenceInMinutes(
+              parse(this.timeSlot.lunchTo, 'hh:mm a', new Date()),
+              parse(this.timeSlot.lunchFrom, 'hh:mm a', new Date())
+            )
+          : 0;
+      const net = totalMinutes - lunchMinutes;
+      const [h, m] = [Math.floor(net / 60), net % 60];
 
       return [h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ') || '0m';
     },
@@ -131,6 +163,9 @@ export default {
             to: '11:59 PM',
             valid: true,
             openAllDay: value,
+            hasLunchBreak: false,
+            lunchFrom: '',
+            lunchTo: '',
           });
         } else {
           this.$emit('update', {
@@ -141,6 +176,19 @@ export default {
             openAllDay: value,
           });
         }
+      },
+    },
+    hasLunchBreak: {
+      get() {
+        return Boolean(this.timeSlot.hasLunchBreak);
+      },
+      set(value) {
+        this.$emit('update', {
+          ...this.timeSlot,
+          hasLunchBreak: value,
+          lunchFrom: value ? this.timeSlot.lunchFrom || '12:00 PM' : '',
+          lunchTo: value ? this.timeSlot.lunchTo || '01:00 PM' : '',
+        });
       },
     },
   },
@@ -164,7 +212,7 @@ export default {
       </div>
     </td>
     <td class="py-3 ltr:pr-3 rtl:pl-3">
-      <div v-if="isDayEnabled" class="flex flex-col gap-1.5">
+      <div v-if="isDayEnabled" class="flex flex-col gap-2">
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
             <input
@@ -193,6 +241,35 @@ export default {
             :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
             :disabled="isOpenAllDay"
           />
+        </div>
+        <div v-if="!isOpenAllDay" class="flex flex-col gap-1.5">
+          <div class="flex items-center gap-2">
+            <input
+              v-model="hasLunchBreak"
+              name="enable-lunch-break"
+              class="m-0"
+              type="checkbox"
+              :title="$t('INBOX_MGMT.BUSINESS_HOURS.LUNCH_BREAK')"
+            />
+            <span class="text-body-main text-n-slate-12">{{
+              $t('INBOX_MGMT.BUSINESS_HOURS.LUNCH_BREAK')
+            }}</span>
+          </div>
+          <div v-if="hasLunchBreak" class="flex items-center gap-4 pl-5">
+            <NextSelect
+              v-model="lunchFromTime"
+              :groups="fromTimeSlots"
+              :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
+            />
+            <div class="flex items-center">
+              <Icon icon="i-lucide-minus size-4" />
+            </div>
+            <NextSelect
+              v-model="lunchToTime"
+              :groups="toTimeSlots"
+              :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
+            />
+          </div>
         </div>
         <span v-if="hasError" class="error text-label-small text-n-ruby-9">
           {{ $t('INBOX_MGMT.BUSINESS_HOURS.DAY.VALIDATION_ERROR') }}

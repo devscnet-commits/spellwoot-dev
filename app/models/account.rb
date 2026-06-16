@@ -53,6 +53,7 @@ class Account < ApplicationRecord
   store_accessor :settings, :keep_pending_on_bot_failure
   store_accessor :settings, :captain_auto_resolve_mode
   include AccountCaptainAutoResolve
+  include ConversationRequiredAttributesNormalizer
 
   has_many :account_users, dependent: :destroy_async
   has_many :agent_bot_inboxes, dependent: :destroy_async
@@ -88,6 +89,8 @@ class Account < ApplicationRecord
   has_many :portals, dependent: :destroy_async, class_name: '::Portal'
   has_many :sms_channels, dependent: :destroy_async, class_name: '::Channel::Sms'
   has_many :teams, dependent: :destroy_async
+  has_many :operational_flows, dependent: :destroy_async
+  has_many :meta_conversion_events, dependent: :destroy_async
   has_many :telegram_channels, dependent: :destroy_async, class_name: '::Channel::Telegram'
   has_many :twilio_sms, dependent: :destroy_async, class_name: '::Channel::TwilioSms'
   has_many :twitter_profiles, dependent: :destroy_async, class_name: '::Channel::TwitterProfile'
@@ -106,6 +109,7 @@ class Account < ApplicationRecord
 
   before_validation :validate_limit_keys
   after_create_commit :notify_creation
+  after_create_commit :create_default_custom_attributes
   after_destroy :remove_account_sequences
 
   def agents
@@ -161,6 +165,34 @@ class Account < ApplicationRecord
 
   def notify_creation
     Rails.configuration.dispatcher.dispatch(ACCOUNT_CREATED, Time.zone.now, account: self)
+  end
+
+  def create_default_custom_attributes
+    unless custom_attribute_definitions.exists?(attribute_key: 'marcado_como_ganho_ou_perdido')
+      custom_attribute_definitions.create!(
+        attribute_display_name: 'Marcado como Ganho ou Perdido',
+        attribute_key: 'marcado_como_ganho_ou_perdido',
+        attribute_display_type: :list,
+        attribute_model: :conversation_attribute,
+        default_value: nil,
+        attribute_values: %w[Ganho Perdido]
+      )
+    end
+
+    current_meta = settings['meta_conversion_settings'] || {}
+    if current_meta['win_status_field'].blank?
+      update_columns(
+        settings: settings.merge(
+          'meta_conversion_settings' => current_meta.merge(
+            'win_status_field' => 'marcado_como_ganho_ou_perdido',
+            'win_value'        => 'Ganho',
+            'loss_value'       => 'Perdido'
+          )
+        )
+      )
+    end
+  rescue StandardError => e
+    Rails.logger.error "Failed to create default custom attributes for account #{id}: #{e.message}"
   end
 
   trigger.after(:insert).for_each(:row) do

@@ -6,6 +6,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   before_action :conversation, except: [:index, :meta, :search, :create, :filter]
   before_action :inbox, :contact, :contact_inbox, only: [:create]
 
+  rescue_from Conversations::ResultService::InvalidReasonError, with: :render_invalid_reason
+
   ATTACHMENT_RESULTS_PER_PAGE = 100
 
   def index
@@ -80,6 +82,9 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def toggle_status
     # FIXME: move this logic into a service object
+    return if resolving_blocked_by_missing_result?
+    return if resolving_blocked_by_required_attributes?
+
     if pending_to_open_by_bot?
       @conversation.bot_handoff!
     elsif params[:status].present?
@@ -134,8 +139,81 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def custom_attributes
-    @conversation.custom_attributes = params.permit(custom_attributes: {})[:custom_attributes]
+    attrs = params.permit(custom_attributes: {})[:custom_attributes]
+    @conversation.custom_attributes = (@conversation.custom_attributes || {}).merge(attrs)
     @conversation.save!
+  end
+
+  # Marking a result (Ganho/Perdido selector) goes through the same gates as closing: required
+  # attributes are validated for the chosen result and the flow's Meta event fires right away
+  # (event_id dedup keeps a later close from re-sending). Clearing the result skips both.
+  def set_outcome
+    outcome = params[:outcome].to_s
+    attrs = params.permit(custom_attributes: {})[:custom_attributes]
+    merged_attributes = (@conversation.custom_attributes || {}).merge(attrs || {})
+
+    if outcome.present? && valid_close_outcome?(outcome)
+      return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
+    end
+
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: outcome,
+      user: Current.user,
+      reason: params[:reason],
+      ip_address: request.ip,
+      custom_attributes: (attrs.present? ? merged_attributes : nil)
+    ).perform
+
+    fire_meta_close_event(outcome) if outcome.present? && valid_close_outcome?(outcome)
+
+    render json: { outcome: @conversation.result_none? ? nil : @conversation.result }, status: :ok
+  end
+
+  def closing_flow
+    @operational_flow = @conversation.operational_flow
+  end
+
+  def close_outcome
+    outcome = params[:outcome].to_s
+    raise Pundit::NotAuthorizedError unless valid_close_outcome?(outcome)
+
+    attrs = params.permit(custom_attributes: {})[:custom_attributes]
+    merged_attributes = (@conversation.custom_attributes || {}).merge(attrs || {})
+
+    return if resolving_blocked_by_required_attributes?(custom_attributes: merged_attributes, result: outcome, force_resolve: true)
+
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: outcome,
+      user: Current.user,
+      reason: params[:reason],
+      ip_address: request.ip,
+      custom_attributes: (attrs.present? ? merged_attributes : nil)
+    ).perform
+
+    # Resolve through the normal path so resolution side effects run: waiting_since is
+    # cleared (keeps SLA from logging a bogus NRT miss after closing), and reporting
+    # events, CSAT, automations and webhooks fire like the native resolve button.
+    @conversation.update!(status: :resolved)
+
+    fire_meta_close_event(outcome)
+
+    render json: { outcome: outcome }, status: :ok
+  end
+
+  def close_as_ai
+    return if ai_close_blocked_for_human?
+
+    Conversations::ResultService.new(
+      conversation: @conversation,
+      outcome: 'ai_closed',
+      user: Current.user,
+      ip_address: request.ip
+    ).perform
+
+    @conversation.update!(status: :resolved)
+    render json: { outcome: 'ai_closed' }, status: :ok
   end
 
   def destroy
@@ -178,6 +256,74 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   def set_conversation_status
     @conversation.status = params[:status]
     @conversation.snoozed_until = parse_date_time(params[:snoozed_until].to_s) if params[:snoozed_until]
+  end
+
+  # The closing conversion is a human action and gated structurally by the resolved flow
+  # (meta_enabled) and the chosen state (meta_event_type) — never inferred from polarity/category.
+  def fire_meta_close_event(outcome)
+    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: outcome, user: Current.user).perform
+  end
+
+  # Accept the legacy won/lost outcomes plus any canonical_key defined on the resolved closing flow.
+  def valid_close_outcome?(outcome)
+    return true if %w[won lost].include?(outcome)
+
+    @conversation.operational_flow&.state_for(outcome).present?
+  end
+
+  # Enforce account required-attributes config on the backend when a human agent resolves a
+  # conversation. System actors (bots, automations, auto-resolve jobs) are intentionally exempt,
+  # mirroring the frontend which only validates agent-initiated resolves.
+  def resolving_blocked_by_required_attributes?(custom_attributes: nil, result: nil, force_resolve: false)
+    return false unless Current.user.is_a?(User)
+    return false unless force_resolve || resolving_to_resolved?
+
+    validator = Conversations::RequiredAttributesValidator.new(
+      conversation: @conversation,
+      custom_attributes: custom_attributes,
+      result: result
+    )
+    return false if validator.valid?
+
+    render json: {
+      error: I18n.t('errors.conversations.required_attributes_missing'),
+      missing_attributes: validator.missing_keys
+    }, status: :unprocessable_entity
+    true
+  end
+
+  # The ai_closed shortcut is only for conversations the AI handled alone: a human resolving
+  # a human-handled conversation must pick a result like everywhere else.
+  def ai_close_blocked_for_human?
+    return false unless Current.user.is_a?(User)
+    return false unless @conversation.additional_attributes&.dig('was_handled_by_human')
+
+    render json: { error: I18n.t('errors.conversations.result_required') }, status: :unprocessable_entity
+    true
+  end
+
+  # A human agent can never resolve a conversation without a result picked first; system
+  # actors (bots, automations, auto-resolve jobs, close_as_ai) are intentionally exempt.
+  def resolving_blocked_by_missing_result?
+    return false unless Current.user.is_a?(User)
+    return false unless resolving_to_resolved?
+    return false unless @conversation.result_none?
+    # No flow configured for this conversation -> there is nothing to pick; resolving
+    # plainly is allowed (the UI shows the "nenhum fluxo configurado" warning instead).
+    return false if @conversation.operational_flow.blank?
+
+    render json: { error: I18n.t('errors.conversations.result_required') }, status: :unprocessable_entity
+    true
+  end
+
+  def resolving_to_resolved?
+    return params[:status] == 'resolved' if params[:status].present?
+
+    @conversation.open?
+  end
+
+  def render_invalid_reason(exception)
+    render json: { error: I18n.t("errors.conversations.#{exception.message}") }, status: :unprocessable_entity
   end
 
   def assign_conversation

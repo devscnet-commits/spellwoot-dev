@@ -87,6 +87,8 @@ export default {
       senderNameType: 'friendly',
       businessName: '',
       locktoSingleConversation: false,
+      reopenWindowEnabled: false,
+      reopenWindowHours: 24,
       allowMessagesAfterResolved: true,
       continuityViaEmail: true,
       selectedInboxName: '',
@@ -106,6 +108,8 @@ export default {
       widgetBubblePosition: 'right',
       widgetBubbleType: 'standard',
       widgetBubbleLauncherTitle: '',
+      // JSON snapshot of the editable fields at load/after save, to drive the dirty state.
+      savedFormState: '',
     };
   },
   computed: {
@@ -115,6 +119,11 @@ export default {
       uiFlags: 'inboxes/getUIFlags',
       portals: 'portals/allPortals',
     }),
+    // True when the form differs from the last loaded/saved state. Drives the save button
+    // so it's only enabled (and not greyed out) when there is something to save.
+    isDirty() {
+      return this.savedFormState !== this.serializeFormState();
+    },
     selectedTabKey() {
       return this.tabs[this.selectedTabIndex]?.key;
     },
@@ -398,6 +407,32 @@ export default {
       this.$store.dispatch('labels/get');
       this.$store.dispatch('portals/index');
     },
+    serializeFormState() {
+      return JSON.stringify({
+        selectedInboxName: this.selectedInboxName,
+        webhookUrl: this.webhookUrl,
+        greetingEnabled: this.greetingEnabled,
+        greetingMessage: this.greetingMessage,
+        emailCollectEnabled: this.emailCollectEnabled,
+        senderNameType: this.senderNameType,
+        businessName: this.businessName,
+        allowMessagesAfterResolved: this.allowMessagesAfterResolved,
+        continuityViaEmail: this.continuityViaEmail,
+        channelWebsiteUrl: this.channelWebsiteUrl,
+        channelWelcomeTitle: this.channelWelcomeTitle,
+        channelWelcomeTagline: this.channelWelcomeTagline,
+        selectedFeatureFlags: this.selectedFeatureFlags,
+        replyTime: this.replyTime,
+        locktoSingleConversation: this.locktoSingleConversation,
+        reopenWindowEnabled: this.reopenWindowEnabled,
+        reopenWindowHours: this.reopenWindowHours,
+        selectedPortalSlug: this.selectedPortalSlug,
+        widgetBubblePosition: this.widgetBubblePosition,
+        widgetBubbleType: this.widgetBubbleType,
+        widgetBubbleLauncherTitle: this.widgetBubbleLauncherTitle,
+        hasAvatarChange: !!this.avatarFile,
+      });
+    },
     syncInboxData() {
       if (!this.inbox || !this.inbox.id) return;
 
@@ -418,6 +453,8 @@ export default {
       this.selectedFeatureFlags = this.inbox.selected_feature_flags || [];
       this.replyTime = this.inbox.reply_time;
       this.locktoSingleConversation = this.inbox.lock_to_single_conversation;
+      this.reopenWindowEnabled = Number(this.inbox.reopen_window_hours) > 0;
+      this.reopenWindowHours = Number(this.inbox.reopen_window_hours) || 24;
       this.selectedPortalSlug = this.inbox.help_center
         ? this.inbox.help_center.slug
         : '';
@@ -435,6 +472,8 @@ export default {
         this.widgetBubbleType = 'standard';
         this.widgetBubbleLauncherTitle = '';
       }
+
+      this.savedFormState = this.serializeFormState();
     },
     async fetchHealthData() {
       if (!this.inbox) return;
@@ -532,6 +571,9 @@ export default {
               )?.id || null
             : null,
           lock_to_single_conversation: this.locktoSingleConversation,
+          reopen_window_hours: this.reopenWindowEnabled
+            ? Number(this.reopenWindowHours) || 1
+            : 0,
           sender_name_type: this.senderNameType,
           business_name: this.businessName || null,
           channel: {
@@ -551,6 +593,9 @@ export default {
         await this.$store.dispatch('inboxes/updateInbox', payload);
         useAlert(this.$t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
         this.showBusinessNameInput = false;
+        this.avatarFile = null;
+        // Re-baseline so the button greys out again until the next change.
+        this.savedFormState = this.serializeFormState();
       } catch (error) {
         useAlert(error.message || this.$t('INBOX_MGMT.EDIT.API.ERROR_MESSAGE'));
       }
@@ -815,6 +860,33 @@ export default {
                 />
               </template>
             </SettingsFieldSection>
+
+            <!-- With single-conversation lock ON the previous conversation always reopens,
+                 so the reopen window is meaningless — only offer it when the lock is OFF. -->
+            <SettingsToggleSection
+              v-if="canLocktoSingleConversation && !locktoSingleConversation"
+              v-model="reopenWindowEnabled"
+              :header="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.LABEL')"
+              :description="$t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HELP')"
+            >
+              <template v-if="reopenWindowEnabled" #editor>
+                <div class="flex items-center gap-2 mt-2">
+                  <input
+                    v-model.number="reopenWindowHours"
+                    type="number"
+                    min="1"
+                    class="!w-24 flex-none px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                  />
+                  <span
+                    class="text-sm text-n-slate-11 flex-none self-stretch inline-flex items-center"
+                  >
+                    {{
+                      $t('INBOX_MGMT.SETTINGS_POPUP.REOPEN_WINDOW.HOURS_SUFFIX')
+                    }}
+                  </span>
+                </div>
+              </template>
+            </SettingsToggleSection>
 
             <SettingsFieldSection
               v-if="isAWebWidgetInbox || isAnEmailChannel"
@@ -1165,7 +1237,7 @@ export default {
               <NextButton
                 v-if="isAPIInbox"
                 type="submit"
-                :disabled="v$.webhookUrl.$invalid"
+                :disabled="v$.webhookUrl.$invalid || !isDirty"
                 :label="$t('INBOX_MGMT.SETTINGS_POPUP.UPDATE')"
                 :is-loading="uiFlags.isUpdating"
                 @click="updateInbox"
@@ -1173,7 +1245,7 @@ export default {
               <NextButton
                 v-else
                 type="submit"
-                :disabled="v$.$invalid"
+                :disabled="v$.$invalid || !isDirty"
                 :label="$t('INBOX_MGMT.SETTINGS_POPUP.UPDATE')"
                 :is-loading="uiFlags.isUpdating"
                 @click="updateInbox"

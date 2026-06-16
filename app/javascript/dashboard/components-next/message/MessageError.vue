@@ -6,11 +6,30 @@ import { useMessageContext } from './provider.js';
 import { hasOneDayPassed } from 'shared/helpers/timeHelper';
 import { ORIENTATION, MESSAGE_STATUS } from './constants';
 
-defineProps({
+const props = defineProps({
   error: { type: String, required: true },
 });
 
 const emit = defineEmits(['retry']);
+
+const HTTP_ERROR_MAP = {
+  '404 Not Found': 'Instância não encontrada. Verifique a conexão da caixa',
+  '401 Unauthorized': 'Sessão expirada. Reconecte a caixa do WhatsApp',
+  '403 Forbidden': 'Sem permissão para enviar mensagens nesta conta',
+  '405 Method Not Allowed': 'Caixa desconectada. Reconecte o WhatsApp',
+  '422 Unprocessable Entity':
+    'Número de telefone inválido ou não está no WhatsApp',
+  '429 Too Many Requests':
+    'Limite de mensagens atingido. Aguarde alguns minutos',
+  '500 Internal Server Error':
+    'Erro no servidor do WhatsApp. Tente reenviar em instantes',
+  '502 Bad Gateway':
+    'Erro no servidor do WhatsApp. Tente reenviar em instantes',
+  '503 Service Unavailable':
+    'Erro no servidor do WhatsApp. Tente reenviar em instantes',
+};
+
+const displayError = computed(() => HTTP_ERROR_MAP[props.error] || props.error);
 
 const { orientation, status, createdAt, content, attachments } =
   useMessageContext();
@@ -43,17 +62,21 @@ const canRetry = computed(() => {
           'ltr:right-0 rtl:left-0': orientation === ORIENTATION.RIGHT,
         }"
       >
-        {{ error }}
+        {{ displayError }}
       </div>
     </div>
     <button
       v-if="canRetry"
       type="button"
       :disabled="status !== MESSAGE_STATUS.FAILED"
-      class="bg-n-alpha-2 rounded-md size-5 grid place-content-center cursor-pointer"
+      class="bg-n-alpha-2 rounded-md size-5 grid place-content-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       @click="emit('retry')"
     >
-      <Icon icon="i-lucide-refresh-ccw" class="text-n-ruby-11 size-[14px]" />
+      <Icon
+        icon="i-lucide-refresh-ccw"
+        class="text-n-ruby-11 size-[14px]"
+        :class="{ 'animate-spin': status === MESSAGE_STATUS.PROGRESS }"
+      />
     </button>
   </div>
 </template>

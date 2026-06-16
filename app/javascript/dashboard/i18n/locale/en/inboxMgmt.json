@@ -315,40 +315,40 @@
         },
         "UAZAPI": {
           "INBOX_NAME": {
-            "LABEL": "Inbox Name",
-            "PLACEHOLDER": "Enter a name for your inbox (e.g., Support WhatsApp)",
-            "ERROR": "Inbox name is required"
+            "LABEL": "Nome da caixa",
+            "PLACEHOLDER": "Informe um nome para a caixa (ex.: Suporte WhatsApp)",
+            "ERROR": "O nome da caixa é obrigatório"
           },
           "PHONE_NUMBER": {
-            "LABEL": "Phone Number",
-            "PLACEHOLDER": "Enter your WhatsApp phone number (e.g., 5511999999999)",
-            "ERROR": "Phone number is required",
-            "VALIDATION_ERROR": "Phone number must have 12 or 13 numeric digits",
-            "HELP": "Enter the phone number without + or spaces (12 or 13 digits). Example: 5511999999999"
+            "LABEL": "Número de telefone",
+            "PLACEHOLDER": "Informe o número do WhatsApp (ex.: 5511999999999)",
+            "ERROR": "O número de telefone é obrigatório",
+            "VALIDATION_ERROR": "O número deve ter 12 ou 13 dígitos numéricos",
+            "HELP": "Informe o número sem + ou espaços (12 ou 13 dígitos). Exemplo: 5511999999999"
           },
-          "SUBMIT_BUTTON": "Create WhatsApp Channel",
+          "SUBMIT_BUTTON": "Criar canal do WhatsApp",
           "API": {
-            "ERROR_MESSAGE": "We were not able to create the WhatsApp channel. Please try again."
+            "ERROR_MESSAGE": "Não foi possível criar o canal do WhatsApp. Tente novamente."
           },
-          "QR_CODE_INSTRUCTIONS": "Open WhatsApp on your phone, go to Settings > Linked Devices > Link a Device, and scan this QR code.",
-          "REFRESH_QR": "Refresh QR Code",
-          "REFRESH_ERROR": "Failed to refresh QR code. Please try again.",
-          "LOADING_QR": "Loading QR Code...",
-          "SUCCESS_MESSAGE": "WhatsApp connected successfully!",
-          "CONNECTED_AS": "Connected as",
-          "ADD_AGENTS": "Add Agents",
+          "QR_CODE_INSTRUCTIONS": "Abra o WhatsApp no seu celular, vá em Configurações > Aparelhos conectados > Conectar um aparelho e leia este QR code.",
+          "REFRESH_QR": "Atualizar QR code",
+          "REFRESH_ERROR": "Falha ao atualizar o QR code. Tente novamente.",
+          "LOADING_QR": "Carregando QR code...",
+          "SUCCESS_MESSAGE": "WhatsApp conectado com sucesso!",
+          "CONNECTED_AS": "Conectado como",
+          "ADD_AGENTS": "Adicionar agentes",
           "STATUS": {
-            "CONNECTED": "Connected",
-            "CONNECTING": "Waiting for connection...",
-            "DISCONNECTED": "Disconnected",
-            "UNKNOWN": "Unknown status"
+            "CONNECTED": "Conectado",
+            "CONNECTING": "Aguardando conexão...",
+            "DISCONNECTED": "Desconectado",
+            "UNKNOWN": "Status desconhecido"
           },
           "WEBHOOK_URL": {
-            "LABEL": "Webhook URL",
-            "COPY": "Copy",
-            "COPIED": "Webhook URL copied to clipboard",
-            "COPY_ERROR": "Failed to copy webhook URL",
-            "HELP": "This URL is automatically configured. Messages from WhatsApp will be received via this webhook."
+            "LABEL": "URL do webhook",
+            "COPY": "Copiar",
+            "COPIED": "URL do webhook copiada",
+            "COPY_ERROR": "Falha ao copiar a URL do webhook",
+            "HELP": "Esta URL é configurada automaticamente. As mensagens do WhatsApp serão recebidas por este webhook."
           }
         }
       },
@@ -636,6 +636,29 @@
         "LABEL": "Enable"
       }
     },
+    "MIGRATE": {
+      "BUTTON_TEXT": "Migrate inbox",
+      "TITLE": "Migrate conversations",
+      "DESCRIPTION": "Move all conversations from inbox \"{name}\" to another inbox.",
+      "TARGET_LABEL": "Destination inbox",
+      "SELECT_PLACEHOLDER": "Select destination inbox",
+      "CANCEL": "Cancel",
+      "CONFIRM": "Migrate now",
+      "SUCCESS": "Conversations migrated successfully.",
+      "STARTED": "Migration started. Conversations are being moved in the background and the source inbox will be removed once it finishes — refresh the page in a moment.",
+      "ERROR": "Error migrating conversations. Please try again.",
+      "DELETE_TITLE": "Delete source inbox?",
+      "DELETE_WARNING_TITLE": "Warning — irreversible action",
+      "DELETE_WARNING_BODY": "Inbox \"{name}\" still exists. If not deleted, contacts calling this number will create new conversations disconnected from the migrated history.",
+      "DELETE_KEEP": "Keep inbox",
+      "DELETE_CONFIRM": "Delete inbox",
+      "DELETE_SUCCESS": "Inbox deleted successfully.",
+      "DELETE_ERROR": "Error deleting inbox.",
+      "KEEP_SUCCESS": "Inbox kept. The UazAPI instance has been redirected to the new inbox.",
+      "KEEP_WARNING": "The UazAPI instance has been redirected to the new inbox. Reconfiguring the old inbox may revert the redirection.",
+      "CONFIRM_AND_DELETE": "Conversations will be migrated and inbox \"{name}\" will be permanently deleted. Continue?",
+      "SUCCESS_AND_DELETED": "Conversations migrated and inbox deleted successfully."
+    },
     "DELETE": {
       "BUTTON_TEXT": "Delete",
       "AVATAR_DELETE_BUTTON_TEXT": "Delete Avatar",
@@ -696,6 +719,14 @@
           "TOOLTIP": "Current operating mode of your WhatsApp account"
         }
       },
+      "WEBHOOK": {
+        "TITLE": "Webhook configuration",
+        "DESCRIPTION": "The webhook URL must be registered with Meta to receive WhatsApp messages",
+        "CONFIGURED_SUCCESS": "Webhook configured",
+        "URL_MISMATCH": "Webhook URL mismatch",
+        "ACTION_REQUIRED": "Action required",
+        "REGISTER_BUTTON": "Register webhook"
+      },
       "VALUES": {
         "TIERS": {
           "TIER_250": "250 customers per 24h",
@@ -723,29 +754,29 @@
     "SETTINGS": "Settings",
     "UAZAPI": {
       "STATUS": {
-        "CONNECTED": "Connected",
-        "DISCONNECTED": "Disconnected",
-        "CHECKING": "Checking..."
+        "CONNECTED": "Conectado",
+        "DISCONNECTED": "Desconectado",
+        "CHECKING": "Verificando..."
       },
-      "RECONNECT": "Reconnect WhatsApp",
-      "REFRESH_STATUS": "Refresh Status",
-      "RECONNECT_INITIATED": "Reconnection initiated. Please scan the QR code in the inbox settings.",
-      "RECONNECT_ERROR": "Failed to reconnect. Please try again.",
-      "INSTANCE_ID_LABEL": "Instance ID",
-      "COPY_INSTANCE_ID": "Copy Instance ID",
-      "INSTANCE_ID_COPIED": "Instance ID copied to clipboard",
-      "INSTANCE_TOKEN_LABEL": "Instance Token",
-      "COPY_INSTANCE_TOKEN": "Copy Instance Token",
-      "INSTANCE_TOKEN_COPIED": "Instance Token copied to clipboard",
-      "WEBHOOK_CONFIG_ERROR": "Webhook Configuration Error",
-      "INTEGRATION_ERROR_TITLE": "Integration Configuration Error",
-      "RECONFIGURE_ERROR": "Failed to reconfigure integration. Please try again.",
-      "QR_CODE_REQUIRED_MESSAGE": "Please generate QR code to reconnect and fix the integration.",
-      "GENERATE_QR_CODE": "Generate QR Code",
-      "GENERATING_QR_CODE": "Generating QR code...",
+      "RECONNECT": "Reconectar WhatsApp",
+      "REFRESH_STATUS": "Atualizar status",
+      "RECONNECT_INITIATED": "Reconexão iniciada. Leia o QR code nas configurações da caixa.",
+      "RECONNECT_ERROR": "Falha ao reconectar. Tente novamente.",
+      "INSTANCE_ID_LABEL": "ID da instância",
+      "COPY_INSTANCE_ID": "Copiar ID da instância",
+      "INSTANCE_ID_COPIED": "ID da instância copiado",
+      "INSTANCE_TOKEN_LABEL": "Token da instância",
+      "COPY_INSTANCE_TOKEN": "Copiar token da instância",
+      "INSTANCE_TOKEN_COPIED": "Token da instância copiado",
+      "WEBHOOK_CONFIG_ERROR": "Erro na configuração do webhook",
+      "INTEGRATION_ERROR_TITLE": "Erro na configuração da integração",
+      "RECONFIGURE_ERROR": "Falha ao reconfigurar a integração. Tente novamente.",
+      "QR_CODE_REQUIRED_MESSAGE": "Gere o QR code para reconectar e corrigir a integração.",
+      "GENERATE_QR_CODE": "Gerar QR code",
+      "GENERATING_QR_CODE": "Gerando QR code...",
       "WEBHOOK_STATUS": {
         "OK": "Webhook OK",
-        "ERROR": "Webhook Error"
+        "ERROR": "Erro no webhook"
       }
     },
     "FEATURES": {
@@ -777,6 +808,11 @@
       "ENABLE_CONTINUITY_VIA_EMAIL_SUB_TEXT": "Conversations will continue over email if the contact email address is available.",
       "LOCK_TO_SINGLE_CONVERSATION": "Lock to single conversation",
       "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Enable or disable multiple conversations for the same contact in this inbox",
+      "REOPEN_WINDOW": {
+        "LABEL": "Janela de reabertura",
+        "HELP": "Quando ativada, uma mensagem para uma conversa resolvida dentro do tempo definido reabre a mesma conversa em vez de criar uma nova.",
+        "HOURS_SUFFIX": "horas"
+      },
       "INBOX_UPDATE_TITLE": "Inbox Settings",
       "INBOX_UPDATE_SUB_TEXT": "Update your inbox settings",
       "AUTO_ASSIGNMENT_SUB_TEXT": "Enable or disable the automatic assignment of new conversations to the agents added to this inbox.",
@@ -922,22 +958,96 @@
       }
     },
     "BUSINESS_HOURS": {
-      "TITLE": "Set your availability",
-      "SUBTITLE": "Set your availability on your livechat widget",
-      "WEEKLY_TITLE": "Set your weekly hours",
-      "TIMEZONE_LABEL": "Select timezone",
-      "UPDATE": "Update business hours settings",
-      "TOGGLE_AVAILABILITY": "Enable business availability for this inbox",
-      "UNAVAILABLE_MESSAGE_LABEL": "Unavailable message for visitors",
-      "TOGGLE_HELP": "Enabling business availability will show the available hours on live chat widget even if all the agents are offline. Outside available hours visitors can be warned with a message and a pre-chat form.",
-      "DAY": {
-        "ENABLE": "Enable availability for this day",
-        "UNAVAILABLE": "Unavailable",
-        "HOURS": "hours",
-        "VALIDATION_ERROR": "Starting time should be before closing time.",
-        "CHOOSE": "Choose"
+      "TITLE": "Defina sua disponibilidade",
+      "SUBTITLE": "Configure os horários de atendimento desta caixa",
+      "WEEKLY_TITLE": "Definir horas semanais",
+      "TIMEZONE_LABEL": "Selecionar fuso horário",
+      "UPDATE": "Atualizar configurações do horário comercial",
+      "SAVED": "Salvo",
+      "HOURS_HINT": "Cada período é um intervalo de funcionamento (Abre → Fecha). Use mais de um período para turnos com pausa — ex.: manhã 08:00–12:00 e tarde 13:30–18:00.",
+      "TOGGLE_AVAILABILITY": "Ativar horário comercial para esta caixa",
+      "UNAVAILABLE_MESSAGE_LABEL": "Mensagem para visitantes fora do horário",
+      "TOGGLE_HELP": "Ao ativar, os horários de atendimento serão exibidos no widget e visitantes fora do horário receberão uma mensagem de aviso.",
+      "ADD_PERIOD": "Adicionar intervalo",
+      "COPY_TO": "Copiar para outros dias",
+      "APPLY_TO": "Aplicar para",
+      "APPLY": "Aplicar",
+      "CANCEL": "Cancelar",
+      "SAVE": "Salvar",
+      "TABS": {
+        "HOURS": "Horário Comercial",
+        "HOLIDAYS": "Feriados",
+        "EXCEPTIONS": "Exceções",
+        "MESSAGES": "Mensagens Automáticas"
       },
-      "ALL_DAY": "All-Day"
+      "STATUS": {
+        "OPEN": "Aberta",
+        "INTERVAL": "Intervalo",
+        "CLOSED": "Fechada",
+        "HOLIDAY": "Feriado",
+        "CLOSES_AT": "Fecha às {time}",
+        "OPENS_AT": "Abre às {time}"
+      },
+      "DAY": {
+        "DAY": "Dia",
+        "AVAILABILITY": "Disponibilidade",
+        "ENABLE": "Ativar disponibilidade para este dia",
+        "UNAVAILABLE": "Indisponível",
+        "HOURS": "horas",
+        "VALIDATION_ERROR": "O horário de início deve ser anterior ao de encerramento.",
+        "CHOOSE": "Escolher",
+        "OPENS": "Abre",
+        "CLOSES": "Fecha"
+      },
+      "ALL_DAY": "O dia todo",
+      "LUNCH_BREAK": "Horário de almoço",
+      "HOLIDAYS": {
+        "EMPTY": "Nenhum feriado cadastrado.",
+        "ADD": "Adicionar feriado",
+        "EDIT": "Editar feriado",
+        "NAME": "Nome",
+        "NAME_PLACEHOLDER": "Ex: Natal",
+        "DAY": "Dia",
+        "MONTH": "Mês",
+        "YEAR": "Ano",
+        "ANY_YEAR": "Todo ano",
+        "TYPE": "Tipo",
+        "RECURRING": "Recorrente todo ano",
+        "ONE_TIME": "Apenas este ano"
+      },
+      "REPLICATE": {
+        "LABEL": "Aplicar para",
+        "THIS": "Apenas esta caixa",
+        "SELECTED": "Caixas selecionadas",
+        "TEAM": "Todas as caixas do time",
+        "ACCOUNT": "Todas as caixas da conta",
+        "NO_OTHER": "Nenhuma outra caixa disponível.",
+        "ACCOUNT_WARNING": "Isso substituirá o horário comercial de todas as outras caixas da conta.",
+        "SUCCESS": "Configuração aplicada a {count} caixa(s)."
+      },
+      "EXCEPTIONS": {
+        "HINT": "Uma exceção tem prioridade sobre o horário padrão e os feriados nessa data.",
+        "EMPTY": "Nenhuma exceção cadastrada.",
+        "ADD": "Adicionar exceção",
+        "EDIT": "Editar exceção",
+        "NAME": "Nome (opcional)",
+        "NAME_PLACEHOLDER": "Ex: Véspera de Natal",
+        "DATE": "Data",
+        "CLOSED": "Fechado o dia todo",
+        "CLOSED_ALL_DAY": "Fechado o dia todo",
+        "PERIODS": "Períodos de atendimento",
+        "ADD_PERIOD": "Adicionar período"
+      },
+      "MESSAGES": {
+        "OUT_OF_OFFICE_TITLE": "Mensagem fora do expediente",
+        "OUT_OF_OFFICE_HELP": "Enviada quando o contato entra em atendimento fora do horário comercial.",
+        "INTERVAL_TITLE": "Mensagem de intervalo",
+        "INTERVAL_HELP": "Enviada quando o contato entra em atendimento durante o intervalo entre períodos (ex: almoço).",
+        "INTERVAL_PLACEHOLDER": "Ex: Estamos em intervalo. Retornamos em breve.",
+        "HOLIDAY_TITLE": "Mensagem de feriado",
+        "HOLIDAY_HELP": "Enviada quando o contato entra em atendimento durante um feriado cadastrado.",
+        "HOLIDAY_PLACEHOLDER": "Ex: Hoje é feriado. Retornamos no próximo dia útil."
+      }
     },
     "IMAP": {
       "TITLE": "IMAP",
@@ -1119,6 +1229,15 @@
       "INSTAGRAM": "Instagram",
       "TIKTOK": "TikTok",
       "VOICE": "Voice"
+    },
+    "ASSIGNMENT_POLICY": {
+      "DELETE_CONFIRM_TITLE": "Excluir política de atribuição?",
+      "DELETE_CONFIRM_MESSAGE": "Tem certeza que deseja remover esta política de atribuição desta caixa de entrada? A caixa voltará a usar as regras de atribuição padrão.",
+      "CANCEL": "Cancelar",
+      "CONFIRM_DELETE": "Excluir",
+      "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
+      "DELETE_ERROR": "Falha ao remover política de atribuição",
+      "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
     }
   }
 }

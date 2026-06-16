@@ -221,7 +221,7 @@ const onUpdate = async (key, value) => {
 
 const onDelete = async key => {
   try {
-    const { [key]: remove, ...updatedAttributes } = customAttributes.value;
+    const updatedAttributes = { ...customAttributes.value, [key]: null };
     if (props.attributeType === 'conversation_attribute') {
       await store.dispatch('updateCustomAttributes', {
         conversationId: conversationId.value,

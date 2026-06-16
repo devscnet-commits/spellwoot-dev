@@ -1,12 +1,13 @@
 <script>
 import { mapGetters } from 'vuex';
+import { ref } from 'vue';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useWindowSize } from '@vueuse/core';
 import ChatList from '../../../components/ChatList.vue';
 import ConversationBox from '../../../components/widgets/conversation/ConversationBox.vue';
 import wootConstants from 'dashboard/constants/globals';
 import { BUS_EVENTS } from 'shared/constants/busEvents';
-import CmdBarConversationSnooze from 'dashboard/routes/dashboard/commands/CmdBarConversationSnooze.vue';
 import { emitter } from 'shared/helpers/mitt';
 import SidepanelSwitch from 'dashboard/components-next/Conversation/SidepanelSwitch.vue';
 import ConversationSidebar from 'dashboard/components/widgets/conversation/ConversationSidebar.vue';
@@ -15,7 +16,6 @@ export default {
   components: {
     ChatList,
     ConversationBox,
-    CmdBarConversationSnooze,
     SidepanelSwitch,
     ConversationSidebar,
   },
@@ -56,11 +56,42 @@ export default {
   setup() {
     const { uiSettings, updateUISettings } = useUISettings();
     const { accountId } = useAccount();
+    const { width: windowWidth } = useWindowSize();
+
+    const CONTACT_WIDTH_KEY = 'cw_contact_panel_width';
+    const MIN_CONTACT_WIDTH = 240;
+    const MAX_CONTACT_WIDTH = 520;
+
+    const stored = localStorage.getItem(CONTACT_WIDTH_KEY);
+    const contactPanelWidth = ref(stored ? parseInt(stored, 10) : 320);
+    const isContactResizing = ref(false);
+
+    function startContactResize(e) {
+      isContactResizing.value = true;
+      const startX = e.clientX;
+      const startWidth = contactPanelWidth.value;
+      function onMove(ev) {
+        const delta = startX - ev.clientX;
+        contactPanelWidth.value = Math.min(MAX_CONTACT_WIDTH, Math.max(MIN_CONTACT_WIDTH, startWidth + delta));
+      }
+      function onUp() {
+        isContactResizing.value = false;
+        localStorage.setItem(CONTACT_WIDTH_KEY, contactPanelWidth.value);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
 
     return {
       uiSettings,
       updateUISettings,
       accountId,
+      windowWidth,
+      contactPanelWidth,
+      isContactResizing,
+      startContactResize,
     };
   },
   data() {
@@ -92,9 +123,11 @@ export default {
       if (!this.currentChat.id) {
         return false;
       }
-
       const { is_contact_sidebar_open: isContactSidebarOpen } = this.uiSettings;
       return isContactSidebarOpen;
+    },
+    isDesktop() {
+      return this.windowWidth >= 1200;
     },
   },
   watch: {
@@ -130,21 +163,6 @@ export default {
     initialize() {
       this.$store.dispatch('setActiveInbox', this.inboxId);
       this.setActiveChat();
-    },
-    toggleConversationLayout() {
-      const { LAYOUT_TYPES } = wootConstants;
-      const {
-        conversation_display_type:
-          conversationDisplayType = LAYOUT_TYPES.CONDENSED,
-      } = this.uiSettings;
-      const newViewType =
-        conversationDisplayType === LAYOUT_TYPES.CONDENSED
-          ? LAYOUT_TYPES.EXPANDED
-          : LAYOUT_TYPES.CONDENSED;
-      this.updateUISettings({
-        conversation_display_type: newViewType,
-        previously_used_conversation_display_type: newViewType,
-      });
     },
     fetchConversationIfUnavailable() {
       if (!this.conversationId) {
@@ -213,7 +231,19 @@ export default {
     >
       <SidepanelSwitch v-if="currentChat.id" />
     </ConversationBox>
-    <ConversationSidebar v-if="shouldShowSidebar" :current-chat="currentChat" />
-    <CmdBarConversationSnooze />
+    <!-- Resize handle between conversation and contact panel (desktop only) -->
+    <div
+      v-if="shouldShowSidebar && isDesktop"
+      class="flex-shrink-0 w-1 cursor-col-resize hover:bg-n-brand/40 active:bg-n-brand/60 transition-colors"
+      :class="{ 'bg-n-brand/60': isContactResizing }"
+      @mousedown.prevent="startContactResize"
+    />
+    <!-- v-if keeps it unmounted when no conversation; v-show preserves state when sidebar toggled -->
+    <ConversationSidebar
+      v-if="!!currentChat.id"
+      v-show="shouldShowSidebar"
+      :current-chat="currentChat"
+      :panel-width="isDesktop ? contactPanelWidth : null"
+    />
   </section>
 </template>

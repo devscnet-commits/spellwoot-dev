@@ -6,6 +6,7 @@ const state = {
   mineCount: 0,
   unAssignedCount: 0,
   allCount: 0,
+  resolvedCount: 0,
 };
 
 export const getters = {
@@ -56,11 +57,15 @@ export const mutations = {
       mine_count: mineCount,
       unassigned_count: unAssignedCount,
       all_count: allCount,
+      resolved_count: resolvedCount,
     } = {}
   ) {
     $state.mineCount = mineCount;
     $state.allCount = allCount;
     $state.unAssignedCount = unAssignedCount;
+    // Keep the previous value when a response doesn't carry it (e.g. filtered views),
+    // so the resolved counter doesn't blank out while browsing.
+    if (resolvedCount !== undefined) $state.resolvedCount = resolvedCount;
     $state.updatedOn = new Date();
   },
 };
