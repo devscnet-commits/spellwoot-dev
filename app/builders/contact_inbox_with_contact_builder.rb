@@ -17,6 +17,12 @@ class ContactInboxWithContactBuilder
     @contact_inbox = inbox.contact_inboxes.find_by(source_id: source_id) if source_id.present?
     return @contact_inbox if @contact_inbox
 
+    # A UazAPI inbox must never create a contact/conversation for its OWN connected number.
+    # Self/echo events coming through the native bridge would otherwise surface a ghost
+    # conversation whose contact is the very number we send from. Skip silently — callers
+    # already guard against a nil contact_inbox.
+    return nil if uazapi_own_number?
+
     ActiveRecord::Base.transaction(requires_new: true) do
       build_contact_with_contact_inbox
     end
@@ -25,6 +31,17 @@ class ContactInboxWithContactBuilder
   end
 
   private
+
+  def uazapi_own_number?
+    channel = inbox.channel
+    return false unless channel.is_a?(Channel::Api) && channel.additional_attributes&.dig('uazapi_instance_token').present?
+
+    own = channel.additional_attributes['phone_number'].to_s.gsub(/\D/, '')
+    return false if own.blank?
+
+    incoming = (contact_attributes[:phone_number] || source_id).to_s.gsub(/\D/, '')
+    incoming.present? && incoming == own
+  end
 
   def build_contact_with_contact_inbox
     @contact = find_contact || create_contact
