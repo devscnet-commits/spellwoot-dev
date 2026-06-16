@@ -13,25 +13,41 @@ class Inboxes::MigrateConversationsJob < ApplicationJob
       ReportingEvent.where(inbox_id: source_inbox.id).update_all(inbox_id: target_inbox.id)
       SlaEvent.where(inbox_id: source_inbox.id).update_all(inbox_id: target_inbox.id) if defined?(SlaEvent)
 
-      # 2. Unique contact → contact_inbox pairs (integers only, no AR objects)
+      # 2. Unique contact → contact_inbox pairs (integers only, no AR objects).
+      #    Orphan conversations (contact deleted → contact_id nil) are excluded here and
+      #    moved separately in step 4b, since they can't map to a ContactInbox.
       unique_contacts = source_inbox.conversations
+                                    .where.not(contact_id: nil)
                                     .pluck(:contact_id, :contact_inbox_id)
                                     .each_with_object({}) { |(cid, ciid), h| h[cid] ||= ciid }
 
-      # 3. Find or create the target ContactInbox for each unique contact
+      # 3. Find or reuse the target ContactInbox for each unique contact. The (inbox_id,
+      #    source_id) pair is unique, so if the source's source_id is already taken in the
+      #    target by another (e.g. duplicated) contact, fall back to a fresh id instead of
+      #    aborting the whole migration.
       contact_inbox_map = unique_contacts.each_with_object({}) do |(contact_id, source_ci_id), map|
-        source_id = ContactInbox.where(id: source_ci_id).pick(:source_id) || SecureRandom.uuid
-        map[contact_id] = ContactInbox.find_or_create_by!(
-          contact_id: contact_id,
-          inbox_id: target_inbox.id
-        ) { |ci| ci.source_id = source_id }
+        target_ci = ContactInbox.find_by(contact_id: contact_id, inbox_id: target_inbox.id)
+        unless target_ci
+          source_id = ContactInbox.where(id: source_ci_id).pick(:source_id)
+          if source_id.blank? || ContactInbox.exists?(inbox_id: target_inbox.id, source_id: source_id)
+            source_id = SecureRandom.uuid
+          end
+          target_ci = ContactInbox.create!(contact_id: contact_id, inbox_id: target_inbox.id, source_id: source_id)
+        end
+        map[contact_id] = target_ci
       end
 
-      # 4. Bulk-update conversations grouped by contact — 1 query per unique contact
+      # 4a. Bulk-update conversations grouped by contact — 1 query per unique contact
       contact_inbox_map.each do |contact_id, target_ci|
         Conversation.where(inbox_id: source_inbox.id, contact_id: contact_id)
                     .update_all(inbox_id: target_inbox.id, contact_inbox_id: target_ci.id)
       end
+
+      # 4b. Move anything still on the source (orphan/contact-less conversations): switch the
+      #     inbox and drop the stale contact_inbox link (it points at a source ContactInbox
+      #     about to be removed; the column is nullable).
+      Conversation.where(inbox_id: source_inbox.id)
+                  .update_all(inbox_id: target_inbox.id, contact_inbox_id: nil)
 
       # 5. Remove old contact_inboxes (conversations already point to the new ones)
       ContactInbox.where(inbox_id: source_inbox.id).destroy_all

@@ -102,10 +102,11 @@ export default {
       return this.v$.editedValue.$error;
     },
     errorMessage() {
-      if (this.v$.editedValue.url) {
+      const field = this.v$.editedValue;
+      if (field.url?.$invalid) {
         return this.$t('CUSTOM_ATTRIBUTES.VALIDATIONS.INVALID_URL');
       }
-      if (!this.v$.editedValue.regexValidation) {
+      if (field.regexValidation?.$invalid) {
         return this.regexCue
           ? this.regexCue
           : this.$t('CUSTOM_ATTRIBUTES.VALIDATIONS.INVALID_INPUT');
@@ -134,8 +135,11 @@ export default {
       editedValue: {
         required,
         regexValidation: value => {
-          return !(
-            this.attributeRegex && !getRegexp(this.attributeRegex).test(value)
+          // Empty is owned by `required`; regex only judges filled values, so the
+          // custom cue shows on a bad value instead of the generic "required".
+          if (!value) return true;
+          return (
+            !this.attributeRegex || getRegexp(this.attributeRegex).test(value)
           );
         },
       },

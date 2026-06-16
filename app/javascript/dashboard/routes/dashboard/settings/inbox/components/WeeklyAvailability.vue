@@ -319,15 +319,20 @@ export default {
           <label class="text-sm font-medium text-n-slate-12">
             {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.LABEL') }}
           </label>
-          <select
-            v-model="replicationScope"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-main text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          >
-            <option value="this">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}</option>
-            <option value="selected">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}</option>
-            <option value="team">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.TEAM') }}</option>
-            <option value="account">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}</option>
-          </select>
+          <div class="relative">
+            <select
+              v-model="replicationScope"
+              class="appearance-none w-full px-3 py-2 pr-10 rounded-lg border border-n-weak bg-n-solid-1 text-body-main text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+            >
+              <option value="this">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}</option>
+              <option value="selected">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}</option>
+              <option value="team">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.TEAM') }}</option>
+              <option value="account">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}</option>
+            </select>
+            <span
+              class="absolute ltr:right-3 rtl:left-3 top-1/2 -translate-y-1/2 size-4 i-lucide-chevron-down text-n-slate-10 pointer-events-none"
+            />
+          </div>
 
           <div
             v-if="replicationScope === 'selected'"

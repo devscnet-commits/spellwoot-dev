@@ -649,7 +649,8 @@
       "ERROR": "Não foi possível registrar o resultado, tente novamente",
       "NO_FLOW": "Nenhum fluxo configurado",
       "NO_FLOW_HINT": "Configure um fluxo de fechamento para o time desta conversa em Configurações → Fluxo de Conversa.",
-      "PROMPT_RESOLVE": "Antes de finalizar, selecione uma das opções abaixo:"
+      "PROMPT_RESOLVE": "Antes de finalizar, selecione uma das opções abaixo:",
+      "RESULT_NONE": "Status da conversa pendente"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
