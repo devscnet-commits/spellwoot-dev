@@ -254,8 +254,11 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def format_phone_number(phone_number)
-    # Remove any non-numeric characters and ensure it starts without +
-    phone_number.to_s.gsub(/\D/, '')
+    number = phone_number.to_s
+    # Don't mangle JIDs / group ids (e.g. "1203...@g.us"); only strip plain phone numbers.
+    return number if number.include?('@')
+
+    number.gsub(/\D/, '')
   end
 
   def attachment_type(file_type)
