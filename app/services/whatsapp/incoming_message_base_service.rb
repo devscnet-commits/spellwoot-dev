@@ -169,7 +169,8 @@ class Whatsapp::IncomingMessageBaseService
                       @contact_inbox.conversations.last
                     else
                       @contact_inbox.conversations
-                                    .where.not(status: :resolved).last
+                                    .where.not(status: :resolved).last ||
+                        reopenable_conversation_within_window
                     end
     return if @conversation
 
@@ -184,6 +185,21 @@ class Whatsapp::IncomingMessageBaseService
       referral: referral,
       provider: 'meta'
     )
+  end
+
+  # Mirrors ConversationBuilder: when a reopen window (hours) is set, reuse the last resolved
+  # conversation if it was resolved within that window, so a quick follow-up reopens the same
+  # thread (and gets the reopened tag) instead of spawning a new conversation. Returns nil
+  # outside the window or when no window is configured.
+  def reopenable_conversation_within_window
+    hours = @inbox.reopen_window_hours.to_i
+    return nil unless hours.positive?
+
+    last_conversation = @contact_inbox.conversations.last
+    return nil unless last_conversation&.resolved?
+
+    reference = last_conversation.last_activity_at || last_conversation.updated_at
+    last_conversation if reference.present? && reference >= hours.hours.ago
   end
 
   def attach_files
