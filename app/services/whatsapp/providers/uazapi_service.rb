@@ -120,19 +120,17 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   private
 
   def send_text_message(phone_number, message)
-    formatted_phone = format_phone_number(phone_number)
-
     body = {
-      phone: formatted_phone,
-      message: message.outgoing_content
+      number: format_phone_number(phone_number),
+      text: message.outgoing_content
     }
 
     # Add reply context if present
     reply_to = message.content_attributes&.dig(:in_reply_to_external_id)
-    body[:quotedMsgId] = reply_to if reply_to.present?
+    body[:replyid] = reply_to if reply_to.present?
 
     response = HTTParty.post(
-      "#{base_url}/message/text",
+      "#{base_url}/send/text",
       headers: api_headers,
       body: body.to_json
     )
@@ -142,26 +140,18 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def send_attachment_message(phone_number, message)
     attachment = message.attachments.first
-    formatted_phone = format_phone_number(phone_number)
     type = attachment_type(attachment.file_type)
 
     body = {
-      phone: formatted_phone,
-      url: attachment.download_url,
-      caption: message.outgoing_content
+      number: format_phone_number(phone_number),
+      type: type,
+      file: attachment.download_url
     }
-
-    endpoint = case type
-               when 'image' then '/message/image'
-               when 'video' then '/message/video'
-               when 'audio' then '/message/audio'
-               else '/message/document'
-               end
-
-    body[:filename] = attachment.file.filename if type == 'document'
+    body[:text] = message.outgoing_content if message.outgoing_content.present?
+    body[:docName] = attachment.file.filename.to_s if type == 'document'
 
     response = HTTParty.post(
-      "#{base_url}#{endpoint}",
+      "#{base_url}/send/media",
       headers: api_headers,
       body: body.to_json
     )
@@ -181,19 +171,14 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def send_button_message(phone_number, message, items)
-    formatted_phone = format_phone_number(phone_number)
-
-    buttons = items.map do |item|
-      { id: item['value'], text: item['title'] }
-    end
-
     response = HTTParty.post(
-      "#{base_url}/message/button",
+      "#{base_url}/send/menu",
       headers: api_headers,
       body: {
-        phone: formatted_phone,
-        message: message.outgoing_content,
-        buttons: buttons
+        number: format_phone_number(phone_number),
+        type: 'button',
+        text: message.outgoing_content,
+        choices: items.map { |item| "#{item['title']}|#{item['value']}" }
       }.to_json
     )
 
@@ -201,20 +186,15 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def send_list_message(phone_number, message, items)
-    formatted_phone = format_phone_number(phone_number)
-
-    rows = items.map do |item|
-      { id: item['value'], title: item['title'] }
-    end
-
     response = HTTParty.post(
-      "#{base_url}/message/list",
+      "#{base_url}/send/menu",
       headers: api_headers,
       body: {
-        phone: formatted_phone,
-        message: message.outgoing_content,
-        buttonText: I18n.t('conversations.messages.whatsapp.list_button_label'),
-        sections: [{ rows: rows }]
+        number: format_phone_number(phone_number),
+        type: 'list',
+        text: message.outgoing_content,
+        listButton: I18n.t('conversations.messages.whatsapp.list_button_label'),
+        choices: items.map { |item| "#{item['title']}|#{item['value']}" }
       }.to_json
     )
 
