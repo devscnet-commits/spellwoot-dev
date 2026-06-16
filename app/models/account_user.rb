@@ -47,7 +47,10 @@ class AccountUser < ApplicationRecord
 
   def create_notification_setting
     setting = user.notification_settings.new(account_id: account.id)
-    setting.selected_email_flags = [:email_conversation_assignment]
+    # No notification emails by default — assignment/new-message emails flood inboxes.
+    # Account emails (password reset/confirmation) are Devise mailers, unaffected by this.
+    # In-app notifications (the bell) are independent of these flags and still show.
+    setting.selected_email_flags = []
     setting.selected_push_flags = [:push_conversation_assignment]
     setting.save!
   end

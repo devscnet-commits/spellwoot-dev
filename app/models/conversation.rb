@@ -115,7 +115,10 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
-  has_many :result_events, class_name: 'ConversationResultEvent', dependent: :destroy_async
+  # These two carry NOT NULL foreign keys to conversations, so destroy_async would leave the
+  # parent delete blocked by the constraint (the cleanup job runs after). Delete them in-line.
+  has_many :result_events, class_name: 'ConversationResultEvent', dependent: :delete_all
+  has_many :meta_conversion_events, dependent: :delete_all
   belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset
@@ -136,10 +139,10 @@ class Conversation < ApplicationRecord
     additional_attributes&.dig('conversation_language')
   end
 
-  # A conversation inherits its operational flow from its Caixa (inbox). Teams are only used to
-  # organize agents, so they never own a flow.
-  def operational_flow
-    inbox&.operational_flow
+  # The operational flow follows the conversation's team — or, without one, the team of the
+  # assignee / acting agent. See Conversations::FlowResolver.
+  def operational_flow(user = Current.user)
+    Conversations::FlowResolver.new(conversation: self, user: user).flow
   end
 
   # Be aware: The precision of created_at and last_activity_at may differ from Ruby's Time precision.
@@ -307,7 +310,7 @@ class Conversation < ApplicationRecord
 
   def list_of_keys
     %w[team_id assignee_id assignee_agent_bot_id status snoozed_until custom_attributes label_list waiting_since
-       first_reply_created_at priority]
+       first_reply_created_at priority result]
   end
 
   def allowed_keys?

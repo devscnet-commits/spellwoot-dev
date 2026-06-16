@@ -55,17 +55,32 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def update_message_with_status(message, status)
+    # An incoming message can never "fail to send" — ignore stray failed acks for it.
+    return if message.incoming? && status[:status] == 'failed'
+
     message.status = status[:status]
     if status[:status] == 'failed' && status[:errors].present?
       error = status[:errors]&.first
       Rails.logger.info "[STATUS_UPDATE] error=#{error.inspect}"
-      message.external_error = translate_whatsapp_error(error[:code])
+      message.external_error = whatsapp_error_message(error)
     end
     message.save!
   end
 
-  def translate_whatsapp_error(code)
+  def whatsapp_error_message(error)
+    code = error[:code]
     Rails.logger.info "[WHATSAPP_ERROR] code=#{code.inspect} to_i=#{code.to_i}"
+
+    friendly = friendly_whatsapp_error(code)
+    return friendly if friendly
+
+    # No friendly translation for this code: surface Meta's own reason so the agent
+    # sees the real cause instead of a generic message.
+    detail = error.dig(:error_data, :details) || error[:message] || error[:title]
+    detail.present? ? "WhatsApp #{code}: #{detail}" : "Falha ao enviar (WhatsApp #{code})"
+  end
+
+  def friendly_whatsapp_error(code)
     case code.to_i
     when 404
       'Instância não encontrada — verifique a conexão da caixa'
@@ -79,8 +94,6 @@ class Whatsapp::IncomingMessageBaseService
       'Número de telefone inválido'
     when 405
       'Caixa desconectada — reconecte o WhatsApp'
-    else
-      'Falha ao enviar mensagem'
     end
   end
 

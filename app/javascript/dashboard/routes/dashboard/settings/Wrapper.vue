@@ -28,11 +28,15 @@ const showSettingsHeader = computed(
       class="z-20 max-w-7xl w-full mx-auto"
     />
 
-    <router-view v-slot="{ Component }" class="px-4 overflow-hidden">
-      <component :is="Component" v-if="!keepAlive" :key="$route.fullPath" />
-      <keep-alive v-else>
-        <component :is="Component" :key="$route.fullPath" />
-      </keep-alive>
-    </router-view>
+    <!-- Full-width scroll container so the scrollbar sits at the page edge, not on the
+         centered page content. -->
+    <div class="flex-1 min-h-0 overflow-y-auto">
+      <router-view v-slot="{ Component }" class="px-4">
+        <component :is="Component" v-if="!keepAlive" :key="$route.fullPath" />
+        <keep-alive v-else>
+          <component :is="Component" :key="$route.fullPath" />
+        </keep-alive>
+      </router-view>
+    </div>
   </div>
 </template>

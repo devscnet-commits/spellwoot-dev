@@ -43,6 +43,8 @@ export default {
   },
   data() {
     return {
+      DAY_NAMES,
+      savedSnapshot: '',
       activeTab: 'hours',
       isBusinessHoursEnabled: false,
       outOfOfficeMessage: '',
@@ -124,6 +126,22 @@ export default {
         return this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.OPENS_AT', { time: this.formatTime(s.nextOpen) });
       return '';
     },
+    // Serialized snapshot of the savable state, used to detect unsaved changes.
+    currentSnapshot() {
+      return JSON.stringify({
+        enabled: this.isBusinessHoursEnabled,
+        out: this.outOfOfficeMessage,
+        interval: this.intervalMessage,
+        holiday: this.holidayMessage,
+        slots: this.daySlots,
+        holidays: this.holidays,
+        exceptions: this.exceptions,
+        tz: this.timeZone.value,
+      });
+    },
+    isDirty() {
+      return this.currentSnapshot !== this.savedSnapshot;
+    },
   },
   watch: {
     inbox() { this.setDefaults(); },
@@ -153,6 +171,7 @@ export default {
       this.exceptions          = exceptions         || [];
       this.daySlots            = (workingPeriods || []).length ? periodsFromApi(workingPeriods) : defaultDaySlots();
       this.timeZone            = this.timeZones.find(item => timeZone === item.value) || DEFAULT_TIMEZONE;
+      this.savedSnapshot       = this.currentSnapshot;
     },
     onSlotUpdate(day, newSlot) {
       this.daySlots = this.daySlots.map(s => s.day === day ? newSlot : s);
@@ -186,6 +205,7 @@ export default {
           channel: {},
         };
         await this.$store.dispatch('inboxes/updateInbox', payload);
+        this.savedSnapshot = this.currentSnapshot;
 
         if (this.replicationScope !== 'this') {
           const { data } = await InboxesAPI.replicateBusinessHours(this.inbox.id, {
@@ -249,6 +269,9 @@ export default {
       <form class="flex flex-col gap-4" @submit.prevent="updateInbox">
         <!-- Tab: Horário Comercial -->
         <template v-if="activeTab === 'hours'">
+          <p class="text-body-main text-n-slate-11 -mt-1">
+            {{ $t('INBOX_MGMT.BUSINESS_HOURS.HOURS_HINT') }}
+          </p>
           <SettingsFieldSection :label="$t('INBOX_MGMT.BUSINESS_HOURS.TIMEZONE_LABEL')">
             <ComboBox
               v-model="timeZoneValue"
@@ -296,15 +319,20 @@ export default {
           <label class="text-sm font-medium text-n-slate-12">
             {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.LABEL') }}
           </label>
-          <select
-            v-model="replicationScope"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-body-main text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          >
-            <option value="this">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}</option>
-            <option value="selected">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}</option>
-            <option value="team">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.TEAM') }}</option>
-            <option value="account">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}</option>
-          </select>
+          <div class="relative">
+            <select
+              v-model="replicationScope"
+              class="appearance-none w-full px-3 py-2 pr-10 rounded-lg border border-n-weak bg-n-solid-1 text-body-main text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+            >
+              <option value="this">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}</option>
+              <option value="selected">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}</option>
+              <option value="team">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.TEAM') }}</option>
+              <option value="account">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}</option>
+            </select>
+            <span
+              class="absolute ltr:right-3 rtl:left-3 top-1/2 -translate-y-1/2 size-4 i-lucide-chevron-down text-n-slate-10 pointer-events-none"
+            />
+          </div>
 
           <div
             v-if="replicationScope === 'selected'"
@@ -334,9 +362,13 @@ export default {
         <div class="flex justify-end py-2">
           <NextButton
             type="submit"
-            :label="$t('INBOX_MGMT.BUSINESS_HOURS.UPDATE')"
+            :label="isDirty
+              ? $t('INBOX_MGMT.BUSINESS_HOURS.UPDATE')
+              : $t('INBOX_MGMT.BUSINESS_HOURS.SAVED')"
             :is-loading="uiFlags.isUpdating"
-            :disabled="hasError || (replicationScope === 'selected' && !selectedInboxIds.length)"
+            :disabled="hasError
+              || (replicationScope === 'selected' && !selectedInboxIds.length)
+              || (replicationScope === 'this' && !isDirty)"
           />
         </div>
       </form>

@@ -656,6 +656,7 @@
       "CANCEL": "Cancelar",
       "CONFIRM": "Migrar agora",
       "SUCCESS": "Conversas migradas com sucesso.",
+      "STARTED": "Migração iniciada. As conversas estão sendo movidas em segundo plano e a caixa de origem será removida ao concluir — atualize a página em instantes.",
       "ERROR": "Erro ao migrar conversas. Tente novamente.",
       "DELETE_TITLE": "Excluir caixa de origem?",
       "DELETE_WARNING_TITLE": "Atenção — ação irreversível",
@@ -824,6 +825,11 @@
       "ENABLE_CONTINUITY_VIA_EMAIL_SUB_TEXT": "As conversas continuarão sobre o e-mail se o endereço de e-mail de contato estiver disponível.",
       "LOCK_TO_SINGLE_CONVERSATION": "Bloquear para conversa única",
       "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Ativar ou desativar várias conversas para o mesmo contato nesta caixa de entrada",
+      "REOPEN_WINDOW": {
+        "LABEL": "Janela de reabertura",
+        "HELP": "Quando ativada, uma mensagem para uma conversa resolvida dentro do tempo definido reabre a mesma conversa em vez de criar uma nova.",
+        "HOURS_SUFFIX": "horas"
+      },
       "INBOX_UPDATE_TITLE": "Configurações da Caixa de Entrada",
       "INBOX_UPDATE_SUB_TEXT": "Atualize suas configurações de caixa de entrada",
       "AUTO_ASSIGNMENT_SUB_TEXT": "Ativar ou desativar a atribuição automática de novas conversas aos agentes adicionados a essa caixa de entrada.",
@@ -975,6 +981,9 @@
       "WEEKLY_TITLE": "Definir horas semanais",
       "TIMEZONE_LABEL": "Selecionar fuso horário",
       "UPDATE": "Atualizar configurações do horário comercial",
+      "SAVED": "Salvo",
+      "HOURS_HINT": "Cada período é um intervalo de funcionamento (Abre → Fecha). Use mais de um período para turnos com pausa — ex.: manhã 08:00–12:00 e tarde 13:30–18:00.",
+      "ADD_PERIOD": "Adicionar intervalo",
       "TOGGLE_AVAILABILITY": "Permitir a disponibilidade de negócios para essa caixa de entrada",
       "UNAVAILABLE_MESSAGE_LABEL": "Mensagem indisponível para visitantes",
       "TOGGLE_HELP": "Permitir a disponibilidade de negócios mostrará as horas disponíveis no widget de bate-papo ao vivo, mesmo que todos os agentes estejam offline. Os vistores disponíveis horários externos podem ser avisados com uma mensagem e um formulário de pré-bate-papo.",
@@ -983,7 +992,9 @@
         "UNAVAILABLE": "Indisponível",
         "HOURS": "horas",
         "VALIDATION_ERROR": "Hora inicial deve ser antes de hora de fechamento.",
-        "CHOOSE": "Selecione"
+        "CHOOSE": "Selecione",
+        "OPENS": "Abre",
+        "CLOSES": "Fecha"
       },
       "ALL_DAY": "O dia todo"
     },
@@ -1215,7 +1226,8 @@
       "CANCEL": "Cancelar",
       "CONFIRM_DELETE": "Excluir",
       "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
-      "DELETE_ERROR": "Falha ao remover política de atribuição"
+      "DELETE_ERROR": "Falha ao remover política de atribuição",
+      "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
     }
   }
 }

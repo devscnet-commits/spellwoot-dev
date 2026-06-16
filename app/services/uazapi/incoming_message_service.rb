@@ -3,15 +3,31 @@
 class Uazapi::IncomingMessageService
   pattr_initialize [:inbox!, :params!]
 
+  # Webhook events that are not user messages: connection/presence/instance updates carry
+  # the instance's own number and were creating a daily ghost contact + empty conversation.
+  NON_MESSAGE_EVENTS = %w[connection presence qrcode status instance chats contacts history sync token].freeze
+
   def perform
     Rails.logger.info "[UAZAPI] Processing incoming message for inbox_id=#{inbox.id}"
     Rails.logger.info "[UAZAPI] Params keys: #{params.keys.join(', ')}"
 
     # UazAPI sends messages in different formats depending on the webhook configuration
     # The payload structure may vary, so we need to handle different formats
+    if non_message_event?
+      Rails.logger.info "[UAZAPI] Skipping non-message event type=#{event_type}"
+      return
+    end
+
     message_data = extract_message_data(params)
 
     return unless message_data.present?
+
+    # A genuine message always has text or media; connection/status payloads have neither —
+    # without this, they materialize a ghost contact and an empty conversation.
+    if message_data[:body].blank? && message_data[:media_url].blank?
+      Rails.logger.info "[UAZAPI] Skipping event without message content from=#{message_data[:from]}"
+      return
+    end
 
     Rails.logger.info "[UAZAPI] Message data extracted: type=#{message_data[:type]}, from=#{message_data[:from]}"
 
@@ -41,6 +57,21 @@ class Uazapi::IncomingMessageService
   end
 
   private
+
+  def event_type
+    # ActiveJob serializes the payload to JSON, so keys arrive as strings — symbol-only
+    # lookups returned nil and silently disabled the blocklist below. Read both.
+    (params[:EventType] || params['EventType'] ||
+     params[:eventType] || params['eventType'] ||
+     params[:event] || params['event']).to_s.downcase
+  end
+
+  def non_message_event?
+    type = event_type
+    return false if type.blank?
+
+    NON_MESSAGE_EVENTS.any? { |non_message| type.include?(non_message) }
+  end
 
   def extract_message_data(params)
     # UazAPI webhook format can vary, try to extract common fields
@@ -85,16 +116,28 @@ class Uazapi::IncomingMessageService
     @contact = contact_inbox.contact
 
     Rails.logger.info "[UAZAPI] Contact set: contact_id=#{@contact.id}, contact_inbox_id=#{@contact_inbox.id}"
+
+    # DIAGNOSTIC (temporary): when a brand-new contact is created, dump the event that
+    # caused it — this is exactly the ghost-creation moment we want to identify.
+    return unless @contact.previously_new_record? || @contact_inbox.previously_new_record?
+
+    Rails.logger.warn(
+      "[UAZAPI][diagnostic] NEW contact created via webhook — name=#{@contact.name} " \
+      "phone=#{@contact.phone_number} source_id=#{source_id} event_type=#{event_type.presence || '(blank)'} " \
+      "from=#{message_data[:from]} payload=#{params.to_json}"
+    )
   end
 
   def set_conversation
     Rails.logger.info "[UAZAPI] Setting conversation for contact_id=#{@contact.id}"
 
-    # if lock to single conversation is disabled, we will create a new conversation if previous conversation is resolved
+    # if lock to single conversation is disabled, we will create a new conversation if previous conversation is resolved,
+    # unless the last resolved conversation is still inside the inbox reopen window (in hours).
     @conversation = if inbox.lock_to_single_conversation
                       @contact_inbox.conversations.last
                     else
-                      @contact_inbox.conversations.where.not(status: :resolved).last
+                      @contact_inbox.conversations.where.not(status: :resolved).last ||
+                        reopenable_conversation_within_window
                     end
 
     if @conversation.blank?
@@ -109,6 +152,31 @@ class Uazapi::IncomingMessageService
     else
       Rails.logger.info "[UAZAPI] Found existing conversation: conversation_id=#{@conversation.id}"
     end
+  end
+
+  # Returns the last resolved conversation if it was resolved within the inbox reopen window (hours),
+  # so a new incoming message reopens it (via Message#reopen_conversation) instead of creating a new one.
+  def reopenable_conversation_within_window
+    hours = inbox.reopen_window_hours.to_i
+    if hours <= 0
+      Rails.logger.info "[UAZAPI] reopen-window off reopen_window_hours=#{inbox.reopen_window_hours.inspect}"
+      return nil
+    end
+
+    last_conversation = @contact_inbox.conversations.last
+    unless last_conversation&.resolved?
+      Rails.logger.info "[UAZAPI] reopen-window no resolved conversation to reopen (last=#{last_conversation&.id} status=#{last_conversation&.status})"
+      return nil
+    end
+
+    reference = last_conversation.last_activity_at || last_conversation.updated_at
+    cutoff = hours.hours.ago
+    within = reference.present? && reference >= cutoff
+    Rails.logger.info(
+      "[UAZAPI] reopen-window conv=#{last_conversation.id} hours=#{hours} " \
+      "reference=#{reference} cutoff=#{cutoff} within=#{within}"
+    )
+    last_conversation if within
   end
 
   def create_message(message_data)

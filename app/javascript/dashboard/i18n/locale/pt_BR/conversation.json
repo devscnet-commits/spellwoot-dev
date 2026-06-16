@@ -1,8 +1,8 @@
 {
   "CONVERSATION": {
+    "404": "Desculpe, não conseguimos encontrar a conversa. Por favor, tente novamente",
     "SELECT_A_CONVERSATION": "Por favor, selecione uma conversa no painel da esquerda",
     "CSAT_REPLY_MESSAGE": "Por favor, classifique a conversa",
-    "404": "Desculpe, não conseguimos encontrar a conversa. Por favor, tente novamente",
     "SWITCH_VIEW_LAYOUT": "Alternar o layout",
     "DASHBOARD_APP_TAB_MESSAGES": "Mensagens",
     "UNVERIFIED_SESSION": "A identidade deste usuário não foi verificada",
@@ -40,7 +40,7 @@
     "BOT_HANDOFF_ACTION": "Marcar como aberta e atribuir a você",
     "BOT_HANDOFF_REOPEN_ACTION": "Marcar conversa como aberta",
     "BOT_HANDOFF_SUCCESS": "Uma conversa foi atribuída a você",
-    "BOT_HANDOFF_ERROR": "Falha ao resolver conversas. Por favor, tente novamente.",
+    "BOT_HANDOFF_ERROR": "Falha ao finalizar conversas. Por favor, tente novamente.",
     "TWILIO_WHATSAPP_CAN_REPLY": "Você só pode responder a esta conversa usando um modelo de mensagem devido a",
     "TWILIO_WHATSAPP_24_HOURS_WINDOW": "Restrições de janela de mensagem de 24 horas",
     "OLD_INSTAGRAM_INBOX_REPLY_BANNER": "Esta conta do Instagram foi migrada para a nova caixa de entrada do canal do Instagram. Todas as novas mensagens serão mostradas lá. Você não poderá mais enviar mensagens desta conversa.",
@@ -85,7 +85,7 @@
       "YOU_ANSWERED": "Você respondeu"
     },
     "HEADER": {
-      "RESOLVE_ACTION": "Resolver",
+      "RESOLVE_ACTION": "Finalizar atendimento",
       "REOPEN_ACTION": "Reabrir",
       "OPEN_ACTION": "Abrir",
       "MORE_ACTIONS": "Mais ações",
@@ -147,7 +147,7 @@
     },
     "CARD_CONTEXT_MENU": {
       "PENDING": "Deixar pendente",
-      "RESOLVED": "Marcar como resolvida",
+      "RESOLVED": "Marcar como finalizada",
       "MARK_AS_UNREAD": "Marcar como não lida",
       "MARK_AS_READ": "Marcar como lida",
       "REOPEN": "Reabrir conversa",
@@ -297,6 +297,13 @@
       "REJECT_CALL": "Recusar",
       "JOIN_CALL": "Entrar na chamada",
       "END_CALL": "Encerrar chamada"
+    },
+    "REOPENED_TAG": "Reaberta",
+    "TEAM_CHANGE_WARNING": {
+      "TITLE": "⚠️ Esta conversa já tem resultado de fechamento",
+      "MESSAGE": "O resultado e os atributos preenchidos pertencem ao fluxo do time atual. Ao trocar o time, o fluxo muda e essas informações podem perder o sentido nos relatórios. Se o cliente trouxe um assunto novo, prefira criar uma nova conversa em vez de reaproveitar esta.",
+      "CONFIRM": "Trocar mesmo assim",
+      "CANCEL": "Cancelar"
     }
   },
   "EMAIL_TRANSCRIPT": {

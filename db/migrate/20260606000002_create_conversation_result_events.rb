@@ -15,7 +15,7 @@ class CreateConversationResultEvents < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    add_index :conversation_result_events, %i[account_id created_at]
-    add_index :conversation_result_events, %i[conversation_id created_at]
+    add_index :conversation_result_events, %i[account_id created_at], name: 'idx_cre_account_created'
+    add_index :conversation_result_events, %i[conversation_id created_at], name: 'idx_cre_conversation_created'
   end
 end

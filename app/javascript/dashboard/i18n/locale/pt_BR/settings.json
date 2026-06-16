@@ -304,7 +304,7 @@
     "ALL_CONVERSATIONS": "Todas as conversas",
     "MENTIONED_CONVERSATIONS": "Menções",
     "PARTICIPATING_CONVERSATIONS": "Participantes",
-    "UNATTENDED_CONVERSATIONS": "Não atendidas",
+    "UNATTENDED_CONVERSATIONS": "Resposta pendente",
     "REPORTS": "Relatórios",
     "SETTINGS": "Configurações",
     "CONTACTS": "Contatos",
@@ -373,7 +373,8 @@
       "LOCALES": "Localidades",
       "SETTINGS": "Configurações"
     },
-    "CHANNELS": "Canais",
+    "CHANNELS": "Conversas por caixas",
+    "CONVERSATIONS_BY_LABELS": "Conversas por etiquetas",
     "SET_AUTO_OFFLINE": {
       "TEXT": "Marcar offline automaticamente",
       "INFO_TEXT": "Deixe o sistema marcar você automaticamente quando você não estiver usando o app ou o painel de controle.",
@@ -383,6 +384,7 @@
     "SECURITY": "Segurança",
     "CAPTAIN_AI": "Capitão",
     "CONVERSATION_WORKFLOW": "Fluxo de Conversa",
+    "OPERATIONAL_FLOWS": "Fluxos Operacionais",
     "INTEGRATIONS_HUB": "APIs & Credenciais"
   },
   "INTEGRATIONS_HUB": {
@@ -581,7 +583,7 @@
     },
     "REQUIRED_ATTRIBUTES": {
       "TITLE": "Atributos obrigatórios para resolução",
-      "DESCRIPTION": "Ao resolver uma conversa, os agentes serão solicitados a preencher esses atributos caso ainda não o tenham feito.",
+      "DESCRIPTION": "Ao finalizar uma conversa, os agentes serão solicitados a preencher esses atributos caso ainda não o tenham feito.",
       "NO_ATTRIBUTES": "Nenhum atributo adicionado ainda",
       "ADD": {
         "TITLE": "Adicionar Atributos",
@@ -592,10 +594,12 @@
         "ERROR": "Não foi possível atualizar os atributos obrigatórios. Por favor, tente novamente"
       },
       "MODAL": {
-        "TITLE": "Resolver conversa",
-        "DESCRIPTION": "Por favor, preencha os seguintes atributos personalizados antes de resolver esta conversa",
+        "TITLE": "Atributos da conversa",
+        "DESCRIPTION": "Preencha os atributos abaixo. Você pode apenas salvar (a conversa continua aberta) ou salvar e finalizar agora.",
+        "SAVED": "Atributos salvos",
         "ACTIONS": {
-          "RESOLVE": "Resolver conversa",
+          "SAVE": "Salvar",
+          "RESOLVE": "Salvar e finalizar",
           "CANCEL": "Cancelar"
         },
         "PLACEHOLDERS": {
@@ -642,7 +646,11 @@
       "CANCEL": "Cancelar",
       "NO_FIELDS": "Nenhum campo adicional necessário.",
       "SUCCESS": "Resultado registrado com sucesso",
-      "ERROR": "Não foi possível registrar o resultado, tente novamente"
+      "ERROR": "Não foi possível registrar o resultado, tente novamente",
+      "NO_FLOW": "Nenhum fluxo configurado",
+      "NO_FLOW_HINT": "Configure um fluxo de fechamento para o time desta conversa em Configurações → Fluxo de Conversa.",
+      "PROMPT_RESOLVE": "Antes de finalizar, selecione uma das opções abaixo:",
+      "RESULT_NONE": "Status da conversa pendente"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
@@ -655,6 +663,10 @@
         "SUCCESS": "Configurações de conversão Meta salvas",
         "ERROR": "Não foi possível salvar as configurações. Por favor, tente novamente"
       },
+      "LEAD_ON_ARRIVAL": {
+        "LABEL": "Enviar Lead na chegada",
+        "DESC": "Dispara um evento Lead quando a conversa chega de um anúncio Click-to-WhatsApp. Independente da conversão de fechamento, que agora é configurada por fluxo (estado \"Enviar à Meta como\")."
+      },
       "STRATEGY": {
         "LABEL": "Quando enviar o evento de conversão?",
         "ON_ARRIVAL_LABEL": "Enviar Lead na chegada",
@@ -662,6 +674,7 @@
         "ON_CLOSE_LABEL": "Enviar conversão no fechamento (ação manual)",
         "ON_CLOSE_DESC": "Nenhum evento é enviado automaticamente. O agente clica em \"Marcar como Ganho\" ou \"Marcar como Perdido\" na conversa para disparar o evento. Os campos obrigatórios do modal são configurados em Fluxo de Conversa → Atributos obrigatórios."
       },
+      "CLOSE_PER_FLOW_NOTE": "O gatilho da conversão agora fica por fluxo — abra um fluxo e defina o \"Enviar à Meta como\" de cada estado. Os campos abaixo são o carimbo de status e a moeda padrão, no nível da conta.",
       "ON_CLOSE": {
         "SECTION_TITLE": "Configuração do campo de resultado",
         "STATUS_FIELD": "Atributo de status (lista)",
@@ -724,9 +737,9 @@
     "TOGGLE_MODAL": "Alternar Modal",
     "TITLE": {
       "OPEN_CONVERSATION": "Abrir conversa",
-      "RESOLVE_AND_NEXT": "Resolver e ir para o próximo",
+      "RESOLVE_AND_NEXT": "Finalizar e ir para o próximo",
       "NAVIGATE_DROPDOWN": "Navegar pelos itens suspensos",
-      "RESOLVE_CONVERSATION": "Resolver Conversa",
+      "RESOLVE_CONVERSATION": "Finalizar Conversa",
       "GO_TO_CONVERSATION_DASHBOARD": "Ir para Painel de Conversação",
       "ADD_ATTACHMENT": "Adicionar anexo",
       "GO_TO_CONTACTS_DASHBOARD": "Ir para Painel de Contatos",

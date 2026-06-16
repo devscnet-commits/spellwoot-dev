@@ -22,7 +22,6 @@ import ChatListHeader from './ChatListHeader.vue';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import ConversationFilter from 'next/filter/ConversationFilter.vue';
 import SaveCustomView from 'next/filter/SaveCustomView.vue';
-import ChatTypeTabs from './widgets/ChatTypeTabs.vue';
 import ConversationItem from './ConversationItem.vue';
 import DeleteCustomViews from 'dashboard/routes/dashboard/customviews/DeleteCustomViews.vue';
 import ConversationBulkActions from './widgets/conversation/conversationBulkActions/Index.vue';
@@ -127,7 +126,10 @@ function startResize(e) {
 
 const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
 const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
-const isResolvedTabActive = ref(false);
+// Status is an independent axis from the assignee tabs: 'em aberto' | 'resolvidas'.
+const isResolvedTabActive = computed(
+  () => activeStatus.value === wootConstants.STATUS_TYPE.RESOLVED
+);
 const activeSortBy = ref(wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC);
 const activeOriginFilter = ref('all');
 const showAdvancedFilters = ref(false);
@@ -231,26 +233,25 @@ const userPermissions = computed(() => {
   return getUserPermissions(currentUser.value, currentAccountId.value);
 });
 
-const assigneeTabItems = computed(() => {
-  const items = filterItemsByPermission(
+// Icon per assignee tab, mirroring the segmented filter mockup.
+const ASSIGNEE_TAB_ICONS = {
+  me: 'i-lucide-user',
+  unassigned: 'i-lucide-users',
+  all: 'i-lucide-list',
+};
+
+const assigneeTabItems = computed(() =>
+  filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
     userPermissions.value,
     item => item.permissions
   ).map(({ key, count: countKey }) => ({
     key,
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-    count: conversationStats.value[countKey] || 0,
-  }));
-  items.push({
-    key: 'resolved',
-    name: t('CHAT_LIST.ASSIGNEE_TYPE_TABS.resolved'),
-    count: 0,
-  });
-  return items;
-});
-
-const activeDisplayTab = computed(() =>
-  isResolvedTabActive.value ? 'resolved' : activeAssigneeTab.value
+    // 'Todas' next to identical sub-counts reads as a contradiction — the counter only
+    // earns its place on the scoped tabs.
+    count: key === 'all' ? 0 : conversationStats.value[countKey] || 0,
+  }))
 );
 
 const showAssigneeInConversationCard = computed(() => {
@@ -433,8 +434,9 @@ const uniqueInboxes = computed(() => {
 // ---------------------- Methods -----------------------
 function setFiltersFromUISettings() {
   const { conversations_filter_by: filterBy = {} } = uiSettings.value;
-  const { status, order_by: orderBy } = filterBy;
-  activeStatus.value = status || wootConstants.STATUS_TYPE.OPEN;
+  const { order_by: orderBy } = filterBy;
+  // Login default is always Minhas + em aberto; only the sort preference is restored.
+  activeStatus.value = wootConstants.STATUS_TYPE.OPEN;
   activeSortBy.value = Object.values(wootConstants.SORT_BY_TYPE).includes(
     orderBy
   )
@@ -542,8 +544,11 @@ function setParamsForEditFolderModal() {
 }
 
 function initializeExistingFilterToModal() {
+  // Status is now driven solely by the Abertas/Finalizadas toggle, so we no
+  // longer seed a status row in the advanced filter modal. Passing an empty
+  // status falls back to the assignee filter for the "Minhas" tab only.
   const statusFilter = initializeStatusAndAssigneeFilterToModal(
-    activeStatus.value,
+    '',
     currentUserDetails.value,
     activeAssigneeTab.value
   );
@@ -663,29 +668,80 @@ const intersectionObserverOptions = computed(() => ({
   rootMargin: '100px 0px 100px 0px',
 }));
 
+function redirectToConversationList() {
+  const {
+    params: { accountId, inbox_id: inboxId, label, teamId },
+    name,
+  } = route;
+
+  let conversationType = '';
+  if (isOnMentionsView({ route: { name } })) {
+    conversationType = wootConstants.CONVERSATION_TYPE.MENTION;
+  } else if (isOnParticipatingView({ route: { name } })) {
+    conversationType = wootConstants.CONVERSATION_TYPE.PARTICIPATING;
+  } else if (isOnUnattendedView({ route: { name } })) {
+    conversationType = wootConstants.CONVERSATION_TYPE.UNATTENDED;
+  }
+  router.push(
+    conversationListPageURL({
+      accountId,
+      conversationType: conversationType,
+      customViewId: props.foldersId,
+      inboxId,
+      label,
+      teamId,
+    })
+  );
+}
+
+// When the filters change, an open conversation that no longer matches them should not
+// linger in the reading pane (e.g. an OPEN conversation still shown after switching to
+// Resolvidas). Clear it back to the empty state; matching conversations stay open.
+function selectedConversationMatchesFilters() {
+  const chat = store.getters.getSelectedChat;
+  if (!chat || !chat.id) return true;
+  if (chat.status !== activeStatus.value) return false;
+
+  const assigneeId = chat.meta?.assignee?.id;
+  if (activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ME) {
+    return assigneeId === currentUser.value?.id;
+  }
+  if (activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.UNASSIGNED) {
+    return !assigneeId;
+  }
+  return true;
+}
+
+function clearOpenConversationIfUnmatched() {
+  if (!selectedConversationMatchesFilters()) {
+    redirectToConversationList();
+  }
+}
+
 function updateAssigneeTab(selectedTab) {
-  const alreadyActive =
-    selectedTab === 'resolved'
-      ? isResolvedTabActive.value
-      : activeAssigneeTab.value === selectedTab;
-  if (alreadyActive) return;
+  if (activeAssigneeTab.value === selectedTab) return;
 
   resetBulkActions();
   emitter.emit('clearSearchInput');
+  activeAssigneeTab.value = selectedTab;
+  clearOpenConversationIfUnmatched();
 
-  if (selectedTab === 'resolved') {
-    isResolvedTabActive.value = true;
-    activeStatus.value = wootConstants.STATUS_TYPE.RESOLVED;
-    activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.ALL;
-  } else {
-    isResolvedTabActive.value = false;
-    if (activeStatus.value === wootConstants.STATUS_TYPE.RESOLVED) {
-      activeStatus.value = wootConstants.STATUS_TYPE.OPEN;
-    }
-    activeAssigneeTab.value = selectedTab;
-  }
+  // Refetch from scratch on every tab switch. The tab counters come from the
+  // server meta (counts all matching conversations), while the visible list is
+  // filtered from the locally-cached conversations — so reusing a stale/partial
+  // cache made the count and the list disagree (e.g. "Unassigned 1" but empty).
+  // Resetting + refetching makes both come from the same fresh response.
+  resetAndFetchData();
+}
 
-  if (!currentPage.value) fetchConversations();
+// 'em aberto' | 'resolvidas' toggle: same refetch semantics as switching tabs.
+function updateListStatus(status) {
+  if (activeStatus.value === status) return;
+  resetBulkActions();
+  emitter.emit('clearSearchInput');
+  activeStatus.value = status;
+  clearOpenConversationIfUnmatched();
+  resetAndFetchData();
 }
 
 function onBasicFilterChange(value, type) {
@@ -715,32 +771,6 @@ function openLastItemAfterDeleteInFolder() {
     router.push({ name: 'home' });
     fetchConversations();
   }
-}
-
-function redirectToConversationList() {
-  const {
-    params: { accountId, inbox_id: inboxId, label, teamId },
-    name,
-  } = route;
-
-  let conversationType = '';
-  if (isOnMentionsView({ route: { name } })) {
-    conversationType = wootConstants.CONVERSATION_TYPE.MENTION;
-  } else if (isOnParticipatingView({ route: { name } })) {
-    conversationType = wootConstants.CONVERSATION_TYPE.PARTICIPATING;
-  } else if (isOnUnattendedView({ route: { name } })) {
-    conversationType = wootConstants.CONVERSATION_TYPE.UNATTENDED;
-  }
-  router.push(
-    conversationListPageURL({
-      accountId,
-      conversationType: conversationType,
-      customViewId: props.foldersId,
-      inboxId,
-      label,
-      teamId,
-    })
-  );
 }
 
 async function assignPriority(priority, conversationId = null) {
@@ -829,8 +859,10 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   // Check for required attributes before resolving
   const conversation = getConversationById.value(conversationId);
   const currentCustomAttributes = conversation?.custom_attributes || {};
+  const legacy = conversation?.additional_attributes?.outcome;
   const result = conversation?.result;
-  const outcome = result === 'won' || result === 'lost' ? result : null;
+  const picked = legacy === 'won' || legacy === 'lost' ? legacy : result;
+  const outcome = picked === 'won' || picked === 'lost' ? picked : null;
   const systemContext = outcome
     ? { [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcome] ?? null }
     : {};
@@ -855,20 +887,27 @@ function handleResolveConversation(conversationId, status, snoozedUntil) {
   }
 }
 
-function handleResolveWithAttributes({ attributes, context }) {
-  if (context) {
-    const existingConversation = getConversationById.value(context.id);
-    const currentCustomAttributes =
-      existingConversation?.custom_attributes || {};
-    const mergedAttributes = { ...currentCustomAttributes, ...attributes };
+function handleResolveWithAttributes({ attributes, context, resolve }) {
+  if (!context) return;
+  const existingConversation = getConversationById.value(context.id);
+  const currentCustomAttributes = existingConversation?.custom_attributes || {};
+  const mergedAttributes = { ...currentCustomAttributes, ...attributes };
 
-    toggleConversationStatus(
-      context.id,
-      wootConstants.STATUS_TYPE.RESOLVED,
-      context.snoozedUntil,
-      mergedAttributes
-    );
+  // "Salvar" only persists the attributes and keeps the conversation open.
+  if (resolve === false) {
+    store.dispatch('updateCustomAttributes', {
+      conversationId: context.id,
+      customAttributes: mergedAttributes,
+    });
+    return;
   }
+
+  toggleConversationStatus(
+    context.id,
+    wootConstants.STATUS_TYPE.RESOLVED,
+    context.snoozedUntil,
+    mergedAttributes
+  );
 }
 
 function allSelectedConversationsStatus(status) {
@@ -996,7 +1035,6 @@ watch(conversationFilters, (newVal, oldVal) => {
       :page-title="pageTitle"
       :has-applied-filters="hasAppliedFilters"
       :has-active-folders="hasActiveFolders"
-      :active-status="activeStatus"
       :conversation-stats="conversationStats"
       :is-list-loading="chatListLoading && !conversationList.length"
       @add-folders="onClickOpenAddFoldersModal"
@@ -1027,13 +1065,70 @@ watch(conversationFilters, (newVal, oldVal) => {
       @close="onCloseDeleteFoldersModal"
     />
 
-    <ChatTypeTabs
+    <!-- Two-level filter, segmented style: "which conversations?" (Minhas/Não atribuídas/
+         Todas) in a highlighted segmented control, then "which status?" as two prominent
+         buttons (Abertas/Resolvidas) so the active selection reads at a glance. -->
+    <div
       v-if="!hasAppliedFiltersOrActiveFolders"
-      :items="assigneeTabItems"
-      :active-tab="activeDisplayTab"
-      is-compact
-      @chat-tab-change="updateAssigneeTab"
-    />
+      class="flex flex-col gap-2 px-3 py-2"
+    >
+      <div class="inline-flex items-stretch gap-1 p-1 rounded-xl bg-n-alpha-2">
+        <button
+          v-for="item in assigneeTabItems"
+          :key="item.key"
+          type="button"
+          class="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-sm font-medium transition-colors"
+          :class="
+            activeAssigneeTab === item.key
+              ? 'bg-n-solid-1 text-n-slate-12 shadow-sm'
+              : 'text-n-slate-11 hover:text-n-slate-12'
+          "
+          @click="updateAssigneeTab(item.key)"
+        >
+          <span class="size-4 shrink-0" :class="ASSIGNEE_TAB_ICONS[item.key]" />
+          <span class="truncate">{{ item.name }}</span>
+          <span
+            v-if="item.count"
+            class="shrink-0 rounded-full px-1.5 min-w-[1.25rem] text-center text-[10px] leading-4 font-semibold"
+            :class="
+              activeAssigneeTab === item.key
+                ? 'bg-n-blue-3 text-n-blue-11'
+                : 'bg-n-alpha-1 text-n-slate-10'
+            "
+          >
+            {{ item.count }}
+          </span>
+        </button>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors"
+          :class="
+            activeStatus === 'open'
+              ? 'border-n-amber-9 text-n-amber-11 bg-n-amber-3'
+              : 'border-n-weak text-n-slate-11 hover:text-n-slate-12'
+          "
+          @click="updateListStatus('open')"
+        >
+          <span class="i-lucide-message-circle size-4" />
+          {{ $t('CHAT_LIST.STATUS_TOGGLE.open') }}
+        </button>
+        <button
+          type="button"
+          class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors"
+          :class="
+            activeStatus === 'resolved'
+              ? 'border-n-teal-9 text-n-teal-11 bg-n-teal-3'
+              : 'border-n-weak text-n-slate-11 hover:text-n-slate-12'
+          "
+          @click="updateListStatus('resolved')"
+        >
+          <span class="i-lucide-circle-check size-4" />
+          {{ $t('CHAT_LIST.STATUS_TOGGLE.resolved') }}
+        </button>
+      </div>
+    </div>
 
     <p
       v-if="!chatListLoading && !conversationList.length"

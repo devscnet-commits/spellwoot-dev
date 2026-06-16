@@ -645,6 +645,7 @@
       "CANCEL": "Cancel",
       "CONFIRM": "Migrate now",
       "SUCCESS": "Conversations migrated successfully.",
+      "STARTED": "Migration started. Conversations are being moved in the background and the source inbox will be removed once it finishes — refresh the page in a moment.",
       "ERROR": "Error migrating conversations. Please try again.",
       "DELETE_TITLE": "Delete source inbox?",
       "DELETE_WARNING_TITLE": "Warning — irreversible action",
@@ -807,6 +808,11 @@
       "ENABLE_CONTINUITY_VIA_EMAIL_SUB_TEXT": "Conversations will continue over email if the contact email address is available.",
       "LOCK_TO_SINGLE_CONVERSATION": "Lock to single conversation",
       "LOCK_TO_SINGLE_CONVERSATION_SUB_TEXT": "Enable or disable multiple conversations for the same contact in this inbox",
+      "REOPEN_WINDOW": {
+        "LABEL": "Janela de reabertura",
+        "HELP": "Quando ativada, uma mensagem para uma conversa resolvida dentro do tempo definido reabre a mesma conversa em vez de criar uma nova.",
+        "HOURS_SUFFIX": "horas"
+      },
       "INBOX_UPDATE_TITLE": "Inbox Settings",
       "INBOX_UPDATE_SUB_TEXT": "Update your inbox settings",
       "AUTO_ASSIGNMENT_SUB_TEXT": "Enable or disable the automatic assignment of new conversations to the agents added to this inbox.",
@@ -957,11 +963,12 @@
       "WEEKLY_TITLE": "Definir horas semanais",
       "TIMEZONE_LABEL": "Selecionar fuso horário",
       "UPDATE": "Atualizar configurações do horário comercial",
+      "SAVED": "Salvo",
+      "HOURS_HINT": "Cada período é um intervalo de funcionamento (Abre → Fecha). Use mais de um período para turnos com pausa — ex.: manhã 08:00–12:00 e tarde 13:30–18:00.",
       "TOGGLE_AVAILABILITY": "Ativar horário comercial para esta caixa",
       "UNAVAILABLE_MESSAGE_LABEL": "Mensagem para visitantes fora do horário",
       "TOGGLE_HELP": "Ao ativar, os horários de atendimento serão exibidos no widget e visitantes fora do horário receberão uma mensagem de aviso.",
-      "ADD_PERIOD": "Adicionar período",
-      "TEMPLATES": "Modelos de horário",
+      "ADD_PERIOD": "Adicionar intervalo",
       "COPY_TO": "Copiar para outros dias",
       "APPLY_TO": "Aplicar para",
       "APPLY": "Aplicar",
@@ -988,7 +995,9 @@
         "UNAVAILABLE": "Indisponível",
         "HOURS": "horas",
         "VALIDATION_ERROR": "O horário de início deve ser anterior ao de encerramento.",
-        "CHOOSE": "Escolher"
+        "CHOOSE": "Escolher",
+        "OPENS": "Abre",
+        "CLOSES": "Fecha"
       },
       "ALL_DAY": "O dia todo",
       "LUNCH_BREAK": "Horário de almoço",
@@ -1220,6 +1229,15 @@
       "INSTAGRAM": "Instagram",
       "TIKTOK": "TikTok",
       "VOICE": "Voice"
+    },
+    "ASSIGNMENT_POLICY": {
+      "DELETE_CONFIRM_TITLE": "Excluir política de atribuição?",
+      "DELETE_CONFIRM_MESSAGE": "Tem certeza que deseja remover esta política de atribuição desta caixa de entrada? A caixa voltará a usar as regras de atribuição padrão.",
+      "CANCEL": "Cancelar",
+      "CONFIRM_DELETE": "Excluir",
+      "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
+      "DELETE_ERROR": "Falha ao remover política de atribuição",
+      "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
     }
   }
 }

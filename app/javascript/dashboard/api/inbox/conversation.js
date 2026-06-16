@@ -123,8 +123,11 @@ class ConversationApi extends ApiClient {
     });
   }
 
-  setOutcome({ conversationId, outcome }) {
-    return axios.post(`${this.url}/${conversationId}/set_outcome`, { outcome });
+  setOutcome({ conversationId, outcome, customAttributes = null }) {
+    return axios.post(`${this.url}/${conversationId}/set_outcome`, {
+      outcome,
+      ...(customAttributes ? { custom_attributes: customAttributes } : {}),
+    });
   }
 
   closeOutcome({ conversationId, outcome, customAttributes = {} }) {
@@ -136,6 +139,10 @@ class ConversationApi extends ApiClient {
 
   closeAsAi(conversationId) {
     return axios.post(`${this.url}/${conversationId}/close_as_ai`);
+  }
+
+  getClosingFlow(conversationId) {
+    return axios.get(`${this.url}/${conversationId}/closing_flow`);
   }
 
   fetchParticipants(conversationId) {

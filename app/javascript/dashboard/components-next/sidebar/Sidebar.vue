@@ -159,7 +159,6 @@ useEventListener(document, 'touchend', onResizeEnd);
 
 const inboxes = useMapGetter('inboxes/getInboxes');
 const labels = useMapGetter('labels/getLabelsOnSidebar');
-const teams = useMapGetter('teams/getMyTeams');
 const contactCustomViews = useMapGetter('customViews/getContactCustomViews');
 const conversationCustomViews = useMapGetter(
   'customViews/getConversationCustomViews'
@@ -245,18 +244,6 @@ const menuItems = computed(() => {
           to: accountScopedRoute('home'),
         },
         {
-          name: 'Mentions',
-          label: t('SIDEBAR.MENTIONED_CONVERSATIONS'),
-          activeOn: ['conversation_through_mentions'],
-          to: accountScopedRoute('conversation_mentions'),
-        },
-        {
-          name: 'Participating',
-          label: t('SIDEBAR.PARTICIPATING_CONVERSATIONS'),
-          activeOn: ['conversation_through_participating'],
-          to: accountScopedRoute('conversation_participating'),
-        },
-        {
           name: 'Unattended',
           activeOn: ['conversation_through_unattended'],
           label: t('SIDEBAR.UNATTENDED_CONVERSATIONS'),
@@ -271,17 +258,6 @@ const menuItems = computed(() => {
             name: `${view.name}-${view.id}`,
             label: view.name,
             to: accountScopedRoute('folder_conversations', { id: view.id }),
-          })),
-        },
-        {
-          name: 'Teams',
-          label: t('SIDEBAR.TEAMS'),
-          icon: 'i-lucide-users',
-          activeOn: ['conversations_through_team'],
-          children: teams.value.map(team => ({
-            name: `${team.name}-${team.id}`,
-            label: team.name,
-            to: accountScopedRoute('team_conversations', { teamId: team.id }),
           })),
         },
         {
@@ -304,7 +280,7 @@ const menuItems = computed(() => {
         },
         {
           name: 'Labels',
-          label: t('SIDEBAR.LABELS'),
+          label: t('SIDEBAR.CONVERSATIONS_BY_LABELS'),
           icon: 'i-lucide-tag',
           activeOn: ['conversations_through_label'],
           children: labels.value.map(label => ({
@@ -731,18 +707,13 @@ const menuItems = computed(() => {
           name: 'Conversation Workflow',
           label: t('SIDEBAR.CONVERSATION_WORKFLOW'),
           icon: 'i-lucide-workflow',
-          to: accountScopedRoute('conversation_workflow_index'),
-        },
-        {
-          name: 'Settings Operational Flows',
-          label: t('SIDEBAR.OPERATIONAL_FLOWS'),
-          icon: 'i-lucide-route',
           activeOn: [
+            'conversation_workflow_index',
             'settings_operational_flows_list',
             'settings_operational_flows_new',
             'settings_operational_flows_edit',
           ],
-          to: accountScopedRoute('settings_operational_flows_list'),
+          to: accountScopedRoute('conversation_workflow_index'),
         },
         {
           name: 'Settings Security',

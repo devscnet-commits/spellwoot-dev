@@ -4,61 +4,137 @@ import { useRoute } from 'vue-router';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
+import SettingsLayout from 'dashboard/routes/dashboard/settings/SettingsLayout.vue';
+import BaseSettingsHeader from 'dashboard/routes/dashboard/settings/components/BaseSettingsHeader.vue';
 import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import FlowSelect from 'dashboard/routes/dashboard/settings/operationalFlows/FlowSelect.vue';
 import TeamsAPI from 'dashboard/api/teams';
 
 const { t } = useI18n();
 const route = useRoute();
 const store = useStore();
 
-const activeTab = ref('details');
+// Integrantes is the most frequent action, so it is the default tab.
+const activeTab = ref('members');
 
 const teamId = computed(() => Number(route.params.teamId));
 const getTeam = useMapGetter('teams/getTeam');
 const team = computed(() => getTeam.value(teamId.value));
+// Team names are stored lowercase; display them title-cased to match the teams list.
+const teamTitle = computed(() =>
+  (team.value?.name || '').replace(
+    /(^|\s)(\p{L})/gu,
+    (_, sep, ch) => sep + ch.toUpperCase()
+  )
+);
 const getTeamMembers = useMapGetter('teamMembers/getTeamMembers');
-const teamMembers = computed(() => getTeamMembers.value(teamId.value) || []);
+const members = computed(() => getTeamMembers.value(teamId.value) || []);
 const agentList = useMapGetter('agents/getAgents');
 const allInboxes = useMapGetter('inboxes/getInboxes');
+const allTeams = useMapGetter('teams/getTeams');
+const flows = useMapGetter('operationalFlows/getFlows');
 const membersUiFlags = useMapGetter('teamMembers/getUIFlags');
 const teamsUiFlags = useMapGetter('teams/getUIFlags');
+
+const isFetchingMembers = computed(() => membersUiFlags.value?.isFetching);
+const isSavingMembers = computed(
+  () => membersUiFlags.value?.isUpdating || membersUiFlags.value?.isCreating
+);
+const isFetchingTeam = computed(() => teamsUiFlags.value?.isFetching);
 
 // Details form
 const formName = ref('');
 const formDescription = ref('');
 const formAllowAutoAssign = ref(true);
+const formFlowId = ref('');
 const isSavingDetails = ref(false);
 
-// Members local state — [{id, name, email, thumbnail, team_role, active, availability_status}]
-const localMembers = ref([]);
+// Members tab state
+const memberFilter = ref('all');
+const memberSearch = ref('');
 const showAddPanel = ref(false);
 const agentSearch = ref('');
-const isSavingMembers = ref(false);
 
-// Linked inboxes local state
+// Linked inboxes state
 const linkedInboxIds = ref([]);
 const isLoadingInboxes = ref(false);
-const isSavingInboxes = ref(false);
 
 const AVAILABILITY_KEYS = ['online', 'busy', 'offline'];
 
-const ROLES = computed(() => [
-  { value: 'member', label: t('TEAMS_SETTINGS.MEMBER_ROLES.member') },
-  { value: 'coordinator', label: t('TEAMS_SETTINGS.MEMBER_ROLES.coordinator') },
-  { value: 'manager', label: t('TEAMS_SETTINGS.MEMBER_ROLES.manager') },
+const tabs = computed(() => [
+  { key: 'members', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.MEMBERS') },
+  { key: 'details', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.DETAILS') },
+  { key: 'inboxes', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.INBOXES') },
 ]);
 
-// Operational counts shown at the top of the team
-const counts = computed(() => {
-  const result = { total: localMembers.value.length, coordinator: 0, manager: 0, member: 0 };
-  localMembers.value.forEach(m => {
-    const role = m.team_role || 'member';
-    result[role] = (result[role] || 0) + 1;
+// Função is read-only and derived from the agent's account role.
+const roleKey = member =>
+  member.role === 'administrator' ? 'administrator' : 'agent';
+const roleLabel = member =>
+  t(`TEAMS_SETTINGS.EDIT_FLOW.ACCOUNT_ROLES.${roleKey(member)}`);
+
+const roleCounts = computed(() => {
+  const counts = { all: members.value.length, agent: 0, administrator: 0 };
+  members.value.forEach(member => {
+    const key = roleKey(member);
+    counts[key] = (counts[key] || 0) + 1;
   });
-  return result;
+  return counts;
+});
+
+const roleFilters = computed(() =>
+  ['all', 'agent', 'administrator'].map(key => ({
+    key,
+    label: t(`TEAMS_SETTINGS.EDIT_FLOW.FILTERS.${key}`),
+    count: roleCounts.value[key] || 0,
+  }))
+);
+
+const filteredMembers = computed(() => {
+  const query = memberSearch.value.trim().toLowerCase();
+  return members.value.filter(member => {
+    if (
+      memberFilter.value !== 'all' &&
+      roleKey(member) !== memberFilter.value
+    ) {
+      return false;
+    }
+    if (!query) return true;
+    return (
+      (member.name || '').toLowerCase().includes(query) ||
+      (member.email || '').toLowerCase().includes(query)
+    );
+  });
+});
+
+// agentId -> team name for agents already in ANOTHER team (single-team rule): they are
+// listed greyed-out so it's clear why they cannot be added here.
+const lockedAgents = computed(() => {
+  const locked = {};
+  (allTeams.value || []).forEach(other => {
+    if (other.id === teamId.value) return;
+    (other.member_ids || []).forEach(id => {
+      locked[id] = other.name;
+    });
+  });
+  return locked;
+});
+
+// Agents not yet in the team, filtered by the add-panel search.
+const availableAgents = computed(() => {
+  const memberIds = new Set(members.value.map(m => m.id));
+  const query = agentSearch.value.trim().toLowerCase();
+  return (agentList.value || []).filter(agent => {
+    if (memberIds.has(agent.id)) return false;
+    if (!query) return true;
+    return (
+      agent.name.toLowerCase().includes(query) ||
+      agent.email.toLowerCase().includes(query)
+    );
+  });
 });
 
 const availabilityLabel = status => {
@@ -73,10 +149,7 @@ function syncFromTeam(teamData) {
   formName.value = teamData.name || '';
   formDescription.value = teamData.description || '';
   formAllowAutoAssign.value = teamData.allow_auto_assign ?? true;
-}
-
-function syncFromMembers(members) {
-  localMembers.value = members.map(m => ({ ...m, team_role: m.team_role || 'member' }));
+  formFlowId.value = teamData.operational_flow_id || '';
 }
 
 async function loadInboxes() {
@@ -92,57 +165,94 @@ async function loadInboxes() {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   store.dispatch('agents/get');
-  await store.dispatch('teamMembers/get', { teamId: teamId.value });
-  syncFromMembers(teamMembers.value);
+  store.dispatch('teams/get', { cache: false });
+  store.dispatch('operationalFlows/get');
+  store.dispatch('teamMembers/get', { teamId: teamId.value });
   loadInboxes();
 });
 
-function toggleInbox(inboxId) {
-  linkedInboxIds.value = linkedInboxIds.value.includes(inboxId)
-    ? linkedInboxIds.value.filter(id => id !== inboxId)
-    : [...linkedInboxIds.value, inboxId];
-}
+watch(team, syncFromTeam, { immediate: true });
 
-async function saveInboxes() {
-  isSavingInboxes.value = true;
+// Adding or removing an integrante saves immediately.
+async function persistMembers(userIds, successKey) {
   try {
-    await TeamsAPI.updateInboxes({ teamId: teamId.value, inboxIds: linkedInboxIds.value });
-    useAlert(t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.SAVED'));
+    await store.dispatch('teamMembers/update', {
+      teamId: teamId.value,
+      agentsList: userIds,
+    });
+    store.dispatch('teams/get', { cache: false });
+    useAlert(t(`TEAMS_SETTINGS.EDIT_FLOW.${successKey}`));
   } catch {
     useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
-  } finally {
-    isSavingInboxes.value = false;
   }
 }
 
-watch(team, syncFromTeam, { immediate: true });
-watch(teamMembers, syncFromMembers, { immediate: false });
+// New member of a team with linked caixas: offer adding them as agent of those caixas
+// too, so they are covered by the team's closing flow without a manual second step.
+const pendingCaixasAgent = ref(null);
+const isAddingToCaixas = ref(false);
 
-// Agents not yet in localMembers, filtered by search
-const availableAgents = computed(() => {
-  const memberIds = new Set(localMembers.value.map(m => m.id));
-  const query = agentSearch.value.trim().toLowerCase();
-  return (agentList.value || []).filter(a => {
-    if (memberIds.has(a.id)) return false;
-    if (!query) return true;
-    return a.name.toLowerCase().includes(query) || a.email.toLowerCase().includes(query);
-  });
-});
+const linkedInboxNames = computed(() =>
+  (allInboxes.value || [])
+    .filter(ibx => linkedInboxIds.value.includes(ibx.id))
+    .map(ibx => ibx.name)
+);
 
 function addAgent(agent) {
-  localMembers.value = [...localMembers.value, { ...agent, team_role: 'member' }];
+  const ids = [...members.value.map(m => m.id), agent.id];
   agentSearch.value = '';
+  showAddPanel.value = false;
+  persistMembers(ids, 'MEMBER_ADDED');
+  if (linkedInboxIds.value.length) pendingCaixasAgent.value = agent;
+}
+
+function skipAddToCaixas() {
+  pendingCaixasAgent.value = null;
+}
+
+async function addPendingAgentToCaixas() {
+  const agent = pendingCaixasAgent.value;
+  isAddingToCaixas.value = true;
+  try {
+    const InboxMembersAPI = (await import('dashboard/api/inboxMembers'))
+      .default;
+    await Promise.all(
+      linkedInboxIds.value.map(inboxId =>
+        InboxMembersAPI.create({ inbox_id: inboxId, user_ids: [agent.id] })
+      )
+    );
+    useAlert(
+      t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.SUCCESS', {
+        agent: agent.name,
+      })
+    );
+  } catch {
+    useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
+  } finally {
+    isAddingToCaixas.value = false;
+    pendingCaixasAgent.value = null;
+  }
 }
 
 function removeMember(agentId) {
-  localMembers.value = localMembers.value.filter(m => m.id !== agentId);
+  const ids = members.value.map(m => m.id).filter(id => id !== agentId);
+  persistMembers(ids, 'MEMBER_REMOVED');
 }
 
-function setMemberRole(agentId, role) {
-  const m = localMembers.value.find(x => x.id === agentId);
-  if (m) m.team_role = role;
+async function toggleInbox(inboxId) {
+  const next = linkedInboxIds.value.includes(inboxId)
+    ? linkedInboxIds.value.filter(id => id !== inboxId)
+    : [...linkedInboxIds.value, inboxId];
+  linkedInboxIds.value = next;
+  try {
+    await TeamsAPI.updateInboxes({ teamId: teamId.value, inboxIds: next });
+    useAlert(t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.SAVED'));
+  } catch {
+    useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
+    loadInboxes();
+  }
 }
 
 async function saveDetails() {
@@ -154,6 +264,7 @@ async function saveDetails() {
       name: formName.value,
       description: formDescription.value,
       allow_auto_assign: formAllowAutoAssign.value,
+      operational_flow_id: formFlowId.value || null,
     });
     useAlert(t('TEAMS_SETTINGS.EDIT_FLOW.UPDATE_SUCCESS'));
   } catch {
@@ -162,300 +273,335 @@ async function saveDetails() {
     isSavingDetails.value = false;
   }
 }
-
-async function saveMembers() {
-  isSavingMembers.value = true;
-  try {
-    const members = localMembers.value.map(m => ({ user_id: m.id, role: m.team_role || 'member' }));
-    await store.dispatch('teamMembers/update', { teamId: teamId.value, members });
-    await store.dispatch('teamMembers/get', { teamId: teamId.value });
-    store.dispatch('teams/get');
-    useAlert(t('TEAMS_SETTINGS.EDIT_FLOW.MEMBERS_UPDATED'));
-  } catch {
-    useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
-  } finally {
-    isSavingMembers.value = false;
-    showAddPanel.value = false;
-  }
-}
 </script>
 
 <template>
-  <div class="p-6 col-span-full w-full max-w-3xl flex flex-col gap-6">
-    <div class="flex flex-col gap-2">
-      <div class="flex flex-col gap-0.5">
-        <h2 class="text-heading-2 font-semibold text-n-slate-12 capitalize">
-          {{ team?.name || '' }}
-        </h2>
-        <p v-if="team?.description" class="text-body-main text-n-slate-11">
-          {{ team.description }}
-        </p>
-      </div>
+  <SettingsLayout class="w-full">
+    <template #header>
+      <BaseSettingsHeader
+        :title="teamTitle"
+        :description="team?.description || ''"
+        :back-button-label="t('TEAMS_SETTINGS.HEADER')"
+      />
+    </template>
 
-      <!-- Operational summary -->
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="i-lucide-users size-3.5 text-n-slate-11" />
-          <span class="font-medium text-n-slate-12">{{ counts.total }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.MEMBERS') }}</span>
-        </span>
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="font-medium text-n-slate-12">{{ counts.coordinator }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.COORDINATORS') }}</span>
-        </span>
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="font-medium text-n-slate-12">{{ counts.manager }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.MANAGERS') }}</span>
-        </span>
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-n-alpha-2 text-sm">
-          <span class="font-medium text-n-slate-12">{{ counts.member }}</span>
-          <span class="text-n-slate-11">{{ t('TEAMS_SETTINGS.EDIT_FLOW.SUMMARY.AGENTS') }}</span>
-        </span>
-      </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="flex gap-1 border-b border-n-weak">
-      <button
-        v-for="tab in [
-          { key: 'details', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.DETAILS') },
-          { key: 'members', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.MEMBERS') },
-          { key: 'inboxes', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.INBOXES') },
-        ]"
-        :key="tab.key"
-        type="button"
-        :class="[
-          'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-          activeTab === tab.key
-            ? 'border-n-brand text-n-brand'
-            : 'border-transparent text-n-slate-11 hover:text-n-slate-12',
-        ]"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
-
-    <!-- Details tab -->
-    <div v-if="activeTab === 'details'" class="flex flex-col gap-4">
-      <div v-if="teamsUiFlags.value?.isFetching" class="flex justify-center py-8">
-        <Spinner class="text-n-brand" />
-      </div>
-      <template v-else>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium text-n-slate-12">
-            {{ t('TEAMS_SETTINGS.FORM.NAME.LABEL') }}
-          </label>
-          <input
-            v-model="formName"
-            type="text"
-            :placeholder="t('TEAMS_SETTINGS.FORM.NAME.PLACEHOLDER')"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-          />
+    <template #body>
+      <div class="flex flex-col w-full gap-4">
+        <!-- Tabs -->
+        <div class="flex gap-1 border-b border-n-weak">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            type="button"
+            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
+            :class="[
+              activeTab === tab.key
+                ? 'border-n-brand text-n-brand'
+                : 'border-transparent text-n-slate-11 hover:text-n-slate-12',
+            ]"
+            @click="activeTab = tab.key"
+          >
+            {{ tab.label }}
+          </button>
         </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium text-n-slate-12">
-            {{ t('TEAMS_SETTINGS.FORM.DESCRIPTION.LABEL') }}
-          </label>
-          <textarea
-            v-model="formDescription"
-            rows="3"
-            :placeholder="t('TEAMS_SETTINGS.FORM.DESCRIPTION.PLACEHOLDER')"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand resize-none"
-          />
-        </div>
-        <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-n-alpha-2">
-          <span class="text-sm font-medium text-n-slate-12">
-            {{ t('TEAMS_SETTINGS.FORM.AUTO_ASSIGN.LABEL') }}
-          </span>
-          <Switch v-model="formAllowAutoAssign" />
-        </div>
-        <div class="flex justify-end">
-          <Button
-            :label="t('TEAMS_SETTINGS.EDIT_FLOW.CREATE.BUTTON_TEXT')"
-            :disabled="!formName.trim() || isSavingDetails"
-            :is-loading="isSavingDetails"
-            @click="saveDetails"
-          />
-        </div>
-      </template>
-    </div>
 
-    <!-- Members tab -->
-    <div v-else-if="activeTab === 'members'" class="flex flex-col gap-4">
-      <div v-if="membersUiFlags.value?.isFetching" class="flex justify-center py-8">
-        <Spinner class="text-n-brand" />
-      </div>
-      <template v-else>
-        <p class="text-sm text-n-slate-11">
-          {{ t('TEAMS_SETTINGS.EDIT_FLOW.LINKED_COUNT', { n: counts.total }) }}
-        </p>
+        <!-- Members tab -->
+        <div v-if="activeTab === 'members'" class="flex flex-col gap-4">
+          <p class="text-sm text-n-slate-11">
+            {{ t('TEAMS_SETTINGS.EDIT_FLOW.MEMBERS_SUBTITLE') }}
+          </p>
 
-        <!-- Members table -->
-        <div
-          v-if="localMembers.length"
-          class="border border-n-weak rounded-xl overflow-hidden"
-        >
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="bg-n-alpha-2 text-n-slate-11 text-left">
-                <th class="font-medium px-4 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.NAME') }}</th>
-                <th class="font-medium px-3 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.ROLE') }}</th>
-                <th class="font-medium px-3 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.STATUS') }}</th>
-                <th class="font-medium px-3 py-2.5">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.AVAILABILITY') }}</th>
-                <th class="font-medium px-4 py-2.5 text-right">{{ t('TEAMS_SETTINGS.EDIT_FLOW.TABLE.ACTIONS') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-n-weak">
-              <tr v-for="member in localMembers" :key="member.id">
-                <td class="px-4 py-3">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <Avatar :src="member.thumbnail" :name="member.name" :size="32" />
-                    <div class="min-w-0">
-                      <p class="font-medium text-n-slate-12 truncate">{{ member.name }}</p>
-                      <p class="text-xs text-n-slate-11 truncate">{{ member.email }}</p>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-3 py-3">
-                  <select
-                    :value="member.team_role || 'member'"
-                    class="text-sm border border-n-weak rounded-lg px-2 py-1 bg-n-solid-1 text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-                    @change="setMemberRole(member.id, $event.target.value)"
-                  >
-                    <option v-for="role in ROLES" :key="role.value" :value="role.value">
-                      {{ role.label }}
-                    </option>
-                  </select>
-                </td>
-                <td class="px-3 py-3">
-                  <span
-                    :class="[
-                      'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                      member.active === false ? 'bg-n-slate-3 text-n-slate-11' : 'bg-n-teal-3 text-n-teal-11',
-                    ]"
-                  >
-                    {{ member.active === false
-                      ? t('TEAMS_SETTINGS.EDIT_FLOW.STATUS.INACTIVE')
-                      : t('TEAMS_SETTINGS.EDIT_FLOW.STATUS.ACTIVE') }}
-                  </span>
-                </td>
-                <td class="px-3 py-3">
-                  <span class="inline-flex items-center gap-1.5 text-xs text-n-slate-11">
-                    <span
-                      :class="[
-                        'size-2 rounded-full',
-                        isOnline(member.availability_status) ? 'bg-n-teal-9' : 'bg-n-slate-8',
-                      ]"
-                    />
-                    {{ availabilityLabel(member.availability_status) }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    class="text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors"
-                    @click="removeMember(member.id)"
-                  >
-                    {{ t('TEAMS_SETTINGS.EDIT_FLOW.REMOVE_MEMBER') }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p v-else class="text-sm text-n-slate-11 text-center py-4">
-          {{ t('TEAMS_SETTINGS.EDIT_FLOW.NO_MEMBERS') }}
-        </p>
-
-        <!-- Add member panel -->
-        <div v-if="showAddPanel" class="flex flex-col gap-2 border border-n-weak rounded-xl p-3">
-          <input
-            v-model="agentSearch"
-            type="text"
-            :placeholder="t('TEAMS_SETTINGS.EDIT_FLOW.SEARCH_PLACEHOLDER')"
-            class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
-            autofocus
-          />
-          <div class="max-h-48 overflow-y-auto divide-y divide-n-weak">
-            <button
-              v-for="agent in availableAgents"
-              :key="agent.id"
-              type="button"
-              class="w-full flex items-center gap-3 px-2 py-2 hover:bg-n-alpha-2 rounded-lg text-left transition-colors"
-              @click="addAgent(agent)"
-            >
-              <Avatar :src="agent.thumbnail" :name="agent.name" :size="28" />
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-n-slate-12 truncate">{{ agent.name }}</p>
-                <p class="text-xs text-n-slate-11 truncate">{{ agent.email }}</p>
-              </div>
-            </button>
-            <p v-if="!availableAgents.length" class="text-sm text-n-slate-11 text-center py-3">
-              {{ t('TEAMS_SETTINGS.EDIT_FLOW.NO_AVAILABLE_AGENTS') }}
-            </p>
+          <!-- Filters + search + add -->
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-1">
+              <button
+                v-for="filter in roleFilters"
+                :key="filter.key"
+                type="button"
+                class="px-2.5 py-1 rounded-lg text-sm font-medium transition-colors"
+                :class="[
+                  memberFilter === filter.key
+                    ? 'bg-n-brand/10 text-n-brand'
+                    : 'text-n-slate-11 hover:bg-n-alpha-2',
+                ]"
+                @click="memberFilter = filter.key"
+              >
+                {{ filter.label }}
+                <span class="text-n-slate-10">{{ filter.count }}</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="memberSearch"
+                type="search"
+                :placeholder="t('TEAMS_SETTINGS.EDIT_FLOW.SEARCH_PLACEHOLDER')"
+                class="w-48 px-3 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              />
+              <Button
+                size="sm"
+                :label="t('TEAMS_SETTINGS.EDIT_FLOW.ADD_MEMBER')"
+                icon="i-lucide-user-plus"
+                @click="showAddPanel = !showAddPanel"
+              />
+            </div>
           </div>
-        </div>
 
-        <!-- Actions -->
-        <div class="flex items-center justify-between">
-          <Button
-            faded
-            slate
-            size="sm"
-            :label="t('TEAMS_SETTINGS.EDIT_FLOW.ADD_MEMBER')"
-            icon="i-lucide-user-plus"
-            @click="showAddPanel = !showAddPanel"
-          />
-          <Button
-            :label="t('TEAMS_SETTINGS.EDIT_FLOW.AGENTS.BUTTON_TEXT')"
-            :disabled="isSavingMembers"
-            :is-loading="isSavingMembers"
-            @click="saveMembers"
-          />
-        </div>
-      </template>
-    </div>
-
-    <!-- Inboxes tab -->
-    <div v-else-if="activeTab === 'inboxes'" class="flex flex-col gap-4">
-      <p class="text-sm text-n-slate-11">
-        {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.HINT') }}
-      </p>
-      <div v-if="isLoadingInboxes" class="flex justify-center py-8">
-        <Spinner class="text-n-brand" />
-      </div>
-      <template v-else>
-        <div
-          v-if="(allInboxes || []).length"
-          class="border border-n-weak rounded-xl divide-y divide-n-weak overflow-hidden"
-        >
-          <label
-            v-for="ibx in allInboxes"
-            :key="ibx.id"
-            class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-n-alpha-2"
+          <!-- Add member panel -->
+          <div
+            v-if="showAddPanel"
+            class="flex flex-col gap-2 border border-n-weak rounded-xl p-3"
           >
             <input
-              type="checkbox"
-              :checked="linkedInboxIds.includes(ibx.id)"
-              class="m-0"
-              @change="toggleInbox(ibx.id)"
+              v-model="agentSearch"
+              type="text"
+              :placeholder="t('TEAMS_SETTINGS.EDIT_FLOW.SEARCH_PLACEHOLDER')"
+              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
             />
-            <span class="text-sm text-n-slate-12">{{ ibx.name }}</span>
-          </label>
+            <div class="max-h-48 overflow-y-auto divide-y divide-n-weak">
+              <component
+                :is="lockedAgents[agent.id] ? 'div' : 'button'"
+                v-for="agent in availableAgents"
+                :key="agent.id"
+                :type="lockedAgents[agent.id] ? undefined : 'button'"
+                class="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left"
+                :class="
+                  lockedAgents[agent.id]
+                    ? 'opacity-60 cursor-not-allowed'
+                    : 'hover:bg-n-alpha-2 transition-colors'
+                "
+                @click="lockedAgents[agent.id] ? null : addAgent(agent)"
+              >
+                <Avatar :src="agent.thumbnail" :name="agent.name" :size="28" />
+                <div class="min-w-0 flex-1">
+                  <p
+                    class="text-sm font-medium truncate"
+                    :class="
+                      lockedAgents[agent.id]
+                        ? 'text-n-slate-9'
+                        : 'text-n-slate-12'
+                    "
+                  >
+                    {{ agent.name }}
+                  </p>
+                  <p class="text-xs text-n-slate-11 truncate">
+                    {{ agent.email }}
+                  </p>
+                </div>
+                <span
+                  v-if="lockedAgents[agent.id]"
+                  class="text-xs text-n-slate-9 shrink-0"
+                >
+                  {{
+                    t('TEAMS_SETTINGS.AGENTS.ALREADY_IN_TEAM', {
+                      team: lockedAgents[agent.id],
+                    })
+                  }}
+                </span>
+              </component>
+              <p
+                v-if="!availableAgents.length"
+                class="text-sm text-n-slate-11 text-center py-3"
+              >
+                {{ t('TEAMS_SETTINGS.EDIT_FLOW.NO_AVAILABLE_AGENTS') }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Members list -->
+          <div v-if="isFetchingMembers" class="flex justify-center py-8">
+            <Spinner class="text-n-brand" />
+          </div>
+          <template v-else>
+            <div
+              v-if="filteredMembers.length"
+              class="border border-n-weak rounded-xl divide-y divide-n-weak overflow-hidden"
+            >
+              <div
+                v-for="member in filteredMembers"
+                :key="member.id"
+                class="flex items-center gap-3 px-4 py-3"
+              >
+                <Avatar
+                  :src="member.thumbnail"
+                  :name="member.name"
+                  :size="32"
+                />
+                <div class="min-w-0 flex-1">
+                  <p class="font-medium text-sm text-n-slate-12 truncate">
+                    {{ member.name }}
+                  </p>
+                  <p class="text-xs text-n-slate-11 truncate">
+                    {{ member.email }}
+                  </p>
+                </div>
+                <span
+                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                  :class="[
+                    roleKey(member) === 'administrator'
+                      ? 'bg-n-teal-3 text-n-teal-11'
+                      : 'bg-n-alpha-2 text-n-slate-11',
+                  ]"
+                >
+                  {{ roleLabel(member) }}
+                </span>
+                <span
+                  class="hidden sm:inline-flex items-center gap-1.5 text-xs text-n-slate-11 w-24"
+                >
+                  <span
+                    class="size-2 rounded-full flex-shrink-0"
+                    :class="[
+                      isOnline(member.availability_status)
+                        ? 'bg-n-teal-9'
+                        : 'bg-n-slate-8',
+                    ]"
+                  />
+                  {{ availabilityLabel(member.availability_status) }}
+                </span>
+                <button
+                  type="button"
+                  class="text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors"
+                  :disabled="isSavingMembers"
+                  @click="removeMember(member.id)"
+                >
+                  {{ t('TEAMS_SETTINGS.EDIT_FLOW.REMOVE_MEMBER') }}
+                </button>
+              </div>
+            </div>
+            <p v-else class="text-sm text-n-slate-11 text-center py-8">
+              {{ t('TEAMS_SETTINGS.EDIT_FLOW.NO_MEMBERS') }}
+            </p>
+          </template>
         </div>
-        <p v-else class="text-sm text-n-slate-11 text-center py-4">
-          {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.EMPTY') }}
-        </p>
-        <div class="flex justify-end">
-          <Button
-            :label="t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.SAVE')"
-            :disabled="isSavingInboxes"
-            :is-loading="isSavingInboxes"
-            @click="saveInboxes"
-          />
+
+        <!-- Details tab -->
+        <div v-else-if="activeTab === 'details'" class="flex flex-col gap-4">
+          <div v-if="isFetchingTeam" class="flex justify-center py-8">
+            <Spinner class="text-n-brand" />
+          </div>
+          <template v-else>
+            <div class="flex flex-col gap-1">
+              <label class="text-sm font-medium text-n-slate-12">
+                {{ t('TEAMS_SETTINGS.FORM.NAME.LABEL') }}
+              </label>
+              <input
+                v-model="formName"
+                type="text"
+                :placeholder="t('TEAMS_SETTINGS.FORM.NAME.PLACEHOLDER')"
+                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+              />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-sm font-medium text-n-slate-12">
+                {{ t('TEAMS_SETTINGS.FORM.DESCRIPTION.LABEL') }}
+              </label>
+              <textarea
+                v-model="formDescription"
+                rows="3"
+                :placeholder="t('TEAMS_SETTINGS.FORM.DESCRIPTION.PLACEHOLDER')"
+                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand resize-none"
+              />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-sm font-medium text-n-slate-12">
+                {{ t('OPERATIONAL_FLOWS_SETTINGS.TIME_FLOWS.HEADER') }}
+              </label>
+              <p class="text-xs text-n-slate-11">
+                {{ t('OPERATIONAL_FLOWS_SETTINGS.TIME_FLOWS.DESCRIPTION') }}
+              </p>
+              <FlowSelect v-model="formFlowId" class="mt-1">
+                <option value="">
+                  {{ t('OPERATIONAL_FLOWS_SETTINGS.TIME_FLOWS.NONE') }}
+                </option>
+                <option v-for="flow in flows" :key="flow.id" :value="flow.id">
+                  {{ flow.name }}
+                </option>
+              </FlowSelect>
+            </div>
+            <div
+              class="flex items-center justify-between py-2 px-3 rounded-lg bg-n-alpha-2"
+            >
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ t('TEAMS_SETTINGS.FORM.AUTO_ASSIGN.LABEL') }}
+              </span>
+              <Switch v-model="formAllowAutoAssign" />
+            </div>
+            <div class="flex justify-end">
+              <Button
+                :label="t('TEAMS_SETTINGS.EDIT_FLOW.CREATE.BUTTON_TEXT')"
+                :disabled="!formName.trim() || isSavingDetails"
+                :is-loading="isSavingDetails"
+                @click="saveDetails"
+              />
+            </div>
+          </template>
         </div>
-      </template>
-    </div>
-  </div>
+
+        <!-- Inboxes tab -->
+        <div v-else-if="activeTab === 'inboxes'" class="flex flex-col gap-4">
+          <p class="text-sm text-n-slate-11">
+            {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.HINT') }}
+          </p>
+          <div v-if="isLoadingInboxes" class="flex justify-center py-8">
+            <Spinner class="text-n-brand" />
+          </div>
+          <template v-else>
+            <div
+              v-if="(allInboxes || []).length"
+              class="border border-n-weak rounded-xl divide-y divide-n-weak overflow-hidden"
+            >
+              <label
+                v-for="ibx in allInboxes"
+                :key="ibx.id"
+                class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-n-alpha-2"
+              >
+                <input
+                  type="checkbox"
+                  :checked="linkedInboxIds.includes(ibx.id)"
+                  class="m-0"
+                  @change="toggleInbox(ibx.id)"
+                />
+                <span class="text-sm text-n-slate-12">{{ ibx.name }}</span>
+              </label>
+            </div>
+            <p v-else class="text-sm text-n-slate-11 text-center py-4">
+              {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.EMPTY') }}
+            </p>
+          </template>
+        </div>
+      </div>
+
+      <woot-modal
+        v-if="pendingCaixasAgent"
+        :show="!!pendingCaixasAgent"
+        :on-close="skipAddToCaixas"
+      >
+        <div class="p-6">
+          <h3 class="text-lg font-medium text-n-slate-12 mb-4">
+            {{ t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.TITLE') }}
+          </h3>
+          <p class="text-sm text-n-slate-11 mb-6">
+            {{
+              t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.MESSAGE', {
+                agent: pendingCaixasAgent.name,
+                inboxes: linkedInboxNames.join(', '),
+              })
+            }}
+          </p>
+          <div class="flex justify-end gap-2">
+            <Button
+              slate
+              :label="t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.SKIP')"
+              :disabled="isAddingToCaixas"
+              @click="skipAddToCaixas"
+            />
+            <Button
+              :label="t('TEAMS_SETTINGS.EDIT_FLOW.ADD_TO_CAIXAS.CONFIRM')"
+              :is-loading="isAddingToCaixas"
+              @click="addPendingAgentToCaixas"
+            />
+          </div>
+        </div>
+      </woot-modal>
+    </template>
+  </SettingsLayout>
 </template>

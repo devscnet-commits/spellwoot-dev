@@ -166,6 +166,7 @@ Rails.application.routes.draw do
               post :close_outcome
               post :set_outcome
               post :close_as_ai
+              get :closing_flow
               get :attachments
               get :inbox_assistant
               get :reporting_events if ChatwootApp.enterprise?
@@ -225,7 +226,7 @@ Rails.application.routes.draw do
           resources :reporting_events, only: [:index] if ChatwootApp.enterprise?
           resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy]
           resources :custom_filters, only: [:index, :show, :create, :update, :destroy]
-          resources :integration_settings, param: :provider, only: [:show, :update] do
+          resources :integration_settings, param: :provider, only: [:show, :update, :destroy] do
             collection do
               post ':provider/import_from_env', action: :import_from_env, as: :import_from_env
               post ':provider/test', action: :test_connection, as: :test_connection

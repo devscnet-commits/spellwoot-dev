@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { generateTimeSlots, scheduleTemplates } from '../helpers/businessHour';
+import { generateTimeSlots } from '../helpers/businessHour';
 import NextSelect from 'dashboard/components-next/select/Select.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 
@@ -32,7 +32,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update', 'copy-to']);
 
-const showTemplates = ref(false);
 const showCopy      = ref(false);
 const showCustom    = ref(false);
 const customDays    = ref([]);
@@ -55,11 +54,6 @@ function addPeriod() {
 
 function removePeriod(idx) {
   emit('update', { ...props.slot, periods: props.slot.periods.filter((_, i) => i !== idx) });
-}
-
-function applyTemplate(tpl) {
-  emit('update', { ...props.slot, enabled: true, periods: tpl.periods.map(p => ({ ...p })) });
-  showTemplates.value = false;
 }
 
 function applyCopy(option) {
@@ -106,21 +100,31 @@ function hasError(p) {
       <div class="flex-1 flex flex-col gap-1.5">
         <template v-if="enabled">
           <div v-for="(period, idx) in slot.periods" :key="idx" class="flex items-center gap-2">
-            <NextSelect
-              :model-value="period.from"
-              :groups="allTimeGroups"
-              :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
-              class="w-32"
-              @update:model-value="v => updatePeriod(idx, 'from', v)"
-            />
-            <span class="text-n-slate-11 text-sm">→</span>
-            <NextSelect
-              :model-value="period.to"
-              :groups="toTimeGroups"
-              :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
-              class="w-32"
-              @update:model-value="v => updatePeriod(idx, 'to', v)"
-            />
+            <div class="flex flex-col gap-0.5">
+              <span v-if="idx === 0" class="text-label-small text-n-slate-10">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.DAY.OPENS') }}
+              </span>
+              <NextSelect
+                :model-value="period.from"
+                :groups="allTimeGroups"
+                :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
+                class="w-32"
+                @update:model-value="v => updatePeriod(idx, 'from', v)"
+              />
+            </div>
+            <span class="text-n-slate-11 text-sm" :class="{ 'mt-5': idx === 0 }">→</span>
+            <div class="flex flex-col gap-0.5">
+              <span v-if="idx === 0" class="text-label-small text-n-slate-10">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.DAY.CLOSES') }}
+              </span>
+              <NextSelect
+                :model-value="period.to"
+                :groups="toTimeGroups"
+                :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.DAY.CHOOSE')"
+                class="w-32"
+                @update:model-value="v => updatePeriod(idx, 'to', v)"
+              />
+            </div>
             <button
               type="button"
               v-if="slot.periods.length > 1"
@@ -182,7 +186,7 @@ function hasError(p) {
             type="button"
             class="text-n-slate-10 hover:text-n-slate-12 transition-colors p-1 rounded"
             :title="$t('INBOX_MGMT.BUSINESS_HOURS.COPY_TO')"
-            @click="showCopy = !showCopy; showTemplates = false"
+            @click="showCopy = !showCopy"
           >
             <span class="i-lucide-copy size-4" />
           </button>

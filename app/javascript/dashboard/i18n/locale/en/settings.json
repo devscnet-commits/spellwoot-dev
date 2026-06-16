@@ -304,7 +304,7 @@
     "ALL_CONVERSATIONS": "All Conversations",
     "MENTIONED_CONVERSATIONS": "Mentions",
     "PARTICIPATING_CONVERSATIONS": "Participating",
-    "UNATTENDED_CONVERSATIONS": "Unattended",
+    "UNATTENDED_CONVERSATIONS": "Pending reply",
     "REPORTS": "Reports",
     "SETTINGS": "Settings",
     "CONTACTS": "Contacts",
@@ -376,7 +376,8 @@
       "LOCALES": "Locales",
       "SETTINGS": "Settings"
     },
-    "CHANNELS": "Channels",
+    "CHANNELS": "Conversations by inboxes",
+    "CONVERSATIONS_BY_LABELS": "Conversations by labels",
     "SET_AUTO_OFFLINE": {
       "TEXT": "Mark offline automatically",
       "INFO_TEXT": "Let the system automatically mark you offline when you aren't using the app or dashboard.",
@@ -583,10 +584,12 @@
         "ERROR": "Could not update required attributes, please try again"
       },
       "MODAL": {
-        "TITLE": "Resolve conversation",
-        "DESCRIPTION": "Please fill in the following custom attributes before resolving this conversation",
+        "TITLE": "Conversation attributes",
+        "DESCRIPTION": "Fill in the attributes below. You can save only (the conversation stays open) or save and resolve now.",
+        "SAVED": "Attributes saved",
         "ACTIONS": {
-          "RESOLVE": "Resolve conversation",
+          "SAVE": "Save",
+          "RESOLVE": "Save and resolve",
           "CANCEL": "Cancel"
         },
         "PLACEHOLDERS": {
@@ -646,23 +649,40 @@
       "NO_FIELDS": "Nenhum campo adicional necessário.",
       "SUCCESS": "Resultado registrado com sucesso",
       "ERROR": "Não foi possível registrar o resultado, tente novamente",
-      "PROMPT_RESOLVE": "Antes de resolver, defina o resultado do lead:",
+      "PROMPT_RESOLVE": "Antes de resolver, selecione uma das opções abaixo:",
       "RESULT_WON": "Ganho",
       "RESULT_LOST": "Perdido",
-      "RESULT_NONE": "Sem resultado",
+      "RESULT_NONE": "Status da conversa pendente",
       "RESULT_UPDATED": "Resultado atualizado",
-      "RESULT_LABEL": "Resultado"
+      "RESULT_LOCKED": "Reabra a conversa para alterar o resultado",
+      "RESULT_LABEL": "Resultado",
+      "NO_FLOW": "Nenhum fluxo configurado",
+      "NO_FLOW_HINT": "Configure um fluxo de fechamento para o time desta conversa em Configurações → Fluxo de Conversa."
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
       "DESCRIPTION": "Send conversion events back to Meta to optimize your Click-to-WhatsApp ad campaigns.",
-      "ENABLED_LABEL": "Enable",
-      "DISABLE_LABEL": "Disable",
+      "MASTER_ON": "Ativado",
+      "MASTER_OFF": "Desativado",
+      "MASTER_DESCRIPTION": "Liga/desliga geral do envio para a Meta. Desligado, nada é enviado — nem o Lead na chegada, nem as conversões de fechamento. As credenciais ficam em Integrações; o evento e o valor da venda ficam por fluxo → estado (\"Enviar à Meta como\").",
+      "CHECKLIST": {
+        "TITLE": "O que está ativo",
+        "CREDENTIALS_ENV": "Credenciais gerenciadas pelo servidor (variáveis de ambiente)",
+        "LEAD_ON": "Lead na chegada: ativo",
+        "LEAD_OFF": "Lead na chegada: desativado",
+        "FLOWS_ACTIVE": "Conversões de fechamento: {count} fluxo(s) com Meta ativa",
+        "FLOWS_NONE": "Nenhum fluxo com conversão de fechamento ativa (ligue no Fluxo de Fechamento → estado \"Enviar à Meta como\").",
+        "FLOW_NO_EVENT": "Meta ligada, mas nenhum estado enviando"
+      },
       "SAVE_BUTTON": "Save",
       "SAVING": "Saving...",
       "SAVE": {
         "SUCCESS": "Meta conversion settings saved",
         "ERROR": "Could not save settings, please try again"
+      },
+      "LEAD_ON_ARRIVAL": {
+        "LABEL": "Send Lead on arrival",
+        "DESC": "Fires a Lead event when a conversation arrives from a Click-to-WhatsApp ad. Independent from the closing conversion, which is now configured per flow (state \"Send to Meta as\")."
       },
       "STRATEGY": {
         "LABEL": "When to send the conversion event?",
@@ -671,6 +691,7 @@
         "ON_CLOSE_LABEL": "Send conversion on close (manual action)",
         "ON_CLOSE_DESC": "No event is sent automatically. The agent clicks \"Mark as Won\" or \"Mark as Lost\" on the conversation to trigger the event. The modal fields are configured in Conversation Workflow → Required Attributes."
       },
+      "CLOSE_PER_FLOW_NOTE": "The conversion trigger now lives per flow — open a flow and set each state's \"Send to Meta as\". The fields below are the account-level status stamp and currency default.",
       "ON_CLOSE": {
         "SECTION_TITLE": "Outcome field configuration",
         "STATUS_FIELD": "Status attribute (list)",

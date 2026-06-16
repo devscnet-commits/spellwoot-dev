@@ -14,11 +14,16 @@ const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
 const { currentAccount } = useAccount();
-const { requiredAttributes } = useConversationRequiredAttributes();
+const { requiredAttributes: accountRequiredAttributes } =
+  useConversationRequiredAttributes();
 
 const currentChat = computed(() => getters.getSelectedChat.value);
 const outcomeModalRef = ref(null);
 const pendingStatusSeed = ref({});
+// Flow state being closed with — pinned into additional_attributes (outcome_state_id +
+// outcome_label snapshot) so the result chip keeps showing the exact button used.
+const pendingOutcomeLabel = ref(null);
+const pendingOutcomeStateId = ref(null);
 
 const metaSettings = computed(
   () => currentAccount.value?.settings?.meta_conversion_settings || {}
@@ -29,6 +34,8 @@ const isOnCloseStrategy = computed(
 );
 
 const outcomeAlreadySet = computed(() => {
+  const legacy = currentChat.value?.additional_attributes?.outcome;
+  if (legacy === 'won' || legacy === 'lost') return true;
   const result = currentChat.value?.result;
   return !!result && result !== 'none';
 });
@@ -62,33 +69,56 @@ const buildInitialValues = (statusValue, outcome) => {
   return base;
 };
 
-const openWon = () => {
-  const initialValues = buildInitialValues(winValue.value, 'won');
+// Flow requirements plus the account-level required attributes (always + conditional rules);
+// the modal decides visibility per condition, so conditional ones can be passed as-is.
+const mergeWithAccountAttributes = (attributes = []) => {
+  const seen = new Set(attributes.map(a => a.value));
+  return [
+    ...attributes,
+    ...accountRequiredAttributes.value.filter(a => !seen.has(a.value)),
+  ];
+};
+
+// Generic opener: outcome is the resolution state's canonical_key, label/statusValue come from
+// the editable display label. The system result field is seeded from the canonical key so
+// conditional required attributes keep evaluating against ganho/perdido.
+const openOutcome = ({
+  outcome,
+  label,
+  statusValue,
+  attributes,
+  outcomeLabel,
+  outcomeStateId,
+}) => {
+  const seedValue = statusValue ?? label;
+  const initialValues = buildInitialValues(seedValue, outcome);
+  pendingOutcomeLabel.value = outcomeLabel || null;
+  pendingOutcomeStateId.value = outcomeStateId || null;
   pendingStatusSeed.value = winStatusField.value
-    ? { [winStatusField.value]: winValue.value }
+    ? { [winStatusField.value]: seedValue }
     : {};
   outcomeModalRef.value?.open({
-    outcome: 'won',
-    label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
-    statusValue: winValue.value,
-    attributes: requiredAttributes.value,
+    outcome,
+    label,
+    statusValue: seedValue,
+    attributes: mergeWithAccountAttributes(attributes ?? []),
     initialValues,
   });
 };
 
-const openLost = () => {
-  const initialValues = buildInitialValues(lossValue.value, 'lost');
-  pendingStatusSeed.value = winStatusField.value
-    ? { [winStatusField.value]: lossValue.value }
-    : {};
-  outcomeModalRef.value?.open({
+const openWon = () =>
+  openOutcome({
+    outcome: 'won',
+    label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_WON'),
+    statusValue: winValue.value,
+  });
+
+const openLost = () =>
+  openOutcome({
     outcome: 'lost',
     label: t('CONVERSATION_WORKFLOW.OUTCOME.MARK_LOST'),
     statusValue: lossValue.value,
-    attributes: requiredAttributes.value,
-    initialValues,
   });
-};
 
 const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
   try {
@@ -111,6 +141,14 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
       result: outcome,
       additional_attributes: {
         ...(currentChat.value.additional_attributes || {}),
+        // Keep the dual-written legacy outcome in sync so the result chip updates live.
+        outcome,
+        ...(pendingOutcomeLabel.value
+          ? { outcome_label: pendingOutcomeLabel.value }
+          : {}),
+        ...(pendingOutcomeStateId.value
+          ? { outcome_state_id: pendingOutcomeStateId.value }
+          : {}),
         ...(isOnCloseStrategy.value && hasCtwaClid.value
           ? { meta_conversion: { sent: true } }
           : {}),
@@ -127,13 +165,13 @@ const handleOutcomeConfirm = async ({ outcome, customAttributes }) => {
   }
 };
 
-defineExpose({ openWon, openLost });
+defineExpose({ openWon, openLost, openOutcome });
 </script>
 
 <template>
   <div v-if="showButtons" class="flex items-center gap-1">
     <Button
-      size="sm"
+      size="md"
       variant="ghost"
       color="teal"
       icon="i-lucide-circle-check"
@@ -142,7 +180,7 @@ defineExpose({ openWon, openLost });
       @click="openWon"
     />
     <Button
-      size="sm"
+      size="md"
       variant="ghost"
       color="ruby"
       icon="i-lucide-circle-x"

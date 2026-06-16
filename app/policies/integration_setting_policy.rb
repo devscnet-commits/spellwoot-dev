@@ -1,4 +1,9 @@
 class IntegrationSettingPolicy < ApplicationPolicy
+  # Covers ProviderInstancesController#index, which authorizes against this policy.
+  def index?
+    @account_user.administrator?
+  end
+
   def show?
     @account_user.administrator?
   end
@@ -16,6 +21,14 @@ class IntegrationSettingPolicy < ApplicationPolicy
   end
 
   def sync_chatwoot?
+    @account_user.administrator?
+  end
+
+  def sync_instances?
+    @account_user.administrator?
+  end
+
+  def destroy?
     @account_user.administrator?
   end
 end

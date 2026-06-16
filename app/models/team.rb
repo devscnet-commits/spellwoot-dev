@@ -19,18 +19,28 @@ class Team < ApplicationRecord
   include AccountCacheRevalidator
 
   belongs_to :account
+  # The closing flow conversations of this team follow; the caixa's flow is only a fallback.
+  belongs_to :operational_flow, optional: true
   has_many :team_members, dependent: :destroy_async
   has_many :members, through: :team_members, source: :user
-  has_many :team_inboxes, dependent: :destroy_async
+  # team_inboxes carries a NOT NULL foreign key to teams, so the async cleanup would leave
+  # the team delete blocked by the constraint — delete the links in-line instead.
+  has_many :team_inboxes, dependent: :delete_all
   has_many :inboxes, through: :team_inboxes
   has_many :conversations, dependent: :nullify
+  # Reporting/outcome rows only reference the team for attribution and carry no FK constraint,
+  # so deleting a team must keep the historical events but detach them instead of blocking.
+  has_many :reporting_events, dependent: :nullify
+  has_many :conversation_result_events, dependent: :nullify
 
   validates :name,
             presence: { message: I18n.t('errors.validations.presence') },
-            uniqueness: { scope: :account_id }
+            uniqueness: { scope: :account_id, case_sensitive: false }
 
   before_validation do
-    self.name = name.downcase if attribute_present?('name')
+    # Preserve the casing the user typed (e.g. "Mídia Paga"); only trim stray whitespace.
+    # Uniqueness stays case-insensitive so "Vendas" and "vendas" still can't coexist.
+    self.name = name.strip if attribute_present?('name')
   end
 
   # Adds multiple members to the team
