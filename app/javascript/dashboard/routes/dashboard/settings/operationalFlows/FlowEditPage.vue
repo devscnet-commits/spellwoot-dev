@@ -20,18 +20,10 @@ const uiFlags = useMapGetter('operationalFlows/getUIFlags');
 const conversationAttributes = useMapGetter(
   'attributes/getConversationAttributes'
 );
-const teams = useMapGetter('teams/getTeams');
-
 const flowId = computed(() =>
   route.params.flowId ? Number(route.params.flowId) : null
 );
 const isEdit = computed(() => !!flowId.value);
-
-// Read-only "who uses this flow": the times linked to it, so the flow editor answers
-// "quem usa isso?" without leaving the page.
-const teamsUsingThisFlow = computed(() =>
-  (teams.value || []).filter(team => team.operational_flow_id === flowId.value)
-);
 
 const CATEGORIES = ['sales', 'support'];
 // Polarity is fixed per canonical state (won=positive, lost=negative) — not user-editable,
@@ -221,8 +213,6 @@ const populate = flow => {
 onMounted(async () => {
   store.dispatch('attributes/get');
   if (!isEdit.value) return;
-  // Needed to list the times currently using this flow.
-  store.dispatch('teams/get', { cache: false });
   isLoading.value = true;
   try {
     await store.dispatch('operationalFlows/show', flowId.value);
@@ -631,36 +621,6 @@ const save = async () => {
           :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.ADD')"
           @click="addRequirement"
         />
-      </div>
-
-      <div
-        v-if="isEdit"
-        class="flex flex-col gap-2 border-t border-n-weak pt-5"
-      >
-        <div class="flex items-start justify-between gap-4">
-          <h3 class="text-lg font-medium text-n-slate-12">
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.TITLE') }}
-          </h3>
-          <router-link
-            :to="{ name: 'conversation_workflow_index' }"
-            class="text-sm font-medium text-n-blue-11 hover:underline shrink-0"
-          >
-            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.MANAGE') }}
-          </router-link>
-        </div>
-        <ul v-if="teamsUsingThisFlow.length" class="flex flex-col gap-1">
-          <li
-            v-for="team in teamsUsingThisFlow"
-            :key="team.id"
-            class="flex items-center gap-2 text-sm text-n-slate-12"
-          >
-            <span class="i-lucide-check size-3.5 text-n-teal-11 shrink-0" />
-            {{ team.name }}
-          </li>
-        </ul>
-        <p v-else class="text-sm text-n-slate-11">
-          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.USED_BY.EMPTY') }}
-        </p>
       </div>
 
       <div class="flex justify-end">
