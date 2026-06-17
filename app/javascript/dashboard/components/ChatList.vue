@@ -248,9 +248,9 @@ const assigneeTabItems = computed(() =>
   ).map(({ key, count: countKey }) => ({
     key,
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-    // 'Todas' next to identical sub-counts reads as a contradiction — the counter only
-    // earns its place on the scoped tabs.
-    count: key === 'all' ? 0 : conversationStats.value[countKey] || 0,
+    // Every tab (Minhas/Não atribuídas/Todas) shows its count for the active status
+    // (em aberto/finalizadas); the backend recounts per status when toggling.
+    count: conversationStats.value[countKey] || 0,
   }))
 );
 

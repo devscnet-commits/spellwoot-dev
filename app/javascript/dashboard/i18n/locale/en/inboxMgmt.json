@@ -1023,7 +1023,8 @@
         "ACCOUNT": "Todas as caixas da conta",
         "NO_OTHER": "Nenhuma outra caixa disponível.",
         "ACCOUNT_WARNING": "Isso substituirá o horário comercial de todas as outras caixas da conta.",
-        "SUCCESS": "Configuração aplicada a {count} caixa(s)."
+        "SUCCESS": "Configuração aplicada a {count} caixa(s).",
+        "PARTIAL": "Configuração aplicada a {count} caixa(s). Não foi possível em {failedCount}: {names}."
       },
       "EXCEPTIONS": {
         "HINT": "Uma exceção tem prioridade sobre o horário padrão e os feriados nessa data.",

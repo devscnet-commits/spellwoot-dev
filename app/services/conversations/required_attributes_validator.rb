@@ -4,6 +4,7 @@
 # support conditional rules ("required IF attribute = value", including the system result field).
 class Conversations::RequiredAttributesValidator
   SYSTEM_OUTCOME_FIELD = '__resultado_conversa__'.freeze
+  SYSTEM_CONTACT_EMAIL_FIELD = '__contato_email__'.freeze
   RESULT_TO_SYSTEM_VALUE = { 'won' => 'ganho', 'lost' => 'perdido' }.freeze
 
   def initialize(conversation:, custom_attributes: nil, result: nil)
@@ -55,7 +56,14 @@ class Conversations::RequiredAttributesValidator
   end
 
   def context
-    @context ||= @custom_attributes.merge(SYSTEM_OUTCOME_FIELD => RESULT_TO_SYSTEM_VALUE[@result])
+    @context ||= @custom_attributes.merge(
+      SYSTEM_OUTCOME_FIELD => RESULT_TO_SYSTEM_VALUE[@result],
+      SYSTEM_CONTACT_EMAIL_FIELD => contact_email_system_value
+    )
+  end
+
+  def contact_email_system_value
+    @conversation.contact&.email.present? ? 'preenchido' : 'vazio'
   end
 
   def required?(config)

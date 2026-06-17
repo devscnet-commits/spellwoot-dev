@@ -165,6 +165,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       custom_attributes: (attrs.present? ? merged_attributes : nil)
     ).perform
 
+    sync_contact_email_from_attributes(merged_attributes) if attrs.present?
     fire_meta_close_event(outcome) if outcome.present? && valid_close_outcome?(outcome)
 
     render json: { outcome: @conversation.result_none? ? nil : @conversation.result }, status: :ok
@@ -191,6 +192,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       ip_address: request.ip,
       custom_attributes: (attrs.present? ? merged_attributes : nil)
     ).perform
+
+    sync_contact_email_from_attributes(merged_attributes) if attrs.present?
 
     # Resolve through the normal path so resolution side effects run: waiting_since is
     # cleared (keeps SLA from logging a bogus NRT miss after closing), and reporting
@@ -262,6 +265,25 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   # (meta_enabled) and the chosen state (meta_event_type) — never inferred from polarity/category.
   def fire_meta_close_event(outcome)
     Meta::HandleCloseEventService.new(conversation: @conversation, outcome: outcome, user: Current.user).perform
+  end
+
+  # When the agent fills the email at closing (because the contact had none), persist it back to the
+  # contact so it is known next time and the Meta auto-send can use it. The Meta enrichment mapping
+  # ('em' -> attribute key) is the explicit declaration of which attribute holds the email; without
+  # it we can't tell which field is the email, so we skip. Never let this break the resolve flow.
+  def sync_contact_email_from_attributes(attributes)
+    contact = @conversation.contact
+    return if contact.nil? || contact.email.present?
+
+    email_key = @conversation.account.settings&.dig('meta_conversion_settings', 'enrichment_fields', 'em')
+    return if email_key.blank?
+
+    email = attributes.with_indifferent_access[email_key].to_s.strip
+    return if email.blank?
+
+    contact.update(email: email)
+  rescue StandardError => e
+    Rails.logger.error "[ContactEmailSync] conv=#{@conversation.id} #{e.class}: #{e.message}"
   end
 
   # Accept the legacy won/lost outcomes plus any canonical_key defined on the resolved closing flow.

@@ -13,7 +13,9 @@ import ConversationResolveAttributesModal from './ConversationResolveAttributesM
 import {
   flowRequiredAttributes,
   SYSTEM_OUTCOME_FIELD,
+  SYSTEM_CONTACT_EMAIL_FIELD,
   OUTCOME_TO_SYSTEM_VALUE,
+  contactEmailSystemValue,
   isAttrVisible,
 } from './constants';
 import { useConversationRequiredAttributes } from 'dashboard/composables/useConversationRequiredAttributes';
@@ -275,9 +277,11 @@ const selectOutcome = async outcomeKey => {
     ...flowAttrs,
     ...accountRequiredAttributes.value.filter(a => !seen.has(a.value)),
   ];
+  const contactHasEmail = !!currentChat.value.meta?.sender?.email;
   const conditionContext = {
     ...currentCustomAttributes,
     [SYSTEM_OUTCOME_FIELD]: OUTCOME_TO_SYSTEM_VALUE[outcomeKey] ?? null,
+    [SYSTEM_CONTACT_EMAIL_FIELD]: contactEmailSystemValue(contactHasEmail),
   };
   const missing = allAttrs.filter(a => {
     if (!isAttrVisible(a, conditionContext)) return false;
@@ -289,6 +293,7 @@ const selectOutcome = async outcomeKey => {
   if (missing.length) {
     resolveAttributesModalRef.value?.open(allAttrs, currentCustomAttributes, {
       outcome: outcomeKey,
+      contactHasEmail,
     });
   } else {
     persistOutcome(outcomeKey);
