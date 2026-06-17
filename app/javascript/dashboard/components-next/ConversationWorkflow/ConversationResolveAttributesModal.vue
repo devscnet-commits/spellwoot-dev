@@ -6,7 +6,6 @@ import { required, url, helpers } from '@vuelidate/validators';
 import { getRegexp } from 'shared/helpers/Validators';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
-import TextArea from 'next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import ChoiceToggle from 'dashboard/components-next/input/ChoiceToggle.vue';
@@ -248,9 +247,10 @@ defineExpose({ open, close });
         </div>
 
         <template v-if="attribute.type === ATTRIBUTE_TYPES.TEXT">
-          <TextArea
+          <Input
             v-model="formValues[attribute.value]"
-            class="w-full"
+            type="text"
+            size="md"
             :placeholder="getPlaceholder(ATTRIBUTE_TYPES.TEXT)"
             :message="getErrorMessage(attribute.value)"
             :message-type="v$[attribute.value].$error ? 'error' : 'info'"
