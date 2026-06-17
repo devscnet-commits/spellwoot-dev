@@ -13,10 +13,22 @@ class Inboxes::BusinessHoursReplicationService
     @inbox_ids = Array(inbox_ids).map(&:to_i)
   end
 
+  # Replication is best-effort per inbox: one inbox that rejects the copy (e.g. an
+  # incompatible channel) must not abort the whole batch — the others still get the
+  # config, and the failures are reported back so they surface in the UI instead of a
+  # blanket 422. Each copy_to runs in its own transaction, so a failure rolls back only
+  # that inbox.
   def perform
-    targets = target_inboxes.to_a
-    targets.each { |inbox| copy_to(inbox) }
-    { ok: true, count: targets.size }
+    succeeded = 0
+    failed = []
+    target_inboxes.find_each do |inbox|
+      copy_to(inbox)
+      succeeded += 1
+    rescue StandardError => e
+      Rails.logger.error "[BusinessHoursReplication] target_inbox_id=#{inbox.id} #{e.class}: #{e.message}"
+      failed << { id: inbox.id, name: inbox.name, error: e.message }
+    end
+    { ok: failed.empty?, count: succeeded, failed: failed }
   end
 
   private

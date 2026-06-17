@@ -212,9 +212,19 @@ export default {
             scope: this.replicationScope,
             inboxIds: this.selectedInboxIds,
           });
-          useAlert(
-            this.$t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SUCCESS', { count: data.count })
-          );
+          if (data.failed && data.failed.length) {
+            useAlert(
+              this.$t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.PARTIAL', {
+                count: data.count,
+                failedCount: data.failed.length,
+                names: data.failed.map(item => item.name).join(', '),
+              })
+            );
+          } else {
+            useAlert(
+              this.$t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SUCCESS', { count: data.count })
+            );
+          }
         } else {
           useAlert(this.$t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
         }
