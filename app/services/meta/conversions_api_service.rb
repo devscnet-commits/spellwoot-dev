@@ -90,6 +90,15 @@ class Meta::ConversionsApiService
     @conversation.contact&.name&.split&.first
   end
 
+  def contact_email
+    @conversation.contact&.email
+  end
+
+  # Stable per-contact identifier for Meta's external_id (improves match quality).
+  def contact_external_id
+    @conversation.contact&.id
+  end
+
   def meta_settings
     @account.settings&.dig('meta_conversion_settings') || {}
   end
@@ -112,11 +121,14 @@ class Meta::ConversionsApiService
   end
 
   def build_payload
-    auto_data = {
-      ctwa_clid: ctwa_clid,
-      ph: contact_phone.present? ? [hashed(contact_phone)] : nil,
-      fn: contact_first_name.present? ? [hashed(contact_first_name)] : nil,
-    }
+    # Built conditionally (rather than with nil placeholders) so a blank contact field doesn't
+    # override an enrichment-mapped value of the same key before .compact runs.
+    auto_data = { ctwa_clid: ctwa_clid }
+    auto_data[:ph] = [hashed(contact_phone)] if contact_phone.present?
+    auto_data[:fn] = [hashed(contact_first_name)] if contact_first_name.present?
+    auto_data[:em] = [hashed(contact_email)] if contact_email.present?
+    auto_data[:external_id] = [hashed(contact_external_id)] if contact_external_id.present?
+
     user_data = enrichment_user_data.merge(auto_data).compact
 
     event = {
