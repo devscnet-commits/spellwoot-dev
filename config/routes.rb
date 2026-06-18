@@ -64,6 +64,7 @@ Rails.application.routes.draw do
                                 controller: 'agent_schedules',
                                 param: :agent_id
           end
+          resources :ai_shadow_runs, only: [:index]
           namespace :captain do
             resource :preferences, only: [:show, :update]
             resources :assistants do

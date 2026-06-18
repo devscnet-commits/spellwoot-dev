@@ -1,0 +1,22 @@
+{
+  "AI_SHADOW_RUNS": {
+    "TITLE": "Validação Shadow (Agentes IA)",
+    "DESCRIPTION": "Execuções em modo shadow: o que a IA teria feito, sem responder ao cliente nem executar ferramentas.",
+    "REFRESH": "Atualizar",
+    "LOADING": "Carregando...",
+    "EMPTY": "Nenhuma execução shadow registrada ainda.",
+    "COLUMNS": {
+      "CONVERSATION": "Conversa",
+      "AGENT": "Agente",
+      "DEPARTMENT": "Departamento",
+      "KNOWLEDGE": "Conhecimento",
+      "REPLY": "Resposta que seria enviada",
+      "TOOL": "Ferramenta que seria chamada",
+      "MODEL": "Provedor / Modelo",
+      "COST": "Custo (USD)",
+      "LATENCY": "Latência (ms)",
+      "STATUS": "Status"
+    },
+    "NONE": "—"
+  }
+}
