@@ -154,6 +154,32 @@ function hasError(p) {
 
       <!-- Actions -->
       <div v-if="enabled" class="flex items-center gap-1 flex-shrink-0 pt-0.5 relative">
+        <!-- Templates -->
+        <div class="relative">
+          <button
+            type="button"
+            class="text-n-slate-10 hover:text-n-slate-12 transition-colors p-1 rounded"
+            :title="$t('INBOX_MGMT.BUSINESS_HOURS.TEMPLATES')"
+            @click="showTemplates = !showTemplates; showCopy = false"
+          >
+            <span class="i-lucide-layout-template size-4" />
+          </button>
+          <div
+            v-if="showTemplates"
+            class="absolute right-0 top-full mt-1 z-50 bg-n-solid-3 border border-n-weak rounded-xl shadow-lg min-w-52 py-1"
+          >
+            <button
+              type="button"
+              v-for="tpl in scheduleTemplates"
+              :key="tpl.label"
+              class="w-full text-left px-4 py-2 text-body-main text-n-slate-12 hover:bg-n-alpha-black2 transition-colors"
+              @click="applyTemplate(tpl)"
+            >
+              {{ tpl.label }}
+            </button>
+          </div>
+        </div>
+
         <!-- Copy to -->
         <div class="relative">
           <button
