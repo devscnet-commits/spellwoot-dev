@@ -5,6 +5,12 @@ import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 
+const props = defineProps({
+  // Optional overrides so this view can be embedded inside the agent (default department).
+  agentId: { type: [String, Number], default: null },
+  departmentId: { type: [String, Number], default: null },
+});
+
 const route = useRoute();
 const { t } = useI18n();
 
@@ -57,7 +63,9 @@ const integrationName = id =>
 const isCapability = computed(() => form.implementation_type === 'capability');
 
 const baseUrl = () => {
-  const { accountId, agentId, departmentId } = route.params;
+  const accountId = route.params.accountId;
+  const agentId = props.agentId || route.params.agentId;
+  const departmentId = props.departmentId || route.params.departmentId;
   return `/api/v1/accounts/${accountId}/ai_agents/${agentId}/ai_departments/${departmentId}/ai_tools`;
 };
 

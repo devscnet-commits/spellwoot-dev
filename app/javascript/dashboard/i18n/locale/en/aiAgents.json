@@ -9,9 +9,19 @@
     "SEARCH": "Pesquisar",
     "TABS": {
       "ABOUT": "Sobre",
+      "INSTRUCTIONS": "Instruções",
+      "BEHAVIOR": "Comportamento",
+      "KNOWLEDGE": "Conhecimento",
+      "STEPS": "Etapas",
+      "TOOLS": "Ferramentas",
+      "FOLLOWUP": "Follow-up",
       "INBOXES": "Caixas",
       "DEPARTMENTS": "Departamentos",
       "TEST": "Teste"
+    },
+    "STEPS": {
+      "HINT": "Defina o passo a passo do atendimento. Arraste pela ordem usando as setas.",
+      "ADD": "Adicionar etapa"
     },
     "LIST": {
       "NAME": "Nome",
@@ -41,13 +51,18 @@
     "IDENTIFY_AS": {
       "LABEL": "Como ele deve se identificar",
       "HUMAN": "Agir como humano",
-      "AI": "Agir como uma IA"
+      "HUMAN_HINT": "Atende como um membro da equipe, sem revelar que é IA.",
+      "AI": "Agir como uma IA",
+      "AI_HINT": "Pode assumir que é um assistente virtual."
     },
     "SOBRE": {
+      "AGENT_NAME": "Nome do agente",
       "COMPANY": "Nome da empresa",
       "SITE": "Site",
       "VERSION": "Versão",
-      "MODEL": "Modelo (perfil operacional)"
+      "MODEL": "Modelo (perfil operacional)",
+      "GENERATE": "Gerar avatar com IA",
+      "GENERATE_SOON": "Geração de avatar por IA disponível em breve."
     },
     "INBOXES": {
       "TITLE": "Onde este agente atende",
