@@ -3,6 +3,7 @@ import AiShadowRuns from './AiShadowRuns.vue';
 import AiAgents from './AiAgents.vue';
 import AiAgentDetail from './AiAgentDetail.vue';
 import AiDepartments from './AiDepartments.vue';
+import AiDepartmentDetail from './AiDepartmentDetail.vue';
 import AiTools from './AiTools.vue';
 import AiKnowledge from './AiKnowledge.vue';
 import AiProfiles from './AiProfiles.vue';
@@ -44,7 +45,19 @@ export const routes = [
     },
   },
   {
-    path: frontendURL('accounts/:accountId/ai/agents/:agentId/departments/:departmentId/tools'),
+    path: frontendURL(
+      'accounts/:accountId/ai/agents/:agentId/departments/:departmentId/detail'
+    ),
+    name: 'ai_department_detail',
+    component: AiDepartmentDetail,
+    meta: {
+      permissions: ['administrator'],
+    },
+  },
+  {
+    path: frontendURL(
+      'accounts/:accountId/ai/agents/:agentId/departments/:departmentId/tools'
+    ),
     name: 'ai_tools_index',
     component: AiTools,
     meta: {
@@ -52,7 +65,9 @@ export const routes = [
     },
   },
   {
-    path: frontendURL('accounts/:accountId/ai/agents/:agentId/departments/:departmentId/knowledge'),
+    path: frontendURL(
+      'accounts/:accountId/ai/agents/:agentId/departments/:departmentId/knowledge'
+    ),
     name: 'ai_knowledge_index',
     component: AiKnowledge,
     meta: {

@@ -3,6 +3,7 @@
     "TITLE": "Agentes IA",
     "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende caixas e departamentos.",
     "NEW": "Novo agente de IA",
+    "BACK": "← Agentes IA",
     "EMPTY": "Nenhum agente IA criado ainda.",
     "SEARCH": "Pesquisar",
     "TABS": {
@@ -74,6 +75,7 @@
   "AI_DEPARTMENTS": {
     "TITLE": "Departamentos",
     "DESCRIPTION": "Cada departamento é um mini processo operacional: objetivo, etapas, regras de transferência e encerramento.",
+    "BACK": "← Departamentos",
     "NEW": "Novo departamento",
     "EMPTY": "Nenhum departamento criado para este agente.",
     "FORM": {
@@ -97,7 +99,69 @@
     "DELETED": "Departamento excluído.",
     "ERROR": "Algo deu errado ao salvar.",
     "TOOLS_LINK": "Ferramentas",
-    "KNOWLEDGE_LINK": "Conhecimento"
+    "KNOWLEDGE_LINK": "Conhecimento",
+    "DETAIL_TABS": {
+      "INSTRUCTIONS": "Instruções",
+      "ATTENDANCE": "Atendimento",
+      "KNOWLEDGE": "Conhecimento",
+      "STEPS": "Etapas",
+      "TOOLS": "Ferramentas",
+      "INTEGRATIONS": "Integrações"
+    },
+    "ATTENDANCE": {
+      "AUTO_TITLE": "Atendimento automático",
+      "AUTO_TOGGLE": "A IA responde automaticamente neste departamento",
+      "TRANSFER_TITLE": "Transferência para humano",
+      "TRANSFER_WHEN": "Transferir quando (uma condição por linha)",
+      "TRANSFER_MESSAGE": "Mensagem ao transferir",
+      "SLA_TITLE": "SLA",
+      "SLA_TIMEOUT": "Tempo de resposta (minutos)",
+      "ON_TIMEOUT": "Ao estourar o SLA",
+      "ON_TIMEOUT_RESOLVE": "Encerrar conversa",
+      "ON_TIMEOUT_NONE": "Não fazer nada",
+      "HOURS_TITLE": "Horário de funcionamento",
+      "HOURS_TOGGLE": "Respeitar horário de funcionamento",
+      "HOURS_MESSAGE": "Mensagem fora do horário",
+      "CLOSE_TITLE": "Encerramento automático",
+      "CLOSE_WHEN": "Encerrar quando (uma condição por linha)",
+      "CLOSE_INACTIVITY": "Encerrar após inatividade (minutos)",
+      "COPILOT_TITLE": "Copiloto",
+      "COPILOT_TOGGLE": "Sugerir respostas ao agente humano",
+      "ESCALATION_TITLE": "Regras de escalonamento",
+      "ESCALATION_WHEN": "Escalonar quando (uma condição por linha)",
+      "FOLLOWUP_TITLE": "Follow-up",
+      "FOLLOWUP_TOGGLE": "Enviar follow-up automático",
+      "FOLLOWUP_DELAY": "Aguardar (minutos)",
+      "FOLLOWUP_MESSAGE": "Mensagem de follow-up"
+    },
+    "LEAD_VARS": {
+      "TITLE": "Variáveis do lead",
+      "NEW": "Nova variável",
+      "EMPTY": "Nenhuma variável definida.",
+      "NAME": "Nome",
+      "DESCRIPTION": "Descrição",
+      "TYPE": "Tipo",
+      "VISIBLE": "Coletar no primeiro contato",
+      "VALUES": "Valores da lista (uma por linha)",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar",
+      "EDIT": "Editar",
+      "DELETE": "Excluir",
+      "CONFIRM_DELETE": "Excluir esta variável?",
+      "TYPES": {
+        "texto": "Texto",
+        "numero": "Número",
+        "booleano": "Sim/Não",
+        "lista": "Lista"
+      }
+    },
+    "INTEGRATIONS": {
+      "TITLE": "Integrações disponíveis",
+      "EMPTY": "Nenhuma integração cadastrada na conta.",
+      "ENABLED": "Ativa neste departamento",
+      "SAVE": "Salvar integrações"
+    },
+    "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento."
   },
   "AI_TOOLS": {
     "TITLE": "Ferramentas",
