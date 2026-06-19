@@ -38,6 +38,16 @@
       "VERSION": "Versão",
       "MODEL": "Modelo (perfil operacional)"
     },
+    "INBOXES": {
+      "TITLE": "Onde este agente atende",
+      "DESCRIPTION": "Escolha as caixas e o modo. Shadow só observa e registra; Live responde ao cliente.",
+      "NONE": "Não atende",
+      "SHADOW": "Shadow (observa)",
+      "LIVE": "Live (responde)",
+      "EMPTY": "Nenhuma caixa nesta conta.",
+      "SAVE": "Salvar caixas",
+      "SAVE_FIRST": "Salve o agente primeiro para vincular caixas."
+    },
     "TEST": {
       "TITLE": "Testar a IA",
       "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",

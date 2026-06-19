@@ -67,6 +67,7 @@ Rails.application.routes.draw do
           resources :ai_shadow_runs, only: [:index]
           resources :ai_agents do
             member { post :test }
+            resource :ai_agent_inboxes, only: %i[show update]
             resources :ai_departments, only: %i[index create update destroy] do
               resources :ai_tools, only: %i[index create update destroy]
               resources :ai_knowledge_sources, only: %i[index create update destroy]

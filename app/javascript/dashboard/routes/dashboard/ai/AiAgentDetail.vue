@@ -66,6 +66,30 @@ const fetchDepartments = async () => {
   departments.value = Array.isArray(data) ? data : [];
 };
 
+// --- Caixas (live/shadow binding) ---
+const inboxes = ref([]);
+const inboxesUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_inboxes`;
+
+const fetchInboxes = async () => {
+  if (isNew.value) return;
+  const { data } = await axios.get(inboxesUrl());
+  inboxes.value = Array.isArray(data) ? data : [];
+};
+
+const saveInboxes = async () => {
+  try {
+    await axios.put(inboxesUrl(), {
+      bindings: inboxes.value.map(i => ({
+        inbox_id: i.inbox_id,
+        mode: i.mode,
+      })),
+    });
+    useAlert(t('AI_AGENTS.SAVED'));
+  } catch (error) {
+    useAlert(t('AI_AGENTS.ERROR'));
+  }
+};
+
 const save = async () => {
   isSaving.value = true;
   try {
@@ -75,6 +99,7 @@ const save = async () => {
       useAlert(t('AI_AGENTS.SAVED'));
       router.replace({ name: 'ai_agent_detail', params: { agentId: data.id } });
       fetchDepartments();
+      fetchInboxes();
     } else {
       await axios.patch(`${agentUrl()}/${agentId.value}`, {
         ai_agent: { ...form },
@@ -122,7 +147,12 @@ const runTest = async () => {
 };
 
 onMounted(async () => {
-  await Promise.all([fetchProfiles(), fetchAgent(), fetchDepartments()]);
+  await Promise.all([
+    fetchProfiles(),
+    fetchAgent(),
+    fetchDepartments(),
+    fetchInboxes(),
+  ]);
 });
 </script>
 
@@ -324,6 +354,54 @@ onMounted(async () => {
           class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
         />
       </label>
+
+      <section class="flex flex-col gap-2 border-t border-n-weak pt-4">
+        <h2 class="text-base font-semibold text-n-slate-12">
+          {{ $t('AI_AGENTS.INBOXES.TITLE') }}
+        </h2>
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
+        </p>
+        <p v-if="isNew" class="text-sm text-n-slate-11">
+          {{ $t('AI_AGENTS.INBOXES.SAVE_FIRST') }}
+        </p>
+        <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
+          {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
+        </p>
+        <div
+          v-else
+          class="border border-n-weak rounded-xl divide-y divide-n-weak"
+        >
+          <div
+            v-for="inbox in inboxes"
+            :key="inbox.inbox_id"
+            class="flex items-center justify-between gap-3 px-4 py-3"
+          >
+            <span class="text-sm text-n-slate-12 truncate">{{
+              inbox.name
+            }}</span>
+            <select
+              v-model="inbox.mode"
+              class="shrink-0 px-3 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+            >
+              <option value="none">{{ $t('AI_AGENTS.INBOXES.NONE') }}</option>
+              <option value="shadow">
+                {{ $t('AI_AGENTS.INBOXES.SHADOW') }}
+              </option>
+              <option value="live">{{ $t('AI_AGENTS.INBOXES.LIVE') }}</option>
+            </select>
+          </div>
+        </div>
+        <div v-if="!isNew && inboxes.length" class="flex justify-end">
+          <button
+            type="button"
+            class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+            @click="saveInboxes"
+          >
+            {{ $t('AI_AGENTS.INBOXES.SAVE') }}
+          </button>
+        </div>
+      </section>
 
       <div class="flex justify-end gap-2">
         <button
