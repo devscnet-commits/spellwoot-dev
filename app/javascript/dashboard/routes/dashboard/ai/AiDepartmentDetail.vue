@@ -41,6 +41,8 @@ const form = reactive({
   followup_enabled: false,
   followup_delay: '',
   followup_message: '',
+  reply_scope: 'off',
+  canary_label: '',
 });
 
 const agentUrl = () =>
@@ -83,6 +85,8 @@ const hydrate = dept => {
     followup_enabled: followUp.enabled || false,
     followup_delay: followUp.delay_minutes ?? '',
     followup_message: followUp.message || '',
+    reply_scope: behavior.reply_scope || 'off',
+    canary_label: behavior.canary_label || '',
   });
 };
 
@@ -120,6 +124,8 @@ const buildPayload = () => ({
       },
       copilot: { enabled: form.copilot_enabled },
       escalation: { when: linesToArray(form.escalation_when) },
+      reply_scope: form.reply_scope,
+      canary_label: form.canary_label,
     },
     follow_up: {
       enabled: form.followup_enabled,
@@ -466,6 +472,43 @@ onMounted(async () => {
         <label class="flex items-center gap-2 text-sm text-n-slate-12">
           <input v-model="form.auto_attendance" type="checkbox" />
           {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TOGGLE') }}
+        </label>
+      </section>
+
+      <section class="flex flex-col gap-2">
+        <h2 class="text-base font-semibold text-n-slate-12">
+          {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_TITLE') }}
+        </h2>
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_HINT') }}
+        </p>
+        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+          {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_SCOPE') }}
+          <select
+            v-model="form.reply_scope"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          >
+            <option value="off">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_OFF') }}
+            </option>
+            <option value="canary">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') }}
+            </option>
+            <option value="all">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_ALL') }}
+            </option>
+          </select>
+        </label>
+        <label
+          v-if="form.reply_scope === 'canary'"
+          class="flex flex-col gap-1 text-sm text-n-slate-12"
+        >
+          {{ $t('AI_DEPARTMENTS.ATTENDANCE.CANARY_LABEL') }}
+          <input
+            v-model="form.canary_label"
+            type="text"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          />
         </label>
       </section>
 

@@ -82,6 +82,8 @@ class Ai::Gateway
       handle_action('conversation.transfer', { 'unassign' => true }, run_record, 'handoff', extra: { reason: handoff[:reason] })
     elsif decision_kind == 'close'
       handle_action('conversation.resolve', {}, run_record, 'close')
+    elsif decision_kind == 'reply'
+      handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
     end
 
     update_memory(run_record)
@@ -118,6 +120,38 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway##{label}] #{e.class}: #{e.message}"
     emit(run_record, "#{label}.failed", { error: "#{e.class}: #{e.message}" })
+  end
+
+  # Sends the AI reply to the customer — the only outward-facing action. Gated by the department
+  # reply_scope (off by default): 'all' replies to every live conversation, 'canary' only when the
+  # conversation carries the configured label. Shadow / off / missing label records intention only.
+  def handle_reply(department, text, run_record)
+    return if text.blank?
+
+    if @acts_live && reply_allowed?(department)
+      Messages::MessageBuilder.new(nil, @conversation, { content: text, private: false }).perform
+      emit(run_record, 'reply.sent', { chars: text.length })
+    else
+      emit(run_record, 'reply.intended', { executed: false, reason: reply_skip_reason(department) })
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#reply] #{e.class}: #{e.message}"
+    emit(run_record, 'reply.failed', { error: "#{e.class}: #{e.message}" })
+  end
+
+  def reply_allowed?(department)
+    behavior = department.behavior.to_h
+    case behavior['reply_scope']
+    when 'all'    then true
+    when 'canary' then behavior['canary_label'].present? && @conversation.cached_label_list_array.include?(behavior['canary_label'])
+    else false
+    end
+  end
+
+  def reply_skip_reason(department)
+    return not_acting_reason unless @acts_live
+
+    department.behavior.to_h['reply_scope'] == 'canary' ? 'canary_label_absent' : 'reply_scope_off'
   end
 
   # Invisible worker: persist a rolling conversation summary into agent memory.
