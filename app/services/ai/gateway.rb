@@ -32,7 +32,7 @@ class Ai::Gateway
     return finalize(run_record, 'no_department') unless department
 
     # Per-department kill switch: even on a live binding, an off toggle keeps the AI observing only.
-    @acts_live = @mode == 'live' && department.behavior.to_h['auto_attendance'] != false
+    @acts_live = Ai::ReplyPolicy.acts_live?(@mode, department)
 
     knowledge = Ai::KnowledgeRetriever.retrieve(department: department, query: effective_content, account_id: @account.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
@@ -128,45 +128,16 @@ class Ai::Gateway
   def handle_reply(department, text, run_record)
     return if text.blank?
 
-    if @acts_live && reply_allowed?(department)
+    if Ai::ReplyPolicy.allowed?(mode: @mode, department: department, conversation: @conversation)
       Messages::MessageBuilder.new(nil, @conversation, { content: text, private: false }).perform
       emit(run_record, 'reply.sent', { chars: text.length })
     else
-      emit(run_record, 'reply.intended', { executed: false, reason: reply_skip_reason(department) })
+      reason = Ai::ReplyPolicy.skip_reason(mode: @mode, department: department, conversation: @conversation)
+      emit(run_record, 'reply.intended', { executed: false, reason: reason })
     end
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#reply] #{e.class}: #{e.message}"
     emit(run_record, 'reply.failed', { error: "#{e.class}: #{e.message}" })
-  end
-
-  def reply_allowed?(department)
-    behavior = department.behavior.to_h
-    scope = behavior['reply_scope']
-    return false if scope.blank? || scope == 'off'
-    return false if outside_business_hours?(behavior)
-    return true if scope == 'all'
-
-    scope == 'canary' && behavior['canary_label'].present? &&
-      @conversation.cached_label_list_array.include?(behavior['canary_label'])
-  end
-
-  def reply_skip_reason(department)
-    return not_acting_reason unless @acts_live
-
-    behavior = department.behavior.to_h
-    scope = behavior['reply_scope']
-    return 'reply_scope_off' if scope.blank? || scope == 'off'
-    return 'outside_business_hours' if outside_business_hours?(behavior)
-
-    'canary_label_absent'
-  end
-
-  # When the toggle is on, respect the inbox's configured working hours: stay silent when closed.
-  def outside_business_hours?(behavior)
-    return false unless behavior.dig('business_hours', 'enabled')
-
-    inbox = @conversation.inbox
-    inbox.respond_to?(:out_of_office?) && inbox.out_of_office?
   end
 
   # Invisible worker: persist a rolling conversation summary into agent memory.
