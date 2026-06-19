@@ -20,8 +20,10 @@ class Ai::Gateway
     )
     emit(run_record, 'message.received', { content: @message.content.to_s.first(500) })
 
-    department = resolve_department
-    emit(run_record, 'department.resolved', { department_id: department&.id, name: department&.name })
+    department, resolution = Ai::DepartmentResolver.resolve(
+      agent: @agent, inbox_id: @message.inbox_id, message_content: @message.content
+    )
+    emit(run_record, 'department.resolved', { department_id: department&.id, name: department&.name, method: resolution })
     return finalize(run_record, 'no_department') unless department
 
     knowledge = Ai::KnowledgeRetriever.retrieve(department: department, query: @message.content, account_id: @account.id)
@@ -100,12 +102,6 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway##{label}] #{e.class}: #{e.message}"
     emit(run_record, "#{label}.failed", { error: "#{e.class}: #{e.message}" })
-  end
-
-  # Single-department slice: the agent's active department (Comercial). A future version resolves
-  # by inbox->department and an optional classifier worker.
-  def resolve_department
-    @agent.departments.active.first
   end
 
   def finalize(run_record, status)
