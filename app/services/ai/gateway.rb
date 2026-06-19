@@ -64,6 +64,17 @@ class Ai::Gateway
       end
     end
 
+    # Intelligent handoff / close. Shadow records intention; live executes the native action.
+    handoff = Ai::HandoffEvaluator.evaluate(
+      decision: result[:decision] || {}, department: department, message_content: @message.content
+    )
+    decision_kind = (result[:decision] || {})['decision']
+    if handoff[:handoff]
+      handle_action('conversation.transfer', { 'unassign' => true }, run_record, 'handoff', extra: { reason: handoff[:reason] })
+    elsif decision_kind == 'close'
+      handle_action('conversation.resolve', {}, run_record, 'close')
+    end
+
     finalize(run_record, result[:status] == 'error' ? 'error' : 'recorded')
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway] conv=#{@conversation&.id} #{e.class}: #{e.message}"
@@ -71,6 +82,25 @@ class Ai::Gateway
   end
 
   private
+
+  # Executes a native action in live mode (audited) or records intention in shadow.
+  def handle_action(capability_key, input, run_record, label, extra: {})
+    unless @mode == 'live'
+      emit(run_record, "#{label}.intended", extra.merge(executed: false, reason: 'shadow_mode'))
+      return
+    end
+
+    output = Ai::CapabilityRegistry.execute(capability_key, conversation: @conversation, input: input)
+    Ai::CapabilityExecution.create!(
+      account_id: @account.id, conversation_id: @conversation.id, ai_run_id: run_record.id,
+      capability_key: capability_key, input: input, output: output[:output], status: 'executed',
+      governance: 'allowed', rollback_data: output[:rollback_data], requested_by: 'ai'
+    )
+    emit(run_record, "#{label}.executed", extra.merge(executed: true))
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway##{label}] #{e.class}: #{e.message}"
+    emit(run_record, "#{label}.failed", { error: "#{e.class}: #{e.message}" })
+  end
 
   # Single-department slice: the agent's active department (Comercial). A future version resolves
   # by inbox->department and an optional classifier worker.
