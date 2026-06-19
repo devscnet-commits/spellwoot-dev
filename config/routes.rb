@@ -73,6 +73,7 @@ Rails.application.routes.draw do
               resources :ai_knowledge_sources, only: %i[index create update destroy]
               resources :ai_lead_variables, only: %i[index create update destroy]
               resource :ai_department_integrations, only: %i[show update]
+              resource :ai_department_inboxes, only: %i[show update]
             end
           end
           resources :ai_operation_profiles, only: %i[index create update destroy]

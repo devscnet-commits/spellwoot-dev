@@ -267,9 +267,36 @@ const saveIntegrations = async () => {
   }
 };
 
+// --- Inbox routing (caixa -> departamento) ---
+const mappedInboxes = ref([]);
+const inboxesUrl = () =>
+  `${deptCollectionUrl()}/${departmentId.value}/ai_department_inboxes`;
+
+const fetchMappedInboxes = async () => {
+  if (isNew.value) return;
+  const { data } = await axios.get(inboxesUrl());
+  mappedInboxes.value = (Array.isArray(data) ? data : []).map(i => ({
+    ...i,
+    enabled: !!i.enabled,
+  }));
+};
+const saveMappedInboxes = async () => {
+  const ids = mappedInboxes.value.filter(i => i.enabled).map(i => i.inbox_id);
+  try {
+    await axios.put(inboxesUrl(), { inbox_ids: ids });
+    useAlert(t('AI_DEPARTMENTS.SAVED'));
+  } catch (error) {
+    useAlert(t('AI_DEPARTMENTS.ERROR'));
+  }
+};
+
 onMounted(async () => {
   await fetchDepartment();
-  await Promise.all([fetchLeadVars(), fetchIntegrations()]);
+  await Promise.all([
+    fetchLeadVars(),
+    fetchIntegrations(),
+    fetchMappedInboxes(),
+  ]);
 });
 </script>
 
@@ -473,6 +500,39 @@ onMounted(async () => {
           <input v-model="form.auto_attendance" type="checkbox" />
           {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TOGGLE') }}
         </label>
+      </section>
+
+      <section class="flex flex-col gap-2">
+        <h2 class="text-base font-semibold text-n-slate-12">
+          {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_TITLE') }}
+        </h2>
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_HINT') }}
+        </p>
+        <p v-if="!mappedInboxes.length" class="text-sm text-n-slate-11">
+          {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_EMPTY') }}
+        </p>
+        <template v-else>
+          <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
+            <label
+              v-for="inbox in mappedInboxes"
+              :key="inbox.inbox_id"
+              class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
+            >
+              <input v-model="inbox.enabled" type="checkbox" />
+              <span>{{ inbox.name }}</span>
+            </label>
+          </div>
+          <div class="flex justify-end">
+            <button
+              type="button"
+              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+              @click="saveMappedInboxes"
+            >
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_SAVE') }}
+            </button>
+          </div>
+        </template>
       </section>
 
       <section class="flex flex-col gap-2">
