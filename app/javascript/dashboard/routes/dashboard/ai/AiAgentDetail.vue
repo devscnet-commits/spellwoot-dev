@@ -187,26 +187,24 @@ onMounted(async () => {
       </button>
       <button
         type="button"
-        class="px-4 py-2 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
+        class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
         :class="
           activeTab === 'departments'
             ? 'border-n-brand text-n-brand'
             : 'border-transparent text-n-slate-11'
         "
-        :disabled="isNew"
         @click="activeTab = 'departments'"
       >
         {{ $t('AI_AGENTS.TABS.DEPARTMENTS') }}
       </button>
       <button
         type="button"
-        class="px-4 py-2 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
+        class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
         :class="
           activeTab === 'test'
             ? 'border-n-brand text-n-brand'
             : 'border-transparent text-n-slate-11'
         "
-        :disabled="isNew"
         @click="activeTab = 'test'"
       >
         {{ $t('AI_AGENTS.TABS.TEST') }}
@@ -424,131 +422,143 @@ onMounted(async () => {
 
     <!-- DEPARTAMENTOS -->
     <div v-else-if="activeTab === 'departments'" class="flex flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <p class="text-sm text-n-slate-11 mb-0">
-          {{ $t('AI_DEPARTMENTS.DESCRIPTION') }}
-        </p>
-        <button
-          type="button"
-          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
-          @click="newDepartment"
-        >
-          {{ $t('AI_DEPARTMENTS.NEW') }}
-        </button>
-      </div>
-      <p
-        v-if="!departments.length"
-        class="text-sm text-n-slate-11 py-8 text-center"
-      >
-        {{ $t('AI_DEPARTMENTS.EMPTY') }}
+      <p v-if="isNew" class="text-sm text-n-slate-11 py-8 text-center">
+        {{ $t('AI_AGENTS.SAVE_FIRST') }}
       </p>
-      <div
-        v-else
-        class="border border-n-weak rounded-xl divide-y divide-n-weak"
-      >
-        <div
-          v-for="dept in departments"
-          :key="dept.id"
-          class="flex items-center justify-between px-4 py-3"
-        >
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-n-slate-12">{{ dept.name }}</p>
-            <p class="text-xs text-n-slate-11 truncate">{{ dept.objetivo }}</p>
-          </div>
+      <template v-else>
+        <div class="flex items-center justify-between">
+          <p class="text-sm text-n-slate-11 mb-0">
+            {{ $t('AI_DEPARTMENTS.DESCRIPTION') }}
+          </p>
           <button
-            class="shrink-0 text-n-brand hover:underline text-sm"
-            @click="editDepartment(dept)"
+            type="button"
+            class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+            @click="newDepartment"
           >
-            {{ $t('AI_DEPARTMENTS.FORM.EDIT') }}
+            {{ $t('AI_DEPARTMENTS.NEW') }}
           </button>
         </div>
-      </div>
+        <p
+          v-if="!departments.length"
+          class="text-sm text-n-slate-11 py-8 text-center"
+        >
+          {{ $t('AI_DEPARTMENTS.EMPTY') }}
+        </p>
+        <div
+          v-else
+          class="border border-n-weak rounded-xl divide-y divide-n-weak"
+        >
+          <div
+            v-for="dept in departments"
+            :key="dept.id"
+            class="flex items-center justify-between px-4 py-3"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-n-slate-12">{{ dept.name }}</p>
+              <p class="text-xs text-n-slate-11 truncate">
+                {{ dept.objetivo }}
+              </p>
+            </div>
+            <button
+              class="shrink-0 text-n-brand hover:underline text-sm"
+              @click="editDepartment(dept)"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.EDIT') }}
+            </button>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- TESTE -->
     <div v-else-if="activeTab === 'test'" class="flex flex-col gap-4 max-w-3xl">
-      <h2 class="text-base font-semibold text-n-slate-12">
-        {{ $t('AI_AGENTS.TEST.TITLE') }}
-      </h2>
-      <div class="flex flex-col gap-2">
-        <textarea
-          v-model="testMessage"
-          rows="3"
-          :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none text-sm text-n-slate-12"
-        />
-        <div class="flex justify-end">
-          <button
-            type="button"
-            class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
-            :disabled="isTesting || !testMessage.trim()"
-            @click="runTest"
-          >
-            {{ $t('AI_AGENTS.TEST.SEND') }}
-          </button>
+      <p v-if="isNew" class="text-sm text-n-slate-11 py-8 text-center">
+        {{ $t('AI_AGENTS.SAVE_FIRST') }}
+      </p>
+      <template v-else>
+        <h2 class="text-base font-semibold text-n-slate-12">
+          {{ $t('AI_AGENTS.TEST.TITLE') }}
+        </h2>
+        <div class="flex flex-col gap-2">
+          <textarea
+            v-model="testMessage"
+            rows="3"
+            :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none text-sm text-n-slate-12"
+          />
+          <div class="flex justify-end">
+            <button
+              type="button"
+              class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
+              :disabled="isTesting || !testMessage.trim()"
+              @click="runTest"
+            >
+              {{ $t('AI_AGENTS.TEST.SEND') }}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div
-        v-if="testResult"
-        class="border border-n-weak rounded-xl p-4 flex flex-col gap-3 bg-n-solid-2"
-      >
-        <p v-if="testResult.error" class="text-sm text-n-ruby-11">
-          {{ testResult.error }}
-        </p>
-        <template v-else>
-          <div class="flex flex-col gap-1">
-            <span class="text-xs text-n-slate-11">{{
-              $t('AI_AGENTS.TEST.REPLY')
-            }}</span>
-            <p class="text-sm text-n-slate-12 whitespace-pre-wrap">
-              {{ testResult.reply || $t('AI_AGENTS.TEST.NONE') }}
-            </p>
-          </div>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            <div>
-              <span class="block text-xs text-n-slate-11">{{
-                $t('AI_AGENTS.TEST.DEPARTMENT')
+        <div
+          v-if="testResult"
+          class="border border-n-weak rounded-xl p-4 flex flex-col gap-3 bg-n-solid-2"
+        >
+          <p v-if="testResult.error" class="text-sm text-n-ruby-11">
+            {{ testResult.error }}
+          </p>
+          <template v-else>
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-n-slate-11">{{
+                $t('AI_AGENTS.TEST.REPLY')
               }}</span>
-              <span class="text-n-slate-12">{{
-                testResult.department || $t('AI_AGENTS.TEST.NONE')
-              }}</span>
+              <p class="text-sm text-n-slate-12 whitespace-pre-wrap">
+                {{ testResult.reply || $t('AI_AGENTS.TEST.NONE') }}
+              </p>
             </div>
-            <div>
-              <span class="block text-xs text-n-slate-11">{{
-                $t('AI_AGENTS.TEST.TOOL')
-              }}</span>
-              <span class="text-n-slate-12">{{
-                testResult.tool || $t('AI_AGENTS.TEST.NONE')
-              }}</span>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.DEPARTMENT')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.department || $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.TOOL')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.tool || $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.KNOWLEDGE')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.knowledge_used
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.TIME')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.COST')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.cost ?? $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
             </div>
-            <div>
-              <span class="block text-xs text-n-slate-11">{{
-                $t('AI_AGENTS.TEST.KNOWLEDGE')
-              }}</span>
-              <span class="text-n-slate-12">{{
-                testResult.knowledge_used
-              }}</span>
-            </div>
-            <div>
-              <span class="block text-xs text-n-slate-11">{{
-                $t('AI_AGENTS.TEST.TIME')
-              }}</span>
-              <span class="text-n-slate-12">{{
-                testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE')
-              }}</span>
-            </div>
-            <div>
-              <span class="block text-xs text-n-slate-11">{{
-                $t('AI_AGENTS.TEST.COST')
-              }}</span>
-              <span class="text-n-slate-12">{{
-                testResult.cost ?? $t('AI_AGENTS.TEST.NONE')
-              }}</span>
-            </div>
-          </div>
-        </template>
-      </div>
+          </template>
+        </div>
+      </template>
     </div>
   </div>
 </template>

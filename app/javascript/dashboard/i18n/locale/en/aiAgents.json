@@ -4,6 +4,7 @@
     "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende caixas e departamentos.",
     "NEW": "Novo agente de IA",
     "BACK": "← Agentes IA",
+    "SAVE_FIRST": "Salve o agente na aba Sobre primeiro para liberar esta seção.",
     "EMPTY": "Nenhum agente IA criado ainda.",
     "SEARCH": "Pesquisar",
     "TABS": {
