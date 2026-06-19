@@ -1,6 +1,7 @@
 import advancedFilters from './advancedFilters.json';
 import agentBots from './agentBots.json';
 import agentMgmt from './agentMgmt.json';
+import aiAgents from './aiAgents.json';
 import aiShadowRuns from './aiShadowRuns.json';
 import attributesMgmt from './attributesMgmt.json';
 import auditLogs from './auditLogs.json';
@@ -47,6 +48,7 @@ export default {
   ...advancedFilters,
   ...agentBots,
   ...agentMgmt,
+  ...aiAgents,
   ...aiShadowRuns,
   ...attributesMgmt,
   ...auditLogs,
