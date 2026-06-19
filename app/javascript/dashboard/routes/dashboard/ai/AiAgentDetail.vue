@@ -189,6 +189,18 @@ onMounted(async () => {
         type="button"
         class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
         :class="
+          activeTab === 'inboxes'
+            ? 'border-n-brand text-n-brand'
+            : 'border-transparent text-n-slate-11'
+        "
+        @click="activeTab = 'inboxes'"
+      >
+        {{ $t('AI_AGENTS.TABS.INBOXES') }}
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
+        :class="
           activeTab === 'departments'
             ? 'border-n-brand text-n-brand'
             : 'border-transparent text-n-slate-11'
@@ -353,23 +365,46 @@ onMounted(async () => {
         />
       </label>
 
-      <section class="flex flex-col gap-2 border-t border-n-weak pt-4">
+      <div class="flex justify-end gap-2">
+        <button
+          type="button"
+          class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+          @click="goBack"
+        >
+          {{ $t('AI_AGENTS.FORM.CANCEL') }}
+        </button>
+        <button
+          type="button"
+          class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
+          :disabled="isSaving"
+          @click="save"
+        >
+          {{ $t('AI_AGENTS.FORM.SAVE') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- CAIXAS -->
+    <div
+      v-else-if="activeTab === 'inboxes'"
+      class="flex flex-col gap-4 max-w-3xl"
+    >
+      <div class="flex flex-col gap-1">
         <h2 class="text-base font-semibold text-n-slate-12">
           {{ $t('AI_AGENTS.INBOXES.TITLE') }}
         </h2>
         <p class="text-sm text-n-slate-11 mb-0">
           {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
         </p>
-        <p v-if="isNew" class="text-sm text-n-slate-11">
-          {{ $t('AI_AGENTS.INBOXES.SAVE_FIRST') }}
-        </p>
-        <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
-          {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
-        </p>
-        <div
-          v-else
-          class="border border-n-weak rounded-xl divide-y divide-n-weak"
-        >
+      </div>
+      <p v-if="isNew" class="text-sm text-n-slate-11 py-8 text-center">
+        {{ $t('AI_AGENTS.SAVE_FIRST') }}
+      </p>
+      <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
+        {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
+      </p>
+      <template v-else>
+        <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
           <div
             v-for="inbox in inboxes"
             :key="inbox.inbox_id"
@@ -390,34 +425,16 @@ onMounted(async () => {
             </select>
           </div>
         </div>
-        <div v-if="!isNew && inboxes.length" class="flex justify-end">
+        <div class="flex justify-end">
           <button
             type="button"
-            class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+            class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
             @click="saveInboxes"
           >
             {{ $t('AI_AGENTS.INBOXES.SAVE') }}
           </button>
         </div>
-      </section>
-
-      <div class="flex justify-end gap-2">
-        <button
-          type="button"
-          class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-          @click="goBack"
-        >
-          {{ $t('AI_AGENTS.FORM.CANCEL') }}
-        </button>
-        <button
-          type="button"
-          class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
-          :disabled="isSaving"
-          @click="save"
-        >
-          {{ $t('AI_AGENTS.FORM.SAVE') }}
-        </button>
-      </div>
+      </template>
     </div>
 
     <!-- DEPARTAMENTOS -->
@@ -555,6 +572,37 @@ onMounted(async () => {
                   testResult.cost ?? $t('AI_AGENTS.TEST.NONE')
                 }}</span>
               </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.MODEL')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.model || $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.TOKENS')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  (testResult.tokens_in ?? 0) +
+                  ' / ' +
+                  (testResult.tokens_out ?? 0)
+                }}</span>
+              </div>
+            </div>
+            <div
+              v-if="testResult.knowledge_preview?.length"
+              class="flex flex-col gap-1"
+            >
+              <span class="text-xs text-n-slate-11">{{
+                $t('AI_AGENTS.TEST.KNOWLEDGE_PREVIEW')
+              }}</span>
+              <ul class="text-xs text-n-slate-11 list-disc pl-4">
+                <li v-for="(k, i) in testResult.knowledge_preview" :key="i">
+                  {{ k }}
+                </li>
+              </ul>
             </div>
           </template>
         </div>

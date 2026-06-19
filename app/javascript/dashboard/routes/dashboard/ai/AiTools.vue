@@ -26,6 +26,34 @@ const blank = () => ({
 });
 const form = reactive(blank());
 
+// Business-friendly names for the internal capabilities (hide the technical keys from the UI).
+const CAPABILITIES = [
+  { key: 'contact.read', i18n: 'CONTACT_READ' },
+  { key: 'contact.update_attributes', i18n: 'CONTACT_UPDATE' },
+  { key: 'conversation.transfer', i18n: 'CONVERSATION_TRANSFER' },
+  { key: 'conversation.resolve', i18n: 'CONVERSATION_RESOLVE' },
+];
+const capabilityLabel = key => {
+  const cap = CAPABILITIES.find(c => c.key === key);
+  return cap ? t(`AI_TOOLS.CAPABILITIES.${cap.i18n}`) : key;
+};
+const GOVERNANCE_I18N = {
+  allowed: 'GOV_ALLOWED',
+  require_confirmation: 'GOV_CONFIRMATION',
+  require_approval: 'GOV_APPROVAL',
+};
+const governanceLabel = g =>
+  t(`AI_TOOLS.FORM.${GOVERNANCE_I18N[g] || 'GOV_ALLOWED'}`);
+const governanceBadge = g =>
+  ({
+    allowed: 'bg-n-teal-3 text-n-teal-11',
+    require_confirmation: 'bg-n-amber-3 text-n-amber-11',
+    require_approval: 'bg-n-ruby-3 text-n-ruby-11',
+  })[g] || 'bg-n-alpha-2 text-n-slate-11';
+
+const integrationName = id =>
+  integrations.value.find(link => link.id === id)?.name || '';
+
 const isCapability = computed(() => form.implementation_type === 'capability');
 
 const baseUrl = () => {
@@ -45,7 +73,9 @@ const fetchTools = async () => {
 
 const fetchIntegrations = async () => {
   try {
-    const { data } = await axios.get(`/api/v1/accounts/${route.params.accountId}/ai_integration_links`);
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/ai_integration_links`
+    );
     integrations.value = Array.isArray(data) ? data : [];
   } catch (error) {
     integrations.value = [];
@@ -128,78 +158,171 @@ onMounted(() => {
   <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-n-slate-12">{{ $t('AI_TOOLS.TITLE') }}</h1>
-        <p class="text-sm text-n-slate-11 mb-0">{{ $t('AI_TOOLS.DESCRIPTION') }}</p>
+        <h1 class="text-xl font-semibold text-n-slate-12">
+          {{ $t('AI_TOOLS.TITLE') }}
+        </h1>
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AI_TOOLS.DESCRIPTION') }}
+        </p>
       </div>
-      <button type="button" class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white" @click="openNew">
+      <button
+        type="button"
+        class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+        @click="openNew"
+      >
         {{ $t('AI_TOOLS.NEW') }}
       </button>
     </div>
 
-    <p v-if="!isLoading && !tools.length" class="text-sm text-n-slate-11 py-8 text-center">
+    <p
+      v-if="!isLoading && !tools.length"
+      class="text-sm text-n-slate-11 py-8 text-center"
+    >
       {{ $t('AI_TOOLS.EMPTY') }}
     </p>
     <div v-else class="border border-n-weak rounded-xl divide-y divide-n-weak">
-      <div v-for="tool in tools" :key="tool.id" class="flex items-center justify-between px-4 py-3">
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-n-slate-12">{{ tool.name }}</p>
-          <p class="text-xs text-n-slate-11 truncate">
-            {{ tool.implementation_type }} · {{ tool.capability_key || tool.integration_link_id }} · {{ tool.governance }}
-          </p>
+      <div
+        v-for="tool in tools"
+        :key="tool.id"
+        class="flex items-center justify-between px-4 py-3"
+      >
+        <div class="min-w-0 flex items-center gap-2">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-n-slate-12">{{ tool.name }}</p>
+            <p class="text-xs text-n-slate-11 truncate">
+              {{
+                tool.implementation_type === 'capability'
+                  ? capabilityLabel(tool.capability_key)
+                  : integrationName(tool.integration_link_id)
+              }}
+            </p>
+          </div>
+          <span
+            class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+            :class="governanceBadge(tool.governance)"
+          >
+            {{ governanceLabel(tool.governance) }}
+          </span>
         </div>
         <div class="shrink-0 whitespace-nowrap">
-          <button class="text-n-brand hover:underline mx-2" @click="openEdit(tool)">{{ $t('AI_TOOLS.FORM.EDIT') }}</button>
-          <button class="text-n-ruby-11 hover:underline" @click="remove(tool)">{{ $t('AI_TOOLS.FORM.DELETE') }}</button>
+          <button
+            class="text-n-brand hover:underline mx-2"
+            @click="openEdit(tool)"
+          >
+            {{ $t('AI_TOOLS.FORM.EDIT') }}
+          </button>
+          <button class="text-n-ruby-11 hover:underline" @click="remove(tool)">
+            {{ $t('AI_TOOLS.FORM.DELETE') }}
+          </button>
         </div>
       </div>
     </div>
 
-    <div v-if="showForm" class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-2">
+    <div
+      v-if="showForm"
+      class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-2"
+    >
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_TOOLS.FORM.NAME') }}
-          <input v-model="form.name" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
+          <input
+            v-model="form.name"
+            type="text"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          />
         </label>
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_TOOLS.FORM.TYPE') }}
-          <select v-model="form.implementation_type" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1">
-            <option value="capability">{{ $t('AI_TOOLS.FORM.TYPE_CAPABILITY') }}</option>
-            <option value="integration">{{ $t('AI_TOOLS.FORM.TYPE_INTEGRATION') }}</option>
+          <select
+            v-model="form.implementation_type"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          >
+            <option value="capability">
+              {{ $t('AI_TOOLS.FORM.TYPE_CAPABILITY') }}
+            </option>
+            <option value="integration">
+              {{ $t('AI_TOOLS.FORM.TYPE_INTEGRATION') }}
+            </option>
           </select>
         </label>
-        <label v-if="isCapability" class="flex flex-col gap-1 text-sm text-n-slate-12">
+        <label
+          v-if="isCapability"
+          class="flex flex-col gap-1 text-sm text-n-slate-12"
+        >
           {{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}
-          <input v-model="form.capability_key" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
+          <select
+            v-model="form.capability_key"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          >
+            <option value="">{{ $t('AI_TOOLS.FORM.NONE') }}</option>
+            <option v-for="cap in CAPABILITIES" :key="cap.key" :value="cap.key">
+              {{ $t(`AI_TOOLS.CAPABILITIES.${cap.i18n}`) }}
+            </option>
+          </select>
         </label>
         <label v-else class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_TOOLS.FORM.INTEGRATION') }}
-          <select v-model="form.integration_link_id" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1">
+          <select
+            v-model="form.integration_link_id"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          >
             <option value="">{{ $t('AI_TOOLS.FORM.NONE') }}</option>
-            <option v-for="link in integrations" :key="link.id" :value="link.id">{{ link.name }}</option>
+            <option
+              v-for="link in integrations"
+              :key="link.id"
+              :value="link.id"
+            >
+              {{ link.name }}
+            </option>
           </select>
         </label>
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_TOOLS.FORM.GOVERNANCE') }}
-          <select v-model="form.governance" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1">
-            <option value="allowed">{{ $t('AI_TOOLS.FORM.GOV_ALLOWED') }}</option>
-            <option value="require_confirmation">{{ $t('AI_TOOLS.FORM.GOV_CONFIRMATION') }}</option>
-            <option value="require_approval">{{ $t('AI_TOOLS.FORM.GOV_APPROVAL') }}</option>
+          <select
+            v-model="form.governance"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          >
+            <option value="allowed">
+              {{ $t('AI_TOOLS.FORM.GOV_ALLOWED') }}
+            </option>
+            <option value="require_confirmation">
+              {{ $t('AI_TOOLS.FORM.GOV_CONFIRMATION') }}
+            </option>
+            <option value="require_approval">
+              {{ $t('AI_TOOLS.FORM.GOV_APPROVAL') }}
+            </option>
           </select>
         </label>
       </div>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">
         {{ $t('AI_TOOLS.FORM.DESCRIPTION') }}
-        <input v-model="form.description" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
+        <input
+          v-model="form.description"
+          type="text"
+          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+        />
       </label>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">
         {{ $t('AI_TOOLS.FORM.INPUT_SCHEMA') }}
-        <textarea v-model="form.input_schema_text" rows="4" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-none" />
+        <textarea
+          v-model="form.input_schema_text"
+          rows="4"
+          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-none"
+        />
       </label>
       <div class="flex justify-end gap-2">
-        <button type="button" class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12" @click="showForm = false">
+        <button
+          type="button"
+          class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+          @click="showForm = false"
+        >
           {{ $t('AI_TOOLS.FORM.CANCEL') }}
         </button>
-        <button type="button" class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white" @click="save">
+        <button
+          type="button"
+          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+          @click="save"
+        >
           {{ $t('AI_TOOLS.FORM.SAVE') }}
         </button>
       </div>

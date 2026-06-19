@@ -9,12 +9,13 @@
     "SEARCH": "Pesquisar",
     "TABS": {
       "ABOUT": "Sobre",
+      "INBOXES": "Caixas",
       "DEPARTMENTS": "Departamentos",
       "TEST": "Teste"
     },
     "LIST": {
       "NAME": "Nome",
-      "TYPE": "Tipo",
+      "TYPE": "Ambiente",
       "STAGE": "Ambiente",
       "STATUS": "Status",
       "ACTIONS": "Ações",
@@ -23,10 +24,19 @@
       "DUPLICATE": "Duplicar",
       "ACTIVATE": "Ativar",
       "DEACTIVATE": "Desativar",
+      "PROMOTE_TO": "Promover para {stage}",
+      "PROMOTED": "Agente promovido.",
       "DEPARTMENTS": "Departamentos",
       "DELETE": "Excluir",
       "ACTIVE": "Ativo",
       "INACTIVE": "Inativo"
+    },
+    "STAGES": {
+      "ALL": "Todos os ambientes",
+      "PRODUCTION": "Produção",
+      "STAGING": "Homologação",
+      "SANDBOX": "Sandbox",
+      "EXPERIMENTAL": "Experimental"
     },
     "IDENTIFY_AS": {
       "LABEL": "Como ele deve se identificar",
@@ -56,8 +66,11 @@
       "DEPARTMENT": "Departamento escolhido",
       "TOOL": "Ferramenta utilizada",
       "KNOWLEDGE": "Conhecimento utilizado",
-      "TIME": "Tempo (ms)",
+      "TIME": "Latência (ms)",
       "COST": "Custo (USD)",
+      "MODEL": "Modelo utilizado",
+      "TOKENS": "Tokens (entrada / saída)",
+      "KNOWLEDGE_PREVIEW": "Trechos de conhecimento utilizados",
       "REPLY": "Resposta da IA",
       "NONE": "—"
     },
@@ -196,7 +209,7 @@
       "TYPE": "Tipo",
       "TYPE_CAPABILITY": "Capacidade interna",
       "TYPE_INTEGRATION": "Integração externa",
-      "CAPABILITY_KEY": "Capacidade (ex: contact.read)",
+      "CAPABILITY_KEY": "Ação que a IA pode executar",
       "INTEGRATION": "Integração",
       "GOVERNANCE": "Governança",
       "GOV_ALLOWED": "Permitido",
@@ -208,6 +221,12 @@
       "EDIT": "Editar",
       "DELETE": "Excluir",
       "NONE": "Selecione"
+    },
+    "CAPABILITIES": {
+      "CONTACT_READ": "Consultar dados do contato",
+      "CONTACT_UPDATE": "Atualizar dados do contato",
+      "CONVERSATION_TRANSFER": "Transferir conversa para humano",
+      "CONVERSATION_RESOLVE": "Encerrar conversa"
     },
     "CONFIRM_DELETE": "Excluir esta ferramenta?",
     "SAVED": "Ferramenta salva.",
