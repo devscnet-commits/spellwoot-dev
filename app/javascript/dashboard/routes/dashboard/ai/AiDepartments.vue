@@ -136,6 +136,12 @@ onMounted(fetchDepartments);
           <p class="text-xs text-n-slate-11 truncate">{{ dept.objetivo }}</p>
         </div>
         <div class="shrink-0 whitespace-nowrap">
+          <router-link
+            class="text-n-brand hover:underline mx-2"
+            :to="{ name: 'ai_tools_index', params: { accountId: route.params.accountId, agentId: route.params.agentId, departmentId: dept.id } }"
+          >
+            {{ $t('AI_DEPARTMENTS.TOOLS_LINK') }}
+          </router-link>
           <button class="text-n-brand hover:underline mx-2" @click="openEdit(dept)">{{ $t('AI_DEPARTMENTS.FORM.EDIT') }}</button>
           <button class="text-n-ruby-11 hover:underline" @click="remove(dept)">{{ $t('AI_DEPARTMENTS.FORM.DELETE') }}</button>
         </div>

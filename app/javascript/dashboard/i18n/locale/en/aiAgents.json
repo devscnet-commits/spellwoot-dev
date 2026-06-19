@@ -59,6 +59,37 @@
     "CONFIRM_DELETE": "Excluir este departamento?",
     "SAVED": "Departamento salvo.",
     "DELETED": "Departamento excluído.",
-    "ERROR": "Algo deu errado ao salvar."
+    "ERROR": "Algo deu errado ao salvar.",
+    "TOOLS_LINK": "Ferramentas"
+  },
+  "AI_TOOLS": {
+    "TITLE": "Ferramentas",
+    "DESCRIPTION": "Ações que a IA pode executar. Cada ferramenta usa uma capacidade interna ou uma integração externa.",
+    "NEW": "Nova ferramenta",
+    "EMPTY": "Nenhuma ferramenta neste departamento.",
+    "FORM": {
+      "NAME": "Nome",
+      "DESCRIPTION": "Descrição",
+      "TYPE": "Tipo",
+      "TYPE_CAPABILITY": "Capacidade interna",
+      "TYPE_INTEGRATION": "Integração externa",
+      "CAPABILITY_KEY": "Capacidade (ex: contact.read)",
+      "INTEGRATION": "Integração",
+      "GOVERNANCE": "Governança",
+      "GOV_ALLOWED": "Permitido",
+      "GOV_CONFIRMATION": "Exige confirmação",
+      "GOV_APPROVAL": "Exige aprovação",
+      "INPUT_SCHEMA": "Schema de entrada (JSON)",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar",
+      "EDIT": "Editar",
+      "DELETE": "Excluir",
+      "NONE": "Selecione"
+    },
+    "CONFIRM_DELETE": "Excluir esta ferramenta?",
+    "SAVED": "Ferramenta salva.",
+    "DELETED": "Ferramenta excluída.",
+    "ERROR": "Algo deu errado ao salvar.",
+    "INVALID_JSON": "O schema de entrada não é um JSON válido."
   }
 }
