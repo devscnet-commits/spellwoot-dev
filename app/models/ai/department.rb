@@ -5,6 +5,7 @@ class Ai::Department < ApplicationRecord
   has_one :playbook, -> { where(active: true) }, class_name: 'Ai::Playbook', foreign_key: :ai_department_id
   has_many :tools, class_name: 'Ai::Tool', foreign_key: :ai_department_id
   has_many :knowledge_sources, class_name: 'Ai::KnowledgeSource', foreign_key: :ai_department_id
+  has_many :lead_variables, class_name: 'Ai::LeadVariable', foreign_key: :ai_department_id
   has_many :department_inboxes, class_name: 'Ai::DepartmentInbox', foreign_key: :ai_department_id
 
   scope :active, -> { where(status: 'active') }

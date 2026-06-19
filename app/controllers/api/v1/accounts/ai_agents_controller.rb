@@ -43,7 +43,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
     params.require(:ai_agent).permit(
       :name, :stage, :status, :assistant_name, :assistant_avatar, :assistant_description,
       :assistant_personality, :assistant_language, :assistant_voice, :base_prompt, :guardrails,
-      :ai_operation_profile_id
+      :ai_operation_profile_id, :company_name, :site, :version, :identify_as
     )
   end
 end
