@@ -135,6 +135,12 @@ onMounted(() => {
             <td class="px-3 py-2">{{ agent.stage }}</td>
             <td class="px-3 py-2">{{ agent.status }}</td>
             <td class="px-3 py-2 text-right whitespace-nowrap">
+              <router-link
+                class="text-n-brand hover:underline mx-2"
+                :to="{ name: 'ai_departments_index', params: { accountId: route.params.accountId, agentId: agent.id } }"
+              >
+                {{ $t('AI_AGENTS.LIST.DEPARTMENTS') }}
+              </router-link>
               <button class="text-n-brand hover:underline mx-2" @click="openEdit(agent)">
                 {{ $t('AI_AGENTS.LIST.EDIT') }}
               </button>
