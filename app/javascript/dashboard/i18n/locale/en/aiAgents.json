@@ -60,7 +60,8 @@
     "SAVED": "Departamento salvo.",
     "DELETED": "Departamento excluído.",
     "ERROR": "Algo deu errado ao salvar.",
-    "TOOLS_LINK": "Ferramentas"
+    "TOOLS_LINK": "Ferramentas",
+    "KNOWLEDGE_LINK": "Conhecimento"
   },
   "AI_TOOLS": {
     "TITLE": "Ferramentas",
@@ -91,5 +92,54 @@
     "DELETED": "Ferramenta excluída.",
     "ERROR": "Algo deu errado ao salvar.",
     "INVALID_JSON": "O schema de entrada não é um JSON válido."
+  },
+  "AI_KNOWLEDGE": {
+    "TITLE": "Conhecimento",
+    "DESCRIPTION": "Fontes de conhecimento do departamento. O texto é dividido em trechos e indexado para busca (RAG).",
+    "NEW": "Nova fonte",
+    "EMPTY": "Nenhuma fonte de conhecimento neste departamento.",
+    "FORM": {
+      "KIND": "Tipo",
+      "TITLE": "Título",
+      "RAW": "Conteúdo",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar",
+      "EDIT": "Editar",
+      "DELETE": "Excluir"
+    },
+    "KINDS": {
+      "FAQ": "FAQ",
+      "PRODUTO": "Produto",
+      "PROMOCAO": "Promoção",
+      "PROCEDIMENTO": "Procedimento",
+      "DOCUMENTO": "Documento",
+      "WEBSITE": "Website"
+    },
+    "CHUNKS": "trechos",
+    "CONFIRM_DELETE": "Excluir esta fonte de conhecimento?",
+    "SAVED": "Conhecimento salvo.",
+    "DELETED": "Fonte excluída.",
+    "ERROR": "Algo deu errado ao salvar."
+  },
+  "AI_PROFILES": {
+    "TITLE": "Perfis operacionais",
+    "DESCRIPTION": "Define provedor e modelo do supervisor por perfil de custo/qualidade.",
+    "NEW": "Novo perfil",
+    "EMPTY": "Nenhum perfil operacional criado.",
+    "FORM": {
+      "NAME": "Nome (ex: balanceado)",
+      "PROVIDER": "Provedor do supervisor",
+      "MODEL": "Modelo do supervisor",
+      "BUDGET": "Orçamento mensal (USD)",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar",
+      "EDIT": "Editar",
+      "DELETE": "Excluir"
+    },
+    "CONFIRM_DELETE": "Excluir este perfil?",
+    "SAVED": "Perfil salvo.",
+    "DELETED": "Perfil excluído.",
+    "ERROR": "Algo deu errado ao salvar.",
+    "LINK": "Perfis operacionais"
   }
 }
