@@ -141,17 +141,32 @@ class Ai::Gateway
 
   def reply_allowed?(department)
     behavior = department.behavior.to_h
-    case behavior['reply_scope']
-    when 'all'    then true
-    when 'canary' then behavior['canary_label'].present? && @conversation.cached_label_list_array.include?(behavior['canary_label'])
-    else false
-    end
+    scope = behavior['reply_scope']
+    return false if scope.blank? || scope == 'off'
+    return false if outside_business_hours?(behavior)
+    return true if scope == 'all'
+
+    scope == 'canary' && behavior['canary_label'].present? &&
+      @conversation.cached_label_list_array.include?(behavior['canary_label'])
   end
 
   def reply_skip_reason(department)
     return not_acting_reason unless @acts_live
 
-    department.behavior.to_h['reply_scope'] == 'canary' ? 'canary_label_absent' : 'reply_scope_off'
+    behavior = department.behavior.to_h
+    scope = behavior['reply_scope']
+    return 'reply_scope_off' if scope.blank? || scope == 'off'
+    return 'outside_business_hours' if outside_business_hours?(behavior)
+
+    'canary_label_absent'
+  end
+
+  # When the toggle is on, respect the inbox's configured working hours: stay silent when closed.
+  def outside_business_hours?(behavior)
+    return false unless behavior.dig('business_hours', 'enabled')
+
+    inbox = @conversation.inbox
+    inbox.respond_to?(:out_of_office?) && inbox.out_of_office?
   end
 
   # Invisible worker: persist a rolling conversation summary into agent memory.

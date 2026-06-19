@@ -137,7 +137,7 @@
       "ON_TIMEOUT_RESOLVE": "Encerrar conversa",
       "ON_TIMEOUT_NONE": "Não fazer nada",
       "HOURS_TITLE": "Horário de funcionamento",
-      "HOURS_TOGGLE": "Respeitar horário de funcionamento",
+      "HOURS_TOGGLE": "Respeitar o horário de funcionamento da caixa (não responde fora do horário)",
       "HOURS_MESSAGE": "Mensagem fora do horário",
       "CLOSE_TITLE": "Encerramento automático",
       "CLOSE_WHEN": "Encerrar quando (uma condição por linha)",
