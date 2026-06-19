@@ -39,6 +39,7 @@ class Api::V1::Accounts::AiOperationProfilesController < Api::V1::Accounts::Base
     out = {}
     out[:budget] = hashify(source[:budget]) if source[:budget]
     out[:worker_overrides] = hashify(source[:worker_overrides]) if source[:worker_overrides]
+    out[:routing_strategy] = hashify(source[:routing_strategy]) if source[:routing_strategy]
     out
   end
 

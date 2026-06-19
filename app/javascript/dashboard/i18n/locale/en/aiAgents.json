@@ -68,8 +68,21 @@
       "KNOWLEDGE": "Conhecimento utilizado",
       "TIME": "Latência (ms)",
       "COST": "Custo (USD)",
-      "MODEL": "Modelo utilizado",
+      "MODEL": "Modelo final utilizado",
       "TOKENS": "Tokens (entrada / saída)",
+      "SCORE": "Score vetorial (RAG)",
+      "ROUTING": "Decisão de roteamento",
+      "WORKER": "Worker utilizado",
+      "BANDS": {
+        "high": "Confiança alta · cache",
+        "mid": "Zona cinzenta · IA econômica",
+        "low": "Confiança baixa · IA premium"
+      },
+      "WORKERS": {
+        "cache": "Cache (sem IA)",
+        "judge": "IA econômica (julga)",
+        "generator": "IA premium (gera)"
+      },
       "KNOWLEDGE_PREVIEW": "Trechos de conhecimento utilizados",
       "REPLY": "Resposta da IA",
       "NONE": "—"
@@ -276,6 +289,17 @@
       "CANCEL": "Cancelar",
       "EDIT": "Editar",
       "DELETE": "Excluir"
+    },
+    "ROUTING": {
+      "TITLE": "Estratégia de roteamento (confiança do RAG)",
+      "DESCRIPTION": "Define como o sistema decide entre cache, IA econômica e IA premium pela confiança da busca vetorial.",
+      "HIGH": "Confiança alta — score ≥ (serve do cache, sem IA)",
+      "LOW": "Confiança baixa — score < (IA premium gera resposta nova)",
+      "CHEAP_PROVIDER": "Provedor da IA econômica (zona cinzenta)",
+      "CHEAP_MODEL": "Modelo da IA econômica",
+      "PREMIUM_PROVIDER": "Provedor da IA premium (confiança baixa)",
+      "PREMIUM_MODEL": "Modelo da IA premium",
+      "EXPLAINER": "Score ≥ confiança alta → serve do cache, instantâneo e sem custo. Entre as duas faixas → a IA econômica julga (serve ou escala). Abaixo da confiança baixa → a IA premium gera uma resposta nova."
     },
     "CONFIRM_DELETE": "Excluir este perfil?",
     "SAVED": "Perfil salvo.",

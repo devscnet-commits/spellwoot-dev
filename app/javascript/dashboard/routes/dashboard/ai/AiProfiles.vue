@@ -20,10 +20,17 @@ const blank = () => ({
   supervisor_provider: 'anthropic',
   supervisor_model: '',
   budget_usd: '',
+  route_high: 0.95,
+  route_low: 0.85,
+  cheap_provider: 'openai',
+  cheap_model: '',
+  premium_provider: 'anthropic',
+  premium_model: '',
 });
 const form = reactive(blank());
 
-const baseUrl = () => `/api/v1/accounts/${route.params.accountId}/ai_operation_profiles`;
+const baseUrl = () =>
+  `/api/v1/accounts/${route.params.accountId}/ai_operation_profiles`;
 
 const fetchProfiles = async () => {
   isLoading.value = true;
@@ -41,12 +48,19 @@ const openNew = () => {
 };
 
 const openEdit = profile => {
+  const routing = profile.routing_strategy || {};
   Object.assign(form, blank(), {
     id: profile.id,
     name: profile.name,
     supervisor_provider: profile.supervisor_provider,
     supervisor_model: profile.supervisor_model,
     budget_usd: profile.budget?.monthly_usd ?? '',
+    route_high: routing.high_threshold ?? 0.95,
+    route_low: routing.low_threshold ?? 0.85,
+    cheap_provider: routing.cheap_provider || 'openai',
+    cheap_model: routing.cheap_model || '',
+    premium_provider: routing.premium_provider || 'anthropic',
+    premium_model: routing.premium_model || '',
   });
   showForm.value = true;
 };
@@ -58,6 +72,14 @@ const save = async () => {
       supervisor_provider: form.supervisor_provider,
       supervisor_model: form.supervisor_model,
       budget: { monthly_usd: Number(form.budget_usd) || 0 },
+      routing_strategy: {
+        high_threshold: Number(form.route_high),
+        low_threshold: Number(form.route_low),
+        cheap_provider: form.cheap_provider,
+        cheap_model: form.cheap_model,
+        premium_provider: form.premium_provider,
+        premium_model: form.premium_model,
+      },
     },
   };
   try {
@@ -93,56 +115,191 @@ onMounted(fetchProfiles);
   <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-n-slate-12">{{ $t('AI_PROFILES.TITLE') }}</h1>
-        <p class="text-sm text-n-slate-11 mb-0">{{ $t('AI_PROFILES.DESCRIPTION') }}</p>
+        <h1 class="text-xl font-semibold text-n-slate-12">
+          {{ $t('AI_PROFILES.TITLE') }}
+        </h1>
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AI_PROFILES.DESCRIPTION') }}
+        </p>
       </div>
-      <button type="button" class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white" @click="openNew">
+      <button
+        type="button"
+        class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+        @click="openNew"
+      >
         {{ $t('AI_PROFILES.NEW') }}
       </button>
     </div>
 
-    <p v-if="!isLoading && !profiles.length" class="text-sm text-n-slate-11 py-8 text-center">
+    <p
+      v-if="!isLoading && !profiles.length"
+      class="text-sm text-n-slate-11 py-8 text-center"
+    >
       {{ $t('AI_PROFILES.EMPTY') }}
     </p>
     <div v-else class="border border-n-weak rounded-xl divide-y divide-n-weak">
-      <div v-for="profile in profiles" :key="profile.id" class="flex items-center justify-between px-4 py-3">
+      <div
+        v-for="profile in profiles"
+        :key="profile.id"
+        class="flex items-center justify-between px-4 py-3"
+      >
         <div class="min-w-0">
           <p class="text-sm font-medium text-n-slate-12">{{ profile.name }}</p>
-          <p class="text-xs text-n-slate-11 truncate">{{ profile.supervisor_provider }} / {{ profile.supervisor_model }}</p>
+          <p class="text-xs text-n-slate-11 truncate">
+            {{ profile.supervisor_provider }} / {{ profile.supervisor_model }}
+          </p>
         </div>
         <div class="shrink-0 whitespace-nowrap">
-          <button class="text-n-brand hover:underline mx-2" @click="openEdit(profile)">{{ $t('AI_PROFILES.FORM.EDIT') }}</button>
-          <button class="text-n-ruby-11 hover:underline" @click="remove(profile)">{{ $t('AI_PROFILES.FORM.DELETE') }}</button>
+          <button
+            class="text-n-brand hover:underline mx-2"
+            @click="openEdit(profile)"
+          >
+            {{ $t('AI_PROFILES.FORM.EDIT') }}
+          </button>
+          <button
+            class="text-n-ruby-11 hover:underline"
+            @click="remove(profile)"
+          >
+            {{ $t('AI_PROFILES.FORM.DELETE') }}
+          </button>
         </div>
       </div>
     </div>
 
-    <div v-if="showForm" class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-2">
+    <div
+      v-if="showForm"
+      class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-2"
+    >
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_PROFILES.FORM.NAME') }}
-          <input v-model="form.name" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
+          <input
+            v-model="form.name"
+            type="text"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          />
         </label>
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_PROFILES.FORM.PROVIDER') }}
-          <select v-model="form.supervisor_provider" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1">
+          <select
+            v-model="form.supervisor_provider"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          >
             <option v-for="p in PROVIDERS" :key="p" :value="p">{{ p }}</option>
           </select>
         </label>
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_PROFILES.FORM.MODEL') }}
-          <input v-model="form.supervisor_model" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
+          <input
+            v-model="form.supervisor_model"
+            type="text"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          />
         </label>
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_PROFILES.FORM.BUDGET') }}
-          <input v-model="form.budget_usd" type="number" min="0" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
+          <input
+            v-model="form.budget_usd"
+            type="number"
+            min="0"
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          />
         </label>
       </div>
+
+      <div class="flex flex-col gap-3 border-t border-n-weak pt-3">
+        <div class="flex flex-col gap-0.5">
+          <h3 class="text-sm font-semibold text-n-slate-12">
+            {{ $t('AI_PROFILES.ROUTING.TITLE') }}
+          </h3>
+          <p class="text-xs text-n-slate-11 mb-0">
+            {{ $t('AI_PROFILES.ROUTING.DESCRIPTION') }}
+          </p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            {{ $t('AI_PROFILES.ROUTING.HIGH') }}
+            <input
+              v-model="form.route_high"
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            {{ $t('AI_PROFILES.ROUTING.LOW') }}
+            <input
+              v-model="form.route_low"
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            />
+          </label>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            {{ $t('AI_PROFILES.ROUTING.CHEAP_PROVIDER') }}
+            <select
+              v-model="form.cheap_provider"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            >
+              <option v-for="p in PROVIDERS" :key="p" :value="p">
+                {{ p }}
+              </option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            {{ $t('AI_PROFILES.ROUTING.CHEAP_MODEL') }}
+            <input
+              v-model="form.cheap_model"
+              type="text"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            {{ $t('AI_PROFILES.ROUTING.PREMIUM_PROVIDER') }}
+            <select
+              v-model="form.premium_provider"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            >
+              <option v-for="p in PROVIDERS" :key="p" :value="p">
+                {{ p }}
+              </option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            {{ $t('AI_PROFILES.ROUTING.PREMIUM_MODEL') }}
+            <input
+              v-model="form.premium_model"
+              type="text"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            />
+          </label>
+        </div>
+        <div
+          class="text-xs text-n-slate-11 leading-relaxed bg-n-alpha-1 rounded-lg p-3"
+        >
+          {{ $t('AI_PROFILES.ROUTING.EXPLAINER') }}
+        </div>
+      </div>
+
       <div class="flex justify-end gap-2">
-        <button type="button" class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12" @click="showForm = false">
+        <button
+          type="button"
+          class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+          @click="showForm = false"
+        >
           {{ $t('AI_PROFILES.FORM.CANCEL') }}
         </button>
-        <button type="button" class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white" @click="save">
+        <button
+          type="button"
+          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+          @click="save"
+        >
           {{ $t('AI_PROFILES.FORM.SAVE') }}
         </button>
       </div>

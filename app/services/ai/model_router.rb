@@ -10,9 +10,11 @@ class Ai::ModelRouter
     'gemini' => [0.0005, 0.0015]
   }.freeze
 
-  def self.decide(profile:, system_prompt:, user_message:)
-    provider = profile&.supervisor_provider.presence || 'anthropic'
-    model    = profile&.supervisor_model.presence || 'claude-3-5-sonnet-latest'
+  # provider/model override the profile's supervisor (used by the confidence router to call the
+  # cheap or premium tier). Falls back to the profile's supervisor when not given.
+  def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil)
+    provider = provider.presence || profile&.supervisor_provider.presence || 'anthropic'
+    model    = model.presence || profile&.supervisor_model.presence || 'claude-3-5-sonnet-latest'
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt, user_message: user_message)

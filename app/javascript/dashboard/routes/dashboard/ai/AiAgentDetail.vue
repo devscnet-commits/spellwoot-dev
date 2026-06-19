@@ -542,6 +542,46 @@ onMounted(async () => {
               </div>
               <div>
                 <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.SCORE')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.vector_score ?? $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.ROUTING')
+                }}</span>
+                <span
+                  v-if="testResult.routing_band"
+                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                  :class="{
+                    'bg-n-teal-3 text-n-teal-11':
+                      testResult.routing_band === 'high',
+                    'bg-n-blue-3 text-n-blue-11':
+                      testResult.routing_band === 'mid',
+                    'bg-n-ruby-3 text-n-ruby-11':
+                      testResult.routing_band === 'low',
+                  }"
+                >
+                  {{ $t(`AI_AGENTS.TEST.BANDS.${testResult.routing_band}`) }}
+                </span>
+                <span v-else class="text-n-slate-12">{{
+                  $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
+                  $t('AI_AGENTS.TEST.WORKER')
+                }}</span>
+                <span class="text-n-slate-12">{{
+                  testResult.worker
+                    ? $t(`AI_AGENTS.TEST.WORKERS.${testResult.worker}`)
+                    : $t('AI_AGENTS.TEST.NONE')
+                }}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-n-slate-11">{{
                   $t('AI_AGENTS.TEST.TOOL')
                 }}</span>
                 <span class="text-n-slate-12">{{
