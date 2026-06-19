@@ -28,6 +28,13 @@ class Ai::CapabilityRegistry
     when 'contact.update_attributes'
       conversation.contact&.update(custom_attributes: execution.rollback_data['custom_attributes'] || {})
       true
+    when 'conversation.transfer'
+      prev = execution.rollback_data['previous'] || {}
+      conversation.update(team_id: prev['team_id'], assignee_id: prev['assignee_id'], status: prev['status'])
+      true
+    when 'conversation.resolve'
+      conversation.update(status: (execution.rollback_data.dig('previous', 'status') || 'open'))
+      true
     else
       false
     end
@@ -55,6 +62,23 @@ class Ai::CapabilityRegistry
     merged = previous.merge(input.except('contact_id').to_h)
     contact.update!(custom_attributes: merged)
     { output: { 'custom_attributes' => merged }, rollback_data: { 'custom_attributes' => previous } }
+  end
+
+  # Hand off to a human: reopen and route to the queue (optionally a team), unassigning the bot.
+  def self.conversation_transfer(conversation, input)
+    previous = { 'team_id' => conversation.team_id, 'assignee_id' => conversation.assignee_id,
+                 'status' => conversation.status }
+    attrs = { status: 'open' }
+    attrs[:team_id] = input['team_id'] if input['team_id'].present?
+    conversation.update!(attrs)
+    conversation.update!(assignee_id: nil) if input['unassign']
+    { output: { 'transferred' => true, 'team_id' => conversation.team_id }, rollback_data: { 'previous' => previous } }
+  end
+
+  def self.conversation_resolve(conversation, _input)
+    previous = { 'status' => conversation.status }
+    conversation.update!(status: 'resolved')
+    { output: { 'status' => 'resolved' }, rollback_data: { 'previous' => previous } }
   end
 
   def self.handler_name(key)
