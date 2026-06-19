@@ -1,0 +1,86 @@
+# Executes a Tool the AI chose, enforcing governance. SAFETY:
+#   - shadow mode never executes (records 'skipped');
+#   - allowed -> executes now;
+#   - require_confirmation / require_approval -> records a 'pending' execution awaiting a human;
+#   - every execution is audited (Ai::CapabilityExecution) with rollback data for undo.
+class Ai::ToolExecutor
+  def initialize(tool:, input:, conversation:, mode:, run: nil, requested_by: 'ai')
+    @tool = tool
+    @input = input || {}
+    @conversation = conversation
+    @mode = mode.to_s
+    @run = run
+    @requested_by = requested_by
+    @account = conversation.account
+  end
+
+  # Returns the Ai::CapabilityExecution row.
+  def perform
+    return record('skipped', reason: 'shadow_mode') unless @mode == 'live'
+    return record('skipped', reason: 'tool_inactive') unless @tool&.status == 'active'
+
+    case @tool.governance
+    when 'allowed'
+      execute_now
+    when 'require_confirmation', 'require_approval'
+      record('pending', approval: 'pending')
+    else
+      record('skipped', reason: "governance_desconhecida:#{@tool.governance}")
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::ToolExecutor] #{e.class}: #{e.message}"
+    record('failed', error: "#{e.class}: #{e.message}")
+  end
+
+  # Run a previously pending execution after a human approves it.
+  def self.approve_and_run(execution, approver_user_id:)
+    return execution unless execution.approval_status == 'pending'
+
+    conversation = ::Conversation.find_by(id: execution.conversation_id)
+    result = Ai::CapabilityRegistry.execute(execution.capability_key, conversation: conversation, input: execution.input)
+    execution.update!(status: 'executed', approval_status: 'approved', approved_by_user_id: approver_user_id,
+                      output: result[:output], rollback_data: result[:rollback_data])
+    execution
+  rescue StandardError => e
+    execution.update!(status: 'failed', error: "#{e.class}: #{e.message}")
+    execution
+  end
+
+  # Undo an executed capability.
+  def self.revert(execution)
+    return false unless execution.status == 'executed'
+
+    reverted = Ai::CapabilityRegistry.rollback(execution)
+    execution.update!(status: 'reverted') if reverted
+    reverted
+  end
+
+  private
+
+  def execute_now
+    result = Ai::CapabilityRegistry.execute(@tool.capability_key, conversation: @conversation, input: @input)
+    build('executed', output: result[:output], rollback_data: result[:rollback_data])
+  end
+
+  def record(status, reason: nil, approval: 'not_required', error: nil)
+    build(status, output: (reason ? { 'reason' => reason } : {}), approval: approval, error: error)
+  end
+
+  def build(status, output: {}, rollback_data: {}, approval: 'not_required', error: nil)
+    Ai::CapabilityExecution.create!(
+      account_id: @account.id,
+      conversation_id: @conversation.id,
+      ai_tool_id: @tool&.id,
+      ai_run_id: @run&.id,
+      capability_key: @tool&.capability_key,
+      input: @input,
+      output: output,
+      status: status,
+      governance: @tool&.governance,
+      approval_status: approval,
+      requested_by: @requested_by,
+      rollback_data: rollback_data,
+      error: error
+    )
+  end
+end
