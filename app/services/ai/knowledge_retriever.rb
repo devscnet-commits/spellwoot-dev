@@ -5,19 +5,29 @@ class Ai::KnowledgeRetriever
   TOP_K = 3
 
   def self.retrieve(department:, query:, account_id:)
+    retrieve_scored(department: department, query: query, account_id: account_id)[:chunks]
+  end
+
+  # Like retrieve, but also returns the top cosine similarity (1 - distance) of the best candidate
+  # so the routing strategy can decide cache vs cheap vs premium. top_score is nil without vectors.
+  def self.retrieve_scored(department:, query:, account_id:)
     source_ids = department.knowledge_sources.active.pluck(:id)
-    return [] if source_ids.empty? || query.blank?
+    return { chunks: [], top_score: nil } if source_ids.empty? || query.blank?
 
     scope = Ai::KnowledgeChunk.where(ai_knowledge_source_id: source_ids)
     vector = embed(query, account_id)
     if vector.present?
-      scope.nearest_neighbors(:embedding, vector, distance: 'cosine').first(TOP_K).map(&:content)
+      records = scope.nearest_neighbors(:embedding, vector, distance: 'cosine').first(TOP_K)
+      distance = records.first&.neighbor_distance
+      score = distance.nil? ? nil : (1.0 - distance).round(4)
+      { chunks: records.map(&:content), top_score: score }
     else
-      scope.where('content ILIKE ?', "%#{query.to_s.first(60)}%").limit(TOP_K).pluck(:content)
+      chunks = scope.where('content ILIKE ?', "%#{query.to_s.first(60)}%").limit(TOP_K).pluck(:content)
+      { chunks: chunks, top_score: nil }
     end
   rescue StandardError => e
     Rails.logger.error "[Ai::KnowledgeRetriever] #{e.class}: #{e.message}"
-    []
+    { chunks: [], top_score: nil }
   end
 
   def self.embed(text, account_id)

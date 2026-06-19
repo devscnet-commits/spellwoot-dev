@@ -12,16 +12,36 @@ const { t } = useI18n();
 const agents = ref([]);
 const isLoading = ref(false);
 const search = ref('');
+const stageFilter = ref('all');
 const openMenuId = ref(null);
+
+// Promotion ladder: experimental -> sandbox -> staging -> production.
+const STAGE_ORDER = ['experimental', 'sandbox', 'staging', 'production'];
+const STAGES = ['all', ...STAGE_ORDER];
+const stageBadge = {
+  production: 'bg-n-teal-3 text-n-teal-11',
+  staging: 'bg-n-amber-3 text-n-amber-11',
+  sandbox: 'bg-n-blue-3 text-n-blue-11',
+  experimental: 'bg-n-alpha-2 text-n-slate-11',
+};
+
+const nextStage = stage => {
+  const i = STAGE_ORDER.indexOf(stage);
+  return i >= 0 && i < STAGE_ORDER.length - 1 ? STAGE_ORDER[i + 1] : null;
+};
 
 const baseUrl = () => `/api/v1/accounts/${route.params.accountId}/ai_agents`;
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
-  if (!q) return agents.value;
-  return agents.value.filter(a =>
-    `${a.assistant_name || ''} ${a.name || ''}`.toLowerCase().includes(q)
-  );
+  return agents.value.filter(a => {
+    const matchesStage =
+      stageFilter.value === 'all' || a.stage === stageFilter.value;
+    const matchesQuery =
+      !q ||
+      `${a.assistant_name || ''} ${a.name || ''}`.toLowerCase().includes(q);
+    return matchesStage && matchesQuery;
+  });
 });
 
 const fetchAgents = async () => {
@@ -34,13 +54,30 @@ const fetchAgents = async () => {
   }
 };
 
-const goNew = () => router.push({ name: 'ai_agent_detail', params: { agentId: 'new' } });
-const goEdit = agent => router.push({ name: 'ai_agent_detail', params: { agentId: agent.id } });
+const goNew = () =>
+  router.push({ name: 'ai_agent_detail', params: { agentId: 'new' } });
+const goEdit = agent =>
+  router.push({ name: 'ai_agent_detail', params: { agentId: agent.id } });
 const goTest = agent =>
-  router.push({ name: 'ai_agent_detail', params: { agentId: agent.id }, query: { tab: 'test' } });
+  router.push({
+    name: 'ai_agent_detail',
+    params: { agentId: agent.id },
+    query: { tab: 'test' },
+  });
 
 const toggleMenu = id => {
   openMenuId.value = openMenuId.value === id ? null : id;
+};
+
+const patchAgent = async (agent, payload, okMessage) => {
+  openMenuId.value = null;
+  try {
+    await axios.patch(`${baseUrl()}/${agent.id}`, { ai_agent: payload });
+    if (okMessage) useAlert(okMessage);
+    fetchAgents();
+  } catch (error) {
+    useAlert(t('AI_AGENTS.ERROR'));
+  }
 };
 
 const duplicate = async agent => {
@@ -56,15 +93,15 @@ const duplicate = async agent => {
   }
 };
 
-const toggleActive = async agent => {
-  openMenuId.value = null;
-  const status = agent.status === 'active' ? 'inactive' : 'active';
-  try {
-    await axios.patch(`${baseUrl()}/${agent.id}`, { ai_agent: { status } });
-    fetchAgents();
-  } catch (error) {
-    useAlert(t('AI_AGENTS.ERROR'));
-  }
+const toggleActive = agent =>
+  patchAgent(agent, {
+    status: agent.status === 'active' ? 'inactive' : 'active',
+  });
+
+const promote = agent => {
+  const next = nextStage(agent.stage);
+  if (!next) return;
+  patchAgent(agent, { stage: next }, t('AI_AGENTS.LIST.PROMOTED'));
 };
 
 const remove = async agent => {
@@ -86,17 +123,31 @@ onMounted(fetchAgents);
 <template>
   <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
     <div class="flex flex-col gap-1">
-      <h1 class="text-xl font-semibold text-n-slate-12">{{ $t('AI_AGENTS.TITLE') }}</h1>
-      <p class="text-sm text-n-slate-11 mb-0">{{ $t('AI_AGENTS.DESCRIPTION') }}</p>
+      <h1 class="text-xl font-semibold text-n-slate-12">
+        {{ $t('AI_AGENTS.TITLE') }}
+      </h1>
+      <p class="text-sm text-n-slate-11 mb-0">
+        {{ $t('AI_AGENTS.DESCRIPTION') }}
+      </p>
     </div>
 
     <div class="flex items-center justify-between gap-3">
-      <input
-        v-model="search"
-        type="search"
-        :placeholder="$t('AI_AGENTS.SEARCH')"
-        class="w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-      />
+      <div class="flex items-center gap-2">
+        <input
+          v-model="search"
+          type="search"
+          :placeholder="$t('AI_AGENTS.SEARCH')"
+          class="w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+        />
+        <select
+          v-model="stageFilter"
+          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+        >
+          <option v-for="s in STAGES" :key="s" :value="s">
+            {{ $t(`AI_AGENTS.STAGES.${s.toUpperCase()}`) }}
+          </option>
+        </select>
+      </div>
       <button
         type="button"
         class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
@@ -106,44 +157,120 @@ onMounted(fetchAgents);
       </button>
     </div>
 
-    <p v-if="!isLoading && !filtered.length" class="text-sm text-n-slate-11 py-8 text-center">
+    <p
+      v-if="!isLoading && !filtered.length"
+      class="text-sm text-n-slate-11 py-8 text-center"
+    >
       {{ $t('AI_AGENTS.EMPTY') }}
     </p>
     <div v-else class="border border-n-weak rounded-xl overflow-visible">
       <table class="w-full text-sm">
         <thead class="bg-n-alpha-2 text-n-slate-11">
           <tr>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.NAME') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.TYPE') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.STATUS') }}</th>
-            <th class="text-right font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.ACTIONS') }}</th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_AGENTS.LIST.NAME') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_AGENTS.LIST.TYPE') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_AGENTS.LIST.STATUS') }}
+            </th>
+            <th class="text-right font-medium px-3 py-2">
+              {{ $t('AI_AGENTS.LIST.ACTIONS') }}
+            </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-n-weak text-n-slate-12">
           <tr v-for="agent in filtered" :key="agent.id">
             <td class="px-3 py-3">{{ agent.assistant_name || agent.name }}</td>
-            <td class="px-3 py-3">{{ agent.stage }}</td>
             <td class="px-3 py-3">
               <span
                 class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                :class="agent.status === 'active' ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-alpha-2 text-n-slate-11'"
+                :class="
+                  stageBadge[agent.stage] || 'bg-n-alpha-2 text-n-slate-11'
+                "
               >
-                {{ agent.status === 'active' ? $t('AI_AGENTS.LIST.ACTIVE') : $t('AI_AGENTS.LIST.INACTIVE') }}
+                {{
+                  $t(`AI_AGENTS.STAGES.${(agent.stage || '').toUpperCase()}`)
+                }}
+              </span>
+            </td>
+            <td class="px-3 py-3">
+              <span
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                :class="
+                  agent.status === 'active'
+                    ? 'bg-n-teal-3 text-n-teal-11'
+                    : 'bg-n-alpha-2 text-n-slate-11'
+                "
+              >
+                {{
+                  agent.status === 'active'
+                    ? $t('AI_AGENTS.LIST.ACTIVE')
+                    : $t('AI_AGENTS.LIST.INACTIVE')
+                }}
               </span>
             </td>
             <td class="px-3 py-3 text-right whitespace-nowrap relative">
-              <button class="text-n-brand hover:underline mx-2" @click="goEdit(agent)">{{ $t('AI_AGENTS.LIST.EDIT') }}</button>
-              <button class="text-n-brand hover:underline mx-2" @click="goTest(agent)">{{ $t('AI_AGENTS.LIST.TEST') }}</button>
-              <button class="text-n-slate-11 hover:text-n-slate-12 px-1" @click="toggleMenu(agent.id)">⋮</button>
+              <button
+                class="text-n-brand hover:underline mx-2"
+                @click="goEdit(agent)"
+              >
+                {{ $t('AI_AGENTS.LIST.EDIT') }}
+              </button>
+              <button
+                class="text-n-brand hover:underline mx-2"
+                @click="goTest(agent)"
+              >
+                {{ $t('AI_AGENTS.LIST.TEST') }}
+              </button>
+              <button
+                class="text-n-slate-11 hover:text-n-slate-12 px-1 align-middle"
+                :aria-label="$t('AI_AGENTS.LIST.ACTIONS')"
+                @click="toggleMenu(agent.id)"
+              >
+                <span class="i-lucide-ellipsis-vertical size-4 inline-block" />
+              </button>
               <div
                 v-if="openMenuId === agent.id"
-                class="absolute right-2 top-full z-10 mt-1 w-40 bg-n-solid-1 border border-n-weak rounded-lg shadow text-left"
+                class="absolute right-2 top-full z-10 mt-1 w-44 bg-n-solid-1 border border-n-weak rounded-lg shadow text-left"
               >
-                <button class="block w-full text-left px-3 py-2 hover:bg-n-alpha-2" @click="duplicate(agent)">{{ $t('AI_AGENTS.LIST.DUPLICATE') }}</button>
-                <button class="block w-full text-left px-3 py-2 hover:bg-n-alpha-2" @click="toggleActive(agent)">
-                  {{ agent.status === 'active' ? $t('AI_AGENTS.LIST.DEACTIVATE') : $t('AI_AGENTS.LIST.ACTIVATE') }}
+                <button
+                  class="block w-full text-left px-3 py-2 hover:bg-n-alpha-2"
+                  @click="duplicate(agent)"
+                >
+                  {{ $t('AI_AGENTS.LIST.DUPLICATE') }}
                 </button>
-                <button class="block w-full text-left px-3 py-2 text-n-ruby-11 hover:bg-n-alpha-2" @click="remove(agent)">{{ $t('AI_AGENTS.LIST.DELETE') }}</button>
+                <button
+                  v-if="nextStage(agent.stage)"
+                  class="block w-full text-left px-3 py-2 hover:bg-n-alpha-2"
+                  @click="promote(agent)"
+                >
+                  {{
+                    $t('AI_AGENTS.LIST.PROMOTE_TO', {
+                      stage: $t(
+                        `AI_AGENTS.STAGES.${nextStage(agent.stage).toUpperCase()}`
+                      ),
+                    })
+                  }}
+                </button>
+                <button
+                  class="block w-full text-left px-3 py-2 hover:bg-n-alpha-2"
+                  @click="toggleActive(agent)"
+                >
+                  {{
+                    agent.status === 'active'
+                      ? $t('AI_AGENTS.LIST.DEACTIVATE')
+                      : $t('AI_AGENTS.LIST.ACTIVATE')
+                  }}
+                </button>
+                <button
+                  class="block w-full text-left px-3 py-2 text-n-ruby-11 hover:bg-n-alpha-2"
+                  @click="remove(agent)"
+                >
+                  {{ $t('AI_AGENTS.LIST.DELETE') }}
+                </button>
               </div>
             </td>
           </tr>
