@@ -141,5 +141,18 @@
     "DELETED": "Perfil excluído.",
     "ERROR": "Algo deu errado ao salvar.",
     "LINK": "Perfis operacionais"
+  },
+  "AI_COSTS": {
+    "TITLE": "Custos de IA",
+    "DESCRIPTION": "Custo estimado e desempenho das execuções de IA da conta.",
+    "TOTAL_COST": "Custo total (USD)",
+    "TOTAL_RUNS": "Execuções",
+    "EMPTY": "Nenhuma execução registrada ainda.",
+    "COLUMNS": {
+      "MODEL": "Provedor / Modelo",
+      "RUNS": "Execuções",
+      "COST": "Custo (USD)",
+      "AVG_LATENCY": "Latência média (ms)"
+    }
   }
 }

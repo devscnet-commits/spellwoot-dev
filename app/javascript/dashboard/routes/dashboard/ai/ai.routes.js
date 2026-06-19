@@ -5,6 +5,7 @@ import AiDepartments from './AiDepartments.vue';
 import AiTools from './AiTools.vue';
 import AiKnowledge from './AiKnowledge.vue';
 import AiProfiles from './AiProfiles.vue';
+import AiCosts from './AiCosts.vue';
 
 // Minimal, read-only validation surface for the AI Core shadow runs (F1 vertical slice).
 // Not the definitive "Agentes IA" UI — just enough to validate the shadow before going live.
@@ -53,6 +54,14 @@ export const routes = [
     path: frontendURL('accounts/:accountId/ai/profiles'),
     name: 'ai_profiles_index',
     component: AiProfiles,
+    meta: {
+      permissions: ['administrator'],
+    },
+  },
+  {
+    path: frontendURL('accounts/:accountId/ai/costs'),
+    name: 'ai_costs_index',
+    component: AiCosts,
     meta: {
       permissions: ['administrator'],
     },
