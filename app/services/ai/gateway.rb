@@ -20,13 +20,18 @@ class Ai::Gateway
     )
     emit(run_record, 'message.received', { content: @message.content.to_s.first(500) })
 
+    # Invisible worker: turn media (audio/image) into text the supervisor can use.
+    media_text = Ai::Workers::MediaProcessor.process(@message)
+    emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
+    effective_content = [@message.content, media_text].compact.join("\n").strip
+
     department, resolution = Ai::DepartmentResolver.resolve(
-      agent: @agent, inbox_id: @message.inbox_id, message_content: @message.content
+      agent: @agent, inbox_id: @message.inbox_id, message_content: effective_content
     )
     emit(run_record, 'department.resolved', { department_id: department&.id, name: department&.name, method: resolution })
     return finalize(run_record, 'no_department') unless department
 
-    knowledge = Ai::KnowledgeRetriever.retrieve(department: department, query: @message.content, account_id: @account.id)
+    knowledge = Ai::KnowledgeRetriever.retrieve(department: department, query: effective_content, account_id: @account.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
 
     memory = Ai::AgentMemory.find_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
@@ -37,7 +42,7 @@ class Ai::Gateway
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
     result = Ai::ModelRouter.decide(
-      profile: @agent.operation_profile, system_prompt: system_prompt, user_message: @message.content.to_s
+      profile: @agent.operation_profile, system_prompt: system_prompt, user_message: effective_content
     )
     run_record.update!(
       provider: result[:provider], model: result[:model],
@@ -68,7 +73,7 @@ class Ai::Gateway
 
     # Intelligent handoff / close. Shadow records intention; live executes the native action.
     handoff = Ai::HandoffEvaluator.evaluate(
-      decision: result[:decision] || {}, department: department, message_content: @message.content
+      decision: result[:decision] || {}, department: department, message_content: effective_content
     )
     decision_kind = (result[:decision] || {})['decision']
     if handoff[:handoff]
@@ -77,6 +82,7 @@ class Ai::Gateway
       handle_action('conversation.resolve', {}, run_record, 'close')
     end
 
+    update_memory(run_record)
     finalize(run_record, result[:status] == 'error' ? 'error' : 'recorded')
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway] conv=#{@conversation&.id} #{e.class}: #{e.message}"
@@ -102,6 +108,18 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway##{label}] #{e.class}: #{e.message}"
     emit(run_record, "#{label}.failed", { error: "#{e.class}: #{e.message}" })
+  end
+
+  # Invisible worker: persist a rolling conversation summary into agent memory.
+  def update_memory(run_record)
+    summary = Ai::Workers::Summary.generate(conversation: @conversation, agent: @agent)
+    return if summary.blank?
+
+    Ai::AgentMemory.find_or_initialize_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
+                   .update!(summary: summary)
+    emit(run_record, 'memory.updated', { chars: summary.length })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#memory] #{e.class}: #{e.message}"
   end
 
   def finalize(run_record, status)
