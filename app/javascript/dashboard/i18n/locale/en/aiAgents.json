@@ -1,0 +1,37 @@
+{
+  "AI_AGENTS": {
+    "TITLE": "Agentes IA",
+    "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende caixas e departamentos.",
+    "NEW": "Novo agente",
+    "EMPTY": "Nenhum agente IA criado ainda.",
+    "LIST": {
+      "NAME": "Nome",
+      "STAGE": "Ambiente",
+      "STATUS": "Status",
+      "ACTIONS": "Ações",
+      "EDIT": "Editar",
+      "DELETE": "Excluir"
+    },
+    "FORM": {
+      "IDENTITY": "Identidade",
+      "NAME": "Nome interno",
+      "STAGE": "Ambiente",
+      "ASSISTANT_NAME": "Nome da assistente",
+      "ASSISTANT_DESCRIPTION": "Descrição",
+      "ASSISTANT_PERSONALITY": "Personalidade",
+      "ASSISTANT_LANGUAGE": "Idioma",
+      "ASSISTANT_VOICE": "Voz",
+      "ASSISTANT_AVATAR": "Avatar (URL)",
+      "BASE_PROMPT": "Prompt base da empresa",
+      "GUARDRAILS": "Regras de segurança (o que nunca fazer)",
+      "PROFILE": "Perfil operacional",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar",
+      "NONE": "Nenhum"
+    },
+    "CONFIRM_DELETE": "Excluir este agente IA?",
+    "SAVED": "Agente salvo.",
+    "DELETED": "Agente excluído.",
+    "ERROR": "Algo deu errado ao salvar."
+  }
+}
