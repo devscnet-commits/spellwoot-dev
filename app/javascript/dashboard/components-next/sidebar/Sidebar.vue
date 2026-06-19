@@ -301,16 +301,15 @@ const menuItems = computed(() => {
       name: 'AIAgents',
       icon: 'i-lucide-bot',
       label: t('SIDEBAR.AI_AGENTS'),
-      activeOn: ['ai_agents_index', 'ai_departments_index', 'ai_tools_index'],
+      activeOn: ['ai_agents_index', 'ai_agent_detail', 'ai_department_detail'],
       children: [
         {
           name: 'AIAgentsList',
           label: t('SIDEBAR.AI_AGENTS_LIST'),
           activeOn: [
             'ai_agents_index',
-            'ai_departments_index',
-            'ai_tools_index',
-            'ai_knowledge_index',
+            'ai_agent_detail',
+            'ai_department_detail',
           ],
           to: accountScopedRoute('ai_agents_index'),
         },
