@@ -4,6 +4,7 @@
     "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende caixas e departamentos.",
     "NEW": "Novo agente de IA",
     "BACK": "← Agentes IA",
+    "SAVE_FIRST": "Salve o agente na aba Sobre primeiro para liberar esta seção.",
     "EMPTY": "Nenhum agente IA criado ainda.",
     "SEARCH": "Pesquisar",
     "TABS": {
@@ -121,6 +122,10 @@
     "ATTENDANCE": {
       "AUTO_TITLE": "Atendimento automático",
       "AUTO_TOGGLE": "A IA responde automaticamente neste departamento",
+      "INBOXES_TITLE": "Caixas atendidas por este departamento",
+      "INBOXES_HINT": "Entre as caixas do agente, marque quais este departamento atende. Se nenhuma for marcada, o roteamento usa o classificador automático.",
+      "INBOXES_EMPTY": "O agente ainda não está vinculado a nenhuma caixa. Configure em Agente → Sobre → Onde atende.",
+      "INBOXES_SAVE": "Salvar caixas",
       "REPLY_TITLE": "Resposta ao cliente",
       "REPLY_HINT": "Controla se a IA envia a mensagem ao cliente. Só vale em caixas no modo Live.",
       "REPLY_SCOPE": "Quando enviar a resposta",
