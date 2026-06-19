@@ -47,10 +47,21 @@ class Ai::Gateway
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms] },
          run_id: run_record.id)
 
-    # SHADOW DISCIPLINE: only record the intended tool call; do not execute it.
+    # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
+    # which itself enforces governance (allowed runs now; confirmation/approval stays pending).
     intended_tool = result.dig(:decision, 'tool')
     if intended_tool.present?
-      emit(run_record, 'tool.intended', { tool: intended_tool, executed: false, reason: 'shadow_mode' })
+      tool = department.tools.active.find_by(name: intended_tool['name'])
+      if @mode == 'live' && tool
+        execution = Ai::ToolExecutor.new(
+          tool: tool, input: intended_tool['input'], conversation: @conversation, mode: @mode, run: run_record
+        ).perform
+        emit(run_record, 'tool.executed',
+             { tool: tool.name, status: execution.status, governance: tool.governance, execution_id: execution.id })
+      else
+        emit(run_record, 'tool.intended',
+             { tool: intended_tool, executed: false, reason: @mode == 'live' ? 'tool_not_found' : 'shadow_mode' })
+      end
     end
 
     finalize(run_record, result[:status] == 'error' ? 'error' : 'recorded')
