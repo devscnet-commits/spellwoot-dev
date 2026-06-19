@@ -10,6 +10,7 @@
       "STATUS": "Status",
       "ACTIONS": "Ações",
       "EDIT": "Editar",
+      "DEPARTMENTS": "Departamentos",
       "DELETE": "Excluir"
     },
     "FORM": {
@@ -32,6 +33,32 @@
     "CONFIRM_DELETE": "Excluir este agente IA?",
     "SAVED": "Agente salvo.",
     "DELETED": "Agente excluído.",
+    "ERROR": "Algo deu errado ao salvar."
+  },
+  "AI_DEPARTMENTS": {
+    "TITLE": "Departamentos",
+    "DESCRIPTION": "Cada departamento é um mini processo operacional: objetivo, etapas, regras de transferência e encerramento.",
+    "NEW": "Novo departamento",
+    "EMPTY": "Nenhum departamento criado para este agente.",
+    "FORM": {
+      "NAME": "Nome",
+      "OBJETIVO": "Objetivo",
+      "SLA_TIMEOUT": "SLA — tempo de resposta (minutos)",
+      "ON_TIMEOUT": "Ao estourar o SLA",
+      "ON_TIMEOUT_RESOLVE": "Encerrar conversa",
+      "ON_TIMEOUT_NONE": "Não fazer nada",
+      "STEPS": "Etapas do atendimento (uma por linha)",
+      "TRANSFER_WHEN": "Transferir para humano quando (uma por linha)",
+      "CLOSE_WHEN": "Encerrar quando (uma por linha)",
+      "GREETING": "Mensagem de saudação",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar",
+      "EDIT": "Editar",
+      "DELETE": "Excluir"
+    },
+    "CONFIRM_DELETE": "Excluir este departamento?",
+    "SAVED": "Departamento salvo.",
+    "DELETED": "Departamento excluído.",
     "ERROR": "Algo deu errado ao salvar."
   }
 }

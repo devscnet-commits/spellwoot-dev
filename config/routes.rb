@@ -65,7 +65,9 @@ Rails.application.routes.draw do
                                 param: :agent_id
           end
           resources :ai_shadow_runs, only: [:index]
-          resources :ai_agents
+          resources :ai_agents do
+            resources :ai_departments, only: %i[index create update destroy]
+          end
           resources :ai_operation_profiles, only: [:index]
           post 'conversations/:conversation_id/ai_copilot', to: 'ai_copilot#create'
           namespace :captain do
