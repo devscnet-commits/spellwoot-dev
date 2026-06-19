@@ -369,6 +369,26 @@ const menuItems = computed(() => {
       ],
     },
     {
+      name: 'AIAgents',
+      icon: 'i-lucide-bot',
+      label: t('SIDEBAR.AI_AGENTS'),
+      activeOn: ['ai_agents_index', 'ai_departments_index', 'ai_tools_index'],
+      children: [
+        {
+          name: 'AIAgentsList',
+          label: t('SIDEBAR.AI_AGENTS_LIST'),
+          activeOn: ['ai_agents_index', 'ai_departments_index', 'ai_tools_index'],
+          to: accountScopedRoute('ai_agents_index'),
+        },
+        {
+          name: 'AIShadowRuns',
+          label: t('SIDEBAR.AI_SHADOW_RUNS'),
+          activeOn: ['ai_shadow_runs'],
+          to: accountScopedRoute('ai_shadow_runs'),
+        },
+      ],
+    },
+    {
       name: 'Contacts',
       label: t('SIDEBAR.CONTACTS'),
       icon: 'i-lucide-contact',
