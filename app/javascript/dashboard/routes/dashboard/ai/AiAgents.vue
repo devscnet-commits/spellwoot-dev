@@ -1,78 +1,66 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
-import axios from 'axios';
+/* global axios */
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 
-const STAGES = ['production', 'staging', 'sandbox', 'experimental'];
-
 const agents = ref([]);
-const profiles = ref([]);
 const isLoading = ref(false);
-const showForm = ref(false);
+const search = ref('');
+const openMenuId = ref(null);
 
-const blank = () => ({
-  id: null,
-  name: '',
-  stage: 'sandbox',
-  status: 'active',
-  assistant_name: '',
-  assistant_description: '',
-  assistant_personality: '',
-  assistant_language: 'pt-BR',
-  assistant_voice: '',
-  assistant_avatar: '',
-  base_prompt: '',
-  guardrails: '',
-  ai_operation_profile_id: '',
+const baseUrl = () => `/api/v1/accounts/${route.params.accountId}/ai_agents`;
+
+const filtered = computed(() => {
+  const q = search.value.trim().toLowerCase();
+  if (!q) return agents.value;
+  return agents.value.filter(a =>
+    `${a.assistant_name || ''} ${a.name || ''}`.toLowerCase().includes(q)
+  );
 });
-const form = reactive(blank());
-
-const baseUrl = () => `/api/v1/accounts/${route.params.accountId}`;
 
 const fetchAgents = async () => {
   isLoading.value = true;
   try {
-    const { data } = await axios.get(`${baseUrl()}/ai_agents`);
+    const { data } = await axios.get(baseUrl());
     agents.value = Array.isArray(data) ? data : [];
   } finally {
     isLoading.value = false;
   }
 };
 
-const fetchProfiles = async () => {
+const goNew = () => router.push({ name: 'ai_agent_detail', params: { agentId: 'new' } });
+const goEdit = agent => router.push({ name: 'ai_agent_detail', params: { agentId: agent.id } });
+const goTest = agent =>
+  router.push({ name: 'ai_agent_detail', params: { agentId: agent.id }, query: { tab: 'test' } });
+
+const toggleMenu = id => {
+  openMenuId.value = openMenuId.value === id ? null : id;
+};
+
+const duplicate = async agent => {
+  openMenuId.value = null;
   try {
-    const { data } = await axios.get(`${baseUrl()}/ai_operation_profiles`);
-    profiles.value = Array.isArray(data) ? data : [];
+    const { data: full } = await axios.get(`${baseUrl()}/${agent.id}`);
+    const copy = { ...full, id: undefined, name: `${full.name} (cópia)` };
+    await axios.post(baseUrl(), { ai_agent: copy });
+    useAlert(t('AI_AGENTS.SAVED'));
+    fetchAgents();
   } catch (error) {
-    profiles.value = [];
+    useAlert(t('AI_AGENTS.ERROR'));
   }
 };
 
-const openNew = () => {
-  Object.assign(form, blank());
-  showForm.value = true;
-};
-
-const openEdit = agent => {
-  Object.assign(form, blank(), agent);
-  showForm.value = true;
-};
-
-const save = async () => {
+const toggleActive = async agent => {
+  openMenuId.value = null;
+  const status = agent.status === 'active' ? 'inactive' : 'active';
   try {
-    const payload = { ai_agent: { ...form } };
-    if (form.id) {
-      await axios.patch(`${baseUrl()}/ai_agents/${form.id}`, payload);
-    } else {
-      await axios.post(`${baseUrl()}/ai_agents`, payload);
-    }
-    useAlert(t('AI_AGENTS.SAVED'));
-    showForm.value = false;
+    await axios.patch(`${baseUrl()}/${agent.id}`, { ai_agent: { status } });
     fetchAgents();
   } catch (error) {
     useAlert(t('AI_AGENTS.ERROR'));
@@ -80,10 +68,11 @@ const save = async () => {
 };
 
 const remove = async agent => {
+  openMenuId.value = null;
   // eslint-disable-next-line no-alert
   if (!window.confirm(t('AI_AGENTS.CONFIRM_DELETE'))) return;
   try {
-    await axios.delete(`${baseUrl()}/ai_agents/${agent.id}`);
+    await axios.delete(`${baseUrl()}/${agent.id}`);
     useAlert(t('AI_AGENTS.DELETED'));
     fetchAgents();
   } catch (error) {
@@ -91,130 +80,75 @@ const remove = async agent => {
   }
 };
 
-onMounted(() => {
-  fetchAgents();
-  fetchProfiles();
-});
+onMounted(fetchAgents);
 </script>
 
 <template>
   <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-n-slate-12">
-          {{ $t('AI_AGENTS.TITLE') }}
-        </h1>
-        <p class="text-sm text-n-slate-11 mb-0">{{ $t('AI_AGENTS.DESCRIPTION') }}</p>
-      </div>
+    <div class="flex flex-col gap-1">
+      <h1 class="text-xl font-semibold text-n-slate-12">{{ $t('AI_AGENTS.TITLE') }}</h1>
+      <p class="text-sm text-n-slate-11 mb-0">{{ $t('AI_AGENTS.DESCRIPTION') }}</p>
+    </div>
+
+    <div class="flex items-center justify-between gap-3">
+      <input
+        v-model="search"
+        type="search"
+        :placeholder="$t('AI_AGENTS.SEARCH')"
+        class="w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+      />
       <button
         type="button"
-        class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
-        @click="openNew"
+        class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+        @click="goNew"
       >
-        {{ $t('AI_AGENTS.NEW') }}
+        + {{ $t('AI_AGENTS.NEW') }}
       </button>
     </div>
 
-    <!-- List -->
-    <p v-if="!isLoading && !agents.length" class="text-sm text-n-slate-11 py-8 text-center">
+    <p v-if="!isLoading && !filtered.length" class="text-sm text-n-slate-11 py-8 text-center">
       {{ $t('AI_AGENTS.EMPTY') }}
     </p>
-    <div v-else class="border border-n-weak rounded-xl overflow-hidden">
+    <div v-else class="border border-n-weak rounded-xl overflow-visible">
       <table class="w-full text-sm">
         <thead class="bg-n-alpha-2 text-n-slate-11">
           <tr>
             <th class="text-left font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.NAME') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.STAGE') }}</th>
+            <th class="text-left font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.TYPE') }}</th>
             <th class="text-left font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.STATUS') }}</th>
             <th class="text-right font-medium px-3 py-2">{{ $t('AI_AGENTS.LIST.ACTIONS') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-n-weak text-n-slate-12">
-          <tr v-for="agent in agents" :key="agent.id">
-            <td class="px-3 py-2">{{ agent.assistant_name || agent.name }}</td>
-            <td class="px-3 py-2">{{ agent.stage }}</td>
-            <td class="px-3 py-2">{{ agent.status }}</td>
-            <td class="px-3 py-2 text-right whitespace-nowrap">
-              <router-link
-                class="text-n-brand hover:underline mx-2"
-                :to="{ name: 'ai_departments_index', params: { accountId: route.params.accountId, agentId: agent.id } }"
+          <tr v-for="agent in filtered" :key="agent.id">
+            <td class="px-3 py-3">{{ agent.assistant_name || agent.name }}</td>
+            <td class="px-3 py-3">{{ agent.stage }}</td>
+            <td class="px-3 py-3">
+              <span
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                :class="agent.status === 'active' ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-alpha-2 text-n-slate-11'"
               >
-                {{ $t('AI_AGENTS.LIST.DEPARTMENTS') }}
-              </router-link>
-              <button class="text-n-brand hover:underline mx-2" @click="openEdit(agent)">
-                {{ $t('AI_AGENTS.LIST.EDIT') }}
-              </button>
-              <button class="text-n-ruby-11 hover:underline" @click="remove(agent)">
-                {{ $t('AI_AGENTS.LIST.DELETE') }}
-              </button>
+                {{ agent.status === 'active' ? $t('AI_AGENTS.LIST.ACTIVE') : $t('AI_AGENTS.LIST.INACTIVE') }}
+              </span>
+            </td>
+            <td class="px-3 py-3 text-right whitespace-nowrap relative">
+              <button class="text-n-brand hover:underline mx-2" @click="goEdit(agent)">{{ $t('AI_AGENTS.LIST.EDIT') }}</button>
+              <button class="text-n-brand hover:underline mx-2" @click="goTest(agent)">{{ $t('AI_AGENTS.LIST.TEST') }}</button>
+              <button class="text-n-slate-11 hover:text-n-slate-12 px-1" @click="toggleMenu(agent.id)">⋮</button>
+              <div
+                v-if="openMenuId === agent.id"
+                class="absolute right-2 top-full z-10 mt-1 w-40 bg-n-solid-1 border border-n-weak rounded-lg shadow text-left"
+              >
+                <button class="block w-full text-left px-3 py-2 hover:bg-n-alpha-2" @click="duplicate(agent)">{{ $t('AI_AGENTS.LIST.DUPLICATE') }}</button>
+                <button class="block w-full text-left px-3 py-2 hover:bg-n-alpha-2" @click="toggleActive(agent)">
+                  {{ agent.status === 'active' ? $t('AI_AGENTS.LIST.DEACTIVATE') : $t('AI_AGENTS.LIST.ACTIVATE') }}
+                </button>
+                <button class="block w-full text-left px-3 py-2 text-n-ruby-11 hover:bg-n-alpha-2" @click="remove(agent)">{{ $t('AI_AGENTS.LIST.DELETE') }}</button>
+              </div>
             </td>
           </tr>
         </tbody>
       </table>
-    </div>
-
-    <!-- Identity form -->
-    <div v-if="showForm" class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-2">
-      <h2 class="text-base font-semibold text-n-slate-12">{{ $t('AI_AGENTS.FORM.IDENTITY') }}</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_AGENTS.FORM.NAME') }}
-          <input v-model="form.name" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_AGENTS.FORM.ASSISTANT_NAME') }}
-          <input v-model="form.assistant_name" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_AGENTS.FORM.STAGE') }}
-          <select v-model="form.stage" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1">
-            <option v-for="s in STAGES" :key="s" :value="s">{{ s }}</option>
-          </select>
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_AGENTS.FORM.PROFILE') }}
-          <select v-model="form.ai_operation_profile_id" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1">
-            <option value="">{{ $t('AI_AGENTS.FORM.NONE') }}</option>
-            <option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_AGENTS.FORM.ASSISTANT_LANGUAGE') }}
-          <input v-model="form.assistant_language" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_AGENTS.FORM.ASSISTANT_VOICE') }}
-          <input v-model="form.assistant_voice" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_AGENTS.FORM.ASSISTANT_AVATAR') }}
-          <input v-model="form.assistant_avatar" type="text" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1" />
-        </label>
-      </div>
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_AGENTS.FORM.ASSISTANT_DESCRIPTION') }}
-        <textarea v-model="form.assistant_description" rows="2" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none" />
-      </label>
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_AGENTS.FORM.ASSISTANT_PERSONALITY') }}
-        <textarea v-model="form.assistant_personality" rows="2" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none" />
-      </label>
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_AGENTS.FORM.BASE_PROMPT') }}
-        <textarea v-model="form.base_prompt" rows="3" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none" />
-      </label>
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_AGENTS.FORM.GUARDRAILS') }}
-        <textarea v-model="form.guardrails" rows="2" class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none" />
-      </label>
-      <div class="flex justify-end gap-2">
-        <button type="button" class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12" @click="showForm = false">
-          {{ $t('AI_AGENTS.FORM.CANCEL') }}
-        </button>
-        <button type="button" class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white" @click="save">
-          {{ $t('AI_AGENTS.FORM.SAVE') }}
-        </button>
-      </div>
     </div>
   </div>
 </template>

@@ -75,3 +75,10 @@ ai_sla_sweep_job:
   cron: '*/15 * * * *'
   class: 'Ai::SlaSweepJob'
   queue: scheduled_jobs
+
+# executed every 15 minutes
+# nudges quiet customers per the department follow-up config (live + canary gated)
+ai_followup_sweep_job:
+  cron: '*/15 * * * *'
+  class: 'Ai::FollowupSweepJob'
+  queue: scheduled_jobs

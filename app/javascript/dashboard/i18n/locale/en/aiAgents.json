@@ -2,16 +2,63 @@
   "AI_AGENTS": {
     "TITLE": "Agentes IA",
     "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende caixas e departamentos.",
-    "NEW": "Novo agente",
+    "NEW": "Novo agente de IA",
+    "BACK": "← Agentes IA",
     "EMPTY": "Nenhum agente IA criado ainda.",
+    "SEARCH": "Pesquisar",
+    "TABS": {
+      "ABOUT": "Sobre",
+      "DEPARTMENTS": "Departamentos",
+      "TEST": "Teste"
+    },
     "LIST": {
       "NAME": "Nome",
+      "TYPE": "Tipo",
       "STAGE": "Ambiente",
       "STATUS": "Status",
       "ACTIONS": "Ações",
       "EDIT": "Editar",
+      "TEST": "Testar",
+      "DUPLICATE": "Duplicar",
+      "ACTIVATE": "Ativar",
+      "DEACTIVATE": "Desativar",
       "DEPARTMENTS": "Departamentos",
-      "DELETE": "Excluir"
+      "DELETE": "Excluir",
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "IDENTIFY_AS": {
+      "LABEL": "Como ele deve se identificar",
+      "HUMAN": "Agir como humano",
+      "AI": "Agir como uma IA"
+    },
+    "SOBRE": {
+      "COMPANY": "Nome da empresa",
+      "SITE": "Site",
+      "VERSION": "Versão",
+      "MODEL": "Modelo (perfil operacional)"
+    },
+    "INBOXES": {
+      "TITLE": "Onde este agente atende",
+      "DESCRIPTION": "Escolha as caixas e o modo. Shadow só observa e registra; Live responde ao cliente.",
+      "NONE": "Não atende",
+      "SHADOW": "Shadow (observa)",
+      "LIVE": "Live (responde)",
+      "EMPTY": "Nenhuma caixa nesta conta.",
+      "SAVE": "Salvar caixas",
+      "SAVE_FIRST": "Salve o agente primeiro para vincular caixas."
+    },
+    "TEST": {
+      "TITLE": "Testar a IA",
+      "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
+      "SEND": "Enviar",
+      "DEPARTMENT": "Departamento escolhido",
+      "TOOL": "Ferramenta utilizada",
+      "KNOWLEDGE": "Conhecimento utilizado",
+      "TIME": "Tempo (ms)",
+      "COST": "Custo (USD)",
+      "REPLY": "Resposta da IA",
+      "NONE": "—"
     },
     "FORM": {
       "IDENTITY": "Identidade",
@@ -38,6 +85,7 @@
   "AI_DEPARTMENTS": {
     "TITLE": "Departamentos",
     "DESCRIPTION": "Cada departamento é um mini processo operacional: objetivo, etapas, regras de transferência e encerramento.",
+    "BACK": "← Departamentos",
     "NEW": "Novo departamento",
     "EMPTY": "Nenhum departamento criado para este agente.",
     "FORM": {
@@ -61,7 +109,76 @@
     "DELETED": "Departamento excluído.",
     "ERROR": "Algo deu errado ao salvar.",
     "TOOLS_LINK": "Ferramentas",
-    "KNOWLEDGE_LINK": "Conhecimento"
+    "KNOWLEDGE_LINK": "Conhecimento",
+    "DETAIL_TABS": {
+      "INSTRUCTIONS": "Instruções",
+      "ATTENDANCE": "Atendimento",
+      "KNOWLEDGE": "Conhecimento",
+      "STEPS": "Etapas",
+      "TOOLS": "Ferramentas",
+      "INTEGRATIONS": "Integrações"
+    },
+    "ATTENDANCE": {
+      "AUTO_TITLE": "Atendimento automático",
+      "AUTO_TOGGLE": "A IA responde automaticamente neste departamento",
+      "REPLY_TITLE": "Resposta ao cliente",
+      "REPLY_HINT": "Controla se a IA envia a mensagem ao cliente. Só vale em caixas no modo Live.",
+      "REPLY_SCOPE": "Quando enviar a resposta",
+      "REPLY_OFF": "Desligada (só observa)",
+      "REPLY_CANARY": "Apenas conversas com a label canário",
+      "REPLY_ALL": "Todas as conversas (rollout geral)",
+      "CANARY_LABEL": "Label canário (ex: ia-piloto)",
+      "TRANSFER_TITLE": "Transferência para humano",
+      "TRANSFER_WHEN": "Transferir quando (uma condição por linha)",
+      "TRANSFER_MESSAGE": "Mensagem ao transferir",
+      "SLA_TITLE": "SLA",
+      "SLA_TIMEOUT": "Tempo de resposta (minutos)",
+      "ON_TIMEOUT": "Ao estourar o SLA",
+      "ON_TIMEOUT_RESOLVE": "Encerrar conversa",
+      "ON_TIMEOUT_NONE": "Não fazer nada",
+      "HOURS_TITLE": "Horário de funcionamento",
+      "HOURS_TOGGLE": "Respeitar o horário de funcionamento da caixa (não responde fora do horário)",
+      "HOURS_MESSAGE": "Mensagem fora do horário",
+      "CLOSE_TITLE": "Encerramento automático",
+      "CLOSE_WHEN": "Encerrar quando (uma condição por linha)",
+      "CLOSE_INACTIVITY": "Encerrar após inatividade (minutos)",
+      "COPILOT_TITLE": "Copiloto",
+      "COPILOT_TOGGLE": "Sugerir respostas ao agente humano",
+      "ESCALATION_TITLE": "Regras de escalonamento",
+      "ESCALATION_WHEN": "Escalonar quando (uma condição por linha)",
+      "FOLLOWUP_TITLE": "Follow-up",
+      "FOLLOWUP_TOGGLE": "Enviar follow-up automático",
+      "FOLLOWUP_DELAY": "Aguardar (minutos)",
+      "FOLLOWUP_MESSAGE": "Mensagem de follow-up"
+    },
+    "LEAD_VARS": {
+      "TITLE": "Variáveis do lead",
+      "NEW": "Nova variável",
+      "EMPTY": "Nenhuma variável definida.",
+      "NAME": "Nome",
+      "DESCRIPTION": "Descrição",
+      "TYPE": "Tipo",
+      "VISIBLE": "Coletar no primeiro contato",
+      "VALUES": "Valores da lista (uma por linha)",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar",
+      "EDIT": "Editar",
+      "DELETE": "Excluir",
+      "CONFIRM_DELETE": "Excluir esta variável?",
+      "TYPES": {
+        "texto": "Texto",
+        "numero": "Número",
+        "booleano": "Sim/Não",
+        "lista": "Lista"
+      }
+    },
+    "INTEGRATIONS": {
+      "TITLE": "Integrações disponíveis",
+      "EMPTY": "Nenhuma integração cadastrada na conta.",
+      "ENABLED": "Ativa neste departamento",
+      "SAVE": "Salvar integrações"
+    },
+    "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento."
   },
   "AI_TOOLS": {
     "TITLE": "Ferramentas",

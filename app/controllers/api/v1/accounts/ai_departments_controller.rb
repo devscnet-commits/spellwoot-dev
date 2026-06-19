@@ -50,7 +50,9 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     {
       sla: hashify(source[:sla]),
       transfer_rules: hashify(source[:transfer_rules]),
-      close_rules: hashify(source[:close_rules])
+      close_rules: hashify(source[:close_rules]),
+      behavior: hashify(source[:behavior]),
+      follow_up: hashify(source[:follow_up])
     }.compact
   end
 

@@ -1,7 +1,7 @@
 <script setup>
+/* global axios */
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import axios from 'axios';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 

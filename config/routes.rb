@@ -66,9 +66,13 @@ Rails.application.routes.draw do
           end
           resources :ai_shadow_runs, only: [:index]
           resources :ai_agents do
+            member { post :test }
+            resource :ai_agent_inboxes, only: %i[show update]
             resources :ai_departments, only: %i[index create update destroy] do
               resources :ai_tools, only: %i[index create update destroy]
               resources :ai_knowledge_sources, only: %i[index create update destroy]
+              resources :ai_lead_variables, only: %i[index create update destroy]
+              resource :ai_department_integrations, only: %i[show update]
             end
           end
           resources :ai_operation_profiles, only: %i[index create update destroy]

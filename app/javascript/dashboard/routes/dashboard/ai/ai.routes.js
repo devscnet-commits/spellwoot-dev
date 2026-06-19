@@ -1,14 +1,13 @@
 import { frontendURL } from '../../../helper/URLHelper';
 import AiShadowRuns from './AiShadowRuns.vue';
 import AiAgents from './AiAgents.vue';
-import AiDepartments from './AiDepartments.vue';
-import AiTools from './AiTools.vue';
-import AiKnowledge from './AiKnowledge.vue';
+import AiAgentDetail from './AiAgentDetail.vue';
+import AiDepartmentDetail from './AiDepartmentDetail.vue';
 import AiProfiles from './AiProfiles.vue';
 import AiCosts from './AiCosts.vue';
 
-// Minimal, read-only validation surface for the AI Core shadow runs (F1 vertical slice).
-// Not the definitive "Agentes IA" UI — just enough to validate the shadow before going live.
+// "Agentes IA" configuration surface. Agents and their departments are edited through
+// the detail pages (tabs); Tools/Knowledge are embedded as tabs inside the department detail.
 export const routes = [
   {
     path: frontendURL('accounts/:accountId/ai/shadow-runs'),
@@ -27,25 +26,19 @@ export const routes = [
     },
   },
   {
-    path: frontendURL('accounts/:accountId/ai/agents/:agentId/departments'),
-    name: 'ai_departments_index',
-    component: AiDepartments,
+    path: frontendURL('accounts/:accountId/ai/agents/:agentId'),
+    name: 'ai_agent_detail',
+    component: AiAgentDetail,
     meta: {
       permissions: ['administrator'],
     },
   },
   {
-    path: frontendURL('accounts/:accountId/ai/agents/:agentId/departments/:departmentId/tools'),
-    name: 'ai_tools_index',
-    component: AiTools,
-    meta: {
-      permissions: ['administrator'],
-    },
-  },
-  {
-    path: frontendURL('accounts/:accountId/ai/agents/:agentId/departments/:departmentId/knowledge'),
-    name: 'ai_knowledge_index',
-    component: AiKnowledge,
+    path: frontendURL(
+      'accounts/:accountId/ai/agents/:agentId/departments/:departmentId/detail'
+    ),
+    name: 'ai_department_detail',
+    component: AiDepartmentDetail,
     meta: {
       permissions: ['administrator'],
     },

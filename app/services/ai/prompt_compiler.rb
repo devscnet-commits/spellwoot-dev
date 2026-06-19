@@ -3,7 +3,7 @@
 class Ai::PromptCompiler
   def self.compile(agent:, department:, knowledge:, memory:, tools:)
     parts = []
-    parts << "Você é #{agent.assistant_name.presence || agent.name}, assistente virtual da empresa."
+    parts.concat(identity_lines(agent))
     parts << agent.base_prompt if agent.base_prompt.present?
     parts << "Personalidade: #{agent.assistant_personality}." if agent.assistant_personality.present?
     parts << "Responda no idioma #{agent.assistant_language}." if agent.assistant_language.present?
@@ -16,6 +16,12 @@ class Ai::PromptCompiler
       parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
     end
 
+    lead_vars = department.lead_variables.to_a
+    if lead_vars.present?
+      lines = lead_vars.map { |v| "- #{v.name} (#{v.var_type})#{v.description.present? ? ": #{v.description}" : ''}" }
+      parts << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}"
+    end
+
     if tools.present?
       lines = tools.map { |t| "- #{t.name}: #{t.description} (input: #{t.input_schema.to_json})" }
       parts << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
@@ -25,6 +31,20 @@ class Ai::PromptCompiler
     parts << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
     parts << response_contract
     parts.join("\n\n")
+  end
+
+  # Identity block: name, company, how it should present itself (human vs IA).
+  def self.identity_lines(agent)
+    name = agent.assistant_name.presence || agent.name
+    company = "da empresa #{agent.company_name}" if agent.company_name.present?
+    lines = ["Você é #{[name, company].compact.join(' ')}.".squeeze(' ')]
+    lines << "Site da empresa: #{agent.site}." if agent.site.present?
+    lines << if agent.identify_as == 'ai'
+               'Você é um assistente virtual (IA) e pode assumir isso se perguntarem.'
+             else
+               'Aja como um atendente humano da equipe. Não diga que é uma inteligência artificial.'
+             end
+    lines
   end
 
   def self.response_contract

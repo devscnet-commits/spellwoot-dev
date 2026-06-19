@@ -1,6 +1,6 @@
 # CRUD for AI Agents (the "Agentes IA" config). Scoped to the current account; ai_* domain only.
 class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
-  before_action :set_agent, only: %i[show update destroy]
+  before_action :set_agent, only: %i[show update destroy test]
 
   def index
     render json: ::Ai::Agent.where(account_id: Current.account.id).order(:id)
@@ -32,6 +32,11 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
     head :no_content
   end
 
+  # Teste tab: dry-run a message against the agent and return the decision breakdown.
+  def test
+    render json: ::Ai::Tester.run(agent: @agent, message: params[:message].to_s, department_id: params[:department_id])
+  end
+
   private
 
   def set_agent
@@ -43,7 +48,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
     params.require(:ai_agent).permit(
       :name, :stage, :status, :assistant_name, :assistant_avatar, :assistant_description,
       :assistant_personality, :assistant_language, :assistant_voice, :base_prompt, :guardrails,
-      :ai_operation_profile_id
+      :ai_operation_profile_id, :company_name, :site, :version, :identify_as
     )
   end
 end
