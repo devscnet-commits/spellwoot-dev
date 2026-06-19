@@ -1,7 +1,7 @@
 <script setup>
+/* global axios */
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import axios from 'axios';
 
 const route = useRoute();
 const runs = ref([]);
