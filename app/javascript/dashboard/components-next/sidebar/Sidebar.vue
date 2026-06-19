@@ -377,8 +377,19 @@ const menuItems = computed(() => {
         {
           name: 'AIAgentsList',
           label: t('SIDEBAR.AI_AGENTS_LIST'),
-          activeOn: ['ai_agents_index', 'ai_departments_index', 'ai_tools_index'],
+          activeOn: [
+            'ai_agents_index',
+            'ai_departments_index',
+            'ai_tools_index',
+            'ai_knowledge_index',
+          ],
           to: accountScopedRoute('ai_agents_index'),
+        },
+        {
+          name: 'AIProfiles',
+          label: t('SIDEBAR.AI_PROFILES'),
+          activeOn: ['ai_profiles_index'],
+          to: accountScopedRoute('ai_profiles_index'),
         },
         {
           name: 'AIShadowRuns',

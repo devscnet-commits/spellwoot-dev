@@ -142,6 +142,12 @@ onMounted(fetchDepartments);
           >
             {{ $t('AI_DEPARTMENTS.TOOLS_LINK') }}
           </router-link>
+          <router-link
+            class="text-n-brand hover:underline mx-2"
+            :to="{ name: 'ai_knowledge_index', params: { accountId: route.params.accountId, agentId: route.params.agentId, departmentId: dept.id } }"
+          >
+            {{ $t('AI_DEPARTMENTS.KNOWLEDGE_LINK') }}
+          </router-link>
           <button class="text-n-brand hover:underline mx-2" @click="openEdit(dept)">{{ $t('AI_DEPARTMENTS.FORM.EDIT') }}</button>
           <button class="text-n-ruby-11 hover:underline" @click="remove(dept)">{{ $t('AI_DEPARTMENTS.FORM.DELETE') }}</button>
         </div>
