@@ -73,6 +73,7 @@ Rails.application.routes.draw do
           end
           resources :ai_operation_profiles, only: %i[index create update destroy]
           resources :ai_integration_links, only: [:index]
+          resources :ai_costs, only: [:index]
           post 'conversations/:conversation_id/ai_copilot', to: 'ai_copilot#create'
           namespace :captain do
             resource :preferences, only: [:show, :update]
