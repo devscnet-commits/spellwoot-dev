@@ -22,13 +22,44 @@ class Ai::Workers::MediaProcessor
     end
   end
 
-  # Extension point: integrate a transcription provider (e.g. Whisper) here.
-  def self.transcribe(_attachment)
+  # Audio transcription via OpenAI Whisper (reuses the configured OpenAI key). Guarded: any
+  # failure returns nil so the caller falls back to the generic marker.
+  def self.transcribe(attachment)
+    return nil unless attachment.file.attached?
+
+    api_key = openai_key
+    return nil if api_key.blank?
+
+    extension = File.extname(attachment.file.blob.filename.to_s).presence || '.ogg'
+    Tempfile.create(['ai-audio', extension]) do |tmp|
+      tmp.binmode
+      tmp.write(attachment.file.download)
+      tmp.rewind
+      response = HTTParty.post(
+        'https://api.openai.com/v1/audio/transcriptions',
+        headers: { 'Authorization' => "Bearer #{api_key}" },
+        multipart: true,
+        body: { model: 'whisper-1', file: tmp }
+      )
+      return nil unless response.success?
+
+      text = response.parsed_response.is_a?(Hash) ? response.parsed_response['text'] : nil
+      return text.present? ? "[Transcrição do áudio]: #{text}" : nil
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Workers::MediaProcessor] transcrição: #{e.class}: #{e.message}"
     nil
   end
 
   # Extension point: integrate a vision/OCR provider here.
   def self.ocr(_attachment)
     nil
+  end
+
+  def self.openai_key
+    value = (InstallationConfig.find_by(name: 'CAPTAIN_OPEN_AI_API_KEY')&.value if defined?(InstallationConfig))
+    value.presence || ENV.fetch('OPENAI_API_KEY', nil)
+  rescue StandardError
+    ENV.fetch('OPENAI_API_KEY', nil)
   end
 end
