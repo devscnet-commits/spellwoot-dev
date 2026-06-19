@@ -2,16 +2,52 @@
   "AI_AGENTS": {
     "TITLE": "Agentes IA",
     "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende caixas e departamentos.",
-    "NEW": "Novo agente",
+    "NEW": "Novo agente de IA",
     "EMPTY": "Nenhum agente IA criado ainda.",
+    "SEARCH": "Pesquisar",
+    "TABS": {
+      "ABOUT": "Sobre",
+      "DEPARTMENTS": "Departamentos",
+      "TEST": "Teste"
+    },
     "LIST": {
       "NAME": "Nome",
+      "TYPE": "Tipo",
       "STAGE": "Ambiente",
       "STATUS": "Status",
       "ACTIONS": "Ações",
       "EDIT": "Editar",
+      "TEST": "Testar",
+      "DUPLICATE": "Duplicar",
+      "ACTIVATE": "Ativar",
+      "DEACTIVATE": "Desativar",
       "DEPARTMENTS": "Departamentos",
-      "DELETE": "Excluir"
+      "DELETE": "Excluir",
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "IDENTIFY_AS": {
+      "LABEL": "Como ele deve se identificar",
+      "HUMAN": "Agir como humano",
+      "AI": "Agir como uma IA"
+    },
+    "SOBRE": {
+      "COMPANY": "Nome da empresa",
+      "SITE": "Site",
+      "VERSION": "Versão",
+      "MODEL": "Modelo (perfil operacional)"
+    },
+    "TEST": {
+      "TITLE": "Testar a IA",
+      "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
+      "SEND": "Enviar",
+      "DEPARTMENT": "Departamento escolhido",
+      "TOOL": "Ferramenta utilizada",
+      "KNOWLEDGE": "Conhecimento utilizado",
+      "TIME": "Tempo (ms)",
+      "COST": "Custo (USD)",
+      "REPLY": "Resposta da IA",
+      "NONE": "—"
     },
     "FORM": {
       "IDENTITY": "Identidade",

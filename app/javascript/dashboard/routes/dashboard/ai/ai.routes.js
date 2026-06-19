@@ -1,6 +1,7 @@
 import { frontendURL } from '../../../helper/URLHelper';
 import AiShadowRuns from './AiShadowRuns.vue';
 import AiAgents from './AiAgents.vue';
+import AiAgentDetail from './AiAgentDetail.vue';
 import AiDepartments from './AiDepartments.vue';
 import AiTools from './AiTools.vue';
 import AiKnowledge from './AiKnowledge.vue';
@@ -22,6 +23,14 @@ export const routes = [
     path: frontendURL('accounts/:accountId/ai/agents'),
     name: 'ai_agents_index',
     component: AiAgents,
+    meta: {
+      permissions: ['administrator'],
+    },
+  },
+  {
+    path: frontendURL('accounts/:accountId/ai/agents/:agentId'),
+    name: 'ai_agent_detail',
+    component: AiAgentDetail,
     meta: {
       permissions: ['administrator'],
     },
