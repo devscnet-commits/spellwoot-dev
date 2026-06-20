@@ -324,6 +324,7 @@ onMounted(async () => {
           'knowledge',
           'steps',
           'tools',
+          'followup',
           'integrations',
         ]"
         :key="tab"
@@ -689,7 +690,13 @@ onMounted(async () => {
           />
         </label>
       </section>
+    </div>
 
+    <!-- FOLLOW-UP -->
+    <div
+      v-else-if="activeTab === 'followup'"
+      class="flex flex-col gap-5 max-w-3xl"
+    >
       <section class="flex flex-col gap-2">
         <h2 class="text-base font-semibold text-n-slate-12">
           {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TITLE') }}
@@ -796,7 +803,9 @@ onMounted(async () => {
 
     <!-- Save bar (config tabs only) -->
     <div
-      v-if="['instructions', 'attendance', 'steps'].includes(activeTab)"
+      v-if="
+        ['instructions', 'attendance', 'steps', 'followup'].includes(activeTab)
+      "
       class="flex justify-end gap-2 border-t border-n-weak pt-4 max-w-3xl"
     >
       <button

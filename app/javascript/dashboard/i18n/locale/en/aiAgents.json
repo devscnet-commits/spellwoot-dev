@@ -61,8 +61,16 @@
       "SITE": "Site",
       "VERSION": "Versão",
       "MODEL": "Modelo (perfil operacional)",
+      "DESCRIPTION_FIELD": "Descrição",
+      "PERSONALITY": "Personalidade",
+      "VOICE": "Tom de voz",
+      "LANGUAGE": "Idioma",
       "GENERATE": "Gerar avatar com IA",
       "GENERATE_SOON": "Geração de avatar por IA disponível em breve."
+    },
+    "ATTENDS": {
+      "TITLE": "Este agente atende:",
+      "NONE": "Nenhuma caixa vinculada ainda. Configure na aba Caixas."
     },
     "INBOXES": {
       "TITLE": "Onde este agente atende",
@@ -76,6 +84,7 @@
     },
     "TEST": {
       "TITLE": "Testar a IA",
+      "QUESTION": "Pergunta (como se fosse o cliente)",
       "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
       "SEND": "Enviar",
       "DEPARTMENT": "Departamento escolhido",
@@ -154,10 +163,11 @@
     "KNOWLEDGE_LINK": "Conhecimento",
     "DETAIL_TABS": {
       "INSTRUCTIONS": "Instruções",
-      "ATTENDANCE": "Atendimento",
+      "ATTENDANCE": "Comportamento",
       "KNOWLEDGE": "Conhecimento",
       "STEPS": "Etapas",
       "TOOLS": "Ferramentas",
+      "FOLLOWUP": "Follow-up",
       "INTEGRATIONS": "Integrações"
     },
     "ATTENDANCE": {
