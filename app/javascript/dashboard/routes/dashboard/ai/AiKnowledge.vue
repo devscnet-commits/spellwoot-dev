@@ -102,63 +102,55 @@ onMounted(fetchSources);
 </script>
 
 <template>
-  <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-n-slate-12">
-          {{ $t('AI_KNOWLEDGE.TITLE') }}
-        </h1>
-        <p class="text-sm text-n-slate-11 mb-0">
-          {{ $t('AI_KNOWLEDGE.DESCRIPTION') }}
-        </p>
-      </div>
+  <div class="flex flex-col gap-5">
+    <div class="flex flex-col gap-2">
+      <span class="text-sm font-medium text-n-slate-12">
+        {{ $t('AI_KNOWLEDGE.DOCS_LABEL') }}
+      </span>
       <button
         type="button"
-        class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+        class="rounded-xl border border-dashed border-n-weak bg-n-solid-2 px-4 py-8 flex flex-col items-center gap-2 text-center hover:border-n-slate-7 transition-colors"
         @click="openNew"
       >
-        {{ $t('AI_KNOWLEDGE.NEW') }}
+        <span class="i-lucide-upload size-6 text-n-brand" />
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AI_KNOWLEDGE.UPLOAD_HINT') }}
+        </p>
+        <p class="text-xs text-n-slate-10 mb-0">
+          {{ $t('AI_KNOWLEDGE.UPLOAD_SUB') }}
+        </p>
       </button>
     </div>
 
-    <p
-      v-if="!isLoading && !sources.length"
-      class="text-sm text-n-slate-11 py-8 text-center"
-    >
-      {{ $t('AI_KNOWLEDGE.EMPTY') }}
-    </p>
-    <div v-else class="border border-n-weak rounded-xl divide-y divide-n-weak">
+    <div v-if="sources.length" class="flex flex-wrap gap-2">
       <div
         v-for="source in sources"
         :key="source.id"
-        class="flex items-center justify-between px-4 py-3"
+        class="flex items-center gap-2 rounded-lg border border-n-weak bg-n-solid-1 pl-3 pr-2 py-2 max-w-xs"
       >
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-n-slate-12">
-            {{
-              source.title ||
-              $t(`AI_KNOWLEDGE.KINDS.${source.kind.toUpperCase()}`)
-            }}
-          </p>
-          <p class="text-xs text-n-slate-11 truncate">
-            {{ $t(`AI_KNOWLEDGE.KINDS.${source.kind.toUpperCase()}`) }} ·
-            {{ source.chunks_count }} {{ $t('AI_KNOWLEDGE.CHUNKS') }}
-          </p>
-        </div>
-        <div class="shrink-0 whitespace-nowrap">
-          <button
-            class="text-n-brand hover:underline mx-2"
-            @click="openEdit(source)"
-          >
-            {{ $t('AI_KNOWLEDGE.FORM.EDIT') }}
-          </button>
-          <button
-            class="text-n-ruby-11 hover:underline"
-            @click="remove(source)"
-          >
-            {{ $t('AI_KNOWLEDGE.FORM.DELETE') }}
-          </button>
-        </div>
+        <span class="i-lucide-file-text size-4 text-n-slate-11 shrink-0" />
+        <span class="text-sm text-n-slate-12 truncate">
+          {{
+            source.title ||
+            $t(`AI_KNOWLEDGE.KINDS.${source.kind.toUpperCase()}`)
+          }}
+        </span>
+        <button
+          type="button"
+          class="shrink-0 text-n-slate-11 hover:text-n-slate-12"
+          :aria-label="$t('AI_KNOWLEDGE.FORM.EDIT')"
+          @click="openEdit(source)"
+        >
+          <span class="i-lucide-pencil size-3.5 inline-block" />
+        </button>
+        <button
+          type="button"
+          class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+          :aria-label="$t('AI_KNOWLEDGE.FORM.DELETE')"
+          @click="remove(source)"
+        >
+          <span class="i-lucide-trash-2 size-3.5 inline-block" />
+        </button>
       </div>
     </div>
 
