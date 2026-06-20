@@ -302,13 +302,42 @@
   },
   "AI_PROFILES": {
     "TITLE": "Perfis operacionais",
-    "DESCRIPTION": "Define provedor e modelo do supervisor por perfil de custo/qualidade.",
+    "DESCRIPTION": "A estratégia operacional completa da IA: supervisor, workers, roteamento por confiança e orçamento.",
     "NEW": "Novo perfil",
     "EMPTY": "Nenhum perfil operacional criado.",
+    "PRESET": {
+      "LABEL": "Modelo de perfil",
+      "ECONOMICO": "Econômico",
+      "BALANCEADO": "Balanceado",
+      "PREMIUM": "Premium",
+      "CUSTOMIZADO": "Customizado"
+    },
+    "SUPERVISOR": {
+      "TITLE": "Supervisor (modelo principal)",
+      "DESCRIPTION": "Decide a resposta e orquestra as ferramentas. É o cérebro do agente."
+    },
+    "WORKERS": {
+      "TITLE": "Workers (modelos auxiliares)",
+      "DESCRIPTION": "Modelos especializados e mais baratos para tarefas de apoio.",
+      "OCR": "OCR (imagem → texto)",
+      "CLASSIFICATION": "Classificação (departamento)",
+      "SUMMARY": "Resumo da conversa",
+      "TRANSLATION": "Tradução",
+      "RAG": "RAG (embeddings)"
+    },
+    "BUDGET": {
+      "TITLE": "Orçamento",
+      "DESCRIPTION": "Teto mensal de gasto com IA e o que fazer ao atingi-lo.",
+      "MONTHLY": "Orçamento mensal (USD)",
+      "ON_LIMIT": "Ao atingir o limite",
+      "ON_LIMIT_STOP": "Parar (cai para humano)",
+      "ON_LIMIT_DOWNGRADE": "Rebaixar (só modelos econômicos)",
+      "ON_LIMIT_ALERT": "Apenas avisar (continua)"
+    },
     "FORM": {
-      "NAME": "Nome (ex: balanceado)",
-      "PROVIDER": "Provedor do supervisor",
-      "MODEL": "Modelo do supervisor",
+      "NAME": "Nome do perfil",
+      "PROVIDER": "Provedor",
+      "MODEL": "Modelo",
       "BUDGET": "Orçamento mensal (USD)",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar",
