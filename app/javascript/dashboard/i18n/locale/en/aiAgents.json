@@ -97,6 +97,9 @@
       "NONE": "Não atende",
       "SHADOW": "Shadow (observa)",
       "LIVE": "Live (responde)",
+      "NONE_SHORT": "Não atende",
+      "SHADOW_SHORT": "Shadow",
+      "LIVE_SHORT": "Live",
       "EMPTY": "Nenhuma caixa nesta conta.",
       "SEARCH": "Buscar caixa...",
       "SAVE": "Salvar caixas",
@@ -104,6 +107,8 @@
     },
     "TEST": {
       "TITLE": "Testar a IA",
+      "LAB_TITLE": "Laboratório de teste",
+      "LAB_SUBTITLE": "Simule uma mensagem do cliente e veja a decisão do motor: departamento, conhecimento, modelo e custo.",
       "QUESTION": "Pergunta (como se fosse o cliente)",
       "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
       "SEND": "Enviar",
@@ -162,6 +167,7 @@
     "STEPS_TITLE": "Etapas da conversa",
     "NEW": "Novo departamento",
     "EMPTY": "Nenhum departamento criado para este agente.",
+    "NO_OBJETIVO": "Sem objetivo definido.",
     "FORM": {
       "NAME": "Nome",
       "OBJETIVO": "Objetivo",
