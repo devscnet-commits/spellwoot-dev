@@ -4,6 +4,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
+import Logo from 'next/icon/Logo.vue';
 import AiTools from './AiTools.vue';
 import AiKnowledge from './AiKnowledge.vue';
 
@@ -327,586 +328,619 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
-    <div class="flex items-center gap-3">
+  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
+    <div class="max-w-5xl mx-auto flex flex-col gap-3">
       <button
         type="button"
-        class="text-sm text-n-slate-11 hover:text-n-slate-12"
+        class="self-start text-sm text-n-slate-11 hover:text-n-slate-12"
         @click="goBack"
       >
         {{ $t('AI_DEPARTMENTS.BACK') }}
       </button>
-      <span class="text-n-slate-9">/</span>
-      <h1 class="text-xl font-semibold text-n-slate-12">
-        {{ form.name || $t('AI_DEPARTMENTS.NEW') }}
-      </h1>
-    </div>
 
-    <div class="flex flex-wrap gap-1 border-b border-n-weak">
-      <button
-        v-for="tab in [
-          'instructions',
-          'attendance',
-          'knowledge',
-          'steps',
-          'tools',
-          'followup',
-          'integrations',
-        ]"
-        :key="tab"
-        type="button"
-        class="px-4 py-2 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
-        :class="
-          activeTab === tab
-            ? 'border-n-brand text-n-brand'
-            : 'border-transparent text-n-slate-11'
-        "
-        :disabled="isNew && tab !== 'instructions'"
-        @click="activeTab = tab"
-      >
-        {{ $t(`AI_DEPARTMENTS.DETAIL_TABS.${tab.toUpperCase()}`) }}
-      </button>
-    </div>
-
-    <!-- INSTRUÇÕES -->
-    <div
-      v-if="activeTab === 'instructions'"
-      class="flex flex-col gap-4 max-w-3xl"
-    >
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
-        <input
-          v-model="form.name"
-          type="text"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-        />
-      </label>
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_DEPARTMENTS.FORM.OBJETIVO') }}
-        <input
-          v-model="form.objetivo"
-          type="text"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-        />
-      </label>
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_DEPARTMENTS.FORM.GREETING') }}
-        <input
-          v-model="form.greeting"
-          type="text"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-        />
-      </label>
-
-      <div class="flex items-center justify-between mt-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
-        </h2>
-        <button
-          type="button"
-          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-          :disabled="isNew"
-          @click="openVarNew"
-        >
-          {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
-        </button>
-      </div>
-      <p v-if="!leadVars.length" class="text-sm text-n-slate-11">
-        {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
-      </p>
       <div
-        v-else
-        class="border border-n-weak rounded-xl divide-y divide-n-weak"
+        class="rounded-2xl border border-n-weak bg-n-solid-1 px-6 sm:px-8 py-6 flex flex-col gap-5"
       >
-        <div
-          v-for="v in leadVars"
-          :key="v.id"
-          class="flex items-center justify-between px-4 py-3"
-        >
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-n-slate-12">{{ v.name }}</p>
-            <p class="text-xs text-n-slate-11 truncate">
-              {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${v.var_type}`) }} ·
-              {{ v.description }}
-            </p>
-          </div>
-          <div class="shrink-0 whitespace-nowrap">
-            <button
-              class="text-n-brand hover:underline mx-2"
-              @click="openVarEdit(v)"
-            >
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.EDIT') }}
-            </button>
-            <button
-              class="text-n-ruby-11 hover:underline"
-              @click="removeVar(v)"
-            >
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.DELETE') }}
-            </button>
-          </div>
+        <div class="flex items-start justify-between gap-4">
+          <h1 class="text-2xl font-semibold text-n-slate-12 truncate">
+            {{ form.name || $t('AI_DEPARTMENTS.NEW') }}
+          </h1>
+          <Logo class="h-7 w-auto shrink-0" />
         </div>
-      </div>
 
-      <div
-        v-if="showVarForm"
-        class="border border-n-weak rounded-xl p-4 flex flex-col gap-3 bg-n-solid-2"
-      >
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.LEAD_VARS.NAME') }}
-            <input
-              v-model="varForm.name"
-              type="text"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+        <div class="flex flex-wrap gap-1 border-b border-n-weak">
+          <button
+            v-for="tab in [
+              'instructions',
+              'attendance',
+              'knowledge',
+              'steps',
+              'tools',
+              'followup',
+              'integrations',
+            ]"
+            :key="tab"
+            type="button"
+            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
+            :class="
+              activeTab === tab
+                ? 'border-n-brand text-n-brand'
+                : 'border-transparent text-n-slate-11'
+            "
+            :disabled="isNew && tab !== 'instructions'"
+            @click="activeTab = tab"
+          >
+            {{ $t(`AI_DEPARTMENTS.DETAIL_TABS.${tab.toUpperCase()}`) }}
+          </button>
+        </div>
+
+        <!-- INSTRUÇÕES -->
+        <div v-if="activeTab === 'instructions'" class="flex flex-col gap-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
+              <input
+                v-model="form.name"
+                type="text"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.GREETING') }}
+              <input
+                v-model="form.greeting"
+                type="text"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </div>
+
+          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+            {{ $t('AI_DEPARTMENTS.INSTRUCTIONS_LABEL') }}
+            <textarea
+              v-model="form.objetivo"
+              rows="5"
+              :placeholder="$t('AI_DEPARTMENTS.INSTRUCTIONS_PLACEHOLDER')"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
             />
           </label>
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}
-            <select
-              v-model="varForm.var_type"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+
+          <div class="flex flex-col gap-3">
+            <span class="text-sm font-medium text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
+            </span>
+            <p v-if="!leadVars.length" class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
+            </p>
+            <div
+              v-for="v in leadVars"
+              :key="v.id"
+              class="flex items-center justify-between gap-3 rounded-xl border border-n-weak px-4 py-3"
             >
-              <option v-for="vt in VAR_TYPES" :key="vt" :value="vt">
-                {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${vt}`) }}
-              </option>
-            </select>
-          </label>
+              <div class="min-w-0">
+                <p
+                  class="text-sm font-medium text-n-slate-12 flex items-center gap-2"
+                >
+                  {{ v.name }}
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-n-alpha-2 text-xs font-normal text-n-slate-11"
+                  >
+                    {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${v.var_type}`) }}
+                  </span>
+                </p>
+                <p class="text-xs text-n-slate-11 truncate mb-0">
+                  {{ v.description }}
+                </p>
+              </div>
+              <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
+                <button
+                  type="button"
+                  class="hover:text-n-slate-12"
+                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.EDIT')"
+                  @click="openVarEdit(v)"
+                >
+                  <span class="i-lucide-pencil size-4 inline-block" />
+                </button>
+                <button
+                  type="button"
+                  class="hover:text-n-ruby-11"
+                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.DELETE')"
+                  @click="removeVar(v)"
+                >
+                  <span class="i-lucide-trash-2 size-4 inline-block" />
+                </button>
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <button
+                type="button"
+                class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white disabled:opacity-50"
+                :disabled="isNew"
+                @click="openVarNew"
+              >
+                + {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Modal: adicionar/editar variável -->
+          <div
+            v-if="showVarForm"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-n-alpha-black2 p-4"
+            @click.self="showVarForm = false"
+          >
+            <div
+              class="w-full max-w-md rounded-2xl border border-n-weak bg-n-solid-1 p-5 flex flex-col gap-3"
+            >
+              <h3 class="text-sm font-semibold text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.MODAL_TITLE') }}
+              </h3>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.NAME') }}
+                <input
+                  v-model="varForm.name"
+                  type="text"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
+                <input
+                  v-model="varForm.description"
+                  type="text"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}
+                <select
+                  v-model="varForm.var_type"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                >
+                  <option v-for="vt in VAR_TYPES" :key="vt" :value="vt">
+                    {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${vt}`) }}
+                  </option>
+                </select>
+              </label>
+              <label
+                v-if="varForm.var_type === 'lista'"
+                class="flex flex-col gap-1.5 text-sm text-n-slate-12"
+              >
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.VALUES') }}
+                <textarea
+                  v-model="varForm.values"
+                  rows="3"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                />
+              </label>
+              <label class="flex items-center gap-2 text-sm text-n-slate-12">
+                <input
+                  v-model="varForm.visible_in_first_chat"
+                  type="checkbox"
+                />
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.VISIBLE') }}
+              </label>
+              <div class="flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                  @click="showVarForm = false"
+                >
+                  {{ $t('AI_DEPARTMENTS.LEAD_VARS.CANCEL') }}
+                </button>
+                <button
+                  type="button"
+                  class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white"
+                  @click="saveVar"
+                >
+                  + {{ $t('AI_DEPARTMENTS.LEAD_VARS.SAVE') }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
-          <input
-            v-model="varForm.description"
-            type="text"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          />
-        </label>
-        <label
-          v-if="varForm.var_type === 'lista'"
-          class="flex flex-col gap-1 text-sm text-n-slate-12"
+
+        <!-- ATENDIMENTO -->
+        <div
+          v-else-if="activeTab === 'attendance'"
+          class="flex flex-col gap-5 max-w-3xl"
         >
-          {{ $t('AI_DEPARTMENTS.LEAD_VARS.VALUES') }}
-          <textarea
-            v-model="varForm.values"
-            rows="3"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-          />
-        </label>
-        <label class="flex items-center gap-2 text-sm text-n-slate-12">
-          <input v-model="varForm.visible_in_first_chat" type="checkbox" />
-          {{ $t('AI_DEPARTMENTS.LEAD_VARS.VISIBLE') }}
-        </label>
-        <div class="flex justify-end gap-2">
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TITLE') }}
+            </h2>
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.auto_attendance" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TOGGLE') }}
+            </label>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_TITLE') }}
+            </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_HINT') }}
+            </p>
+            <p v-if="!mappedInboxes.length" class="text-sm text-n-slate-11">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_EMPTY') }}
+            </p>
+            <template v-else>
+              <div
+                class="border border-n-weak rounded-xl divide-y divide-n-weak"
+              >
+                <label
+                  v-for="inbox in mappedInboxes"
+                  :key="inbox.inbox_id"
+                  class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
+                >
+                  <input v-model="inbox.enabled" type="checkbox" />
+                  <span>{{ inbox.name }}</span>
+                </label>
+              </div>
+              <div class="flex justify-end">
+                <button
+                  type="button"
+                  class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                  @click="saveMappedInboxes"
+                >
+                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_SAVE') }}
+                </button>
+              </div>
+            </template>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_TITLE') }}
+            </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_HINT') }}
+            </p>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_SCOPE') }}
+              <select
+                v-model="form.reply_scope"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              >
+                <option value="off">
+                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_OFF') }}
+                </option>
+                <option value="canary">
+                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') }}
+                </option>
+                <option value="all">
+                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_ALL') }}
+                </option>
+              </select>
+            </label>
+            <label
+              v-if="form.reply_scope === 'canary'"
+              class="flex flex-col gap-1 text-sm text-n-slate-12"
+            >
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CANARY_LABEL') }}
+              <input
+                v-model="form.canary_label"
+                type="text"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_TITLE') }}
+            </h2>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_WHEN') }}
+              <textarea
+                v-model="form.transfer_when"
+                rows="3"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_MESSAGE') }}
+              <input
+                v-model="form.transfer_message"
+                type="text"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TITLE') }}
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TIMEOUT') }}
+                <input
+                  v-model="form.sla_timeout"
+                  type="number"
+                  min="0"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT') }}
+                <select
+                  v-model="form.on_timeout"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                >
+                  <option value="resolve">
+                    {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_RESOLVE') }}
+                  </option>
+                  <option value="none">
+                    {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_NONE') }}
+                  </option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TITLE') }}
+            </h2>
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.hours_enabled" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TOGGLE') }}
+            </label>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_MESSAGE') }}
+              <input
+                v-model="form.hours_message"
+                type="text"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_TITLE') }}
+            </h2>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_WHEN') }}
+              <textarea
+                v-model="form.close_when"
+                rows="3"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_INACTIVITY') }}
+              <input
+                v-model="form.close_inactivity"
+                type="number"
+                min="0"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TITLE') }}
+            </h2>
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.copilot_enabled" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TOGGLE') }}
+            </label>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.ESCALATION_TITLE') }}
+            </h2>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.ESCALATION_WHEN') }}
+              <textarea
+                v-model="form.escalation_when"
+                rows="3"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
+            </label>
+          </section>
+        </div>
+
+        <!-- FOLLOW-UP -->
+        <div
+          v-else-if="activeTab === 'followup'"
+          class="flex flex-col gap-5 max-w-3xl"
+        >
+          <section class="flex flex-col gap-2">
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TITLE') }}
+            </h2>
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.followup_enabled" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TOGGLE') }}
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_DELAY') }}
+                <input
+                  v-model="form.followup_delay"
+                  type="number"
+                  min="0"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_MESSAGE') }}
+                <input
+                  v-model="form.followup_message"
+                  type="text"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <!-- ETAPAS -->
+        <div
+          v-else-if="activeTab === 'steps'"
+          class="flex flex-col gap-4 max-w-3xl"
+        >
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            {{ $t('AI_DEPARTMENTS.FORM.STEPS') }}
+            <textarea
+              v-model="form.steps"
+              rows="5"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+            />
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
+              <textarea
+                v-model="form.transfer_when_steps"
+                rows="3"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
+              <textarea
+                v-model="form.close_when_steps"
+                rows="3"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
+            </label>
+          </div>
+
+          <!-- Histórico de versões do playbook -->
+          <div
+            v-if="!isNew"
+            class="border-t border-n-weak pt-4 flex flex-col gap-3"
+          >
+            <button
+              type="button"
+              class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
+              @click="showVersions = !showVersions"
+            >
+              <span
+                class="size-4 inline-block"
+                :class="
+                  showVersions
+                    ? 'i-lucide-chevron-down'
+                    : 'i-lucide-chevron-right'
+                "
+              />
+              {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
+              <span class="text-n-slate-11 font-normal">{{
+                `(${versions.length})`
+              }}</span>
+            </button>
+            <div
+              v-if="showVersions"
+              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-72 overflow-auto"
+            >
+              <p
+                v-if="!versions.length"
+                class="text-sm text-n-slate-11 px-4 py-3 mb-0"
+              >
+                {{ $t('AI_AGENTS.VERSIONS.EMPTY') }}
+              </p>
+              <div
+                v-for="v in versions"
+                :key="v.id"
+                class="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm text-n-slate-12 mb-0">
+                    {{ `v${v.version_number}` }}
+                    <span v-if="v.note" class="text-n-slate-11">{{
+                      ` · ${v.note}`
+                    }}</span>
+                  </p>
+                  <p class="text-xs text-n-slate-11 mb-0">
+                    {{ formatVersionDate(v.created_at) }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="shrink-0 text-sm text-n-brand hover:underline"
+                  @click="restoreVersion(v)"
+                >
+                  {{ $t('AI_AGENTS.VERSIONS.RESTORE') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CONHECIMENTO -->
+        <AiKnowledge v-else-if="activeTab === 'knowledge' && !isNew" />
+
+        <!-- FERRAMENTAS -->
+        <AiTools v-else-if="activeTab === 'tools' && !isNew" />
+
+        <!-- INTEGRAÇÕES -->
+        <div
+          v-else-if="activeTab === 'integrations'"
+          class="flex flex-col gap-4 max-w-3xl"
+        >
+          <h2 class="text-base font-semibold text-n-slate-12">
+            {{ $t('AI_DEPARTMENTS.INTEGRATIONS.TITLE') }}
+          </h2>
+          <p v-if="!integrations.length" class="text-sm text-n-slate-11">
+            {{ $t('AI_DEPARTMENTS.INTEGRATIONS.EMPTY') }}
+          </p>
+          <div
+            v-else
+            class="border border-n-weak rounded-xl divide-y divide-n-weak"
+          >
+            <label
+              v-for="i in integrations"
+              :key="i.id"
+              class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
+            >
+              <input v-model="i.enabled" type="checkbox" />
+              <span class="font-medium">{{ i.name }}</span>
+            </label>
+          </div>
+          <div v-if="integrations.length" class="flex justify-end">
+            <button
+              type="button"
+              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+              @click="saveIntegrations"
+            >
+              {{ $t('AI_DEPARTMENTS.INTEGRATIONS.SAVE') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Save bar (config tabs only) -->
+        <div
+          v-if="
+            ['instructions', 'attendance', 'steps', 'followup'].includes(
+              activeTab
+            )
+          "
+          class="flex justify-end gap-2 border-t border-n-weak pt-4 max-w-3xl"
+        >
           <button
             type="button"
             class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-            @click="showVarForm = false"
+            @click="goBack"
           >
-            {{ $t('AI_DEPARTMENTS.LEAD_VARS.CANCEL') }}
+            {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
           </button>
           <button
             type="button"
-            class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
-            @click="saveVar"
+            class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
+            :disabled="isSaving"
+            @click="save"
           >
-            {{ $t('AI_DEPARTMENTS.LEAD_VARS.SAVE') }}
+            {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
           </button>
         </div>
       </div>
-    </div>
-
-    <!-- ATENDIMENTO -->
-    <div
-      v-else-if="activeTab === 'attendance'"
-      class="flex flex-col gap-5 max-w-3xl"
-    >
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TITLE') }}
-        </h2>
-        <label class="flex items-center gap-2 text-sm text-n-slate-12">
-          <input v-model="form.auto_attendance" type="checkbox" />
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TOGGLE') }}
-        </label>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_TITLE') }}
-        </h2>
-        <p class="text-sm text-n-slate-11 mb-0">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_HINT') }}
-        </p>
-        <p v-if="!mappedInboxes.length" class="text-sm text-n-slate-11">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_EMPTY') }}
-        </p>
-        <template v-else>
-          <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
-            <label
-              v-for="inbox in mappedInboxes"
-              :key="inbox.inbox_id"
-              class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
-            >
-              <input v-model="inbox.enabled" type="checkbox" />
-              <span>{{ inbox.name }}</span>
-            </label>
-          </div>
-          <div class="flex justify-end">
-            <button
-              type="button"
-              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-              @click="saveMappedInboxes"
-            >
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_SAVE') }}
-            </button>
-          </div>
-        </template>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_TITLE') }}
-        </h2>
-        <p class="text-sm text-n-slate-11 mb-0">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_HINT') }}
-        </p>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_SCOPE') }}
-          <select
-            v-model="form.reply_scope"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          >
-            <option value="off">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_OFF') }}
-            </option>
-            <option value="canary">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') }}
-            </option>
-            <option value="all">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_ALL') }}
-            </option>
-          </select>
-        </label>
-        <label
-          v-if="form.reply_scope === 'canary'"
-          class="flex flex-col gap-1 text-sm text-n-slate-12"
-        >
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.CANARY_LABEL') }}
-          <input
-            v-model="form.canary_label"
-            type="text"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          />
-        </label>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_TITLE') }}
-        </h2>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_WHEN') }}
-          <textarea
-            v-model="form.transfer_when"
-            rows="3"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-          />
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_MESSAGE') }}
-          <input
-            v-model="form.transfer_message"
-            type="text"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          />
-        </label>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TITLE') }}
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TIMEOUT') }}
-            <input
-              v-model="form.sla_timeout"
-              type="number"
-              min="0"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            />
-          </label>
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT') }}
-            <select
-              v-model="form.on_timeout"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            >
-              <option value="resolve">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_RESOLVE') }}
-              </option>
-              <option value="none">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_NONE') }}
-              </option>
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TITLE') }}
-        </h2>
-        <label class="flex items-center gap-2 text-sm text-n-slate-12">
-          <input v-model="form.hours_enabled" type="checkbox" />
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TOGGLE') }}
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_MESSAGE') }}
-          <input
-            v-model="form.hours_message"
-            type="text"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          />
-        </label>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_TITLE') }}
-        </h2>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_WHEN') }}
-          <textarea
-            v-model="form.close_when"
-            rows="3"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-          />
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_INACTIVITY') }}
-          <input
-            v-model="form.close_inactivity"
-            type="number"
-            min="0"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          />
-        </label>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TITLE') }}
-        </h2>
-        <label class="flex items-center gap-2 text-sm text-n-slate-12">
-          <input v-model="form.copilot_enabled" type="checkbox" />
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TOGGLE') }}
-        </label>
-      </section>
-
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.ESCALATION_TITLE') }}
-        </h2>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.ESCALATION_WHEN') }}
-          <textarea
-            v-model="form.escalation_when"
-            rows="3"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-          />
-        </label>
-      </section>
-    </div>
-
-    <!-- FOLLOW-UP -->
-    <div
-      v-else-if="activeTab === 'followup'"
-      class="flex flex-col gap-5 max-w-3xl"
-    >
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TITLE') }}
-        </h2>
-        <label class="flex items-center gap-2 text-sm text-n-slate-12">
-          <input v-model="form.followup_enabled" type="checkbox" />
-          {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TOGGLE') }}
-        </label>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_DELAY') }}
-            <input
-              v-model="form.followup_delay"
-              type="number"
-              min="0"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            />
-          </label>
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_MESSAGE') }}
-            <input
-              v-model="form.followup_message"
-              type="text"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            />
-          </label>
-        </div>
-      </section>
-    </div>
-
-    <!-- ETAPAS -->
-    <div
-      v-else-if="activeTab === 'steps'"
-      class="flex flex-col gap-4 max-w-3xl"
-    >
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_DEPARTMENTS.FORM.STEPS') }}
-        <textarea
-          v-model="form.steps"
-          rows="5"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-        />
-      </label>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
-          <textarea
-            v-model="form.transfer_when_steps"
-            rows="3"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-          />
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
-          <textarea
-            v-model="form.close_when_steps"
-            rows="3"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-          />
-        </label>
-      </div>
-
-      <!-- Histórico de versões do playbook -->
-      <div
-        v-if="!isNew"
-        class="border-t border-n-weak pt-4 flex flex-col gap-3"
-      >
-        <button
-          type="button"
-          class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
-          @click="showVersions = !showVersions"
-        >
-          <span
-            class="size-4 inline-block"
-            :class="
-              showVersions ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'
-            "
-          />
-          {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
-          <span class="text-n-slate-11 font-normal">{{
-            `(${versions.length})`
-          }}</span>
-        </button>
-        <div
-          v-if="showVersions"
-          class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-72 overflow-auto"
-        >
-          <p
-            v-if="!versions.length"
-            class="text-sm text-n-slate-11 px-4 py-3 mb-0"
-          >
-            {{ $t('AI_AGENTS.VERSIONS.EMPTY') }}
-          </p>
-          <div
-            v-for="v in versions"
-            :key="v.id"
-            class="flex items-center justify-between gap-3 px-4 py-2.5"
-          >
-            <div class="min-w-0">
-              <p class="text-sm text-n-slate-12 mb-0">
-                {{ `v${v.version_number}` }}
-                <span v-if="v.note" class="text-n-slate-11">{{
-                  ` · ${v.note}`
-                }}</span>
-              </p>
-              <p class="text-xs text-n-slate-11 mb-0">
-                {{ formatVersionDate(v.created_at) }}
-              </p>
-            </div>
-            <button
-              type="button"
-              class="shrink-0 text-sm text-n-brand hover:underline"
-              @click="restoreVersion(v)"
-            >
-              {{ $t('AI_AGENTS.VERSIONS.RESTORE') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- CONHECIMENTO -->
-    <AiKnowledge v-else-if="activeTab === 'knowledge' && !isNew" />
-
-    <!-- FERRAMENTAS -->
-    <AiTools v-else-if="activeTab === 'tools' && !isNew" />
-
-    <!-- INTEGRAÇÕES -->
-    <div
-      v-else-if="activeTab === 'integrations'"
-      class="flex flex-col gap-4 max-w-3xl"
-    >
-      <h2 class="text-base font-semibold text-n-slate-12">
-        {{ $t('AI_DEPARTMENTS.INTEGRATIONS.TITLE') }}
-      </h2>
-      <p v-if="!integrations.length" class="text-sm text-n-slate-11">
-        {{ $t('AI_DEPARTMENTS.INTEGRATIONS.EMPTY') }}
-      </p>
-      <div
-        v-else
-        class="border border-n-weak rounded-xl divide-y divide-n-weak"
-      >
-        <label
-          v-for="i in integrations"
-          :key="i.id"
-          class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
-        >
-          <input v-model="i.enabled" type="checkbox" />
-          <span class="font-medium">{{ i.name }}</span>
-        </label>
-      </div>
-      <div v-if="integrations.length" class="flex justify-end">
-        <button
-          type="button"
-          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
-          @click="saveIntegrations"
-        >
-          {{ $t('AI_DEPARTMENTS.INTEGRATIONS.SAVE') }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Save bar (config tabs only) -->
-    <div
-      v-if="
-        ['instructions', 'attendance', 'steps', 'followup'].includes(activeTab)
-      "
-      class="flex justify-end gap-2 border-t border-n-weak pt-4 max-w-3xl"
-    >
-      <button
-        type="button"
-        class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-        @click="goBack"
-      >
-        {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
-      </button>
-      <button
-        type="button"
-        class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
-        :disabled="isSaving"
-        @click="save"
-      >
-        {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
-      </button>
     </div>
   </div>
 </template>
