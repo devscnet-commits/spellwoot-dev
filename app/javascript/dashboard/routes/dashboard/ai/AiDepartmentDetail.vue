@@ -551,7 +551,9 @@ onMounted(async () => {
           v-else-if="activeTab === 'attendance'"
           class="flex flex-col gap-5 max-w-3xl"
         >
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TITLE') }}
             </h2>
@@ -561,7 +563,9 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_TITLE') }}
             </h2>
@@ -596,7 +600,9 @@ onMounted(async () => {
             </template>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_TITLE') }}
             </h2>
@@ -633,7 +639,9 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_TITLE') }}
             </h2>
@@ -655,7 +663,9 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TITLE') }}
             </h2>
@@ -686,7 +696,9 @@ onMounted(async () => {
             </div>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TITLE') }}
             </h2>
@@ -704,7 +716,9 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_TITLE') }}
             </h2>
@@ -727,7 +741,9 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TITLE') }}
             </h2>
@@ -737,7 +753,9 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.ESCALATION_TITLE') }}
             </h2>
@@ -757,7 +775,9 @@ onMounted(async () => {
           v-else-if="activeTab === 'followup'"
           class="flex flex-col gap-5 max-w-3xl"
         >
-          <section class="flex flex-col gap-2">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TITLE') }}
             </h2>
@@ -790,34 +810,41 @@ onMounted(async () => {
         <!-- ETAPAS -->
         <div
           v-else-if="activeTab === 'steps'"
-          class="flex flex-col gap-4 max-w-3xl"
+          class="flex flex-col gap-5 max-w-3xl"
         >
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.FORM.STEPS') }}
-            <textarea
-              v-model="form.steps"
-              rows="5"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-            />
-          </label>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
+          >
+            <span class="text-sm font-medium text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.STEPS_TITLE') }}
+            </span>
+            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.STEPS') }}
               <textarea
-                v-model="form.transfer_when_steps"
-                rows="3"
+                v-model="form.steps"
+                rows="5"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
               />
             </label>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
-              <textarea
-                v-model="form.close_when_steps"
-                rows="3"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-              />
-            </label>
-          </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
+                <textarea
+                  v-model="form.transfer_when_steps"
+                  rows="3"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                />
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
+                <textarea
+                  v-model="form.close_when_steps"
+                  rows="3"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                />
+              </label>
+            </div>
+          </section>
 
           <!-- Histórico de versões do playbook -->
           <div
