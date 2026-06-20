@@ -329,7 +329,7 @@ onMounted(async () => {
 
 <template>
   <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
-    <div class="max-w-5xl mx-auto flex flex-col gap-3">
+    <div class="max-w-4xl mx-auto flex flex-col gap-3">
       <button
         type="button"
         class="self-start text-sm text-n-slate-11 hover:text-n-slate-12"
@@ -339,16 +339,16 @@ onMounted(async () => {
       </button>
 
       <div
-        class="rounded-2xl border border-n-weak bg-n-solid-1 px-6 sm:px-8 py-6 flex flex-col gap-5"
+        class="rounded-2xl border border-n-weak bg-n-solid-1 px-6 sm:px-10 py-7 flex flex-col gap-6"
       >
-        <div class="flex items-start justify-between gap-4">
-          <h1 class="text-2xl font-semibold text-n-slate-12 truncate">
+        <div class="flex items-center justify-between gap-4">
+          <h1 class="text-3xl font-semibold text-n-slate-12 truncate">
             {{ form.name || $t('AI_DEPARTMENTS.NEW') }}
           </h1>
-          <Logo class="h-7 w-auto shrink-0" />
+          <Logo class="h-8 w-auto shrink-0" />
         </div>
 
-        <div class="flex flex-wrap gap-1 border-b border-n-weak">
+        <div class="flex flex-wrap gap-x-5 gap-y-1 border-b border-n-weak">
           <button
             v-for="tab in [
               'instructions',
@@ -361,11 +361,11 @@ onMounted(async () => {
             ]"
             :key="tab"
             type="button"
-            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
+            class="pb-2.5 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
             :class="
               activeTab === tab
                 ? 'border-n-brand text-n-brand'
-                : 'border-transparent text-n-slate-11'
+                : 'border-transparent text-n-slate-11 hover:text-n-slate-12'
             "
             :disabled="isNew && tab !== 'instructions'"
             @click="activeTab = tab"
@@ -375,51 +375,67 @@ onMounted(async () => {
         </div>
 
         <!-- INSTRUÇÕES -->
+        <!-- INSTRUÇÕES -->
         <div v-if="activeTab === 'instructions'" class="flex flex-col gap-5">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
+          >
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
+                <input
+                  v-model="form.name"
+                  type="text"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.GREETING') }}
+                <input
+                  v-model="form.greeting"
+                  type="text"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+            </div>
             <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
-              <input
-                v-model="form.name"
-                type="text"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              {{ $t('AI_DEPARTMENTS.INSTRUCTIONS_LABEL') }}
+              <textarea
+                v-model="form.objetivo"
+                rows="5"
+                :placeholder="$t('AI_DEPARTMENTS.INSTRUCTIONS_PLACEHOLDER')"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
               />
             </label>
-            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FORM.GREETING') }}
-              <input
-                v-model="form.greeting"
-                type="text"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              />
-            </label>
-          </div>
+          </section>
 
-          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.INSTRUCTIONS_LABEL') }}
-            <textarea
-              v-model="form.objetivo"
-              rows="5"
-              :placeholder="$t('AI_DEPARTMENTS.INSTRUCTIONS_PLACEHOLDER')"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-            />
-          </label>
-
-          <div class="flex flex-col gap-3">
-            <span class="text-sm font-medium text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
-            </span>
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
+              </span>
+              <button
+                type="button"
+                class="text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white disabled:opacity-50"
+                :disabled="isNew"
+                @click="openVarNew"
+              >
+                + {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
+              </button>
+            </div>
             <p v-if="!leadVars.length" class="text-sm text-n-slate-11 mb-0">
               {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
             </p>
             <div
               v-for="v in leadVars"
               :key="v.id"
-              class="flex items-center justify-between gap-3 rounded-xl border border-n-weak px-4 py-3"
+              class="flex items-center justify-between gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-4 py-3"
             >
               <div class="min-w-0">
                 <p
-                  class="text-sm font-medium text-n-slate-12 flex items-center gap-2"
+                  class="text-sm font-medium text-n-slate-12 flex items-center gap-2 mb-0"
                 >
                   {{ v.name }}
                   <span
@@ -451,17 +467,7 @@ onMounted(async () => {
                 </button>
               </div>
             </div>
-            <div class="flex justify-end">
-              <button
-                type="button"
-                class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white disabled:opacity-50"
-                :disabled="isNew"
-                @click="openVarNew"
-              >
-                + {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
-              </button>
-            </div>
-          </div>
+          </section>
 
           <!-- Modal: adicionar/editar variável -->
           <div
