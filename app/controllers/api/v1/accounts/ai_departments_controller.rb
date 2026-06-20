@@ -77,6 +77,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
       active: true
     )
     playbook.save!
+    ::Ai::PlaybookVersion.snapshot!(playbook)
   end
 
   def serialize(department)

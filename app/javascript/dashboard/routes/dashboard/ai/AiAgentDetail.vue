@@ -153,6 +153,33 @@ const saveAgent = async () => {
   }
 };
 
+// --- Histórico de versões ---
+const versions = ref([]);
+const showVersions = ref(false);
+const versionsUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_versions`;
+const fetchVersions = async () => {
+  if (isNew.value) return;
+  const { data } = await axios.get(versionsUrl());
+  versions.value = Array.isArray(data) ? data : [];
+};
+const restoreVersion = async v => {
+  // eslint-disable-next-line no-alert
+  if (!window.confirm(t('AI_AGENTS.VERSIONS.CONFIRM', { n: v.version_number })))
+    return;
+  try {
+    await axios.post(`${versionsUrl()}/${v.id}/restore`);
+    useAlert(t('AI_AGENTS.VERSIONS.RESTORED'));
+    await fetchAgent();
+    await fetchVersions();
+  } catch (error) {
+    useAlert(t('AI_AGENTS.ERROR'));
+  }
+};
+const formatVersionDate = iso => {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString();
+};
+
 const goBack = () => router.push({ name: 'ai_agents_index' });
 const newDepartment = () =>
   router.push({
@@ -216,7 +243,7 @@ const runTest = async () => {
 onMounted(async () => {
   await fetchProfiles();
   await fetchAgent();
-  await Promise.all([fetchDepartments(), fetchInboxes()]);
+  await Promise.all([fetchDepartments(), fetchInboxes(), fetchVersions()]);
 });
 </script>
 
@@ -418,6 +445,66 @@ onMounted(async () => {
               :is-loading="isSaving"
               @click="saveAgent"
             />
+          </div>
+
+          <!-- Histórico de versões -->
+          <div
+            v-if="!isNew"
+            class="border-t border-n-weak pt-4 flex flex-col gap-3"
+          >
+            <button
+              type="button"
+              class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
+              @click="showVersions = !showVersions"
+            >
+              <span
+                class="size-4 inline-block"
+                :class="
+                  showVersions
+                    ? 'i-lucide-chevron-down'
+                    : 'i-lucide-chevron-right'
+                "
+              />
+              {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
+              <span class="text-n-slate-11 font-normal">{{
+                `(${versions.length})`
+              }}</span>
+            </button>
+            <div
+              v-if="showVersions"
+              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-72 overflow-auto"
+            >
+              <p
+                v-if="!versions.length"
+                class="text-sm text-n-slate-11 px-4 py-3 mb-0"
+              >
+                {{ $t('AI_AGENTS.VERSIONS.EMPTY') }}
+              </p>
+              <div
+                v-for="v in versions"
+                :key="v.id"
+                class="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm text-n-slate-12 mb-0">
+                    {{ `v${v.version_number}` }}
+                    <span v-if="v.note" class="text-n-slate-11">{{
+                      ` · ${v.note}`
+                    }}</span>
+                  </p>
+                  <p class="text-xs text-n-slate-11 mb-0">
+                    {{ formatVersionDate(v.created_at) }}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  color="slate"
+                  size="sm"
+                  :label="$t('AI_AGENTS.VERSIONS.RESTORE')"
+                  @click="restoreVersion(v)"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
