@@ -3,7 +3,10 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   before_action :set_agent, only: %i[show update destroy test]
 
   def index
-    render json: ::Ai::Agent.where(account_id: Current.account.id).order(:id)
+    agents = ::Ai::Agent.where(account_id: Current.account.id)
+                        .includes(:operation_profile, :departments, :agent_inboxes)
+                        .order(:id)
+    render json: agents.map { |agent| serialize_list(agent) }
   end
 
   def show
@@ -46,9 +49,21 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
 
   def agent_params
     params.require(:ai_agent).permit(
-      :name, :stage, :status, :assistant_name, :assistant_avatar, :assistant_description,
+      :name, :stage, :status, :category, :assistant_name, :assistant_avatar, :assistant_description,
       :assistant_personality, :assistant_language, :assistant_voice, :base_prompt, :guardrails,
       :ai_operation_profile_id, :company_name, :site, :version, :identify_as
+    )
+  end
+
+  # List row: enrich with the department count, the profile name and whether the agent has any
+  # live/shadow binding, so the table can show Tipo / Perfil / Departamentos / Status at a glance.
+  def serialize_list(agent)
+    bindings = agent.agent_inboxes.select(&:active)
+    agent.as_json.merge(
+      'departments_count' => agent.departments.size,
+      'operation_profile_name' => agent.operation_profile&.name,
+      'has_live' => bindings.any? { |b| b.mode == 'live' },
+      'has_shadow' => bindings.any? { |b| b.mode == 'shadow' }
     )
   end
 end

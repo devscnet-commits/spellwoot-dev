@@ -55,6 +55,7 @@ const agentUrl = () => `${accountUrl()}/ai_agents`;
 const agentForm = reactive({
   name: '',
   assistant_name: '',
+  category: '',
   company_name: '',
   site: '',
   version: '',
@@ -169,6 +170,12 @@ const fetchInboxes = async () => {
 const boundInboxes = computed(() =>
   inboxes.value.filter(i => i.mode && i.mode !== 'none')
 );
+const inboxSearch = ref('');
+const filteredInboxes = computed(() => {
+  const q = inboxSearch.value.trim().toLowerCase();
+  if (!q) return inboxes.value;
+  return inboxes.value.filter(i => (i.name || '').toLowerCase().includes(q));
+});
 const modeLabel = mode =>
   mode === 'live' ? t('AI_AGENTS.INBOXES.LIVE') : t('AI_AGENTS.INBOXES.SHADOW');
 const saveInboxes = async () => {
@@ -315,6 +322,10 @@ onMounted(async () => {
             :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
           />
           <Input
+            v-model="agentForm.category"
+            :label="$t('AI_AGENTS.SOBRE.CATEGORY')"
+          />
+          <Input
             v-model="agentForm.company_name"
             :label="$t('AI_AGENTS.SOBRE.COMPANY')"
           />
@@ -443,9 +454,17 @@ onMounted(async () => {
           {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
         </p>
         <template v-else>
-          <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
+          <input
+            v-model="inboxSearch"
+            type="search"
+            :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
+            class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+          />
+          <div
+            class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-96 overflow-auto"
+          >
             <div
-              v-for="inbox in inboxes"
+              v-for="inbox in filteredInboxes"
               :key="inbox.inbox_id"
               class="flex items-center justify-between gap-3 px-4 py-3"
             >
