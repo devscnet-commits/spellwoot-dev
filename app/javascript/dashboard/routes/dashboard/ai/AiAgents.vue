@@ -6,6 +6,7 @@ import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import Select from 'dashboard/components-next/select/Select.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -54,6 +55,26 @@ const categories = computed(() => [
   'all',
   ...new Set(agents.value.map(a => a.category).filter(Boolean)),
 ]);
+
+const typeOptions = computed(() => [
+  { value: 'all', label: t('AI_AGENTS.LIST.FILTER_TYPE') },
+  ...categories.value.slice(1).map(c => ({ value: c, label: c })),
+]);
+const statusOptions = computed(() =>
+  STATUSES.map(s => ({
+    value: s,
+    label:
+      s === 'all'
+        ? t('AI_AGENTS.LIST.FILTER_STATUS')
+        : t(`AI_AGENTS.LIST.STATUS_${s.toUpperCase()}`),
+  }))
+);
+const stageOptions = computed(() =>
+  STAGES.map(s => ({
+    value: s,
+    label: t(`AI_AGENTS.STAGES.${s.toUpperCase()}`),
+  }))
+);
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -174,37 +195,11 @@ onMounted(fetchAgents);
         v-model="search"
         type="search"
         :placeholder="$t('AI_AGENTS.SEARCH')"
-        class="w-56 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+        class="flex-1 min-w-48 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
       />
-      <select
-        v-model="typeFilter"
-        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-      >
-        <option value="all">{{ $t('AI_AGENTS.LIST.FILTER_TYPE') }}</option>
-        <option v-for="c in categories.slice(1)" :key="c" :value="c">
-          {{ c }}
-        </option>
-      </select>
-      <select
-        v-model="statusFilter"
-        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-      >
-        <option v-for="s in STATUSES" :key="s" :value="s">
-          {{
-            s === 'all'
-              ? $t('AI_AGENTS.LIST.FILTER_STATUS')
-              : $t(`AI_AGENTS.LIST.STATUS_${s.toUpperCase()}`)
-          }}
-        </option>
-      </select>
-      <select
-        v-model="stageFilter"
-        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-      >
-        <option v-for="s in STAGES" :key="s" :value="s">
-          {{ $t(`AI_AGENTS.STAGES.${s.toUpperCase()}`) }}
-        </option>
-      </select>
+      <Select v-model="typeFilter" :options="typeOptions" />
+      <Select v-model="statusFilter" :options="statusOptions" />
+      <Select v-model="stageFilter" :options="stageOptions" />
     </div>
 
     <p
