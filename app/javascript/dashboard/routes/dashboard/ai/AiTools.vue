@@ -163,41 +163,39 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-n-slate-12">
-          {{ $t('AI_TOOLS.TITLE') }}
-        </h1>
-        <p class="text-sm text-n-slate-11 mb-0">
-          {{ $t('AI_TOOLS.DESCRIPTION') }}
-        </p>
-      </div>
+  <div class="flex flex-col gap-4">
+    <div class="flex items-center justify-between gap-4">
+      <span class="text-sm font-medium text-n-slate-12">
+        {{ $t('AI_TOOLS.DESCRIPTION') }}
+      </span>
       <button
         type="button"
-        class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+        class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white"
         @click="openNew"
       >
-        {{ $t('AI_TOOLS.NEW') }}
+        + {{ $t('AI_TOOLS.NEW') }}
       </button>
     </div>
 
     <p
       v-if="!isLoading && !tools.length"
-      class="text-sm text-n-slate-11 py-8 text-center"
+      class="text-sm text-n-slate-11 py-6 text-center"
     >
       {{ $t('AI_TOOLS.EMPTY') }}
     </p>
-    <div v-else class="border border-n-weak rounded-xl divide-y divide-n-weak">
+    <div v-else class="flex flex-col gap-2">
       <div
         v-for="tool in tools"
         :key="tool.id"
-        class="flex items-center justify-between px-4 py-3"
+        class="flex items-center justify-between gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-4 py-3"
       >
         <div class="min-w-0 flex items-center gap-2">
+          <span class="i-lucide-wrench size-4 text-n-slate-11 shrink-0" />
           <div class="min-w-0">
-            <p class="text-sm font-medium text-n-slate-12">{{ tool.name }}</p>
-            <p class="text-xs text-n-slate-11 truncate">
+            <p class="text-sm font-medium text-n-slate-12 mb-0 truncate">
+              {{ tool.name }}
+            </p>
+            <p class="text-xs text-n-slate-11 truncate mb-0">
               {{
                 tool.implementation_type === 'capability'
                   ? capabilityLabel(tool.capability_key)
@@ -212,15 +210,22 @@ onMounted(() => {
             {{ governanceLabel(tool.governance) }}
           </span>
         </div>
-        <div class="shrink-0 whitespace-nowrap">
+        <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
           <button
-            class="text-n-brand hover:underline mx-2"
+            type="button"
+            class="hover:text-n-slate-12"
+            :aria-label="$t('AI_TOOLS.FORM.EDIT')"
             @click="openEdit(tool)"
           >
-            {{ $t('AI_TOOLS.FORM.EDIT') }}
+            <span class="i-lucide-pencil size-4 inline-block" />
           </button>
-          <button class="text-n-ruby-11 hover:underline" @click="remove(tool)">
-            {{ $t('AI_TOOLS.FORM.DELETE') }}
+          <button
+            type="button"
+            class="hover:text-n-ruby-11"
+            :aria-label="$t('AI_TOOLS.FORM.DELETE')"
+            @click="remove(tool)"
+          >
+            <span class="i-lucide-trash-2 size-4 inline-block" />
           </button>
         </div>
       </div>
