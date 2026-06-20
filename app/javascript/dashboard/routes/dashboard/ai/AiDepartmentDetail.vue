@@ -375,90 +375,107 @@ onMounted(async () => {
         </div>
 
         <!-- INSTRUÇÕES -->
-        <div
-          v-if="activeTab === 'instructions'"
-          class="flex flex-col gap-4 max-w-3xl"
-        >
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
-            <input
-              v-model="form.name"
-              type="text"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            />
-          </label>
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.FORM.OBJETIVO') }}
-            <input
+        <div v-if="activeTab === 'instructions'" class="flex flex-col gap-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
+              <input
+                v-model="form.name"
+                type="text"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.GREETING') }}
+              <input
+                v-model="form.greeting"
+                type="text"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </div>
+
+          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+            {{ $t('AI_DEPARTMENTS.INSTRUCTIONS_LABEL') }}
+            <textarea
               v-model="form.objetivo"
-              type="text"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            />
-          </label>
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.FORM.GREETING') }}
-            <input
-              v-model="form.greeting"
-              type="text"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              rows="5"
+              :placeholder="$t('AI_DEPARTMENTS.INSTRUCTIONS_PLACEHOLDER')"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
             />
           </label>
 
-          <div class="flex items-center justify-between mt-2">
-            <h2 class="text-base font-semibold text-n-slate-12">
+          <div class="flex flex-col gap-3">
+            <span class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
-            </h2>
-            <button
-              type="button"
-              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-              :disabled="isNew"
-              @click="openVarNew"
-            >
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
-            </button>
-          </div>
-          <p v-if="!leadVars.length" class="text-sm text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
-          </p>
-          <div
-            v-else
-            class="border border-n-weak rounded-xl divide-y divide-n-weak"
-          >
+            </span>
+            <p v-if="!leadVars.length" class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
+            </p>
             <div
               v-for="v in leadVars"
               :key="v.id"
-              class="flex items-center justify-between px-4 py-3"
+              class="flex items-center justify-between gap-3 rounded-xl border border-n-weak px-4 py-3"
             >
               <div class="min-w-0">
-                <p class="text-sm font-medium text-n-slate-12">{{ v.name }}</p>
-                <p class="text-xs text-n-slate-11 truncate">
-                  {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${v.var_type}`) }} ·
+                <p
+                  class="text-sm font-medium text-n-slate-12 flex items-center gap-2"
+                >
+                  {{ v.name }}
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-n-alpha-2 text-xs font-normal text-n-slate-11"
+                  >
+                    {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${v.var_type}`) }}
+                  </span>
+                </p>
+                <p class="text-xs text-n-slate-11 truncate mb-0">
                   {{ v.description }}
                 </p>
               </div>
-              <div class="shrink-0 whitespace-nowrap">
+              <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
                 <button
-                  class="text-n-brand hover:underline mx-2"
+                  type="button"
+                  class="hover:text-n-slate-12"
+                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.EDIT')"
                   @click="openVarEdit(v)"
                 >
-                  {{ $t('AI_DEPARTMENTS.LEAD_VARS.EDIT') }}
+                  <span class="i-lucide-pencil size-4 inline-block" />
                 </button>
                 <button
-                  class="text-n-ruby-11 hover:underline"
+                  type="button"
+                  class="hover:text-n-ruby-11"
+                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.DELETE')"
                   @click="removeVar(v)"
                 >
-                  {{ $t('AI_DEPARTMENTS.LEAD_VARS.DELETE') }}
+                  <span class="i-lucide-trash-2 size-4 inline-block" />
                 </button>
               </div>
             </div>
+            <div class="flex justify-end">
+              <button
+                type="button"
+                class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white disabled:opacity-50"
+                :disabled="isNew"
+                @click="openVarNew"
+              >
+                + {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
+              </button>
+            </div>
           </div>
 
+          <!-- Modal: adicionar/editar variável -->
           <div
             v-if="showVarForm"
-            class="border border-n-weak rounded-xl p-4 flex flex-col gap-3 bg-n-solid-2"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-n-alpha-black2 p-4"
+            @click.self="showVarForm = false"
           >
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            <div
+              class="w-full max-w-md rounded-2xl border border-n-weak bg-n-solid-1 p-5 flex flex-col gap-3"
+            >
+              <h3 class="text-sm font-semibold text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.MODAL_TITLE') }}
+              </h3>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.LEAD_VARS.NAME') }}
                 <input
                   v-model="varForm.name"
@@ -466,7 +483,15 @@ onMounted(async () => {
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
                 />
               </label>
-              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
+                <input
+                  v-model="varForm.description"
+                  type="text"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}
                 <select
                   v-model="varForm.var_type"
@@ -477,45 +502,40 @@ onMounted(async () => {
                   </option>
                 </select>
               </label>
-            </div>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
-              <input
-                v-model="varForm.description"
-                type="text"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              />
-            </label>
-            <label
-              v-if="varForm.var_type === 'lista'"
-              class="flex flex-col gap-1 text-sm text-n-slate-12"
-            >
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.VALUES') }}
-              <textarea
-                v-model="varForm.values"
-                rows="3"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-              />
-            </label>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="varForm.visible_in_first_chat" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.VISIBLE') }}
-            </label>
-            <div class="flex justify-end gap-2">
-              <button
-                type="button"
-                class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-                @click="showVarForm = false"
+              <label
+                v-if="varForm.var_type === 'lista'"
+                class="flex flex-col gap-1.5 text-sm text-n-slate-12"
               >
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.CANCEL') }}
-              </button>
-              <button
-                type="button"
-                class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
-                @click="saveVar"
-              >
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.SAVE') }}
-              </button>
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.VALUES') }}
+                <textarea
+                  v-model="varForm.values"
+                  rows="3"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                />
+              </label>
+              <label class="flex items-center gap-2 text-sm text-n-slate-12">
+                <input
+                  v-model="varForm.visible_in_first_chat"
+                  type="checkbox"
+                />
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.VISIBLE') }}
+              </label>
+              <div class="flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                  @click="showVarForm = false"
+                >
+                  {{ $t('AI_DEPARTMENTS.LEAD_VARS.CANCEL') }}
+                </button>
+                <button
+                  type="button"
+                  class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white"
+                  @click="saveVar"
+                >
+                  + {{ $t('AI_DEPARTMENTS.LEAD_VARS.SAVE') }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
