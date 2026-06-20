@@ -84,6 +84,13 @@
       "TITLE": "Este agente atende:",
       "NONE": "Nenhuma caixa vinculada ainda. Configure na aba Caixas."
     },
+    "VERSIONS": {
+      "TITLE": "Histórico de versões",
+      "EMPTY": "Nenhuma versão registrada ainda.",
+      "RESTORE": "Restaurar",
+      "RESTORED": "Versão restaurada.",
+      "CONFIRM": "Restaurar a configuração da v{n}? A versão atual fica salva no histórico."
+    },
     "INBOXES": {
       "TITLE": "Onde este agente atende",
       "DESCRIPTION": "Escolha as caixas e o modo. Shadow só observa e registra; Live responde ao cliente.",

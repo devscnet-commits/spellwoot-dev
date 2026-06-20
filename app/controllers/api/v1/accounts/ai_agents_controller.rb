@@ -16,6 +16,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   def create
     agent = ::Ai::Agent.new(agent_params.merge(account_id: Current.account.id))
     if agent.save
+      ::Ai::AgentVersion.snapshot!(agent)
       render json: agent, status: :created
     else
       render json: { errors: agent.errors.full_messages }, status: :unprocessable_entity
@@ -24,6 +25,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
 
   def update
     if @agent.update(agent_params)
+      ::Ai::AgentVersion.snapshot!(@agent)
       render json: @agent
     else
       render json: { errors: @agent.errors.full_messages }, status: :unprocessable_entity

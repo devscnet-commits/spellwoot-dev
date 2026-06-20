@@ -68,12 +68,18 @@ Rails.application.routes.draw do
           resources :ai_agents do
             member { post :test }
             resource :ai_agent_inboxes, only: %i[show update]
+            resources :ai_agent_versions, only: [:index] do
+              member { post :restore }
+            end
             resources :ai_departments, only: %i[index create update destroy] do
               resources :ai_tools, only: %i[index create update destroy]
               resources :ai_knowledge_sources, only: %i[index create update destroy]
               resources :ai_lead_variables, only: %i[index create update destroy]
               resource :ai_department_integrations, only: %i[show update]
               resource :ai_department_inboxes, only: %i[show update]
+              resources :ai_playbook_versions, only: [:index] do
+                member { post :restore }
+              end
             end
           end
           resources :ai_operation_profiles, only: %i[index create update destroy]
