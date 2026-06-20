@@ -26,7 +26,9 @@ onMounted(fetchRuns);
 </script>
 
 <template>
-  <div class="flex flex-col w-full h-full overflow-auto p-6 gap-4">
+  <div
+    class="flex flex-col w-full h-full overflow-auto p-6 gap-4 max-w-5xl mx-auto"
+  >
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
         <h1 class="text-xl font-semibold text-n-slate-12">
@@ -42,11 +44,18 @@ onMounted(fetchRuns);
         :disabled="isLoading"
         @click="fetchRuns"
       >
-        {{ isLoading ? $t('AI_SHADOW_RUNS.LOADING') : $t('AI_SHADOW_RUNS.REFRESH') }}
+        {{
+          isLoading
+            ? $t('AI_SHADOW_RUNS.LOADING')
+            : $t('AI_SHADOW_RUNS.REFRESH')
+        }}
       </button>
     </div>
 
-    <p v-if="!isLoading && !runs.length" class="text-sm text-n-slate-11 py-8 text-center">
+    <p
+      v-if="!isLoading && !runs.length"
+      class="text-sm text-n-slate-11 py-8 text-center"
+    >
       {{ $t('AI_SHADOW_RUNS.EMPTY') }}
     </p>
 
@@ -57,25 +66,59 @@ onMounted(fetchRuns);
       <table class="w-full text-sm">
         <thead class="bg-n-alpha-2 text-n-slate-11">
           <tr>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.CONVERSATION') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.DEPARTMENT') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.KNOWLEDGE') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.REPLY') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.TOOL') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.MODEL') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.COST') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.LATENCY') }}</th>
-            <th class="text-left font-medium px-3 py-2">{{ $t('AI_SHADOW_RUNS.COLUMNS.STATUS') }}</th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.CONVERSATION') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.DEPARTMENT') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.KNOWLEDGE') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.REPLY') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.TOOL') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.MODEL') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.COST') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.LATENCY') }}
+            </th>
+            <th class="text-left font-medium px-3 py-2">
+              {{ $t('AI_SHADOW_RUNS.COLUMNS.STATUS') }}
+            </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-n-weak text-n-slate-12">
           <tr v-for="run in runs" :key="run.id" class="align-top">
-            <td class="px-3 py-2 whitespace-nowrap">#{{ run.conversation_id }}</td>
-            <td class="px-3 py-2 whitespace-nowrap">{{ run.department || $t('AI_SHADOW_RUNS.NONE') }}</td>
-            <td class="px-3 py-2 whitespace-nowrap">{{ run.knowledge_count ?? 0 }}</td>
-            <td class="px-3 py-2 max-w-md">{{ run.reply_text || $t('AI_SHADOW_RUNS.NONE') }}</td>
-            <td class="px-3 py-2 whitespace-nowrap">{{ run.tool && run.tool.name ? run.tool.name : $t('AI_SHADOW_RUNS.NONE') }}</td>
-            <td class="px-3 py-2 whitespace-nowrap">{{ run.provider }} / {{ run.model }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              #{{ run.conversation_id }}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              {{ run.department || $t('AI_SHADOW_RUNS.NONE') }}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              {{ run.knowledge_count ?? 0 }}
+            </td>
+            <td class="px-3 py-2 max-w-md">
+              {{ run.reply_text || $t('AI_SHADOW_RUNS.NONE') }}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              {{
+                run.tool && run.tool.name
+                  ? run.tool.name
+                  : $t('AI_SHADOW_RUNS.NONE')
+              }}
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              {{ run.provider }} / {{ run.model }}
+            </td>
             <td class="px-3 py-2 whitespace-nowrap">{{ run.cost }}</td>
             <td class="px-3 py-2 whitespace-nowrap">{{ run.latency_ms }}</td>
             <td class="px-3 py-2 whitespace-nowrap">{{ run.status }}</td>
