@@ -10,6 +10,7 @@ import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
+import Logo from 'next/icon/Logo.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -115,8 +116,13 @@ const onAvatarUpload = ({ file }) => {
   };
   reader.readAsDataURL(file);
 };
-const onAvatarDelete = () => {
-  agentForm.assistant_avatar = '';
+const fileInput = ref(null);
+const triggerUpload = () => {
+  if (fileInput.value) fileInput.value.click();
+};
+const onFilePick = e => {
+  const file = e.target.files && e.target.files[0];
+  if (file) onAvatarUpload({ file });
 };
 const generateAvatar = () => useAlert(t('AI_AGENTS.SOBRE.GENERATE_SOON'));
 
@@ -159,7 +165,7 @@ const editDepartment = dept =>
     params: { agentId: agentId.value, departmentId: dept.id },
   });
 
-// --- Caixas (live/shadow binding) + "atende" summary at the top ---
+// --- Caixas (live/shadow binding) ---
 const inboxes = ref([]);
 const inboxesUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_inboxes`;
 const fetchInboxes = async () => {
@@ -167,17 +173,12 @@ const fetchInboxes = async () => {
   const { data } = await axios.get(inboxesUrl());
   inboxes.value = Array.isArray(data) ? data : [];
 };
-const boundInboxes = computed(() =>
-  inboxes.value.filter(i => i.mode && i.mode !== 'none')
-);
 const inboxSearch = ref('');
 const filteredInboxes = computed(() => {
   const q = inboxSearch.value.trim().toLowerCase();
   if (!q) return inboxes.value;
   return inboxes.value.filter(i => (i.name || '').toLowerCase().includes(q));
 });
-const modeLabel = mode =>
-  mode === 'live' ? t('AI_AGENTS.INBOXES.LIVE') : t('AI_AGENTS.INBOXES.SHADOW');
 const saveInboxes = async () => {
   try {
     await axios.put(inboxesUrl(), {
@@ -220,32 +221,24 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col w-full h-full overflow-auto">
-    <div class="flex items-center gap-3 px-6 pt-6">
+  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
+    <div class="max-w-5xl mx-auto flex flex-col gap-3">
       <button
         type="button"
-        class="text-sm text-n-slate-11 hover:text-n-slate-12"
+        class="self-start text-sm text-n-slate-11 hover:text-n-slate-12"
         @click="goBack"
       >
         {{ $t('AI_AGENTS.BACK') }}
       </button>
-    </div>
 
-    <!-- Hero: avatar + identity + ambiente + a quem atende -->
-    <div class="flex flex-col gap-3 px-6 pt-4 pb-5">
-      <div class="flex items-center gap-4">
-        <Avatar
-          :src="agentForm.assistant_avatar"
-          :name="agentForm.assistant_name || agentForm.name || 'IA'"
-          :size="72"
-          rounded-full
-          allow-upload
-          @upload="onAvatarUpload"
-          @delete="onAvatarDelete"
-        />
-        <div class="flex flex-col gap-1 min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            <h1 class="text-xl font-semibold text-n-slate-12">
+      <!-- Main card -->
+      <div
+        class="rounded-2xl border border-n-weak bg-n-solid-1 px-6 sm:px-8 py-6 flex flex-col gap-5"
+      >
+        <!-- Header: name (left) + brand logo (right) -->
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-center gap-3 min-w-0">
+            <h1 class="text-2xl font-semibold text-n-slate-12 truncate">
               {{
                 agentForm.assistant_name ||
                 agentForm.name ||
@@ -253,402 +246,409 @@ onMounted(async () => {
               }}
             </h1>
             <span
-              class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+              class="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
               :class="[stageBadge.bg, stageBadge.text]"
             >
               <span class="size-1.5 rounded-full" :class="stageBadge.dot" />
               {{ $t(`AI_AGENTS.STAGES.${agentForm.stage.toUpperCase()}`) }}
             </span>
           </div>
-          <p class="text-sm text-n-slate-11 mb-0 truncate">
-            {{ agentForm.company_name || $t('AI_AGENTS.DESCRIPTION') }}
-          </p>
-          <button
-            type="button"
-            class="text-xs text-n-brand hover:underline text-left"
-            @click="generateAvatar"
-          >
-            {{ $t('AI_AGENTS.SOBRE.GENERATE') }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Most critical config: what this agent serves -->
-      <div
-        v-if="!isNew"
-        class="flex flex-col gap-1.5 rounded-xl border border-n-weak bg-n-solid-2 px-4 py-3"
-      >
-        <span class="text-xs font-medium text-n-slate-11">{{
-          $t('AI_AGENTS.ATTENDS.TITLE')
-        }}</span>
-        <p v-if="!boundInboxes.length" class="text-sm text-n-slate-11 mb-0">
-          {{ $t('AI_AGENTS.ATTENDS.NONE') }}
-        </p>
-        <div v-else class="flex flex-wrap gap-2">
-          <span
-            v-for="i in boundInboxes"
-            :key="i.inbox_id"
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-n-alpha-2 text-xs text-n-slate-12"
-          >
-            {{ i.name }}
-            <span
-              class="i-lucide-arrow-right size-3 inline-block text-n-slate-11"
-            />
-            <span
-              class="font-medium"
-              :class="i.mode === 'live' ? 'text-n-teal-11' : 'text-n-amber-11'"
-            >
-              {{ modeLabel(i.mode) }}
-            </span>
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div class="px-6">
-      <TabBar
-        :tabs="tabs"
-        :initial-active-tab="activeIndex"
-        @tab-changed="onTabChanged"
-      />
-    </div>
-
-    <div class="px-6 py-6 flex flex-col gap-6 max-w-3xl">
-      <!-- SOBRE -->
-      <template v-if="activeKey === 'about'">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            v-model="agentForm.assistant_name"
-            :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
-          />
-          <Input
-            v-model="agentForm.category"
-            :label="$t('AI_AGENTS.SOBRE.CATEGORY')"
-          />
-          <Input
-            v-model="agentForm.company_name"
-            :label="$t('AI_AGENTS.SOBRE.COMPANY')"
-          />
-          <Input v-model="agentForm.site" :label="$t('AI_AGENTS.SOBRE.SITE')" />
-          <Input
-            v-model="agentForm.version"
-            :label="$t('AI_AGENTS.SOBRE.VERSION')"
-          />
-          <Input
-            v-model="agentForm.assistant_voice"
-            :label="$t('AI_AGENTS.SOBRE.VOICE')"
-          />
-          <Input
-            v-model="agentForm.assistant_language"
-            :label="$t('AI_AGENTS.SOBRE.LANGUAGE')"
-          />
+          <Logo class="h-7 w-auto shrink-0" />
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="flex flex-col gap-1.5">
-            <span class="text-sm font-medium text-n-slate-12">{{
-              $t('AI_AGENTS.SOBRE.MODEL')
-            }}</span>
-            <Select
-              v-model="agentForm.ai_operation_profile_id"
-              :options="profileOptions"
-            />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="text-sm font-medium text-n-slate-12">{{
-              $t('AI_AGENTS.FORM.STAGE')
-            }}</span>
-            <Select v-model="agentForm.stage" :options="stageOptions" />
-          </div>
-        </div>
-
-        <TextArea
-          v-model="agentForm.assistant_description"
-          :label="$t('AI_AGENTS.SOBRE.DESCRIPTION_FIELD')"
-          :max-length="500"
-        />
-        <TextArea
-          v-model="agentForm.assistant_personality"
-          :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
-          :max-length="1000"
+        <TabBar
+          :tabs="tabs"
+          :initial-active-tab="activeIndex"
+          @tab-changed="onTabChanged"
         />
 
-        <div class="flex flex-col gap-2">
-          <span class="text-sm font-medium text-n-slate-12">{{
-            $t('AI_AGENTS.IDENTIFY_AS.LABEL')
-          }}</span>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              type="button"
-              class="flex flex-col items-start gap-1 text-left px-4 py-3 rounded-xl border transition-colors"
-              :class="
-                agentForm.identify_as === 'human'
-                  ? 'border-n-brand bg-n-brand/5'
-                  : 'border-n-weak hover:border-n-slate-7'
-              "
-              @click="agentForm.identify_as = 'human'"
-            >
-              <span class="i-lucide-user-round size-5 text-n-slate-11" />
-              <span class="text-sm font-medium text-n-slate-12">{{
-                $t('AI_AGENTS.IDENTIFY_AS.HUMAN')
-              }}</span>
-              <span class="text-xs text-n-slate-11">{{
-                $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT')
-              }}</span>
-            </button>
-            <button
-              type="button"
-              class="flex flex-col items-start gap-1 text-left px-4 py-3 rounded-xl border transition-colors"
-              :class="
-                agentForm.identify_as === 'ai'
-                  ? 'border-n-brand bg-n-brand/5'
-                  : 'border-n-weak hover:border-n-slate-7'
-              "
-              @click="agentForm.identify_as = 'ai'"
-            >
-              <span class="i-lucide-bot size-5 text-n-slate-11" />
-              <span class="text-sm font-medium text-n-slate-12">{{
-                $t('AI_AGENTS.IDENTIFY_AS.AI')
-              }}</span>
-              <span class="text-xs text-n-slate-11">{{
-                $t('AI_AGENTS.IDENTIFY_AS.AI_HINT')
-              }}</span>
-            </button>
-          </div>
-        </div>
+        <!-- SOBRE -->
+        <div v-if="activeKey === 'about'" class="flex flex-col gap-5">
+          <!-- Row 1: avatar + image actions | identify cards -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="flex items-start gap-3">
+              <Avatar
+                :src="agentForm.assistant_avatar"
+                :name="agentForm.assistant_name || agentForm.name || 'IA'"
+                :size="80"
+              />
+              <div class="flex flex-col gap-2">
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  @change="onFilePick"
+                />
+                <Button
+                  variant="outline"
+                  color="slate"
+                  size="sm"
+                  icon="i-lucide-upload"
+                  :label="$t('AI_AGENTS.SOBRE.UPLOAD')"
+                  @click="triggerUpload"
+                />
+                <Button
+                  variant="outline"
+                  color="slate"
+                  size="sm"
+                  icon="i-lucide-sparkles"
+                  :label="$t('AI_AGENTS.SOBRE.GENERATE')"
+                  @click="generateAvatar"
+                />
+              </div>
+            </div>
 
-        <TextArea
-          v-model="agentForm.base_prompt"
-          :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
-          :max-length="4000"
-        />
-        <TextArea
-          v-model="agentForm.guardrails"
-          :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
-          :max-length="2000"
-        />
-
-        <div class="flex justify-end">
-          <Button
-            :label="$t('AI_AGENTS.FORM.SAVE')"
-            :is-loading="isSaving"
-            @click="saveAgent"
-          />
-        </div>
-      </template>
-
-      <!-- CAIXAS -->
-      <template v-else-if="activeKey === 'inboxes'">
-        <div class="flex flex-col gap-1">
-          <span class="text-sm font-medium text-n-slate-12">{{
-            $t('AI_AGENTS.INBOXES.TITLE')
-          }}</span>
-          <p class="text-sm text-n-slate-11 mb-0">
-            {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
-          </p>
-        </div>
-        <p v-if="isNew" class="text-sm text-n-slate-11">
-          {{ $t('AI_AGENTS.SAVE_FIRST') }}
-        </p>
-        <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
-          {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
-        </p>
-        <template v-else>
-          <input
-            v-model="inboxSearch"
-            type="search"
-            :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
-            class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-          />
-          <div
-            class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-96 overflow-auto"
-          >
-            <div
-              v-for="inbox in filteredInboxes"
-              :key="inbox.inbox_id"
-              class="flex items-center justify-between gap-3 px-4 py-3"
-            >
-              <span class="text-sm text-n-slate-12 truncate">{{
-                inbox.name
-              }}</span>
-              <select
-                v-model="inbox.mode"
-                class="shrink-0 px-3 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-              >
-                <option value="none">{{ $t('AI_AGENTS.INBOXES.NONE') }}</option>
-                <option value="shadow">
-                  {{ $t('AI_AGENTS.INBOXES.SHADOW') }}
-                </option>
-                <option value="live">{{ $t('AI_AGENTS.INBOXES.LIVE') }}</option>
-              </select>
+            <div class="lg:col-span-2 flex flex-col gap-2">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.IDENTIFY_AS.LABEL') }}
+              </span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  class="flex flex-col items-start gap-1 text-left px-4 py-3 rounded-xl border transition-colors h-full"
+                  :class="
+                    agentForm.identify_as === 'human'
+                      ? 'border-n-brand bg-n-brand/5'
+                      : 'border-n-weak hover:border-n-slate-7'
+                  "
+                  @click="agentForm.identify_as = 'human'"
+                >
+                  <span class="text-sm font-medium text-n-slate-12">
+                    {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN') }}
+                  </span>
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT') }}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="flex flex-col items-start gap-1 text-left px-4 py-3 rounded-xl border transition-colors h-full"
+                  :class="
+                    agentForm.identify_as === 'ai'
+                      ? 'border-n-brand bg-n-brand/5'
+                      : 'border-n-weak hover:border-n-slate-7'
+                  "
+                  @click="agentForm.identify_as = 'ai'"
+                >
+                  <span class="text-sm font-medium text-n-slate-12">
+                    {{ $t('AI_AGENTS.IDENTIFY_AS.AI') }}
+                  </span>
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_AGENTS.IDENTIFY_AS.AI_HINT') }}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
-          <div class="flex justify-end">
-            <Button
-              variant="faded"
-              :label="$t('AI_AGENTS.INBOXES.SAVE')"
-              @click="saveInboxes"
+
+          <!-- Row 2: nome | empresa | site -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5">
+            <Input
+              v-model="agentForm.assistant_name"
+              :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
+            />
+            <Input
+              v-model="agentForm.company_name"
+              :label="$t('AI_AGENTS.SOBRE.COMPANY')"
+            />
+            <Input
+              v-model="agentForm.site"
+              :label="$t('AI_AGENTS.SOBRE.SITE')"
+            />
+
+            <Input
+              v-model="agentForm.version"
+              :label="$t('AI_AGENTS.SOBRE.VERSION')"
+            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.MODEL') }}
+              </span>
+              <Select
+                v-model="agentForm.ai_operation_profile_id"
+                :options="profileOptions"
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.FORM.STAGE') }}
+              </span>
+              <Select v-model="agentForm.stage" :options="stageOptions" />
+            </div>
+
+            <Input
+              v-model="agentForm.category"
+              :label="$t('AI_AGENTS.SOBRE.CATEGORY')"
+            />
+            <Input
+              v-model="agentForm.assistant_voice"
+              :label="$t('AI_AGENTS.SOBRE.VOICE')"
+            />
+            <Input
+              v-model="agentForm.assistant_language"
+              :label="$t('AI_AGENTS.SOBRE.LANGUAGE')"
             />
           </div>
-        </template>
-      </template>
 
-      <!-- DEPARTAMENTOS -->
-      <template v-else-if="activeKey === 'departments'">
-        <div class="flex items-center justify-between">
-          <p class="text-sm text-n-slate-11 mb-0">
-            {{ $t('AI_DEPARTMENTS.DESCRIPTION') }}
-          </p>
-          <Button
-            v-if="!isNew"
-            icon="i-lucide-plus"
-            :label="$t('AI_DEPARTMENTS.NEW')"
-            @click="newDepartment"
-          />
-        </div>
-        <p v-if="isNew" class="text-sm text-n-slate-11">
-          {{ $t('AI_AGENTS.SAVE_FIRST') }}
-        </p>
-        <p
-          v-else-if="!departments.length"
-          class="text-sm text-n-slate-11 py-8 text-center"
-        >
-          {{ $t('AI_DEPARTMENTS.EMPTY') }}
-        </p>
-        <div
-          v-else
-          class="border border-n-weak rounded-xl divide-y divide-n-weak"
-        >
-          <button
-            v-for="dept in departments"
-            :key="dept.id"
-            type="button"
-            class="flex items-center justify-between gap-3 px-4 py-3 w-full text-left hover:bg-n-alpha-1"
-            @click="editDepartment(dept)"
-          >
-            <div class="min-w-0">
-              <p class="text-sm font-medium text-n-slate-12">{{ dept.name }}</p>
-              <p class="text-xs text-n-slate-11 truncate">
-                {{ dept.objetivo }}
-              </p>
-            </div>
-            <span
-              class="i-lucide-chevron-right size-4 text-n-slate-11 shrink-0"
-            />
-          </button>
-        </div>
-      </template>
-
-      <!-- TESTE -->
-      <template v-else-if="activeKey === 'test'">
-        <p v-if="isNew" class="text-sm text-n-slate-11">
-          {{ $t('AI_AGENTS.SAVE_FIRST') }}
-        </p>
-        <template v-else>
           <TextArea
-            v-model="testMessage"
-            :label="$t('AI_AGENTS.TEST.QUESTION')"
-            :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
+            v-model="agentForm.assistant_description"
+            :label="$t('AI_AGENTS.SOBRE.DESCRIPTION_FIELD')"
+            :max-length="500"
+          />
+          <TextArea
+            v-model="agentForm.assistant_personality"
+            :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
             :max-length="1000"
           />
+          <TextArea
+            v-model="agentForm.base_prompt"
+            :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
+            :max-length="4000"
+          />
+          <TextArea
+            v-model="agentForm.guardrails"
+            :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
+            :max-length="2000"
+          />
+
           <div class="flex justify-end">
             <Button
-              :label="$t('AI_AGENTS.TEST.SEND')"
-              :is-loading="isTesting"
-              @click="runTest"
+              :label="$t('AI_AGENTS.FORM.SAVE')"
+              :is-loading="isSaving"
+              @click="saveAgent"
             />
           </div>
-          <div
-            v-if="testResult"
-            class="border border-n-weak rounded-xl p-4 flex flex-col gap-3 bg-n-solid-2"
-          >
-            <p v-if="testResult.error" class="text-sm text-n-ruby-11">
-              {{ testResult.error }}
+        </div>
+
+        <!-- CAIXAS -->
+        <div
+          v-else-if="activeKey === 'inboxes'"
+          class="flex flex-col gap-4 max-w-3xl"
+        >
+          <div class="flex flex-col gap-1">
+            <span class="text-sm font-medium text-n-slate-12">
+              {{ $t('AI_AGENTS.INBOXES.TITLE') }}
+            </span>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
             </p>
-            <template v-else>
-              <div class="flex flex-col gap-1">
-                <span class="text-xs text-n-slate-11">{{
-                  $t('AI_AGENTS.TEST.REPLY')
-                }}</span>
-                <p class="text-sm text-n-slate-12 whitespace-pre-wrap">
-                  {{ testResult.reply || $t('AI_AGENTS.TEST.NONE') }}
+          </div>
+          <p v-if="isNew" class="text-sm text-n-slate-11">
+            {{ $t('AI_AGENTS.SAVE_FIRST') }}
+          </p>
+          <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
+            {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
+          </p>
+          <template v-else>
+            <input
+              v-model="inboxSearch"
+              type="search"
+              :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
+              class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+            />
+            <div
+              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-96 overflow-auto"
+            >
+              <div
+                v-for="inbox in filteredInboxes"
+                :key="inbox.inbox_id"
+                class="flex items-center justify-between gap-3 px-4 py-3"
+              >
+                <span class="text-sm text-n-slate-12 truncate">
+                  {{ inbox.name }}
+                </span>
+                <select
+                  v-model="inbox.mode"
+                  class="shrink-0 px-3 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                >
+                  <option value="none">
+                    {{ $t('AI_AGENTS.INBOXES.NONE') }}
+                  </option>
+                  <option value="shadow">
+                    {{ $t('AI_AGENTS.INBOXES.SHADOW') }}
+                  </option>
+                  <option value="live">
+                    {{ $t('AI_AGENTS.INBOXES.LIVE') }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <Button
+                variant="faded"
+                :label="$t('AI_AGENTS.INBOXES.SAVE')"
+                @click="saveInboxes"
+              />
+            </div>
+          </template>
+        </div>
+
+        <!-- DEPARTAMENTOS -->
+        <div
+          v-else-if="activeKey === 'departments'"
+          class="flex flex-col gap-4 max-w-3xl"
+        >
+          <div class="flex items-center justify-between">
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.DESCRIPTION') }}
+            </p>
+            <Button
+              v-if="!isNew"
+              icon="i-lucide-plus"
+              :label="$t('AI_DEPARTMENTS.NEW')"
+              @click="newDepartment"
+            />
+          </div>
+          <p v-if="isNew" class="text-sm text-n-slate-11">
+            {{ $t('AI_AGENTS.SAVE_FIRST') }}
+          </p>
+          <p
+            v-else-if="!departments.length"
+            class="text-sm text-n-slate-11 py-8 text-center"
+          >
+            {{ $t('AI_DEPARTMENTS.EMPTY') }}
+          </p>
+          <div
+            v-else
+            class="border border-n-weak rounded-xl divide-y divide-n-weak"
+          >
+            <button
+              v-for="dept in departments"
+              :key="dept.id"
+              type="button"
+              class="flex items-center justify-between gap-3 px-4 py-3 w-full text-left hover:bg-n-alpha-1"
+              @click="editDepartment(dept)"
+            >
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-n-slate-12">
+                  {{ dept.name }}
+                </p>
+                <p class="text-xs text-n-slate-11 truncate">
+                  {{ dept.objetivo }}
                 </p>
               </div>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <span class="block text-xs text-n-slate-11">{{
-                    $t('AI_AGENTS.TEST.DEPARTMENT')
-                  }}</span>
-                  <span class="text-n-slate-12">{{
-                    testResult.department || $t('AI_AGENTS.TEST.NONE')
-                  }}</span>
-                </div>
-                <div>
-                  <span class="block text-xs text-n-slate-11">{{
-                    $t('AI_AGENTS.TEST.TOOL')
-                  }}</span>
-                  <span class="text-n-slate-12">{{
-                    testResult.tool || $t('AI_AGENTS.TEST.NONE')
-                  }}</span>
-                </div>
-                <div>
-                  <span class="block text-xs text-n-slate-11">{{
-                    $t('AI_AGENTS.TEST.KNOWLEDGE')
-                  }}</span>
-                  <span class="text-n-slate-12">{{
-                    testResult.knowledge_used ?? 0
-                  }}</span>
-                </div>
-                <div>
-                  <span class="block text-xs text-n-slate-11">{{
-                    $t('AI_AGENTS.TEST.SCORE')
-                  }}</span>
-                  <span class="text-n-slate-12">{{
-                    testResult.vector_score ?? $t('AI_AGENTS.TEST.NONE')
-                  }}</span>
-                </div>
-                <div>
-                  <span class="block text-xs text-n-slate-11">{{
-                    $t('AI_AGENTS.TEST.MODEL')
-                  }}</span>
-                  <span class="text-n-slate-12">{{
-                    testResult.model || $t('AI_AGENTS.TEST.NONE')
-                  }}</span>
-                </div>
-                <div>
-                  <span class="block text-xs text-n-slate-11">{{
-                    $t('AI_AGENTS.TEST.COST')
-                  }}</span>
-                  <span class="text-n-slate-12">{{
-                    testResult.cost ?? $t('AI_AGENTS.TEST.NONE')
-                  }}</span>
-                </div>
-                <div>
-                  <span class="block text-xs text-n-slate-11">{{
-                    $t('AI_AGENTS.TEST.TIME')
-                  }}</span>
-                  <span class="text-n-slate-12">{{
-                    testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE')
-                  }}</span>
-                </div>
-              </div>
-              <div
-                v-if="testResult.knowledge_preview?.length"
-                class="flex flex-col gap-1"
-              >
-                <span class="text-xs text-n-slate-11">{{
-                  $t('AI_AGENTS.TEST.KNOWLEDGE_PREVIEW')
-                }}</span>
-                <ul class="text-xs text-n-slate-11 list-disc pl-4">
-                  <li v-for="(k, i) in testResult.knowledge_preview" :key="i">
-                    {{ k }}
-                  </li>
-                </ul>
-              </div>
-            </template>
+              <span
+                class="i-lucide-chevron-right size-4 text-n-slate-11 shrink-0"
+              />
+            </button>
           </div>
-        </template>
-      </template>
+        </div>
+
+        <!-- TESTE -->
+        <div
+          v-else-if="activeKey === 'test'"
+          class="flex flex-col gap-4 max-w-3xl"
+        >
+          <p v-if="isNew" class="text-sm text-n-slate-11">
+            {{ $t('AI_AGENTS.SAVE_FIRST') }}
+          </p>
+          <template v-else>
+            <TextArea
+              v-model="testMessage"
+              :label="$t('AI_AGENTS.TEST.QUESTION')"
+              :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
+              :max-length="1000"
+            />
+            <div class="flex justify-end">
+              <Button
+                :label="$t('AI_AGENTS.TEST.SEND')"
+                :is-loading="isTesting"
+                @click="runTest"
+              />
+            </div>
+            <div
+              v-if="testResult"
+              class="border border-n-weak rounded-xl p-4 flex flex-col gap-3 bg-n-solid-2"
+            >
+              <p v-if="testResult.error" class="text-sm text-n-ruby-11">
+                {{ testResult.error }}
+              </p>
+              <template v-else>
+                <div class="flex flex-col gap-1">
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_AGENTS.TEST.REPLY') }}
+                  </span>
+                  <p class="text-sm text-n-slate-12 whitespace-pre-wrap">
+                    {{ testResult.reply || $t('AI_AGENTS.TEST.NONE') }}
+                  </p>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span class="block text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.TEST.DEPARTMENT') }}
+                    </span>
+                    <span class="text-n-slate-12">
+                      {{ testResult.department || $t('AI_AGENTS.TEST.NONE') }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.TEST.TOOL') }}
+                    </span>
+                    <span class="text-n-slate-12">
+                      {{ testResult.tool || $t('AI_AGENTS.TEST.NONE') }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.TEST.KNOWLEDGE') }}
+                    </span>
+                    <span class="text-n-slate-12">
+                      {{ testResult.knowledge_used ?? 0 }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.TEST.SCORE') }}
+                    </span>
+                    <span class="text-n-slate-12">
+                      {{ testResult.vector_score ?? $t('AI_AGENTS.TEST.NONE') }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.TEST.MODEL') }}
+                    </span>
+                    <span class="text-n-slate-12">
+                      {{ testResult.model || $t('AI_AGENTS.TEST.NONE') }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.TEST.COST') }}
+                    </span>
+                    <span class="text-n-slate-12">
+                      {{ testResult.cost ?? $t('AI_AGENTS.TEST.NONE') }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.TEST.TIME') }}
+                    </span>
+                    <span class="text-n-slate-12">
+                      {{ testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE') }}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  v-if="testResult.knowledge_preview?.length"
+                  class="flex flex-col gap-1"
+                >
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_AGENTS.TEST.KNOWLEDGE_PREVIEW') }}
+                  </span>
+                  <ul class="text-xs text-n-slate-11 list-disc pl-4">
+                    <li v-for="(k, i) in testResult.knowledge_preview" :key="i">
+                      {{ k }}
+                    </li>
+                  </ul>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
   </div>
 </template>

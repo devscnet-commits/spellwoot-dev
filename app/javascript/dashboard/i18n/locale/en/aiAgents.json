@@ -76,7 +76,8 @@
       "PERSONALITY": "Personalidade",
       "VOICE": "Tom de voz",
       "LANGUAGE": "Idioma",
-      "GENERATE": "Gerar avatar com IA",
+      "UPLOAD": "Carregar imagem",
+      "GENERATE": "Gerar com IA",
       "GENERATE_SOON": "Geração de avatar por IA disponível em breve."
     },
     "ATTENDS": {
