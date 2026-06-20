@@ -194,6 +194,23 @@ const editDepartment = dept =>
 
 // --- Caixas (live/shadow binding) ---
 const inboxes = ref([]);
+const INBOX_MODES = [
+  {
+    value: 'none',
+    i18n: 'NONE_SHORT',
+    active: 'bg-n-solid-1 text-n-slate-12 shadow-sm',
+  },
+  {
+    value: 'shadow',
+    i18n: 'SHADOW_SHORT',
+    active: 'bg-n-amber-3 text-n-amber-11 shadow-sm',
+  },
+  {
+    value: 'live',
+    i18n: 'LIVE_SHORT',
+    active: 'bg-n-teal-3 text-n-teal-11 shadow-sm',
+  },
+];
 const inboxesUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_inboxes`;
 const fetchInboxes = async () => {
   if (isNew.value) return;
@@ -330,40 +347,72 @@ onMounted(async () => {
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.IDENTIFY_AS.LABEL') }}
               </span>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button
                   type="button"
-                  class="flex flex-col items-start gap-1 text-left px-4 py-3 rounded-xl border transition-colors h-full"
+                  class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
                   :class="
                     agentForm.identify_as === 'human'
-                      ? 'border-n-brand bg-n-brand/5'
-                      : 'border-n-weak hover:border-n-slate-7'
+                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
+                      : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
                   "
                   @click="agentForm.identify_as = 'human'"
                 >
-                  <span class="text-sm font-medium text-n-slate-12">
-                    {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN') }}
+                  <span
+                    class="shrink-0 size-10 rounded-full flex items-center justify-center"
+                    :class="
+                      agentForm.identify_as === 'human'
+                        ? 'bg-n-brand text-white'
+                        : 'bg-n-alpha-2 text-n-slate-11'
+                    "
+                  >
+                    <span class="i-lucide-user-round size-5" />
                   </span>
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT') }}
+                  <span class="flex flex-col gap-0.5 min-w-0">
+                    <span class="text-base font-semibold text-n-slate-12">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN') }}
+                    </span>
+                    <span class="text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT') }}
+                    </span>
                   </span>
+                  <span
+                    v-if="agentForm.identify_as === 'human'"
+                    class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
+                  />
                 </button>
                 <button
                   type="button"
-                  class="flex flex-col items-start gap-1 text-left px-4 py-3 rounded-xl border transition-colors h-full"
+                  class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
                   :class="
                     agentForm.identify_as === 'ai'
-                      ? 'border-n-brand bg-n-brand/5'
-                      : 'border-n-weak hover:border-n-slate-7'
+                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
+                      : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
                   "
                   @click="agentForm.identify_as = 'ai'"
                 >
-                  <span class="text-sm font-medium text-n-slate-12">
-                    {{ $t('AI_AGENTS.IDENTIFY_AS.AI') }}
+                  <span
+                    class="shrink-0 size-10 rounded-full flex items-center justify-center"
+                    :class="
+                      agentForm.identify_as === 'ai'
+                        ? 'bg-n-brand text-white'
+                        : 'bg-n-alpha-2 text-n-slate-11'
+                    "
+                  >
+                    <span class="i-lucide-bot size-5" />
                   </span>
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_AGENTS.IDENTIFY_AS.AI_HINT') }}
+                  <span class="flex flex-col gap-0.5 min-w-0">
+                    <span class="text-base font-semibold text-n-slate-12">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.AI') }}
+                    </span>
+                    <span class="text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.AI_HINT') }}
+                    </span>
                   </span>
+                  <span
+                    v-if="agentForm.identify_as === 'ai'"
+                    class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
+                  />
                 </button>
               </div>
             </div>
@@ -509,10 +558,7 @@ onMounted(async () => {
         </div>
 
         <!-- CAIXAS -->
-        <div
-          v-else-if="activeKey === 'inboxes'"
-          class="flex flex-col gap-4 max-w-3xl"
-        >
+        <div v-else-if="activeKey === 'inboxes'" class="flex flex-col gap-4">
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_AGENTS.INBOXES.TITLE') }}
@@ -534,36 +580,42 @@ onMounted(async () => {
               :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
               class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
             />
-            <div
-              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-96 overflow-auto"
-            >
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div
                 v-for="inbox in filteredInboxes"
                 :key="inbox.inbox_id"
-                class="flex items-center justify-between gap-3 px-4 py-3"
+                class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3"
               >
-                <span class="text-sm text-n-slate-12 truncate">
-                  {{ inbox.name }}
-                </span>
-                <select
-                  v-model="inbox.mode"
-                  class="shrink-0 px-3 py-1.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-                >
-                  <option value="none">
-                    {{ $t('AI_AGENTS.INBOXES.NONE') }}
-                  </option>
-                  <option value="shadow">
-                    {{ $t('AI_AGENTS.INBOXES.SHADOW') }}
-                  </option>
-                  <option value="live">
-                    {{ $t('AI_AGENTS.INBOXES.LIVE') }}
-                  </option>
-                </select>
+                <div class="flex items-center gap-2 min-w-0">
+                  <span
+                    class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
+                  >
+                    <span class="i-lucide-inbox size-4 text-n-slate-11" />
+                  </span>
+                  <span class="text-sm font-medium text-n-slate-12 truncate">
+                    {{ inbox.name }}
+                  </span>
+                </div>
+                <div class="grid grid-cols-3 gap-1 rounded-lg bg-n-alpha-1 p-1">
+                  <button
+                    v-for="m in INBOX_MODES"
+                    :key="m.value"
+                    type="button"
+                    class="px-2 py-1.5 rounded-md text-xs font-medium transition-colors"
+                    :class="
+                      inbox.mode === m.value
+                        ? m.active
+                        : 'text-n-slate-11 hover:text-n-slate-12'
+                    "
+                    @click="inbox.mode = m.value"
+                  >
+                    {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
+                  </button>
+                </div>
               </div>
             </div>
             <div class="flex justify-end">
               <Button
-                variant="faded"
                 :label="$t('AI_AGENTS.INBOXES.SAVE')"
                 @click="saveInboxes"
               />
@@ -574,7 +626,7 @@ onMounted(async () => {
         <!-- DEPARTAMENTOS -->
         <div
           v-else-if="activeKey === 'departments'"
-          class="flex flex-col gap-4 max-w-3xl"
+          class="flex flex-col gap-4"
         >
           <div class="flex items-center justify-between">
             <p class="text-sm text-n-slate-11 mb-0">
@@ -596,133 +648,178 @@ onMounted(async () => {
           >
             {{ $t('AI_DEPARTMENTS.EMPTY') }}
           </p>
-          <div
-            v-else
-            class="border border-n-weak rounded-xl divide-y divide-n-weak"
-          >
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               v-for="dept in departments"
               :key="dept.id"
               type="button"
-              class="flex items-center justify-between gap-3 px-4 py-3 w-full text-left hover:bg-n-alpha-1"
+              class="group rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3 text-left hover:border-n-brand transition-colors"
               @click="editDepartment(dept)"
             >
+              <div class="flex items-center justify-between gap-2">
+                <span
+                  class="size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
+                >
+                  <span class="i-lucide-layers size-5" />
+                </span>
+                <span
+                  class="i-lucide-arrow-right size-4 text-n-slate-10 group-hover:text-n-brand"
+                />
+              </div>
               <div class="min-w-0">
-                <p class="text-sm font-medium text-n-slate-12">
+                <p
+                  class="text-base font-semibold text-n-slate-12 mb-0 truncate"
+                >
                   {{ dept.name }}
                 </p>
-                <p class="text-xs text-n-slate-11 truncate">
-                  {{ dept.objetivo }}
+                <p class="text-xs text-n-slate-11 line-clamp-2 mb-0">
+                  {{ dept.objetivo || $t('AI_DEPARTMENTS.NO_OBJETIVO') }}
                 </p>
               </div>
-              <span
-                class="i-lucide-chevron-right size-4 text-n-slate-11 shrink-0"
-              />
             </button>
           </div>
         </div>
 
         <!-- TESTE -->
-        <div
-          v-else-if="activeKey === 'test'"
-          class="flex flex-col gap-4 max-w-3xl"
-        >
+        <div v-else-if="activeKey === 'test'" class="flex flex-col gap-5">
+          <div class="flex items-center gap-3">
+            <span
+              class="size-10 rounded-xl bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
+            >
+              <span class="i-lucide-flask-conical size-5" />
+            </span>
+            <div class="flex flex-col">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                {{ $t('AI_AGENTS.TEST.LAB_TITLE') }}
+              </h2>
+              <p class="text-sm text-n-slate-11 mb-0">
+                {{ $t('AI_AGENTS.TEST.LAB_SUBTITLE') }}
+              </p>
+            </div>
+          </div>
+
           <p v-if="isNew" class="text-sm text-n-slate-11">
             {{ $t('AI_AGENTS.SAVE_FIRST') }}
           </p>
           <template v-else>
-            <TextArea
-              v-model="testMessage"
-              :label="$t('AI_AGENTS.TEST.QUESTION')"
-              :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
-              :max-length="1000"
-            />
-            <div class="flex justify-end">
-              <Button
-                :label="$t('AI_AGENTS.TEST.SEND')"
-                :is-loading="isTesting"
-                @click="runTest"
-              />
-            </div>
             <div
-              v-if="testResult"
-              class="border border-n-weak rounded-xl p-4 flex flex-col gap-3 bg-n-solid-2"
+              class="rounded-2xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3"
             >
-              <p v-if="testResult.error" class="text-sm text-n-ruby-11">
+              <TextArea
+                v-model="testMessage"
+                :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
+                :max-length="1000"
+              />
+              <div class="flex justify-end">
+                <Button
+                  icon="i-lucide-play"
+                  :label="$t('AI_AGENTS.TEST.SEND')"
+                  :is-loading="isTesting"
+                  @click="runTest"
+                />
+              </div>
+            </div>
+
+            <div v-if="testResult" class="flex flex-col gap-4">
+              <p
+                v-if="testResult.error"
+                class="text-sm text-n-ruby-11 rounded-xl border border-n-ruby-6 bg-n-ruby-2 px-4 py-3"
+              >
                 {{ testResult.error }}
               </p>
               <template v-else>
-                <div class="flex flex-col gap-1">
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_AGENTS.TEST.REPLY') }}
-                  </span>
-                  <p class="text-sm text-n-slate-12 whitespace-pre-wrap">
+                <!-- Simulação do diálogo -->
+                <div class="flex flex-col gap-2">
+                  <div
+                    class="self-end max-w-[80%] rounded-2xl rounded-br-sm bg-n-brand text-white px-4 py-2.5 text-sm whitespace-pre-wrap"
+                  >
+                    {{ testMessage }}
+                  </div>
+                  <div
+                    class="self-start max-w-[80%] rounded-2xl rounded-bl-sm bg-n-solid-1 border border-n-weak px-4 py-2.5 text-sm text-n-slate-12 whitespace-pre-wrap"
+                  >
                     {{ testResult.reply || $t('AI_AGENTS.TEST.NONE') }}
-                  </p>
-                </div>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <span class="block text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.TEST.DEPARTMENT') }}
-                    </span>
-                    <span class="text-n-slate-12">
-                      {{ testResult.department || $t('AI_AGENTS.TEST.NONE') }}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.TEST.TOOL') }}
-                    </span>
-                    <span class="text-n-slate-12">
-                      {{ testResult.tool || $t('AI_AGENTS.TEST.NONE') }}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.TEST.KNOWLEDGE') }}
-                    </span>
-                    <span class="text-n-slate-12">
-                      {{ testResult.knowledge_used ?? 0 }}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.TEST.SCORE') }}
-                    </span>
-                    <span class="text-n-slate-12">
-                      {{ testResult.vector_score ?? $t('AI_AGENTS.TEST.NONE') }}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.TEST.MODEL') }}
-                    </span>
-                    <span class="text-n-slate-12">
-                      {{ testResult.model || $t('AI_AGENTS.TEST.NONE') }}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.TEST.COST') }}
-                    </span>
-                    <span class="text-n-slate-12">
-                      {{ testResult.cost ?? $t('AI_AGENTS.TEST.NONE') }}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.TEST.TIME') }}
-                    </span>
-                    <span class="text-n-slate-12">
-                      {{ testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE') }}
-                    </span>
                   </div>
                 </div>
+
+                <!-- Decisão de roteamento -->
                 <div
-                  v-if="testResult.knowledge_preview?.length"
-                  class="flex flex-col gap-1"
+                  v-if="testResult.routing_band"
+                  class="flex items-center gap-2"
                 >
                   <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_AGENTS.TEST.ROUTING') }}:
+                  </span>
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-n-alpha-2 text-n-slate-12"
+                  >
+                    {{ $t(`AI_AGENTS.TEST.BANDS.${testResult.routing_band}`) }}
+                  </span>
+                </div>
+
+                <!-- Métricas do motor -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div
+                    v-for="stat in [
+                      {
+                        icon: 'i-lucide-layers',
+                        label: $t('AI_AGENTS.TEST.DEPARTMENT'),
+                        value:
+                          testResult.department || $t('AI_AGENTS.TEST.NONE'),
+                      },
+                      {
+                        icon: 'i-lucide-wrench',
+                        label: $t('AI_AGENTS.TEST.TOOL'),
+                        value: testResult.tool || $t('AI_AGENTS.TEST.NONE'),
+                      },
+                      {
+                        icon: 'i-lucide-book-open',
+                        label: $t('AI_AGENTS.TEST.KNOWLEDGE'),
+                        value: testResult.knowledge_used ?? 0,
+                      },
+                      {
+                        icon: 'i-lucide-gauge',
+                        label: $t('AI_AGENTS.TEST.SCORE'),
+                        value:
+                          testResult.vector_score ?? $t('AI_AGENTS.TEST.NONE'),
+                      },
+                      {
+                        icon: 'i-lucide-cpu',
+                        label: $t('AI_AGENTS.TEST.MODEL'),
+                        value: testResult.model || $t('AI_AGENTS.TEST.NONE'),
+                      },
+                      {
+                        icon: 'i-lucide-coins',
+                        label: $t('AI_AGENTS.TEST.COST'),
+                        value: testResult.cost ?? $t('AI_AGENTS.TEST.NONE'),
+                      },
+                      {
+                        icon: 'i-lucide-timer',
+                        label: $t('AI_AGENTS.TEST.TIME'),
+                        value:
+                          testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE'),
+                      },
+                    ]"
+                    :key="stat.label"
+                    class="rounded-xl border border-n-weak bg-n-solid-2 p-3 flex flex-col gap-1"
+                  >
+                    <span
+                      class="flex items-center gap-1.5 text-xs text-n-slate-11"
+                    >
+                      <span :class="stat.icon" class="size-3.5 inline-block" />
+                      {{ stat.label }}
+                    </span>
+                    <span class="text-sm font-medium text-n-slate-12 truncate">
+                      {{ stat.value }}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  v-if="testResult.knowledge_preview?.length"
+                  class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-1"
+                >
+                  <span class="text-xs font-medium text-n-slate-11">
                     {{ $t('AI_AGENTS.TEST.KNOWLEDGE_PREVIEW') }}
                   </span>
                   <ul class="text-xs text-n-slate-11 list-disc pl-4">
