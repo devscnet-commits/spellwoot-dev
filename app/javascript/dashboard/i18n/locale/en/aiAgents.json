@@ -159,6 +159,7 @@
     "BACK": "← Departamentos",
     "INSTRUCTIONS_LABEL": "Instruções do agente",
     "INSTRUCTIONS_PLACEHOLDER": "Escreva aqui as instruções para o agente IA...",
+    "STEPS_TITLE": "Etapas da conversa",
     "NEW": "Novo departamento",
     "EMPTY": "Nenhum departamento criado para este agente.",
     "FORM": {
