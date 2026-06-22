@@ -976,8 +976,8 @@ onMounted(async () => {
               {{ $t('AI_DEPARTMENTS.FORM.STEPS') }}
               <textarea
                 v-model="form.steps"
-                rows="5"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                rows="8"
+                class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-32 leading-relaxed"
               />
             </label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -985,16 +985,16 @@ onMounted(async () => {
                 {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
                 <textarea
                   v-model="form.transfer_when_steps"
-                  rows="3"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                  rows="6"
+                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
                 />
               </label>
               <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
                 <textarea
                   v-model="form.close_when_steps"
-                  rows="3"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                  rows="6"
+                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
                 />
               </label>
             </div>
