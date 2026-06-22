@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import Input from 'dashboard/components-next/input/Input.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -96,6 +97,7 @@ const blank = () => ({
   on_limit: 'downgrade',
 });
 const form = reactive(blank());
+const { isDirty, capture } = useFormDirty(() => ({ ...form }));
 
 // Advanced sections start collapsed so the form reads as a short, focused setup.
 const sections = reactive({ workers: false, routing: false, budget: false });
@@ -151,6 +153,7 @@ const openNew = () => {
   applyPreset('balanceado');
   form.name = '';
   showForm.value = true;
+  capture();
 };
 
 const openEdit = profile => {
@@ -180,6 +183,7 @@ const openEdit = profile => {
     on_limit: budget.on_limit || 'downgrade',
   });
   showForm.value = true;
+  capture();
 };
 
 const save = async () => {
@@ -516,7 +520,11 @@ onMounted(fetchProfiles);
           :label="$t('AI_PROFILES.FORM.CANCEL')"
           @click="showForm = false"
         />
-        <Button :label="$t('AI_PROFILES.FORM.SAVE')" @click="save" />
+        <Button
+          :label="$t('AI_PROFILES.FORM.SAVE')"
+          :disabled="!isDirty"
+          @click="save"
+        />
       </div>
     </div>
   </div>

@@ -6,6 +6,7 @@ import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Logo from 'next/icon/Logo.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
 import AiKnowledge from './AiKnowledge.vue';
 
@@ -69,6 +70,11 @@ const form = reactive({
   is_default: false,
   position: 0,
 });
+const {
+  isDirty: deptDirty,
+  capture: captureDept,
+  reset: resetDept,
+} = useFormDirty(() => ({ ...form }));
 
 const agentUrl = () =>
   `/api/v1/accounts/${route.params.accountId}/ai_agents/${route.params.agentId}`;
@@ -132,6 +138,7 @@ const fetchDepartment = async () => {
       knowledge: dept.knowledge_sources_count ?? 0,
     };
   }
+  captureDept();
 };
 
 const buildPayload = () => ({
@@ -198,6 +205,7 @@ const save = async () => {
       );
       useAlert(t('AI_DEPARTMENTS.SAVED'));
     }
+    resetDept();
   } catch (error) {
     useAlert(t('AI_DEPARTMENTS.ERROR'));
   } finally {
@@ -222,6 +230,9 @@ const varForm = reactive({
   visible_in_first_chat: true,
   values: '',
 });
+const { isDirty: varDirty, capture: captureVar } = useFormDirty(() => ({
+  ...varForm,
+}));
 const leadVarsUrl = () =>
   `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`;
 
@@ -241,6 +252,7 @@ const openVarNew = () => {
     values: '',
   });
   showVarForm.value = true;
+  captureVar();
 };
 const openVarEdit = v => {
   Object.assign(varForm, {
@@ -252,6 +264,7 @@ const openVarEdit = v => {
     values: arrayToLines(v.values),
   });
   showVarForm.value = true;
+  captureVar();
 };
 const saveVar = async () => {
   const payload = {
@@ -287,6 +300,11 @@ const integrations = ref([]);
 const integrationsUrl = () =>
   `${deptCollectionUrl()}/${departmentId.value}/ai_department_integrations`;
 
+const {
+  isDirty: integrationsDirty,
+  capture: captureIntegrations,
+  reset: resetIntegrations,
+} = useFormDirty(() => integrations.value.map(i => !!i.enabled));
 const fetchIntegrations = async () => {
   if (isNew.value) return;
   const { data } = await axios.get(integrationsUrl());
@@ -294,6 +312,7 @@ const fetchIntegrations = async () => {
     ...i,
     enabled: !!i.enabled,
   }));
+  captureIntegrations();
 };
 // Operational readiness (%): a checklist over data already loaded — no backend.
 const readinessChecks = computed(() => [
@@ -316,6 +335,7 @@ const saveIntegrations = async () => {
   try {
     await axios.put(integrationsUrl(), { integration_link_ids: ids });
     useAlert(t('AI_DEPARTMENTS.SAVED'));
+    resetIntegrations();
   } catch (error) {
     useAlert(t('AI_DEPARTMENTS.ERROR'));
   }
@@ -326,6 +346,11 @@ const mappedInboxes = ref([]);
 const inboxesUrl = () =>
   `${deptCollectionUrl()}/${departmentId.value}/ai_department_inboxes`;
 
+const {
+  isDirty: mappedInboxesDirty,
+  capture: captureMappedInboxes,
+  reset: resetMappedInboxes,
+} = useFormDirty(() => mappedInboxes.value.map(i => !!i.enabled));
 const fetchMappedInboxes = async () => {
   if (isNew.value) return;
   const { data } = await axios.get(inboxesUrl());
@@ -333,12 +358,14 @@ const fetchMappedInboxes = async () => {
     ...i,
     enabled: !!i.enabled,
   }));
+  captureMappedInboxes();
 };
 const saveMappedInboxes = async () => {
   const ids = mappedInboxes.value.filter(i => i.enabled).map(i => i.inbox_id);
   try {
     await axios.put(inboxesUrl(), { inbox_ids: ids });
     useAlert(t('AI_DEPARTMENTS.SAVED'));
+    resetMappedInboxes();
   } catch (error) {
     useAlert(t('AI_DEPARTMENTS.ERROR'));
   }
@@ -371,6 +398,7 @@ const formatVersionDate = iso => (iso ? new Date(iso).toLocaleString() : '');
 
 onMounted(async () => {
   await fetchDepartment();
+  captureDept();
   await Promise.all([
     fetchLeadVars(),
     fetchIntegrations(),
@@ -674,7 +702,8 @@ onMounted(async () => {
                 </button>
                 <button
                   type="button"
-                  class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white"
+                  :disabled="!varDirty"
+                  class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   @click="saveVar"
                 >
                   + {{ $t('AI_DEPARTMENTS.LEAD_VARS.SAVE') }}
@@ -784,7 +813,8 @@ onMounted(async () => {
               <div class="flex justify-end">
                 <button
                   type="button"
-                  class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                  :disabled="!mappedInboxesDirty"
+                  class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12 disabled:opacity-50 disabled:cursor-not-allowed"
                   @click="saveMappedInboxes"
                 >
                   {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_SAVE') }}
@@ -1110,7 +1140,8 @@ onMounted(async () => {
           <div v-if="integrations.length" class="flex justify-end">
             <button
               type="button"
-              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+              :disabled="!integrationsDirty"
+              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
               @click="saveIntegrations"
             >
               {{ $t('AI_DEPARTMENTS.INTEGRATIONS.SAVE') }}
@@ -1136,8 +1167,8 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50"
-            :disabled="isSaving"
+            class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="isSaving || !deptDirty"
             @click="save"
           >
             {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
