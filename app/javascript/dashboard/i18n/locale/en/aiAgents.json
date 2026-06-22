@@ -569,5 +569,60 @@
       "classification_failed": "Falha ao classificar o departamento",
       "unknown": "Erro não identificado"
     }
+  },
+  "AI_INTEGRATIONS": {
+    "TITLE": "Integrações",
+    "DESCRIPTION": "Conecte a IA aos sistemas da sua empresa (cobrança, ERP, CRM).",
+    "NEW": "Nova integração",
+    "EMPTY": "Nenhuma integração criada. Conecte a IA ao seu primeiro sistema.",
+    "STATUS": {
+      "ACTIVE": "Ativa",
+      "INACTIVE": "Desativada"
+    },
+    "KINDS": {
+      "WEBHOOK": "Webhook",
+      "ERP": "ERP",
+      "BITRIX": "Bitrix",
+      "N8N": "n8n"
+    },
+    "FORM": {
+      "NAME": "Nome",
+      "KIND": "Sistema",
+      "ENDPOINT": "Endereço do sistema (URL)",
+      "METHOD": "Tipo de chamada",
+      "AUTH": "Como o sistema valida o acesso",
+      "AUTH_NONE": "Sem autenticação",
+      "AUTH_BEARER": "Token de acesso (Bearer)",
+      "AUTH_HEADER": "Chave no cabeçalho",
+      "TOKEN": "Token",
+      "HEADER_NAME": "Nome do cabeçalho",
+      "HEADER_VALUE": "Valor",
+      "ADVANCED": "Detalhes técnicos",
+      "HEADERS": "Cabeçalhos extras (JSON)",
+      "PAYLOAD": "Dados fixos enviados (JSON)",
+      "TIMEOUT": "Tempo limite (s)",
+      "RETRY": "Tentativas",
+      "STATUS": "Status",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar"
+    },
+    "TEST": {
+      "BUTTON": "Testar conexão",
+      "OK": "Conexão funcionou",
+      "FAIL": "Falha na conexão",
+      "STATUS_LABEL": "status",
+      "OK_DETAIL": "· status {status} · {ms} ms"
+    },
+    "INVALID_JSON": "JSON inválido em cabeçalhos ou dados fixos.",
+    "SAVED": "Integração salva.",
+    "DELETED": "Integração excluída.",
+    "ERROR": "Algo deu errado.",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir integração",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    }
   }
 }
