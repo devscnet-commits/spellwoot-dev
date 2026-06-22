@@ -431,12 +431,36 @@
     "DESCRIPTION": "Custo estimado e desempenho das execuções de IA da conta.",
     "TOTAL_COST": "Custo total (USD)",
     "TOTAL_RUNS": "Execuções",
+    "TOTAL_ERRORS": "Erros",
     "EMPTY": "Nenhuma execução registrada ainda.",
+    "PERIOD": "Período",
+    "PERIOD_ALL": "Todo o período",
+    "PERIOD_7": "Últimos 7 dias",
+    "PERIOD_30": "Últimos 30 dias",
+    "BY_AGENT": "Por agente",
+    "BY_DEPARTMENT": "Por departamento",
+    "BY_MODEL": "Por modelo",
+    "BY_ERROR": "Erros por tipo",
+    "EMPTY_SECTION": "Sem dados neste período.",
     "COLUMNS": {
       "MODEL": "Provedor / Modelo",
+      "AGENT": "Agente",
+      "DEPARTMENT": "Departamento",
+      "ERROR_TYPE": "Tipo de erro",
       "RUNS": "Execuções",
       "COST": "Custo (USD)",
+      "COUNT": "Ocorrências",
       "AVG_LATENCY": "Latência média (ms)"
+    },
+    "ERROR_TYPES": {
+      "provider_timeout": "Tempo esgotado do provedor",
+      "provider_error": "Falha no provedor de IA",
+      "knowledge_timeout": "Tempo esgotado na busca de conhecimento",
+      "tool_failed": "Falha ao executar ferramenta",
+      "guardrail_blocked": "Bloqueado por regra de segurança",
+      "budget_exceeded": "Orçamento excedido",
+      "classification_failed": "Falha ao classificar o departamento",
+      "unknown": "Erro não identificado"
     }
   }
 }
