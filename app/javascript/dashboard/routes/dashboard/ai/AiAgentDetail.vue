@@ -57,7 +57,6 @@ const agentUrl = () => `${accountUrl()}/ai_agents`;
 const agentForm = reactive({
   name: '',
   assistant_name: '',
-  category: '',
   company_name: '',
   site: '',
   identify_as: 'human',
@@ -85,15 +84,6 @@ const profileOptions = computed(() => [
   ...profiles.value.map(p => ({ value: p.id, label: p.name })),
 ]);
 
-// Controlled organizational categories (decoupled from departments / behaviour).
-const CATEGORY_KEYS = ['cliente', 'parceiro', 'interno', 'outro'];
-const categoryOptions = computed(() => [
-  { value: '', label: t('AI_AGENTS.FORM.NONE') },
-  ...CATEGORY_KEYS.map(k => ({
-    value: k,
-    label: t(`AI_AGENTS.CATEGORIES.${k}`),
-  })),
-]);
 const stageOptions = computed(() =>
   ['production', 'staging', 'sandbox', 'experimental'].map(s => ({
     value: s,
@@ -545,18 +535,6 @@ onMounted(async () => {
                     {{ $t('AI_AGENTS.FORM.STAGE') }}
                   </span>
                   <Select v-model="agentForm.stage" :options="stageOptions" />
-                </div>
-                <div class="flex flex-col gap-1.5">
-                  <span class="text-sm font-medium text-n-slate-12">
-                    {{ $t('AI_AGENTS.SOBRE.CATEGORY') }}
-                  </span>
-                  <Select
-                    v-model="agentForm.category"
-                    :options="categoryOptions"
-                  />
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_AGENTS.SOBRE.CATEGORY_HINT') }}
-                  </span>
                 </div>
               </div>
               <TextArea
