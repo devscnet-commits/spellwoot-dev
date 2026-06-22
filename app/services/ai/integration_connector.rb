@@ -20,13 +20,16 @@ class Ai::IntegrationConnector
   end
 
   def self.request(link, body)
-    HTTParty.send(
-      (link.http_method.presence || 'POST').downcase.to_sym,
-      link.endpoint,
-      headers: build_headers(link),
-      body: body.to_json,
-      timeout: link.timeout_seconds.to_i.clamp(1, 60)
-    )
+    method = (link.http_method.presence || 'POST').downcase.to_sym
+    options = { headers: build_headers(link), timeout: link.timeout_seconds.to_i.clamp(1, 60) }
+    # GET/DELETE carry parameters in the query string (typical of ERP "consultar" endpoints);
+    # the others send a JSON body.
+    if %i[get delete].include?(method)
+      options[:query] = body
+    else
+      options[:body] = body.to_json
+    end
+    HTTParty.send(method, link.endpoint, **options)
   end
 
   def self.build_headers(link)
