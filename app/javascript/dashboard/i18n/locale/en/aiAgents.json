@@ -396,8 +396,8 @@
     "DESCRIPTION": "Fontes de conhecimento do departamento. O texto é dividido em trechos e indexado para busca (RAG).",
     "DOCS_LABEL": "Documentos / Base de conhecimento",
     "DOCS_HINT": "Tudo o que a IA pode consultar para responder. Cada item vira trechos indexados para busca (RAG).",
-    "UPLOAD_HINT": "Clique para adicionar conhecimento (FAQ, produto, procedimento, documento…)",
-    "UPLOAD_SUB": "O conteúdo é dividido em trechos e indexado para busca (RAG).",
+    "ADD_MANUAL": "Adicionar conhecimento",
+    "ADD_MANUAL_SUB": "Digite manualmente um FAQ, produto, procedimento ou documento. O conteúdo é indexado para busca (RAG).",
     "NEW": "Nova fonte",
     "EMPTY": "Nenhuma fonte de conhecimento neste departamento.",
     "FORM": {

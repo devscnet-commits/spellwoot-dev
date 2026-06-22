@@ -16,7 +16,6 @@ const { t } = useI18n();
 const agents = ref([]);
 const isLoading = ref(false);
 const search = ref('');
-const typeFilter = ref('all');
 const statusFilter = ref('all');
 const stageFilter = ref('all');
 const openMenuId = ref(null);
@@ -60,24 +59,6 @@ const nextStage = stage => {
 
 const baseUrl = () => `/api/v1/accounts/${route.params.accountId}/ai_agents`;
 
-// Controlled organizational categories (decoupled from departments / behaviour).
-const CATEGORY_KEYS = ['cliente', 'parceiro', 'interno', 'outro'];
-const categoryLabel = c => {
-  if (!c) return t('AI_AGENTS.LIST.NO_CATEGORY');
-  return CATEGORY_KEYS.includes(c) ? t(`AI_AGENTS.CATEGORIES.${c}`) : c;
-};
-
-const categories = computed(() => [
-  'all',
-  ...new Set(agents.value.map(a => a.category).filter(Boolean)),
-]);
-
-const typeOptions = computed(() => [
-  { value: 'all', label: t('AI_AGENTS.LIST.FILTER_TYPE') },
-  ...categories.value
-    .slice(1)
-    .map(c => ({ value: c, label: categoryLabel(c) })),
-]);
 const statusOptions = computed(() =>
   STATUSES.map(s => ({
     value: s,
@@ -102,13 +83,11 @@ const filtered = computed(() => {
       `${a.assistant_name || ''} ${a.name || ''} ${a.category || ''}`
         .toLowerCase()
         .includes(q);
-    const okType =
-      typeFilter.value === 'all' || a.category === typeFilter.value;
     const okStage =
       stageFilter.value === 'all' || a.stage === stageFilter.value;
     const okStatus =
       statusFilter.value === 'all' || statusOf(a) === statusFilter.value;
-    return okQuery && okType && okStage && okStatus;
+    return okQuery && okStage && okStatus;
   });
 });
 
@@ -219,7 +198,6 @@ onMounted(fetchAgents);
         :placeholder="$t('AI_AGENTS.SEARCH')"
         class="flex-1 min-w-48 py-2 px-3 rounded-lg border-0 outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 text-sm text-n-slate-12"
       />
-      <Select v-model="typeFilter" :options="typeOptions" />
       <Select v-model="statusFilter" :options="statusOptions" />
       <Select v-model="stageFilter" :options="stageOptions" />
     </div>
@@ -236,9 +214,6 @@ onMounted(fetchAgents);
           <tr>
             <th class="text-left font-medium px-4 py-2.5">
               {{ $t('AI_AGENTS.LIST.NAME') }}
-            </th>
-            <th class="hidden md:table-cell text-left font-medium px-3 py-2.5">
-              {{ $t('AI_AGENTS.LIST.TYPE') }}
             </th>
             <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.PROFILE') }}
@@ -288,9 +263,6 @@ onMounted(fetchAgents);
                   </span>
                 </div>
               </div>
-            </td>
-            <td class="hidden md:table-cell px-3 py-3">
-              {{ categoryLabel(agent.category) }}
             </td>
             <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{

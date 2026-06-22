@@ -140,15 +140,15 @@ onMounted(fetchSources);
 
     <button
       type="button"
-      class="rounded-xl border border-dashed border-n-weak bg-n-solid-1 px-4 py-6 flex flex-col items-center gap-2 text-center hover:border-n-brand transition-colors"
+      class="rounded-xl border border-n-weak bg-n-solid-1 px-4 py-5 flex flex-col items-center gap-1.5 text-center hover:border-n-brand transition-colors"
       @click="openNew"
     >
-      <span class="i-lucide-upload size-6 text-n-brand" />
+      <span class="i-lucide-plus size-5 text-n-brand" />
       <p class="text-sm text-n-slate-11 mb-0">
-        {{ $t('AI_KNOWLEDGE.UPLOAD_HINT') }}
+        {{ $t('AI_KNOWLEDGE.ADD_MANUAL') }}
       </p>
       <p class="text-xs text-n-slate-10 mb-0">
-        {{ $t('AI_KNOWLEDGE.UPLOAD_SUB') }}
+        {{ $t('AI_KNOWLEDGE.ADD_MANUAL_SUB') }}
       </p>
     </button>
 

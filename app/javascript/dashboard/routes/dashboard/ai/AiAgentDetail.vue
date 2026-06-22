@@ -158,8 +158,6 @@ const onFilePick = e => {
   const file = e.target.files && e.target.files[0];
   if (file) onAvatarUpload({ file });
 };
-const generateAvatar = () => useAlert(t('AI_AGENTS.SOBRE.GENERATE_SOON'));
-
 const saveAgent = async () => {
   isSaving.value = true;
   const payload = {
@@ -182,7 +180,13 @@ const saveAgent = async () => {
     useAlert(t('AI_AGENTS.SAVED'));
     resetAgent();
   } catch (error) {
-    useAlert(t('AI_AGENTS.ERROR'));
+    // Surface the API's validation messages instead of a generic error.
+    const messages = error.response?.data?.errors;
+    useAlert(
+      Array.isArray(messages) && messages.length
+        ? messages.join('. ')
+        : t('AI_AGENTS.ERROR')
+    );
   } finally {
     isSaving.value = false;
   }
@@ -391,14 +395,6 @@ onMounted(async () => {
                   :label="$t('AI_AGENTS.SOBRE.UPLOAD')"
                   @click="triggerUpload"
                 />
-                <Button
-                  variant="outline"
-                  color="slate"
-                  size="sm"
-                  icon="i-lucide-sparkles"
-                  :label="$t('AI_AGENTS.SOBRE.GENERATE')"
-                  @click="generateAvatar"
-                />
               </div>
             </div>
 
@@ -571,7 +567,10 @@ onMounted(async () => {
             <Button
               :label="$t('AI_AGENTS.FORM.SAVE')"
               :is-loading="isSaving"
-              :disabled="!agentDirty"
+              :disabled="
+                !agentDirty ||
+                !(agentForm.assistant_name || agentForm.name || '').trim()
+              "
               @click="saveAgent"
             />
           </div>

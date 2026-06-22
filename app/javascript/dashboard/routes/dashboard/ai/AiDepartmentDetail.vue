@@ -522,10 +522,11 @@ onMounted(async () => {
           >
             {{ $t(`AI_DEPARTMENTS.DETAIL_TABS.${tab.toUpperCase()}`) }}
           </button>
-          <span
-            class="ml-1 pb-2.5 text-xs uppercase tracking-wide text-n-slate-10"
-          >
-            {{ $t('AI_DEPARTMENTS.ADVANCED_LABEL') }}
+          <span class="flex items-center gap-2 pb-2.5 ml-1 text-n-slate-10">
+            <span class="w-px h-3.5 bg-n-weak" />
+            <span class="text-xs">{{
+              $t('AI_DEPARTMENTS.ADVANCED_LABEL')
+            }}</span>
           </span>
           <button
             v-for="tab in ['attendance', 'followup', 'integrations']"
@@ -544,7 +545,6 @@ onMounted(async () => {
           </button>
         </div>
 
-        <!-- INSTRUÇÕES -->
         <!-- INSTRUÇÕES -->
         <div v-if="activeTab === 'instructions'" class="flex flex-col gap-5">
           <section
