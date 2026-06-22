@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const props = defineProps({
@@ -172,12 +173,12 @@ const save = async () => {
   }
 };
 
-const remove = async tool => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_TOOLS.CONFIRM_DELETE'))) return;
+const deleteTarget = ref(null);
+const confirmRemove = async () => {
   try {
-    await axios.delete(`${baseUrl()}/${tool.id}`);
+    await axios.delete(`${baseUrl()}/${deleteTarget.value.id}`);
     useAlert(t('AI_TOOLS.DELETED'));
+    deleteTarget.value = null;
     fetchTools();
   } catch (error) {
     useAlert(t('AI_TOOLS.ERROR'));
@@ -251,7 +252,7 @@ onMounted(() => {
             type="button"
             class="hover:text-n-ruby-11"
             :aria-label="$t('AI_TOOLS.FORM.DELETE')"
-            @click="remove(tool)"
+            @click="deleteTarget = tool"
           >
             <span class="i-lucide-trash-2 size-4 inline-block" />
           </button>
@@ -332,5 +333,22 @@ onMounted(() => {
         </button>
       </div>
     </div>
+
+    <ConfirmDeleteModal
+      v-if="deleteTarget"
+      show
+      :title="$t('AI_TOOLS.DELETE_MODAL.TITLE')"
+      :message="
+        $t('AI_TOOLS.DELETE_MODAL.MESSAGE', { name: deleteTarget.name })
+      "
+      :confirm-text="$t('AI_TOOLS.DELETE_MODAL.CONFIRM')"
+      :reject-text="$t('AI_TOOLS.DELETE_MODAL.CANCEL')"
+      :confirm-value="deleteTarget.name"
+      :confirm-place-holder-text="
+        $t('AI_TOOLS.DELETE_MODAL.PLACEHOLDER', { name: deleteTarget.name })
+      "
+      @on-confirm="confirmRemove"
+      @on-close="deleteTarget = null"
+    />
   </div>
 </template>

@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
+import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -171,13 +172,17 @@ const promote = agent => {
   patchAgent(agent, { stage: next }, t('AI_AGENTS.LIST.PROMOTED'));
 };
 
-const remove = async agent => {
+const deleteTarget = ref(null);
+const agentName = agent => agent.assistant_name || agent.name || '';
+const askRemove = agent => {
   openMenuId.value = null;
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_AGENTS.CONFIRM_DELETE'))) return;
+  deleteTarget.value = agent;
+};
+const confirmRemove = async () => {
   try {
-    await axios.delete(`${baseUrl()}/${agent.id}`);
+    await axios.delete(`${baseUrl()}/${deleteTarget.value.id}`);
     useAlert(t('AI_AGENTS.DELETED'));
+    deleteTarget.value = null;
     fetchAgents();
   } catch (error) {
     useAlert(t('AI_AGENTS.ERROR'));
@@ -212,7 +217,7 @@ onMounted(fetchAgents);
         v-model="search"
         type="search"
         :placeholder="$t('AI_AGENTS.SEARCH')"
-        class="flex-1 min-w-48 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+        class="flex-1 min-w-48 py-2 px-3 rounded-lg border-0 outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 text-sm text-n-slate-12"
       />
       <Select v-model="typeFilter" :options="typeOptions" />
       <Select v-model="statusFilter" :options="statusOptions" />
@@ -381,7 +386,7 @@ onMounted(fetchAgents);
                 </button>
                 <button
                   class="block w-full text-left px-3 py-2 text-sm text-n-ruby-11 hover:bg-n-alpha-2"
-                  @click="remove(agent)"
+                  @click="askRemove(agent)"
                 >
                   {{ $t('AI_AGENTS.LIST.DELETE') }}
                 </button>
@@ -391,5 +396,24 @@ onMounted(fetchAgents);
         </tbody>
       </table>
     </div>
+
+    <ConfirmDeleteModal
+      v-if="deleteTarget"
+      show
+      :title="$t('AI_AGENTS.DELETE_MODAL.TITLE')"
+      :message="
+        $t('AI_AGENTS.DELETE_MODAL.MESSAGE', { name: agentName(deleteTarget) })
+      "
+      :confirm-text="$t('AI_AGENTS.DELETE_MODAL.CONFIRM')"
+      :reject-text="$t('AI_AGENTS.DELETE_MODAL.CANCEL')"
+      :confirm-value="agentName(deleteTarget)"
+      :confirm-place-holder-text="
+        $t('AI_AGENTS.DELETE_MODAL.PLACEHOLDER', {
+          name: agentName(deleteTarget),
+        })
+      "
+      @on-confirm="confirmRemove"
+      @on-close="deleteTarget = null"
+    />
   </div>
 </template>

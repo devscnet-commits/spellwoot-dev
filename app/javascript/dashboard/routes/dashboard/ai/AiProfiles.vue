@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import Input from 'dashboard/components-next/input/Input.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const route = useRoute();
@@ -231,12 +232,12 @@ const save = async () => {
   }
 };
 
-const remove = async profile => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_PROFILES.CONFIRM_DELETE'))) return;
+const deleteTarget = ref(null);
+const confirmRemove = async () => {
   try {
-    await axios.delete(`${baseUrl()}/${profile.id}`);
+    await axios.delete(`${baseUrl()}/${deleteTarget.value.id}`);
     useAlert(t('AI_PROFILES.DELETED'));
+    deleteTarget.value = null;
     fetchProfiles();
   } catch (error) {
     useAlert(t('AI_PROFILES.ERROR'));
@@ -297,7 +298,7 @@ onMounted(fetchProfiles);
             color="ruby"
             size="sm"
             icon="i-lucide-trash-2"
-            @click="remove(profile)"
+            @click="deleteTarget = profile"
           />
         </div>
       </div>
@@ -552,5 +553,22 @@ onMounted(fetchProfiles);
         />
       </div>
     </div>
+
+    <ConfirmDeleteModal
+      v-if="deleteTarget"
+      show
+      :title="$t('AI_PROFILES.DELETE_MODAL.TITLE')"
+      :message="
+        $t('AI_PROFILES.DELETE_MODAL.MESSAGE', { name: deleteTarget.name })
+      "
+      :confirm-text="$t('AI_PROFILES.DELETE_MODAL.CONFIRM')"
+      :reject-text="$t('AI_PROFILES.DELETE_MODAL.CANCEL')"
+      :confirm-value="deleteTarget.name"
+      :confirm-place-holder-text="
+        $t('AI_PROFILES.DELETE_MODAL.PLACEHOLDER', { name: deleteTarget.name })
+      "
+      @on-confirm="confirmRemove"
+      @on-close="deleteTarget = null"
+    />
   </div>
 </template>

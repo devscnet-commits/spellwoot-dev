@@ -184,10 +184,16 @@
       "CANCEL": "Cancelar",
       "NONE": "Nenhum"
     },
-    "CONFIRM_DELETE": "Excluir este agente IA?",
     "SAVED": "Agente salvo.",
     "DELETED": "Agente excluído.",
-    "ERROR": "Algo deu errado ao salvar."
+    "ERROR": "Algo deu errado ao salvar.",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir agente",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    }
   },
   "AI_DEPARTMENTS": {
     "TITLE": "Departamentos",
@@ -373,11 +379,17 @@
       "CONVERSATION_TRANSFER": "Transferir conversa para humano",
       "CONVERSATION_RESOLVE": "Encerrar conversa"
     },
-    "CONFIRM_DELETE": "Excluir esta ferramenta?",
     "SAVED": "Ferramenta salva.",
     "DELETED": "Ferramenta excluída.",
     "ERROR": "Algo deu errado ao salvar.",
-    "INVALID_JSON": "O schema de entrada não é um JSON válido."
+    "INVALID_JSON": "O schema de entrada não é um JSON válido.",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir ferramenta",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    }
   },
   "AI_KNOWLEDGE": {
     "TITLE": "Conhecimento",
@@ -406,10 +418,16 @@
       "WEBSITE": "Website"
     },
     "CHUNKS": "trechos",
-    "CONFIRM_DELETE": "Excluir esta fonte de conhecimento?",
     "SAVED": "Conhecimento salvo.",
     "DELETED": "Fonte excluída.",
-    "ERROR": "Algo deu errado ao salvar."
+    "ERROR": "Algo deu errado ao salvar.",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir conhecimento",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    }
   },
   "AI_PROFILES": {
     "TITLE": "Níveis de atendimento",
@@ -485,11 +503,17 @@
       "PREMIUM_MODEL": "Modelo da IA premium",
       "EXPLAINER": "Score ≥ confiança alta → serve do cache, instantâneo e sem custo. Entre as duas faixas → a IA econômica julga (serve ou escala). Abaixo da confiança baixa → a IA premium gera uma resposta nova."
     },
-    "CONFIRM_DELETE": "Excluir este perfil?",
     "SAVED": "Perfil salvo.",
     "DELETED": "Perfil excluído.",
     "ERROR": "Algo deu errado ao salvar.",
-    "LINK": "Níveis de atendimento"
+    "LINK": "Níveis de atendimento",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir nível de atendimento",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    }
   },
   "AI_COSTS": {
     "TITLE": "Custos de IA",
