@@ -254,7 +254,7 @@ onMounted(fetchProfiles);
         class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-4"
       >
         <div class="flex items-start justify-between gap-4">
-          <div class="flex flex-col gap-1">
+          <div class="flex flex-col gap-1 min-w-0">
             <h1 class="text-xl font-semibold text-n-slate-12">
               {{ $t('AI_PROFILES.TITLE') }}
             </h1>
@@ -262,11 +262,13 @@ onMounted(fetchProfiles);
               {{ $t('AI_PROFILES.DESCRIPTION') }}
             </p>
           </div>
-          <Button
-            icon="i-lucide-plus"
-            :label="$t('AI_PROFILES.NEW')"
-            @click="openNew"
-          />
+          <div class="shrink-0">
+            <Button
+              icon="i-lucide-plus"
+              :label="$t('AI_PROFILES.NEW')"
+              @click="openNew"
+            />
+          </div>
         </div>
 
         <p

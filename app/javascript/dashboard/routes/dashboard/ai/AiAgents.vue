@@ -176,7 +176,7 @@ onMounted(fetchAgents);
     class="flex flex-col w-full h-full overflow-auto p-4 sm:p-6 gap-4 max-w-5xl mx-auto"
   >
     <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
+      <div class="flex flex-col gap-1 min-w-0">
         <h1 class="text-xl font-semibold text-n-slate-12">
           {{ $t('AI_AGENTS.TITLE') }}
         </h1>
@@ -184,11 +184,13 @@ onMounted(fetchAgents);
           {{ $t('AI_AGENTS.DESCRIPTION') }}
         </p>
       </div>
-      <Button
-        icon="i-lucide-plus"
-        :label="$t('AI_AGENTS.NEW')"
-        @click="goNew"
-      />
+      <div class="shrink-0">
+        <Button
+          icon="i-lucide-plus"
+          :label="$t('AI_AGENTS.NEW')"
+          @click="goNew"
+        />
+      </div>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
