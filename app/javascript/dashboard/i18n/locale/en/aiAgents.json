@@ -87,7 +87,7 @@
       "GENERATE": "Gerar com IA",
       "GENERATE_SOON": "Geração de avatar por IA disponível em breve.",
       "ADVANCED": "Configuração avançada",
-      "ADVANCED_HINT": "Prompt base e guardrails"
+      "ADVANCED_HINT": "Empresa, idioma, ambiente, prompt base e guardrails"
     },
     "ATTENDS": {
       "TITLE": "Este agente atende:",
@@ -212,6 +212,7 @@
     "STATUS_ACTIVE": "Ativo",
     "STATUS_INACTIVE": "Inativo",
     "DEFAULT_BADGE": "Padrão",
+    "ADVANCED_LABEL": "Avançado",
     "READINESS": {
       "TITLE": "Prontidão operacional",
       "OBJETIVO": "Objetivo",
