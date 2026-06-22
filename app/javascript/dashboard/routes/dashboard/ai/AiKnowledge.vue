@@ -4,7 +4,6 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
-import Select from 'dashboard/components-next/select/Select.vue';
 import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
@@ -16,15 +15,6 @@ const props = defineProps({
 
 const route = useRoute();
 const { t } = useI18n();
-
-const KINDS = [
-  'faq',
-  'produto',
-  'promocao',
-  'procedimento',
-  'documento',
-  'website',
-];
 
 // A document-like icon per knowledge kind so the list reads as a knowledge base, not a CRUD table.
 const KIND_ICONS = {
@@ -38,9 +28,18 @@ const KIND_ICONS = {
 const kindIcon = kind => KIND_ICONS[kind] || 'i-lucide-file-text';
 const kindLabel = kind =>
   t(`AI_KNOWLEDGE.KINDS.${(kind || 'documento').toUpperCase()}`);
-const kindOptions = computed(() =>
-  KINDS.map(k => ({ value: k, label: kindLabel(k) }))
-);
+
+// The user teaches the company by business source, never by "type". These work today as plain
+// text. Documentos (upload) and Site (import) need backend, so they show as "em breve".
+const CREATABLE = [
+  { kind: 'faq', icon: 'i-lucide-help-circle' },
+  { kind: 'produto', icon: 'i-lucide-package' },
+  { kind: 'procedimento', icon: 'i-lucide-list-checks' },
+];
+const COMING_SOON = [
+  { key: 'DOCUMENTOS', icon: 'i-lucide-file-text' },
+  { key: 'SITE', icon: 'i-lucide-globe' },
+];
 
 const sources = ref([]);
 const isLoading = ref(false);
@@ -55,6 +54,19 @@ const blank = () => ({
 });
 const form = reactive(blank());
 const { isDirty, capture } = useFormDirty(() => ({ ...form }));
+
+// Field labels adapt to the source (FAQ = Pergunta/Resposta, etc.) — no backend change.
+const FIELD_LABELS = {
+  faq: { title: 'FAQ_QUESTION', raw: 'FAQ_ANSWER' },
+  produto: { title: 'PRODUCT_NAME', raw: 'PRODUCT_DESC' },
+  procedimento: { title: 'PROC_TITLE', raw: 'PROC_STEPS' },
+};
+const titleLabel = computed(() =>
+  t(`AI_KNOWLEDGE.FORM.${FIELD_LABELS[form.kind]?.title || 'TITLE'}`)
+);
+const rawLabel = computed(() =>
+  t(`AI_KNOWLEDGE.FORM.${FIELD_LABELS[form.kind]?.raw || 'RAW'}`)
+);
 
 const baseUrl = () => {
   const accountId = route.params.accountId;
@@ -73,8 +85,8 @@ const fetchSources = async () => {
   }
 };
 
-const openNew = () => {
-  Object.assign(form, blank());
+const openNew = kind => {
+  Object.assign(form, blank(), { kind });
   showForm.value = true;
   capture();
 };
@@ -138,19 +150,42 @@ onMounted(fetchSources);
       </p>
     </div>
 
-    <button
-      type="button"
-      class="rounded-xl border border-n-weak bg-n-solid-1 px-4 py-5 flex flex-col items-center gap-1.5 text-center hover:border-n-brand transition-colors"
-      @click="openNew"
-    >
-      <span class="i-lucide-plus size-5 text-n-brand" />
-      <p class="text-sm text-n-slate-11 mb-0">
-        {{ $t('AI_KNOWLEDGE.ADD_MANUAL') }}
-      </p>
-      <p class="text-xs text-n-slate-10 mb-0">
-        {{ $t('AI_KNOWLEDGE.ADD_MANUAL_SUB') }}
-      </p>
-    </button>
+    <div class="flex flex-col gap-2">
+      <span class="text-xs font-medium text-n-slate-11">
+        {{ $t('AI_KNOWLEDGE.SOURCES.LABEL') }}
+      </span>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        <button
+          v-for="src in CREATABLE"
+          :key="src.kind"
+          type="button"
+          class="rounded-xl border border-n-weak bg-n-solid-1 p-3 flex flex-col items-center gap-1 text-center hover:border-n-brand transition-colors"
+          @click="openNew(src.kind)"
+        >
+          <span :class="src.icon" class="size-5 text-n-brand" />
+          <span class="text-sm font-medium text-n-slate-12">
+            {{ $t(`AI_KNOWLEDGE.SOURCES.${src.kind.toUpperCase()}`) }}
+          </span>
+          <span class="text-xs text-n-slate-10">
+            {{ $t(`AI_KNOWLEDGE.SOURCES.${src.kind.toUpperCase()}_HINT`) }}
+          </span>
+        </button>
+        <div
+          v-for="src in COMING_SOON"
+          :key="src.key"
+          class="rounded-xl border border-dashed border-n-weak bg-n-alpha-1 p-3 flex flex-col items-center gap-1 text-center opacity-70"
+        >
+          <span :class="src.icon" class="size-5 text-n-slate-10" />
+          <span class="text-sm font-medium text-n-slate-11">
+            {{ $t(`AI_KNOWLEDGE.SOURCES.${src.key}`) }}
+          </span>
+          <span class="inline-flex items-center gap-1 text-xs text-n-slate-10">
+            <span class="i-lucide-clock size-3" />
+            {{ $t('AI_KNOWLEDGE.SOURCES.SOON') }}
+          </span>
+        </div>
+      </div>
+    </div>
 
     <div v-if="sources.length" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div
@@ -209,22 +244,22 @@ onMounted(fetchSources);
       v-if="showForm"
       class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-1"
     >
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
-          <span>{{ $t('AI_KNOWLEDGE.FORM.KIND') }}</span>
-          <Select v-model="form.kind" :options="kindOptions" />
-        </div>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_KNOWLEDGE.FORM.TITLE') }}
-          <input
-            v-model="form.title"
-            type="text"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          />
-        </label>
-      </div>
+      <h3
+        class="text-sm font-semibold text-n-slate-12 mb-0 flex items-center gap-2"
+      >
+        <span :class="kindIcon(form.kind)" class="size-4 text-n-brand" />
+        {{ kindLabel(form.kind) }}
+      </h3>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_KNOWLEDGE.FORM.RAW') }}
+        {{ titleLabel }}
+        <input
+          v-model="form.title"
+          type="text"
+          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+        {{ rawLabel }}
         <textarea
           v-model="form.raw"
           rows="8"
