@@ -156,6 +156,7 @@ const saveAgent = async () => {
 // --- Histórico de versões ---
 const versions = ref([]);
 const showVersions = ref(false);
+const showAdvanced = ref(false);
 const versionsUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_versions`;
 const fetchVersions = async () => {
   if (isNew.value) return;
@@ -204,6 +205,7 @@ const INBOX_MODES = [
     value: 'shadow',
     i18n: 'SHADOW_SHORT',
     active: 'bg-n-amber-3 text-n-amber-11 shadow-sm',
+    icon: 'i-lucide-eye',
   },
   {
     value: 'live',
@@ -477,16 +479,41 @@ onMounted(async () => {
             :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
             :max-length="1000"
           />
-          <TextArea
-            v-model="agentForm.base_prompt"
-            :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
-            :max-length="4000"
-          />
-          <TextArea
-            v-model="agentForm.guardrails"
-            :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
-            :max-length="2000"
-          />
+          <div class="border border-n-weak rounded-xl">
+            <button
+              type="button"
+              class="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-n-slate-12"
+              @click="showAdvanced = !showAdvanced"
+            >
+              <span
+                class="size-4 inline-block text-n-slate-11"
+                :class="
+                  showAdvanced
+                    ? 'i-lucide-chevron-down'
+                    : 'i-lucide-chevron-right'
+                "
+              />
+              {{ $t('AI_AGENTS.SOBRE.ADVANCED') }}
+              <span class="text-xs text-n-slate-11 font-normal">
+                {{ $t('AI_AGENTS.SOBRE.ADVANCED_HINT') }}
+              </span>
+            </button>
+            <div
+              v-if="showAdvanced"
+              class="border-t border-n-weak p-4 flex flex-col gap-5"
+            >
+              <TextArea
+                v-model="agentForm.base_prompt"
+                :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
+                :max-length="4000"
+              />
+              <TextArea
+                v-model="agentForm.guardrails"
+                :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
+                :max-length="2000"
+              />
+            </div>
+          </div>
 
           <div class="flex justify-end">
             <Button
@@ -601,7 +628,7 @@ onMounted(async () => {
                     v-for="m in INBOX_MODES"
                     :key="m.value"
                     type="button"
-                    class="px-2 py-1.5 rounded-md text-xs font-medium transition-colors"
+                    class="px-2 py-1.5 rounded-md text-xs font-medium transition-colors inline-flex items-center justify-center gap-1"
                     :class="
                       inbox.mode === m.value
                         ? m.active
@@ -609,6 +636,11 @@ onMounted(async () => {
                     "
                     @click="inbox.mode = m.value"
                   >
+                    <span
+                      v-if="m.icon && inbox.mode === m.value"
+                      class="size-3 inline-block"
+                      :class="m.icon"
+                    />
                     {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
                   </button>
                 </div>

@@ -31,10 +31,18 @@ const stageBadge = {
   experimental: 'bg-n-alpha-2 text-n-slate-11',
 };
 const statusBadge = {
-  live: { dot: 'bg-n-teal-9', cls: 'bg-n-teal-3 text-n-teal-11' },
-  shadow: { dot: 'bg-n-amber-9', cls: 'bg-n-amber-3 text-n-amber-11' },
-  idle: { dot: 'bg-n-slate-7', cls: 'bg-n-alpha-2 text-n-slate-11' },
-  inactive: { dot: 'bg-n-slate-9', cls: 'bg-n-alpha-2 text-n-slate-11' },
+  live: { dot: 'bg-n-teal-9', cls: 'bg-n-teal-3 text-n-teal-11', icon: '' },
+  shadow: {
+    dot: 'bg-n-amber-9',
+    cls: 'bg-n-amber-3 text-n-amber-11 ring-1 ring-inset ring-n-amber-7',
+    icon: 'i-lucide-eye',
+  },
+  idle: { dot: 'bg-n-slate-7', cls: 'bg-n-alpha-2 text-n-slate-11', icon: '' },
+  inactive: {
+    dot: 'bg-n-slate-9',
+    cls: 'bg-n-alpha-2 text-n-slate-11',
+    icon: '',
+  },
 };
 
 const statusOf = a => {
@@ -288,6 +296,12 @@ onMounted(fetchAgents);
                 :class="statusBadge[statusOf(agent)].cls"
               >
                 <span
+                  v-if="statusBadge[statusOf(agent)].icon"
+                  class="size-3 inline-block"
+                  :class="statusBadge[statusOf(agent)].icon"
+                />
+                <span
+                  v-else
                   class="size-1.5 rounded-full"
                   :class="statusBadge[statusOf(agent)].dot"
                 />

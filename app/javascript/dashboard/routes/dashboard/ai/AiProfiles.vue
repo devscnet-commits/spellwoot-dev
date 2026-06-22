@@ -97,6 +97,9 @@ const blank = () => ({
 });
 const form = reactive(blank());
 
+// Advanced sections start collapsed so the form reads as a short, focused setup.
+const sections = reactive({ workers: false, routing: false, budget: false });
+
 const onLimitOptions = computed(() =>
   ['stop', 'downgrade', 'alert'].map(v => ({
     value: v,
@@ -343,97 +346,155 @@ onMounted(fetchProfiles);
       </section>
 
       <!-- Workers -->
-      <section class="flex flex-col gap-3">
-        <div class="flex flex-col gap-0.5">
-          <h3 class="text-sm font-semibold text-n-slate-12">
-            {{ $t('AI_PROFILES.WORKERS.TITLE') }}
-          </h3>
-          <p class="text-xs text-n-slate-11 mb-0">
-            {{ $t('AI_PROFILES.WORKERS.DESCRIPTION') }}
-          </p>
-        </div>
-        <div
-          v-for="w in WORKER_KEYS"
-          :key="w"
-          class="grid grid-cols-1 sm:grid-cols-[8rem,1fr,1.5fr] gap-2 items-center"
+      <section class="border border-n-weak rounded-xl bg-n-solid-1">
+        <button
+          type="button"
+          class="w-full flex items-center gap-2 px-4 py-3 text-left"
+          @click="sections.workers = !sections.workers"
         >
-          <span class="text-sm text-n-slate-12">{{
-            $t(`AI_PROFILES.WORKERS.${w.toUpperCase()}`)
-          }}</span>
-          <Select
-            v-model="form.workers[w].provider"
-            :options="providerOptions"
+          <span
+            class="size-4 inline-block text-n-slate-11 shrink-0"
+            :class="
+              sections.workers
+                ? 'i-lucide-chevron-down'
+                : 'i-lucide-chevron-right'
+            "
           />
-          <Input
-            v-model="form.workers[w].model"
-            :placeholder="$t('AI_PROFILES.FORM.MODEL')"
-          />
+          <span class="flex flex-col gap-0.5 min-w-0">
+            <span class="text-sm font-semibold text-n-slate-12">
+              {{ $t('AI_PROFILES.WORKERS.TITLE') }}
+            </span>
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_PROFILES.WORKERS.DESCRIPTION') }}
+            </span>
+          </span>
+        </button>
+        <div
+          v-if="sections.workers"
+          class="border-t border-n-weak p-4 flex flex-col gap-3"
+        >
+          <div
+            v-for="w in WORKER_KEYS"
+            :key="w"
+            class="grid grid-cols-1 sm:grid-cols-[8rem,1fr,1.5fr] gap-2 items-center"
+          >
+            <span class="text-sm text-n-slate-12">{{
+              $t(`AI_PROFILES.WORKERS.${w.toUpperCase()}`)
+            }}</span>
+            <Select
+              v-model="form.workers[w].provider"
+              :options="providerOptions"
+            />
+            <Input
+              v-model="form.workers[w].model"
+              :placeholder="$t('AI_PROFILES.FORM.MODEL')"
+            />
+          </div>
         </div>
       </section>
 
       <!-- Routing -->
-      <section class="flex flex-col gap-3">
-        <div class="flex flex-col gap-0.5">
-          <h3 class="text-sm font-semibold text-n-slate-12">
-            {{ $t('AI_PROFILES.ROUTING.TITLE') }}
-          </h3>
-          <p class="text-xs text-n-slate-11 mb-0">
-            {{ $t('AI_PROFILES.ROUTING.DESCRIPTION') }}
-          </p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            v-model="form.route_high"
-            type="number"
-            :label="$t('AI_PROFILES.ROUTING.HIGH')"
+      <section class="border border-n-weak rounded-xl bg-n-solid-1">
+        <button
+          type="button"
+          class="w-full flex items-center gap-2 px-4 py-3 text-left"
+          @click="sections.routing = !sections.routing"
+        >
+          <span
+            class="size-4 inline-block text-n-slate-11 shrink-0"
+            :class="
+              sections.routing
+                ? 'i-lucide-chevron-down'
+                : 'i-lucide-chevron-right'
+            "
           />
-          <Input
-            v-model="form.route_low"
-            type="number"
-            :label="$t('AI_PROFILES.ROUTING.LOW')"
-          />
-          <div class="flex flex-col gap-1.5">
-            <span class="text-sm font-medium text-n-slate-12">{{
-              $t('AI_PROFILES.ROUTING.CHEAP_PROVIDER')
-            }}</span>
-            <Select v-model="form.cheap_provider" :options="providerOptions" />
-          </div>
-          <Input
-            v-model="form.cheap_model"
-            :label="$t('AI_PROFILES.ROUTING.CHEAP_MODEL')"
-          />
-          <div class="flex flex-col gap-1.5">
-            <span class="text-sm font-medium text-n-slate-12">{{
-              $t('AI_PROFILES.ROUTING.PREMIUM_PROVIDER')
-            }}</span>
-            <Select
-              v-model="form.premium_provider"
-              :options="providerOptions"
+          <span class="flex flex-col gap-0.5 min-w-0">
+            <span class="text-sm font-semibold text-n-slate-12">
+              {{ $t('AI_PROFILES.ROUTING.TITLE') }}
+            </span>
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_PROFILES.ROUTING.DESCRIPTION') }}
+            </span>
+          </span>
+        </button>
+        <div
+          v-if="sections.routing"
+          class="border-t border-n-weak p-4 flex flex-col gap-3"
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              v-model="form.route_high"
+              type="number"
+              :label="$t('AI_PROFILES.ROUTING.HIGH')"
+            />
+            <Input
+              v-model="form.route_low"
+              type="number"
+              :label="$t('AI_PROFILES.ROUTING.LOW')"
+            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">{{
+                $t('AI_PROFILES.ROUTING.CHEAP_PROVIDER')
+              }}</span>
+              <Select
+                v-model="form.cheap_provider"
+                :options="providerOptions"
+              />
+            </div>
+            <Input
+              v-model="form.cheap_model"
+              :label="$t('AI_PROFILES.ROUTING.CHEAP_MODEL')"
+            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">{{
+                $t('AI_PROFILES.ROUTING.PREMIUM_PROVIDER')
+              }}</span>
+              <Select
+                v-model="form.premium_provider"
+                :options="providerOptions"
+              />
+            </div>
+            <Input
+              v-model="form.premium_model"
+              :label="$t('AI_PROFILES.ROUTING.PREMIUM_MODEL')"
             />
           </div>
-          <Input
-            v-model="form.premium_model"
-            :label="$t('AI_PROFILES.ROUTING.PREMIUM_MODEL')"
-          />
-        </div>
-        <div
-          class="text-xs text-n-slate-11 leading-relaxed bg-n-alpha-1 rounded-lg p-3"
-        >
-          {{ $t('AI_PROFILES.ROUTING.EXPLAINER') }}
+          <div
+            class="text-xs text-n-slate-11 leading-relaxed bg-n-alpha-1 rounded-lg p-3"
+          >
+            {{ $t('AI_PROFILES.ROUTING.EXPLAINER') }}
+          </div>
         </div>
       </section>
 
       <!-- Budget -->
-      <section class="flex flex-col gap-3">
-        <div class="flex flex-col gap-0.5">
-          <h3 class="text-sm font-semibold text-n-slate-12">
-            {{ $t('AI_PROFILES.BUDGET.TITLE') }}
-          </h3>
-          <p class="text-xs text-n-slate-11 mb-0">
-            {{ $t('AI_PROFILES.BUDGET.DESCRIPTION') }}
-          </p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <section class="border border-n-weak rounded-xl bg-n-solid-1">
+        <button
+          type="button"
+          class="w-full flex items-center gap-2 px-4 py-3 text-left"
+          @click="sections.budget = !sections.budget"
+        >
+          <span
+            class="size-4 inline-block text-n-slate-11 shrink-0"
+            :class="
+              sections.budget
+                ? 'i-lucide-chevron-down'
+                : 'i-lucide-chevron-right'
+            "
+          />
+          <span class="flex flex-col gap-0.5 min-w-0">
+            <span class="text-sm font-semibold text-n-slate-12">
+              {{ $t('AI_PROFILES.BUDGET.TITLE') }}
+            </span>
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_PROFILES.BUDGET.DESCRIPTION') }}
+            </span>
+          </span>
+        </button>
+        <div
+          v-if="sections.budget"
+          class="border-t border-n-weak p-4 grid grid-cols-1 sm:grid-cols-2 gap-3"
+        >
           <Input
             v-model="form.budget_usd"
             type="number"
