@@ -23,6 +23,19 @@ const KINDS = [
   'website',
 ];
 
+// A document-like icon per knowledge kind so the list reads as a knowledge base, not a CRUD table.
+const KIND_ICONS = {
+  faq: 'i-lucide-help-circle',
+  produto: 'i-lucide-package',
+  promocao: 'i-lucide-tag',
+  procedimento: 'i-lucide-list-checks',
+  documento: 'i-lucide-file-text',
+  website: 'i-lucide-globe',
+};
+const kindIcon = kind => KIND_ICONS[kind] || 'i-lucide-file-text';
+const kindLabel = kind =>
+  t(`AI_KNOWLEDGE.KINDS.${(kind || 'documento').toUpperCase()}`);
+
 const sources = ref([]);
 const isLoading = ref(false);
 const showForm = ref(false);
@@ -102,61 +115,88 @@ onMounted(fetchSources);
 </script>
 
 <template>
-  <div class="flex flex-col gap-5">
-    <div class="flex flex-col gap-2">
-      <span class="text-sm font-medium text-n-slate-12">
+  <section
+    class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
+  >
+    <div class="flex flex-col gap-0.5">
+      <h2 class="text-base font-semibold text-n-slate-12 mb-0">
         {{ $t('AI_KNOWLEDGE.DOCS_LABEL') }}
-      </span>
-      <button
-        type="button"
-        class="rounded-xl border border-dashed border-n-weak bg-n-solid-2 px-4 py-8 flex flex-col items-center gap-2 text-center hover:border-n-slate-7 transition-colors"
-        @click="openNew"
-      >
-        <span class="i-lucide-upload size-6 text-n-brand" />
-        <p class="text-sm text-n-slate-11 mb-0">
-          {{ $t('AI_KNOWLEDGE.UPLOAD_HINT') }}
-        </p>
-        <p class="text-xs text-n-slate-10 mb-0">
-          {{ $t('AI_KNOWLEDGE.UPLOAD_SUB') }}
-        </p>
-      </button>
+      </h2>
+      <p class="text-xs text-n-slate-11 mb-0">
+        {{ $t('AI_KNOWLEDGE.DOCS_HINT') }}
+      </p>
     </div>
 
-    <div v-if="sources.length" class="flex flex-wrap gap-2">
+    <button
+      type="button"
+      class="rounded-xl border border-dashed border-n-weak bg-n-solid-1 px-4 py-6 flex flex-col items-center gap-2 text-center hover:border-n-brand transition-colors"
+      @click="openNew"
+    >
+      <span class="i-lucide-upload size-6 text-n-brand" />
+      <p class="text-sm text-n-slate-11 mb-0">
+        {{ $t('AI_KNOWLEDGE.UPLOAD_HINT') }}
+      </p>
+      <p class="text-xs text-n-slate-10 mb-0">
+        {{ $t('AI_KNOWLEDGE.UPLOAD_SUB') }}
+      </p>
+    </button>
+
+    <div v-if="sources.length" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div
         v-for="source in sources"
         :key="source.id"
-        class="flex items-center gap-2 rounded-lg border border-n-weak bg-n-solid-1 pl-3 pr-2 py-2 max-w-xs"
+        class="group rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-2"
       >
-        <span class="i-lucide-file-text size-4 text-n-slate-11 shrink-0" />
-        <span class="text-sm text-n-slate-12 truncate">
-          {{
-            source.title ||
-            $t(`AI_KNOWLEDGE.KINDS.${source.kind.toUpperCase()}`)
-          }}
+        <div class="flex items-start justify-between gap-2">
+          <span
+            class="shrink-0 size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center"
+          >
+            <span :class="kindIcon(source.kind)" class="size-5" />
+          </span>
+          <div
+            class="shrink-0 flex items-center gap-1 text-n-slate-11 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <button
+              type="button"
+              class="hover:text-n-slate-12"
+              :aria-label="$t('AI_KNOWLEDGE.FORM.EDIT')"
+              @click="openEdit(source)"
+            >
+              <span class="i-lucide-pencil size-4 inline-block" />
+            </button>
+            <button
+              type="button"
+              class="hover:text-n-ruby-11"
+              :aria-label="$t('AI_KNOWLEDGE.FORM.DELETE')"
+              @click="remove(source)"
+            >
+              <span class="i-lucide-trash-2 size-4 inline-block" />
+            </button>
+          </div>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-n-slate-12 mb-0 truncate">
+            {{ source.title || kindLabel(source.kind) }}
+          </p>
+          <p
+            v-if="source.raw"
+            class="text-xs text-n-slate-11 mb-0 line-clamp-2"
+          >
+            {{ source.raw }}
+          </p>
+        </div>
+        <span
+          class="self-start inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-n-alpha-2 text-xs text-n-slate-11"
+        >
+          <span :class="kindIcon(source.kind)" class="size-3" />
+          {{ kindLabel(source.kind) }}
         </span>
-        <button
-          type="button"
-          class="shrink-0 text-n-slate-11 hover:text-n-slate-12"
-          :aria-label="$t('AI_KNOWLEDGE.FORM.EDIT')"
-          @click="openEdit(source)"
-        >
-          <span class="i-lucide-pencil size-3.5 inline-block" />
-        </button>
-        <button
-          type="button"
-          class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
-          :aria-label="$t('AI_KNOWLEDGE.FORM.DELETE')"
-          @click="remove(source)"
-        >
-          <span class="i-lucide-trash-2 size-3.5 inline-block" />
-        </button>
       </div>
     </div>
 
     <div
       v-if="showForm"
-      class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-2"
+      class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-1"
     >
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
@@ -204,5 +244,5 @@ onMounted(fetchSources);
         </button>
       </div>
     </div>
-  </div>
+  </section>
 </template>
