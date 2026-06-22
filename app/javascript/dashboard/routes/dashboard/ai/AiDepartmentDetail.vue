@@ -199,11 +199,29 @@ const varForm = reactive({
   description: '',
   var_type: 'texto',
   visible_in_first_chat: true,
-  values: '',
+  values: [],
 });
 const { isDirty: varDirty, capture: captureVar } = useFormDirty(() => ({
   ...varForm,
 }));
+
+// "Lista" options as chips — business config, not a textarea of data.
+const newOption = ref('');
+const optionError = ref('');
+const addOption = () => {
+  const value = newOption.value.trim();
+  if (!value) return;
+  if (varForm.values.some(v => v.toLowerCase() === value.toLowerCase())) {
+    optionError.value = t('AI_DEPARTMENTS.LEAD_VARS.DUPLICATE');
+    return;
+  }
+  varForm.values.push(value);
+  newOption.value = '';
+  optionError.value = '';
+};
+const removeOption = index => {
+  varForm.values.splice(index, 1);
+};
 const leadVarsUrl = () =>
   `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`;
 
@@ -220,8 +238,10 @@ const openVarNew = () => {
     description: '',
     var_type: 'texto',
     visible_in_first_chat: true,
-    values: '',
+    values: [],
   });
+  newOption.value = '';
+  optionError.value = '';
   showVarForm.value = true;
   captureVar();
 };
@@ -232,8 +252,10 @@ const openVarEdit = v => {
     description: v.description || '',
     var_type: v.var_type,
     visible_in_first_chat: v.visible_in_first_chat,
-    values: arrayToLines(v.values),
+    values: Array.isArray(v.values) ? [...v.values] : [],
   });
+  newOption.value = '';
+  optionError.value = '';
   showVarForm.value = true;
   captureVar();
 };
@@ -244,7 +266,7 @@ const saveVar = async () => {
       description: varForm.description,
       var_type: varForm.var_type,
       visible_in_first_chat: varForm.visible_in_first_chat,
-      values: linesToArray(varForm.values),
+      values: varForm.values.map(v => v.trim()).filter(Boolean),
     },
   };
   try {
@@ -649,18 +671,56 @@ onMounted(async () => {
               <div class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}</span>
                 <Select v-model="varForm.var_type" :options="varTypeOptions" />
+                <span class="text-xs text-n-slate-11">
+                  {{
+                    $t(`AI_DEPARTMENTS.LEAD_VARS.TYPE_HINT.${varForm.var_type}`)
+                  }}
+                </span>
               </div>
-              <label
+              <div
                 v-if="varForm.var_type === 'lista'"
-                class="flex flex-col gap-1.5 text-sm text-n-slate-12"
+                class="flex flex-col gap-2 text-sm text-n-slate-12"
               >
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.VALUES') }}
-                <textarea
-                  v-model="varForm.values"
-                  rows="3"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-                />
-              </label>
+                <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS_LABEL') }}</span>
+                <div v-if="varForm.values.length" class="flex flex-wrap gap-2">
+                  <span
+                    v-for="(option, index) in varForm.values"
+                    :key="index"
+                    class="inline-flex items-center gap-1 rounded-full bg-n-alpha-2 text-n-slate-12 pl-3 pr-1.5 py-1"
+                  >
+                    {{ option }}
+                    <button
+                      type="button"
+                      class="text-n-slate-11 hover:text-n-ruby-11"
+                      :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.REMOVE_OPTION')"
+                      @click="removeOption(index)"
+                    >
+                      <span class="i-lucide-x size-3.5 inline-block" />
+                    </button>
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input
+                    v-model="newOption"
+                    type="text"
+                    :placeholder="
+                      $t('AI_DEPARTMENTS.LEAD_VARS.OPTION_PLACEHOLDER')
+                    "
+                    class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                    @keydown.enter.prevent="addOption"
+                  />
+                  <button
+                    type="button"
+                    class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                    @click="addOption"
+                  >
+                    {{ $t('AI_DEPARTMENTS.LEAD_VARS.ADD_OPTION') }}
+                  </button>
+                </div>
+                <span v-if="optionError" class="text-xs text-n-ruby-11">
+                  {{ optionError }}
+                </span>
+              </div>
               <label class="flex items-center gap-2 text-sm text-n-slate-12">
                 <input
                   v-model="varForm.visible_in_first_chat"
