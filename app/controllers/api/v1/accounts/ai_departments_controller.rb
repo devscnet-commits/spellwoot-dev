@@ -43,7 +43,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
   end
 
   def scalar_params
-    params.require(:ai_department).permit(:name, :objetivo, :status)
+    params.require(:ai_department).permit(:name, :objetivo, :instructions, :status)
   end
 
   def jsonb_params
