@@ -19,7 +19,7 @@ class AsyncDispatcher < BaseDispatcher
       ParticipationListener.instance,
       ReportingEventListener.instance,
       WebhookListener.instance,
-      Ai::ShadowListener.instance
+      Ai::GatewayListener.instance
     ]
   end
 end

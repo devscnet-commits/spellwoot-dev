@@ -1,7 +1,8 @@
 # Runs the Gateway for every active agent bound to the message's inbox (shadow + live).
-# The binding's mode drives behaviour: shadow records only; live may reply, gated by the
-# department reply_scope (off by default, canary for piloting). Background only.
-class Ai::ShadowRunJob < ApplicationJob
+# Mandatory plumbing for the AI runtime (not the optional "shadow" validation feature). The
+# binding's mode drives behaviour: shadow records only; live may reply, gated by the department
+# reply_scope (off by default, canary for piloting). Background only.
+class Ai::GatewayRunJob < ApplicationJob
   queue_as :low
 
   def perform(message_id)
