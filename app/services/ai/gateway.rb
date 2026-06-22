@@ -33,8 +33,12 @@ class Ai::Gateway
 
     run_record.update!(ai_department_id: department.id)
 
-    # Per-department kill switch: even on a live binding, an off toggle keeps the AI observing only.
-    @acts_live = Ai::ReplyPolicy.acts_live?(@mode, department)
+    # Single gate for every outward action (reply, tools, transfer/resolve): the AI only acts when
+    # this conversation is effectively live — i.e. live binding + auto_attendance on + within hours
+    # + reply_scope all/canary-match. Otherwise it observes (records intention) only, so a live
+    # binding piloted "behind canary" never touches non-canary conversations.
+    @acts_live =
+      Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation) == :live
 
     knowledge = Ai::KnowledgeRetriever.retrieve(department: department, query: effective_content, account_id: @account.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
