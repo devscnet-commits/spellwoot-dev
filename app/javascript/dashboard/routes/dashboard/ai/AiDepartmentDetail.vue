@@ -699,24 +699,15 @@ onMounted(async () => {
                     </button>
                   </span>
                 </div>
-                <div class="flex items-center gap-2">
-                  <input
-                    v-model="newOption"
-                    type="text"
-                    :placeholder="
-                      $t('AI_DEPARTMENTS.LEAD_VARS.OPTION_PLACEHOLDER')
-                    "
-                    class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                    @keydown.enter.prevent="addOption"
-                  />
-                  <button
-                    type="button"
-                    class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-                    @click="addOption"
-                  >
-                    {{ $t('AI_DEPARTMENTS.LEAD_VARS.ADD_OPTION') }}
-                  </button>
-                </div>
+                <input
+                  v-model="newOption"
+                  type="text"
+                  :placeholder="
+                    $t('AI_DEPARTMENTS.LEAD_VARS.OPTION_PLACEHOLDER')
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                  @keydown.enter.prevent="addOption"
+                />
                 <span v-if="optionError" class="text-xs text-n-ruby-11">
                   {{ optionError }}
                 </span>
