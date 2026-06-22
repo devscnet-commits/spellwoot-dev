@@ -221,6 +221,8 @@ const formatVersionDate = iso => {
 };
 
 const goBack = () => router.push({ name: 'ai_agents_index' });
+// Managing/creating custom levels is an advanced surface, off the main nav.
+const goProfiles = () => router.push({ name: 'ai_profiles_index' });
 const newDepartment = () =>
   router.push({
     name: 'ai_department_detail',
@@ -487,6 +489,13 @@ onMounted(async () => {
                 v-model="agentForm.ai_operation_profile_id"
                 :options="profileOptions"
               />
+              <button
+                type="button"
+                class="self-start text-xs text-n-slate-11 hover:text-n-brand"
+                @click="goProfiles"
+              >
+                {{ $t('AI_AGENTS.SOBRE.MANAGE_LEVELS') }}
+              </button>
             </div>
           </div>
 
