@@ -273,6 +273,26 @@ Construídos **sobre dados que já existem** — viram tela quando o produto ped
 | 9 | `instructions` como coluna dedicada do departamento | 🔜 a efetivar (item C) |
 | 10 | `ai_runs` dimensionado por departamento/caixa + `error_type` | 🔜 a efetivar (itens D, E) |
 
+### 8.1 Shadow é um módulo opcional
+
+O **Shadow** (observação em modo shadow + o painel de Validação/Inteligência) é uma camada
+**opcional** de validação e melhoria contínua. **Sua ausência não impacta** o funcionamento do
+atendimento, do roteamento, do conhecimento, das ferramentas nem da execução do Gateway: a IA
+atende ao vivo por bindings `live` de forma independente de qualquer uso do Shadow.
+
+Em outras palavras, o Shadow **agrega inteligência operacional** (avaliar → identificar lacuna →
+corrigir FAQ/instrução/ferramenta → medir de novo), mas **não é requisito** para a IA funcionar.
+
+Notas de implementação (estado atual vs. previsto):
+
+- **Tudo atrás da flag `ai_core`** (por conta, nasce desabilitada). Sem a flag, nada do pipeline
+  reativo roda — nem shadow, nem live.
+- **Hoje opera em modo completo**: quando habilitado, toda mensagem de entrada numa caixa com
+  binding ativo gera um run (`ai_runs`) + eventos (`ai_events`).
+- **Amostragem (sampling)** — operar avaliando apenas uma fração das conversas — é um **modo de
+  configuração previsto**, ainda **não implementado**. Quando existir, será por configuração da
+  conta, sem alterar o caminho de atendimento.
+
 ---
 
 ## 9. Mapa final validado vs roadmap ConexiIA
