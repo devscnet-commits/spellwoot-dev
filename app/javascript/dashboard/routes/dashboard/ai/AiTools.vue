@@ -50,6 +50,8 @@ const GOVERNANCE_I18N = {
 };
 const governanceLabel = g =>
   t(`AI_TOOLS.FORM.${GOVERNANCE_I18N[g] || 'GOV_ALLOWED'}`);
+const governanceHint = g =>
+  t(`AI_TOOLS.FORM.${GOVERNANCE_I18N[g] || 'GOV_ALLOWED'}_HINT`);
 const governanceBadge = g =>
   ({
     allowed: 'bg-n-teal-3 text-n-teal-11',
@@ -305,6 +307,9 @@ onMounted(() => {
               {{ $t('AI_TOOLS.FORM.GOV_APPROVAL') }}
             </option>
           </select>
+          <span class="text-xs text-n-slate-11">
+            {{ governanceHint(form.governance) }}
+          </span>
         </label>
       </div>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">

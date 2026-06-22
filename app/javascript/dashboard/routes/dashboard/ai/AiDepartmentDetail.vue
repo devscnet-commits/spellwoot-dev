@@ -16,6 +16,8 @@ const isNew = computed(() => route.params.departmentId === 'new');
 const departmentId = ref(isNew.value ? null : route.params.departmentId);
 const activeTab = ref('instructions');
 const isSaving = ref(false);
+// Operational summary counts (read-only) served by the departments index serializer.
+const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 
 const VAR_TYPES = ['texto', 'numero', 'booleano', 'lista'];
 
@@ -99,7 +101,14 @@ const fetchDepartment = async () => {
   const dept = (Array.isArray(data) ? data : []).find(
     d => String(d.id) === String(departmentId.value)
   );
-  if (dept) hydrate(dept);
+  if (dept) {
+    hydrate(dept);
+    summary.value = {
+      steps: dept.steps_count ?? 0,
+      tools: dept.tools_count ?? 0,
+      knowledge: dept.knowledge_sources_count ?? 0,
+    };
+  }
 };
 
 const buildPayload = () => ({
@@ -353,6 +362,45 @@ onMounted(async () => {
           <Logo class="h-8 w-auto shrink-0" />
         </div>
 
+        <!-- Operational summary: what this department is made of, at a glance -->
+        <div
+          v-if="!isNew"
+          class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-n-slate-11"
+        >
+          <span class="inline-flex items-center gap-1.5">
+            <span class="i-lucide-list-checks size-4" />
+            {{ $t('AI_DEPARTMENTS.STATS_STEPS', { count: summary.steps }) }}
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="i-lucide-wrench size-4" />
+            {{ $t('AI_DEPARTMENTS.STATS_TOOLS', { count: summary.tools }) }}
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="i-lucide-book-open size-4" />
+            {{
+              $t('AI_DEPARTMENTS.STATS_KNOWLEDGE', { count: summary.knowledge })
+            }}
+          </span>
+          <span
+            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+            :class="
+              form.auto_attendance
+                ? 'bg-n-teal-3 text-n-teal-11'
+                : 'bg-n-alpha-2 text-n-slate-11'
+            "
+          >
+            <span
+              class="size-1.5 rounded-full"
+              :class="form.auto_attendance ? 'bg-n-teal-9' : 'bg-n-slate-7'"
+            />
+            {{
+              form.auto_attendance
+                ? $t('AI_DEPARTMENTS.AUTO_ON')
+                : $t('AI_DEPARTMENTS.AUTO_OFF')
+            }}
+          </span>
+        </div>
+
         <div class="flex flex-wrap gap-x-5 gap-y-1 border-b border-n-weak">
           <button
             v-for="tab in [
@@ -568,9 +616,38 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TITLE') }}
-            </h2>
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TITLE') }}
+                </h2>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{
+                    form.auto_attendance
+                      ? $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_HINT_ON')
+                      : $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_HINT_OFF')
+                  }}
+                </p>
+              </div>
+              <span
+                class="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+                :class="
+                  form.auto_attendance
+                    ? 'bg-n-teal-3 text-n-teal-11'
+                    : 'bg-n-alpha-2 text-n-slate-11'
+                "
+              >
+                <span
+                  class="size-1.5 rounded-full"
+                  :class="form.auto_attendance ? 'bg-n-teal-9' : 'bg-n-slate-7'"
+                />
+                {{
+                  form.auto_attendance
+                    ? $t('AI_DEPARTMENTS.STATE_ON')
+                    : $t('AI_DEPARTMENTS.STATE_OFF')
+                }}
+              </span>
+            </div>
             <label class="flex items-center gap-2 text-sm text-n-slate-12">
               <input v-model="form.auto_attendance" type="checkbox" />
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TOGGLE') }}

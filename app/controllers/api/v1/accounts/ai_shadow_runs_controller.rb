@@ -31,6 +31,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
       cost: run.cost,
       latency_ms: run.latency_ms,
       status: run.status,
+      error_type: run.error_type,
       mode: run.mode,
       created_at: run.created_at
     }
