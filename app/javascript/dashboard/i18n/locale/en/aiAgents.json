@@ -78,7 +78,7 @@
       "COMPANY": "Nome da empresa",
       "SITE": "Site",
       "VERSION": "Versão",
-      "MODEL": "Perfil operacional",
+      "MODEL": "Nível de atendimento",
       "DESCRIPTION_FIELD": "Descrição",
       "PERSONALITY": "Personalidade",
       "VOICE": "Tom de voz",
@@ -412,16 +412,35 @@
     "ERROR": "Algo deu errado ao salvar."
   },
   "AI_PROFILES": {
-    "TITLE": "Perfis operacionais",
-    "DESCRIPTION": "A estratégia operacional completa da IA: supervisor, workers, roteamento por confiança e orçamento.",
-    "NEW": "Novo perfil",
-    "EMPTY": "Nenhum perfil operacional criado.",
+    "TITLE": "Níveis de atendimento",
+    "DESCRIPTION": "Modelos reutilizáveis que definem o equilíbrio entre custo, velocidade e qualidade da IA. A configuração técnica fica em Avançado.",
+    "NEW": "Novo nível",
+    "EMPTY": "Nenhum nível de atendimento criado.",
     "PRESET": {
-      "LABEL": "Modelo de perfil",
+      "LABEL": "Nível de atendimento",
       "ECONOMICO": "Econômico",
-      "BALANCEADO": "Balanceado",
-      "PREMIUM": "Premium",
+      "BALANCEADO": "Equilibrado",
+      "PREMIUM": "Máxima Qualidade",
       "CUSTOMIZADO": "Customizado"
+    },
+    "LEVELS": {
+      "HINT": "Escolha o equilíbrio entre custo, velocidade e qualidade. Os detalhes técnicos do motor ficam em Avançado.",
+      "COST": "Custo",
+      "SPEED": "Velocidade",
+      "QUALITY": "Qualidade",
+      "VALUE": {
+        "LOW": "Baixo",
+        "MEDIUM": "Médio",
+        "HIGH": "Alto",
+        "MAX": "Máxima"
+      },
+      "ECONOMICO_DESC": "Prioriza economia. Ideal para alto volume e perguntas simples.",
+      "BALANCEADO_DESC": "Bom equilíbrio entre custo e qualidade para a maioria dos casos.",
+      "PREMIUM_DESC": "Máxima qualidade de resposta, com os modelos mais avançados."
+    },
+    "ADVANCED": {
+      "TITLE": "Avançado (motor)",
+      "DESCRIPTION": "Supervisor, workers, roteamento e orçamento. Só para usuários avançados — o nível acima já define bons padrões."
     },
     "SUPERVISOR": {
       "TITLE": "Supervisor (modelo principal)",
@@ -470,7 +489,7 @@
     "SAVED": "Perfil salvo.",
     "DELETED": "Perfil excluído.",
     "ERROR": "Algo deu errado ao salvar.",
-    "LINK": "Perfis operacionais"
+    "LINK": "Níveis de atendimento"
   },
   "AI_COSTS": {
     "TITLE": "Custos de IA",
