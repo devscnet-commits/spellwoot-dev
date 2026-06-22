@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Logo from 'next/icon/Logo.vue';
+import Select from 'dashboard/components-next/select/Select.vue';
 import AiTools from './AiTools.vue';
 import AiKnowledge from './AiKnowledge.vue';
 
@@ -20,6 +21,24 @@ const isSaving = ref(false);
 const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 
 const VAR_TYPES = ['texto', 'numero', 'booleano', 'lista'];
+const varTypeOptions = computed(() =>
+  VAR_TYPES.map(vt => ({
+    value: vt,
+    label: t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${vt}`),
+  }))
+);
+const replyScopeOptions = computed(() => [
+  { value: 'off', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_OFF') },
+  { value: 'canary', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') },
+  { value: 'all', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_ALL') },
+]);
+const onTimeoutOptions = computed(() => [
+  {
+    value: 'resolve',
+    label: t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_RESOLVE'),
+  },
+  { value: 'none', label: t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_NONE') },
+]);
 
 const form = reactive({
   name: '',
@@ -559,17 +578,10 @@ onMounted(async () => {
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
                 />
               </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}
-                <select
-                  v-model="varForm.var_type"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                >
-                  <option v-for="vt in VAR_TYPES" :key="vt" :value="vt">
-                    {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${vt}`) }}
-                  </option>
-                </select>
-              </label>
+              <div class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}</span>
+                <Select v-model="varForm.var_type" :options="varTypeOptions" />
+              </div>
               <label
                 v-if="varForm.var_type === 'lista'"
                 class="flex flex-col gap-1.5 text-sm text-n-slate-12"
@@ -700,23 +712,10 @@ onMounted(async () => {
             <p class="text-sm text-n-slate-11 mb-0">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_HINT') }}
             </p>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_SCOPE') }}
-              <select
-                v-model="form.reply_scope"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              >
-                <option value="off">
-                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_OFF') }}
-                </option>
-                <option value="canary">
-                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') }}
-                </option>
-                <option value="all">
-                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_ALL') }}
-                </option>
-              </select>
-            </label>
+            <div class="flex flex-col gap-1 text-sm text-n-slate-12">
+              <span>{{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_SCOPE') }}</span>
+              <Select v-model="form.reply_scope" :options="replyScopeOptions" />
+            </div>
             <label
               v-if="form.reply_scope === 'canary'"
               class="flex flex-col gap-1 text-sm text-n-slate-12"
@@ -770,20 +769,10 @@ onMounted(async () => {
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
                 />
               </label>
-              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT') }}
-                <select
-                  v-model="form.on_timeout"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                >
-                  <option value="resolve">
-                    {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_RESOLVE') }}
-                  </option>
-                  <option value="none">
-                    {{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_NONE') }}
-                  </option>
-                </select>
-              </label>
+              <div class="flex flex-col gap-1 text-sm text-n-slate-12">
+                <span>{{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT') }}</span>
+                <Select v-model="form.on_timeout" :options="onTimeoutOptions" />
+              </div>
             </div>
           </section>
 
