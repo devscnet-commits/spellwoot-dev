@@ -59,6 +59,13 @@ const nextStage = stage => {
 
 const baseUrl = () => `/api/v1/accounts/${route.params.accountId}/ai_agents`;
 
+// Controlled organizational categories (decoupled from departments / behaviour).
+const CATEGORY_KEYS = ['cliente', 'parceiro', 'interno', 'outro'];
+const categoryLabel = c => {
+  if (!c) return t('AI_AGENTS.LIST.NO_CATEGORY');
+  return CATEGORY_KEYS.includes(c) ? t(`AI_AGENTS.CATEGORIES.${c}`) : c;
+};
+
 const categories = computed(() => [
   'all',
   ...new Set(agents.value.map(a => a.category).filter(Boolean)),
@@ -66,7 +73,9 @@ const categories = computed(() => [
 
 const typeOptions = computed(() => [
   { value: 'all', label: t('AI_AGENTS.LIST.FILTER_TYPE') },
-  ...categories.value.slice(1).map(c => ({ value: c, label: c })),
+  ...categories.value
+    .slice(1)
+    .map(c => ({ value: c, label: categoryLabel(c) })),
 ]);
 const statusOptions = computed(() =>
   STATUSES.map(s => ({
@@ -276,7 +285,7 @@ onMounted(fetchAgents);
               </div>
             </td>
             <td class="hidden md:table-cell px-3 py-3">
-              {{ agent.category || $t('AI_AGENTS.LIST.NO_CATEGORY') }}
+              {{ categoryLabel(agent.category) }}
             </td>
             <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{
