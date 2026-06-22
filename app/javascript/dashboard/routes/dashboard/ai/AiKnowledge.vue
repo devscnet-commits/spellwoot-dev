@@ -1,9 +1,10 @@
 <script setup>
 /* global axios */
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
+import Select from 'dashboard/components-next/select/Select.vue';
 
 const props = defineProps({
   // Optional overrides so this view can be embedded inside the agent (default department).
@@ -35,6 +36,9 @@ const KIND_ICONS = {
 const kindIcon = kind => KIND_ICONS[kind] || 'i-lucide-file-text';
 const kindLabel = kind =>
   t(`AI_KNOWLEDGE.KINDS.${(kind || 'documento').toUpperCase()}`);
+const kindOptions = computed(() =>
+  KINDS.map(k => ({ value: k, label: kindLabel(k) }))
+);
 
 const sources = ref([]);
 const isLoading = ref(false);
@@ -199,17 +203,10 @@ onMounted(fetchSources);
       class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-1"
     >
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_KNOWLEDGE.FORM.KIND') }}
-          <select
-            v-model="form.kind"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          >
-            <option v-for="k in KINDS" :key="k" :value="k">
-              {{ $t(`AI_KNOWLEDGE.KINDS.${k.toUpperCase()}`) }}
-            </option>
-          </select>
-        </label>
+        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
+          <span>{{ $t('AI_KNOWLEDGE.FORM.KIND') }}</span>
+          <Select v-model="form.kind" :options="kindOptions" />
+        </div>
         <label class="flex flex-col gap-1 text-sm text-n-slate-12">
           {{ $t('AI_KNOWLEDGE.FORM.TITLE') }}
           <input

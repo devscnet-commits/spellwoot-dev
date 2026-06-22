@@ -4,6 +4,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
+import Select from 'dashboard/components-next/select/Select.vue';
 
 const props = defineProps({
   // Optional overrides so this view can be embedded inside the agent (default department).
@@ -63,6 +64,27 @@ const integrationName = id =>
   integrations.value.find(link => link.id === id)?.name || '';
 
 const isCapability = computed(() => form.implementation_type === 'capability');
+
+const typeOptions = computed(() => [
+  { value: 'capability', label: t('AI_TOOLS.FORM.TYPE_CAPABILITY') },
+  { value: 'integration', label: t('AI_TOOLS.FORM.TYPE_INTEGRATION') },
+]);
+const capabilityOptions = computed(() => [
+  { value: '', label: t('AI_TOOLS.FORM.NONE') },
+  ...CAPABILITIES.map(c => ({
+    value: c.key,
+    label: t(`AI_TOOLS.CAPABILITIES.${c.i18n}`),
+  })),
+]);
+const integrationOptions = computed(() => [
+  { value: '', label: t('AI_TOOLS.FORM.NONE') },
+  ...integrations.value.map(link => ({ value: link.id, label: link.name })),
+]);
+const governanceOptions = computed(() => [
+  { value: 'allowed', label: t('AI_TOOLS.FORM.GOV_ALLOWED') },
+  { value: 'require_confirmation', label: t('AI_TOOLS.FORM.GOV_CONFIRMATION') },
+  { value: 'require_approval', label: t('AI_TOOLS.FORM.GOV_APPROVAL') },
+]);
 
 const baseUrl = () => {
   const accountId = route.params.accountId;
@@ -246,71 +268,31 @@ onMounted(() => {
             class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
           />
         </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_TOOLS.FORM.TYPE') }}
-          <select
-            v-model="form.implementation_type"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          >
-            <option value="capability">
-              {{ $t('AI_TOOLS.FORM.TYPE_CAPABILITY') }}
-            </option>
-            <option value="integration">
-              {{ $t('AI_TOOLS.FORM.TYPE_INTEGRATION') }}
-            </option>
-          </select>
-        </label>
-        <label
+        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
+          <span>{{ $t('AI_TOOLS.FORM.TYPE') }}</span>
+          <Select v-model="form.implementation_type" :options="typeOptions" />
+        </div>
+        <div
           v-if="isCapability"
           class="flex flex-col gap-1 text-sm text-n-slate-12"
         >
-          {{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}
-          <select
-            v-model="form.capability_key"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          >
-            <option value="">{{ $t('AI_TOOLS.FORM.NONE') }}</option>
-            <option v-for="cap in CAPABILITIES" :key="cap.key" :value="cap.key">
-              {{ $t(`AI_TOOLS.CAPABILITIES.${cap.i18n}`) }}
-            </option>
-          </select>
-        </label>
-        <label v-else class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_TOOLS.FORM.INTEGRATION') }}
-          <select
+          <span>{{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}</span>
+          <Select v-model="form.capability_key" :options="capabilityOptions" />
+        </div>
+        <div v-else class="flex flex-col gap-1 text-sm text-n-slate-12">
+          <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
+          <Select
             v-model="form.integration_link_id"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          >
-            <option value="">{{ $t('AI_TOOLS.FORM.NONE') }}</option>
-            <option
-              v-for="link in integrations"
-              :key="link.id"
-              :value="link.id"
-            >
-              {{ link.name }}
-            </option>
-          </select>
-        </label>
-        <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-          {{ $t('AI_TOOLS.FORM.GOVERNANCE') }}
-          <select
-            v-model="form.governance"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-          >
-            <option value="allowed">
-              {{ $t('AI_TOOLS.FORM.GOV_ALLOWED') }}
-            </option>
-            <option value="require_confirmation">
-              {{ $t('AI_TOOLS.FORM.GOV_CONFIRMATION') }}
-            </option>
-            <option value="require_approval">
-              {{ $t('AI_TOOLS.FORM.GOV_APPROVAL') }}
-            </option>
-          </select>
+            :options="integrationOptions"
+          />
+        </div>
+        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
+          <span>{{ $t('AI_TOOLS.FORM.GOVERNANCE') }}</span>
+          <Select v-model="form.governance" :options="governanceOptions" />
           <span class="text-xs text-n-slate-11">
             {{ governanceHint(form.governance) }}
           </span>
-        </label>
+        </div>
       </div>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">
         {{ $t('AI_TOOLS.FORM.DESCRIPTION') }}
