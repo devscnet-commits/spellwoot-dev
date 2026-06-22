@@ -16,8 +16,9 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
 
     dept_names = department_names(runs)
     dept_tools = department_tools(runs)
+    methods = routing_methods(runs)
 
-    rows = runs.map { |run| row(run, dept_names, dept_tools) }
+    rows = runs.map { |run| row(run, dept_names, dept_tools, methods) }
 
     render json: {
       facets: facets(base),
@@ -51,7 +52,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     runs
   end
 
-  def row(run, dept_names, dept_tools)
+  def row(run, dept_names, dept_tools, methods)
     tool = tool_name(run)
     missing = tool.present? && !dept_tools[run.ai_department_id].to_a.include?(tool.downcase)
     {
@@ -59,6 +60,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
       conversation_id: run.conversation_id,
       department_id: run.ai_department_id,
       department: dept_names[run.ai_department_id],
+      routing_method: methods[run.id],
       resolution: classify(run),
       status: run.status,
       error_type: run.error_type,
@@ -186,6 +188,25 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     ::Ai::Tool.where(ai_department_id: ids).pluck(:ai_department_id, :name)
               .each_with_object(Hash.new { |h, k| h[k] = [] }) do |(dept_id, name), acc|
       acc[dept_id] << name.to_s.downcase
+    end
+  end
+
+  # Maps run.id => routing method (single/inbox_mapping/classifier/default/fallback) from the
+  # existing `department.resolved` event. One batched query; matched to each run by time window.
+  def routing_methods(runs)
+    conv_ids = runs.map(&:conversation_id).compact.uniq
+    return {} if conv_ids.empty?
+
+    events = ::Ai::Event.where(conversation_id: conv_ids, event_type: 'department.resolved')
+                        .pluck(:conversation_id, :created_at, :payload)
+    by_conversation = events.group_by(&:first)
+    runs.each_with_object({}) do |run, acc|
+      candidates = by_conversation[run.conversation_id]
+      next if candidates.blank?
+
+      window = run.created_at..(run.updated_at + 2.seconds)
+      match = candidates.find { |(_conv, created_at, _payload)| window.cover?(created_at) }
+      acc[run.id] = (match || candidates.last)[2]['method'] if match || candidates.last
     end
   end
 end

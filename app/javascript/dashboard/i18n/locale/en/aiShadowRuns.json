@@ -71,8 +71,17 @@
       "ERRORS": "erros",
       "UNANSWERED": "sem resposta"
     },
+    "METHODS": {
+      "single": "único departamento",
+      "inbox_mapping": "mapeamento da caixa",
+      "classifier": "classificador (IA)",
+      "default": "departamento padrão",
+      "fallback": "fallback",
+      "manual": "seleção manual"
+    },
     "RUN": {
       "CONVERSATION": "Conversa",
+      "VIA": "via",
       "REPLY": "Resposta que seria enviada",
       "NO_REPLY": "Nenhuma resposta proposta.",
       "TOOL": "Ferramenta",

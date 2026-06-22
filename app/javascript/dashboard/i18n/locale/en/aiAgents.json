@@ -141,6 +141,28 @@
         "judge": "IA econômica (julga)",
         "generator": "IA premium (gera)"
       },
+      "CONFIDENCE": "Confiança",
+      "GOVERNANCE_TITLE": "Governança da decisão",
+      "CHOSEN_BY": "Departamento escolhido",
+      "RESOLVED_BY": "Resposta resolvida por",
+      "TOOLS_CONSIDERED": "Ferramentas consideradas",
+      "TOOL_EXECUTED": "executada",
+      "HANDOFF_BY": "Transferência por",
+      "METHODS": {
+        "single": "único departamento",
+        "inbox_mapping": "mapeamento da caixa",
+        "classifier": "classificador (IA)",
+        "default": "departamento padrão",
+        "fallback": "fallback",
+        "manual": "seleção manual"
+      },
+      "RESOLVED": {
+        "knowledge": "conhecimento (RAG)",
+        "instruction": "instrução do departamento",
+        "tool": "ferramenta",
+        "transfer": "transferência para humano",
+        "unanswered": "sem resposta"
+      },
       "KNOWLEDGE_PREVIEW": "Trechos de conhecimento utilizados",
       "REPLY": "Resposta da IA",
       "NONE": "—"
@@ -190,6 +212,15 @@
     "STATUS_ACTIVE": "Ativo",
     "STATUS_INACTIVE": "Inativo",
     "DEFAULT_BADGE": "Padrão",
+    "READINESS": {
+      "TITLE": "Prontidão operacional",
+      "OBJETIVO": "Objetivo",
+      "INSTRUCTIONS": "Instruções",
+      "STEPS": "Etapas",
+      "KNOWLEDGE": "Conhecimento",
+      "TOOLS": "Ferramentas",
+      "INTEGRATIONS": "Integrações"
+    },
     "AUTO_ON": "Autoatendimento ativo",
     "AUTO_OFF": "Autoatendimento desligado",
     "STATE_ON": "Ativado",

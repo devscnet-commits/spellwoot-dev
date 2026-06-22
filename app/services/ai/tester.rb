@@ -2,7 +2,7 @@
 # (department, knowledge, suggested tool, model, tokens, cost, latency, reply). Pure dry-run.
 class Ai::Tester
   def self.run(agent:, message:, department_id: nil)
-    department = resolve_department(agent, message, department_id)
+    department, department_method = resolve_department(agent, message, department_id)
     return { 'error' => 'nenhum departamento ativo' } if department.nil?
 
     retrieval = Ai::KnowledgeRetriever.retrieve_scored(department: department, query: message, account_id: agent.account_id)
@@ -19,8 +19,13 @@ class Ai::Tester
 
     {
       'department' => department.name,
+      'department_method' => department_method,
       'reply' => decision['reply_text'],
+      'decision' => decision['decision'],
+      'confidence' => decision['confidence'],
+      'handoff_reason' => decision['handoff_reason'],
       'tool' => decision.dig('tool', 'name'),
+      'tools_considered' => tools.map(&:name),
       'knowledge_used' => knowledge.size,
       'knowledge_preview' => knowledge.first(3).map { |k| k.to_s.first(160) },
       'vector_score' => score,
@@ -53,9 +58,10 @@ class Ai::Tester
                            user_message: message, provider: routing['provider'], model: routing['model'])
   end
 
+  # Returns [department, method] so the Lab can show WHY this department was chosen.
   def self.resolve_department(agent, message, department_id)
-    return agent.departments.find_by(id: department_id) if department_id.present?
+    return [agent.departments.find_by(id: department_id), 'manual'] if department_id.present?
 
-    Ai::DepartmentResolver.resolve(agent: agent, inbox_id: nil, message_content: message).first
+    Ai::DepartmentResolver.resolve(agent: agent, inbox_id: nil, message_content: message)
   end
 end

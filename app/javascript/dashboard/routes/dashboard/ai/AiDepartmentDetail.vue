@@ -295,6 +295,22 @@ const fetchIntegrations = async () => {
     enabled: !!i.enabled,
   }));
 };
+// Operational readiness (%): a checklist over data already loaded — no backend.
+const readinessChecks = computed(() => [
+  { key: 'OBJETIVO', ok: !!form.objetivo?.trim() },
+  { key: 'INSTRUCTIONS', ok: !!form.instructions?.trim() },
+  { key: 'STEPS', ok: summary.value.steps > 0 },
+  { key: 'KNOWLEDGE', ok: summary.value.knowledge > 0 },
+  { key: 'TOOLS', ok: summary.value.tools > 0 },
+  { key: 'INTEGRATIONS', ok: integrations.value.some(i => i.enabled) },
+]);
+const readinessPct = computed(() => {
+  const checks = readinessChecks.value;
+  return checks.length
+    ? Math.round((checks.filter(c => c.ok).length / checks.length) * 100)
+    : 0;
+});
+
 const saveIntegrations = async () => {
   const ids = integrations.value.filter(i => i.enabled).map(i => i.id);
   try {
@@ -424,6 +440,48 @@ onMounted(async () => {
                 : $t('AI_DEPARTMENTS.AUTO_OFF')
             }}
           </span>
+        </div>
+
+        <!-- Prontidão Operacional: checklist sobre dados já carregados (sem backend) -->
+        <div
+          v-if="!isNew"
+          class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.READINESS.TITLE') }}
+            </span>
+            <span
+              class="text-lg font-semibold"
+              :class="
+                readinessPct === 100
+                  ? 'text-n-teal-11'
+                  : readinessPct >= 60
+                    ? 'text-n-slate-12'
+                    : 'text-n-amber-11'
+              "
+            >
+              {{ `${readinessPct}%` }}
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+            <span
+              v-for="check in readinessChecks"
+              :key="check.key"
+              class="inline-flex items-center gap-1.5 text-xs"
+              :class="check.ok ? 'text-n-slate-11' : 'text-n-amber-11'"
+            >
+              <span
+                class="size-3.5"
+                :class="
+                  check.ok
+                    ? 'i-lucide-check-circle-2 text-n-teal-11'
+                    : 'i-lucide-alert-circle'
+                "
+              />
+              {{ $t(`AI_DEPARTMENTS.READINESS.${check.key}`) }}
+            </span>
+          </div>
         </div>
 
         <div class="flex flex-wrap gap-x-5 gap-y-1 border-b border-n-weak">
