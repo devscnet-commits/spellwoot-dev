@@ -314,6 +314,12 @@ const menuItems = computed(() => {
           to: accountScopedRoute('ai_agents_index'),
         },
         {
+          name: 'AIProfiles',
+          label: t('SIDEBAR.AI_PROFILES'),
+          activeOn: ['ai_profiles_index'],
+          to: accountScopedRoute('ai_profiles_index'),
+        },
+        {
           name: 'AIIntegrations',
           label: t('SIDEBAR.AI_INTEGRATIONS'),
           activeOn: ['ai_integrations_index'],
