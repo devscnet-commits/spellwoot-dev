@@ -16,7 +16,7 @@ class Ai::Gateway
   def run
     run_record = Ai::Run.create!(
       account_id: @account.id, conversation_id: @conversation.id, ai_agent_id: @agent.id,
-      run_type: 'decision', mode: @mode, status: 'running'
+      inbox_id: @message.inbox_id, run_type: 'decision', mode: @mode, status: 'running'
     )
     emit(run_record, 'message.received', { content: @message.content.to_s.first(500) })
 
@@ -30,6 +30,8 @@ class Ai::Gateway
     )
     emit(run_record, 'department.resolved', { department_id: department&.id, name: department&.name, method: resolution })
     return finalize(run_record, 'no_department') unless department
+
+    run_record.update!(ai_department_id: department.id)
 
     # Per-department kill switch: even on a live binding, an off toggle keeps the AI observing only.
     @acts_live = Ai::ReplyPolicy.acts_live?(@mode, department)
@@ -51,7 +53,8 @@ class Ai::Gateway
       provider: result[:provider], model: result[:model],
       tokens_in: result[:tokens_in], tokens_out: result[:tokens_out],
       cost: result[:cost], latency_ms: result[:latency_ms],
-      decision: result[:decision] || {}, status: result[:status]
+      decision: result[:decision] || {}, status: result[:status],
+      error_type: (result[:status] == 'error' ? 'provider_error' : nil)
     )
     emit(run_record, 'decision.made',
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms] },
@@ -90,6 +93,7 @@ class Ai::Gateway
     finalize(run_record, result[:status] == 'error' ? 'error' : 'recorded')
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway] conv=#{@conversation&.id} #{e.class}: #{e.message}"
+    run_record.update!(status: 'error', error_type: 'unknown') if defined?(run_record) && run_record&.persisted?
     nil
   end
 
@@ -128,7 +132,8 @@ class Ai::Gateway
   def handle_reply(department, text, run_record)
     return if text.blank?
 
-    if Ai::ReplyPolicy.allowed?(mode: @mode, department: department, conversation: @conversation)
+    state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation)
+    if state == :live
       Messages::MessageBuilder.new(nil, @conversation, { content: text, private: false }).perform
       emit(run_record, 'reply.sent', { chars: text.length })
     else

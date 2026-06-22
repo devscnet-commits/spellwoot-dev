@@ -10,6 +10,7 @@ class Ai::PromptCompiler
     parts << "Regras de segurança (nunca viole): #{agent.guardrails}." if agent.guardrails.present?
 
     parts << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
+    parts << "Instruções: #{department.instructions}." if department.instructions.present?
     if (pb = department.playbook)
       parts << "Etapas do atendimento: #{Array(pb.steps).join(' -> ')}." if pb.steps.present?
       parts << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?

@@ -7,7 +7,9 @@ class Ai::FollowupSweepJob < ApplicationJob
   queue_as :low
 
   def perform
-    Ai::AgentInbox.live.includes(:agent).find_each do |binding|
+    Ai::AgentInbox.live.includes(agent: :account).find_each do |binding|
+      next unless binding.agent.account&.feature_enabled?('ai_core')
+
       department = binding.agent.departments.active.first
       next if department.nil?
 
