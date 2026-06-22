@@ -1,9 +1,10 @@
 # Resolves which department handles a message within an already-resolved agent.
 # Order: single department -> explicit inbox->department mapping -> classifier (cheap LLM worker)
-# -> fallback to the first candidate. Returns [department, method].
+# -> default department (is_default) -> first candidate. Departments are tried in `position` order.
+# Returns [department, method].
 class Ai::DepartmentResolver
   def self.resolve(agent:, inbox_id:, message_content:)
-    departments = agent.departments.active.to_a
+    departments = agent.departments.active.order(:position, :id).to_a
     return [nil, 'none'] if departments.empty?
     return [departments.first, 'single'] if departments.size == 1
 
@@ -12,7 +13,10 @@ class Ai::DepartmentResolver
 
     candidates = mapped.presence || departments
     chosen = classify(candidates, message_content, agent)
-    chosen ? [chosen, 'classifier'] : [candidates.first, 'fallback']
+    return [chosen, 'classifier'] if chosen
+
+    fallback = candidates.find(&:is_default) || departments.find(&:is_default)
+    fallback ? [fallback, 'default'] : [candidates.first, 'fallback']
   end
 
   # Cheap classification worker: picks the best department by name/objetivo.
