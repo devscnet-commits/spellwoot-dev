@@ -60,13 +60,10 @@ const agentForm = reactive({
   category: '',
   company_name: '',
   site: '',
-  version: '',
   identify_as: 'human',
   assistant_avatar: '',
   ai_operation_profile_id: '',
-  assistant_description: '',
   assistant_personality: '',
-  assistant_voice: '',
   assistant_language: '',
   base_prompt: '',
   guardrails: '',
@@ -495,10 +492,6 @@ onMounted(async () => {
               :label="$t('AI_AGENTS.SOBRE.SITE')"
             />
 
-            <Input
-              v-model="agentForm.version"
-              :label="$t('AI_AGENTS.SOBRE.VERSION')"
-            />
             <div class="flex flex-col gap-1.5">
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.SOBRE.MODEL') }}
@@ -525,20 +518,11 @@ onMounted(async () => {
               </span>
             </div>
             <Input
-              v-model="agentForm.assistant_voice"
-              :label="$t('AI_AGENTS.SOBRE.VOICE')"
-            />
-            <Input
               v-model="agentForm.assistant_language"
               :label="$t('AI_AGENTS.SOBRE.LANGUAGE')"
             />
           </div>
 
-          <TextArea
-            v-model="agentForm.assistant_description"
-            :label="$t('AI_AGENTS.SOBRE.DESCRIPTION_FIELD')"
-            :max-length="500"
-          />
           <TextArea
             v-model="agentForm.assistant_personality"
             :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
