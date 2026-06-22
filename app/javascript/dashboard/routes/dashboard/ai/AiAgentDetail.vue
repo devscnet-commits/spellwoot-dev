@@ -279,7 +279,7 @@ onMounted(async () => {
 
       <!-- Main card -->
       <div
-        class="rounded-2xl border border-n-weak bg-n-solid-1 px-6 sm:px-8 py-6 flex flex-col gap-5"
+        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-5"
       >
         <!-- Header: name (left) + brand logo (right) -->
         <div class="flex items-start justify-between gap-4">

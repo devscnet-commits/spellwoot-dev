@@ -180,7 +180,7 @@ onMounted(fetchAgents);
 
 <template>
   <div
-    class="flex flex-col w-full h-full overflow-auto p-6 gap-4 max-w-5xl mx-auto"
+    class="flex flex-col w-full h-full overflow-auto p-4 sm:p-6 gap-4 max-w-5xl mx-auto"
   >
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
@@ -223,13 +223,13 @@ onMounted(fetchAgents);
             <th class="text-left font-medium px-4 py-2.5">
               {{ $t('AI_AGENTS.LIST.NAME') }}
             </th>
-            <th class="text-left font-medium px-3 py-2.5">
+            <th class="hidden md:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.TYPE') }}
             </th>
-            <th class="text-left font-medium px-3 py-2.5">
+            <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.PROFILE') }}
             </th>
-            <th class="text-left font-medium px-3 py-2.5">
+            <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.DEPARTMENTS') }}
             </th>
             <th class="text-left font-medium px-3 py-2.5">
@@ -275,15 +275,15 @@ onMounted(fetchAgents);
                 </div>
               </div>
             </td>
-            <td class="px-3 py-3">
+            <td class="hidden md:table-cell px-3 py-3">
               {{ agent.category || $t('AI_AGENTS.LIST.NO_CATEGORY') }}
             </td>
-            <td class="px-3 py-3 text-n-slate-11">
+            <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{
                 agent.operation_profile_name || $t('AI_AGENTS.LIST.NO_PROFILE')
               }}
             </td>
-            <td class="px-3 py-3 text-n-slate-11">
+            <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{
                 $t('AI_AGENTS.LIST.DEPARTMENTS_COUNT', {
                   count: agent.departments_count ?? 0,

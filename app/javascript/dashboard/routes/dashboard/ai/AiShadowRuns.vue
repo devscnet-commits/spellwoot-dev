@@ -27,7 +27,7 @@ onMounted(fetchRuns);
 
 <template>
   <div
-    class="flex flex-col w-full h-full overflow-auto p-6 gap-4 max-w-5xl mx-auto"
+    class="flex flex-col w-full h-full overflow-auto p-4 sm:p-6 gap-4 max-w-5xl mx-auto"
   >
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
@@ -63,7 +63,7 @@ onMounted(fetchRuns);
       v-else
       class="border border-n-weak rounded-xl overflow-hidden overflow-x-auto"
     >
-      <table class="w-full text-sm">
+      <table class="w-full text-sm min-w-[48rem]">
         <thead class="bg-n-alpha-2 text-n-slate-11">
           <tr>
             <th class="text-left font-medium px-3 py-2">

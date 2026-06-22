@@ -234,7 +234,7 @@ onMounted(fetchProfiles);
 
 <template>
   <div
-    class="flex flex-col w-full h-full overflow-auto p-6 gap-4 max-w-4xl mx-auto"
+    class="flex flex-col w-full h-full overflow-auto p-4 sm:p-6 gap-4 max-w-4xl mx-auto"
   >
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
