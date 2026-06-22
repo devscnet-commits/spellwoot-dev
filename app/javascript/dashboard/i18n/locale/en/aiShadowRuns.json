@@ -5,6 +5,32 @@
     "REFRESH": "Atualizar",
     "LOADING": "Carregando...",
     "EMPTY": "Nenhuma execução shadow registrada ainda.",
+    "CONVERSATION": "Conversa",
+    "DEPARTMENT": "Departamento",
+    "REPLY": "Resposta que seria enviada",
+    "NO_REPLY": "Nenhuma resposta proposta.",
+    "TOOL": "Ferramenta",
+    "KNOWLEDGE": "Conhecimento",
+    "MODEL": "Modelo",
+    "COST": "Custo",
+    "LATENCY": "Latência",
+    "KNOWLEDGE_COUNT": "{count} trechos",
+    "STATUS": {
+      "recorded": "Registrado",
+      "running": "Em andamento",
+      "no_department": "Sem departamento",
+      "error": "Erro"
+    },
+    "ERROR_TYPES": {
+      "provider_timeout": "Tempo esgotado do provedor",
+      "provider_error": "Falha no provedor de IA",
+      "knowledge_timeout": "Tempo esgotado na busca de conhecimento",
+      "tool_failed": "Falha ao executar ferramenta",
+      "guardrail_blocked": "Bloqueado por regra de segurança",
+      "budget_exceeded": "Orçamento excedido",
+      "classification_failed": "Falha ao classificar o departamento",
+      "unknown": "Erro não identificado"
+    },
     "COLUMNS": {
       "CONVERSATION": "Conversa",
       "AGENT": "Agente",
