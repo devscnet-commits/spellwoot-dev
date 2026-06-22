@@ -74,7 +74,7 @@
     "METHODS": {
       "single": "único departamento",
       "inbox_mapping": "mapeamento da caixa",
-      "classifier": "classificador (IA)",
+      "classifier": "roteamento automático",
       "default": "departamento padrão",
       "fallback": "fallback",
       "manual": "seleção manual"
@@ -86,7 +86,7 @@
       "NO_REPLY": "Nenhuma resposta proposta.",
       "TOOL": "Ferramenta",
       "TOOL_MISSING": "não configurada",
-      "KNOWLEDGE_COUNT": "{count} trechos",
+      "KNOWLEDGE_COUNT": "{count} conhecimentos usados",
       "CONFIDENCE": "Confiança",
       "EMPTY": "Nenhuma execução com os filtros atuais."
     },

@@ -79,7 +79,7 @@
       "SITE": "Site",
       "VERSION": "Versão",
       "MODEL": "Nível de atendimento",
-    "MANAGE_LEVELS": "Gerenciar níveis",
+      "MANAGE_LEVELS": "Gerenciar níveis",
       "DESCRIPTION_FIELD": "Descrição",
       "PERSONALITY": "Personalidade",
       "VOICE": "Tom de voz",
@@ -129,9 +129,9 @@
       "COST": "Custo (USD)",
       "MODEL": "Modelo final utilizado",
       "TOKENS": "Tokens (entrada / saída)",
-      "SCORE": "Score vetorial (RAG)",
+      "SCORE": "Confiança da busca",
       "ROUTING": "Decisão de roteamento",
-      "WORKER": "Worker utilizado",
+      "WORKER": "Modelo utilizado",
       "BANDS": {
         "high": "Confiança alta · cache",
         "mid": "Zona cinzenta · IA econômica",
@@ -152,19 +152,19 @@
       "METHODS": {
         "single": "único departamento",
         "inbox_mapping": "mapeamento da caixa",
-        "classifier": "classificador (IA)",
+        "classifier": "roteamento automático",
         "default": "departamento padrão",
         "fallback": "fallback",
         "manual": "seleção manual"
       },
       "RESOLVED": {
-        "knowledge": "conhecimento (RAG)",
+        "knowledge": "conhecimento",
         "instruction": "instrução do departamento",
         "tool": "ferramenta",
         "transfer": "transferência para humano",
         "unanswered": "sem resposta"
       },
-      "KNOWLEDGE_PREVIEW": "Trechos de conhecimento utilizados",
+      "KNOWLEDGE_PREVIEW": "Conhecimento consultado",
       "REPLY": "Resposta da IA",
       "NONE": "—"
     },
@@ -271,10 +271,10 @@
       "AUTO_HINT_ON": "A IA está autorizada a agir neste departamento (sujeita ao modo da caixa e ao horário). Desligar mantém a IA apenas observando.",
       "AUTO_HINT_OFF": "A IA só observa: registra o que faria, mas não responde nem executa ações neste departamento.",
       "DEFAULT_TITLE": "Departamento padrão",
-      "DEFAULT_HINT": "Recebe a conversa quando o classificador não tem certeza de qual departamento atende. Apenas um departamento pode ser o padrão.",
+      "DEFAULT_HINT": "Recebe a conversa quando o roteamento automático não tem certeza de qual departamento atende. Apenas um departamento pode ser o padrão.",
       "DEFAULT_TOGGLE": "Usar este como departamento padrão do agente",
       "INBOXES_TITLE": "Caixas atendidas por este departamento",
-      "INBOXES_HINT": "Entre as caixas do agente, marque quais este departamento atende. Se nenhuma for marcada, o roteamento usa o classificador automático.",
+      "INBOXES_HINT": "Entre as caixas do agente, marque quais este departamento atende. Se nenhuma for marcada, usa o roteamento automático.",
       "INBOXES_EMPTY": "O agente ainda não está vinculado a nenhuma caixa. Configure em Agente → Sobre → Onde atende.",
       "INBOXES_SAVE": "Salvar caixas",
       "REPLY_TITLE": "Resposta ao cliente",
@@ -394,11 +394,9 @@
   },
   "AI_KNOWLEDGE": {
     "TITLE": "Conhecimento",
-    "DESCRIPTION": "Fontes de conhecimento do departamento. O texto é dividido em trechos e indexado para busca (RAG).",
-    "DOCS_LABEL": "Documentos / Base de conhecimento",
-    "DOCS_HINT": "Tudo o que a IA pode consultar para responder. Cada item vira trechos indexados para busca (RAG).",
-    "ADD_MANUAL": "Adicionar conhecimento",
-    "ADD_MANUAL_SUB": "Digite manualmente um FAQ, produto, procedimento ou documento. O conteúdo é indexado para busca (RAG).",
+    "DESCRIPTION": "Ensine sua empresa para a IA: FAQ, produtos, procedimentos e mais.",
+    "DOCS_LABEL": "Conhecimento da empresa",
+    "DOCS_HINT": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui ela usa para responder os clientes.",
     "NEW": "Nova fonte",
     "EMPTY": "Nenhuma fonte de conhecimento neste departamento.",
     "FORM": {
@@ -408,7 +406,13 @@
       "SAVE": "Salvar",
       "CANCEL": "Cancelar",
       "EDIT": "Editar",
-      "DELETE": "Excluir"
+      "DELETE": "Excluir",
+      "FAQ_QUESTION": "Pergunta",
+      "FAQ_ANSWER": "Resposta",
+      "PRODUCT_NAME": "Nome do produto ou serviço",
+      "PRODUCT_DESC": "Descrição (inclua preço e condições)",
+      "PROC_TITLE": "Título do procedimento",
+      "PROC_STEPS": "Passo a passo"
     },
     "KINDS": {
       "FAQ": "FAQ",
@@ -418,7 +422,6 @@
       "DOCUMENTO": "Documento",
       "WEBSITE": "Website"
     },
-    "CHUNKS": "trechos",
     "SAVED": "Conhecimento salvo.",
     "DELETED": "Fonte excluída.",
     "ERROR": "Algo deu errado ao salvar.",
@@ -428,6 +431,20 @@
       "CONFIRM": "Excluir",
       "CANCEL": "Cancelar",
       "PLACEHOLDER": "Digite {name} para confirmar"
+    },
+    "SOURCES": {
+      "LABEL": "O que você quer ensinar?",
+      "FAQ": "FAQ",
+      "FAQ_HINT": "Pergunta e resposta",
+      "PRODUTO": "Produtos e serviços",
+      "PRODUTO_HINT": "Nome, descrição e preço",
+      "PROCEDIMENTO": "Procedimentos",
+      "PROCEDIMENTO_HINT": "Passo a passo",
+      "DOCUMENTOS": "Documentos",
+      "DOCUMENTOS_HINT": "PDF, DOCX, TXT",
+      "SITE": "Site",
+      "SITE_HINT": "Importar páginas",
+      "SOON": "Em breve"
     }
   },
   "AI_PROFILES": {

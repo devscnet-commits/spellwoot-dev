@@ -46,6 +46,34 @@ Não expandir a arquitetura de workers agora. **Não** criar telas/fluxos para S
 Tradução, Classificador, RAG, Embeddings. Eles existem internamente, mas **não** fazem parte da
 experiência principal. **O cliente não escolhe worker.**
 
+## Conhecimento — o usuário ensina a empresa para a IA
+
+O usuário **não configura IA**: ele **ensina a empresa** para a IA. Ele nunca precisa entender
+RAG, embeddings, vetores, chunking, workers, classificadores, OCR ou pipelines — isso é
+**infraestrutura interna** da plataforma e permanece invisível.
+
+A área de Conhecimento é organizada por **fontes de negócio**, não por tecnologia:
+- **FAQ** — pergunta + resposta (criação rápida; importação CSV no futuro).
+- **Documentos** — upload de PDF/DOCX/TXT/MD com status de processamento *(roadmap de backend)*.
+- **Site** — importar e indexar páginas de uma URL *(roadmap de backend)*.
+- **Produtos e serviços** — nome, descrição e preço (importação CSV no futuro).
+- **Procedimentos** — título + passo a passo.
+
+**Nunca exibir** ao cliente: embeddings, chunking, vetores, indexação, RAG ou qualquer
+terminologia técnica de IA. O cliente pensa "estou ensinando minha empresa", nunca "estou
+configurando um sistema RAG".
+
+### Ciclo oficial do produto: Ensinar → Atender → Medir → Evoluir
+1. **Ensinar** — o cliente adiciona FAQ, documentos, site, produtos, procedimentos.
+2. **Atender** — a IA usa esse conhecimento para responder.
+3. **Medir** — o Shadow monitora dúvidas não respondidas, falhas, baixa confiança, temas recorrentes.
+4. **Evoluir** — o Shadow sugere ações ("essa pergunta apareceu 27 vezes e não tem resposta" →
+   **Criar FAQ**); o usuário aprova; o conhecimento cresce; a IA melhora. O Shadow é a
+   **principal ferramenta de evolução do conhecimento**.
+
+Honestidade: enquanto upload de documentos, importação de site e CSV não existirem no backend,
+**não simular** esses fluxos — sinalizar como **"em breve" 🚧**.
+
 ## Caminho crítico do produto
 
 O sistema deve ser utilizável apenas com:
@@ -102,9 +130,13 @@ engenharia de IA. Complexidade interna é aceitável; complexidade exposta ao cl
 - Agente/Sobre → identidade + "Avançado".
 - Departamento → 4 alavancas como núcleo; Comportamento/Follow-up/Integrações em "Avançado".
 - Perfil → reapresentar como **nível de atendimento** (Econômico/Equilibrado/Máxima); workers/modelos/roteamento só em "Avançado" para o power user.
+- Conhecimento → reenquadrar como **"Conhecimento da empresa"**, organizado por fontes de negócio (FAQ/Produtos/Procedimentos); purgar terminologia técnica (RAG/trechos/chunk/vetor/worker) das telas do cliente; Documentos/Site/CSV sinalizados como **"em breve" 🚧** até existir backend.
 
 **Funcional/futuro (backend — fora do escopo de UX):**
 - Tradução de custo em **plano / consumo / créditos** (esconder tokens).
 - Orçamento como política de **conta** (separado do perfil).
 - Motor por **departamento** via herança+override (decisão de arquitetura registrada).
 - Ligar de verdade os workers internos (maturidade) — sem expor ao cliente.
+- Conhecimento: **upload + parsing** de PDF/DOCX/TXT/MD, **importação de site** (URL → páginas), **importação CSV** (FAQ/Produtos), preço estruturado em Produtos e status de processamento.
+- Shadow → **Evoluir**: ação "Criar FAQ" a partir de um insight (pergunta recorrente sem resposta vira conhecimento aprovado pelo usuário).
+- "SLA" do departamento: renomear para **auto-encerramento por inatividade** (ou remover) — não é SLA de resposta.
