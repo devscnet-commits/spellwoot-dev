@@ -6,6 +6,7 @@ class Ai::ShadowListener < BaseListener
     return if message.blank?
     return unless message.incoming?
     return if message.private?
+    return unless message.account&.feature_enabled?('ai_core')
     return unless Ai::AgentInbox.shadow.exists?(inbox_id: message.inbox_id)
 
     Ai::ShadowRunJob.perform_later(message.id)
