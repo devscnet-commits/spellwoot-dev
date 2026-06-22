@@ -337,6 +337,7 @@
     "TITLE": "Conhecimento",
     "DESCRIPTION": "Fontes de conhecimento do departamento. O texto é dividido em trechos e indexado para busca (RAG).",
     "DOCS_LABEL": "Documentos / Base de conhecimento",
+    "DOCS_HINT": "Tudo o que a IA pode consultar para responder. Cada item vira trechos indexados para busca (RAG).",
     "UPLOAD_HINT": "Clique para adicionar conhecimento (FAQ, produto, procedimento, documento…)",
     "UPLOAD_SUB": "O conteúdo é dividido em trechos e indexado para busca (RAG).",
     "NEW": "Nova fonte",
