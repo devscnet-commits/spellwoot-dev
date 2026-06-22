@@ -22,6 +22,7 @@ const VAR_TYPES = ['texto', 'numero', 'booleano', 'lista'];
 const form = reactive({
   name: '',
   objetivo: '',
+  instructions: '',
   status: 'active',
   greeting: '',
   steps: '',
@@ -67,6 +68,7 @@ const hydrate = dept => {
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
+    instructions: behavior.instructions || '',
     status: dept.status || 'active',
     greeting: playbook.default_messages?.greeting || '',
     steps: arrayToLines(playbook.steps),
@@ -118,6 +120,7 @@ const buildPayload = () => ({
       inactivity_minutes: Number(form.close_inactivity) || 0,
     },
     behavior: {
+      instructions: form.instructions,
       auto_attendance: form.auto_attendance,
       business_hours: {
         enabled: form.hours_enabled,
@@ -401,10 +404,19 @@ onMounted(async () => {
               </label>
             </div>
             <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.OBJETIVO_LABEL') }}
+              <input
+                v-model="form.objetivo"
+                type="text"
+                :placeholder="$t('AI_DEPARTMENTS.OBJETIVO_PLACEHOLDER')"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.INSTRUCTIONS_LABEL') }}
               <textarea
-                v-model="form.objetivo"
-                rows="5"
+                v-model="form.instructions"
+                rows="6"
                 :placeholder="$t('AI_DEPARTMENTS.INSTRUCTIONS_PLACEHOLDER')"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
               />

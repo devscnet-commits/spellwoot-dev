@@ -81,6 +81,16 @@ const profileOptions = computed(() => [
   { value: '', label: t('AI_AGENTS.FORM.NONE') },
   ...profiles.value.map(p => ({ value: p.id, label: p.name })),
 ]);
+
+// Controlled organizational categories (decoupled from departments / behaviour).
+const CATEGORY_KEYS = ['cliente', 'parceiro', 'interno', 'outro'];
+const categoryOptions = computed(() => [
+  { value: '', label: t('AI_AGENTS.FORM.NONE') },
+  ...CATEGORY_KEYS.map(k => ({
+    value: k,
+    label: t(`AI_AGENTS.CATEGORIES.${k}`),
+  })),
+]);
 const stageOptions = computed(() =>
   ['production', 'staging', 'sandbox', 'experimental'].map(s => ({
     value: s,
@@ -108,6 +118,27 @@ const fetchDepartments = async () => {
   );
   departments.value = Array.isArray(data) ? data : [];
 };
+
+const deptSearch = ref('');
+const deptSort = ref('name');
+const deptSortOptions = computed(() => [
+  { value: 'name', label: t('AI_DEPARTMENTS.SORT_NAME') },
+  { value: 'recent', label: t('AI_DEPARTMENTS.SORT_RECENT') },
+]);
+const filteredDepartments = computed(() => {
+  const q = deptSearch.value.trim().toLowerCase();
+  const list = q
+    ? departments.value.filter(d =>
+        `${d.name || ''} ${d.objetivo || ''}`.toLowerCase().includes(q)
+      )
+    : [...departments.value];
+  if (deptSort.value === 'recent') {
+    return list.sort(
+      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    );
+  }
+  return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+});
 
 const onAvatarUpload = ({ file }) => {
   const reader = new FileReader();
@@ -455,10 +486,15 @@ onMounted(async () => {
               <Select v-model="agentForm.stage" :options="stageOptions" />
             </div>
 
-            <Input
-              v-model="agentForm.category"
-              :label="$t('AI_AGENTS.SOBRE.CATEGORY')"
-            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.CATEGORY') }}
+              </span>
+              <Select v-model="agentForm.category" :options="categoryOptions" />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.SOBRE.CATEGORY_HINT') }}
+              </span>
+            </div>
             <Input
               v-model="agentForm.assistant_voice"
               :label="$t('AI_AGENTS.SOBRE.VOICE')"
@@ -680,36 +716,47 @@ onMounted(async () => {
           >
             {{ $t('AI_DEPARTMENTS.EMPTY') }}
           </p>
-          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              v-for="dept in departments"
-              :key="dept.id"
-              type="button"
-              class="group rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3 text-left hover:border-n-brand transition-colors"
-              @click="editDepartment(dept)"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <span
-                  class="size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
-                >
-                  <span class="i-lucide-layers size-5" />
-                </span>
-                <span
-                  class="i-lucide-arrow-right size-4 text-n-slate-10 group-hover:text-n-brand"
-                />
-              </div>
-              <div class="min-w-0">
-                <p
-                  class="text-base font-semibold text-n-slate-12 mb-0 truncate"
-                >
-                  {{ dept.name }}
-                </p>
-                <p class="text-xs text-n-slate-11 line-clamp-2 mb-0">
-                  {{ dept.objetivo || $t('AI_DEPARTMENTS.NO_OBJETIVO') }}
-                </p>
-              </div>
-            </button>
-          </div>
+          <template v-else>
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                v-model="deptSearch"
+                type="search"
+                :placeholder="$t('AI_DEPARTMENTS.SEARCH')"
+                class="flex-1 min-w-48 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              />
+              <Select v-model="deptSort" :options="deptSortOptions" />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                v-for="dept in filteredDepartments"
+                :key="dept.id"
+                type="button"
+                class="group rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3 text-left hover:border-n-brand transition-colors"
+                @click="editDepartment(dept)"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span
+                    class="size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
+                  >
+                    <span class="i-lucide-layers size-5" />
+                  </span>
+                  <span
+                    class="i-lucide-arrow-right size-4 text-n-slate-10 group-hover:text-n-brand"
+                  />
+                </div>
+                <div class="min-w-0">
+                  <p
+                    class="text-base font-semibold text-n-slate-12 mb-0 truncate"
+                  >
+                    {{ dept.name }}
+                  </p>
+                  <p class="text-xs text-n-slate-11 line-clamp-2 mb-0">
+                    {{ dept.objetivo || $t('AI_DEPARTMENTS.NO_OBJETIVO') }}
+                  </p>
+                </div>
+              </button>
+            </div>
+          </template>
         </div>
 
         <!-- TESTE -->
