@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const props = defineProps({
@@ -107,12 +108,14 @@ const save = async () => {
   }
 };
 
-const remove = async source => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_KNOWLEDGE.CONFIRM_DELETE'))) return;
+const deleteTarget = ref(null);
+const sourceName = source =>
+  source ? source.title || kindLabel(source.kind) : '';
+const confirmRemove = async () => {
   try {
-    await axios.delete(`${baseUrl()}/${source.id}`);
+    await axios.delete(`${baseUrl()}/${deleteTarget.value.id}`);
     useAlert(t('AI_KNOWLEDGE.DELETED'));
+    deleteTarget.value = null;
     fetchSources();
   } catch (error) {
     useAlert(t('AI_KNOWLEDGE.ERROR'));
@@ -176,7 +179,7 @@ onMounted(fetchSources);
               type="button"
               class="hover:text-n-ruby-11"
               :aria-label="$t('AI_KNOWLEDGE.FORM.DELETE')"
-              @click="remove(source)"
+              @click="deleteTarget = source"
             >
               <span class="i-lucide-trash-2 size-4 inline-block" />
             </button>
@@ -246,5 +249,26 @@ onMounted(fetchSources);
         </button>
       </div>
     </div>
+
+    <ConfirmDeleteModal
+      v-if="deleteTarget"
+      show
+      :title="$t('AI_KNOWLEDGE.DELETE_MODAL.TITLE')"
+      :message="
+        $t('AI_KNOWLEDGE.DELETE_MODAL.MESSAGE', {
+          name: sourceName(deleteTarget),
+        })
+      "
+      :confirm-text="$t('AI_KNOWLEDGE.DELETE_MODAL.CONFIRM')"
+      :reject-text="$t('AI_KNOWLEDGE.DELETE_MODAL.CANCEL')"
+      :confirm-value="sourceName(deleteTarget)"
+      :confirm-place-holder-text="
+        $t('AI_KNOWLEDGE.DELETE_MODAL.PLACEHOLDER', {
+          name: sourceName(deleteTarget),
+        })
+      "
+      @on-confirm="confirmRemove"
+      @on-close="deleteTarget = null"
+    />
   </section>
 </template>
