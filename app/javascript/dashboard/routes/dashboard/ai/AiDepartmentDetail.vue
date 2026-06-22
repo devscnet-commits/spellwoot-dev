@@ -46,22 +46,15 @@ const form = reactive({
   objetivo: '',
   instructions: '',
   status: 'active',
-  greeting: '',
   steps: '',
   transfer_when_steps: '',
   close_when_steps: '',
   // Atendimento
   auto_attendance: true,
-  transfer_when: '',
-  transfer_message: '',
   sla_timeout: '',
   on_timeout: 'resolve',
   hours_enabled: false,
-  hours_message: '',
-  close_when: '',
-  close_inactivity: '',
   copilot_enabled: false,
-  escalation_when: '',
   followup_enabled: false,
   followup_delay: '',
   followup_message: '',
@@ -90,30 +83,21 @@ const arrayToLines = value => (Array.isArray(value) ? value.join('\n') : '');
 const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
-  const transfer = dept.transfer_rules || {};
   const sla = dept.sla || {};
-  const close = dept.close_rules || {};
   const followUp = dept.follow_up || {};
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
     instructions: dept.instructions || behavior.instructions || '',
     status: dept.status || 'active',
-    greeting: playbook.default_messages?.greeting || '',
     steps: arrayToLines(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
     auto_attendance: behavior.auto_attendance !== false,
-    transfer_when: arrayToLines(transfer.when),
-    transfer_message: transfer.message || '',
     sla_timeout: sla.response_timeout_minutes ?? '',
     on_timeout: sla.on_timeout || 'resolve',
     hours_enabled: behavior.business_hours?.enabled || false,
-    hours_message: behavior.business_hours?.message || '',
-    close_when: arrayToLines(close.when),
-    close_inactivity: close.inactivity_minutes ?? '',
     copilot_enabled: behavior.copilot?.enabled || false,
-    escalation_when: arrayToLines(behavior.escalation?.when),
     followup_enabled: followUp.enabled || false,
     followup_delay: followUp.delay_minutes ?? '',
     followup_message: followUp.message || '',
@@ -153,22 +137,10 @@ const buildPayload = () => ({
       response_timeout_minutes: Number(form.sla_timeout) || 0,
       on_timeout: form.on_timeout,
     },
-    transfer_rules: {
-      when: linesToArray(form.transfer_when),
-      message: form.transfer_message,
-    },
-    close_rules: {
-      when: linesToArray(form.close_when),
-      inactivity_minutes: Number(form.close_inactivity) || 0,
-    },
     behavior: {
       auto_attendance: form.auto_attendance,
-      business_hours: {
-        enabled: form.hours_enabled,
-        message: form.hours_message,
-      },
+      business_hours: { enabled: form.hours_enabled },
       copilot: { enabled: form.copilot_enabled },
-      escalation: { when: linesToArray(form.escalation_when) },
       reply_scope: form.reply_scope,
       canary_label: form.canary_label,
     },
@@ -182,7 +154,6 @@ const buildPayload = () => ({
       steps: linesToArray(form.steps),
       transfer_when: linesToArray(form.transfer_when_steps),
       close_when: linesToArray(form.close_when_steps),
-      default_messages: { greeting: form.greeting },
     },
   },
 });
@@ -321,7 +292,6 @@ const readinessChecks = computed(() => [
   { key: 'STEPS', ok: summary.value.steps > 0 },
   { key: 'KNOWLEDGE', ok: summary.value.knowledge > 0 },
   { key: 'TOOLS', ok: summary.value.tools > 0 },
-  { key: 'INTEGRATIONS', ok: integrations.value.some(i => i.enabled) },
 ]);
 const readinessPct = computed(() => {
   const checks = readinessChecks.value;
@@ -549,14 +519,6 @@ onMounted(async () => {
                 {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
                 <input
                   v-model="form.name"
-                  type="text"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.GREETING') }}
-                <input
-                  v-model="form.greeting"
                   type="text"
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
                 />
@@ -853,30 +815,6 @@ onMounted(async () => {
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
             <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_TITLE') }}
-            </h2>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_WHEN') }}
-              <textarea
-                v-model="form.transfer_when"
-                rows="3"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-              />
-            </label>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.TRANSFER_MESSAGE') }}
-              <input
-                v-model="form.transfer_message"
-                type="text"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              />
-            </label>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TITLE') }}
             </h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -906,39 +844,6 @@ onMounted(async () => {
               <input v-model="form.hours_enabled" type="checkbox" />
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TOGGLE') }}
             </label>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_MESSAGE') }}
-              <input
-                v-model="form.hours_message"
-                type="text"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              />
-            </label>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_TITLE') }}
-            </h2>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_WHEN') }}
-              <textarea
-                v-model="form.close_when"
-                rows="3"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-              />
-            </label>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CLOSE_INACTIVITY') }}
-              <input
-                v-model="form.close_inactivity"
-                type="number"
-                min="0"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              />
-            </label>
           </section>
 
           <section
@@ -950,22 +855,6 @@ onMounted(async () => {
             <label class="flex items-center gap-2 text-sm text-n-slate-12">
               <input v-model="form.copilot_enabled" type="checkbox" />
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TOGGLE') }}
-            </label>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.ESCALATION_TITLE') }}
-            </h2>
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.ESCALATION_WHEN') }}
-              <textarea
-                v-model="form.escalation_when"
-                rows="3"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-              />
             </label>
           </section>
         </div>
