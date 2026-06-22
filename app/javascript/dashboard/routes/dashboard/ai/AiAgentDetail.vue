@@ -696,10 +696,22 @@ onMounted(async () => {
           v-else-if="activeKey === 'departments'"
           class="flex flex-col gap-4"
         >
-          <div class="flex items-center justify-between">
-            <p class="text-sm text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.DESCRIPTION') }}
-            </p>
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3 min-w-0">
+              <span
+                class="shrink-0 size-10 rounded-xl bg-n-brand/10 text-n-brand flex items-center justify-center"
+              >
+                <span class="i-lucide-layers size-5" />
+              </span>
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                  {{ $t('AI_DEPARTMENTS.CORE_TITLE') }}
+                </h2>
+                <p class="text-sm text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.CORE_HINT') }}
+                </p>
+              </div>
+            </div>
             <Button
               v-if="!isNew"
               icon="i-lucide-plus"
@@ -717,7 +729,10 @@ onMounted(async () => {
             {{ $t('AI_DEPARTMENTS.EMPTY') }}
           </p>
           <template v-else>
-            <div class="flex flex-wrap items-center gap-2">
+            <div
+              v-if="departments.length > 2"
+              class="flex flex-wrap items-center gap-2"
+            >
               <input
                 v-model="deptSearch"
                 type="search"
@@ -731,28 +746,81 @@ onMounted(async () => {
                 v-for="dept in filteredDepartments"
                 :key="dept.id"
                 type="button"
-                class="group rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3 text-left hover:border-n-brand transition-colors"
+                class="group rounded-2xl border border-n-weak bg-n-solid-1 p-5 flex flex-col gap-3 text-left hover:border-n-brand hover:shadow-sm transition-all"
                 @click="editDepartment(dept)"
               >
-                <div class="flex items-center justify-between gap-2">
+                <div class="flex items-start justify-between gap-2">
                   <span
-                    class="size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
+                    class="size-10 rounded-xl bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
                   >
                     <span class="i-lucide-layers size-5" />
                   </span>
                   <span
-                    class="i-lucide-arrow-right size-4 text-n-slate-10 group-hover:text-n-brand"
-                  />
+                    class="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+                    :class="
+                      dept.status === 'active'
+                        ? 'bg-n-teal-3 text-n-teal-11'
+                        : 'bg-n-alpha-2 text-n-slate-11'
+                    "
+                  >
+                    <span
+                      class="size-1.5 rounded-full"
+                      :class="
+                        dept.status === 'active'
+                          ? 'bg-n-teal-9'
+                          : 'bg-n-slate-7'
+                      "
+                    />
+                    {{
+                      dept.status === 'active'
+                        ? $t('AI_DEPARTMENTS.STATUS_ACTIVE')
+                        : $t('AI_DEPARTMENTS.STATUS_INACTIVE')
+                    }}
+                  </span>
                 </div>
                 <div class="min-w-0">
                   <p
-                    class="text-base font-semibold text-n-slate-12 mb-0 truncate"
+                    class="text-lg font-semibold text-n-slate-12 mb-0 truncate"
                   >
                     {{ dept.name }}
                   </p>
                   <p class="text-xs text-n-slate-11 line-clamp-2 mb-0">
                     {{ dept.objetivo || $t('AI_DEPARTMENTS.NO_OBJETIVO') }}
                   </p>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-n-weak pt-3 text-xs text-n-slate-11"
+                >
+                  <span class="inline-flex items-center gap-1">
+                    <span class="i-lucide-list-checks size-3.5" />
+                    {{
+                      $t('AI_DEPARTMENTS.STATS_STEPS', {
+                        count: dept.steps_count ?? 0,
+                      })
+                    }}
+                  </span>
+                  <span class="inline-flex items-center gap-1">
+                    <span class="i-lucide-wrench size-3.5" />
+                    {{
+                      $t('AI_DEPARTMENTS.STATS_TOOLS', {
+                        count: dept.tools_count ?? 0,
+                      })
+                    }}
+                  </span>
+                  <span class="inline-flex items-center gap-1">
+                    <span class="i-lucide-book-open size-3.5" />
+                    {{
+                      $t('AI_DEPARTMENTS.STATS_KNOWLEDGE', {
+                        count: dept.knowledge_sources_count ?? 0,
+                      })
+                    }}
+                  </span>
+                  <span
+                    class="ml-auto inline-flex items-center gap-1 text-n-slate-10 group-hover:text-n-brand"
+                  >
+                    {{ $t('AI_DEPARTMENTS.CONFIGURE') }}
+                    <span class="i-lucide-arrow-right size-3.5" />
+                  </span>
                 </div>
               </button>
             </div>

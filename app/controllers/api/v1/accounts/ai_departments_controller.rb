@@ -4,7 +4,8 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
   before_action :set_department, only: %i[update destroy]
 
   def index
-    render json: @agent.departments.order(:id).map { |dept| serialize(dept) }
+    departments = @agent.departments.includes(:playbook, :tools, :knowledge_sources).order(:id)
+    render json: departments.map { |dept| serialize(dept) }
   end
 
   def create
@@ -81,6 +82,13 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
   end
 
   def serialize(department)
-    department.as_json.merge('playbook' => department.playbook&.as_json)
+    playbook = department.playbook
+    steps = playbook&.steps
+    department.as_json.merge(
+      'playbook' => playbook&.as_json,
+      'steps_count' => steps.is_a?(Array) ? steps.size : 0,
+      'tools_count' => department.tools.size,
+      'knowledge_sources_count' => department.knowledge_sources.size
+    )
   end
 end
