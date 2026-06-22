@@ -42,6 +42,7 @@ class Ai::Gateway
 
     knowledge = Ai::KnowledgeRetriever.retrieve(department: department, query: effective_content, account_id: @account.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
+    run_record.update!(knowledge_count: knowledge.size)
 
     memory = Ai::AgentMemory.find_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
     tools  = department.tools.active.to_a
