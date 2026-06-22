@@ -314,12 +314,6 @@ const menuItems = computed(() => {
           to: accountScopedRoute('ai_agents_index'),
         },
         {
-          name: 'AIProfiles',
-          label: t('SIDEBAR.AI_PROFILES'),
-          activeOn: ['ai_profiles_index'],
-          to: accountScopedRoute('ai_profiles_index'),
-        },
-        {
           name: 'AICosts',
           label: t('SIDEBAR.AI_COSTS'),
           activeOn: ['ai_costs_index'],
