@@ -308,7 +308,11 @@
       "DESCRIPTION": "Descrição",
       "TYPE": "Tipo",
       "VISIBLE": "Campo visível no bate-papo inicial",
-      "VALUES": "Valores da lista (uma por linha)",
+      "OPTIONS_LABEL": "Opções que o atendente poderá selecionar",
+      "OPTION_PLACEHOLDER": "Digite uma opção e pressione Enter",
+      "ADD_OPTION": "Adicionar",
+      "REMOVE_OPTION": "Remover opção",
+      "DUPLICATE": "Esta opção já existe",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar",
       "EDIT": "Editar",
@@ -319,6 +323,12 @@
         "numero": "Número",
         "booleano": "Sim/Não",
         "lista": "Lista"
+      },
+      "TYPE_HINT": {
+        "texto": "Resposta livre em texto.",
+        "numero": "Aceita apenas números.",
+        "booleano": "Sim / Não.",
+        "lista": "Opções pré-definidas para o atendente escolher."
       }
     },
     "INTEGRATIONS": {
