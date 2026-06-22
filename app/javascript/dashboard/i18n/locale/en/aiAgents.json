@@ -78,7 +78,9 @@
       "LANGUAGE": "Idioma",
       "UPLOAD": "Carregar imagem",
       "GENERATE": "Gerar com IA",
-      "GENERATE_SOON": "Geração de avatar por IA disponível em breve."
+      "GENERATE_SOON": "Geração de avatar por IA disponível em breve.",
+      "ADVANCED": "Configuração avançada",
+      "ADVANCED_HINT": "Prompt base e guardrails"
     },
     "ATTENDS": {
       "TITLE": "Este agente atende:",

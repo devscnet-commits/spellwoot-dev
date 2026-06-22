@@ -339,10 +339,12 @@ onMounted(async () => {
       </button>
 
       <div
-        class="rounded-2xl border border-n-weak bg-n-solid-1 px-6 sm:px-10 py-7 flex flex-col gap-6"
+        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-10 py-6 sm:py-7 flex flex-col gap-6"
       >
         <div class="flex items-center justify-between gap-4">
-          <h1 class="text-3xl font-semibold text-n-slate-12 truncate">
+          <h1
+            class="text-2xl sm:text-3xl font-semibold text-n-slate-12 truncate"
+          >
             {{ form.name || $t('AI_DEPARTMENTS.NEW') }}
           </h1>
           <Logo class="h-8 w-auto shrink-0" />

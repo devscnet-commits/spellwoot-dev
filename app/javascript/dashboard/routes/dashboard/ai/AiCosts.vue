@@ -24,7 +24,7 @@ onMounted(fetchCosts);
 
 <template>
   <div
-    class="flex flex-col w-full h-full overflow-auto p-6 gap-4 max-w-5xl mx-auto"
+    class="flex flex-col w-full h-full overflow-auto p-4 sm:p-6 gap-4 max-w-5xl mx-auto"
   >
     <div class="flex flex-col gap-1">
       <h1 class="text-xl font-semibold text-n-slate-12">
@@ -60,8 +60,8 @@ onMounted(fetchCosts);
     >
       {{ $t('AI_COSTS.EMPTY') }}
     </p>
-    <div v-else class="border border-n-weak rounded-xl overflow-hidden">
-      <table class="w-full text-sm">
+    <div v-else class="border border-n-weak rounded-xl overflow-x-auto">
+      <table class="w-full text-sm min-w-[32rem]">
         <thead class="bg-n-alpha-2 text-n-slate-11">
           <tr>
             <th class="text-left font-medium px-3 py-2">

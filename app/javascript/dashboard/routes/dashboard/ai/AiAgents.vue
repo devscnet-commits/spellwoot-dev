@@ -31,10 +31,18 @@ const stageBadge = {
   experimental: 'bg-n-alpha-2 text-n-slate-11',
 };
 const statusBadge = {
-  live: { dot: 'bg-n-teal-9', cls: 'bg-n-teal-3 text-n-teal-11' },
-  shadow: { dot: 'bg-n-amber-9', cls: 'bg-n-amber-3 text-n-amber-11' },
-  idle: { dot: 'bg-n-slate-7', cls: 'bg-n-alpha-2 text-n-slate-11' },
-  inactive: { dot: 'bg-n-slate-9', cls: 'bg-n-alpha-2 text-n-slate-11' },
+  live: { dot: 'bg-n-teal-9', cls: 'bg-n-teal-3 text-n-teal-11', icon: '' },
+  shadow: {
+    dot: 'bg-n-amber-9',
+    cls: 'bg-n-amber-3 text-n-amber-11 ring-1 ring-inset ring-n-amber-7',
+    icon: 'i-lucide-eye',
+  },
+  idle: { dot: 'bg-n-slate-7', cls: 'bg-n-alpha-2 text-n-slate-11', icon: '' },
+  inactive: {
+    dot: 'bg-n-slate-9',
+    cls: 'bg-n-alpha-2 text-n-slate-11',
+    icon: '',
+  },
 };
 
 const statusOf = a => {
@@ -172,7 +180,7 @@ onMounted(fetchAgents);
 
 <template>
   <div
-    class="flex flex-col w-full h-full overflow-auto p-6 gap-4 max-w-5xl mx-auto"
+    class="flex flex-col w-full h-full overflow-auto p-4 sm:p-6 gap-4 max-w-5xl mx-auto"
   >
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
@@ -215,13 +223,13 @@ onMounted(fetchAgents);
             <th class="text-left font-medium px-4 py-2.5">
               {{ $t('AI_AGENTS.LIST.NAME') }}
             </th>
-            <th class="text-left font-medium px-3 py-2.5">
+            <th class="hidden md:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.TYPE') }}
             </th>
-            <th class="text-left font-medium px-3 py-2.5">
+            <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.PROFILE') }}
             </th>
-            <th class="text-left font-medium px-3 py-2.5">
+            <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.DEPARTMENTS') }}
             </th>
             <th class="text-left font-medium px-3 py-2.5">
@@ -267,15 +275,15 @@ onMounted(fetchAgents);
                 </div>
               </div>
             </td>
-            <td class="px-3 py-3">
+            <td class="hidden md:table-cell px-3 py-3">
               {{ agent.category || $t('AI_AGENTS.LIST.NO_CATEGORY') }}
             </td>
-            <td class="px-3 py-3 text-n-slate-11">
+            <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{
                 agent.operation_profile_name || $t('AI_AGENTS.LIST.NO_PROFILE')
               }}
             </td>
-            <td class="px-3 py-3 text-n-slate-11">
+            <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{
                 $t('AI_AGENTS.LIST.DEPARTMENTS_COUNT', {
                   count: agent.departments_count ?? 0,
@@ -288,6 +296,12 @@ onMounted(fetchAgents);
                 :class="statusBadge[statusOf(agent)].cls"
               >
                 <span
+                  v-if="statusBadge[statusOf(agent)].icon"
+                  class="size-3 inline-block"
+                  :class="statusBadge[statusOf(agent)].icon"
+                />
+                <span
+                  v-else
                   class="size-1.5 rounded-full"
                   :class="statusBadge[statusOf(agent)].dot"
                 />
