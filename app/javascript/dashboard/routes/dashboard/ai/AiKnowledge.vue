@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const props = defineProps({
   // Optional overrides so this view can be embedded inside the agent (default department).
@@ -52,6 +53,7 @@ const blank = () => ({
   status: 'active',
 });
 const form = reactive(blank());
+const { isDirty, capture } = useFormDirty(() => ({ ...form }));
 
 const baseUrl = () => {
   const accountId = route.params.accountId;
@@ -73,11 +75,13 @@ const fetchSources = async () => {
 const openNew = () => {
   Object.assign(form, blank());
   showForm.value = true;
+  capture();
 };
 
 const openEdit = source => {
   Object.assign(form, blank(), source);
   showForm.value = true;
+  capture();
 };
 
 const save = async () => {
@@ -234,7 +238,8 @@ onMounted(fetchSources);
         </button>
         <button
           type="button"
-          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+          :disabled="!isDirty"
+          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
           @click="save"
         >
           {{ $t('AI_KNOWLEDGE.FORM.SAVE') }}

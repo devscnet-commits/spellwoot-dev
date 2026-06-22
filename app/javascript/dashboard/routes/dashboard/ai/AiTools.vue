@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const props = defineProps({
   // Optional overrides so this view can be embedded inside the agent (default department).
@@ -32,6 +33,7 @@ const blank = () => ({
   input_schema_text: '{}',
 });
 const form = reactive(blank());
+const { isDirty, capture } = useFormDirty(() => ({ ...form }));
 
 // Business-friendly names for the internal capabilities (hide the technical keys from the UI).
 const CAPABILITIES = [
@@ -117,6 +119,7 @@ const fetchIntegrations = async () => {
 const openNew = () => {
   Object.assign(form, blank());
   showForm.value = true;
+  capture();
 };
 
 const openEdit = tool => {
@@ -132,6 +135,7 @@ const openEdit = tool => {
     input_schema_text: JSON.stringify(tool.input_schema || {}, null, 2),
   });
   showForm.value = true;
+  capture();
 };
 
 const save = async () => {
@@ -320,7 +324,8 @@ onMounted(() => {
         </button>
         <button
           type="button"
-          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white"
+          :disabled="!isDirty"
+          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
           @click="save"
         >
           {{ $t('AI_TOOLS.FORM.SAVE') }}

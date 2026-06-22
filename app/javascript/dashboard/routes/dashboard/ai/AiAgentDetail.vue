@@ -11,6 +11,7 @@ import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
 import Logo from 'next/icon/Logo.vue';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const route = useRoute();
 const router = useRouter();
@@ -72,6 +73,11 @@ const agentForm = reactive({
   stage: 'sandbox',
   status: 'active',
 });
+const {
+  isDirty: agentDirty,
+  capture: captureAgent,
+  reset: resetAgent,
+} = useFormDirty(() => ({ ...agentForm }));
 
 const stageBadge = computed(
   () => STAGE_BADGE[agentForm.stage] || STAGE_BADGE.experimental
@@ -177,6 +183,7 @@ const saveAgent = async () => {
       });
     }
     useAlert(t('AI_AGENTS.SAVED'));
+    resetAgent();
   } catch (error) {
     useAlert(t('AI_AGENTS.ERROR'));
   } finally {
@@ -245,10 +252,18 @@ const INBOX_MODES = [
   },
 ];
 const inboxesUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_inboxes`;
+const {
+  isDirty: inboxesDirty,
+  capture: captureInboxes,
+  reset: resetInboxes,
+} = useFormDirty(() =>
+  inboxes.value.map(i => ({ inbox_id: i.inbox_id, mode: i.mode }))
+);
 const fetchInboxes = async () => {
   if (isNew.value) return;
   const { data } = await axios.get(inboxesUrl());
   inboxes.value = Array.isArray(data) ? data : [];
+  captureInboxes();
 };
 const inboxSearch = ref('');
 const filteredInboxes = computed(() => {
@@ -265,6 +280,7 @@ const saveInboxes = async () => {
       })),
     });
     useAlert(t('AI_AGENTS.SAVED'));
+    resetInboxes();
   } catch (error) {
     useAlert(t('AI_AGENTS.ERROR'));
   }
@@ -305,6 +321,7 @@ const runTest = async () => {
 onMounted(async () => {
   await fetchProfiles();
   await fetchAgent();
+  captureAgent();
   await Promise.all([fetchDepartments(), fetchInboxes(), fetchVersions()]);
 });
 </script>
@@ -567,6 +584,7 @@ onMounted(async () => {
             <Button
               :label="$t('AI_AGENTS.FORM.SAVE')"
               :is-loading="isSaving"
+              :disabled="!agentDirty"
               @click="saveAgent"
             />
           </div>
@@ -697,6 +715,7 @@ onMounted(async () => {
             <div class="flex justify-end">
               <Button
                 :label="$t('AI_AGENTS.INBOXES.SAVE')"
+                :disabled="!inboxesDirty"
                 @click="saveInboxes"
               />
             </div>
