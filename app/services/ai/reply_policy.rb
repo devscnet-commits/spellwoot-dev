@@ -20,6 +20,19 @@ class Ai::ReplyPolicy
       conversation.cached_label_list_array.include?(behavior['canary_label'])
   end
 
+  # F1.0/A — consolidated state the Gateway will read so the reply decision lives in one place.
+  #   :off    -> the agent is not bound to this inbox (mode none): nothing runs
+  #   :shadow -> observes and records, never replies (explicit shadow, or live but gated to silence)
+  #   :live   -> may reply to the customer
+  # A live-but-gated binding (reply_scope off, canary miss, off-hours, kill switch) still runs as
+  # shadow: it records the decision without sending. Inert until the Gateway calls it (F1.1).
+  def self.effective_reply_state(mode:, department:, conversation:)
+    return :off if mode.blank? || mode == 'none'
+    return :shadow if mode == 'shadow'
+
+    allowed?(mode: mode, department: department, conversation: conversation) ? :live : :shadow
+  end
+
   def self.skip_reason(mode:, department:, conversation:)
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, department)

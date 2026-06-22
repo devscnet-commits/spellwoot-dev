@@ -68,7 +68,7 @@ const hydrate = dept => {
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
-    instructions: behavior.instructions || '',
+    instructions: dept.instructions || behavior.instructions || '',
     status: dept.status || 'active',
     greeting: playbook.default_messages?.greeting || '',
     steps: arrayToLines(playbook.steps),
@@ -106,6 +106,7 @@ const buildPayload = () => ({
   ai_department: {
     name: form.name,
     objetivo: form.objetivo,
+    instructions: form.instructions,
     status: form.status,
     sla: {
       response_timeout_minutes: Number(form.sla_timeout) || 0,
@@ -120,7 +121,6 @@ const buildPayload = () => ({
       inactivity_minutes: Number(form.close_inactivity) || 0,
     },
     behavior: {
-      instructions: form.instructions,
       auto_attendance: form.auto_attendance,
       business_hours: {
         enabled: form.hours_enabled,
