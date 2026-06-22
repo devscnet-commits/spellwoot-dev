@@ -216,282 +216,306 @@ onMounted(fetchRuns);
 </script>
 
 <template>
-  <div
-    class="flex flex-col w-full h-full overflow-auto p-4 sm:p-6 gap-5 max-w-5xl mx-auto"
-  >
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex flex-col gap-1">
-        <h1 class="text-xl font-semibold text-n-slate-12">
-          {{ $t('AI_SHADOW_RUNS.TITLE') }}
-        </h1>
-        <p class="text-sm text-n-slate-11 mb-0 max-w-2xl">
-          {{ $t('AI_SHADOW_RUNS.DESCRIPTION') }}
-        </p>
-      </div>
-      <button
-        type="button"
-        class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12 disabled:opacity-50"
-        :disabled="isLoading"
-        @click="fetchRuns"
+  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
+    <div class="max-w-5xl mx-auto flex flex-col gap-3">
+      <div
+        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-5"
       >
-        {{
-          isLoading
-            ? $t('AI_SHADOW_RUNS.LOADING')
-            : $t('AI_SHADOW_RUNS.REFRESH')
-        }}
-      </button>
-    </div>
-
-    <!-- Filters -->
-    <div class="flex flex-wrap items-end gap-2">
-      <Select v-model="filters.period" :options="periodOptions" />
-      <Select v-model="filters.department_id" :options="departmentOptions" />
-      <Select v-model="filters.error_type" :options="errorOptions" />
-      <Select v-model="filters.status" :options="statusOptions" />
-      <Select v-model="filters.has_reply" :options="replyOptions" />
-      <Select v-model="filters.has_tool" :options="toolOptions" />
-      <input
-        v-model="filters.conversation_id"
-        type="search"
-        inputmode="numeric"
-        :placeholder="$t('AI_SHADOW_RUNS.FILTERS.CONVERSATION')"
-        class="w-28 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-      />
-      <button
-        type="button"
-        class="text-sm text-n-slate-11 hover:text-n-slate-12 px-2 py-2"
-        @click="clearFilters"
-      >
-        {{ $t('AI_SHADOW_RUNS.FILTERS.CLEAR') }}
-      </button>
-    </div>
-
-    <p
-      v-if="!isLoading && !hasData"
-      class="text-sm text-n-slate-11 py-8 text-center"
-    >
-      {{ $t('AI_SHADOW_RUNS.EMPTY') }}
-    </p>
-
-    <template v-else>
-      <!-- Resumo executivo -->
-      <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold text-n-slate-12">
-          {{ $t('AI_SHADOW_RUNS.BLOCKS.SUMMARY') }}
-        </h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div
-            v-for="kpi in kpis"
-            :key="kpi.key"
-            class="border border-n-weak rounded-xl p-3"
-          >
-            <p class="text-xs text-n-slate-11 mb-1">
-              {{ $t(`AI_SHADOW_RUNS.KPI.${kpi.key}`) }}
-            </p>
-            <p
-              class="text-xl font-semibold mb-0"
-              :class="
-                kpi.warn && kpi.value > 0 ? 'text-n-ruby-11' : 'text-n-slate-12'
-              "
-            >
-              {{ kpi.value }}
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex flex-col gap-1">
+            <h1 class="text-xl font-semibold text-n-slate-12">
+              {{ $t('AI_SHADOW_RUNS.TITLE') }}
+            </h1>
+            <p class="text-sm text-n-slate-11 mb-0 max-w-2xl">
+              {{ $t('AI_SHADOW_RUNS.DESCRIPTION') }}
             </p>
           </div>
-        </div>
-        <!-- Resolution distribution -->
-        <div class="flex flex-wrap gap-2">
-          <span
-            v-for="chip in resolutionChips"
-            :key="chip.resolution"
-            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-            :class="resolutionMeta(chip.resolution).cls"
+          <button
+            type="button"
+            class="shrink-0 text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12 disabled:opacity-50"
+            :disabled="isLoading"
+            @click="fetchRuns"
           >
-            <span
-              :class="resolutionMeta(chip.resolution).icon"
-              class="size-3"
-            />
-            {{ resolutionLabel(chip.resolution) }}
-            <span class="opacity-70">{{ chip.count }}</span>
-          </span>
+            {{
+              isLoading
+                ? $t('AI_SHADOW_RUNS.LOADING')
+                : $t('AI_SHADOW_RUNS.REFRESH')
+            }}
+          </button>
         </div>
-      </section>
 
-      <!-- Diagnostic blocks: knowledge gaps / instruction / tools / recurring errors -->
-      <section
-        v-for="block in diagnosticBlocks"
-        :key="block.key"
-        class="flex flex-col gap-2"
-      >
-        <h2 class="text-sm font-semibold text-n-slate-12">
-          {{ $t(`AI_SHADOW_RUNS.BLOCKS.${block.title}`) }}
-        </h2>
-        <p v-if="!block.items.length" class="text-sm text-n-slate-11 mb-0 px-1">
-          {{ $t('AI_SHADOW_RUNS.INSIGHT.EMPTY') }}
-        </p>
+        <!-- Filters -->
         <div
-          v-for="(insight, index) in block.items"
-          :key="index"
-          class="flex items-start gap-3 rounded-xl border border-n-weak bg-n-solid-1 p-3"
+          class="flex flex-wrap items-center gap-2 rounded-xl border border-n-weak bg-n-alpha-1 p-3"
         >
-          <span
-            class="shrink-0 size-8 rounded-lg flex items-center justify-center"
-            :class="INSIGHT_META[block.key].cls"
+          <Select v-model="filters.period" :options="periodOptions" />
+          <Select
+            v-model="filters.department_id"
+            :options="departmentOptions"
+          />
+          <Select v-model="filters.error_type" :options="errorOptions" />
+          <Select v-model="filters.status" :options="statusOptions" />
+          <Select v-model="filters.has_reply" :options="replyOptions" />
+          <Select v-model="filters.has_tool" :options="toolOptions" />
+          <input
+            v-model="filters.conversation_id"
+            type="search"
+            inputmode="numeric"
+            :placeholder="$t('AI_SHADOW_RUNS.FILTERS.CONVERSATION')"
+            class="w-28 py-2 px-3 rounded-lg border-0 outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 text-sm text-n-slate-12"
+          />
+          <button
+            type="button"
+            class="ms-auto text-sm text-n-slate-11 hover:text-n-slate-12 px-2 py-2"
+            @click="clearFilters"
           >
-            <span :class="INSIGHT_META[block.key].icon" class="size-4" />
-          </span>
-          <div class="min-w-0 flex-1">
-            <p class="text-sm font-medium text-n-slate-12 mb-0">
-              {{
-                $t(`AI_SHADOW_RUNS.INSIGHT.${block.key.toUpperCase()}_TITLE`)
-              }}
-            </p>
-            <p class="text-xs text-n-slate-11 mb-0">
-              {{ insightBody(insight) }}
-            </p>
-          </div>
-          <span
-            class="shrink-0 inline-flex items-center justify-center min-w-6 px-1.5 h-6 rounded-full bg-n-alpha-2 text-xs font-medium text-n-slate-12"
-          >
-            {{ insight.count }}
-          </span>
+            {{ $t('AI_SHADOW_RUNS.FILTERS.CLEAR') }}
+          </button>
         </div>
-      </section>
 
-      <!-- Oportunidades por departamento -->
-      <section
-        v-if="data.summary.by_department.length"
-        class="flex flex-col gap-2"
-      >
-        <h2 class="text-sm font-semibold text-n-slate-12">
-          {{ $t('AI_SHADOW_RUNS.BLOCKS.BY_DEPARTMENT') }}
-        </h2>
-        <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
-          <div
-            v-for="(dept, index) in data.summary.by_department"
-            :key="index"
-            class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
-          >
-            <span class="text-n-slate-12 truncate">{{ dept.name }}</span>
-            <span
-              class="shrink-0 flex items-center gap-4 text-xs text-n-slate-11"
-            >
-              <span>{{
-                dept.total + ' ' + $t('AI_SHADOW_RUNS.DEPT.TOTAL')
-              }}</span>
-              <span :class="{ 'text-n-ruby-11 font-medium': dept.errors > 0 }">
-                {{ dept.errors + ' ' + $t('AI_SHADOW_RUNS.DEPT.ERRORS') }}
-              </span>
-              <span
-                :class="{ 'text-n-amber-11 font-medium': dept.unanswered > 0 }"
-              >
-                {{
-                  dept.unanswered + ' ' + $t('AI_SHADOW_RUNS.DEPT.UNANSWERED')
-                }}
-              </span>
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Execuções detalhadas -->
-      <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold text-n-slate-12">
-          {{ $t('AI_SHADOW_RUNS.BLOCKS.RUNS') }}
-        </h2>
         <p
-          v-if="!data.runs.length"
-          class="text-sm text-n-slate-11 py-4 text-center mb-0"
+          v-if="!isLoading && !hasData"
+          class="text-sm text-n-slate-11 py-8 text-center"
         >
-          {{ $t('AI_SHADOW_RUNS.RUN.EMPTY') }}
+          {{ $t('AI_SHADOW_RUNS.EMPTY') }}
         </p>
-        <div
-          v-for="run in data.runs"
-          :key="run.id"
-          class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex items-center gap-2 min-w-0 text-sm">
-              <span class="font-medium text-n-slate-12">
-                {{
-                  `${$t('AI_SHADOW_RUNS.RUN.CONVERSATION')} #${run.conversation_id}`
-                }}
-              </span>
-              <span
-                v-if="run.department"
-                class="inline-flex items-center gap-1 text-n-slate-11 truncate"
+
+        <template v-else>
+          <!-- Resumo executivo -->
+          <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-semibold text-n-slate-12">
+              {{ $t('AI_SHADOW_RUNS.BLOCKS.SUMMARY') }}
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div
+                v-for="kpi in kpis"
+                :key="kpi.key"
+                class="border border-n-weak rounded-xl p-3"
               >
-                <span class="i-lucide-layers size-3.5 shrink-0" />
-                {{ run.department }}
-                <span v-if="run.routing_method" class="text-n-slate-10">
-                  {{
-                    `· ${$t('AI_SHADOW_RUNS.RUN.VIA')} ${methodLabel(run.routing_method)}`
-                  }}
-                </span>
-              </span>
+                <p class="text-xs text-n-slate-11 mb-1">
+                  {{ $t(`AI_SHADOW_RUNS.KPI.${kpi.key}`) }}
+                </p>
+                <p
+                  class="text-xl font-semibold mb-0"
+                  :class="
+                    kpi.warn && kpi.value > 0
+                      ? 'text-n-ruby-11'
+                      : 'text-n-slate-12'
+                  "
+                >
+                  {{ kpi.value }}
+                </p>
+              </div>
             </div>
-            <div class="shrink-0 flex items-center gap-1.5">
+            <!-- Resolution distribution -->
+            <div class="flex flex-wrap gap-2">
               <span
-                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                :class="resolutionMeta(run.resolution).cls"
+                v-for="chip in resolutionChips"
+                :key="chip.resolution"
+                class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+                :class="resolutionMeta(chip.resolution).cls"
               >
                 <span
-                  :class="resolutionMeta(run.resolution).icon"
+                  :class="resolutionMeta(chip.resolution).icon"
                   class="size-3"
                 />
-                {{ resolutionLabel(run.resolution) }}
-              </span>
-              <span
-                v-if="isErrorRow(run)"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-n-ruby-3 text-n-ruby-11"
-              >
-                {{ errorTypeLabel(run.error_type || 'unknown') }}
+                {{ resolutionLabel(chip.resolution) }}
+                <span class="opacity-70">{{ chip.count }}</span>
               </span>
             </div>
-          </div>
+          </section>
 
-          <p
-            class="text-sm text-n-slate-12 mb-0 whitespace-pre-wrap line-clamp-3 rounded-lg bg-n-alpha-1 px-3 py-2"
-            :class="{ 'italic text-n-slate-11': !run.reply_text }"
+          <!-- Diagnostic blocks: knowledge gaps / instruction / tools / recurring errors -->
+          <section
+            v-for="block in diagnosticBlocks"
+            :key="block.key"
+            class="flex flex-col gap-2"
           >
-            {{ run.reply_text || $t('AI_SHADOW_RUNS.RUN.NO_REPLY') }}
-          </p>
-
-          <div
-            class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-n-slate-11"
-          >
-            <span v-if="run.tool" class="inline-flex items-center gap-1">
-              <span class="i-lucide-wrench size-3.5" />
-              {{ run.tool }}
-              <span v-if="run.tool_missing" class="text-n-ruby-11">{{
-                `(${$t('AI_SHADOW_RUNS.RUN.TOOL_MISSING')})`
-              }}</span>
-            </span>
-            <span class="inline-flex items-center gap-1">
-              <span class="i-lucide-book-open size-3.5" />
-              {{
-                $t('AI_SHADOW_RUNS.RUN.KNOWLEDGE_COUNT', {
-                  count: run.knowledge_count ?? 0,
-                })
-              }}
-            </span>
-            <span
-              v-if="run.confidence != null"
-              class="inline-flex items-center gap-1"
+            <h2 class="text-sm font-semibold text-n-slate-12">
+              {{ $t(`AI_SHADOW_RUNS.BLOCKS.${block.title}`) }}
+            </h2>
+            <p
+              v-if="!block.items.length"
+              class="text-sm text-n-slate-11 mb-0 px-1"
             >
-              <span class="i-lucide-gauge size-3.5" />
-              {{ `${$t('AI_SHADOW_RUNS.RUN.CONFIDENCE')}: ${run.confidence}` }}
-            </span>
-            <span class="inline-flex items-center gap-1">
-              <span class="i-lucide-timer size-3.5" />
-              {{ `${run.latency_ms ?? 0} ms` }}
-            </span>
-            <span class="inline-flex items-center gap-1">
-              <span class="i-lucide-banknote size-3.5" />
-              {{ `US$ ${run.cost ?? 0}` }}
-            </span>
-          </div>
-        </div>
-      </section>
-    </template>
+              {{ $t('AI_SHADOW_RUNS.INSIGHT.EMPTY') }}
+            </p>
+            <div
+              v-for="(insight, index) in block.items"
+              :key="index"
+              class="flex items-start gap-3 rounded-xl border border-n-weak bg-n-solid-1 p-3"
+            >
+              <span
+                class="shrink-0 size-8 rounded-lg flex items-center justify-center"
+                :class="INSIGHT_META[block.key].cls"
+              >
+                <span :class="INSIGHT_META[block.key].icon" class="size-4" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-n-slate-12 mb-0">
+                  {{
+                    $t(
+                      `AI_SHADOW_RUNS.INSIGHT.${block.key.toUpperCase()}_TITLE`
+                    )
+                  }}
+                </p>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ insightBody(insight) }}
+                </p>
+              </div>
+              <span
+                class="shrink-0 inline-flex items-center justify-center min-w-6 px-1.5 h-6 rounded-full bg-n-alpha-2 text-xs font-medium text-n-slate-12"
+              >
+                {{ insight.count }}
+              </span>
+            </div>
+          </section>
+
+          <!-- Oportunidades por departamento -->
+          <section
+            v-if="data.summary.by_department.length"
+            class="flex flex-col gap-2"
+          >
+            <h2 class="text-sm font-semibold text-n-slate-12">
+              {{ $t('AI_SHADOW_RUNS.BLOCKS.BY_DEPARTMENT') }}
+            </h2>
+            <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
+              <div
+                v-for="(dept, index) in data.summary.by_department"
+                :key="index"
+                class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+              >
+                <span class="text-n-slate-12 truncate">{{ dept.name }}</span>
+                <span
+                  class="shrink-0 flex items-center gap-4 text-xs text-n-slate-11"
+                >
+                  <span>{{
+                    dept.total + ' ' + $t('AI_SHADOW_RUNS.DEPT.TOTAL')
+                  }}</span>
+                  <span
+                    :class="{ 'text-n-ruby-11 font-medium': dept.errors > 0 }"
+                  >
+                    {{ dept.errors + ' ' + $t('AI_SHADOW_RUNS.DEPT.ERRORS') }}
+                  </span>
+                  <span
+                    :class="{
+                      'text-n-amber-11 font-medium': dept.unanswered > 0,
+                    }"
+                  >
+                    {{
+                      dept.unanswered +
+                      ' ' +
+                      $t('AI_SHADOW_RUNS.DEPT.UNANSWERED')
+                    }}
+                  </span>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Execuções detalhadas -->
+          <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-semibold text-n-slate-12">
+              {{ $t('AI_SHADOW_RUNS.BLOCKS.RUNS') }}
+            </h2>
+            <p
+              v-if="!data.runs.length"
+              class="text-sm text-n-slate-11 py-4 text-center mb-0"
+            >
+              {{ $t('AI_SHADOW_RUNS.RUN.EMPTY') }}
+            </p>
+            <div
+              v-for="run in data.runs"
+              :key="run.id"
+              class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-2 min-w-0 text-sm">
+                  <span class="font-medium text-n-slate-12">
+                    {{
+                      `${$t('AI_SHADOW_RUNS.RUN.CONVERSATION')} #${run.conversation_id}`
+                    }}
+                  </span>
+                  <span
+                    v-if="run.department"
+                    class="inline-flex items-center gap-1 text-n-slate-11 truncate"
+                  >
+                    <span class="i-lucide-layers size-3.5 shrink-0" />
+                    {{ run.department }}
+                    <span v-if="run.routing_method" class="text-n-slate-10">
+                      {{
+                        `· ${$t('AI_SHADOW_RUNS.RUN.VIA')} ${methodLabel(run.routing_method)}`
+                      }}
+                    </span>
+                  </span>
+                </div>
+                <div class="shrink-0 flex items-center gap-1.5">
+                  <span
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                    :class="resolutionMeta(run.resolution).cls"
+                  >
+                    <span
+                      :class="resolutionMeta(run.resolution).icon"
+                      class="size-3"
+                    />
+                    {{ resolutionLabel(run.resolution) }}
+                  </span>
+                  <span
+                    v-if="isErrorRow(run)"
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-n-ruby-3 text-n-ruby-11"
+                  >
+                    {{ errorTypeLabel(run.error_type || 'unknown') }}
+                  </span>
+                </div>
+              </div>
+
+              <p
+                class="text-sm text-n-slate-12 mb-0 whitespace-pre-wrap line-clamp-3 rounded-lg bg-n-alpha-1 px-3 py-2"
+                :class="{ 'italic text-n-slate-11': !run.reply_text }"
+              >
+                {{ run.reply_text || $t('AI_SHADOW_RUNS.RUN.NO_REPLY') }}
+              </p>
+
+              <div
+                class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-n-slate-11"
+              >
+                <span v-if="run.tool" class="inline-flex items-center gap-1">
+                  <span class="i-lucide-wrench size-3.5" />
+                  {{ run.tool }}
+                  <span v-if="run.tool_missing" class="text-n-ruby-11">{{
+                    `(${$t('AI_SHADOW_RUNS.RUN.TOOL_MISSING')})`
+                  }}</span>
+                </span>
+                <span class="inline-flex items-center gap-1">
+                  <span class="i-lucide-book-open size-3.5" />
+                  {{
+                    $t('AI_SHADOW_RUNS.RUN.KNOWLEDGE_COUNT', {
+                      count: run.knowledge_count ?? 0,
+                    })
+                  }}
+                </span>
+                <span
+                  v-if="run.confidence != null"
+                  class="inline-flex items-center gap-1"
+                >
+                  <span class="i-lucide-gauge size-3.5" />
+                  {{
+                    `${$t('AI_SHADOW_RUNS.RUN.CONFIDENCE')}: ${run.confidence}`
+                  }}
+                </span>
+                <span class="inline-flex items-center gap-1">
+                  <span class="i-lucide-timer size-3.5" />
+                  {{ `${run.latency_ms ?? 0} ms` }}
+                </span>
+                <span class="inline-flex items-center gap-1">
+                  <span class="i-lucide-banknote size-3.5" />
+                  {{ `US$ ${run.cost ?? 0}` }}
+                </span>
+              </div>
+            </div>
+          </section>
+        </template>
+      </div>
+    </div>
   </div>
 </template>
