@@ -477,21 +477,12 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Row 2: nome | empresa | site -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5">
+          <!-- Identidade essencial: nome + perfil operacional -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
             <Input
               v-model="agentForm.assistant_name"
               :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
             />
-            <Input
-              v-model="agentForm.company_name"
-              :label="$t('AI_AGENTS.SOBRE.COMPANY')"
-            />
-            <Input
-              v-model="agentForm.site"
-              :label="$t('AI_AGENTS.SOBRE.SITE')"
-            />
-
             <div class="flex flex-col gap-1.5">
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.SOBRE.MODEL') }}
@@ -501,26 +492,6 @@ onMounted(async () => {
                 :options="profileOptions"
               />
             </div>
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.FORM.STAGE') }}
-              </span>
-              <Select v-model="agentForm.stage" :options="stageOptions" />
-            </div>
-
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.SOBRE.CATEGORY') }}
-              </span>
-              <Select v-model="agentForm.category" :options="categoryOptions" />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_AGENTS.SOBRE.CATEGORY_HINT') }}
-              </span>
-            </div>
-            <Input
-              v-model="agentForm.assistant_language"
-              :label="$t('AI_AGENTS.SOBRE.LANGUAGE')"
-            />
           </div>
 
           <TextArea
@@ -551,6 +522,38 @@ onMounted(async () => {
               v-if="showAdvanced"
               class="border-t border-n-weak p-4 flex flex-col gap-5"
             >
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                <Input
+                  v-model="agentForm.company_name"
+                  :label="$t('AI_AGENTS.SOBRE.COMPANY')"
+                />
+                <Input
+                  v-model="agentForm.site"
+                  :label="$t('AI_AGENTS.SOBRE.SITE')"
+                />
+                <Input
+                  v-model="agentForm.assistant_language"
+                  :label="$t('AI_AGENTS.SOBRE.LANGUAGE')"
+                />
+                <div class="flex flex-col gap-1.5">
+                  <span class="text-sm font-medium text-n-slate-12">
+                    {{ $t('AI_AGENTS.FORM.STAGE') }}
+                  </span>
+                  <Select v-model="agentForm.stage" :options="stageOptions" />
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <span class="text-sm font-medium text-n-slate-12">
+                    {{ $t('AI_AGENTS.SOBRE.CATEGORY') }}
+                  </span>
+                  <Select
+                    v-model="agentForm.category"
+                    :options="categoryOptions"
+                  />
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_AGENTS.SOBRE.CATEGORY_HINT') }}
+                  </span>
+                </div>
+              </div>
               <TextArea
                 v-model="agentForm.base_prompt"
                 :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"

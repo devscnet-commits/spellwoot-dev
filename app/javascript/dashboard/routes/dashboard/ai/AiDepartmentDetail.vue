@@ -482,17 +482,11 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="flex flex-wrap gap-x-5 gap-y-1 border-b border-n-weak">
+        <div
+          class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-n-weak"
+        >
           <button
-            v-for="tab in [
-              'instructions',
-              'attendance',
-              'knowledge',
-              'steps',
-              'tools',
-              'followup',
-              'integrations',
-            ]"
+            v-for="tab in ['instructions', 'knowledge', 'steps', 'tools']"
             :key="tab"
             type="button"
             class="pb-2.5 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
@@ -502,6 +496,26 @@ onMounted(async () => {
                 : 'border-transparent text-n-slate-11 hover:text-n-slate-12'
             "
             :disabled="isNew && tab !== 'instructions'"
+            @click="activeTab = tab"
+          >
+            {{ $t(`AI_DEPARTMENTS.DETAIL_TABS.${tab.toUpperCase()}`) }}
+          </button>
+          <span
+            class="ml-1 pb-2.5 text-xs uppercase tracking-wide text-n-slate-10"
+          >
+            {{ $t('AI_DEPARTMENTS.ADVANCED_LABEL') }}
+          </span>
+          <button
+            v-for="tab in ['attendance', 'followup', 'integrations']"
+            :key="tab"
+            type="button"
+            class="pb-2.5 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
+            :class="
+              activeTab === tab
+                ? 'border-n-brand text-n-brand'
+                : 'border-transparent text-n-slate-10 hover:text-n-slate-12'
+            "
+            :disabled="isNew"
             @click="activeTab = tab"
           >
             {{ $t(`AI_DEPARTMENTS.DETAIL_TABS.${tab.toUpperCase()}`) }}
