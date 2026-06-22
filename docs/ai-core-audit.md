@@ -283,6 +283,16 @@ atende ao vivo por bindings `live` de forma independente de qualquer uso do Shad
 Em outras palavras, o Shadow **agrega inteligência operacional** (avaliar → identificar lacuna →
 corrigir FAQ/instrução/ferramenta → medir de novo), mas **não é requisito** para a IA funcionar.
 
+"Shadow" significa três coisas distintas — só as duas primeiras são opcionais:
+
+- **Modo shadow** (binding de caixa em `shadow`): **opcional**. A IA observa e registra sem
+  responder. Sem nenhum binding shadow, o atendimento ao vivo não muda.
+- **Painel Shadow / Validação** (a tela): **observabilidade** read-only. Analisa todos os runs
+  (shadow **e** live), então agrega valor mesmo numa operação 100% ao vivo. Não usar = zero impacto.
+- **`Ai::GatewayListener` / `Ai::GatewayRunJob`** (ponto de entrada): **encanamento obrigatório**
+  do runtime — dispara o Gateway para bindings shadow **e** live. Apesar do histórico, não é a
+  feature "shadow"; por isso foi renomeado de `Ai::Shadow*` para `Ai::Gateway*`.
+
 Notas de implementação (estado atual vs. previsto):
 
 - **Tudo atrás da flag `ai_core`** (por conta, nasce desabilitada). Sem a flag, nada do pipeline
