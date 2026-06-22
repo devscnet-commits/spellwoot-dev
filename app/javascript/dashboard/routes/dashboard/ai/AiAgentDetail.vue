@@ -755,28 +755,37 @@ onMounted(async () => {
                   >
                     <span class="i-lucide-layers size-5" />
                   </span>
-                  <span
-                    class="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
-                    :class="
-                      dept.status === 'active'
-                        ? 'bg-n-teal-3 text-n-teal-11'
-                        : 'bg-n-alpha-2 text-n-slate-11'
-                    "
-                  >
+                  <div class="flex items-center gap-1.5 shrink-0">
                     <span
-                      class="size-1.5 rounded-full"
+                      v-if="dept.is_default"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-n-brand/10 text-n-brand"
+                    >
+                      <span class="i-lucide-star size-3" />
+                      {{ $t('AI_DEPARTMENTS.DEFAULT_BADGE') }}
+                    </span>
+                    <span
+                      class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
                       :class="
                         dept.status === 'active'
-                          ? 'bg-n-teal-9'
-                          : 'bg-n-slate-7'
+                          ? 'bg-n-teal-3 text-n-teal-11'
+                          : 'bg-n-alpha-2 text-n-slate-11'
                       "
-                    />
-                    {{
-                      dept.status === 'active'
-                        ? $t('AI_DEPARTMENTS.STATUS_ACTIVE')
-                        : $t('AI_DEPARTMENTS.STATUS_INACTIVE')
-                    }}
-                  </span>
+                    >
+                      <span
+                        class="size-1.5 rounded-full"
+                        :class="
+                          dept.status === 'active'
+                            ? 'bg-n-teal-9'
+                            : 'bg-n-slate-7'
+                        "
+                      />
+                      {{
+                        dept.status === 'active'
+                          ? $t('AI_DEPARTMENTS.STATUS_ACTIVE')
+                          : $t('AI_DEPARTMENTS.STATUS_INACTIVE')
+                      }}
+                    </span>
+                  </div>
                 </div>
                 <div class="min-w-0">
                   <p
@@ -848,6 +857,7 @@ onMounted(async () => {
           <p v-if="isNew" class="text-sm text-n-slate-11">
             {{ $t('AI_AGENTS.SAVE_FIRST') }}
           </p>
+
           <template v-else>
             <div
               class="rounded-2xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3"

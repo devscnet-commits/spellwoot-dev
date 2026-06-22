@@ -66,6 +66,8 @@ const form = reactive({
   followup_message: '',
   reply_scope: 'off',
   canary_label: '',
+  is_default: false,
+  position: 0,
 });
 
 const agentUrl = () =>
@@ -111,6 +113,8 @@ const hydrate = dept => {
     followup_message: followUp.message || '',
     reply_scope: behavior.reply_scope || 'off',
     canary_label: behavior.canary_label || '',
+    is_default: dept.is_default || false,
+    position: dept.position ?? 0,
   });
 };
 
@@ -136,6 +140,8 @@ const buildPayload = () => ({
     objetivo: form.objetivo,
     instructions: form.instructions,
     status: form.status,
+    is_default: form.is_default,
+    position: form.position,
     sla: {
       response_timeout_minutes: Number(form.sla_timeout) || 0,
       on_timeout: form.on_timeout,
@@ -663,6 +669,32 @@ onMounted(async () => {
             <label class="flex items-center gap-2 text-sm text-n-slate-12">
               <input v-model="form.auto_attendance" type="checkbox" />
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TOGGLE') }}
+            </label>
+          </section>
+
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.DEFAULT_TITLE') }}
+                </h2>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.DEFAULT_HINT') }}
+                </p>
+              </div>
+              <span
+                v-if="form.is_default"
+                class="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-n-brand/10 text-n-brand"
+              >
+                <span class="i-lucide-star size-3" />
+                {{ $t('AI_DEPARTMENTS.DEFAULT_BADGE') }}
+              </span>
+            </div>
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.is_default" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.DEFAULT_TOGGLE') }}
             </label>
           </section>
 

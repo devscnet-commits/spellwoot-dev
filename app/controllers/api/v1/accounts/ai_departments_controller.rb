@@ -13,6 +13,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     department.assign_attributes(jsonb_params)
     return render(json: { errors: department.errors.full_messages }, status: :unprocessable_entity) unless department.save
 
+    ensure_single_default(department)
     upsert_playbook(department)
     render json: serialize(department), status: :created
   end
@@ -21,6 +22,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     @department.assign_attributes(scalar_params.merge(jsonb_params))
     return render(json: { errors: @department.errors.full_messages }, status: :unprocessable_entity) unless @department.save
 
+    ensure_single_default(@department)
     upsert_playbook(@department)
     render json: serialize(@department)
   end
@@ -43,7 +45,14 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
   end
 
   def scalar_params
-    params.require(:ai_department).permit(:name, :objetivo, :instructions, :status)
+    params.require(:ai_department).permit(:name, :objetivo, :instructions, :status, :is_default, :position)
+  end
+
+  # Only one default department per agent: clear the flag on the others.
+  def ensure_single_default(department)
+    return unless department.is_default?
+
+    @agent.departments.where.not(id: department.id).where(is_default: true).update_all(is_default: false)
   end
 
   def jsonb_params
