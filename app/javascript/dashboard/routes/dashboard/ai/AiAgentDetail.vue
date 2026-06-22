@@ -274,6 +274,18 @@ const saveInboxes = async () => {
 const testMessage = ref('');
 const testResult = ref(null);
 const isTesting = ref(false);
+
+// Governance read-out for the Lab: how the engine decided (all from the Tester response).
+const testMethodLabel = m => (m ? t(`AI_AGENTS.TEST.METHODS.${m}`, m) : '');
+const testResolvedBy = computed(() => {
+  const r = testResult.value;
+  if (!r || r.error) return null;
+  if (r.decision === 'handoff') return 'transfer';
+  if (r.tool) return 'tool';
+  if (r.reply && (r.knowledge_used ?? 0) > 0) return 'knowledge';
+  if (r.reply) return 'instruction';
+  return 'unanswered';
+});
 const runTest = async () => {
   if (!testMessage.value.trim() || isNew.value) return;
   isTesting.value = true;
@@ -956,6 +968,26 @@ onMounted(async () => {
                         value:
                           testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE'),
                       },
+                      {
+                        icon: 'i-lucide-hash',
+                        label: $t('AI_AGENTS.TEST.TOKENS'),
+                        value: `${testResult.tokens_in ?? 0} / ${testResult.tokens_out ?? 0}`,
+                      },
+                      {
+                        icon: 'i-lucide-bot',
+                        label: $t('AI_AGENTS.TEST.WORKER'),
+                        value: testResult.worker
+                          ? $t(`AI_AGENTS.TEST.WORKERS.${testResult.worker}`)
+                          : $t('AI_AGENTS.TEST.NONE'),
+                      },
+                      {
+                        icon: 'i-lucide-target',
+                        label: $t('AI_AGENTS.TEST.CONFIDENCE'),
+                        value:
+                          testResult.confidence != null
+                            ? `${Math.round(testResult.confidence * 100)}%`
+                            : $t('AI_AGENTS.TEST.NONE'),
+                      },
                     ]"
                     :key="stat.label"
                     class="rounded-xl border border-n-weak bg-n-solid-2 p-3 flex flex-col gap-1"
@@ -969,6 +1001,70 @@ onMounted(async () => {
                     <span class="text-sm font-medium text-n-slate-12 truncate">
                       {{ stat.value }}
                     </span>
+                  </div>
+                </div>
+
+                <!-- Governança da decisão: por que a IA decidiu assim -->
+                <div
+                  class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-2"
+                >
+                  <span class="text-xs font-semibold text-n-slate-12">
+                    {{ $t('AI_AGENTS.TEST.GOVERNANCE_TITLE') }}
+                  </span>
+                  <div class="flex flex-col gap-1.5 text-xs text-n-slate-11">
+                    <p class="mb-0">
+                      <span
+                        class="i-lucide-layers size-3.5 inline-block align-text-bottom"
+                      />
+                      {{ $t('AI_AGENTS.TEST.CHOSEN_BY') }}:
+                      <span class="text-n-slate-12 font-medium">
+                        {{ testResult.department || $t('AI_AGENTS.TEST.NONE') }}
+                        <template v-if="testResult.department_method">
+                          {{
+                            `(${testMethodLabel(testResult.department_method)})`
+                          }}
+                        </template>
+                      </span>
+                    </p>
+                    <p v-if="testResolvedBy" class="mb-0">
+                      <span
+                        class="i-lucide-sparkles size-3.5 inline-block align-text-bottom"
+                      />
+                      {{ $t('AI_AGENTS.TEST.RESOLVED_BY') }}:
+                      <span class="text-n-slate-12 font-medium">
+                        {{ $t(`AI_AGENTS.TEST.RESOLVED.${testResolvedBy}`) }}
+                      </span>
+                    </p>
+                    <p class="mb-0">
+                      <span
+                        class="i-lucide-wrench size-3.5 inline-block align-text-bottom"
+                      />
+                      {{ $t('AI_AGENTS.TEST.TOOLS_CONSIDERED') }}:
+                      <span class="text-n-slate-12">
+                        {{
+                          testResult.tools_considered?.length
+                            ? testResult.tools_considered.join(', ')
+                            : $t('AI_AGENTS.TEST.NONE')
+                        }}
+                      </span>
+                      <template v-if="testResult.tool">
+                        {{ ' · ' }}
+                        <span class="text-n-slate-12 font-medium">
+                          {{
+                            `${$t('AI_AGENTS.TEST.TOOL_EXECUTED')}: ${testResult.tool}`
+                          }}
+                        </span>
+                      </template>
+                    </p>
+                    <p v-if="testResult.handoff_reason" class="mb-0">
+                      <span
+                        class="i-lucide-user-round size-3.5 inline-block align-text-bottom"
+                      />
+                      {{ $t('AI_AGENTS.TEST.HANDOFF_BY') }}:
+                      <span class="text-n-slate-12 font-medium">{{
+                        testResult.handoff_reason
+                      }}</span>
+                    </p>
                   </div>
                 </div>
 

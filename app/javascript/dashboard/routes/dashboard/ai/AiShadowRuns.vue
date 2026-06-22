@@ -63,6 +63,7 @@ const resolutionLabel = r => t(`AI_SHADOW_RUNS.RESOLUTION.${r}`);
 const errorTypeLabel = type =>
   type ? t(`AI_SHADOW_RUNS.ERROR_TYPES.${type}`) : type;
 const statusLabel = s => t(`AI_SHADOW_RUNS.STATUS.${s}`, s);
+const methodLabel = m => (m ? t(`AI_SHADOW_RUNS.METHODS.${m}`, m) : '');
 
 const isErrorRow = run => run.status === 'error' || !!run.error_type;
 
@@ -421,6 +422,11 @@ onMounted(fetchRuns);
               >
                 <span class="i-lucide-layers size-3.5 shrink-0" />
                 {{ run.department }}
+                <span v-if="run.routing_method" class="text-n-slate-10">
+                  {{
+                    `· ${$t('AI_SHADOW_RUNS.RUN.VIA')} ${methodLabel(run.routing_method)}`
+                  }}
+                </span>
               </span>
             </div>
             <div class="shrink-0 flex items-center gap-1.5">
