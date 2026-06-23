@@ -89,6 +89,7 @@ const form = reactive({
   followup_message: '',
   reply_scope: 'off',
   canary_label: '',
+  disabled_custom_attributes: [],
   is_default: false,
   position: 0,
 });
@@ -101,6 +102,26 @@ const {
 const agentUrl = () =>
   `/api/v1/accounts/${route.params.accountId}/ai_agents/${route.params.agentId}`;
 const deptCollectionUrl = () => `${agentUrl()}/ai_departments`;
+
+// Custom attributes (account-level): the agent may use all of them by default; the user can
+// exclude specific ones per agent (opt-out). New attributes appear enabled automatically.
+const customAttributes = ref([]);
+const fetchCustomAttributes = async () => {
+  try {
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/custom_attribute_definitions`
+    );
+    customAttributes.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    customAttributes.value = [];
+  }
+};
+const attrEnabled = key => !form.disabled_custom_attributes.includes(key);
+const toggleAttr = key => {
+  const i = form.disabled_custom_attributes.indexOf(key);
+  if (i >= 0) form.disabled_custom_attributes.splice(i, 1);
+  else form.disabled_custom_attributes.push(key);
+};
 
 const linesToArray = value =>
   (value || '')
@@ -133,6 +154,11 @@ const hydrate = dept => {
     followup_message: followUp.message || '',
     reply_scope: behavior.reply_scope || 'off',
     canary_label: behavior.canary_label || '',
+    disabled_custom_attributes: Array.isArray(
+      behavior.disabled_custom_attributes
+    )
+      ? [...behavior.disabled_custom_attributes]
+      : [],
     is_default: dept.is_default || false,
     position: dept.position ?? 0,
   });
@@ -174,6 +200,7 @@ const buildPayload = () => ({
       copilot: { enabled: form.copilot_enabled },
       reply_scope: form.reply_scope,
       canary_label: form.canary_label,
+      disabled_custom_attributes: form.disabled_custom_attributes,
     },
     follow_up: {
       enabled: form.followup_enabled,
@@ -427,6 +454,7 @@ onMounted(async () => {
     fetchIntegrations(),
     fetchMappedInboxes(),
     fetchVersions(),
+    fetchCustomAttributes(),
   ]);
 });
 </script>
@@ -687,6 +715,65 @@ onMounted(async () => {
                   @click="removeVar(v)"
                 >
                   <span class="i-lucide-trash-2 size-4 inline-block" />
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Atributos personalizados (da conta): usar ou excluir por agente -->
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <div class="flex flex-col gap-0.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.TITLE') }}
+              </span>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.HINT') }}
+              </p>
+            </div>
+            <p
+              v-if="!customAttributes.length"
+              class="text-sm text-n-slate-11 mb-0"
+            >
+              {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EMPTY') }}
+            </p>
+            <div
+              v-else
+              class="border border-n-weak rounded-xl divide-y divide-n-weak"
+            >
+              <div
+                v-for="attr in customAttributes"
+                :key="attr.attribute_key"
+                class="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm text-n-slate-12 mb-0 truncate">
+                    {{ attr.attribute_display_name }}
+                  </p>
+                  <p class="text-xs text-n-slate-11 mb-0">
+                    {{
+                      attr.attribute_model === 'contact_attribute'
+                        ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MODEL_CONTACT')
+                        : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MODEL_CONVERSATION')
+                    }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="shrink-0 text-xs font-medium px-3 py-1 rounded-full transition-colors"
+                  :class="
+                    attrEnabled(attr.attribute_key)
+                      ? 'bg-n-teal-3 text-n-teal-11'
+                      : 'bg-n-alpha-2 text-n-slate-11'
+                  "
+                  @click="toggleAttr(attr.attribute_key)"
+                >
+                  {{
+                    attrEnabled(attr.attribute_key)
+                      ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.USING')
+                      : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EXCLUDED')
+                  }}
                 </button>
               </div>
             </div>

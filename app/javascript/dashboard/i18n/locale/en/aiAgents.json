@@ -356,7 +356,16 @@
       "ENABLED": "Ativa neste departamento",
       "SAVE": "Salvar integrações"
     },
-    "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento."
+    "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento.",
+    "CUSTOM_ATTRS": {
+      "TITLE": "Atributos personalizados",
+      "HINT": "Atributos criados no sistema que esta IA pode preencher e consultar nas conversas. Novos atributos entram habilitados; exclua aqui os que esta IA não deve usar (não apaga do sistema).",
+      "EMPTY": "Nenhum atributo personalizado criado no sistema.",
+      "MODEL_CONTACT": "Contato",
+      "MODEL_CONVERSATION": "Conversa",
+      "USING": "Em uso",
+      "EXCLUDED": "Excluído"
+    }
   },
   "AI_TOOLS": {
     "TITLE": "Ferramentas",
