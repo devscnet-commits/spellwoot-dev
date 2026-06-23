@@ -83,6 +83,7 @@ const form = reactive({
   on_timeout: 'resolve',
   hours_enabled: false,
   group_delay_seconds: '',
+  max_input_chars: '',
   copilot_enabled: false,
   followup_enabled: false,
   followup_delay: '',
@@ -148,6 +149,7 @@ const hydrate = dept => {
     on_timeout: sla.on_timeout || 'resolve',
     hours_enabled: behavior.business_hours?.enabled || false,
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
+    max_input_chars: behavior.max_input_chars ?? '',
     copilot_enabled: behavior.copilot?.enabled || false,
     followup_enabled: followUp.enabled || false,
     followup_delay: followUp.delay_minutes ?? '',
@@ -197,6 +199,7 @@ const buildPayload = () => ({
       auto_attendance: form.auto_attendance,
       business_hours: { enabled: form.hours_enabled },
       grouping: { delay_seconds: Number(form.group_delay_seconds) || 0 },
+      max_input_chars: Number(form.max_input_chars) || 0,
       copilot: { enabled: form.copilot_enabled },
       reply_scope: form.reply_scope,
       canary_label: form.canary_label,
@@ -1063,6 +1066,26 @@ onMounted(async () => {
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.GROUPING_DELAY') }}
               <input
                 v-model="form.group_delay_seconds"
+                type="number"
+                min="0"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </section>
+
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_TITLE') }}
+            </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_HINT') }}
+            </p>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_FIELD') }}
+              <input
+                v-model="form.max_input_chars"
                 type="number"
                 min="0"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
