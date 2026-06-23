@@ -10,12 +10,20 @@ import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
 import AiKnowledge from './AiKnowledge.vue';
 
+// When embedded inside the agent (the agent's single default department), ids come by prop
+// and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
+const props = defineProps({
+  embedded: { type: Boolean, default: false },
+  embedDepartmentId: { type: [String, Number], default: null },
+});
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 
 const isNew = computed(() => route.params.departmentId === 'new');
-const departmentId = ref(isNew.value ? null : route.params.departmentId);
+const departmentId = ref(
+  props.embedDepartmentId || (isNew.value ? null : route.params.departmentId)
+);
 const activeTab = ref('instructions');
 const isSaving = ref(false);
 // Operational summary counts (read-only) served by the departments index serializer.
@@ -401,9 +409,22 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
-    <div class="max-w-4xl mx-auto flex flex-col gap-3">
+  <div
+    :class="
+      embedded
+        ? 'w-full'
+        : 'w-full h-full overflow-auto bg-n-background p-4 sm:p-6'
+    "
+  >
+    <div
+      :class="
+        embedded
+          ? 'w-full flex flex-col gap-3'
+          : 'max-w-4xl mx-auto flex flex-col gap-3'
+      "
+    >
       <button
+        v-if="!embedded"
         type="button"
         class="self-start text-sm text-n-slate-11 hover:text-n-slate-12"
         @click="goBack"
@@ -1113,6 +1134,7 @@ onMounted(async () => {
           class="flex justify-end gap-2 border-t border-n-weak pt-4 max-w-3xl"
         >
           <button
+            v-if="!embedded"
             type="button"
             class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
             @click="goBack"

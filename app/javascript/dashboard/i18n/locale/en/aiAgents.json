@@ -88,7 +88,7 @@
       "GENERATE": "Gerar com IA",
       "GENERATE_SOON": "Geração de avatar por IA disponível em breve.",
       "ADVANCED": "Configuração avançada",
-      "ADVANCED_HINT": "Empresa, idioma, ambiente, prompt base e guardrails",
+      "ADVANCED_HINT": "Empresa, idioma e ambiente",
       "LANGUAGES": {
         "PT_BR": "Português (Brasil)",
         "EN": "Inglês",
