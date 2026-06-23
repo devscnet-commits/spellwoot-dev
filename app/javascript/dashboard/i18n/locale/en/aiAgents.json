@@ -93,7 +93,10 @@
         "PT_BR": "Português (Brasil)",
         "EN": "Inglês",
         "ES": "Espanhol"
-      }
+      },
+      "TEAM": "Time (roteamento)",
+      "TEAM_ANY": "Qualquer conversa",
+      "TEAM_HINT": "Quando várias IAs atendem a mesma caixa, esta assume as conversas atribuídas a este time. Deixe em \"Qualquer conversa\" para atender sem distinção de time."
     },
     "ATTENDS": {
       "TITLE": "Este agente atende:",

@@ -7,6 +7,8 @@ class Ai::Agent < ApplicationRecord
   belongs_to :account, class_name: '::Account'
   belongs_to :operation_profile, class_name: 'Ai::OperationProfile',
                                   foreign_key: :ai_operation_profile_id, optional: true
+  # Optional routing link: conversations assigned to this team are handled by this agent.
+  belongs_to :team, class_name: '::Team', optional: true
   has_many :agent_inboxes, class_name: 'Ai::AgentInbox', foreign_key: :ai_agent_id, dependent: :destroy
   has_many :departments, class_name: 'Ai::Department', foreign_key: :ai_agent_id, dependent: :destroy
 

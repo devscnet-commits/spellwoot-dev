@@ -4,13 +4,14 @@
 # In shadow it NEVER replies, NEVER executes a tool, NEVER writes operational changes — it only
 # records intention, runs and events.
 class Ai::Gateway
-  def initialize(message:, agent_inbox:)
+  def initialize(message:, agent_inbox:, mode: nil)
     @message = message
     @agent_inbox = agent_inbox
     @agent = agent_inbox.agent
     @conversation = message.conversation
     @account = message.account
-    @mode = agent_inbox.mode
+    # mode may be downgraded by the caller (team routing): a non-owner agent observes (shadow).
+    @mode = mode || agent_inbox.mode
   end
 
   def run
