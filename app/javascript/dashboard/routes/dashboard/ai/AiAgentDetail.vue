@@ -11,6 +11,7 @@ import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
 import Logo from 'next/icon/Logo.vue';
+import AiDepartmentDetail from './AiDepartmentDetail.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const route = useRoute();
@@ -22,7 +23,7 @@ const agentId = ref(isNew.value ? null : route.params.agentId);
 
 // The agent holds identity, the inboxes it serves, and its departments. Knowledge / tools /
 // steps / follow-up live INSIDE each department (Comercial uses different tools than Financeiro).
-const TAB_KEYS = ['about', 'inboxes', 'departments', 'test'];
+const TAB_KEYS = ['about', 'behavior', 'inboxes', 'test'];
 const activeKey = ref(route.query.tab === 'test' ? 'test' : 'about');
 const tabs = computed(() =>
   TAB_KEYS.map(key => ({
@@ -113,6 +114,9 @@ const fetchAgent = async () => {
   });
 };
 
+// The agent owns a single default department (its behavior/knowledge/steps/tools). It is
+// resolved (or created) on load and edited inline in the "Comportamento" tab.
+const defaultDeptId = ref(null);
 const fetchDepartments = async () => {
   if (isNew.value) return;
   const { data } = await axios.get(
@@ -120,27 +124,27 @@ const fetchDepartments = async () => {
   );
   departments.value = Array.isArray(data) ? data : [];
 };
-
-const deptSearch = ref('');
-const deptSort = ref('name');
-const deptSortOptions = computed(() => [
-  { value: 'name', label: t('AI_DEPARTMENTS.SORT_NAME') },
-  { value: 'recent', label: t('AI_DEPARTMENTS.SORT_RECENT') },
-]);
-const filteredDepartments = computed(() => {
-  const q = deptSearch.value.trim().toLowerCase();
-  const list = q
-    ? departments.value.filter(d =>
-        `${d.name || ''} ${d.objetivo || ''}`.toLowerCase().includes(q)
-      )
-    : [...departments.value];
-  if (deptSort.value === 'recent') {
-    return list.sort(
-      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    );
+const ensureDefaultDepartment = async () => {
+  if (isNew.value || !agentId.value) return;
+  const existing =
+    departments.value.find(d => d.is_default) || departments.value[0];
+  if (existing) {
+    defaultDeptId.value = existing.id;
+    return;
   }
-  return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-});
+  const { data } = await axios.post(
+    `${agentUrl()}/${agentId.value}/ai_departments`,
+    {
+      ai_department: {
+        name: agentForm.assistant_name || agentForm.name || 'Atendimento',
+        is_default: true,
+        status: 'active',
+      },
+    }
+  );
+  departments.value = [data];
+  defaultDeptId.value = data.id;
+};
 
 const onAvatarUpload = ({ file }) => {
   const reader = new FileReader();
@@ -168,7 +172,8 @@ const saveAgent = async () => {
       const { data } = await axios.post(agentUrl(), { ai_agent: payload });
       agentId.value = data.id;
       router.replace({ name: 'ai_agent_detail', params: { agentId: data.id } });
-      fetchDepartments();
+      await fetchDepartments();
+      await ensureDefaultDepartment();
       // eslint-disable-next-line no-use-before-define
       fetchInboxes();
     } else {
@@ -222,16 +227,6 @@ const formatVersionDate = iso => {
 const goBack = () => router.push({ name: 'ai_agents_index' });
 // Managing/creating custom levels is an advanced surface, off the main nav.
 const goProfiles = () => router.push({ name: 'ai_profiles_index' });
-const newDepartment = () =>
-  router.push({
-    name: 'ai_department_detail',
-    params: { agentId: agentId.value, departmentId: 'new' },
-  });
-const editDepartment = dept =>
-  router.push({
-    name: 'ai_department_detail',
-    params: { agentId: agentId.value, departmentId: dept.id },
-  });
 
 // --- Caixas (live/shadow binding) ---
 const inboxes = ref([]);
@@ -325,6 +320,7 @@ onMounted(async () => {
   await fetchAgent();
   captureAgent();
   await Promise.all([fetchDepartments(), fetchInboxes(), fetchVersions()]);
+  await ensureDefaultDepartment();
 });
 </script>
 
@@ -551,16 +547,6 @@ onMounted(async () => {
                   <Select v-model="agentForm.stage" :options="stageOptions" />
                 </div>
               </div>
-              <TextArea
-                v-model="agentForm.base_prompt"
-                :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
-                :max-length="4000"
-              />
-              <TextArea
-                v-model="agentForm.guardrails"
-                :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
-                :max-length="2000"
-              />
             </div>
           </div>
 
@@ -709,148 +695,41 @@ onMounted(async () => {
           </template>
         </div>
 
-        <!-- DEPARTAMENTOS -->
-        <div
-          v-else-if="activeKey === 'departments'"
-          class="flex flex-col gap-4"
-        >
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex items-start gap-3 min-w-0">
-              <span
-                class="shrink-0 size-10 rounded-xl bg-n-brand/10 text-n-brand flex items-center justify-center"
-              >
-                <span class="i-lucide-layers size-5" />
-              </span>
-              <div class="flex flex-col gap-0.5 min-w-0">
-                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
-                  {{ $t('AI_DEPARTMENTS.CORE_TITLE') }}
-                </h2>
-                <p class="text-sm text-n-slate-11 mb-0">
-                  {{ $t('AI_DEPARTMENTS.CORE_HINT') }}
-                </p>
-              </div>
-            </div>
-            <Button
-              v-if="!isNew"
-              icon="i-lucide-plus"
-              :label="$t('AI_DEPARTMENTS.NEW')"
-              @click="newDepartment"
-            />
-          </div>
+        <!-- COMPORTAMENTO -->
+        <div v-else-if="activeKey === 'behavior'" class="flex flex-col gap-5">
           <p v-if="isNew" class="text-sm text-n-slate-11">
             {{ $t('AI_AGENTS.SAVE_FIRST') }}
           </p>
-          <p
-            v-else-if="!departments.length"
-            class="text-sm text-n-slate-11 py-8 text-center"
-          >
-            {{ $t('AI_DEPARTMENTS.EMPTY') }}
-          </p>
           <template v-else>
-            <div
-              v-if="departments.length > 2"
-              class="flex flex-wrap items-center gap-2"
+            <section
+              class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
             >
-              <input
-                v-model="deptSearch"
-                type="search"
-                :placeholder="$t('AI_DEPARTMENTS.SEARCH')"
-                class="flex-1 min-w-48 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              <TextArea
+                v-model="agentForm.base_prompt"
+                :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
+                :max-length="4000"
               />
-              <Select v-model="deptSort" :options="deptSortOptions" />
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                v-for="dept in filteredDepartments"
-                :key="dept.id"
-                type="button"
-                class="group rounded-2xl border border-n-weak bg-n-solid-1 p-5 flex flex-col gap-3 text-left hover:border-n-brand hover:shadow-sm transition-all"
-                @click="editDepartment(dept)"
-              >
-                <div class="flex items-start justify-between gap-2">
-                  <span
-                    class="size-10 rounded-xl bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
-                  >
-                    <span class="i-lucide-layers size-5" />
-                  </span>
-                  <div class="flex items-center gap-1.5 shrink-0">
-                    <span
-                      v-if="dept.is_default"
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-n-brand/10 text-n-brand"
-                    >
-                      <span class="i-lucide-star size-3" />
-                      {{ $t('AI_DEPARTMENTS.DEFAULT_BADGE') }}
-                    </span>
-                    <span
-                      class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
-                      :class="
-                        dept.status === 'active'
-                          ? 'bg-n-teal-3 text-n-teal-11'
-                          : 'bg-n-alpha-2 text-n-slate-11'
-                      "
-                    >
-                      <span
-                        class="size-1.5 rounded-full"
-                        :class="
-                          dept.status === 'active'
-                            ? 'bg-n-teal-9'
-                            : 'bg-n-slate-7'
-                        "
-                      />
-                      {{
-                        dept.status === 'active'
-                          ? $t('AI_DEPARTMENTS.STATUS_ACTIVE')
-                          : $t('AI_DEPARTMENTS.STATUS_INACTIVE')
-                      }}
-                    </span>
-                  </div>
-                </div>
-                <div class="min-w-0">
-                  <p
-                    class="text-lg font-semibold text-n-slate-12 mb-0 truncate"
-                  >
-                    {{ dept.name }}
-                  </p>
-                  <p class="text-xs text-n-slate-11 line-clamp-2 mb-0">
-                    {{ dept.objetivo || $t('AI_DEPARTMENTS.NO_OBJETIVO') }}
-                  </p>
-                </div>
-                <div
-                  class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-n-weak pt-3 text-xs text-n-slate-11"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    <span class="i-lucide-list-checks size-3.5" />
-                    {{
-                      $t('AI_DEPARTMENTS.STATS_STEPS', {
-                        count: dept.steps_count ?? 0,
-                      })
-                    }}
-                  </span>
-                  <span class="inline-flex items-center gap-1">
-                    <span class="i-lucide-wrench size-3.5" />
-                    {{
-                      $t('AI_DEPARTMENTS.STATS_TOOLS', {
-                        count: dept.tools_count ?? 0,
-                      })
-                    }}
-                  </span>
-                  <span class="inline-flex items-center gap-1">
-                    <span class="i-lucide-book-open size-3.5" />
-                    {{
-                      $t('AI_DEPARTMENTS.STATS_KNOWLEDGE', {
-                        count: dept.knowledge_sources_count ?? 0,
-                      })
-                    }}
-                  </span>
-                  <span
-                    class="ml-auto inline-flex items-center gap-1 text-n-slate-10 group-hover:text-n-brand"
-                  >
-                    {{ $t('AI_DEPARTMENTS.CONFIGURE') }}
-                    <span class="i-lucide-arrow-right size-3.5" />
-                  </span>
-                </div>
-              </button>
-            </div>
+              <TextArea
+                v-model="agentForm.guardrails"
+                :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
+                :max-length="2000"
+              />
+              <div class="flex justify-end">
+                <Button
+                  :label="$t('AI_AGENTS.FORM.SAVE')"
+                  :is-loading="isSaving"
+                  :disabled="!agentDirty"
+                  @click="saveAgent"
+                />
+              </div>
+            </section>
+
+            <AiDepartmentDetail
+              v-if="defaultDeptId"
+              :key="defaultDeptId"
+              embedded
+              :embed-department-id="defaultDeptId"
+            />
           </template>
         </div>
 
