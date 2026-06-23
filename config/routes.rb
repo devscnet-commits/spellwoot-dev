@@ -65,6 +65,7 @@ Rails.application.routes.draw do
                                 param: :agent_id
           end
           resources :ai_shadow_runs, only: [:index]
+          resources :ai_shadows, only: %i[index create update destroy]
           resources :ai_agents do
             member { post :test }
             resource :ai_agent_inboxes, only: %i[show update]

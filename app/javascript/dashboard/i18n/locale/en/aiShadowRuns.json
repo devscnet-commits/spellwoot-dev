@@ -106,5 +106,49 @@
       "classification_failed": "Falha ao classificar o departamento",
       "unknown": "Erro não identificado"
     }
+  },
+  "AI_SHADOWS": {
+    "TITLE": "Validação (Shadow)",
+    "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
+    "NEW": "Novo shadow",
+    "ANALYSIS": "Ver análise",
+    "EMPTY": "Nenhum shadow criado. Crie um observador para auditar seus atendimentos.",
+    "INBOX_COUNT": "{count} caixas",
+    "STATUS": {
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "FORM": {
+      "NAME": "Nome",
+      "INSTRUCTIONS": "Instruções de avaliação",
+      "INSTRUCTIONS_PLACEHOLDER": "O que o shadow deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
+      "INBOXES": "Caixas observadas",
+      "NO_INBOXES": "Nenhuma caixa nesta conta.",
+      "SCOPE": "O que observar",
+      "OBSERVE_AI": "Atendimentos da IA",
+      "OBSERVE_HUMAN": "Atendimentos humanos",
+      "SIGNALS": "O que trazer para a Validação",
+      "STATUS": "Status",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar"
+    },
+    "SIGNALS": {
+      "UNANSWERED": "Dúvidas não respondidas",
+      "ERRORS": "Erros / informação incorreta",
+      "LOW_CONFIDENCE": "Baixa confiança",
+      "KNOWLEDGE_GAPS": "Conhecimento faltante",
+      "TOOLS_MISSING": "Ferramenta que faltou",
+      "RECURRING": "Temas recorrentes"
+    },
+    "SAVED": "Shadow salvo.",
+    "DELETED": "Shadow excluído.",
+    "ERROR": "Algo deu errado.",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir shadow",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    }
   }
 }
