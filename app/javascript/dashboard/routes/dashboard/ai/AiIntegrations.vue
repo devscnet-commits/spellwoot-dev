@@ -184,250 +184,238 @@ onMounted(fetchIntegrations);
 </script>
 
 <template>
-  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
-    <div class="max-w-4xl mx-auto flex flex-col gap-3">
+  <div class="w-full flex flex-col gap-4">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex flex-col gap-1 min-w-0">
+        <h1 class="text-xl font-semibold text-n-slate-12">
+          {{ $t('AI_INTEGRATIONS.TITLE') }}
+        </h1>
+        <p class="text-sm text-n-slate-11 mb-0">
+          {{ $t('AI_INTEGRATIONS.DESCRIPTION') }}
+        </p>
+      </div>
+      <div class="shrink-0">
+        <Button
+          icon="i-lucide-plus"
+          :label="$t('AI_INTEGRATIONS.NEW')"
+          @click="openNew"
+        />
+      </div>
+    </div>
+
+    <p
+      v-if="!isLoading && !integrations.length"
+      class="text-sm text-n-slate-11 py-8 text-center"
+    >
+      {{ $t('AI_INTEGRATIONS.EMPTY') }}
+    </p>
+    <div v-else class="border border-n-weak rounded-xl divide-y divide-n-weak">
       <div
-        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-4"
+        v-for="link in integrations"
+        :key="link.id"
+        class="flex flex-col gap-2 px-4 py-3"
       >
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex flex-col gap-1 min-w-0">
-            <h1 class="text-xl font-semibold text-n-slate-12">
-              {{ $t('AI_INTEGRATIONS.TITLE') }}
-            </h1>
-            <p class="text-sm text-n-slate-11 mb-0">
-              {{ $t('AI_INTEGRATIONS.DESCRIPTION') }}
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-n-slate-12">
+              {{ link.name }}
+            </p>
+            <p class="text-xs text-n-slate-11 truncate">
+              {{
+                $t(
+                  `AI_INTEGRATIONS.KINDS.${(link.kind || 'webhook').toUpperCase()}`
+                )
+              }}
+              · {{ statusLabel(link.status) }}
             </p>
           </div>
-          <div class="shrink-0">
-            <Button
-              icon="i-lucide-plus"
-              :label="$t('AI_INTEGRATIONS.NEW')"
-              @click="openNew"
-            />
-          </div>
-        </div>
-
-        <p
-          v-if="!isLoading && !integrations.length"
-          class="text-sm text-n-slate-11 py-8 text-center"
-        >
-          {{ $t('AI_INTEGRATIONS.EMPTY') }}
-        </p>
-        <div
-          v-else
-          class="border border-n-weak rounded-xl divide-y divide-n-weak"
-        >
-          <div
-            v-for="link in integrations"
-            :key="link.id"
-            class="flex flex-col gap-2 px-4 py-3"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-n-slate-12">
-                  {{ link.name }}
-                </p>
-                <p class="text-xs text-n-slate-11 truncate">
-                  {{
-                    $t(
-                      `AI_INTEGRATIONS.KINDS.${(link.kind || 'webhook').toUpperCase()}`
-                    )
-                  }}
-                  · {{ statusLabel(link.status) }}
-                </p>
-              </div>
-              <div class="shrink-0 flex items-center gap-1">
-                <Button
-                  variant="faded"
-                  color="slate"
-                  size="sm"
-                  :is-loading="testingId === link.id"
-                  :label="$t('AI_INTEGRATIONS.TEST.BUTTON')"
-                  @click="runTest(link)"
-                />
-                <Button
-                  variant="ghost"
-                  color="slate"
-                  size="sm"
-                  icon="i-lucide-pencil"
-                  @click="openEdit(link)"
-                />
-                <Button
-                  variant="ghost"
-                  color="ruby"
-                  size="sm"
-                  icon="i-lucide-trash-2"
-                  @click="deleteTarget = link"
-                />
-              </div>
-            </div>
-            <div
-              v-if="testResult && testResult.id === link.id"
-              class="rounded-lg px-3 py-2 text-xs"
-              :class="
-                testResult.ok
-                  ? 'bg-n-teal-3 text-n-teal-11'
-                  : 'bg-n-ruby-3 text-n-ruby-11'
-              "
-            >
-              <span class="font-medium">
-                {{
-                  testResult.ok
-                    ? $t('AI_INTEGRATIONS.TEST.OK')
-                    : $t('AI_INTEGRATIONS.TEST.FAIL')
-                }}
-              </span>
-              <span v-if="testResult.ok">
-                {{
-                  $t('AI_INTEGRATIONS.TEST.OK_DETAIL', {
-                    status: testResult.status,
-                    ms: testResult.latency_ms,
-                  })
-                }}
-              </span>
-              <span v-else>{{ testResult.error }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Form -->
-        <div
-          v-if="showForm"
-          class="border border-n-weak rounded-xl p-5 flex flex-col gap-4 bg-n-solid-2"
-        >
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              v-model="form.name"
-              :label="$t('AI_INTEGRATIONS.FORM.NAME')"
-            />
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">{{
-                $t('AI_INTEGRATIONS.FORM.KIND')
-              }}</span>
-              <Select v-model="form.kind" :options="kindOptions" />
-            </div>
-          </div>
-
-          <Input
-            v-model="form.endpoint"
-            :label="$t('AI_INTEGRATIONS.FORM.ENDPOINT')"
-            placeholder="https://..."
-          />
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">{{
-                $t('AI_INTEGRATIONS.FORM.METHOD')
-              }}</span>
-              <Select v-model="form.http_method" :options="methodOptions" />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">{{
-                $t('AI_INTEGRATIONS.FORM.AUTH')
-              }}</span>
-              <Select v-model="form.auth_type" :options="authOptions" />
-            </div>
-          </div>
-
-          <Input
-            v-if="form.auth_type === 'bearer'"
-            v-model="form.auth_token"
-            :label="$t('AI_INTEGRATIONS.FORM.TOKEN')"
-          />
-          <div
-            v-else-if="form.auth_type === 'header'"
-            class="grid grid-cols-1 sm:grid-cols-2 gap-4"
-          >
-            <Input
-              v-model="form.auth_header"
-              :label="$t('AI_INTEGRATIONS.FORM.HEADER_NAME')"
-            />
-            <Input
-              v-model="form.auth_value"
-              :label="$t('AI_INTEGRATIONS.FORM.HEADER_VALUE')"
-            />
-          </div>
-
-          <!-- Detalhes técnicos -->
-          <section class="border border-n-weak rounded-xl bg-n-solid-1">
-            <button
-              type="button"
-              class="w-full flex items-center gap-2 px-4 py-3 text-left"
-              @click="sections.advanced = !sections.advanced"
-            >
-              <span
-                class="size-4 inline-block text-n-slate-11 shrink-0"
-                :class="
-                  sections.advanced
-                    ? 'i-lucide-chevron-down'
-                    : 'i-lucide-chevron-right'
-                "
-              />
-              <span class="text-sm font-semibold text-n-slate-12">
-                {{ $t('AI_INTEGRATIONS.FORM.ADVANCED') }}
-              </span>
-            </button>
-            <div
-              v-if="sections.advanced"
-              class="border-t border-n-weak p-4 flex flex-col gap-4"
-            >
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_INTEGRATIONS.FORM.HEADERS') }}
-                <textarea
-                  v-model="form.headers_text"
-                  rows="3"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-y"
-                />
-              </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_INTEGRATIONS.FORM.PAYLOAD') }}
-                <textarea
-                  v-model="form.payload_text"
-                  rows="3"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-y"
-                />
-              </label>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Input
-                  v-model="form.timeout_seconds"
-                  type="number"
-                  :label="$t('AI_INTEGRATIONS.FORM.TIMEOUT')"
-                />
-                <Input
-                  v-model="form.retry_count"
-                  type="number"
-                  :label="$t('AI_INTEGRATIONS.FORM.RETRY')"
-                />
-                <div class="flex flex-col gap-1.5">
-                  <span class="text-sm font-medium text-n-slate-12">{{
-                    $t('AI_INTEGRATIONS.FORM.STATUS')
-                  }}</span>
-                  <Select
-                    v-model="form.status"
-                    :options="[
-                      { value: 'active', label: statusLabel('active') },
-                      { value: 'inactive', label: statusLabel('inactive') },
-                    ]"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <div class="flex justify-end gap-2">
+          <div class="shrink-0 flex items-center gap-1">
             <Button
               variant="faded"
               color="slate"
-              :label="$t('AI_INTEGRATIONS.FORM.CANCEL')"
-              @click="showForm = false"
+              size="sm"
+              :is-loading="testingId === link.id"
+              :label="$t('AI_INTEGRATIONS.TEST.BUTTON')"
+              @click="runTest(link)"
             />
             <Button
-              :label="$t('AI_INTEGRATIONS.FORM.SAVE')"
-              :disabled="!isDirty || !form.name.trim() || !form.endpoint.trim()"
-              @click="save"
+              variant="ghost"
+              color="slate"
+              size="sm"
+              icon="i-lucide-pencil"
+              @click="openEdit(link)"
+            />
+            <Button
+              variant="ghost"
+              color="ruby"
+              size="sm"
+              icon="i-lucide-trash-2"
+              @click="deleteTarget = link"
             />
           </div>
         </div>
+        <div
+          v-if="testResult && testResult.id === link.id"
+          class="rounded-lg px-3 py-2 text-xs"
+          :class="
+            testResult.ok
+              ? 'bg-n-teal-3 text-n-teal-11'
+              : 'bg-n-ruby-3 text-n-ruby-11'
+          "
+        >
+          <span class="font-medium">
+            {{
+              testResult.ok
+                ? $t('AI_INTEGRATIONS.TEST.OK')
+                : $t('AI_INTEGRATIONS.TEST.FAIL')
+            }}
+          </span>
+          <span v-if="testResult.ok">
+            {{
+              $t('AI_INTEGRATIONS.TEST.OK_DETAIL', {
+                status: testResult.status,
+                ms: testResult.latency_ms,
+              })
+            }}
+          </span>
+          <span v-else>{{ testResult.error }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <div
+      v-if="showForm"
+      class="border border-n-weak rounded-xl p-5 flex flex-col gap-4 bg-n-solid-2"
+    >
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input v-model="form.name" :label="$t('AI_INTEGRATIONS.FORM.NAME')" />
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-n-slate-12">{{
+            $t('AI_INTEGRATIONS.FORM.KIND')
+          }}</span>
+          <Select v-model="form.kind" :options="kindOptions" />
+        </div>
+      </div>
+
+      <Input
+        v-model="form.endpoint"
+        :label="$t('AI_INTEGRATIONS.FORM.ENDPOINT')"
+        placeholder="https://..."
+      />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-n-slate-12">{{
+            $t('AI_INTEGRATIONS.FORM.METHOD')
+          }}</span>
+          <Select v-model="form.http_method" :options="methodOptions" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-n-slate-12">{{
+            $t('AI_INTEGRATIONS.FORM.AUTH')
+          }}</span>
+          <Select v-model="form.auth_type" :options="authOptions" />
+        </div>
+      </div>
+
+      <Input
+        v-if="form.auth_type === 'bearer'"
+        v-model="form.auth_token"
+        :label="$t('AI_INTEGRATIONS.FORM.TOKEN')"
+      />
+      <div
+        v-else-if="form.auth_type === 'header'"
+        class="grid grid-cols-1 sm:grid-cols-2 gap-4"
+      >
+        <Input
+          v-model="form.auth_header"
+          :label="$t('AI_INTEGRATIONS.FORM.HEADER_NAME')"
+        />
+        <Input
+          v-model="form.auth_value"
+          :label="$t('AI_INTEGRATIONS.FORM.HEADER_VALUE')"
+        />
+      </div>
+
+      <!-- Detalhes técnicos -->
+      <section class="border border-n-weak rounded-xl bg-n-solid-1">
+        <button
+          type="button"
+          class="w-full flex items-center gap-2 px-4 py-3 text-left"
+          @click="sections.advanced = !sections.advanced"
+        >
+          <span
+            class="size-4 inline-block text-n-slate-11 shrink-0"
+            :class="
+              sections.advanced
+                ? 'i-lucide-chevron-down'
+                : 'i-lucide-chevron-right'
+            "
+          />
+          <span class="text-sm font-semibold text-n-slate-12">
+            {{ $t('AI_INTEGRATIONS.FORM.ADVANCED') }}
+          </span>
+        </button>
+        <div
+          v-if="sections.advanced"
+          class="border-t border-n-weak p-4 flex flex-col gap-4"
+        >
+          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+            {{ $t('AI_INTEGRATIONS.FORM.HEADERS') }}
+            <textarea
+              v-model="form.headers_text"
+              rows="3"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-y"
+            />
+          </label>
+          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+            {{ $t('AI_INTEGRATIONS.FORM.PAYLOAD') }}
+            <textarea
+              v-model="form.payload_text"
+              rows="3"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-y"
+            />
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Input
+              v-model="form.timeout_seconds"
+              type="number"
+              :label="$t('AI_INTEGRATIONS.FORM.TIMEOUT')"
+            />
+            <Input
+              v-model="form.retry_count"
+              type="number"
+              :label="$t('AI_INTEGRATIONS.FORM.RETRY')"
+            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">{{
+                $t('AI_INTEGRATIONS.FORM.STATUS')
+              }}</span>
+              <Select
+                v-model="form.status"
+                :options="[
+                  { value: 'active', label: statusLabel('active') },
+                  { value: 'inactive', label: statusLabel('inactive') },
+                ]"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="flex justify-end gap-2">
+        <Button
+          variant="faded"
+          color="slate"
+          :label="$t('AI_INTEGRATIONS.FORM.CANCEL')"
+          @click="showForm = false"
+        />
+        <Button
+          :label="$t('AI_INTEGRATIONS.FORM.SAVE')"
+          :disabled="!isDirty || !form.name.trim() || !form.endpoint.trim()"
+          @click="save"
+        />
       </div>
     </div>
 
