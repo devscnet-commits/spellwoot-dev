@@ -522,12 +522,7 @@ onMounted(async () => {
           >
             {{ $t(`AI_DEPARTMENTS.DETAIL_TABS.${tab.toUpperCase()}`) }}
           </button>
-          <span class="flex items-center gap-2 pb-2.5 ml-1 text-n-slate-10">
-            <span class="w-px h-3.5 bg-n-weak" />
-            <span class="text-xs">{{
-              $t('AI_DEPARTMENTS.ADVANCED_LABEL')
-            }}</span>
-          </span>
+          <span class="w-px h-5 bg-n-weak mx-2 mb-2.5" aria-hidden="true" />
           <button
             v-for="tab in ['attendance', 'followup', 'integrations']"
             :key="tab"
@@ -882,6 +877,9 @@ onMounted(async () => {
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TITLE') }}
             </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_HINT') }}
+            </p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label class="flex flex-col gap-1 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TIMEOUT') }}
@@ -935,6 +933,9 @@ onMounted(async () => {
             <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TITLE') }}
             </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_HINT') }}
+            </p>
             <label class="flex items-center gap-2 text-sm text-n-slate-12">
               <input v-model="form.followup_enabled" type="checkbox" />
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TOGGLE') }}
