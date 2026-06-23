@@ -139,11 +139,14 @@ const applyPreset = key => {
   form.on_limit = preset.on_limit;
 };
 
+// Show the effect of the level (cost/quality), never the engine behind it.
 const profileSubtitle = p => {
-  const base = `${p.supervisor_provider} / ${p.supervisor_model}`;
-  return p.budget?.monthly_usd
-    ? `${base} · $${p.budget.monthly_usd}/mês`
-    : base;
+  const tier = p.tier || 'customizado';
+  const label = t(`AI_PROFILES.PRESET.${tier.toUpperCase()}`);
+  const eff = LEVEL_EFFECTS[tier];
+  if (!eff) return label;
+  const val = k => t(`AI_PROFILES.LEVELS.VALUE.${k}`);
+  return `${label} · ${t('AI_PROFILES.LEVELS.COST')}: ${val(eff.cost)} · ${t('AI_PROFILES.LEVELS.QUALITY')}: ${val(eff.quality)}`;
 };
 
 const baseUrl = () =>
@@ -173,7 +176,7 @@ const openEdit = profile => {
   const budget = profile.budget || {};
   Object.assign(form, blank(), {
     id: profile.id,
-    preset: 'customizado',
+    preset: profile.tier || 'customizado',
     name: profile.name,
     supervisor_provider: profile.supervisor_provider,
     supervisor_model: profile.supervisor_model,
@@ -201,6 +204,7 @@ const save = async () => {
   const payload = {
     ai_operation_profile: {
       name: form.name,
+      tier: form.preset,
       supervisor_provider: form.supervisor_provider,
       supervisor_model: form.supervisor_model,
       worker_overrides: form.workers,
