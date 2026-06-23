@@ -37,6 +37,10 @@ class Ai::Gateway
 
     run_record.update!(ai_department_id: department.id)
 
+    # Cap the customer input the model sees, to bound tokens per interaction (anti-abuse).
+    max_input = department.behavior.to_h['max_input_chars'].to_i
+    effective_content = effective_content.first(max_input) if max_input.positive?
+
     # Single gate for every outward action (reply, tools, transfer/resolve): the AI only acts when
     # this conversation is effectively live — i.e. live binding + auto_attendance on + within hours
     # + reply_scope all/canary-match. Otherwise it observes (records intention) only, so a live
