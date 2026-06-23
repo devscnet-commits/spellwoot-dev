@@ -15,6 +15,8 @@ import AiKnowledge from './AiKnowledge.vue';
 const props = defineProps({
   embedded: { type: Boolean, default: false },
   embedDepartmentId: { type: [String, Number], default: null },
+  // When embedded, which agent-level group of sections to show.
+  section: { type: String, default: null },
 });
 const route = useRoute();
 const router = useRouter();
@@ -25,6 +27,24 @@ const departmentId = ref(
   props.embedDepartmentId || (isNew.value ? null : route.params.departmentId)
 );
 const activeTab = ref('instructions');
+
+// Flattened into agent-level tabs when embedded: each group maps to underlying sections.
+const SECTION_GROUPS = {
+  behavior: ['instructions', 'attendance', 'followup', 'integrations'],
+  knowledge: ['knowledge'],
+  steps: ['steps'],
+  tools: ['tools'],
+};
+const visibleSections = computed(() =>
+  props.embedded && props.section
+    ? new Set(SECTION_GROUPS[props.section] || [])
+    : new Set([activeTab.value])
+);
+const showSave = computed(() =>
+  ['instructions', 'attendance', 'steps', 'followup'].some(s =>
+    visibleSections.value.has(s)
+  )
+);
 const isSaving = ref(false);
 // Operational summary counts (read-only) served by the departments index serializer.
 const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
@@ -433,9 +453,13 @@ onMounted(async () => {
       </button>
 
       <div
-        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-10 py-6 sm:py-7 flex flex-col gap-6"
+        :class="
+          embedded
+            ? 'flex flex-col gap-6'
+            : 'rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-10 py-6 sm:py-7 flex flex-col gap-6'
+        "
       >
-        <div class="flex items-center justify-between gap-4">
+        <div v-if="!embedded" class="flex items-center justify-between gap-4">
           <h1
             class="text-2xl sm:text-3xl font-semibold text-n-slate-12 truncate"
           >
@@ -446,7 +470,7 @@ onMounted(async () => {
 
         <!-- Operational summary: what this department is made of, at a glance -->
         <div
-          v-if="!isNew"
+          v-if="!isNew && !embedded"
           class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-n-slate-11"
         >
           <span class="inline-flex items-center gap-1.5">
@@ -485,7 +509,7 @@ onMounted(async () => {
 
         <!-- Prontidão Operacional: checklist sobre dados já carregados (sem backend) -->
         <div
-          v-if="!isNew"
+          v-if="!isNew && !embedded"
           class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3"
         >
           <div class="flex items-center justify-between gap-3">
@@ -526,6 +550,7 @@ onMounted(async () => {
         </div>
 
         <div
+          v-if="!embedded"
           class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-n-weak"
         >
           <button
@@ -567,7 +592,10 @@ onMounted(async () => {
         </div>
 
         <!-- INSTRUÇÕES -->
-        <div v-if="activeTab === 'instructions'" class="flex flex-col gap-5">
+        <div
+          v-if="visibleSections.has('instructions')"
+          class="flex flex-col gap-5"
+        >
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
@@ -763,7 +791,7 @@ onMounted(async () => {
 
         <!-- ATENDIMENTO -->
         <div
-          v-else-if="activeTab === 'attendance'"
+          v-if="visibleSections.has('attendance')"
           class="flex flex-col gap-5 max-w-3xl"
         >
           <section
@@ -947,7 +975,7 @@ onMounted(async () => {
 
         <!-- FOLLOW-UP -->
         <div
-          v-else-if="activeTab === 'followup'"
+          v-if="visibleSections.has('followup')"
           class="flex flex-col gap-5 max-w-3xl"
         >
           <section
@@ -984,7 +1012,7 @@ onMounted(async () => {
 
         <!-- ETAPAS -->
         <div
-          v-else-if="activeTab === 'steps'"
+          v-if="visibleSections.has('steps')"
           class="flex flex-col gap-5 max-w-3xl"
         >
           <section
@@ -1083,14 +1111,22 @@ onMounted(async () => {
         </div>
 
         <!-- CONHECIMENTO -->
-        <AiKnowledge v-else-if="activeTab === 'knowledge' && !isNew" />
+        <AiKnowledge
+          v-if="visibleSections.has('knowledge') && !isNew"
+          :agent-id="route.params.agentId"
+          :department-id="departmentId"
+        />
 
         <!-- FERRAMENTAS -->
-        <AiTools v-else-if="activeTab === 'tools' && !isNew" />
+        <AiTools
+          v-if="visibleSections.has('tools') && !isNew"
+          :agent-id="route.params.agentId"
+          :department-id="departmentId"
+        />
 
         <!-- INTEGRAÇÕES -->
         <div
-          v-else-if="activeTab === 'integrations'"
+          v-if="visibleSections.has('integrations')"
           class="flex flex-col gap-4 max-w-3xl"
         >
           <h2 class="text-base font-semibold text-n-slate-12">
@@ -1126,11 +1162,7 @@ onMounted(async () => {
 
         <!-- Save bar (config tabs only) -->
         <div
-          v-if="
-            ['instructions', 'attendance', 'steps', 'followup'].includes(
-              activeTab
-            )
-          "
+          v-if="showSave"
           class="flex justify-end gap-2 border-t border-n-weak pt-4 max-w-3xl"
         >
           <button

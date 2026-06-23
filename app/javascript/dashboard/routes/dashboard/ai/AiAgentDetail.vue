@@ -23,7 +23,17 @@ const agentId = ref(isNew.value ? null : route.params.agentId);
 
 // The agent holds identity, the inboxes it serves, and its departments. Knowledge / tools /
 // steps / follow-up live INSIDE each department (Comercial uses different tools than Financeiro).
-const TAB_KEYS = ['about', 'behavior', 'inboxes', 'test'];
+const TAB_KEYS = [
+  'about',
+  'behavior',
+  'knowledge',
+  'steps',
+  'tools',
+  'inboxes',
+  'test',
+];
+// The four agent tabs that edit the default department's sections (flattened).
+const DEPT_TABS = ['behavior', 'knowledge', 'steps', 'tools'];
 const activeKey = ref(route.query.tab === 'test' ? 'test' : 'about');
 const tabs = computed(() =>
   TAB_KEYS.map(key => ({
@@ -695,13 +705,17 @@ onMounted(async () => {
           </template>
         </div>
 
-        <!-- COMPORTAMENTO -->
-        <div v-else-if="activeKey === 'behavior'" class="flex flex-col gap-5">
+        <!-- COMPORTAMENTO / CONHECIMENTO / ETAPAS / FERRAMENTAS (departamento padrão) -->
+        <div
+          v-else-if="DEPT_TABS.includes(activeKey)"
+          class="flex flex-col gap-5"
+        >
           <p v-if="isNew" class="text-sm text-n-slate-11">
             {{ $t('AI_AGENTS.SAVE_FIRST') }}
           </p>
           <template v-else>
             <section
+              v-if="activeKey === 'behavior'"
               class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
             >
               <TextArea
@@ -729,6 +743,7 @@ onMounted(async () => {
               :key="defaultDeptId"
               embedded
               :embed-department-id="defaultDeptId"
+              :section="activeKey"
             />
           </template>
         </div>
