@@ -4,7 +4,7 @@
 # In shadow it NEVER replies, NEVER executes a tool, NEVER writes operational changes — it only
 # records intention, runs and events.
 class Ai::Gateway
-  def initialize(message:, agent_inbox:, mode: nil)
+  def initialize(message:, agent_inbox:, mode: nil, content_override: nil)
     @message = message
     @agent_inbox = agent_inbox
     @agent = agent_inbox.agent
@@ -12,6 +12,8 @@ class Ai::Gateway
     @account = message.account
     # mode may be downgraded by the caller (team routing): a non-owner agent observes (shadow).
     @mode = mode || agent_inbox.mode
+    # When grouping, the caller passes the whole customer burst as the content to consider.
+    @content_override = content_override
   end
 
   def run
@@ -24,7 +26,8 @@ class Ai::Gateway
     # Invisible worker: turn media (audio/image) into text the supervisor can use.
     media_text = Ai::Workers::MediaProcessor.process(@message)
     emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
-    effective_content = [@message.content, media_text].compact.join("\n").strip
+    base_content = @content_override.presence || @message.content
+    effective_content = [base_content, media_text].compact.join("\n").strip
 
     department, resolution = Ai::DepartmentResolver.resolve(
       agent: @agent, inbox_id: @message.inbox_id, message_content: effective_content

@@ -8,14 +8,17 @@
 class Ai::GatewayRunJob < ApplicationJob
   queue_as :low
 
-  def perform(message_id)
+  def perform(message_id, grouped: false)
     message = Message.find_by(id: message_id)
     return if message.blank?
+    # Debounce: if the customer kept typing, let the newer message's job handle the group.
+    return if grouped && !Ai::MessageGrouping.latest_incoming?(message)
 
+    content_override = grouped ? Ai::MessageGrouping.grouped_content(message.conversation) : nil
     conversation_team_id = message.conversation&.team_id
     Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).includes(:agent).find_each do |binding|
       mode = effective_mode(binding, conversation_team_id)
-      Ai::Gateway.new(message: message, agent_inbox: binding, mode: mode).run
+      Ai::Gateway.new(message: message, agent_inbox: binding, mode: mode, content_override: content_override).run
     end
   end
 

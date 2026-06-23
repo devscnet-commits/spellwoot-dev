@@ -12,6 +12,13 @@ class Ai::GatewayListener < BaseListener
     return unless message.account&.feature_enabled?('ai_core')
     return unless Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).exists?
 
-    Ai::GatewayRunJob.perform_later(message.id)
+    # Message grouping: when a department sets a delay, defer the run so a burst of messages is
+    # answered once (the deferred job processes only the last message and groups the burst).
+    delay = Ai::MessageGrouping.delay_seconds(message.inbox_id)
+    if delay.positive?
+      Ai::GatewayRunJob.set(wait: delay.seconds).perform_later(message.id, grouped: true)
+    else
+      Ai::GatewayRunJob.perform_later(message.id)
+    end
   end
 end
