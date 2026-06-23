@@ -63,10 +63,10 @@ const agentForm = reactive({
   assistant_avatar: '',
   ai_operation_profile_id: '',
   assistant_personality: '',
-  assistant_language: '',
+  assistant_language: 'pt-BR',
   base_prompt: '',
   guardrails: '',
-  stage: 'sandbox',
+  stage: 'experimental',
   status: 'active',
 });
 const {
@@ -85,9 +85,18 @@ const profileOptions = computed(() => [
 ]);
 
 const stageOptions = computed(() =>
-  ['production', 'staging', 'sandbox', 'experimental'].map(s => ({
+  ['production', 'experimental'].map(s => ({
     value: s,
     label: t(`AI_AGENTS.STAGES.${s.toUpperCase()}`),
+  }))
+);
+
+const LANGUAGES = ['pt-BR', 'en', 'es'];
+const LANG_KEY = { 'pt-BR': 'PT_BR', en: 'EN', es: 'ES' };
+const languageOptions = computed(() =>
+  LANGUAGES.map(l => ({
+    value: l,
+    label: t(`AI_AGENTS.SOBRE.LANGUAGES.${LANG_KEY[l]}`),
   }))
 );
 
@@ -526,10 +535,15 @@ onMounted(async () => {
                   v-model="agentForm.site"
                   :label="$t('AI_AGENTS.SOBRE.SITE')"
                 />
-                <Input
-                  v-model="agentForm.assistant_language"
-                  :label="$t('AI_AGENTS.SOBRE.LANGUAGE')"
-                />
+                <div class="flex flex-col gap-1.5">
+                  <span class="text-sm font-medium text-n-slate-12">
+                    {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
+                  </span>
+                  <Select
+                    v-model="agentForm.assistant_language"
+                    :options="languageOptions"
+                  />
+                </div>
                 <div class="flex flex-col gap-1.5">
                   <span class="text-sm font-medium text-n-slate-12">
                     {{ $t('AI_AGENTS.FORM.STAGE') }}
