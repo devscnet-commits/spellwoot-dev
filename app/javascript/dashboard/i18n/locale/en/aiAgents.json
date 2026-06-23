@@ -88,7 +88,12 @@
       "GENERATE": "Gerar com IA",
       "GENERATE_SOON": "Geração de avatar por IA disponível em breve.",
       "ADVANCED": "Configuração avançada",
-      "ADVANCED_HINT": "Empresa, idioma, ambiente, prompt base e guardrails"
+      "ADVANCED_HINT": "Empresa, idioma, ambiente, prompt base e guardrails",
+      "LANGUAGES": {
+        "PT_BR": "Português (Brasil)",
+        "EN": "Inglês",
+        "ES": "Espanhol"
+      }
     },
     "ATTENDS": {
       "TITLE": "Este agente atende:",
