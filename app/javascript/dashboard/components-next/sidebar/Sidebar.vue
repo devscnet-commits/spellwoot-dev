@@ -328,8 +328,8 @@ const menuItems = computed(() => {
         {
           name: 'AIShadowRuns',
           label: t('SIDEBAR.AI_SHADOW_RUNS'),
-          activeOn: ['ai_shadow_runs'],
-          to: accountScopedRoute('ai_shadow_runs'),
+          activeOn: ['ai_shadows_index', 'ai_shadow_runs'],
+          to: accountScopedRoute('ai_shadows_index'),
         },
       ],
     },
