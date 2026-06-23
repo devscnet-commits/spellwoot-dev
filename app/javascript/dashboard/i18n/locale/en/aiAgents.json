@@ -623,6 +623,8 @@
       "CONFIRM": "Excluir",
       "CANCEL": "Cancelar",
       "PLACEHOLDER": "Digite {name} para confirmar"
-    }
+    },
+    "HUB_CARD_NAME": "Sistemas da empresa (IA)",
+    "HUB_CARD_DESC": "Conecte a IA ao seu ERP, cobrança ou CRM para consultar dados e executar ações nas conversas."
   }
 }
