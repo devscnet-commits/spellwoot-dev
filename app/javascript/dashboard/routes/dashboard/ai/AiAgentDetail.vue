@@ -247,12 +247,6 @@ const INBOX_MODES = [
     active: 'bg-n-solid-1 text-n-slate-12 shadow-sm',
   },
   {
-    value: 'shadow',
-    i18n: 'SHADOW_SHORT',
-    active: 'bg-n-amber-3 text-n-amber-11 shadow-sm',
-    icon: 'i-lucide-eye',
-  },
-  {
     value: 'live',
     i18n: 'LIVE_SHORT',
     active: 'bg-n-teal-3 text-n-teal-11 shadow-sm',
@@ -660,7 +654,7 @@ onMounted(async () => {
               <div
                 v-for="inbox in filteredInboxes"
                 :key="inbox.inbox_id"
-                class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3"
+                class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex items-center justify-between gap-3"
               >
                 <div class="flex items-center gap-2 min-w-0">
                   <span
@@ -672,12 +666,14 @@ onMounted(async () => {
                     {{ inbox.name }}
                   </span>
                 </div>
-                <div class="grid grid-cols-3 gap-1 rounded-lg bg-n-alpha-1 p-1">
+                <div
+                  class="shrink-0 grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
+                >
                   <button
                     v-for="m in INBOX_MODES"
                     :key="m.value"
                     type="button"
-                    class="px-2 py-1.5 rounded-md text-xs font-medium transition-colors inline-flex items-center justify-center gap-1"
+                    class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
                     :class="
                       inbox.mode === m.value
                         ? m.active
@@ -685,11 +681,6 @@ onMounted(async () => {
                     "
                     @click="inbox.mode = m.value"
                   >
-                    <span
-                      v-if="m.icon && inbox.mode === m.value"
-                      class="size-3 inline-block"
-                      :class="m.icon"
-                    />
                     {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
                   </button>
                 </div>
