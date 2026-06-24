@@ -346,6 +346,14 @@ onMounted(fetchRuns);
         </p>
 
         <template v-else>
+          <!-- Aviso: custos são estimativas, não a fatura final -->
+          <p
+            class="flex items-start gap-2 text-xs text-n-slate-11 rounded-xl border border-n-weak bg-n-alpha-1 px-3 py-2 mb-0"
+          >
+            <span class="i-lucide-info size-3.5 shrink-0 mt-0.5" />
+            <span>{{ $t('AI_SHADOW_RUNS.COST_DISCLAIMER') }}</span>
+          </p>
+
           <!-- Resumo executivo -->
           <section class="flex flex-col gap-3">
             <h2 class="text-sm font-semibold text-n-slate-12">
@@ -574,7 +582,11 @@ onMounted(fetchRuns);
                 </span>
                 <span class="inline-flex items-center gap-1">
                   <span class="i-lucide-banknote size-3.5" />
-                  {{ `US$ ${run.cost ?? 0}` }}
+                  {{
+                    $t('AI_SHADOW_RUNS.RUN.COST_ESTIMATED', {
+                      value: run.cost ?? 0,
+                    })
+                  }}
                 </span>
               </div>
             </div>

@@ -6,6 +6,7 @@
     "LOADING": "Carregando...",
     "EMPTY": "Nenhuma execução registrada ainda. Coloque uma caixa em modo Shadow para começar a avaliar.",
     "NONE": "—",
+    "COST_DISCLAIMER": "Os custos exibidos são estimativas do consumo dos modelos de IA. Não incluem impostos, IOF, taxas de câmbio ou outros encargos — portanto podem divergir da fatura final.",
     "FILTERS": {
       "TITLE": "Filtros",
       "LABEL_PERIOD": "Período",
@@ -96,6 +97,7 @@
       "TOOL_MISSING": "não configurada",
       "KNOWLEDGE_COUNT": "{count} conhecimentos usados",
       "CONFIDENCE": "Confiança",
+      "COST_ESTIMATED": "US$ {value} (estimado)",
       "EMPTY": "Nenhuma execução com os filtros atuais."
     },
     "STATUS": {
