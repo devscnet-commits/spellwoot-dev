@@ -389,9 +389,11 @@
       "FAQ_QUESTION": "Pergunta",
       "FAQ_ANSWER": "Resposta",
       "PRODUCT_NAME": "Nome do produto ou serviço",
-      "PRODUCT_DESC": "Descrição (inclua preço e condições)",
+      "PRODUCT_DESC": "Descrição",
       "PROC_TITLE": "Título do procedimento",
-      "PROC_STEPS": "Passo a passo"
+      "PROC_STEPS": "Passo a passo",
+      "PRICE": "Preço",
+      "PRICE_PLACEHOLDER": "ex.: R$ 99,90/mês ou Sob consulta"
     },
     "KINDS": {
       "FAQ": "FAQ",
@@ -420,7 +422,7 @@
       "PROCEDIMENTO": "Procedimentos",
       "PROCEDIMENTO_HINT": "Passo a passo",
       "DOCUMENTOS": "Documentos",
-      "DOCUMENTOS_HINT": "PDF, DOCX, TXT",
+      "DOCUMENTOS_HINT": "TXT ou CSV",
       "SITE": "Site",
       "SITE_HINT": "Importar páginas",
       "SOON": "Em breve"
