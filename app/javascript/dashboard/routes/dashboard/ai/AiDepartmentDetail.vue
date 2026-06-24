@@ -6,6 +6,7 @@ import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Logo from 'next/icon/Logo.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
+import Switch from 'dashboard/components-next/switch/Switch.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
 
@@ -571,22 +572,19 @@ onMounted(async () => {
                     }}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  class="shrink-0 text-xs font-medium px-3 py-1 rounded-full transition-colors"
-                  :class="
-                    attrEnabled(attr.attribute_key)
-                      ? 'bg-n-teal-3 text-n-teal-11'
-                      : 'bg-n-alpha-2 text-n-slate-11'
-                  "
-                  @click="toggleAttr(attr.attribute_key)"
-                >
-                  {{
-                    attrEnabled(attr.attribute_key)
-                      ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.USING')
-                      : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EXCLUDED')
-                  }}
-                </button>
+                <div class="shrink-0 flex items-center gap-2.5">
+                  <span class="text-xs text-n-slate-11">
+                    {{
+                      attrEnabled(attr.attribute_key)
+                        ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.USING')
+                        : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EXCLUDED')
+                    }}
+                  </span>
+                  <Switch
+                    :model-value="attrEnabled(attr.attribute_key)"
+                    @change="toggleAttr(attr.attribute_key)"
+                  />
+                </div>
               </div>
             </div>
           </section>
