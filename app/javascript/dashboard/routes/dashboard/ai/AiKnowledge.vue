@@ -30,10 +30,7 @@ const CREATABLE = [
   { kind: 'produto', icon: 'i-lucide-package' },
   { kind: 'procedimento', icon: 'i-lucide-list-checks' },
 ];
-const COMING_SOON = [
-  { key: 'DOCUMENTOS', icon: 'i-lucide-file-text' },
-  { key: 'SITE', icon: 'i-lucide-globe' },
-];
+const COMING_SOON = [{ key: 'SITE', icon: 'i-lucide-globe' }];
 
 const sources = ref([]);
 const isLoading = ref(false);
@@ -44,6 +41,7 @@ const blank = () => ({
   kind: 'faq',
   title: '',
   raw: '',
+  price: '',
   status: 'active',
 });
 const form = reactive(blank());
@@ -75,6 +73,24 @@ const fetchSources = async () => {
   }
 };
 
+// Documentos: upload a TXT/CSV file; the backend extracts its text into a knowledge source.
+const fileInput = ref(null);
+const triggerUpload = () => fileInput.value?.click();
+const onFilePick = async e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    await axios.post(baseUrl(), fd);
+    useAlert(t('AI_KNOWLEDGE.SAVED'));
+    fetchSources();
+  } catch (error) {
+    useAlert(error.response?.data?.errors?.[0] || t('AI_KNOWLEDGE.ERROR'));
+  }
+};
+
 const openNew = kind => {
   Object.assign(form, blank(), { kind });
   showForm.value = true;
@@ -93,6 +109,7 @@ const save = async () => {
       kind: form.kind,
       title: form.title,
       raw: form.raw,
+      price: form.kind === 'produto' ? form.price : '',
       status: form.status,
     },
   };
@@ -161,6 +178,26 @@ onMounted(fetchSources);
                 {{ $t(`AI_KNOWLEDGE.SOURCES.${src.kind.toUpperCase()}_HINT`) }}
               </span>
             </button>
+            <input
+              ref="fileInput"
+              type="file"
+              accept=".txt,.csv"
+              class="hidden"
+              @change="onFilePick"
+            />
+            <button
+              type="button"
+              class="rounded-xl border border-n-weak bg-n-solid-1 p-3 flex flex-col items-center gap-1 text-center hover:border-n-brand transition-colors"
+              @click="triggerUpload"
+            >
+              <span class="i-lucide-upload size-5 text-n-brand" />
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS') }}
+              </span>
+              <span class="text-xs text-n-slate-10">
+                {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS_HINT') }}
+              </span>
+            </button>
             <div
               v-for="src in COMING_SOON"
               :key="src.key"
@@ -221,6 +258,12 @@ onMounted(fetchSources);
                 {{ source.title || kindLabel(source.kind) }}
               </p>
               <p
+                v-if="source.price"
+                class="text-xs font-medium text-n-brand mb-0"
+              >
+                {{ source.price }}
+              </p>
+              <p
                 v-if="source.raw"
                 class="text-xs text-n-slate-11 mb-0 line-clamp-2"
               >
@@ -260,6 +303,18 @@ onMounted(fetchSources);
               v-model="form.raw"
               rows="8"
               class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+            />
+          </label>
+          <label
+            v-if="form.kind === 'produto'"
+            class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+          >
+            {{ $t('AI_KNOWLEDGE.FORM.PRICE') }}
+            <input
+              v-model="form.price"
+              type="text"
+              :placeholder="$t('AI_KNOWLEDGE.FORM.PRICE_PLACEHOLDER')"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
             />
           </label>
           <div class="flex justify-end gap-2">
