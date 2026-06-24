@@ -10,6 +10,10 @@ const { t } = useI18n();
 
 const blank = () => ({
   total_cost: 0,
+  total_cost_in: 0,
+  total_cost_out: 0,
+  total_tokens_in: 0,
+  total_tokens_out: 0,
   total_runs: 0,
   total_errors: 0,
   by_model: [],
@@ -17,6 +21,9 @@ const blank = () => ({
   by_department: [],
   by_error: [],
 });
+
+const numberFormat = new Intl.NumberFormat('pt-BR');
+const formatTokens = value => numberFormat.format(value || 0);
 const data = ref(blank());
 const isLoading = ref(false);
 const period = ref('0');
@@ -73,14 +80,46 @@ onMounted(fetchCosts);
           </div>
         </div>
 
+        <!-- Aviso: custos são estimativas, não a fatura final -->
+        <p
+          class="flex items-start gap-2 text-xs text-n-slate-11 rounded-xl border border-n-weak bg-n-alpha-1 px-3 py-2 mb-0"
+        >
+          <span class="i-lucide-info size-3.5 shrink-0 mt-0.5" />
+          <span>{{ $t('AI_COSTS.DISCLAIMER') }}</span>
+        </p>
+
         <!-- Headline numbers -->
-        <div class="grid grid-cols-3 gap-3 sm:max-w-xl">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div class="border border-n-weak rounded-xl p-4">
             <p class="text-xs text-n-slate-11 mb-1">
               {{ $t('AI_COSTS.TOTAL_COST') }}
             </p>
-            <p class="text-lg font-semibold text-n-slate-12 mb-0">
-              {{ data.total_cost }}
+            <p class="text-lg font-semibold text-n-slate-12 mb-1">
+              {{ 'US$ ' + data.total_cost }}
+            </p>
+            <p class="text-xs text-n-slate-11 mb-0">
+              {{
+                $t('AI_COSTS.COST_SPLIT', {
+                  input: data.total_cost_in,
+                  output: data.total_cost_out,
+                })
+              }}
+            </p>
+          </div>
+          <div class="border border-n-weak rounded-xl p-4">
+            <p class="text-xs text-n-slate-11 mb-1">
+              {{ $t('AI_COSTS.TOTAL_TOKENS') }}
+            </p>
+            <p class="text-lg font-semibold text-n-slate-12 mb-1">
+              {{ formatTokens(data.total_tokens_in + data.total_tokens_out) }}
+            </p>
+            <p class="text-xs text-n-slate-11 mb-0">
+              {{
+                $t('AI_COSTS.TOKENS_SPLIT', {
+                  input: formatTokens(data.total_tokens_in),
+                  output: formatTokens(data.total_tokens_out),
+                })
+              }}
             </p>
           </div>
           <div class="border border-n-weak rounded-xl p-4">
@@ -199,7 +238,7 @@ onMounted(fetchCosts);
               {{ $t('AI_COSTS.BY_MODEL') }}
             </h2>
             <div class="border border-n-weak rounded-xl overflow-x-auto">
-              <table class="w-full text-sm min-w-[32rem]">
+              <table class="w-full text-sm min-w-[44rem]">
                 <thead class="bg-n-alpha-2 text-n-slate-11">
                   <tr>
                     <th class="text-left font-medium px-3 py-2">
@@ -207,6 +246,18 @@ onMounted(fetchCosts);
                     </th>
                     <th class="text-left font-medium px-3 py-2">
                       {{ $t('AI_COSTS.COLUMNS.RUNS') }}
+                    </th>
+                    <th class="text-left font-medium px-3 py-2">
+                      {{ $t('AI_COSTS.COLUMNS.TOKENS_IN') }}
+                    </th>
+                    <th class="text-left font-medium px-3 py-2">
+                      {{ $t('AI_COSTS.COLUMNS.TOKENS_OUT') }}
+                    </th>
+                    <th class="text-left font-medium px-3 py-2">
+                      {{ $t('AI_COSTS.COLUMNS.COST_IN') }}
+                    </th>
+                    <th class="text-left font-medium px-3 py-2">
+                      {{ $t('AI_COSTS.COLUMNS.COST_OUT') }}
                     </th>
                     <th class="text-left font-medium px-3 py-2">
                       {{ $t('AI_COSTS.COLUMNS.COST') }}
@@ -224,7 +275,15 @@ onMounted(fetchCosts);
                       }}
                     </td>
                     <td class="px-3 py-2">{{ row.runs }}</td>
-                    <td class="px-3 py-2">{{ row.cost }}</td>
+                    <td class="px-3 py-2">{{ formatTokens(row.tokens_in) }}</td>
+                    <td class="px-3 py-2">
+                      {{ formatTokens(row.tokens_out) }}
+                    </td>
+                    <td class="px-3 py-2">{{ 'US$ ' + row.cost_in }}</td>
+                    <td class="px-3 py-2">{{ 'US$ ' + row.cost_out }}</td>
+                    <td class="px-3 py-2 font-medium">
+                      {{ 'US$ ' + row.cost }}
+                    </td>
                     <td class="px-3 py-2">{{ row.avg_latency }}</td>
                   </tr>
                 </tbody>

@@ -559,7 +559,11 @@
   "AI_COSTS": {
     "TITLE": "Custos de IA",
     "DESCRIPTION": "Custo estimado e desempenho das execuções de IA da conta.",
+    "DISCLAIMER": "Os custos são estimativas calculadas sobre os tokens realmente consumidos, usando os preços de tabela dos modelos. Não incluem impostos, IOF, câmbio, descontos de volume ou cache — portanto podem divergir da fatura final.",
     "TOTAL_COST": "Custo total (USD)",
+    "COST_SPLIT": "Entrada US$ {input} · Saída US$ {output}",
+    "TOTAL_TOKENS": "Tokens",
+    "TOKENS_SPLIT": "Entrada {input} · Saída {output}",
     "TOTAL_RUNS": "Execuções",
     "TOTAL_ERRORS": "Erros",
     "EMPTY": "Nenhuma execução registrada ainda.",
@@ -578,6 +582,10 @@
       "DEPARTMENT": "Departamento",
       "ERROR_TYPE": "Tipo de erro",
       "RUNS": "Execuções",
+      "TOKENS_IN": "Tokens entrada",
+      "TOKENS_OUT": "Tokens saída",
+      "COST_IN": "Custo entrada",
+      "COST_OUT": "Custo saída",
       "COST": "Custo (USD)",
       "COUNT": "Ocorrências",
       "AVG_LATENCY": "Latência média (ms)"
