@@ -8,7 +8,6 @@ import Logo from 'next/icon/Logo.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
-import AiKnowledge from './AiKnowledge.vue';
 
 // When embedded inside the agent (the agent's single default department), ids come by prop
 // and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
@@ -31,7 +30,6 @@ const activeTab = ref('instructions');
 // Flattened into agent-level tabs when embedded: each group maps to underlying sections.
 const SECTION_GROUPS = {
   behavior: ['instructions', 'attendance', 'followup', 'integrations'],
-  knowledge: ['knowledge'],
   steps: ['steps'],
   tools: ['tools'],
 };
@@ -459,7 +457,7 @@ onMounted(async () => {
           class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-n-weak"
         >
           <button
-            v-for="tab in ['instructions', 'knowledge', 'steps', 'tools']"
+            v-for="tab in ['instructions', 'steps', 'tools']"
             :key="tab"
             type="button"
             class="pb-2.5 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
@@ -901,13 +899,6 @@ onMounted(async () => {
             </div>
           </div>
         </div>
-
-        <!-- CONHECIMENTO -->
-        <AiKnowledge
-          v-if="visibleSections.has('knowledge') && !isNew"
-          :agent-id="route.params.agentId"
-          :department-id="departmentId"
-        />
 
         <!-- FERRAMENTAS -->
         <AiTools

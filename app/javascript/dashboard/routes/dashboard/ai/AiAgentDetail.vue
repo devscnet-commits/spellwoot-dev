@@ -23,17 +23,9 @@ const agentId = ref(isNew.value ? null : route.params.agentId);
 
 // The agent holds identity, the inboxes it serves, and its departments. Knowledge / tools /
 // steps / follow-up live INSIDE each department (Comercial uses different tools than Financeiro).
-const TAB_KEYS = [
-  'about',
-  'behavior',
-  'knowledge',
-  'steps',
-  'tools',
-  'inboxes',
-  'test',
-];
-// The four agent tabs that edit the default department's sections (flattened).
-const DEPT_TABS = ['behavior', 'knowledge', 'steps', 'tools'];
+const TAB_KEYS = ['about', 'behavior', 'steps', 'tools', 'inboxes', 'test'];
+// The agent tabs that edit the default department's sections (flattened).
+const DEPT_TABS = ['behavior', 'steps', 'tools'];
 const activeKey = ref(route.query.tab === 'test' ? 'test' : 'about');
 const tabs = computed(() =>
   TAB_KEYS.map(key => ({
