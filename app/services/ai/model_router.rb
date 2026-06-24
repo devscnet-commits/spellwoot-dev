@@ -3,12 +3,35 @@
 # only OpenAI, so we wire the others here from InstallationConfig or ENV). Defensive: any failure
 # returns an 'error' result + reason so the pipeline records the run instead of crashing.
 class Ai::ModelRouter
-  # Rough USD per 1k tokens [input, output]; refine with real pricing later.
-  PRICES = {
-    'claude' => [0.003, 0.015],
-    'gpt'    => [0.0005, 0.0015],
-    'gemini' => [0.0005, 0.0015]
-  }.freeze
+  # List prices in USD per 1k tokens [input, output], most specific match first.
+  # Source: public provider price sheets. These are estimates — review periodically
+  # (caching, batch discounts, image tokens and FX are not reflected here).
+  PRICES = [
+    ['claude-3-5-haiku',  [0.0008, 0.004]],
+    ['claude-3-haiku',    [0.00025, 0.00125]],
+    ['claude-haiku',      [0.0008, 0.004]],
+    ['claude-3-opus',     [0.015, 0.075]],
+    ['claude-opus',       [0.015, 0.075]],
+    ['claude-3-5-sonnet', [0.003, 0.015]],
+    ['claude-sonnet',     [0.003, 0.015]],
+    ['claude',            [0.003, 0.015]],
+    ['gpt-4o-mini',       [0.00015, 0.0006]],
+    ['gpt-4o',            [0.0025, 0.01]],
+    ['gpt-4.1-nano',      [0.0001, 0.0004]],
+    ['gpt-4.1-mini',      [0.0004, 0.0016]],
+    ['gpt-4.1',           [0.002, 0.008]],
+    ['o4-mini',           [0.0011, 0.0044]],
+    ['o3-mini',           [0.0011, 0.0044]],
+    ['gpt',               [0.0005, 0.0015]],
+    ['gemini-2.0-flash',  [0.000075, 0.0003]],
+    ['gemini-1.5-flash',  [0.000075, 0.0003]],
+    ['gemini-flash',      [0.000075, 0.0003]],
+    ['gemini-1.5-pro',    [0.00125, 0.005]],
+    ['gemini-pro',        [0.00125, 0.005]],
+    ['gemini',            [0.0005, 0.0015]]
+  ].freeze
+  # Fallback when the model name matches nothing above (still an estimate, never 0).
+  DEFAULT_PRICE = [0.001, 0.003].freeze
 
   # provider/model override the profile's supervisor (used by the confidence router to call the
   # cheap or premium tier). Falls back to the profile's supervisor when not given.
@@ -93,11 +116,15 @@ class Ai::ModelRouter
     { 'decision' => 'reply', 'reply_text' => text }
   end
 
-  def self.estimate_cost(model, tokens_in, tokens_out)
-    key = PRICES.keys.find { |k| model.to_s.downcase.include?(k) }
-    return 0 unless key
+  # [input, output] price per 1k tokens for a given model (longest/most-specific match wins).
+  def self.price_for(model)
+    name = model.to_s.downcase
+    _, price = PRICES.find { |pattern, _| name.include?(pattern) }
+    price || DEFAULT_PRICE
+  end
 
-    input_price, output_price = PRICES[key]
+  def self.estimate_cost(model, tokens_in, tokens_out)
+    input_price, output_price = price_for(model)
     ((tokens_in.to_i / 1000.0) * input_price + (tokens_out.to_i / 1000.0) * output_price).round(6)
   end
 end

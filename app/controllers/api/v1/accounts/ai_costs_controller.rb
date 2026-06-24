@@ -1,15 +1,26 @@
 # Read-only AI metrics aggregation for the account (from ai_runs). Observability only.
-# Breakdowns by model / agent / department / error type, with an optional period window (?days=N).
+# Costs are recomputed from the real token counts using the current price table
+# (Ai::ModelRouter.price_for), so the screen always reflects today's prices and the
+# input/output split adds up. Breakdowns by model / agent / department / error type,
+# with an optional period window (?days=N).
 class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
   def index
     scope = ::Ai::Run.where(account_id: Current.account.id)
     scope = scope.where('ai_runs.created_at >= ?', period_start) if period_start
 
+    models = by_model(scope)
+    cost_in = round6(models.sum { |m| m[:cost_in] })
+    cost_out = round6(models.sum { |m| m[:cost_out] })
+
     render json: {
-      total_cost: scope.sum(:cost),
+      total_cost: round6(cost_in + cost_out),
+      total_cost_in: cost_in,
+      total_cost_out: cost_out,
+      total_tokens_in: scope.sum(:tokens_in),
+      total_tokens_out: scope.sum(:tokens_out),
       total_runs: scope.count,
       total_errors: scope.where.not(error_type: nil).count,
-      by_model: by_model(scope),
+      by_model: models,
       by_agent: by_agent(scope),
       by_department: by_department(scope),
       by_error: by_error(scope)
@@ -23,31 +34,55 @@ class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
     days.positive? ? days.days.ago : nil
   end
 
+  def round6(value)
+    value.to_f.round(6)
+  end
+
+  # input/output cost in USD for a token pair, using the current price table.
+  def cost_split(tokens_in, tokens_out, model)
+    input_price, output_price = ::Ai::ModelRouter.price_for(model)
+    [round6(tokens_in.to_i / 1000.0 * input_price), round6(tokens_out.to_i / 1000.0 * output_price)]
+  end
+
   def by_model(scope)
     scope.group(:provider, :model)
-         .select('provider, model, COUNT(*) AS runs, SUM(cost) AS cost, AVG(latency_ms) AS avg_latency')
+         .select('provider, model, COUNT(*) AS runs, SUM(tokens_in) AS tokens_in, ' \
+                 'SUM(tokens_out) AS tokens_out, AVG(latency_ms) AS avg_latency')
          .map do |row|
-      { provider: row.provider, model: row.model, runs: row.runs, cost: row.cost,
+      cost_in, cost_out = cost_split(row.tokens_in, row.tokens_out, row.model)
+      { provider: row.provider, model: row.model, runs: row.runs,
+        tokens_in: row.tokens_in.to_i, tokens_out: row.tokens_out.to_i,
+        cost_in: cost_in, cost_out: cost_out, cost: round6(cost_in + cost_out),
         avg_latency: row.avg_latency&.round }
     end
   end
 
-  def by_agent(scope)
-    rows = scope.where.not(ai_agent_id: nil).group(:ai_agent_id)
-                .select('ai_agent_id, COUNT(*) AS runs, SUM(cost) AS cost')
-    names = agent_names(rows.map(&:ai_agent_id))
-    rows.map do |row|
-      { name: names[row.ai_agent_id] || "##{row.ai_agent_id}", runs: row.runs, cost: row.cost }
+  # Recomputed cost per dimension: group by the key AND the model (price depends on model),
+  # then fold the per-model token sums back into a single cost per key.
+  def grouped_cost(scope, key)
+    rows = scope.where.not(key => nil).group(key, :model)
+                .select("#{key} AS gid, model, COUNT(*) AS runs, " \
+                        'SUM(tokens_in) AS tokens_in, SUM(tokens_out) AS tokens_out')
+    agg = Hash.new { |hash, gid| hash[gid] = { runs: 0, cost: 0.0 } }
+    rows.each do |row|
+      cost_in, cost_out = cost_split(row.tokens_in, row.tokens_out, row.model)
+      bucket = agg[row.gid]
+      bucket[:runs] += row.runs
+      bucket[:cost] = round6(bucket[:cost] + cost_in + cost_out)
     end
+    agg
+  end
+
+  def by_agent(scope)
+    agg = grouped_cost(scope, :ai_agent_id)
+    names = agent_names(agg.keys)
+    agg.map { |id, row| { name: names[id] || "##{id}", runs: row[:runs], cost: row[:cost] } }
   end
 
   def by_department(scope)
-    rows = scope.where.not(ai_department_id: nil).group(:ai_department_id)
-                .select('ai_department_id, COUNT(*) AS runs, SUM(cost) AS cost')
-    names = ::Ai::Department.where(id: rows.map(&:ai_department_id)).pluck(:id, :name).to_h
-    rows.map do |row|
-      { name: names[row.ai_department_id] || "##{row.ai_department_id}", runs: row.runs, cost: row.cost }
-    end
+    agg = grouped_cost(scope, :ai_department_id)
+    names = ::Ai::Department.where(id: agg.keys).pluck(:id, :name).to_h
+    agg.map { |id, row| { name: names[id] || "##{id}", runs: row[:runs], cost: row[:cost] } }
   end
 
   def by_error(scope)
