@@ -29,7 +29,7 @@ const activeTab = ref('instructions');
 
 // Flattened into agent-level tabs when embedded: each group maps to underlying sections.
 const SECTION_GROUPS = {
-  behavior: ['instructions', 'attendance', 'followup', 'integrations'],
+  behavior: ['instructions', 'attendance', 'followup'],
   steps: ['steps'],
   tools: ['tools'],
 };
@@ -207,25 +207,6 @@ const goBack = () =>
     params: { agentId: route.params.agentId },
   });
 
-// --- Integrations ---
-const integrations = ref([]);
-const integrationsUrl = () =>
-  `${deptCollectionUrl()}/${departmentId.value}/ai_department_integrations`;
-
-const {
-  isDirty: integrationsDirty,
-  capture: captureIntegrations,
-  reset: resetIntegrations,
-} = useFormDirty(() => integrations.value.map(i => !!i.enabled));
-const fetchIntegrations = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(integrationsUrl());
-  integrations.value = (Array.isArray(data) ? data : []).map(i => ({
-    ...i,
-    enabled: !!i.enabled,
-  }));
-  captureIntegrations();
-};
 // Operational readiness (%): a checklist over data already loaded — no backend.
 const readinessChecks = computed(() => [
   { key: 'OBJETIVO', ok: !!form.objetivo?.trim() },
@@ -240,17 +221,6 @@ const readinessPct = computed(() => {
     ? Math.round((checks.filter(c => c.ok).length / checks.length) * 100)
     : 0;
 });
-
-const saveIntegrations = async () => {
-  const ids = integrations.value.filter(i => i.enabled).map(i => i.id);
-  try {
-    await axios.put(integrationsUrl(), { integration_link_ids: ids });
-    useAlert(t('AI_DEPARTMENTS.SAVED'));
-    resetIntegrations();
-  } catch (error) {
-    useAlert(t('AI_DEPARTMENTS.ERROR'));
-  }
-};
 
 // --- Histórico de versões do playbook ---
 const versions = ref([]);
@@ -280,11 +250,7 @@ const formatVersionDate = iso => (iso ? new Date(iso).toLocaleString() : '');
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
-  await Promise.all([
-    fetchIntegrations(),
-    fetchVersions(),
-    fetchCustomAttributes(),
-  ]);
+  await Promise.all([fetchVersions(), fetchCustomAttributes()]);
 });
 </script>
 
@@ -417,7 +383,7 @@ onMounted(async () => {
             }}</span>
           </span>
           <button
-            v-for="tab in ['attendance', 'followup', 'integrations']"
+            v-for="tab in ['attendance', 'followup']"
             :key="tab"
             type="button"
             class="pb-2.5 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
@@ -711,42 +677,6 @@ onMounted(async () => {
           :agent-id="route.params.agentId"
           :department-id="departmentId"
         />
-
-        <!-- INTEGRAÇÕES -->
-        <div
-          v-if="visibleSections.has('integrations')"
-          class="flex flex-col gap-4"
-        >
-          <h2 class="text-base font-semibold text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.INTEGRATIONS.TITLE') }}
-          </h2>
-          <p v-if="!integrations.length" class="text-sm text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.INTEGRATIONS.EMPTY') }}
-          </p>
-          <div
-            v-else
-            class="border border-n-weak rounded-xl divide-y divide-n-weak"
-          >
-            <label
-              v-for="i in integrations"
-              :key="i.id"
-              class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
-            >
-              <input v-model="i.enabled" type="checkbox" />
-              <span class="font-medium">{{ i.name }}</span>
-            </label>
-          </div>
-          <div v-if="integrations.length" class="flex justify-end">
-            <button
-              type="button"
-              :disabled="!integrationsDirty"
-              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="saveIntegrations"
-            >
-              {{ $t('AI_DEPARTMENTS.INTEGRATIONS.SAVE') }}
-            </button>
-          </div>
-        </div>
 
         <!-- Save bar (config tabs only) -->
         <div
