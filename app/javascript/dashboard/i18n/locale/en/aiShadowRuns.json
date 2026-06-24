@@ -1,0 +1,154 @@
+{
+  "AI_SHADOW_RUNS": {
+    "TITLE": "Validação Shadow — Inteligência da IA",
+    "DESCRIPTION": "Avalie o que a IA acertou, errou ou deixou sem resposta e descubra exatamente o que ajustar: FAQ, instrução, ferramenta ou comportamento.",
+    "REFRESH": "Atualizar",
+    "LOADING": "Carregando...",
+    "EMPTY": "Nenhuma execução registrada ainda. Coloque uma caixa em modo Shadow para começar a avaliar.",
+    "NONE": "—",
+    "FILTERS": {
+      "PERIOD": "Período",
+      "PERIOD_ALL": "Todo o período",
+      "PERIOD_7": "Últimos 7 dias",
+      "PERIOD_30": "Últimos 30 dias",
+      "DEPARTMENT": "Departamento",
+      "DEPARTMENT_ALL": "Todos os departamentos",
+      "ERROR_TYPE": "Tipo de erro",
+      "ERROR_ALL": "Todos os erros",
+      "STATUS": "Status",
+      "STATUS_ALL": "Todos os status",
+      "RESPONSE": "Resposta",
+      "HAS_REPLY": "Com resposta",
+      "NO_REPLY": "Sem resposta",
+      "TOOL": "Ferramenta",
+      "HAS_TOOL": "Com ferramenta sugerida",
+      "NO_TOOL": "Sem ferramenta",
+      "ANY": "Qualquer",
+      "CONVERSATION": "Conversa #",
+      "CLEAR": "Limpar filtros"
+    },
+    "KPI": {
+      "EVALUATED": "Execuções avaliadas",
+      "UNANSWERED": "Perguntas sem resposta",
+      "ERRORS": "Erros",
+      "LOW_CONFIDENCE": "Respostas de baixa confiança",
+      "TOOLS_SUGGESTED": "Ferramentas sugeridas",
+      "TOOLS_MISSING": "Ferramentas ausentes",
+      "KNOWLEDGE_GAPS": "Lacunas de conhecimento"
+    },
+    "BLOCKS": {
+      "SUMMARY": "Resumo executivo",
+      "KNOWLEDGE_GAPS": "Lacunas de conhecimento",
+      "INSTRUCTION_FAILS": "Falhas de instrução",
+      "TOOLS_MISSING": "Ferramentas ausentes",
+      "RECURRING_ERRORS": "Erros recorrentes",
+      "BY_DEPARTMENT": "Oportunidades por departamento",
+      "RUNS": "Execuções detalhadas"
+    },
+    "RESOLUTION": {
+      "TITLE": "Como a IA resolveu",
+      "knowledge": "Por conhecimento",
+      "instruction": "Por instrução",
+      "tool": "Por ferramenta",
+      "transfer": "Transferência",
+      "closed": "Encerramento",
+      "unanswered": "Sem resposta",
+      "error": "Erro"
+    },
+    "INSIGHT": {
+      "EMPTY": "Nenhuma ação sugerida neste recorte. 🎉",
+      "FAQ_TITLE": "Vire FAQ / reforce o conhecimento",
+      "FAQ_BODY": "{count} pergunta(s) sem cobertura de conhecimento em {department}. Crie uma FAQ ou fonte de conhecimento.",
+      "INSTRUCTION_TITLE": "Instrução fraca",
+      "INSTRUCTION_BODY": "{count} resposta(s) de baixa confiança em {department}. Reforce as instruções do departamento.",
+      "TOOL_TITLE": "Ferramenta ausente",
+      "TOOL_BODY": "A ferramenta \"{tool}\" foi sugerida {count}× em {department}, mas não está configurada.",
+      "ERROR_TITLE": "Erro recorrente",
+      "ERROR_BODY": "{error} aconteceu {count}× — precisa de correção estrutural."
+    },
+    "DEPT": {
+      "TOTAL": "execuções",
+      "ERRORS": "erros",
+      "UNANSWERED": "sem resposta"
+    },
+    "METHODS": {
+      "single": "único departamento",
+      "inbox_mapping": "mapeamento da caixa",
+      "classifier": "roteamento automático",
+      "default": "departamento padrão",
+      "fallback": "fallback",
+      "manual": "seleção manual"
+    },
+    "RUN": {
+      "CONVERSATION": "Conversa",
+      "VIA": "via",
+      "REPLY": "Resposta que seria enviada",
+      "NO_REPLY": "Nenhuma resposta proposta.",
+      "TOOL": "Ferramenta",
+      "TOOL_MISSING": "não configurada",
+      "KNOWLEDGE_COUNT": "{count} conhecimentos usados",
+      "CONFIDENCE": "Confiança",
+      "EMPTY": "Nenhuma execução com os filtros atuais."
+    },
+    "STATUS": {
+      "recorded": "Registrado",
+      "running": "Em andamento",
+      "no_department": "Sem departamento",
+      "error": "Erro"
+    },
+    "ERROR_TYPES": {
+      "provider_timeout": "Tempo esgotado do provedor",
+      "provider_error": "Falha no provedor de IA",
+      "knowledge_timeout": "Tempo esgotado na busca de conhecimento",
+      "tool_failed": "Falha ao executar ferramenta",
+      "guardrail_blocked": "Bloqueado por regra de segurança",
+      "budget_exceeded": "Orçamento excedido",
+      "classification_failed": "Falha ao classificar o departamento",
+      "unknown": "Erro não identificado"
+    }
+  },
+  "AI_SHADOWS": {
+    "TITLE": "Validação (Shadow)",
+    "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
+    "NEW": "Novo shadow",
+    "ANALYSIS": "Ver análise",
+    "EMPTY": "Nenhum shadow criado. Crie um observador para auditar seus atendimentos.",
+    "INBOX_COUNT": "{count} caixas",
+    "STATUS": {
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "FORM": {
+      "NAME": "Nome",
+      "INSTRUCTIONS": "Instruções de avaliação",
+      "INSTRUCTIONS_PLACEHOLDER": "O que o shadow deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
+      "INBOXES": "Caixas observadas",
+      "NO_INBOXES": "Nenhuma caixa nesta conta.",
+      "SCOPE": "O que observar",
+      "OBSERVE_AI": "Atendimentos da IA",
+      "OBSERVE_HUMAN": "Atendimentos humanos",
+      "SIGNALS": "O que trazer para a Validação",
+      "STATUS": "Status",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar"
+    },
+    "SIGNALS": {
+      "UNANSWERED": "Dúvidas não respondidas",
+      "ERRORS": "Erros / informação incorreta",
+      "LOW_CONFIDENCE": "Baixa confiança",
+      "KNOWLEDGE_GAPS": "Conhecimento faltante",
+      "TOOLS_MISSING": "Ferramenta que faltou",
+      "RECURRING": "Temas recorrentes"
+    },
+    "SAVED": "Shadow salvo.",
+    "DELETED": "Shadow excluído.",
+    "ERROR": "Algo deu errado.",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir shadow",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    }
+  }
+}

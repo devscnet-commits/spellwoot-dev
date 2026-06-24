@@ -156,14 +156,15 @@ module OutOfOffisable
   # ── Writers ──────────────────────────────────────────────────────────────────
 
   def update_working_periods(params)
-    return if params.blank?
+    return if params.nil?
 
     ActiveRecord::Base.transaction do
-      # Replace all periods for the submitted days
-      submitted_days = params.map { |p| p['day_of_week'].to_i }.uniq
-      working_periods.where(day_of_week: submitted_days).delete_all
+      # The submitted set is the full desired schedule — the UI omits disabled days — so replace
+      # every period. Deleting only the submitted days would leave a day that was turned off with
+      # its old periods, making it reappear on reload (the "saved but reverted" bug).
+      working_periods.delete_all
 
-      params.each_with_index do |period, idx|
+      Array(params).each_with_index do |period, idx|
         working_periods.create!(period.slice(*PERIOD_ATTRS).merge('position' => idx))
       end
     end

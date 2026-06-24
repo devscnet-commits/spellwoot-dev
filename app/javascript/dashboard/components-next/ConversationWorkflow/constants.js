@@ -9,6 +9,15 @@ export const ATTRIBUTE_TYPES = {
 
 // System-level fields available as condition triggers (not custom attributes)
 export const SYSTEM_OUTCOME_FIELD = '__resultado_conversa__';
+export const SYSTEM_CONTACT_EMAIL_FIELD = '__contato_email__';
+
+// Values for the contact-email system field. Lets a required attribute be gated on whether the
+// contact already has an email on file (e.g. require the Email field only when it is missing).
+export const CONTACT_EMAIL_FILLED = 'preenchido';
+export const CONTACT_EMAIL_EMPTY = 'vazio';
+
+export const contactEmailSystemValue = hasEmail =>
+  hasEmail ? CONTACT_EMAIL_FILLED : CONTACT_EMAIL_EMPTY;
 
 export const SYSTEM_CONDITION_FIELDS = [
   {
@@ -16,6 +25,13 @@ export const SYSTEM_CONDITION_FIELDS = [
     label: 'Resultado da Conversa (Sistema)',
     type: 'list',
     attributeValues: ['ganho', 'perdido'],
+    isSystem: true,
+  },
+  {
+    value: SYSTEM_CONTACT_EMAIL_FIELD,
+    label: 'Email do contato (Sistema)',
+    type: 'list',
+    attributeValues: [CONTACT_EMAIL_FILLED, CONTACT_EMAIL_EMPTY],
     isSystem: true,
   },
 ];

@@ -6,11 +6,10 @@ import { required, url, helpers } from '@vuelidate/validators';
 import { getRegexp } from 'shared/helpers/Validators';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
-import TextArea from 'next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import ChoiceToggle from 'dashboard/components-next/input/ChoiceToggle.vue';
-import { ATTRIBUTE_TYPES, SYSTEM_OUTCOME_FIELD, OUTCOME_TO_SYSTEM_VALUE, isAttrVisible } from './constants';
+import { ATTRIBUTE_TYPES, SYSTEM_OUTCOME_FIELD, SYSTEM_CONTACT_EMAIL_FIELD, OUTCOME_TO_SYSTEM_VALUE, contactEmailSystemValue, isAttrVisible } from './constants';
 
 const emit = defineEmits(['submit']);
 
@@ -142,6 +141,14 @@ const open = (attributes = [], initialValues = {}, context = null) => {
       OUTCOME_TO_SYSTEM_VALUE[context.outcome] ?? null;
   }
 
+  // Inject the contact-email system field so a field gated on "Email do contato = vazio"
+  // is shown/hidden consistently with the trigger that opened the modal.
+  if (context && 'contactHasEmail' in context) {
+    formValues[SYSTEM_CONTACT_EMAIL_FIELD] = contactEmailSystemValue(
+      context.contactHasEmail
+    );
+  }
+
   // Seed all conversation attributes so condition_field values are available
   // for the visibleAttributes filter (conditional rules check formValues)
   Object.entries(initialValues).forEach(([key, value]) => {
@@ -248,9 +255,10 @@ defineExpose({ open, close });
         </div>
 
         <template v-if="attribute.type === ATTRIBUTE_TYPES.TEXT">
-          <TextArea
+          <Input
             v-model="formValues[attribute.value]"
-            class="w-full"
+            type="text"
+            size="md"
             :placeholder="getPlaceholder(ATTRIBUTE_TYPES.TEXT)"
             :message="getErrorMessage(attribute.value)"
             :message-type="v$[attribute.value].$error ? 'error' : 'info'"

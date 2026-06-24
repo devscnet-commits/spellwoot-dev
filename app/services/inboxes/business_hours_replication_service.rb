@@ -13,10 +13,22 @@ class Inboxes::BusinessHoursReplicationService
     @inbox_ids = Array(inbox_ids).map(&:to_i)
   end
 
+  # Replication is best-effort per inbox: one inbox that rejects the copy (e.g. an
+  # incompatible channel) must not abort the whole batch — the others still get the
+  # config, and the failures are reported back so they surface in the UI instead of a
+  # blanket 422. Each copy_to runs in its own transaction, so a failure rolls back only
+  # that inbox.
   def perform
-    targets = target_inboxes.to_a
-    targets.each { |inbox| copy_to(inbox) }
-    { ok: true, count: targets.size }
+    succeeded = 0
+    failed = []
+    target_inboxes.find_each do |inbox|
+      copy_to(inbox)
+      succeeded += 1
+    rescue StandardError => e
+      Rails.logger.error "[BusinessHoursReplication] target_inbox_id=#{inbox.id} #{e.class}: #{e.message}"
+      failed << { id: inbox.id, name: inbox.name, error: e.message }
+    end
+    { ok: failed.empty?, count: succeeded, failed: failed }
   end
 
   private
@@ -40,22 +52,26 @@ class Inboxes::BusinessHoursReplicationService
     end
   end
 
+  # NOTE: we delete via the model relation (a real SQL DELETE) rather than
+  # inbox.working_periods.delete_all. The association is declared dependent: :destroy_async,
+  # and CollectionProxy#delete_all then *nullifies* the FK (UPDATE inbox_id = NULL) instead of
+  # deleting — which blows up on the NOT NULL inbox_id. Relation#delete_all issues a DELETE.
   def copy_working_periods(inbox)
-    inbox.working_periods.delete_all
+    WorkingPeriod.where(inbox_id: inbox.id).delete_all
     @source.working_periods.find_each do |period|
       inbox.working_periods.create!(period.slice(*Inbox::PERIOD_ATTRS).merge('inbox_id' => inbox.id))
     end
   end
 
   def copy_holidays(inbox)
-    inbox.inbox_holidays.delete_all
+    InboxHoliday.where(inbox_id: inbox.id).delete_all
     @source.inbox_holidays.find_each do |holiday|
       inbox.inbox_holidays.create!(holiday.slice(*Inbox::HOLIDAY_ATTRS).merge('inbox_id' => inbox.id))
     end
   end
 
   def copy_exceptions(inbox)
-    inbox.inbox_exceptions.delete_all
+    InboxException.where(inbox_id: inbox.id).delete_all
     @source.inbox_exceptions.find_each do |exception|
       inbox.inbox_exceptions.create!(exception.slice('name', 'exception_date', 'closed', 'periods').merge('inbox_id' => inbox.id))
     end

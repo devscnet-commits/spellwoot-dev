@@ -1,0 +1,348 @@
+<script setup>
+/* global axios */
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useAlert } from 'dashboard/composables';
+import { useI18n } from 'vue-i18n';
+import Input from 'dashboard/components-next/input/Input.vue';
+import Select from 'dashboard/components-next/select/Select.vue';
+import Button from 'dashboard/components-next/button/Button.vue';
+import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
+import { useFormDirty } from 'dashboard/composables/useFormDirty';
+
+const route = useRoute();
+const router = useRouter();
+const { t } = useI18n();
+
+// Signals the Shadow surfaces in the Validação screen.
+const SIGNALS = [
+  'unanswered',
+  'errors',
+  'low_confidence',
+  'knowledge_gaps',
+  'tools_missing',
+  'recurring',
+];
+
+const shadows = ref([]);
+const inboxes = ref([]);
+const isLoading = ref(false);
+const showForm = ref(false);
+
+const blank = () => ({
+  id: null,
+  name: '',
+  instructions: '',
+  status: 'active',
+  observe_ai: true,
+  observe_human: true,
+  signals: SIGNALS.reduce((acc, s) => ({ ...acc, [s]: true }), {}),
+  inbox_ids: [],
+});
+const form = reactive(blank());
+const { isDirty, capture } = useFormDirty(() => ({ ...form }));
+
+const accountUrl = () => `/api/v1/accounts/${route.params.accountId}`;
+const baseUrl = () => `${accountUrl()}/ai_shadows`;
+
+const statusOptions = computed(() => [
+  { value: 'active', label: t('AI_SHADOWS.STATUS.ACTIVE') },
+  { value: 'inactive', label: t('AI_SHADOWS.STATUS.INACTIVE') },
+]);
+
+const fetchShadows = async () => {
+  isLoading.value = true;
+  try {
+    const { data } = await axios.get(baseUrl());
+    shadows.value = Array.isArray(data) ? data : [];
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const fetchInboxes = async () => {
+  try {
+    const { data } = await axios.get(`${accountUrl()}/inboxes`);
+    inboxes.value = data?.payload || (Array.isArray(data) ? data : []);
+  } catch (error) {
+    inboxes.value = [];
+  }
+};
+
+const toggleInbox = id => {
+  const i = form.inbox_ids.indexOf(id);
+  if (i >= 0) form.inbox_ids.splice(i, 1);
+  else form.inbox_ids.push(id);
+};
+
+const openNew = () => {
+  Object.assign(form, blank());
+  showForm.value = true;
+  capture();
+};
+
+const openEdit = shadow => {
+  const scope = shadow.scope || {};
+  const signals = shadow.data_signals || {};
+  Object.assign(form, blank(), {
+    id: shadow.id,
+    name: shadow.name,
+    instructions: shadow.instructions || '',
+    status: shadow.status || 'active',
+    observe_ai: scope.observe_ai !== false,
+    observe_human: scope.observe_human !== false,
+    signals: SIGNALS.reduce(
+      (acc, s) => ({ ...acc, [s]: signals[s] !== false }),
+      {}
+    ),
+    inbox_ids: Array.isArray(shadow.inbox_ids) ? [...shadow.inbox_ids] : [],
+  });
+  showForm.value = true;
+  capture();
+};
+
+const save = async () => {
+  const payload = {
+    ai_shadow: {
+      name: form.name,
+      instructions: form.instructions,
+      status: form.status,
+      scope: { observe_ai: form.observe_ai, observe_human: form.observe_human },
+      data_signals: { ...form.signals },
+      inbox_ids: form.inbox_ids,
+    },
+  };
+  try {
+    if (form.id) {
+      await axios.patch(`${baseUrl()}/${form.id}`, payload);
+    } else {
+      await axios.post(baseUrl(), payload);
+    }
+    useAlert(t('AI_SHADOWS.SAVED'));
+    showForm.value = false;
+    fetchShadows();
+  } catch (error) {
+    useAlert(t('AI_SHADOWS.ERROR'));
+  }
+};
+
+const deleteTarget = ref(null);
+const confirmRemove = async () => {
+  try {
+    await axios.delete(`${baseUrl()}/${deleteTarget.value.id}`);
+    useAlert(t('AI_SHADOWS.DELETED'));
+    deleteTarget.value = null;
+    fetchShadows();
+  } catch (error) {
+    useAlert(t('AI_SHADOWS.ERROR'));
+  }
+};
+
+const goAnalysis = () => router.push({ name: 'ai_shadow_runs' });
+
+onMounted(() => {
+  fetchShadows();
+  fetchInboxes();
+});
+</script>
+
+<template>
+  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
+    <div class="max-w-4xl mx-auto flex flex-col gap-3">
+      <div
+        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-4"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex flex-col gap-1 min-w-0">
+            <h1 class="text-xl font-semibold text-n-slate-12">
+              {{ $t('AI_SHADOWS.TITLE') }}
+            </h1>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_SHADOWS.DESCRIPTION') }}
+            </p>
+          </div>
+          <div class="shrink-0 flex items-center gap-2">
+            <Button
+              variant="faded"
+              color="slate"
+              icon="i-lucide-bar-chart-3"
+              :label="$t('AI_SHADOWS.ANALYSIS')"
+              @click="goAnalysis"
+            />
+            <Button
+              icon="i-lucide-plus"
+              :label="$t('AI_SHADOWS.NEW')"
+              @click="openNew"
+            />
+          </div>
+        </div>
+
+        <p
+          v-if="!isLoading && !shadows.length"
+          class="text-sm text-n-slate-11 py-8 text-center"
+        >
+          {{ $t('AI_SHADOWS.EMPTY') }}
+        </p>
+        <div
+          v-else
+          class="border border-n-weak rounded-xl divide-y divide-n-weak"
+        >
+          <div
+            v-for="shadow in shadows"
+            :key="shadow.id"
+            class="flex items-center justify-between px-4 py-3 gap-3"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-n-slate-12">
+                {{ shadow.name }}
+              </p>
+              <p class="text-xs text-n-slate-11 truncate">
+                {{
+                  $t('AI_SHADOWS.INBOX_COUNT', {
+                    count: (shadow.inbox_ids || []).length,
+                  })
+                }}
+                ·
+                {{
+                  shadow.status === 'active'
+                    ? $t('AI_SHADOWS.STATUS.ACTIVE')
+                    : $t('AI_SHADOWS.STATUS.INACTIVE')
+                }}
+              </p>
+            </div>
+            <div class="shrink-0 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                color="slate"
+                size="sm"
+                icon="i-lucide-pencil"
+                @click="openEdit(shadow)"
+              />
+              <Button
+                variant="ghost"
+                color="ruby"
+                size="sm"
+                icon="i-lucide-trash-2"
+                @click="deleteTarget = shadow"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Form -->
+        <div
+          v-if="showForm"
+          class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
+        >
+          <Input v-model="form.name" :label="$t('AI_SHADOWS.FORM.NAME')" />
+
+          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+            {{ $t('AI_SHADOWS.FORM.INSTRUCTIONS') }}
+            <textarea
+              v-model="form.instructions"
+              rows="5"
+              :placeholder="$t('AI_SHADOWS.FORM.INSTRUCTIONS_PLACEHOLDER')"
+              class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y leading-relaxed"
+            />
+          </label>
+
+          <!-- Caixas observadas -->
+          <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-n-slate-12">
+              {{ $t('AI_SHADOWS.FORM.INBOXES') }}
+            </span>
+            <p v-if="!inboxes.length" class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_SHADOWS.FORM.NO_INBOXES') }}
+            </p>
+            <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label
+                v-for="inbox in inboxes"
+                :key="inbox.id"
+                class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  :checked="form.inbox_ids.includes(inbox.id)"
+                  @change="toggleInbox(inbox.id)"
+                />
+                <span class="truncate">{{ inbox.name }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- O que observar -->
+          <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-n-slate-12">
+              {{ $t('AI_SHADOWS.FORM.SCOPE') }}
+            </span>
+            <div class="flex flex-wrap gap-4">
+              <label class="flex items-center gap-2 text-sm text-n-slate-12">
+                <input v-model="form.observe_ai" type="checkbox" />
+                {{ $t('AI_SHADOWS.FORM.OBSERVE_AI') }}
+              </label>
+              <label class="flex items-center gap-2 text-sm text-n-slate-12">
+                <input v-model="form.observe_human" type="checkbox" />
+                {{ $t('AI_SHADOWS.FORM.OBSERVE_HUMAN') }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Sinais para a Validação -->
+          <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-n-slate-12">
+              {{ $t('AI_SHADOWS.FORM.SIGNALS') }}
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label
+                v-for="s in SIGNALS"
+                :key="s"
+                class="flex items-center gap-2 text-sm text-n-slate-12"
+              >
+                <input v-model="form.signals[s]" type="checkbox" />
+                {{ $t(`AI_SHADOWS.SIGNALS.${s.toUpperCase()}`) }}
+              </label>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <span class="text-sm font-medium text-n-slate-12">
+              {{ $t('AI_SHADOWS.FORM.STATUS') }}
+            </span>
+            <Select v-model="form.status" :options="statusOptions" />
+          </div>
+
+          <div class="flex justify-end gap-2">
+            <Button
+              variant="faded"
+              color="slate"
+              :label="$t('AI_SHADOWS.FORM.CANCEL')"
+              @click="showForm = false"
+            />
+            <Button
+              :label="$t('AI_SHADOWS.FORM.SAVE')"
+              :disabled="!isDirty || !form.name.trim()"
+              @click="save"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ConfirmDeleteModal
+      v-if="deleteTarget"
+      show
+      :title="$t('AI_SHADOWS.DELETE_MODAL.TITLE')"
+      :message="
+        $t('AI_SHADOWS.DELETE_MODAL.MESSAGE', { name: deleteTarget.name })
+      "
+      :confirm-text="$t('AI_SHADOWS.DELETE_MODAL.CONFIRM')"
+      :reject-text="$t('AI_SHADOWS.DELETE_MODAL.CANCEL')"
+      :confirm-value="deleteTarget.name"
+      :confirm-place-holder-text="
+        $t('AI_SHADOWS.DELETE_MODAL.PLACEHOLDER', { name: deleteTarget.name })
+      "
+      @on-confirm="confirmRemove"
+      @on-close="deleteTarget = null"
+    />
+  </div>
+</template>
