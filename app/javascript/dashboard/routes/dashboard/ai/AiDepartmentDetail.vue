@@ -49,13 +49,6 @@ const isSaving = ref(false);
 // Operational summary counts (read-only) served by the departments index serializer.
 const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 
-const VAR_TYPES = ['texto', 'numero', 'booleano', 'lista'];
-const varTypeOptions = computed(() =>
-  VAR_TYPES.map(vt => ({
-    value: vt,
-    label: t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${vt}`),
-  }))
-);
 const replyScopeOptions = computed(() => [
   { value: 'off', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_OFF') },
   { value: 'canary', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') },
@@ -251,104 +244,6 @@ const goBack = () =>
     params: { agentId: route.params.agentId },
   });
 
-// --- Lead variables ---
-const leadVars = ref([]);
-const showVarForm = ref(false);
-const varForm = reactive({
-  id: null,
-  name: '',
-  description: '',
-  var_type: 'texto',
-  visible_in_first_chat: true,
-  values: [],
-});
-const { isDirty: varDirty, capture: captureVar } = useFormDirty(() => ({
-  ...varForm,
-}));
-
-// "Lista" options as chips — business config, not a textarea of data.
-const newOption = ref('');
-const optionError = ref('');
-const addOption = () => {
-  const value = newOption.value.trim();
-  if (!value) return;
-  if (varForm.values.some(v => v.toLowerCase() === value.toLowerCase())) {
-    optionError.value = t('AI_DEPARTMENTS.LEAD_VARS.DUPLICATE');
-    return;
-  }
-  varForm.values.push(value);
-  newOption.value = '';
-  optionError.value = '';
-};
-const removeOption = index => {
-  varForm.values.splice(index, 1);
-};
-const leadVarsUrl = () =>
-  `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`;
-
-const fetchLeadVars = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(leadVarsUrl());
-  leadVars.value = Array.isArray(data) ? data : [];
-};
-
-const openVarNew = () => {
-  Object.assign(varForm, {
-    id: null,
-    name: '',
-    description: '',
-    var_type: 'texto',
-    visible_in_first_chat: true,
-    values: [],
-  });
-  newOption.value = '';
-  optionError.value = '';
-  showVarForm.value = true;
-  captureVar();
-};
-const openVarEdit = v => {
-  Object.assign(varForm, {
-    id: v.id,
-    name: v.name,
-    description: v.description || '',
-    var_type: v.var_type,
-    visible_in_first_chat: v.visible_in_first_chat,
-    values: Array.isArray(v.values) ? [...v.values] : [],
-  });
-  newOption.value = '';
-  optionError.value = '';
-  showVarForm.value = true;
-  captureVar();
-};
-const saveVar = async () => {
-  const payload = {
-    ai_lead_variable: {
-      name: varForm.name,
-      description: varForm.description,
-      var_type: varForm.var_type,
-      visible_in_first_chat: varForm.visible_in_first_chat,
-      values: varForm.values.map(v => v.trim()).filter(Boolean),
-    },
-  };
-  try {
-    if (varForm.id) {
-      await axios.patch(`${leadVarsUrl()}/${varForm.id}`, payload);
-    } else {
-      await axios.post(leadVarsUrl(), payload);
-    }
-    showVarForm.value = false;
-    fetchLeadVars();
-  } catch (error) {
-    useAlert(t('AI_DEPARTMENTS.ERROR'));
-  }
-};
-const removeVar = async v => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_DEPARTMENTS.LEAD_VARS.CONFIRM_DELETE'))) return;
-  await axios.delete(`${leadVarsUrl()}/${v.id}`);
-  fetchLeadVars();
-};
-
 // --- Integrations ---
 const integrations = ref([]);
 const integrationsUrl = () =>
@@ -453,7 +348,6 @@ onMounted(async () => {
   await fetchDepartment();
   captureDept();
   await Promise.all([
-    fetchLeadVars(),
     fetchIntegrations(),
     fetchMappedInboxes(),
     fetchVersions(),
@@ -663,66 +557,6 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
-              </span>
-              <button
-                type="button"
-                class="text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white disabled:opacity-50"
-                :disabled="isNew"
-                @click="openVarNew"
-              >
-                + {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
-              </button>
-            </div>
-            <p v-if="!leadVars.length" class="text-sm text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
-            </p>
-            <div
-              v-for="v in leadVars"
-              :key="v.id"
-              class="flex items-center justify-between gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-4 py-3"
-            >
-              <div class="min-w-0">
-                <p
-                  class="text-sm font-medium text-n-slate-12 flex items-center gap-2 mb-0"
-                >
-                  {{ v.name }}
-                  <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-n-alpha-2 text-xs font-normal text-n-slate-11"
-                  >
-                    {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${v.var_type}`) }}
-                  </span>
-                </p>
-                <p class="text-xs text-n-slate-11 truncate mb-0">
-                  {{ v.description }}
-                </p>
-              </div>
-              <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
-                <button
-                  type="button"
-                  class="hover:text-n-slate-12"
-                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.EDIT')"
-                  @click="openVarEdit(v)"
-                >
-                  <span class="i-lucide-pencil size-4 inline-block" />
-                </button>
-                <button
-                  type="button"
-                  class="hover:text-n-ruby-11"
-                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.DELETE')"
-                  @click="removeVar(v)"
-                >
-                  <span class="i-lucide-trash-2 size-4 inline-block" />
-                </button>
-              </div>
-            </div>
-          </section>
-
           <!-- Atributos personalizados (da conta): usar ou excluir por agente -->
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
@@ -781,105 +615,6 @@ onMounted(async () => {
               </div>
             </div>
           </section>
-
-          <!-- Modal: adicionar/editar variável -->
-          <div
-            v-if="showVarForm"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-n-alpha-black2 p-4"
-            @click.self="showVarForm = false"
-          >
-            <div
-              class="w-full max-w-md rounded-2xl border border-n-weak bg-n-solid-1 p-5 flex flex-col gap-3"
-            >
-              <h3 class="text-sm font-semibold text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.MODAL_TITLE') }}
-              </h3>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.NAME') }}
-                <input
-                  v-model="varForm.name"
-                  type="text"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
-                <input
-                  v-model="varForm.description"
-                  type="text"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <div class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}</span>
-                <Select v-model="varForm.var_type" :options="varTypeOptions" />
-                <span class="text-xs text-n-slate-11">
-                  {{
-                    $t(`AI_DEPARTMENTS.LEAD_VARS.TYPE_HINT.${varForm.var_type}`)
-                  }}
-                </span>
-              </div>
-              <div
-                v-if="varForm.var_type === 'lista'"
-                class="flex flex-col gap-2 text-sm text-n-slate-12"
-              >
-                <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS_LABEL') }}</span>
-                <div v-if="varForm.values.length" class="flex flex-wrap gap-2">
-                  <span
-                    v-for="(option, index) in varForm.values"
-                    :key="index"
-                    class="inline-flex items-center gap-1 rounded-full bg-n-alpha-2 text-n-slate-12 pl-3 pr-1.5 py-1"
-                  >
-                    {{ option }}
-                    <button
-                      type="button"
-                      class="text-n-slate-11 hover:text-n-ruby-11"
-                      :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.REMOVE_OPTION')"
-                      @click="removeOption(index)"
-                    >
-                      <span class="i-lucide-x size-3.5 inline-block" />
-                    </button>
-                  </span>
-                </div>
-                <input
-                  v-model="newOption"
-                  type="text"
-                  :placeholder="
-                    $t('AI_DEPARTMENTS.LEAD_VARS.OPTION_PLACEHOLDER')
-                  "
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                  @keydown.enter.prevent="addOption"
-                />
-                <span v-if="optionError" class="text-xs text-n-ruby-11">
-                  {{ optionError }}
-                </span>
-              </div>
-              <label class="flex items-center gap-2 text-sm text-n-slate-12">
-                <input
-                  v-model="varForm.visible_in_first_chat"
-                  type="checkbox"
-                />
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.VISIBLE') }}
-              </label>
-              <div class="flex justify-end gap-2">
-                <button
-                  type="button"
-                  class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-                  @click="showVarForm = false"
-                >
-                  {{ $t('AI_DEPARTMENTS.LEAD_VARS.CANCEL') }}
-                </button>
-                <button
-                  type="button"
-                  :disabled="!varDirty"
-                  class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  @click="saveVar"
-                >
-                  + {{ $t('AI_DEPARTMENTS.LEAD_VARS.SAVE') }}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- ATENDIMENTO -->
