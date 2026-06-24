@@ -324,8 +324,8 @@
       "EMPTY": "Nenhum atributo personalizado criado no sistema.",
       "MODEL_CONTACT": "Contato",
       "MODEL_CONVERSATION": "Conversa",
-      "USING": "Em uso",
-      "EXCLUDED": "Excluído"
+      "USING": "Ativado",
+      "EXCLUDED": "Desativado"
     }
   },
   "AI_TOOLS": {
