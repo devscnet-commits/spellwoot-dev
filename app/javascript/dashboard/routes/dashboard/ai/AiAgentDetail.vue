@@ -519,6 +519,9 @@ onMounted(async () => {
               v-model="agentForm.site"
               :label="$t('AI_AGENTS.SOBRE.SITE')"
             />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5">
             <div class="flex flex-col gap-1.5">
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
@@ -534,7 +537,7 @@ onMounted(async () => {
               </span>
               <Select v-model="agentForm.stage" :options="stageOptions" />
             </div>
-            <div class="flex flex-col gap-1.5 sm:col-span-2">
+            <div class="flex flex-col gap-1.5">
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.SOBRE.TEAM') }}
               </span>
