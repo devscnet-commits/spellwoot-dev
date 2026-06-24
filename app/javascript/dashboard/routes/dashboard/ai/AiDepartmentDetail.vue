@@ -54,14 +54,6 @@ const replyScopeOptions = computed(() => [
   { value: 'canary', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') },
   { value: 'all', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_ALL') },
 ]);
-const onTimeoutOptions = computed(() => [
-  {
-    value: 'resolve',
-    label: t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_RESOLVE'),
-  },
-  { value: 'none', label: t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_NONE') },
-]);
-
 const form = reactive({
   name: '',
   objetivo: '',
@@ -72,12 +64,8 @@ const form = reactive({
   close_when_steps: '',
   // Atendimento
   auto_attendance: true,
-  sla_timeout: '',
-  on_timeout: 'resolve',
-  hours_enabled: false,
   group_delay_seconds: '',
   max_input_chars: '',
-  copilot_enabled: false,
   followup_enabled: false,
   followup_delay: '',
   followup_message: '',
@@ -127,7 +115,6 @@ const arrayToLines = value => (Array.isArray(value) ? value.join('\n') : '');
 const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
-  const sla = dept.sla || {};
   const followUp = dept.follow_up || {};
   Object.assign(form, {
     name: dept.name || '',
@@ -138,12 +125,8 @@ const hydrate = dept => {
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
     auto_attendance: behavior.auto_attendance !== false,
-    sla_timeout: sla.response_timeout_minutes ?? '',
-    on_timeout: sla.on_timeout || 'resolve',
-    hours_enabled: behavior.business_hours?.enabled || false,
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
-    copilot_enabled: behavior.copilot?.enabled || false,
     followup_enabled: followUp.enabled || false,
     followup_delay: followUp.delay_minutes ?? '',
     followup_message: followUp.message || '',
@@ -184,16 +167,10 @@ const buildPayload = () => ({
     status: form.status,
     is_default: form.is_default,
     position: form.position,
-    sla: {
-      response_timeout_minutes: Number(form.sla_timeout) || 0,
-      on_timeout: form.on_timeout,
-    },
     behavior: {
       auto_attendance: form.auto_attendance,
-      business_hours: { enabled: form.hours_enabled },
       grouping: { delay_seconds: Number(form.group_delay_seconds) || 0 },
       max_input_chars: Number(form.max_input_chars) || 0,
-      copilot: { enabled: form.copilot_enabled },
       reply_scope: form.reply_scope,
       canary_label: form.canary_label,
       disabled_custom_attributes: form.disabled_custom_attributes,
@@ -620,7 +597,7 @@ onMounted(async () => {
         <!-- ATENDIMENTO -->
         <div
           v-if="visibleSections.has('attendance')"
-          class="flex flex-col gap-5 max-w-3xl"
+          class="flex flex-col gap-5"
         >
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
@@ -757,41 +734,6 @@ onMounted(async () => {
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
             <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TITLE') }}
-            </h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TIMEOUT') }}
-                <input
-                  v-model="form.sla_timeout"
-                  type="number"
-                  min="0"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <div class="flex flex-col gap-1 text-sm text-n-slate-12">
-                <span>{{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT') }}</span>
-                <Select v-model="form.on_timeout" :options="onTimeoutOptions" />
-              </div>
-            </div>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TITLE') }}
-            </h2>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.hours_enabled" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TOGGLE') }}
-            </label>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.GROUPING_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -827,25 +769,10 @@ onMounted(async () => {
               />
             </label>
           </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TITLE') }}
-            </h2>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.copilot_enabled" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TOGGLE') }}
-            </label>
-          </section>
         </div>
 
         <!-- FOLLOW-UP -->
-        <div
-          v-if="visibleSections.has('followup')"
-          class="flex flex-col gap-5 max-w-3xl"
-        >
+        <div v-if="visibleSections.has('followup')" class="flex flex-col gap-5">
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
@@ -879,10 +806,7 @@ onMounted(async () => {
         </div>
 
         <!-- ETAPAS -->
-        <div
-          v-if="visibleSections.has('steps')"
-          class="flex flex-col gap-5 max-w-3xl"
-        >
+        <div v-if="visibleSections.has('steps')" class="flex flex-col gap-5">
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
@@ -995,7 +919,7 @@ onMounted(async () => {
         <!-- INTEGRAÇÕES -->
         <div
           v-if="visibleSections.has('integrations')"
-          class="flex flex-col gap-4 max-w-3xl"
+          class="flex flex-col gap-4"
         >
           <h2 class="text-base font-semibold text-n-slate-12">
             {{ $t('AI_DEPARTMENTS.INTEGRATIONS.TITLE') }}
@@ -1031,7 +955,7 @@ onMounted(async () => {
         <!-- Save bar (config tabs only) -->
         <div
           v-if="showSave"
-          class="flex justify-end gap-2 border-t border-n-weak pt-4 max-w-3xl"
+          class="flex justify-end gap-2 border-t border-n-weak pt-4"
         >
           <button
             v-if="!embedded"
