@@ -265,31 +265,77 @@ onMounted(fetchRuns);
 
         <!-- Filters -->
         <div
-          class="flex flex-wrap items-center gap-2 rounded-xl border border-n-weak bg-n-alpha-1 p-3"
+          class="flex flex-col gap-3 rounded-xl border border-n-weak bg-n-alpha-1 p-3"
         >
-          <Select v-model="filters.period" :options="periodOptions" />
-          <Select
-            v-model="filters.department_id"
-            :options="departmentOptions"
-          />
-          <Select v-model="filters.error_type" :options="errorOptions" />
-          <Select v-model="filters.status" :options="statusOptions" />
-          <Select v-model="filters.has_reply" :options="replyOptions" />
-          <Select v-model="filters.has_tool" :options="toolOptions" />
-          <input
-            v-model="filters.conversation_id"
-            type="search"
-            inputmode="numeric"
-            :placeholder="$t('AI_SHADOW_RUNS.FILTERS.CONVERSATION')"
-            class="w-28 py-2 px-3 rounded-lg border-0 outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 text-sm text-n-slate-12"
-          />
-          <button
-            type="button"
-            class="ms-auto text-sm text-n-slate-11 hover:text-n-slate-12 px-2 py-2"
-            @click="clearFilters"
+          <div class="flex items-center justify-between gap-3">
+            <span
+              class="text-xs font-medium uppercase tracking-wide text-n-slate-10"
+            >
+              {{ $t('AI_SHADOW_RUNS.FILTERS.TITLE') }}
+            </span>
+            <button
+              type="button"
+              class="text-sm text-n-slate-11 hover:text-n-slate-12"
+              @click="clearFilters"
+            >
+              {{ $t('AI_SHADOW_RUNS.FILTERS.CLEAR') }}
+            </button>
+          </div>
+          <div
+            class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-3"
           >
-            {{ $t('AI_SHADOW_RUNS.FILTERS.CLEAR') }}
-          </button>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_PERIOD') }}
+              </span>
+              <Select v-model="filters.period" :options="periodOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_DEPARTMENT') }}
+              </span>
+              <Select
+                v-model="filters.department_id"
+                :options="departmentOptions"
+              />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_ERROR') }}
+              </span>
+              <Select v-model="filters.error_type" :options="errorOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_STATUS') }}
+              </span>
+              <Select v-model="filters.status" :options="statusOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_REPLY') }}
+              </span>
+              <Select v-model="filters.has_reply" :options="replyOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_TOOL') }}
+              </span>
+              <Select v-model="filters.has_tool" :options="toolOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_CONVERSATION') }}
+              </span>
+              <input
+                v-model="filters.conversation_id"
+                type="search"
+                inputmode="numeric"
+                :placeholder="$t('AI_SHADOW_RUNS.FILTERS.CONVERSATION')"
+                class="w-full py-2 px-3 rounded-lg border-0 outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 text-sm text-n-slate-12"
+              />
+            </label>
+          </div>
         </div>
 
         <p
