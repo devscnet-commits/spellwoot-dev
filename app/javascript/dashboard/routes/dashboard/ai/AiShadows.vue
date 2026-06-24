@@ -1,11 +1,10 @@
 <script setup>
 /* global axios */
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Input from 'dashboard/components-next/input/Input.vue';
-import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import AiShadowRuns from './AiShadowRuns.vue';
@@ -47,11 +46,6 @@ const { isDirty, capture } = useFormDirty(() => ({ ...form }));
 
 const accountUrl = () => `/api/v1/accounts/${route.params.accountId}`;
 const baseUrl = () => `${accountUrl()}/ai_shadows`;
-
-const statusOptions = computed(() => [
-  { value: 'active', label: t('AI_SHADOWS.STATUS.ACTIVE') },
-  { value: 'inactive', label: t('AI_SHADOWS.STATUS.INACTIVE') },
-]);
 
 const fetchShadows = async () => {
   isLoading.value = true;
@@ -251,19 +245,21 @@ onMounted(() => {
         >
           <Input v-model="form.name" :label="$t('AI_SHADOWS.FORM.NAME')" />
 
-          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-            {{ $t('AI_SHADOWS.FORM.INSTRUCTIONS') }}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-heading-3 text-n-slate-12">
+              {{ $t('AI_SHADOWS.FORM.INSTRUCTIONS') }}
+            </span>
             <textarea
               v-model="form.instructions"
               rows="5"
               :placeholder="$t('AI_SHADOWS.FORM.INSTRUCTIONS_PLACEHOLDER')"
-              class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y leading-relaxed"
+              class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y leading-relaxed text-sm text-n-slate-12"
             />
-          </label>
+          </div>
 
           <!-- Caixas observadas -->
-          <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-n-slate-12">
+          <div class="flex flex-col gap-1.5">
+            <span class="text-heading-3 text-n-slate-12">
               {{ $t('AI_SHADOWS.FORM.INBOXES') }}
             </span>
             <p v-if="!inboxes.length" class="text-sm text-n-slate-11 mb-0">
@@ -286,44 +282,70 @@ onMounted(() => {
           </div>
 
           <!-- O que observar -->
-          <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-n-slate-12">
+          <div class="flex flex-col gap-1.5">
+            <span class="text-heading-3 text-n-slate-12">
               {{ $t('AI_SHADOWS.FORM.SCOPE') }}
             </span>
-            <div class="flex flex-wrap gap-4">
-              <label class="flex items-center gap-2 text-sm text-n-slate-12">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label
+                class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
+              >
                 <input v-model="form.observe_ai" type="checkbox" />
-                {{ $t('AI_SHADOWS.FORM.OBSERVE_AI') }}
+                <span class="truncate">{{
+                  $t('AI_SHADOWS.FORM.OBSERVE_AI')
+                }}</span>
               </label>
-              <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <label
+                class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
+              >
                 <input v-model="form.observe_human" type="checkbox" />
-                {{ $t('AI_SHADOWS.FORM.OBSERVE_HUMAN') }}
+                <span class="truncate">{{
+                  $t('AI_SHADOWS.FORM.OBSERVE_HUMAN')
+                }}</span>
               </label>
             </div>
           </div>
 
           <!-- Sinais para a Validação -->
-          <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-n-slate-12">
+          <div class="flex flex-col gap-1.5">
+            <span class="text-heading-3 text-n-slate-12">
               {{ $t('AI_SHADOWS.FORM.SIGNALS') }}
             </span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <label
                 v-for="s in SIGNALS"
                 :key="s"
-                class="flex items-center gap-2 text-sm text-n-slate-12"
+                class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
               >
                 <input v-model="form.signals[s]" type="checkbox" />
-                {{ $t(`AI_SHADOWS.SIGNALS.${s.toUpperCase()}`) }}
+                <span class="truncate">{{
+                  $t(`AI_SHADOWS.SIGNALS.${s.toUpperCase()}`)
+                }}</span>
               </label>
             </div>
           </div>
 
+          <!-- Status -->
           <div class="flex flex-col gap-1.5">
-            <span class="text-sm font-medium text-n-slate-12">
+            <span class="text-heading-3 text-n-slate-12">
               {{ $t('AI_SHADOWS.FORM.STATUS') }}
             </span>
-            <Select v-model="form.status" :options="statusOptions" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label
+                class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  :checked="form.status === 'active'"
+                  @change="
+                    form.status = $event.target.checked ? 'active' : 'inactive'
+                  "
+                />
+                <span class="truncate">{{
+                  $t('AI_SHADOWS.STATUS.ACTIVE')
+                }}</span>
+              </label>
+            </div>
           </div>
 
           <div class="flex justify-end gap-2">
