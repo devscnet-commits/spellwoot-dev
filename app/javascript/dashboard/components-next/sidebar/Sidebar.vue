@@ -301,7 +301,12 @@ const menuItems = computed(() => {
       name: 'AIAgents',
       icon: 'i-lucide-bot',
       label: t('SIDEBAR.AI_AGENTS'),
-      activeOn: ['ai_agents_index', 'ai_agent_detail', 'ai_department_detail'],
+      activeOn: [
+        'ai_agents_index',
+        'ai_agent_detail',
+        'ai_department_detail',
+        'ai_knowledge_index',
+      ],
       children: [
         {
           name: 'AIAgentsList',
@@ -312,6 +317,12 @@ const menuItems = computed(() => {
             'ai_department_detail',
           ],
           to: accountScopedRoute('ai_agents_index'),
+        },
+        {
+          name: 'AIKnowledge',
+          label: t('SIDEBAR.AI_KNOWLEDGE'),
+          activeOn: ['ai_knowledge_index'],
+          to: accountScopedRoute('ai_knowledge_index'),
         },
         {
           name: 'AIProfiles',

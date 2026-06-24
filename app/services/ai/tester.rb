@@ -5,7 +5,7 @@ class Ai::Tester
     department, department_method = resolve_department(agent, message, department_id)
     return { 'error' => 'nenhum departamento ativo' } if department.nil?
 
-    retrieval = Ai::KnowledgeRetriever.retrieve_scored(department: department, query: message, account_id: agent.account_id)
+    retrieval = Ai::KnowledgeRetriever.retrieve_scored(query: message, account_id: agent.account_id)
     knowledge = retrieval[:chunks]
     score = retrieval[:top_score]
     routing = Ai::RoutingStrategy.decide(score: score, profile: agent.operation_profile)

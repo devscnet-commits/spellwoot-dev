@@ -379,7 +379,7 @@
     "DOCS_LABEL": "Conhecimento da empresa",
     "DOCS_HINT": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui ela usa para responder os clientes.",
     "NEW": "Nova fonte",
-    "EMPTY": "Nenhuma fonte de conhecimento neste departamento.",
+    "EMPTY": "Nenhuma fonte de conhecimento cadastrada.",
     "FORM": {
       "KIND": "Tipo",
       "TITLE": "Título",

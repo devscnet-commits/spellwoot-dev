@@ -21,7 +21,7 @@ class Ai::Copilot
     return { 'error' => 'nenhum departamento ativo' } if department.nil?
 
     knowledge = Ai::KnowledgeRetriever.retrieve(
-      department: department, query: last_customer_message, account_id: @account.id
+      query: last_customer_message, account_id: @account.id
     )
 
     run = Ai::Run.create!(

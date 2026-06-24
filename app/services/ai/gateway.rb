@@ -48,7 +48,7 @@ class Ai::Gateway
     @acts_live =
       Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation) == :live
 
-    knowledge = Ai::KnowledgeRetriever.retrieve(department: department, query: effective_content, account_id: @account.id)
+    knowledge = Ai::KnowledgeRetriever.retrieve(query: effective_content, account_id: @account.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
     run_record.update!(knowledge_count: knowledge.size)
 
