@@ -5,6 +5,9 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
 
+// Embedded as the "Análises" tab inside the Shadow module: drop the page shell/card.
+defineProps({ embedded: { type: Boolean, default: false } });
+
 const route = useRoute();
 const { t } = useI18n();
 
@@ -216,12 +219,28 @@ onMounted(fetchRuns);
 </script>
 
 <template>
-  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
-    <div class="max-w-5xl mx-auto flex flex-col gap-3">
+  <div
+    :class="
+      embedded
+        ? 'w-full'
+        : 'w-full h-full overflow-auto bg-n-background p-4 sm:p-6'
+    "
+  >
+    <div
+      :class="
+        embedded
+          ? 'w-full flex flex-col gap-5'
+          : 'max-w-5xl mx-auto flex flex-col gap-3'
+      "
+    >
       <div
-        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-5"
+        :class="
+          embedded
+            ? 'flex flex-col gap-5'
+            : 'rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-5'
+        "
       >
-        <div class="flex items-start justify-between gap-4">
+        <div v-if="!embedded" class="flex items-start justify-between gap-4">
           <div class="flex flex-col gap-1">
             <h1 class="text-xl font-semibold text-n-slate-12">
               {{ $t('AI_SHADOW_RUNS.TITLE') }}

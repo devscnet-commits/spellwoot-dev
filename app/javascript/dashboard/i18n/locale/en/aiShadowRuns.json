@@ -108,7 +108,7 @@
     }
   },
   "AI_SHADOWS": {
-    "TITLE": "Validação (Shadow)",
+    "TITLE": "Shadow",
     "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
     "NEW": "Novo shadow",
     "ANALYSIS": "Ver análise",
@@ -149,6 +149,10 @@
       "CONFIRM": "Excluir",
       "CANCEL": "Cancelar",
       "PLACEHOLDER": "Digite {name} para confirmar"
+    },
+    "TABS": {
+      "SHADOWS": "Shadows",
+      "ANALYSIS": "Análises"
     }
   }
 }

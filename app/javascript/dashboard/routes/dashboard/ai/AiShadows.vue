@@ -1,18 +1,21 @@
 <script setup>
 /* global axios */
 import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Input from 'dashboard/components-next/input/Input.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
+import AiShadowRuns from './AiShadowRuns.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const route = useRoute();
-const router = useRouter();
 const { t } = useI18n();
+
+// Module tabs: the shadows list + the analysis (submodule), no navigation away.
+const activeTab = ref('shadows');
 
 // Signals the Shadow surfaces in the Validação screen.
 const SIGNALS = [
@@ -138,8 +141,6 @@ const confirmRemove = async () => {
   }
 };
 
-const goAnalysis = () => router.push({ name: 'ai_shadow_runs' });
-
 onMounted(() => {
   fetchShadows();
   fetchInboxes();
@@ -161,15 +162,9 @@ onMounted(() => {
               {{ $t('AI_SHADOWS.DESCRIPTION') }}
             </p>
           </div>
-          <div class="shrink-0 flex items-center gap-2">
+          <div class="shrink-0">
             <Button
-              variant="faded"
-              color="slate"
-              icon="i-lucide-bar-chart-3"
-              :label="$t('AI_SHADOWS.ANALYSIS')"
-              @click="goAnalysis"
-            />
-            <Button
+              v-if="activeTab === 'shadows'"
               icon="i-lucide-plus"
               :label="$t('AI_SHADOWS.NEW')"
               @click="openNew"
@@ -177,8 +172,28 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- Tabs do módulo: Shadows (lista/criação) + Análises (submódulo) -->
+        <div class="flex items-center gap-x-5 gap-y-1 border-b border-n-weak">
+          <button
+            v-for="tab in ['shadows', 'analysis']"
+            :key="tab"
+            type="button"
+            class="pb-2.5 text-sm font-medium border-b-2 -mb-px"
+            :class="
+              activeTab === tab
+                ? 'border-n-brand text-n-brand'
+                : 'border-transparent text-n-slate-11 hover:text-n-slate-12'
+            "
+            @click="activeTab = tab"
+          >
+            {{ $t(`AI_SHADOWS.TABS.${tab.toUpperCase()}`) }}
+          </button>
+        </div>
+
+        <AiShadowRuns v-if="activeTab === 'analysis'" embedded />
+
         <p
-          v-if="!isLoading && !shadows.length"
+          v-else-if="!isLoading && !shadows.length"
           class="text-sm text-n-slate-11 py-8 text-center"
         >
           {{ $t('AI_SHADOWS.EMPTY') }}
@@ -231,7 +246,7 @@ onMounted(() => {
 
         <!-- Form -->
         <div
-          v-if="showForm"
+          v-if="showForm && activeTab === 'shadows'"
           class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
         >
           <Input v-model="form.name" :label="$t('AI_SHADOWS.FORM.NAME')" />
