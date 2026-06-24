@@ -375,9 +375,7 @@
   },
   "AI_KNOWLEDGE": {
     "TITLE": "Conhecimento",
-    "DESCRIPTION": "Ensine sua empresa para a IA: FAQ, produtos, procedimentos e mais.",
-    "DOCS_LABEL": "Conhecimento da empresa",
-    "DOCS_HINT": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui ela usa para responder os clientes.",
+    "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui — FAQ, produtos, procedimentos — ela usa para responder os clientes.",
     "NEW": "Nova fonte",
     "EMPTY": "Nenhuma fonte de conhecimento cadastrada.",
     "FORM": {
