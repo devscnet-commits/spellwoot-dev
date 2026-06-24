@@ -1,12 +1,13 @@
 # Read-only AI metrics aggregation for the account (from ai_runs). Observability only.
 # Costs are recomputed from the real token counts using the current price table
 # (Ai::ModelRouter.price_for), so the screen always reflects today's prices and the
-# input/output split adds up. Breakdowns by model / agent / department / error type,
-# with an optional period window (?days=N).
+# input/output split adds up. Breakdowns by model / agent / error type, with an optional
+# period window (?days=N) and an optional agent filter (?agent_id=N).
 class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
   def index
     scope = ::Ai::Run.where(account_id: Current.account.id)
     scope = scope.where('ai_runs.created_at >= ?', period_start) if period_start
+    scope = scope.where(ai_agent_id: params[:agent_id]) if params[:agent_id].present?
 
     models = by_model(scope)
     cost_in = round6(models.sum { |m| m[:cost_in] })
@@ -22,7 +23,6 @@ class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
       total_errors: scope.where.not(error_type: nil).count,
       by_model: models,
       by_agent: by_agent(scope),
-      by_department: by_department(scope),
       by_error: by_error(scope)
     }
   end
@@ -76,12 +76,6 @@ class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
   def by_agent(scope)
     agg = grouped_cost(scope, :ai_agent_id)
     names = agent_names(agg.keys)
-    agg.map { |id, row| { name: names[id] || "##{id}", runs: row[:runs], cost: row[:cost] } }
-  end
-
-  def by_department(scope)
-    agg = grouped_cost(scope, :ai_department_id)
-    names = ::Ai::Department.where(id: agg.keys).pluck(:id, :name).to_h
     agg.map { |id, row| { name: names[id] || "##{id}", runs: row[:runs], cost: row[:cost] } }
   end
 
