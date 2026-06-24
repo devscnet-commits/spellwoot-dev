@@ -224,7 +224,6 @@ const saveAgent = async () => {
 // --- Histórico de versões ---
 const versions = ref([]);
 const showVersions = ref(false);
-const showAdvanced = ref(false);
 const versionsUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_versions`;
 const fetchVersions = async () => {
   if (isNew.value) return;
@@ -519,63 +518,38 @@ onMounted(async () => {
             :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
             :max-length="1000"
           />
-          <div class="border border-n-weak rounded-xl">
-            <button
-              type="button"
-              class="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-n-slate-12"
-              @click="showAdvanced = !showAdvanced"
-            >
-              <span
-                class="size-4 inline-block text-n-slate-11"
-                :class="
-                  showAdvanced
-                    ? 'i-lucide-chevron-down'
-                    : 'i-lucide-chevron-right'
-                "
-              />
-              {{ $t('AI_AGENTS.SOBRE.ADVANCED') }}
-              <span class="text-xs text-n-slate-11 font-normal">
-                {{ $t('AI_AGENTS.SOBRE.ADVANCED_HINT') }}
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+            <Input
+              v-model="agentForm.company_name"
+              :label="$t('AI_AGENTS.SOBRE.COMPANY')"
+            />
+            <Input
+              v-model="agentForm.site"
+              :label="$t('AI_AGENTS.SOBRE.SITE')"
+            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
               </span>
-            </button>
-            <div
-              v-if="showAdvanced"
-              class="border-t border-n-weak p-4 flex flex-col gap-5"
-            >
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                <Input
-                  v-model="agentForm.company_name"
-                  :label="$t('AI_AGENTS.SOBRE.COMPANY')"
-                />
-                <Input
-                  v-model="agentForm.site"
-                  :label="$t('AI_AGENTS.SOBRE.SITE')"
-                />
-                <div class="flex flex-col gap-1.5">
-                  <span class="text-sm font-medium text-n-slate-12">
-                    {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
-                  </span>
-                  <Select
-                    v-model="agentForm.assistant_language"
-                    :options="languageOptions"
-                  />
-                </div>
-                <div class="flex flex-col gap-1.5">
-                  <span class="text-sm font-medium text-n-slate-12">
-                    {{ $t('AI_AGENTS.FORM.STAGE') }}
-                  </span>
-                  <Select v-model="agentForm.stage" :options="stageOptions" />
-                </div>
-                <div class="flex flex-col gap-1.5 sm:col-span-2">
-                  <span class="text-sm font-medium text-n-slate-12">
-                    {{ $t('AI_AGENTS.SOBRE.TEAM') }}
-                  </span>
-                  <Select v-model="agentForm.team_id" :options="teamOptions" />
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_AGENTS.SOBRE.TEAM_HINT') }}
-                  </span>
-                </div>
-              </div>
+              <Select
+                v-model="agentForm.assistant_language"
+                :options="languageOptions"
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.FORM.STAGE') }}
+              </span>
+              <Select v-model="agentForm.stage" :options="stageOptions" />
+            </div>
+            <div class="flex flex-col gap-1.5 sm:col-span-2">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.TEAM') }}
+              </span>
+              <Select v-model="agentForm.team_id" :options="teamOptions" />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.SOBRE.TEAM_HINT') }}
+              </span>
             </div>
           </div>
 
