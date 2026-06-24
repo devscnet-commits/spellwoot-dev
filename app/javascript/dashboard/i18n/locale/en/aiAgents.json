@@ -321,38 +321,6 @@
       "INPUT_LIMIT_HINT": "Limita o tamanho do texto do cliente que a IA processa por interação, para conter abuso e o consumo de tokens. Deixe 0 para não limitar.",
       "INPUT_LIMIT_FIELD": "Máximo de caracteres por mensagem"
     },
-    "LEAD_VARS": {
-      "TITLE": "Variáveis do lead",
-      "NEW": "Nova variável",
-      "EMPTY": "Nenhuma variável definida.",
-      "MODAL_TITLE": "Adicionar variável personalizada",
-      "NAME": "Nome",
-      "DESCRIPTION": "Descrição",
-      "TYPE": "Tipo",
-      "VISIBLE": "Campo visível no bate-papo inicial",
-      "OPTIONS_LABEL": "Opções que o atendente poderá selecionar",
-      "OPTION_PLACEHOLDER": "Digite uma opção e pressione Enter",
-      "ADD_OPTION": "Adicionar",
-      "REMOVE_OPTION": "Remover opção",
-      "DUPLICATE": "Esta opção já existe",
-      "SAVE": "Salvar",
-      "CANCEL": "Cancelar",
-      "EDIT": "Editar",
-      "DELETE": "Excluir",
-      "CONFIRM_DELETE": "Excluir esta variável?",
-      "TYPES": {
-        "texto": "Texto",
-        "numero": "Número",
-        "booleano": "Sim/Não",
-        "lista": "Lista"
-      },
-      "TYPE_HINT": {
-        "texto": "Resposta livre em texto.",
-        "numero": "Aceita apenas números.",
-        "booleano": "Sim / Não.",
-        "lista": "Opções pré-definidas para o atendente escolher."
-      }
-    },
     "INTEGRATIONS": {
       "TITLE": "Integrações disponíveis",
       "EMPTY": "Nenhuma integração cadastrada na conta.",
