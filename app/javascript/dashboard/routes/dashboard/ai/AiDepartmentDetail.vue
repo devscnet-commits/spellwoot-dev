@@ -29,7 +29,8 @@ const activeTab = ref('instructions');
 
 // Flattened into agent-level tabs when embedded: each group maps to underlying sections.
 const SECTION_GROUPS = {
-  behavior: ['instructions', 'attendance', 'followup'],
+  behavior: ['instructions', 'attendance'],
+  followup: ['followup'],
   steps: ['steps'],
   tools: ['tools'],
 };
@@ -61,6 +62,10 @@ const form = reactive({
   followup_enabled: false,
   followup_delay: '',
   followup_message: '',
+  followup_max: '',
+  followup_when_online: false,
+  followup_window_start: '',
+  followup_window_end: '',
   disabled_custom_attributes: [],
   is_default: false,
   position: 0,
@@ -119,6 +124,10 @@ const hydrate = dept => {
     followup_enabled: followUp.enabled || false,
     followup_delay: followUp.delay_minutes ?? '',
     followup_message: followUp.message || '',
+    followup_max: followUp.max_followups ?? '',
+    followup_when_online: followUp.when_agents_online || false,
+    followup_window_start: followUp.window_start || '',
+    followup_window_end: followUp.window_end || '',
     disabled_custom_attributes: Array.isArray(
       behavior.disabled_custom_attributes
     )
@@ -165,6 +174,10 @@ const buildPayload = () => ({
       enabled: form.followup_enabled,
       delay_minutes: Number(form.followup_delay) || 0,
       message: form.followup_message,
+      max_followups: Number(form.followup_max) || 0,
+      when_agents_online: form.followup_when_online,
+      window_start: form.followup_window_start,
+      window_end: form.followup_window_end,
     },
     playbook: {
       objetivo: form.objetivo,
@@ -543,18 +556,38 @@ onMounted(async () => {
         <!-- FOLLOW-UP -->
         <div v-if="visibleSections.has('followup')" class="flex flex-col gap-5">
           <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TITLE') }}
-            </h2>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.followup_enabled" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TOGGLE') }}
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.TITLE') }}
+                </h2>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.HINT') }}
+                </p>
+              </div>
+              <label
+                class="shrink-0 flex items-center gap-2 text-sm text-n-slate-12"
+              >
+                <input v-model="form.followup_enabled" type="checkbox" />
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.TOGGLE') }}
+              </label>
+            </div>
+
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FOLLOWUP.MESSAGE') }}
+              <textarea
+                v-model="form.followup_message"
+                rows="3"
+                :placeholder="$t('AI_DEPARTMENTS.FOLLOWUP.MESSAGE_PLACEHOLDER')"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
             </label>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
               <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_DELAY') }}
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.INTERVAL') }}
                 <input
                   v-model="form.followup_delay"
                   type="number"
@@ -563,14 +596,47 @@ onMounted(async () => {
                 />
               </label>
               <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_MESSAGE') }}
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.MAX') }}
                 <input
-                  v-model="form.followup_message"
-                  type="text"
+                  v-model="form.followup_max"
+                  type="number"
+                  min="0"
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
                 />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.MAX_HINT') }}
+                </span>
               </label>
             </div>
+
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW') }}
+              </span>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="form.followup_window_start"
+                  type="time"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                />
+                <span class="text-sm text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
+                </span>
+                <input
+                  v-model="form.followup_window_end"
+                  type="time"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                />
+              </div>
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_HINT') }}
+              </span>
+            </div>
+
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.followup_when_online" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.FOLLOWUP.WHEN_ONLINE') }}
+            </label>
           </section>
         </div>
 

@@ -317,6 +317,20 @@
       "ENABLED": "Ativa neste departamento",
       "SAVE": "Salvar integrações"
     },
+    "FOLLOWUP": {
+      "TITLE": "Retomar conversa parada",
+      "HINT": "Quando o cliente recebe uma resposta e fica em silêncio, a IA envia uma mensagem para retomar a conversa.",
+      "TOGGLE": "Ativar",
+      "MESSAGE": "Mensagem de retomada",
+      "MESSAGE_PLACEHOLDER": "Ex.: Oi! Ainda posso ajudar com algo? 😊",
+      "INTERVAL": "Intervalo entre mensagens (minutos)",
+      "MAX": "Máximo de tentativas antes de passar para um humano",
+      "MAX_HINT": "Depois desse número de retomadas sem resposta, a conversa é encaminhada a um humano. 0 = sem limite.",
+      "WINDOW": "Janela de horário para envio",
+      "WINDOW_TO": "até",
+      "WINDOW_HINT": "Só envia retomadas dentro deste horário. Deixe em branco para enviar a qualquer hora.",
+      "WHEN_ONLINE": "Também retomar quando houver um agente humano cuidando da conversa"
+    },
     "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento.",
     "CUSTOM_ATTRS": {
       "TITLE": "Atributos personalizados",
