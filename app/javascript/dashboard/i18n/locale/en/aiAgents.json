@@ -501,11 +501,11 @@
     },
     "ADVANCED": {
       "TITLE": "Avançado (motor)",
-      "DESCRIPTION": "Supervisor, workers, roteamento e orçamento. Só para usuários avançados — o nível acima já define bons padrões."
+      "DESCRIPTION": "Modelo da IA, workers e orçamento. Só para usuários avançados — o nível acima já define bons padrões."
     },
     "SUPERVISOR": {
-      "TITLE": "Supervisor (modelo principal)",
-      "DESCRIPTION": "Decide a resposta e orquestra as ferramentas. É o cérebro do agente."
+      "TITLE": "Modelo da IA",
+      "DESCRIPTION": "O modelo principal que conduz o atendimento e usa as ferramentas."
     },
     "WORKERS": {
       "TITLE": "Workers (modelos auxiliares)",

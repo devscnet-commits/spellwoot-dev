@@ -16,6 +16,12 @@ const { t } = useI18n();
 const PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter'];
 const providerOptions = PROVIDERS.map(p => ({ value: p, label: p }));
 const WORKER_KEYS = ['ocr', 'classification', 'summary', 'translation', 'rag'];
+// Classification fed the (now removed) flow routing; keep it in the data model
+// for backend compatibility, but hide it from the form.
+const HIDDEN_WORKERS = ['classification'];
+const visibleWorkers = computed(() =>
+  WORKER_KEYS.filter(w => !HIDDEN_WORKERS.includes(w))
+);
 const PRESET_KEYS = ['economico', 'balanceado', 'premium', 'customizado'];
 
 // Default operational strategies. Customizado leaves the form as-is for advanced setups.
@@ -452,7 +458,7 @@ onMounted(fetchProfiles);
                   </p>
                 </div>
                 <div
-                  v-for="w in WORKER_KEYS"
+                  v-for="w in visibleWorkers"
                   :key="w"
                   class="grid grid-cols-1 sm:grid-cols-[8rem,1fr,1.5fr] gap-2 items-center"
                 >
@@ -467,61 +473,6 @@ onMounted(fetchProfiles);
                     v-model="form.workers[w].model"
                     :placeholder="$t('AI_PROFILES.FORM.MODEL')"
                   />
-                </div>
-              </div>
-
-              <!-- Routing -->
-              <div class="flex flex-col gap-3">
-                <div class="flex flex-col gap-0.5">
-                  <h3 class="text-sm font-semibold text-n-slate-12">
-                    {{ $t('AI_PROFILES.ROUTING.TITLE') }}
-                  </h3>
-                  <p class="text-xs text-n-slate-11 mb-0">
-                    {{ $t('AI_PROFILES.ROUTING.DESCRIPTION') }}
-                  </p>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    v-model="form.route_high"
-                    type="number"
-                    :label="$t('AI_PROFILES.ROUTING.HIGH')"
-                  />
-                  <Input
-                    v-model="form.route_low"
-                    type="number"
-                    :label="$t('AI_PROFILES.ROUTING.LOW')"
-                  />
-                  <div class="flex flex-col gap-1.5">
-                    <span class="text-sm font-medium text-n-slate-12">{{
-                      $t('AI_PROFILES.ROUTING.CHEAP_PROVIDER')
-                    }}</span>
-                    <Select
-                      v-model="form.cheap_provider"
-                      :options="providerOptions"
-                    />
-                  </div>
-                  <Input
-                    v-model="form.cheap_model"
-                    :label="$t('AI_PROFILES.ROUTING.CHEAP_MODEL')"
-                  />
-                  <div class="flex flex-col gap-1.5">
-                    <span class="text-sm font-medium text-n-slate-12">{{
-                      $t('AI_PROFILES.ROUTING.PREMIUM_PROVIDER')
-                    }}</span>
-                    <Select
-                      v-model="form.premium_provider"
-                      :options="providerOptions"
-                    />
-                  </div>
-                  <Input
-                    v-model="form.premium_model"
-                    :label="$t('AI_PROFILES.ROUTING.PREMIUM_MODEL')"
-                  />
-                </div>
-                <div
-                  class="text-xs text-n-slate-11 leading-relaxed bg-n-alpha-1 rounded-lg p-3"
-                >
-                  {{ $t('AI_PROFILES.ROUTING.EXPLAINER') }}
                 </div>
               </div>
 
