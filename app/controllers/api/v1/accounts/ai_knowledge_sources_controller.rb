@@ -50,13 +50,13 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
   # the existing chunk/embedding ingestion then indexes it. PDF/site stay roadmap.
   UploadError = Class.new(StandardError)
   ALLOWED_UPLOAD_EXTENSIONS = %w[.txt .csv].freeze
-  MAX_UPLOAD_BYTES = 2.megabytes
+  MAX_UPLOAD_BYTES = 5.megabytes
 
   def create_attributes
     file = params[:file]
     return source_params unless file.respond_to?(:read)
 
-    raise UploadError, 'Arquivo acima de 2 MB.' if file.size > MAX_UPLOAD_BYTES
+    raise UploadError, 'Arquivo acima de 5 MB.' if file.size > MAX_UPLOAD_BYTES
     ext = File.extname(file.original_filename.to_s).downcase
     raise UploadError, 'Formato não suportado. Use TXT ou CSV.' unless ALLOWED_UPLOAD_EXTENSIONS.include?(ext)
 

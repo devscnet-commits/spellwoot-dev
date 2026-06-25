@@ -391,6 +391,11 @@
     "TITLE": "Conhecimento",
     "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui — FAQ, produtos, procedimentos — ela usa para responder os clientes.",
     "NEW": "Nova fonte",
+    "DROPZONE": {
+      "HINT": "Arraste e solte aqui um arquivo com dados sobre seus produtos e serviços. Ou clique para procurar no seu dispositivo.",
+      "FORMATS": "TXT e CSV · máx 5 MB (DOC, DOCX e PDF em breve)"
+    },
+    "WEBSITE_PLACEHOLDER": "Informe a URL do site para importar",
     "EMPTY": "Nenhuma fonte de conhecimento cadastrada.",
     "FORM": {
       "KIND": "Tipo",
