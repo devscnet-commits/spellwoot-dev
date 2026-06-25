@@ -24,11 +24,12 @@ const visibleWorkers = computed(() =>
 );
 const PRESET_KEYS = ['economico', 'balanceado', 'premium', 'customizado'];
 
-// Default operational strategies. Customizado leaves the form as-is for advanced setups.
+// Default operational strategies. One model per level (no routing).
+// Customizado leaves the form as-is for advanced setups.
 const PRESETS = {
   economico: {
     name: 'Econômico',
-    supervisor: ['openai', 'gpt-4.1-mini'],
+    model: ['openai', 'gpt-4.1-mini'],
     workers: {
       ocr: ['openai', 'gpt-4.1-mini'],
       classification: ['openai', 'gpt-4.1-mini'],
@@ -36,15 +37,12 @@ const PRESETS = {
       translation: ['openai', 'gpt-4.1-mini'],
       rag: ['openai', 'text-embedding-3-small'],
     },
-    route: [0.9, 0.78],
-    cheap: ['openai', 'gpt-4.1-mini'],
-    premium: ['openai', 'gpt-4.1-mini'],
     budget: 50,
     on_limit: 'stop',
   },
   balanceado: {
     name: 'Balanceado',
-    supervisor: ['openai', 'gpt-4.1-mini'],
+    model: ['openai', 'gpt-4.1'],
     workers: {
       ocr: ['openai', 'gpt-4.1-mini'],
       classification: ['openai', 'gpt-4.1-mini'],
@@ -52,15 +50,12 @@ const PRESETS = {
       translation: ['openai', 'gpt-4.1-mini'],
       rag: ['openai', 'text-embedding-3-small'],
     },
-    route: [0.95, 0.85],
-    cheap: ['openai', 'gpt-4.1-mini'],
-    premium: ['openai', 'gpt-4.1'],
     budget: 150,
     on_limit: 'downgrade',
   },
   premium: {
     name: 'Premium',
-    supervisor: ['anthropic', 'claude-3-5-sonnet-latest'],
+    model: ['anthropic', 'claude-3-5-sonnet-latest'],
     workers: {
       ocr: ['openai', 'gpt-4.1'],
       classification: ['openai', 'gpt-4.1-mini'],
@@ -68,9 +63,6 @@ const PRESETS = {
       translation: ['openai', 'gpt-4.1'],
       rag: ['openai', 'text-embedding-3-large'],
     },
-    route: [0.97, 0.88],
-    cheap: ['openai', 'gpt-4.1-mini'],
-    premium: ['anthropic', 'claude-3-5-sonnet-latest'],
     budget: 500,
     on_limit: 'alert',
   },
@@ -131,16 +123,16 @@ const applyPreset = key => {
   const preset = PRESETS[key];
   if (!preset) return;
   form.name = form.name || preset.name;
-  [form.supervisor_provider, form.supervisor_model] = preset.supervisor;
+  [form.supervisor_provider, form.supervisor_model] = preset.model;
   WORKER_KEYS.forEach(w => {
     form.workers[w] = {
       provider: preset.workers[w][0],
       model: preset.workers[w][1],
     };
   });
-  [form.route_high, form.route_low] = preset.route;
-  [form.cheap_provider, form.cheap_model] = preset.cheap;
-  [form.premium_provider, form.premium_model] = preset.premium;
+  // One model per level: cheap/premium mirror the single model (no routing).
+  [form.cheap_provider, form.cheap_model] = preset.model;
+  [form.premium_provider, form.premium_model] = preset.model;
   form.budget_usd = preset.budget;
   form.on_limit = preset.on_limit;
 };
