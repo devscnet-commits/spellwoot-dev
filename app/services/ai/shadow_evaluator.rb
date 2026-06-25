@@ -3,7 +3,6 @@
 # Read-only: it never replies to the customer and never executes tools.
 class Ai::ShadowEvaluator
   TRANSCRIPT_LIMIT = 30
-  SIGNAL_KEYS = %w[unanswered errors low_confidence knowledge_gaps tools_missing recurring].freeze
 
   def initialize(shadow:, conversation:)
     @shadow = shadow
@@ -32,17 +31,11 @@ class Ai::ShadowEvaluator
 
   private
 
-  def signals
-    enabled = @shadow.data_signals.to_h
-    SIGNAL_KEYS.select { |k| enabled[k] != false }
-  end
-
   def build_prompt
     parts = []
     parts << 'Você é um AVALIADOR de qualidade de atendimento (Shadow). Você NÃO responde ao ' \
              'cliente; apenas audita a conversa e aponta problemas e melhorias.'
     parts << "Instruções de avaliação:\n#{@shadow.instructions}" if @shadow.instructions.present?
-    parts << "Foque nestes sinais: #{signals.join(', ')}." if signals.any?
     parts << 'Retorne ESTRITAMENTE um JSON válido: ' \
              '{"resolution":"knowledge|instruction|tool|transfer|closed|unanswered|error",' \
              '"confidence":0.0,"error_type":null,"issues":["..."],"suggestions":["..."]}'

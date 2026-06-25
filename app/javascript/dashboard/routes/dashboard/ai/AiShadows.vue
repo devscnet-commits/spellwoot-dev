@@ -16,8 +16,9 @@ const { t } = useI18n();
 // Module tabs: the shadows list + the analysis (submodule), no navigation away.
 const activeTab = ref('shadows');
 
-// Signals the Shadow surfaces in the Validação screen.
-const SIGNALS = [
+// Quick suggestions: clicking one appends a ready-made line to the evaluation
+// instructions. There is a single source of truth — the instructions text.
+const SUGGESTION_KEYS = [
   'unanswered',
   'errors',
   'low_confidence',
@@ -38,7 +39,6 @@ const blank = () => ({
   status: 'active',
   observe_ai: true,
   observe_human: true,
-  signals: SIGNALS.reduce((acc, s) => ({ ...acc, [s]: true }), {}),
   inbox_ids: [],
 });
 const form = reactive(blank());
@@ -80,7 +80,6 @@ const openNew = () => {
 
 const openEdit = shadow => {
   const scope = shadow.scope || {};
-  const signals = shadow.data_signals || {};
   Object.assign(form, blank(), {
     id: shadow.id,
     name: shadow.name,
@@ -88,14 +87,18 @@ const openEdit = shadow => {
     status: shadow.status || 'active',
     observe_ai: scope.observe_ai !== false,
     observe_human: scope.observe_human !== false,
-    signals: SIGNALS.reduce(
-      (acc, s) => ({ ...acc, [s]: signals[s] !== false }),
-      {}
-    ),
     inbox_ids: Array.isArray(shadow.inbox_ids) ? [...shadow.inbox_ids] : [],
   });
   showForm.value = true;
   capture();
+};
+
+// Append a suggestion line to the instructions (no duplicates).
+const addSuggestion = key => {
+  const line = t(`AI_SHADOWS.SUGGESTIONS.${key.toUpperCase()}`);
+  const current = form.instructions.trim();
+  if (current.includes(line)) return;
+  form.instructions = current ? `${current}\n${line}` : line;
 };
 
 const save = async () => {
@@ -105,7 +108,6 @@ const save = async () => {
       instructions: form.instructions,
       status: form.status,
       scope: { observe_ai: form.observe_ai, observe_human: form.observe_human },
-      data_signals: { ...form.signals },
       inbox_ids: form.inbox_ids,
     },
   };
@@ -251,10 +253,25 @@ onMounted(() => {
             </span>
             <textarea
               v-model="form.instructions"
-              rows="5"
+              rows="6"
               :placeholder="$t('AI_SHADOWS.FORM.INSTRUCTIONS_PLACEHOLDER')"
               class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y leading-relaxed text-sm text-n-slate-12"
             />
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_SHADOWS.FORM.SUGGESTIONS_HINT') }}
+            </span>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button
+                v-for="key in SUGGESTION_KEYS"
+                :key="key"
+                type="button"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-n-weak text-xs text-n-slate-11 hover:border-n-brand hover:text-n-brand transition-colors"
+                @click="addSuggestion(key)"
+              >
+                <span class="i-lucide-plus size-3" />
+                {{ $t(`AI_SHADOWS.SIGNALS.${key.toUpperCase()}`) }}
+              </button>
+            </div>
           </div>
 
           <!-- Caixas observadas -->
@@ -301,25 +318,6 @@ onMounted(() => {
                 <input v-model="form.observe_human" type="checkbox" />
                 <span class="truncate">{{
                   $t('AI_SHADOWS.FORM.OBSERVE_HUMAN')
-                }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Sinais para a Validação -->
-          <div class="flex flex-col gap-1.5">
-            <span class="text-heading-3 text-n-slate-12">
-              {{ $t('AI_SHADOWS.FORM.SIGNALS') }}
-            </span>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <label
-                v-for="s in SIGNALS"
-                :key="s"
-                class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
-              >
-                <input v-model="form.signals[s]" type="checkbox" />
-                <span class="truncate">{{
-                  $t(`AI_SHADOWS.SIGNALS.${s.toUpperCase()}`)
                 }}</span>
               </label>
             </div>

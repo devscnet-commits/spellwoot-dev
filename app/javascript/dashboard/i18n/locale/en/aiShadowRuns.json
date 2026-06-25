@@ -137,7 +137,7 @@
       "SCOPE": "O que observar",
       "OBSERVE_AI": "Atendimentos da IA",
       "OBSERVE_HUMAN": "Atendimentos humanos",
-      "SIGNALS": "O que trazer para a Validação",
+      "SUGGESTIONS_HINT": "Clique nas sugestões abaixo para adicioná-las às instruções de avaliação.",
       "STATUS": "Status",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar"
@@ -149,6 +149,14 @@
       "KNOWLEDGE_GAPS": "Conhecimento faltante",
       "TOOLS_MISSING": "Ferramenta que faltou",
       "RECURRING": "Temas recorrentes"
+    },
+    "SUGGESTIONS": {
+      "UNANSWERED": "Aponte dúvidas do cliente que ficaram sem resposta.",
+      "ERRORS": "Sinalize erros ou informações incorretas passadas no atendimento.",
+      "LOW_CONFIDENCE": "Identifique respostas vagas ou dadas com baixa confiança.",
+      "KNOWLEDGE_GAPS": "Aponte assuntos sem cobertura na base de conhecimento.",
+      "TOOLS_MISSING": "Indique quando faltou uma ferramenta ou integração para resolver.",
+      "RECURRING": "Destaque temas ou problemas que se repetem nos atendimentos."
     },
     "SAVED": "Analista salvo.",
     "DELETED": "Analista excluído.",
