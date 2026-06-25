@@ -4,7 +4,7 @@
     "DESCRIPTION": "Avalie o que a IA acertou, errou ou deixou sem resposta e descubra exatamente o que ajustar: FAQ, instrução, ferramenta ou comportamento.",
     "REFRESH": "Atualizar",
     "LOADING": "Carregando...",
-    "EMPTY": "Nenhuma execução registrada ainda. Crie um agente de análise para começar a avaliar.",
+    "EMPTY": "Nenhuma execução registrada ainda. Crie um analista para começar a avaliar.",
     "NONE": "—",
     "COST_DISCLAIMER": "Os custos exibidos são estimativas do consumo dos modelos de IA. Não incluem impostos, IOF, taxas de câmbio ou outros encargos — portanto podem divergir da fatura final.",
     "FILTERS": {
@@ -120,9 +120,9 @@
   "AI_SHADOWS": {
     "TITLE": "Análises com IA",
     "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
-    "NEW": "Novo agente de análise",
+    "NEW": "Novo analista",
     "ANALYSIS": "Ver análise",
-    "EMPTY": "Nenhum agente de análise criado. Crie um agente para auditar seus atendimentos.",
+    "EMPTY": "Nenhum analista criado. Crie um analista para auditar seus atendimentos.",
     "INBOX_COUNT": "{count} caixas",
     "STATUS": {
       "ACTIVE": "Ativo",
@@ -131,7 +131,7 @@
     "FORM": {
       "NAME": "Nome",
       "INSTRUCTIONS": "Instruções de avaliação",
-      "INSTRUCTIONS_PLACEHOLDER": "O que o agente de análise deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
+      "INSTRUCTIONS_PLACEHOLDER": "O que o analista deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
       "INBOXES": "Caixas observadas",
       "NO_INBOXES": "Nenhuma caixa nesta conta.",
       "SCOPE": "O que observar",
@@ -150,11 +150,11 @@
       "TOOLS_MISSING": "Ferramenta que faltou",
       "RECURRING": "Temas recorrentes"
     },
-    "SAVED": "Agente de análise salvo.",
-    "DELETED": "Agente de análise excluído.",
+    "SAVED": "Analista salvo.",
+    "DELETED": "Analista excluído.",
     "ERROR": "Algo deu errado.",
     "DELETE_MODAL": {
-      "TITLE": "Excluir agente de análise",
+      "TITLE": "Excluir analista",
       "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
       "CONFIRM": "Excluir",
       "CANCEL": "Cancelar",
