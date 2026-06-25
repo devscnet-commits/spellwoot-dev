@@ -74,6 +74,7 @@ const agentForm = reactive({
   assistant_avatar: '',
   ai_operation_profile_id: '',
   team_id: '',
+  handoff_team_ids: [],
   assistant_personality: '',
   assistant_language: 'pt-BR',
   base_prompt: '',
@@ -95,6 +96,30 @@ const profileOptions = computed(() => [
   { value: '', label: t('AI_AGENTS.FORM.NONE') },
   ...profiles.value.map(p => ({ value: p.id, label: p.name })),
 ]);
+
+// Teams power AI->AI routing: this agent serves its own team, and may hand off only to the
+// teams in its allowlist (handoff_team_ids).
+const teams = ref([]);
+const teamOptions = computed(() => [
+  { value: '', label: t('AI_AGENTS.SOBRE.TEAM_ANY') },
+  ...teams.value.map(tm => ({ value: tm.id, label: tm.name })),
+]);
+const handoffTeamOptions = computed(() =>
+  teams.value.filter(tm => tm.id !== agentForm.team_id)
+);
+const fetchTeams = async () => {
+  try {
+    const { data } = await axios.get(`${accountUrl()}/teams`);
+    teams.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    teams.value = [];
+  }
+};
+const toggleHandoffTeam = id => {
+  const i = agentForm.handoff_team_ids.indexOf(id);
+  if (i >= 0) agentForm.handoff_team_ids.splice(i, 1);
+  else agentForm.handoff_team_ids.push(id);
+};
 
 const stageOptions = computed(() =>
   ['production', 'experimental'].map(s => ({
@@ -321,6 +346,7 @@ const runTest = async () => {
 
 onMounted(async () => {
   await fetchProfiles();
+  fetchTeams();
   await fetchAgent();
   captureAgent();
   await Promise.all([fetchDepartments(), fetchInboxes(), fetchVersions()]);
@@ -529,6 +555,59 @@ onMounted(async () => {
                 {{ $t('AI_AGENTS.FORM.STAGE') }}
               </span>
               <Select v-model="agentForm.stage" :options="stageOptions" />
+            </div>
+          </div>
+
+          <!-- Roteamento e transferência entre agentes de IA -->
+          <div
+            class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
+          >
+            <div class="flex flex-col gap-0.5">
+              <h3 class="text-sm font-semibold text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.TITLE') }}
+              </h3>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_AGENTS.HANDOFF.DESCRIPTION') }}
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-1.5 max-w-sm">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.TEAM') }}
+              </span>
+              <Select v-model="agentForm.team_id" :options="teamOptions" />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.HANDOFF.TEAM_HINT') }}
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST') }}
+              </span>
+              <p
+                v-if="!handoffTeamOptions.length"
+                class="text-sm text-n-slate-11 mb-0"
+              >
+                {{ $t('AI_AGENTS.HANDOFF.NO_TEAMS') }}
+              </p>
+              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label
+                  v-for="tm in handoffTeamOptions"
+                  :key="tm.id"
+                  class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="agentForm.handoff_team_ids.includes(tm.id)"
+                    @change="toggleHandoffTeam(tm.id)"
+                  />
+                  <span class="truncate">{{ tm.name }}</span>
+                </label>
+              </div>
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST_HINT') }}
+              </span>
             </div>
           </div>
 
