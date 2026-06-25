@@ -1,7 +1,7 @@
 <script setup>
 /* global axios */
 import { ref, reactive, computed, watch, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
@@ -15,6 +15,7 @@ const props = defineProps({
 });
 
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 
 const tools = ref([]);
@@ -164,10 +165,24 @@ const capabilityOptions = computed(() => [
     label: t(`AI_TOOLS.CAPABILITIES.${c.i18n}`),
   })),
 ]);
+// Integrations come from Configurações → Integrações; flag inactive ones so the user
+// doesn't pick a connector that won't run.
+const hasIntegrations = computed(() => integrations.value.length > 0);
 const integrationOptions = computed(() => [
   { value: '', label: t('AI_TOOLS.FORM.NONE') },
-  ...integrations.value.map(link => ({ value: link.id, label: link.name })),
+  ...integrations.value.map(link => ({
+    value: link.id,
+    label:
+      link.status === 'active'
+        ? link.name
+        : `${link.name} · ${t('AI_TOOLS.FORM.INTEGRATION_INACTIVE')}`,
+  })),
 ]);
+const goIntegrations = () =>
+  router.push({
+    name: 'settings_integrations_ai_systems',
+    params: { accountId: route.params.accountId },
+  });
 const governanceOptions = computed(() => [
   { value: 'allowed', label: t('AI_TOOLS.FORM.GOV_ALLOWED') },
   { value: 'require_confirmation', label: t('AI_TOOLS.FORM.GOV_CONFIRMATION') },
@@ -379,9 +394,25 @@ onMounted(() => {
         <div v-else class="flex flex-col gap-1 text-sm text-n-slate-12">
           <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
           <Select
+            v-if="hasIntegrations"
             v-model="form.integration_link_id"
             :options="integrationOptions"
           />
+          <div
+            v-else
+            class="rounded-lg border border-dashed border-n-weak bg-n-alpha-1 px-3 py-3 flex flex-col gap-1.5"
+          >
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_TOOLS.FORM.INTEGRATION_EMPTY') }}
+            </span>
+            <button
+              type="button"
+              class="self-start text-xs font-medium text-n-brand hover:underline"
+              @click="goIntegrations"
+            >
+              {{ $t('AI_TOOLS.FORM.INTEGRATION_CONFIGURE') }}
+            </button>
+          </div>
         </div>
         <div class="flex flex-col gap-1 text-sm text-n-slate-12">
           <span>{{ $t('AI_TOOLS.FORM.GOVERNANCE') }}</span>
