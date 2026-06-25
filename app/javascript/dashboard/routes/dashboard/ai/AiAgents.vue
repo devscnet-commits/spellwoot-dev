@@ -220,9 +220,6 @@ onMounted(fetchAgents);
             <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.PROFILE') }}
             </th>
-            <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
-              {{ $t('AI_AGENTS.LIST.DEPARTMENTS') }}
-            </th>
             <th class="text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.STATUS') }}
             </th>
@@ -269,13 +266,6 @@ onMounted(fetchAgents);
             <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{
                 agent.operation_profile_name || $t('AI_AGENTS.LIST.NO_PROFILE')
-              }}
-            </td>
-            <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
-              {{
-                $t('AI_AGENTS.LIST.DEPARTMENTS_COUNT', {
-                  count: agent.departments_count ?? 0,
-                })
               }}
             </td>
             <td class="px-3 py-3">

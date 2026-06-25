@@ -1,7 +1,7 @@
 {
   "AI_AGENTS": {
     "TITLE": "Agentes IA",
-    "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende caixas e departamentos.",
+    "DESCRIPTION": "Configure as assistentes virtuais da empresa. Cada agente tem identidade própria e atende suas caixas.",
     "NEW": "Novo agente de IA",
     "BACK": "← Agentes IA",
     "SAVE_FIRST": "Salve o agente na aba Sobre primeiro para liberar esta seção.",
@@ -74,7 +74,7 @@
     "SOBRE": {
       "AGENT_NAME": "Nome do agente",
       "CATEGORY": "Categoria",
-      "CATEGORY_HINT": "Apenas para organizar a lista de agentes. Não afeta roteamento, comportamento ou departamentos.",
+      "CATEGORY_HINT": "Apenas para organizar a lista de agentes. Não afeta roteamento ou comportamento.",
       "COMPANY": "Nome da empresa",
       "SITE": "Site",
       "VERSION": "Versão",
@@ -126,11 +126,11 @@
     "TEST": {
       "TITLE": "Testar a IA",
       "LAB_TITLE": "Laboratório de teste",
-      "LAB_SUBTITLE": "Simule uma mensagem do cliente e veja a decisão do motor: departamento, conhecimento, modelo e custo.",
+      "LAB_SUBTITLE": "Simule uma mensagem do cliente e veja a decisão do motor: fluxo, conhecimento, modelo e custo.",
       "QUESTION": "Pergunta (como se fosse o cliente)",
       "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
       "SEND": "Enviar",
-      "DEPARTMENT": "Departamento escolhido",
+      "DEPARTMENT": "Fluxo escolhido",
       "TOOL": "Ferramenta utilizada",
       "KNOWLEDGE": "Conhecimento utilizado",
       "TIME": "Latência (ms)",
@@ -152,22 +152,22 @@
       },
       "CONFIDENCE": "Confiança",
       "GOVERNANCE_TITLE": "Governança da decisão",
-      "CHOSEN_BY": "Departamento escolhido",
+      "CHOSEN_BY": "Fluxo escolhido",
       "RESOLVED_BY": "Resposta resolvida por",
       "TOOLS_CONSIDERED": "Ferramentas consideradas",
       "TOOL_EXECUTED": "executada",
       "HANDOFF_BY": "Transferência por",
       "METHODS": {
-        "single": "único departamento",
+        "single": "único fluxo",
         "inbox_mapping": "mapeamento da caixa",
         "classifier": "roteamento automático",
-        "default": "departamento padrão",
+        "default": "fluxo padrão",
         "fallback": "fallback",
         "manual": "seleção manual"
       },
       "RESOLVED": {
         "knowledge": "conhecimento",
-        "instruction": "instrução do departamento",
+        "instruction": "instrução do fluxo",
         "tool": "ferramenta",
         "transfer": "transferência para humano",
         "unanswered": "sem resposta"
@@ -508,7 +508,7 @@
       "TITLE": "Workers (modelos auxiliares)",
       "DESCRIPTION": "Modelos especializados e mais baratos para tarefas de apoio.",
       "OCR": "OCR (imagem → texto)",
-      "CLASSIFICATION": "Classificação (departamento)",
+      "CLASSIFICATION": "Classificação (fluxo)",
       "SUMMARY": "Resumo da conversa",
       "TRANSLATION": "Tradução",
       "RAG": "RAG (embeddings)"
@@ -579,7 +579,7 @@
     "COLUMNS": {
       "MODEL": "Provedor / Modelo",
       "AGENT": "Agente",
-      "DEPARTMENT": "Departamento",
+      "DEPARTMENT": "Fluxo",
       "ERROR_TYPE": "Tipo de erro",
       "RUNS": "Execuções",
       "TOKENS_IN": "Tokens entrada",
@@ -597,7 +597,7 @@
       "tool_failed": "Falha ao executar ferramenta",
       "guardrail_blocked": "Bloqueado por regra de segurança",
       "budget_exceeded": "Orçamento excedido",
-      "classification_failed": "Falha ao classificar o departamento",
+      "classification_failed": "Falha ao classificar o fluxo",
       "unknown": "Erro não identificado"
     }
   },

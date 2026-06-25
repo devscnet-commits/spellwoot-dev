@@ -10,7 +10,7 @@
     "FILTERS": {
       "TITLE": "Filtros",
       "LABEL_PERIOD": "Período",
-      "LABEL_DEPARTMENT": "Departamento",
+      "LABEL_DEPARTMENT": "Fluxo",
       "LABEL_ERROR": "Tipo de erro",
       "LABEL_STATUS": "Status",
       "LABEL_REPLY": "Resposta da IA",
@@ -20,8 +20,8 @@
       "PERIOD_ALL": "Todo o período",
       "PERIOD_7": "Últimos 7 dias",
       "PERIOD_30": "Últimos 30 dias",
-      "DEPARTMENT": "Departamento",
-      "DEPARTMENT_ALL": "Todos os departamentos",
+      "DEPARTMENT": "Fluxo",
+      "DEPARTMENT_ALL": "Todos os fluxos",
       "ERROR_TYPE": "Tipo de erro",
       "ERROR_ALL": "Todos os erros",
       "STATUS": "Status",
@@ -51,7 +51,7 @@
       "INSTRUCTION_FAILS": "Falhas de instrução",
       "TOOLS_MISSING": "Ferramentas ausentes",
       "RECURRING_ERRORS": "Erros recorrentes",
-      "BY_DEPARTMENT": "Oportunidades por departamento",
+      "BY_DEPARTMENT": "Oportunidades por fluxo",
       "RUNS": "Execuções detalhadas"
     },
     "RESOLUTION": {
@@ -69,7 +69,7 @@
       "FAQ_TITLE": "Vire FAQ / reforce o conhecimento",
       "FAQ_BODY": "{count} pergunta(s) sem cobertura de conhecimento em {department}. Crie uma FAQ ou fonte de conhecimento.",
       "INSTRUCTION_TITLE": "Instrução fraca",
-      "INSTRUCTION_BODY": "{count} resposta(s) de baixa confiança em {department}. Reforce as instruções do departamento.",
+      "INSTRUCTION_BODY": "{count} resposta(s) de baixa confiança em {department}. Reforce as instruções do fluxo.",
       "TOOL_TITLE": "Ferramenta ausente",
       "TOOL_BODY": "A ferramenta \"{tool}\" foi sugerida {count}× em {department}, mas não está configurada.",
       "ERROR_TITLE": "Erro recorrente",
@@ -81,10 +81,10 @@
       "UNANSWERED": "sem resposta"
     },
     "METHODS": {
-      "single": "único departamento",
+      "single": "único fluxo",
       "inbox_mapping": "mapeamento da caixa",
       "classifier": "roteamento automático",
-      "default": "departamento padrão",
+      "default": "fluxo padrão",
       "fallback": "fallback",
       "manual": "seleção manual"
     },
@@ -103,7 +103,7 @@
     "STATUS": {
       "recorded": "Registrado",
       "running": "Em andamento",
-      "no_department": "Sem departamento",
+      "no_department": "Sem fluxo",
       "error": "Erro"
     },
     "ERROR_TYPES": {
@@ -113,7 +113,7 @@
       "tool_failed": "Falha ao executar ferramenta",
       "guardrail_blocked": "Bloqueado por regra de segurança",
       "budget_exceeded": "Orçamento excedido",
-      "classification_failed": "Falha ao classificar o departamento",
+      "classification_failed": "Falha ao classificar o fluxo",
       "unknown": "Erro não identificado"
     }
   },
