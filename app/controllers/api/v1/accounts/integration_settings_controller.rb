@@ -23,8 +23,7 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
       account_id: Current.account.id,
       provider: params[:provider]
     )
-    incoming = config_params.reject { |key, value| value.blank? || masked_sensitive?(key, value) }
-    setting.config  = setting.config_hash.merge(incoming).to_json
+    setting.config  = merged_config(setting.config_hash).to_json
     setting.enabled = params.fetch(:enabled, true)
     setting.save!
     render json: {
@@ -97,6 +96,24 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
   # on/off without re-sending credentials.
   def config_params
     params.fetch(:config, ActionController::Parameters.new).permit!.to_h
+  end
+
+  # Merge the submitted config over what's stored, with three rules:
+  #   - a masked sensitive echo (unchanged secret) keeps the stored value;
+  #   - a blank sensitive value is ignored, so a secret is never wiped by an empty submit;
+  #   - a blank non-sensitive value clears the key, so optional fields like testEventCode
+  #     can actually be unset from the UI (a plain blank-rejecting merge could never remove
+  #     an already-stored value).
+  def merged_config(stored)
+    config_params.each_with_object(stored.dup) do |(key, value), merged|
+      if masked_sensitive?(key, value)
+        next
+      elsif value.blank?
+        merged.delete(key) unless SENSITIVE_KEYS.include?(key)
+      else
+        merged[key] = value
+      end
+    end
   end
 
   # The UI loads sensitive values masked (e.g. "EAAB********************xyz"). When it
