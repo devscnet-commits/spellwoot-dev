@@ -1,6 +1,6 @@
 # pre-build stage
-FROM node:24-alpine AS node
-FROM ruby:3.4.4-alpine3.21 AS pre-builder
+FROM mirror.gcr.io/library/node:24-alpine AS node
+FROM mirror.gcr.io/library/ruby:3.4.4-alpine3.21 AS pre-builder
 
 ARG NODE_VERSION="24.13.0"
 ARG PNPM_VERSION="10.2.0"
@@ -96,7 +96,7 @@ RUN rm -rf /gems/ruby/3.4.0/cache/*.gem \
   && rm .gitignore
 
 # final build stage
-FROM ruby:3.4.4-alpine3.21
+FROM mirror.gcr.io/library/ruby:3.4.4-alpine3.21
 
 ARG NODE_VERSION="24.13.0"
 ARG PNPM_VERSION="10.2.0"
