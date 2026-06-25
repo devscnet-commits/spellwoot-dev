@@ -687,16 +687,26 @@ onMounted(async () => {
               v-if="activeKey === 'behavior'"
               class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
             >
-              <TextArea
-                v-model="agentForm.base_prompt"
-                :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
-                :max-length="4000"
-              />
-              <TextArea
-                v-model="agentForm.guardrails"
-                :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
-                :max-length="2000"
-              />
+              <div class="flex flex-col gap-1">
+                <TextArea
+                  v-model="agentForm.base_prompt"
+                  :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
+                  :max-length="4000"
+                />
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_AGENTS.FORM.BASE_PROMPT_HINT') }}
+                </p>
+              </div>
+              <div class="flex flex-col gap-1">
+                <TextArea
+                  v-model="agentForm.guardrails"
+                  :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
+                  :max-length="2000"
+                />
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_AGENTS.FORM.GUARDRAILS_HINT') }}
+                </p>
+              </div>
               <div class="flex justify-end">
                 <Button
                   :label="$t('AI_AGENTS.FORM.SAVE')"

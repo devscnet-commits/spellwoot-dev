@@ -438,6 +438,9 @@ onMounted(async () => {
                 :placeholder="$t('AI_DEPARTMENTS.OBJETIVO_PLACEHOLDER')"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
               />
+              <span class="text-xs font-normal text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.OBJETIVO_HINT') }}
+              </span>
             </label>
             <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.INSTRUCTIONS_LABEL') }}
@@ -447,6 +450,9 @@ onMounted(async () => {
                 :placeholder="$t('AI_DEPARTMENTS.INSTRUCTIONS_PLACEHOLDER')"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
               />
+              <span class="text-xs font-normal text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.INSTRUCTIONS_HINT') }}
+              </span>
             </label>
           </section>
 
