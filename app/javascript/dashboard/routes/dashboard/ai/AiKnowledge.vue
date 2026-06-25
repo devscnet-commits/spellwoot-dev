@@ -30,7 +30,6 @@ const CREATABLE = [
   { kind: 'produto', icon: 'i-lucide-package' },
   { kind: 'procedimento', icon: 'i-lucide-list-checks' },
 ];
-const COMING_SOON = [{ key: 'SITE', icon: 'i-lucide-globe' }];
 
 const sources = ref([]);
 const isLoading = ref(false);
@@ -73,12 +72,11 @@ const fetchSources = async () => {
   }
 };
 
-// Documentos: upload a TXT/CSV file; the backend extracts its text into a knowledge source.
+// Documentos: drag-and-drop or click to upload a TXT/CSV file; the backend extracts its text.
 const fileInput = ref(null);
+const dragActive = ref(false);
 const triggerUpload = () => fileInput.value?.click();
-const onFilePick = async e => {
-  const file = e.target.files?.[0];
-  e.target.value = '';
+const uploadFile = async file => {
   if (!file) return;
   const fd = new FormData();
   fd.append('file', file);
@@ -89,6 +87,15 @@ const onFilePick = async e => {
   } catch (error) {
     useAlert(error.response?.data?.errors?.[0] || t('AI_KNOWLEDGE.ERROR'));
   }
+};
+const onFilePick = e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  uploadFile(file);
+};
+const onDrop = e => {
+  dragActive.value = false;
+  uploadFile(e.dataTransfer?.files?.[0]);
 };
 
 const openNew = kind => {
@@ -158,11 +165,12 @@ onMounted(fetchSources);
       <section
         class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
       >
+        <!-- Fontes de negócio (texto): FAQ, Produtos, Procedimentos -->
         <div class="flex flex-col gap-2">
           <span class="text-xs font-medium text-n-slate-11">
             {{ $t('AI_KNOWLEDGE.SOURCES.LABEL') }}
           </span>
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               v-for="src in CREATABLE"
               :key="src.kind"
@@ -178,42 +186,68 @@ onMounted(fetchSources);
                 {{ $t(`AI_KNOWLEDGE.SOURCES.${src.kind.toUpperCase()}_HINT`) }}
               </span>
             </button>
+          </div>
+        </div>
+
+        <!-- Documentos: dropzone (arrastar/clicar) -->
+        <div class="flex flex-col gap-2">
+          <span
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-n-slate-12"
+          >
+            <span class="i-lucide-folder-up size-4" />
+            {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS') }}
+          </span>
+          <input
+            ref="fileInput"
+            type="file"
+            accept=".txt,.csv"
+            class="hidden"
+            @change="onFilePick"
+          />
+          <button
+            type="button"
+            class="rounded-2xl border-2 border-dashed p-8 flex flex-col items-center gap-2 text-center transition-colors"
+            :class="
+              dragActive
+                ? 'border-n-brand bg-n-brand/5'
+                : 'border-n-weak bg-n-alpha-1 hover:border-n-slate-7'
+            "
+            @click="triggerUpload"
+            @dragover.prevent="dragActive = true"
+            @dragleave.prevent="dragActive = false"
+            @drop.prevent="onDrop"
+          >
+            <span class="i-lucide-upload size-7 text-n-brand" />
+            <span class="text-sm text-n-slate-11 max-w-md">
+              {{ $t('AI_KNOWLEDGE.DROPZONE.HINT') }}
+            </span>
+            <span class="text-xs text-n-brand">
+              {{ $t('AI_KNOWLEDGE.DROPZONE.FORMATS') }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Website: importar páginas (em breve) -->
+        <div class="flex flex-col gap-1.5">
+          <span
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-n-slate-12"
+          >
+            <span class="i-lucide-globe size-4" />
+            {{ $t('AI_KNOWLEDGE.SOURCES.SITE') }}
+          </span>
+          <div class="relative">
             <input
-              ref="fileInput"
-              type="file"
-              accept=".txt,.csv"
-              class="hidden"
-              @change="onFilePick"
+              type="text"
+              disabled
+              :placeholder="$t('AI_KNOWLEDGE.WEBSITE_PLACEHOLDER')"
+              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-alpha-1 text-sm text-n-slate-11 cursor-not-allowed"
             />
-            <button
-              type="button"
-              class="rounded-xl border border-n-weak bg-n-solid-1 p-3 flex flex-col items-center gap-1 text-center hover:border-n-brand transition-colors"
-              @click="triggerUpload"
+            <span
+              class="absolute top-1/2 -translate-y-1/2 ltr:right-3 rtl:left-3 inline-flex items-center gap-1 text-xs text-n-slate-10"
             >
-              <span class="i-lucide-upload size-5 text-n-brand" />
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS') }}
-              </span>
-              <span class="text-xs text-n-slate-10">
-                {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS_HINT') }}
-              </span>
-            </button>
-            <div
-              v-for="src in COMING_SOON"
-              :key="src.key"
-              class="rounded-xl border border-dashed border-n-weak bg-n-alpha-1 p-3 flex flex-col items-center gap-1 text-center opacity-70"
-            >
-              <span :class="src.icon" class="size-5 text-n-slate-10" />
-              <span class="text-sm font-medium text-n-slate-11">
-                {{ $t(`AI_KNOWLEDGE.SOURCES.${src.key}`) }}
-              </span>
-              <span
-                class="inline-flex items-center gap-1 text-xs text-n-slate-10"
-              >
-                <span class="i-lucide-clock size-3" />
-                {{ $t('AI_KNOWLEDGE.SOURCES.SOON') }}
-              </span>
-            </div>
+              <span class="i-lucide-clock size-3" />
+              {{ $t('AI_KNOWLEDGE.SOURCES.SOON') }}
+            </span>
           </div>
         </div>
 
