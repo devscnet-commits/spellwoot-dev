@@ -58,6 +58,7 @@ const form = reactive({
   close_when_steps: '',
   // Atendimento
   group_delay_seconds: '',
+  max_replies: '',
   max_input_chars: '',
   followup_enabled: false,
   followup_delay: '',
@@ -120,6 +121,7 @@ const hydrate = dept => {
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
+    max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
     followup_enabled: followUp.enabled || false,
     followup_delay: followUp.delay_minutes ?? '',
@@ -166,6 +168,7 @@ const buildPayload = () => ({
     behavior: {
       auto_attendance: true,
       grouping: { delay_seconds: Number(form.group_delay_seconds) || 0 },
+      max_replies: Number(form.max_replies) || 0,
       max_input_chars: Number(form.max_input_chars) || 0,
       reply_scope: 'all',
       disabled_custom_attributes: form.disabled_custom_attributes,
@@ -531,6 +534,26 @@ onMounted(async () => {
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.GROUPING_DELAY') }}
               <input
                 v-model="form.group_delay_seconds"
+                type="number"
+                min="0"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+          </section>
+
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.MAX_REPLIES_TITLE') }}
+            </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.MAX_REPLIES_HINT') }}
+            </p>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.MAX_REPLIES_FIELD') }}
+              <input
+                v-model="form.max_replies"
                 type="number"
                 min="0"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
