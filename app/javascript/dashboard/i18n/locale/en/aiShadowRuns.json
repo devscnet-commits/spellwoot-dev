@@ -1,10 +1,10 @@
 {
   "AI_SHADOW_RUNS": {
-    "TITLE": "Validação Shadow — Inteligência da IA",
+    "TITLE": "Validação de Análises — Inteligência da IA",
     "DESCRIPTION": "Avalie o que a IA acertou, errou ou deixou sem resposta e descubra exatamente o que ajustar: FAQ, instrução, ferramenta ou comportamento.",
     "REFRESH": "Atualizar",
     "LOADING": "Carregando...",
-    "EMPTY": "Nenhuma execução registrada ainda. Coloque uma caixa em modo Shadow para começar a avaliar.",
+    "EMPTY": "Nenhuma execução registrada ainda. Crie um agente de análise para começar a avaliar.",
     "NONE": "—",
     "COST_DISCLAIMER": "Os custos exibidos são estimativas do consumo dos modelos de IA. Não incluem impostos, IOF, taxas de câmbio ou outros encargos — portanto podem divergir da fatura final.",
     "FILTERS": {
@@ -118,11 +118,11 @@
     }
   },
   "AI_SHADOWS": {
-    "TITLE": "Shadow",
+    "TITLE": "Análises com IA",
     "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
-    "NEW": "Novo shadow",
+    "NEW": "Novo agente de análise",
     "ANALYSIS": "Ver análise",
-    "EMPTY": "Nenhum shadow criado. Crie um observador para auditar seus atendimentos.",
+    "EMPTY": "Nenhum agente de análise criado. Crie um agente para auditar seus atendimentos.",
     "INBOX_COUNT": "{count} caixas",
     "STATUS": {
       "ACTIVE": "Ativo",
@@ -131,7 +131,7 @@
     "FORM": {
       "NAME": "Nome",
       "INSTRUCTIONS": "Instruções de avaliação",
-      "INSTRUCTIONS_PLACEHOLDER": "O que o shadow deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
+      "INSTRUCTIONS_PLACEHOLDER": "O que o agente de análise deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
       "INBOXES": "Caixas observadas",
       "NO_INBOXES": "Nenhuma caixa nesta conta.",
       "SCOPE": "O que observar",
@@ -150,18 +150,18 @@
       "TOOLS_MISSING": "Ferramenta que faltou",
       "RECURRING": "Temas recorrentes"
     },
-    "SAVED": "Shadow salvo.",
-    "DELETED": "Shadow excluído.",
+    "SAVED": "Agente de análise salvo.",
+    "DELETED": "Agente de análise excluído.",
     "ERROR": "Algo deu errado.",
     "DELETE_MODAL": {
-      "TITLE": "Excluir shadow",
+      "TITLE": "Excluir agente de análise",
       "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
       "CONFIRM": "Excluir",
       "CANCEL": "Cancelar",
       "PLACEHOLDER": "Digite {name} para confirmar"
     },
     "TABS": {
-      "SHADOWS": "Shadows",
+      "SHADOWS": "Análises com IA",
       "ANALYSIS": "Análises"
     }
   }
