@@ -18,7 +18,6 @@ const blank = () => ({
   total_errors: 0,
   by_model: [],
   by_agent: [],
-  by_department: [],
   by_error: [],
 });
 
@@ -27,11 +26,20 @@ const formatTokens = value => numberFormat.format(value || 0);
 const data = ref(blank());
 const isLoading = ref(false);
 const period = ref('0');
+const agentId = ref('');
+const agents = ref([]);
 
 const periodOptions = computed(() => [
   { value: '0', label: t('AI_COSTS.PERIOD_ALL') },
   { value: '7', label: t('AI_COSTS.PERIOD_7') },
   { value: '30', label: t('AI_COSTS.PERIOD_30') },
+]);
+const agentOptions = computed(() => [
+  { value: '', label: t('AI_COSTS.AGENT_ALL') },
+  ...agents.value.map(a => ({
+    value: String(a.id),
+    label: a.assistant_name || a.name,
+  })),
 ]);
 
 const errorTypeLabel = type =>
@@ -39,13 +47,27 @@ const errorTypeLabel = type =>
 
 const hasData = computed(() => data.value.total_runs > 0);
 
+const fetchAgents = async () => {
+  try {
+    const { data: payload } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/ai_agents`
+    );
+    agents.value = Array.isArray(payload) ? payload : [];
+  } catch (error) {
+    agents.value = [];
+  }
+};
+
 const fetchCosts = async () => {
   isLoading.value = true;
   try {
+    const params = {};
     const days = Number(period.value) || 0;
+    if (days > 0) params.days = days;
+    if (agentId.value) params.agent_id = agentId.value;
     const { data: payload } = await axios.get(
       `/api/v1/accounts/${route.params.accountId}/ai_costs`,
-      { params: days > 0 ? { days } : {} }
+      { params }
     );
     data.value = { ...blank(), ...(payload || {}) };
   } finally {
@@ -53,8 +75,11 @@ const fetchCosts = async () => {
   }
 };
 
-watch(period, fetchCosts);
-onMounted(fetchCosts);
+watch([period, agentId], fetchCosts);
+onMounted(() => {
+  fetchAgents();
+  fetchCosts();
+});
 </script>
 
 <template>
@@ -72,11 +97,19 @@ onMounted(fetchCosts);
               {{ $t('AI_COSTS.DESCRIPTION') }}
             </p>
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-n-slate-11">{{
-              $t('AI_COSTS.PERIOD')
-            }}</span>
-            <Select v-model="period" :options="periodOptions" />
+          <div class="flex items-end gap-3">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-n-slate-11">{{
+                $t('AI_COSTS.AGENT')
+              }}</span>
+              <Select v-model="agentId" :options="agentOptions" />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-n-slate-11">{{
+                $t('AI_COSTS.PERIOD')
+              }}</span>
+              <Select v-model="period" :options="periodOptions" />
+            </div>
           </div>
         </div>
 
@@ -167,36 +200,6 @@ onMounted(fetchCosts);
               </p>
               <div
                 v-for="(row, index) in data.by_agent"
-                :key="index"
-                class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
-              >
-                <span class="text-n-slate-12 truncate">{{ row.name }}</span>
-                <span class="shrink-0 flex items-center gap-4 text-n-slate-11">
-                  <span>{{
-                    $t('AI_COSTS.COLUMNS.RUNS') + ': ' + row.runs
-                  }}</span>
-                  <span class="text-n-slate-12 font-medium">{{
-                    'US$ ' + row.cost
-                  }}</span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- By department -->
-          <div class="flex flex-col gap-2">
-            <h2 class="text-sm font-semibold text-n-slate-12">
-              {{ $t('AI_COSTS.BY_DEPARTMENT') }}
-            </h2>
-            <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
-              <p
-                v-if="!data.by_department.length"
-                class="text-sm text-n-slate-11 px-4 py-3 mb-0"
-              >
-                {{ $t('AI_COSTS.EMPTY_SECTION') }}
-              </p>
-              <div
-                v-for="(row, index) in data.by_department"
                 :key="index"
                 class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
               >

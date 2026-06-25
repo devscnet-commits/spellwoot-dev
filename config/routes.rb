@@ -74,7 +74,6 @@ Rails.application.routes.draw do
             end
             resources :ai_departments, only: %i[index create update destroy] do
               resources :ai_tools, only: %i[index create update destroy]
-              resources :ai_knowledge_sources, only: %i[index create update destroy]
               resources :ai_lead_variables, only: %i[index create update destroy]
               resource :ai_department_integrations, only: %i[show update]
               resource :ai_department_inboxes, only: %i[show update]
@@ -83,6 +82,7 @@ Rails.application.routes.draw do
               end
             end
           end
+          resources :ai_knowledge_sources, only: %i[index create update destroy]
           resources :ai_operation_profiles, only: %i[index create update destroy]
           resources :ai_integration_links, only: %i[index create update destroy] do
             member { post :test }

@@ -6,7 +6,16 @@
     "LOADING": "Carregando...",
     "EMPTY": "Nenhuma execução registrada ainda. Coloque uma caixa em modo Shadow para começar a avaliar.",
     "NONE": "—",
+    "COST_DISCLAIMER": "Os custos exibidos são estimativas do consumo dos modelos de IA. Não incluem impostos, IOF, taxas de câmbio ou outros encargos — portanto podem divergir da fatura final.",
     "FILTERS": {
+      "TITLE": "Filtros",
+      "LABEL_PERIOD": "Período",
+      "LABEL_DEPARTMENT": "Departamento",
+      "LABEL_ERROR": "Tipo de erro",
+      "LABEL_STATUS": "Status",
+      "LABEL_REPLY": "Resposta da IA",
+      "LABEL_TOOL": "Ferramenta",
+      "LABEL_CONVERSATION": "Conversa",
       "PERIOD": "Período",
       "PERIOD_ALL": "Todo o período",
       "PERIOD_7": "Últimos 7 dias",
@@ -88,6 +97,7 @@
       "TOOL_MISSING": "não configurada",
       "KNOWLEDGE_COUNT": "{count} conhecimentos usados",
       "CONFIDENCE": "Confiança",
+      "COST_ESTIMATED": "US$ {value} (estimado)",
       "EMPTY": "Nenhuma execução com os filtros atuais."
     },
     "STATUS": {
@@ -108,7 +118,7 @@
     }
   },
   "AI_SHADOWS": {
-    "TITLE": "Validação (Shadow)",
+    "TITLE": "Shadow",
     "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
     "NEW": "Novo shadow",
     "ANALYSIS": "Ver análise",
@@ -149,6 +159,10 @@
       "CONFIRM": "Excluir",
       "CANCEL": "Cancelar",
       "PLACEHOLDER": "Digite {name} para confirmar"
+    },
+    "TABS": {
+      "SHADOWS": "Shadows",
+      "ANALYSIS": "Análises"
     }
   }
 }

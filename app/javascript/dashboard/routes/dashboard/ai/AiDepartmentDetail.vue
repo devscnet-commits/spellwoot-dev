@@ -5,10 +5,9 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Logo from 'next/icon/Logo.vue';
-import Select from 'dashboard/components-next/select/Select.vue';
+import Switch from 'dashboard/components-next/switch/Switch.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
-import AiKnowledge from './AiKnowledge.vue';
 
 // When embedded inside the agent (the agent's single default department), ids come by prop
 // and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
@@ -30,8 +29,8 @@ const activeTab = ref('instructions');
 
 // Flattened into agent-level tabs when embedded: each group maps to underlying sections.
 const SECTION_GROUPS = {
-  behavior: ['instructions', 'attendance', 'followup', 'integrations'],
-  knowledge: ['knowledge'],
+  behavior: ['instructions', 'attendance'],
+  followup: ['followup'],
   steps: ['steps'],
   tools: ['tools'],
 };
@@ -49,26 +48,6 @@ const isSaving = ref(false);
 // Operational summary counts (read-only) served by the departments index serializer.
 const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 
-const VAR_TYPES = ['texto', 'numero', 'booleano', 'lista'];
-const varTypeOptions = computed(() =>
-  VAR_TYPES.map(vt => ({
-    value: vt,
-    label: t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${vt}`),
-  }))
-);
-const replyScopeOptions = computed(() => [
-  { value: 'off', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_OFF') },
-  { value: 'canary', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_CANARY') },
-  { value: 'all', label: t('AI_DEPARTMENTS.ATTENDANCE.REPLY_ALL') },
-]);
-const onTimeoutOptions = computed(() => [
-  {
-    value: 'resolve',
-    label: t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_RESOLVE'),
-  },
-  { value: 'none', label: t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT_NONE') },
-]);
-
 const form = reactive({
   name: '',
   objetivo: '',
@@ -78,18 +57,15 @@ const form = reactive({
   transfer_when_steps: '',
   close_when_steps: '',
   // Atendimento
-  auto_attendance: true,
-  sla_timeout: '',
-  on_timeout: 'resolve',
-  hours_enabled: false,
   group_delay_seconds: '',
   max_input_chars: '',
-  copilot_enabled: false,
   followup_enabled: false,
   followup_delay: '',
   followup_message: '',
-  reply_scope: 'off',
-  canary_label: '',
+  followup_max: '',
+  followup_when_online: false,
+  followup_window_start: '',
+  followup_window_end: '',
   disabled_custom_attributes: [],
   is_default: false,
   position: 0,
@@ -134,7 +110,6 @@ const arrayToLines = value => (Array.isArray(value) ? value.join('\n') : '');
 const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
-  const sla = dept.sla || {};
   const followUp = dept.follow_up || {};
   Object.assign(form, {
     name: dept.name || '',
@@ -144,18 +119,15 @@ const hydrate = dept => {
     steps: arrayToLines(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
-    auto_attendance: behavior.auto_attendance !== false,
-    sla_timeout: sla.response_timeout_minutes ?? '',
-    on_timeout: sla.on_timeout || 'resolve',
-    hours_enabled: behavior.business_hours?.enabled || false,
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
-    copilot_enabled: behavior.copilot?.enabled || false,
     followup_enabled: followUp.enabled || false,
     followup_delay: followUp.delay_minutes ?? '',
     followup_message: followUp.message || '',
-    reply_scope: behavior.reply_scope || 'off',
-    canary_label: behavior.canary_label || '',
+    followup_max: followUp.max_followups ?? '',
+    followup_when_online: followUp.when_agents_online || false,
+    followup_window_start: followUp.window_start || '',
+    followup_window_end: followUp.window_end || '',
     disabled_custom_attributes: Array.isArray(
       behavior.disabled_custom_attributes
     )
@@ -189,26 +161,23 @@ const buildPayload = () => ({
     objetivo: form.objetivo,
     instructions: form.instructions,
     status: form.status,
-    is_default: form.is_default,
+    is_default: true,
     position: form.position,
-    sla: {
-      response_timeout_minutes: Number(form.sla_timeout) || 0,
-      on_timeout: form.on_timeout,
-    },
     behavior: {
-      auto_attendance: form.auto_attendance,
-      business_hours: { enabled: form.hours_enabled },
+      auto_attendance: true,
       grouping: { delay_seconds: Number(form.group_delay_seconds) || 0 },
       max_input_chars: Number(form.max_input_chars) || 0,
-      copilot: { enabled: form.copilot_enabled },
-      reply_scope: form.reply_scope,
-      canary_label: form.canary_label,
+      reply_scope: 'all',
       disabled_custom_attributes: form.disabled_custom_attributes,
     },
     follow_up: {
       enabled: form.followup_enabled,
       delay_minutes: Number(form.followup_delay) || 0,
       message: form.followup_message,
+      max_followups: Number(form.followup_max) || 0,
+      when_agents_online: form.followup_when_online,
+      window_start: form.followup_window_start,
+      window_end: form.followup_window_end,
     },
     playbook: {
       objetivo: form.objetivo,
@@ -251,123 +220,6 @@ const goBack = () =>
     params: { agentId: route.params.agentId },
   });
 
-// --- Lead variables ---
-const leadVars = ref([]);
-const showVarForm = ref(false);
-const varForm = reactive({
-  id: null,
-  name: '',
-  description: '',
-  var_type: 'texto',
-  visible_in_first_chat: true,
-  values: [],
-});
-const { isDirty: varDirty, capture: captureVar } = useFormDirty(() => ({
-  ...varForm,
-}));
-
-// "Lista" options as chips — business config, not a textarea of data.
-const newOption = ref('');
-const optionError = ref('');
-const addOption = () => {
-  const value = newOption.value.trim();
-  if (!value) return;
-  if (varForm.values.some(v => v.toLowerCase() === value.toLowerCase())) {
-    optionError.value = t('AI_DEPARTMENTS.LEAD_VARS.DUPLICATE');
-    return;
-  }
-  varForm.values.push(value);
-  newOption.value = '';
-  optionError.value = '';
-};
-const removeOption = index => {
-  varForm.values.splice(index, 1);
-};
-const leadVarsUrl = () =>
-  `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`;
-
-const fetchLeadVars = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(leadVarsUrl());
-  leadVars.value = Array.isArray(data) ? data : [];
-};
-
-const openVarNew = () => {
-  Object.assign(varForm, {
-    id: null,
-    name: '',
-    description: '',
-    var_type: 'texto',
-    visible_in_first_chat: true,
-    values: [],
-  });
-  newOption.value = '';
-  optionError.value = '';
-  showVarForm.value = true;
-  captureVar();
-};
-const openVarEdit = v => {
-  Object.assign(varForm, {
-    id: v.id,
-    name: v.name,
-    description: v.description || '',
-    var_type: v.var_type,
-    visible_in_first_chat: v.visible_in_first_chat,
-    values: Array.isArray(v.values) ? [...v.values] : [],
-  });
-  newOption.value = '';
-  optionError.value = '';
-  showVarForm.value = true;
-  captureVar();
-};
-const saveVar = async () => {
-  const payload = {
-    ai_lead_variable: {
-      name: varForm.name,
-      description: varForm.description,
-      var_type: varForm.var_type,
-      visible_in_first_chat: varForm.visible_in_first_chat,
-      values: varForm.values.map(v => v.trim()).filter(Boolean),
-    },
-  };
-  try {
-    if (varForm.id) {
-      await axios.patch(`${leadVarsUrl()}/${varForm.id}`, payload);
-    } else {
-      await axios.post(leadVarsUrl(), payload);
-    }
-    showVarForm.value = false;
-    fetchLeadVars();
-  } catch (error) {
-    useAlert(t('AI_DEPARTMENTS.ERROR'));
-  }
-};
-const removeVar = async v => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_DEPARTMENTS.LEAD_VARS.CONFIRM_DELETE'))) return;
-  await axios.delete(`${leadVarsUrl()}/${v.id}`);
-  fetchLeadVars();
-};
-
-// --- Integrations ---
-const integrations = ref([]);
-const integrationsUrl = () =>
-  `${deptCollectionUrl()}/${departmentId.value}/ai_department_integrations`;
-
-const {
-  isDirty: integrationsDirty,
-  capture: captureIntegrations,
-  reset: resetIntegrations,
-} = useFormDirty(() => integrations.value.map(i => !!i.enabled));
-const fetchIntegrations = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(integrationsUrl());
-  integrations.value = (Array.isArray(data) ? data : []).map(i => ({
-    ...i,
-    enabled: !!i.enabled,
-  }));
-  captureIntegrations();
-};
 // Operational readiness (%): a checklist over data already loaded — no backend.
 const readinessChecks = computed(() => [
   { key: 'OBJETIVO', ok: !!form.objetivo?.trim() },
@@ -382,47 +234,6 @@ const readinessPct = computed(() => {
     ? Math.round((checks.filter(c => c.ok).length / checks.length) * 100)
     : 0;
 });
-
-const saveIntegrations = async () => {
-  const ids = integrations.value.filter(i => i.enabled).map(i => i.id);
-  try {
-    await axios.put(integrationsUrl(), { integration_link_ids: ids });
-    useAlert(t('AI_DEPARTMENTS.SAVED'));
-    resetIntegrations();
-  } catch (error) {
-    useAlert(t('AI_DEPARTMENTS.ERROR'));
-  }
-};
-
-// --- Inbox routing (caixa -> departamento) ---
-const mappedInboxes = ref([]);
-const inboxesUrl = () =>
-  `${deptCollectionUrl()}/${departmentId.value}/ai_department_inboxes`;
-
-const {
-  isDirty: mappedInboxesDirty,
-  capture: captureMappedInboxes,
-  reset: resetMappedInboxes,
-} = useFormDirty(() => mappedInboxes.value.map(i => !!i.enabled));
-const fetchMappedInboxes = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(inboxesUrl());
-  mappedInboxes.value = (Array.isArray(data) ? data : []).map(i => ({
-    ...i,
-    enabled: !!i.enabled,
-  }));
-  captureMappedInboxes();
-};
-const saveMappedInboxes = async () => {
-  const ids = mappedInboxes.value.filter(i => i.enabled).map(i => i.inbox_id);
-  try {
-    await axios.put(inboxesUrl(), { inbox_ids: ids });
-    useAlert(t('AI_DEPARTMENTS.SAVED'));
-    resetMappedInboxes();
-  } catch (error) {
-    useAlert(t('AI_DEPARTMENTS.ERROR'));
-  }
-};
 
 // --- Histórico de versões do playbook ---
 const versions = ref([]);
@@ -452,13 +263,7 @@ const formatVersionDate = iso => (iso ? new Date(iso).toLocaleString() : '');
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
-  await Promise.all([
-    fetchLeadVars(),
-    fetchIntegrations(),
-    fetchMappedInboxes(),
-    fetchVersions(),
-    fetchCustomAttributes(),
-  ]);
+  await Promise.all([fetchVersions(), fetchCustomAttributes()]);
 });
 </script>
 
@@ -521,24 +326,6 @@ onMounted(async () => {
               $t('AI_DEPARTMENTS.STATS_KNOWLEDGE', { count: summary.knowledge })
             }}
           </span>
-          <span
-            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
-            :class="
-              form.auto_attendance
-                ? 'bg-n-teal-3 text-n-teal-11'
-                : 'bg-n-alpha-2 text-n-slate-11'
-            "
-          >
-            <span
-              class="size-1.5 rounded-full"
-              :class="form.auto_attendance ? 'bg-n-teal-9' : 'bg-n-slate-7'"
-            />
-            {{
-              form.auto_attendance
-                ? $t('AI_DEPARTMENTS.AUTO_ON')
-                : $t('AI_DEPARTMENTS.AUTO_OFF')
-            }}
-          </span>
         </div>
 
         <!-- Prontidão Operacional: checklist sobre dados já carregados (sem backend) -->
@@ -588,7 +375,7 @@ onMounted(async () => {
           class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-n-weak"
         >
           <button
-            v-for="tab in ['instructions', 'knowledge', 'steps', 'tools']"
+            v-for="tab in ['instructions', 'steps', 'tools']"
             :key="tab"
             type="button"
             class="pb-2.5 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
@@ -609,7 +396,7 @@ onMounted(async () => {
             }}</span>
           </span>
           <button
-            v-for="tab in ['attendance', 'followup', 'integrations']"
+            v-for="tab in ['attendance', 'followup']"
             :key="tab"
             type="button"
             class="pb-2.5 text-sm font-medium border-b-2 -mb-px disabled:opacity-40"
@@ -663,66 +450,6 @@ onMounted(async () => {
             </label>
           </section>
 
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
-              </span>
-              <button
-                type="button"
-                class="text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white disabled:opacity-50"
-                :disabled="isNew"
-                @click="openVarNew"
-              >
-                + {{ $t('AI_DEPARTMENTS.LEAD_VARS.NEW') }}
-              </button>
-            </div>
-            <p v-if="!leadVars.length" class="text-sm text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
-            </p>
-            <div
-              v-for="v in leadVars"
-              :key="v.id"
-              class="flex items-center justify-between gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-4 py-3"
-            >
-              <div class="min-w-0">
-                <p
-                  class="text-sm font-medium text-n-slate-12 flex items-center gap-2 mb-0"
-                >
-                  {{ v.name }}
-                  <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-n-alpha-2 text-xs font-normal text-n-slate-11"
-                  >
-                    {{ $t(`AI_DEPARTMENTS.LEAD_VARS.TYPES.${v.var_type}`) }}
-                  </span>
-                </p>
-                <p class="text-xs text-n-slate-11 truncate mb-0">
-                  {{ v.description }}
-                </p>
-              </div>
-              <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
-                <button
-                  type="button"
-                  class="hover:text-n-slate-12"
-                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.EDIT')"
-                  @click="openVarEdit(v)"
-                >
-                  <span class="i-lucide-pencil size-4 inline-block" />
-                </button>
-                <button
-                  type="button"
-                  class="hover:text-n-ruby-11"
-                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.DELETE')"
-                  @click="removeVar(v)"
-                >
-                  <span class="i-lucide-trash-2 size-4 inline-block" />
-                </button>
-              </div>
-            </div>
-          </section>
-
           <!-- Atributos personalizados (da conta): usar ou excluir por agente -->
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
@@ -762,297 +489,29 @@ onMounted(async () => {
                     }}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  class="shrink-0 text-xs font-medium px-3 py-1 rounded-full transition-colors"
-                  :class="
-                    attrEnabled(attr.attribute_key)
-                      ? 'bg-n-teal-3 text-n-teal-11'
-                      : 'bg-n-alpha-2 text-n-slate-11'
-                  "
-                  @click="toggleAttr(attr.attribute_key)"
-                >
-                  {{
-                    attrEnabled(attr.attribute_key)
-                      ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.USING')
-                      : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EXCLUDED')
-                  }}
-                </button>
+                <div class="shrink-0 flex items-center gap-2.5">
+                  <span class="text-xs text-n-slate-11">
+                    {{
+                      attrEnabled(attr.attribute_key)
+                        ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.USING')
+                        : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EXCLUDED')
+                    }}
+                  </span>
+                  <Switch
+                    :model-value="attrEnabled(attr.attribute_key)"
+                    @change="toggleAttr(attr.attribute_key)"
+                  />
+                </div>
               </div>
             </div>
           </section>
-
-          <!-- Modal: adicionar/editar variável -->
-          <div
-            v-if="showVarForm"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-n-alpha-black2 p-4"
-            @click.self="showVarForm = false"
-          >
-            <div
-              class="w-full max-w-md rounded-2xl border border-n-weak bg-n-solid-1 p-5 flex flex-col gap-3"
-            >
-              <h3 class="text-sm font-semibold text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.MODAL_TITLE') }}
-              </h3>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.NAME') }}
-                <input
-                  v-model="varForm.name"
-                  type="text"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
-                <input
-                  v-model="varForm.description"
-                  type="text"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <div class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}</span>
-                <Select v-model="varForm.var_type" :options="varTypeOptions" />
-                <span class="text-xs text-n-slate-11">
-                  {{
-                    $t(`AI_DEPARTMENTS.LEAD_VARS.TYPE_HINT.${varForm.var_type}`)
-                  }}
-                </span>
-              </div>
-              <div
-                v-if="varForm.var_type === 'lista'"
-                class="flex flex-col gap-2 text-sm text-n-slate-12"
-              >
-                <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS_LABEL') }}</span>
-                <div v-if="varForm.values.length" class="flex flex-wrap gap-2">
-                  <span
-                    v-for="(option, index) in varForm.values"
-                    :key="index"
-                    class="inline-flex items-center gap-1 rounded-full bg-n-alpha-2 text-n-slate-12 pl-3 pr-1.5 py-1"
-                  >
-                    {{ option }}
-                    <button
-                      type="button"
-                      class="text-n-slate-11 hover:text-n-ruby-11"
-                      :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.REMOVE_OPTION')"
-                      @click="removeOption(index)"
-                    >
-                      <span class="i-lucide-x size-3.5 inline-block" />
-                    </button>
-                  </span>
-                </div>
-                <input
-                  v-model="newOption"
-                  type="text"
-                  :placeholder="
-                    $t('AI_DEPARTMENTS.LEAD_VARS.OPTION_PLACEHOLDER')
-                  "
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                  @keydown.enter.prevent="addOption"
-                />
-                <span v-if="optionError" class="text-xs text-n-ruby-11">
-                  {{ optionError }}
-                </span>
-              </div>
-              <label class="flex items-center gap-2 text-sm text-n-slate-12">
-                <input
-                  v-model="varForm.visible_in_first_chat"
-                  type="checkbox"
-                />
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.VISIBLE') }}
-              </label>
-              <div class="flex justify-end gap-2">
-                <button
-                  type="button"
-                  class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-                  @click="showVarForm = false"
-                >
-                  {{ $t('AI_DEPARTMENTS.LEAD_VARS.CANCEL') }}
-                </button>
-                <button
-                  type="button"
-                  :disabled="!varDirty"
-                  class="text-sm font-medium px-4 py-2 rounded-full bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  @click="saveVar"
-                >
-                  + {{ $t('AI_DEPARTMENTS.LEAD_VARS.SAVE') }}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- ATENDIMENTO -->
         <div
           v-if="visibleSections.has('attendance')"
-          class="flex flex-col gap-5 max-w-3xl"
+          class="flex flex-col gap-5"
         >
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex flex-col gap-0.5 min-w-0">
-                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
-                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TITLE') }}
-                </h2>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{
-                    form.auto_attendance
-                      ? $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_HINT_ON')
-                      : $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_HINT_OFF')
-                  }}
-                </p>
-              </div>
-              <span
-                class="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
-                :class="
-                  form.auto_attendance
-                    ? 'bg-n-teal-3 text-n-teal-11'
-                    : 'bg-n-alpha-2 text-n-slate-11'
-                "
-              >
-                <span
-                  class="size-1.5 rounded-full"
-                  :class="form.auto_attendance ? 'bg-n-teal-9' : 'bg-n-slate-7'"
-                />
-                {{
-                  form.auto_attendance
-                    ? $t('AI_DEPARTMENTS.STATE_ON')
-                    : $t('AI_DEPARTMENTS.STATE_OFF')
-                }}
-              </span>
-            </div>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.auto_attendance" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.AUTO_TOGGLE') }}
-            </label>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex flex-col gap-0.5 min-w-0">
-                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
-                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.DEFAULT_TITLE') }}
-                </h2>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.DEFAULT_HINT') }}
-                </p>
-              </div>
-              <span
-                v-if="form.is_default"
-                class="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-n-brand/10 text-n-brand"
-              >
-                <span class="i-lucide-star size-3" />
-                {{ $t('AI_DEPARTMENTS.DEFAULT_BADGE') }}
-              </span>
-            </div>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.is_default" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.DEFAULT_TOGGLE') }}
-            </label>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_TITLE') }}
-            </h2>
-            <p class="text-sm text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_HINT') }}
-            </p>
-            <p v-if="!mappedInboxes.length" class="text-sm text-n-slate-11">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_EMPTY') }}
-            </p>
-            <template v-else>
-              <div
-                class="border border-n-weak rounded-xl divide-y divide-n-weak"
-              >
-                <label
-                  v-for="inbox in mappedInboxes"
-                  :key="inbox.inbox_id"
-                  class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
-                >
-                  <input v-model="inbox.enabled" type="checkbox" />
-                  <span>{{ inbox.name }}</span>
-                </label>
-              </div>
-              <div class="flex justify-end">
-                <button
-                  type="button"
-                  :disabled="!mappedInboxesDirty"
-                  class="text-sm font-medium px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12 disabled:opacity-50 disabled:cursor-not-allowed"
-                  @click="saveMappedInboxes"
-                >
-                  {{ $t('AI_DEPARTMENTS.ATTENDANCE.INBOXES_SAVE') }}
-                </button>
-              </div>
-            </template>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_TITLE') }}
-            </h2>
-            <p class="text-sm text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_HINT') }}
-            </p>
-            <div class="flex flex-col gap-1 text-sm text-n-slate-12">
-              <span>{{ $t('AI_DEPARTMENTS.ATTENDANCE.REPLY_SCOPE') }}</span>
-              <Select v-model="form.reply_scope" :options="replyScopeOptions" />
-            </div>
-            <label
-              v-if="form.reply_scope === 'canary'"
-              class="flex flex-col gap-1 text-sm text-n-slate-12"
-            >
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.CANARY_LABEL') }}
-              <input
-                v-model="form.canary_label"
-                type="text"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              />
-            </label>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TITLE') }}
-            </h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.SLA_TIMEOUT') }}
-                <input
-                  v-model="form.sla_timeout"
-                  type="number"
-                  min="0"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <div class="flex flex-col gap-1 text-sm text-n-slate-12">
-                <span>{{ $t('AI_DEPARTMENTS.ATTENDANCE.ON_TIMEOUT') }}</span>
-                <Select v-model="form.on_timeout" :options="onTimeoutOptions" />
-              </div>
-            </div>
-          </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TITLE') }}
-            </h2>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.hours_enabled" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HOURS_TOGGLE') }}
-            </label>
-          </section>
-
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
@@ -1092,38 +551,43 @@ onMounted(async () => {
               />
             </label>
           </section>
-
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TITLE') }}
-            </h2>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.copilot_enabled" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.COPILOT_TOGGLE') }}
-            </label>
-          </section>
         </div>
 
         <!-- FOLLOW-UP -->
-        <div
-          v-if="visibleSections.has('followup')"
-          class="flex flex-col gap-5 max-w-3xl"
-        >
+        <div v-if="visibleSections.has('followup')" class="flex flex-col gap-5">
           <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
-            <h2 class="text-base font-semibold text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TITLE') }}
-            </h2>
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.followup_enabled" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_TOGGLE') }}
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.TITLE') }}
+                </h2>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.HINT') }}
+                </p>
+              </div>
+              <label
+                class="shrink-0 flex items-center gap-2 text-sm text-n-slate-12"
+              >
+                <input v-model="form.followup_enabled" type="checkbox" />
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.TOGGLE') }}
+              </label>
+            </div>
+
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FOLLOWUP.MESSAGE') }}
+              <textarea
+                v-model="form.followup_message"
+                rows="3"
+                :placeholder="$t('AI_DEPARTMENTS.FOLLOWUP.MESSAGE_PLACEHOLDER')"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
             </label>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
               <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_DELAY') }}
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.INTERVAL') }}
                 <input
                   v-model="form.followup_delay"
                   type="number"
@@ -1132,22 +596,52 @@ onMounted(async () => {
                 />
               </label>
               <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.ATTENDANCE.FOLLOWUP_MESSAGE') }}
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.MAX') }}
                 <input
-                  v-model="form.followup_message"
-                  type="text"
+                  v-model="form.followup_max"
+                  type="number"
+                  min="0"
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
                 />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.MAX_HINT') }}
+                </span>
               </label>
             </div>
+
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW') }}
+              </span>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="form.followup_window_start"
+                  type="time"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                />
+                <span class="text-sm text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
+                </span>
+                <input
+                  v-model="form.followup_window_end"
+                  type="time"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                />
+              </div>
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_HINT') }}
+              </span>
+            </div>
+
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.followup_when_online" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.FOLLOWUP.WHEN_ONLINE') }}
+            </label>
           </section>
         </div>
 
         <!-- ETAPAS -->
-        <div
-          v-if="visibleSections.has('steps')"
-          class="flex flex-col gap-5 max-w-3xl"
-        >
+        <div v-if="visibleSections.has('steps')" class="flex flex-col gap-5">
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
@@ -1243,13 +737,6 @@ onMounted(async () => {
           </div>
         </div>
 
-        <!-- CONHECIMENTO -->
-        <AiKnowledge
-          v-if="visibleSections.has('knowledge') && !isNew"
-          :agent-id="route.params.agentId"
-          :department-id="departmentId"
-        />
-
         <!-- FERRAMENTAS -->
         <AiTools
           v-if="visibleSections.has('tools') && !isNew"
@@ -1257,46 +744,10 @@ onMounted(async () => {
           :department-id="departmentId"
         />
 
-        <!-- INTEGRAÇÕES -->
-        <div
-          v-if="visibleSections.has('integrations')"
-          class="flex flex-col gap-4 max-w-3xl"
-        >
-          <h2 class="text-base font-semibold text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.INTEGRATIONS.TITLE') }}
-          </h2>
-          <p v-if="!integrations.length" class="text-sm text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.INTEGRATIONS.EMPTY') }}
-          </p>
-          <div
-            v-else
-            class="border border-n-weak rounded-xl divide-y divide-n-weak"
-          >
-            <label
-              v-for="i in integrations"
-              :key="i.id"
-              class="flex items-center gap-3 px-4 py-3 text-sm text-n-slate-12"
-            >
-              <input v-model="i.enabled" type="checkbox" />
-              <span class="font-medium">{{ i.name }}</span>
-            </label>
-          </div>
-          <div v-if="integrations.length" class="flex justify-end">
-            <button
-              type="button"
-              :disabled="!integrationsDirty"
-              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="saveIntegrations"
-            >
-              {{ $t('AI_DEPARTMENTS.INTEGRATIONS.SAVE') }}
-            </button>
-          </div>
-        </div>
-
         <!-- Save bar (config tabs only) -->
         <div
           v-if="showSave"
-          class="flex justify-end gap-2 border-t border-n-weak pt-4 max-w-3xl"
+          class="flex justify-end gap-2 border-t border-n-weak pt-4"
         >
           <button
             v-if="!embedded"

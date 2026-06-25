@@ -4,14 +4,15 @@
 class Ai::KnowledgeRetriever
   TOP_K = 3
 
-  def self.retrieve(department:, query:, account_id:)
-    retrieve_scored(department: department, query: query, account_id: account_id)[:chunks]
+  def self.retrieve(query:, account_id:)
+    retrieve_scored(query: query, account_id: account_id)[:chunks]
   end
 
   # Like retrieve, but also returns the top cosine similarity (1 - distance) of the best candidate
   # so the routing strategy can decide cache vs cheap vs premium. top_score is nil without vectors.
-  def self.retrieve_scored(department:, query:, account_id:)
-    source_ids = department.knowledge_sources.active.pluck(:id)
+  # Knowledge is account-wide (shared library): every agent draws from the same sources, ingested once.
+  def self.retrieve_scored(query:, account_id:)
+    source_ids = Ai::KnowledgeSource.active.where(account_id: account_id).pluck(:id)
     return { chunks: [], top_score: nil } if source_ids.empty? || query.blank?
 
     scope = Ai::KnowledgeChunk.where(ai_knowledge_source_id: source_ids)

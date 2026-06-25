@@ -1,7 +1,7 @@
 <script setup>
 /* global axios */
-import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
@@ -15,6 +15,7 @@ const props = defineProps({
 });
 
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 
 const tools = ref([]);
@@ -31,10 +32,95 @@ const blank = () => ({
   integration_link_id: '',
   governance: 'allowed',
   status: 'active',
+  // args drive the visual builder; input_schema_text stays the canonical value used on save.
+  args: [],
   input_schema_text: '{}',
 });
 const form = reactive(blank());
 const { isDirty, capture } = useFormDirty(() => ({ ...form }));
+
+// Visual argument builder: friendly types map to JSON Schema. The user never writes JSON,
+// but an "advanced" escape hatch exposes the raw schema for cases the builder can't model.
+const showAdvancedJson = ref(false);
+const ARG_TYPES = [
+  { value: 'string', i18n: 'TYPE_STRING' },
+  { value: 'number', i18n: 'TYPE_NUMBER' },
+  { value: 'boolean', i18n: 'TYPE_BOOLEAN' },
+  { value: 'date', i18n: 'TYPE_DATE' },
+  { value: 'array', i18n: 'TYPE_ARRAY' },
+];
+const argTypeOptions = computed(() =>
+  ARG_TYPES.map(a => ({ value: a.value, label: t(`AI_TOOLS.FORM.${a.i18n}`) }))
+);
+
+const blankArg = () => ({
+  name: '',
+  type: 'string',
+  required: false,
+  description: '',
+});
+
+// Build a JSON Schema object from the argument rows.
+const buildSchema = () => {
+  const properties = {};
+  const required = [];
+  form.args.forEach(arg => {
+    const key = (arg.name || '').trim();
+    if (!key) return;
+    const prop =
+      arg.type === 'date'
+        ? { type: 'string', format: 'date' }
+        : { type: arg.type };
+    if ((arg.description || '').trim())
+      prop.description = arg.description.trim();
+    properties[key] = prop;
+    if (arg.required) required.push(key);
+  });
+  const schema = { type: 'object', properties };
+  if (required.length) schema.required = required;
+  return schema;
+};
+
+// Turn an existing JSON Schema back into rows for the builder.
+const parseSchema = schema => {
+  const schemaProps = schema && schema.properties ? schema.properties : {};
+  const req = Array.isArray(schema && schema.required) ? schema.required : [];
+  return Object.entries(schemaProps).map(([name, def]) => ({
+    name,
+    type: def && def.format === 'date' ? 'date' : (def && def.type) || 'string',
+    required: req.includes(name),
+    description: (def && def.description) || '',
+  }));
+};
+
+const addArg = () => form.args.push(blankArg());
+const removeArg = index => form.args.splice(index, 1);
+
+// Keep the canonical schema text in sync while the builder is the active editor.
+watch(
+  () => form.args,
+  () => {
+    if (!showAdvancedJson.value) {
+      form.input_schema_text = JSON.stringify(buildSchema(), null, 2);
+    }
+  },
+  { deep: true }
+);
+
+const toggleAdvanced = () => {
+  if (showAdvancedJson.value) {
+    // leaving advanced: re-derive rows from whatever JSON the user left behind
+    try {
+      form.args = parseSchema(JSON.parse(form.input_schema_text || '{}'));
+    } catch (error) {
+      useAlert(t('AI_TOOLS.INVALID_JSON'));
+      return;
+    }
+  } else {
+    form.input_schema_text = JSON.stringify(buildSchema(), null, 2);
+  }
+  showAdvancedJson.value = !showAdvancedJson.value;
+};
 
 // Business-friendly names for the internal capabilities (hide the technical keys from the UI).
 const CAPABILITIES = [
@@ -79,10 +165,24 @@ const capabilityOptions = computed(() => [
     label: t(`AI_TOOLS.CAPABILITIES.${c.i18n}`),
   })),
 ]);
+// Integrations come from Configurações → Integrações; flag inactive ones so the user
+// doesn't pick a connector that won't run.
+const hasIntegrations = computed(() => integrations.value.length > 0);
 const integrationOptions = computed(() => [
   { value: '', label: t('AI_TOOLS.FORM.NONE') },
-  ...integrations.value.map(link => ({ value: link.id, label: link.name })),
+  ...integrations.value.map(link => ({
+    value: link.id,
+    label:
+      link.status === 'active'
+        ? link.name
+        : `${link.name} · ${t('AI_TOOLS.FORM.INTEGRATION_INACTIVE')}`,
+  })),
 ]);
+const goIntegrations = () =>
+  router.push({
+    name: 'settings_integrations_ai_systems',
+    params: { accountId: route.params.accountId },
+  });
 const governanceOptions = computed(() => [
   { value: 'allowed', label: t('AI_TOOLS.FORM.GOV_ALLOWED') },
   { value: 'require_confirmation', label: t('AI_TOOLS.FORM.GOV_CONFIRMATION') },
@@ -119,6 +219,7 @@ const fetchIntegrations = async () => {
 
 const openNew = () => {
   Object.assign(form, blank());
+  showAdvancedJson.value = false;
   showForm.value = true;
   capture();
 };
@@ -133,19 +234,25 @@ const openEdit = tool => {
     integration_link_id: tool.integration_link_id || '',
     governance: tool.governance,
     status: tool.status,
+    args: parseSchema(tool.input_schema || {}),
     input_schema_text: JSON.stringify(tool.input_schema || {}, null, 2),
   });
+  showAdvancedJson.value = false;
   showForm.value = true;
   capture();
 };
 
 const save = async () => {
   let inputSchema = {};
-  try {
-    inputSchema = JSON.parse(form.input_schema_text || '{}');
-  } catch (error) {
-    useAlert(t('AI_TOOLS.INVALID_JSON'));
-    return;
+  if (showAdvancedJson.value) {
+    try {
+      inputSchema = JSON.parse(form.input_schema_text || '{}');
+    } catch (error) {
+      useAlert(t('AI_TOOLS.INVALID_JSON'));
+      return;
+    }
+  } else {
+    inputSchema = buildSchema();
   }
   const payload = {
     ai_tool: {
@@ -287,9 +394,25 @@ onMounted(() => {
         <div v-else class="flex flex-col gap-1 text-sm text-n-slate-12">
           <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
           <Select
+            v-if="hasIntegrations"
             v-model="form.integration_link_id"
             :options="integrationOptions"
           />
+          <div
+            v-else
+            class="rounded-lg border border-dashed border-n-weak bg-n-alpha-1 px-3 py-3 flex flex-col gap-1.5"
+          >
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_TOOLS.FORM.INTEGRATION_EMPTY') }}
+            </span>
+            <button
+              type="button"
+              class="self-start text-xs font-medium text-n-brand hover:underline"
+              @click="goIntegrations"
+            >
+              {{ $t('AI_TOOLS.FORM.INTEGRATION_CONFIGURE') }}
+            </button>
+          </div>
         </div>
         <div class="flex flex-col gap-1 text-sm text-n-slate-12">
           <span>{{ $t('AI_TOOLS.FORM.GOVERNANCE') }}</span>
@@ -307,14 +430,83 @@ onMounted(() => {
           class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
         />
       </label>
-      <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-        {{ $t('AI_TOOLS.FORM.INPUT_SCHEMA') }}
+      <!-- Argumentos da ação: construtor visual + JSON avançado opcional -->
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-sm text-n-slate-12">
+            {{ $t('AI_TOOLS.FORM.ARGS_LABEL') }}
+          </span>
+          <button
+            type="button"
+            class="text-xs text-n-slate-11 hover:text-n-brand"
+            @click="toggleAdvanced"
+          >
+            {{
+              showAdvancedJson
+                ? $t('AI_TOOLS.FORM.ARGS_BUILDER')
+                : $t('AI_TOOLS.FORM.ARGS_ADVANCED')
+            }}
+          </button>
+        </div>
+        <p class="text-xs text-n-slate-11 mb-0">
+          {{ $t('AI_TOOLS.FORM.ARGS_HINT') }}
+        </p>
+
+        <template v-if="!showAdvancedJson">
+          <p v-if="!form.args.length" class="text-xs text-n-slate-11 mb-0 py-1">
+            {{ $t('AI_TOOLS.FORM.ARGS_EMPTY') }}
+          </p>
+          <div
+            v-for="(arg, index) in form.args"
+            :key="index"
+            class="flex flex-wrap items-center gap-2 rounded-lg border border-n-weak bg-n-solid-1 p-2"
+          >
+            <input
+              v-model="arg.name"
+              type="text"
+              :placeholder="$t('AI_TOOLS.FORM.ARG_NAME')"
+              class="flex-1 min-w-[8rem] px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
+            />
+            <div class="w-36">
+              <Select v-model="arg.type" :options="argTypeOptions" />
+            </div>
+            <input
+              v-model="arg.description"
+              type="text"
+              :placeholder="$t('AI_TOOLS.FORM.ARG_DESC')"
+              class="flex-[2] min-w-[10rem] px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
+            />
+            <label
+              class="flex items-center gap-1.5 text-xs text-n-slate-12 whitespace-nowrap"
+            >
+              <input v-model="arg.required" type="checkbox" />
+              {{ $t('AI_TOOLS.FORM.ARG_REQUIRED') }}
+            </label>
+            <button
+              type="button"
+              class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+              :aria-label="$t('AI_TOOLS.FORM.ARG_REMOVE')"
+              @click="removeArg(index)"
+            >
+              <span class="i-lucide-x size-4 inline-block" />
+            </button>
+          </div>
+          <button
+            type="button"
+            class="self-start text-sm font-medium text-n-brand hover:underline"
+            @click="addArg"
+          >
+            + {{ $t('AI_TOOLS.FORM.ARG_ADD') }}
+          </button>
+        </template>
+
         <textarea
+          v-else
           v-model="form.input_schema_text"
-          rows="4"
+          rows="6"
           class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-none"
         />
-      </label>
+      </div>
       <div class="flex justify-end gap-2">
         <button
           type="button"

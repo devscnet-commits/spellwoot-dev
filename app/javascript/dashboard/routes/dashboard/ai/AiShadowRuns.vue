@@ -5,6 +5,9 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
 
+// Embedded as the "Análises" tab inside the Shadow module: drop the page shell/card.
+defineProps({ embedded: { type: Boolean, default: false } });
+
 const route = useRoute();
 const { t } = useI18n();
 
@@ -216,12 +219,28 @@ onMounted(fetchRuns);
 </script>
 
 <template>
-  <div class="w-full h-full overflow-auto bg-n-background p-4 sm:p-6">
-    <div class="max-w-5xl mx-auto flex flex-col gap-3">
+  <div
+    :class="
+      embedded
+        ? 'w-full'
+        : 'w-full h-full overflow-auto bg-n-background p-4 sm:p-6'
+    "
+  >
+    <div
+      :class="
+        embedded
+          ? 'w-full flex flex-col gap-5'
+          : 'max-w-5xl mx-auto flex flex-col gap-3'
+      "
+    >
       <div
-        class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-5"
+        :class="
+          embedded
+            ? 'flex flex-col gap-5'
+            : 'rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-5'
+        "
       >
-        <div class="flex items-start justify-between gap-4">
+        <div v-if="!embedded" class="flex items-start justify-between gap-4">
           <div class="flex flex-col gap-1">
             <h1 class="text-xl font-semibold text-n-slate-12">
               {{ $t('AI_SHADOW_RUNS.TITLE') }}
@@ -246,31 +265,77 @@ onMounted(fetchRuns);
 
         <!-- Filters -->
         <div
-          class="flex flex-wrap items-center gap-2 rounded-xl border border-n-weak bg-n-alpha-1 p-3"
+          class="flex flex-col gap-3 rounded-xl border border-n-weak bg-n-alpha-1 p-3"
         >
-          <Select v-model="filters.period" :options="periodOptions" />
-          <Select
-            v-model="filters.department_id"
-            :options="departmentOptions"
-          />
-          <Select v-model="filters.error_type" :options="errorOptions" />
-          <Select v-model="filters.status" :options="statusOptions" />
-          <Select v-model="filters.has_reply" :options="replyOptions" />
-          <Select v-model="filters.has_tool" :options="toolOptions" />
-          <input
-            v-model="filters.conversation_id"
-            type="search"
-            inputmode="numeric"
-            :placeholder="$t('AI_SHADOW_RUNS.FILTERS.CONVERSATION')"
-            class="w-28 py-2 px-3 rounded-lg border-0 outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 text-sm text-n-slate-12"
-          />
-          <button
-            type="button"
-            class="ms-auto text-sm text-n-slate-11 hover:text-n-slate-12 px-2 py-2"
-            @click="clearFilters"
+          <div class="flex items-center justify-between gap-3">
+            <span
+              class="text-xs font-medium uppercase tracking-wide text-n-slate-10"
+            >
+              {{ $t('AI_SHADOW_RUNS.FILTERS.TITLE') }}
+            </span>
+            <button
+              type="button"
+              class="text-sm text-n-slate-11 hover:text-n-slate-12"
+              @click="clearFilters"
+            >
+              {{ $t('AI_SHADOW_RUNS.FILTERS.CLEAR') }}
+            </button>
+          </div>
+          <div
+            class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-3"
           >
-            {{ $t('AI_SHADOW_RUNS.FILTERS.CLEAR') }}
-          </button>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_PERIOD') }}
+              </span>
+              <Select v-model="filters.period" :options="periodOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_DEPARTMENT') }}
+              </span>
+              <Select
+                v-model="filters.department_id"
+                :options="departmentOptions"
+              />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_ERROR') }}
+              </span>
+              <Select v-model="filters.error_type" :options="errorOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_STATUS') }}
+              </span>
+              <Select v-model="filters.status" :options="statusOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_REPLY') }}
+              </span>
+              <Select v-model="filters.has_reply" :options="replyOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_TOOL') }}
+              </span>
+              <Select v-model="filters.has_tool" :options="toolOptions" />
+            </label>
+            <label class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_CONVERSATION') }}
+              </span>
+              <input
+                v-model="filters.conversation_id"
+                type="search"
+                inputmode="numeric"
+                :placeholder="$t('AI_SHADOW_RUNS.FILTERS.CONVERSATION')"
+                class="w-full py-2 px-3 rounded-lg border-0 outline outline-1 -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 text-sm text-n-slate-12"
+              />
+            </label>
+          </div>
         </div>
 
         <p
@@ -281,6 +346,14 @@ onMounted(fetchRuns);
         </p>
 
         <template v-else>
+          <!-- Aviso: custos são estimativas, não a fatura final -->
+          <p
+            class="flex items-start gap-2 text-xs text-n-slate-11 rounded-xl border border-n-weak bg-n-alpha-1 px-3 py-2 mb-0"
+          >
+            <span class="i-lucide-info size-3.5 shrink-0 mt-0.5" />
+            <span>{{ $t('AI_SHADOW_RUNS.COST_DISCLAIMER') }}</span>
+          </p>
+
           <!-- Resumo executivo -->
           <section class="flex flex-col gap-3">
             <h2 class="text-sm font-semibold text-n-slate-12">
@@ -509,7 +582,11 @@ onMounted(fetchRuns);
                 </span>
                 <span class="inline-flex items-center gap-1">
                   <span class="i-lucide-banknote size-3.5" />
-                  {{ `US$ ${run.cost ?? 0}` }}
+                  {{
+                    $t('AI_SHADOW_RUNS.RUN.COST_ESTIMATED', {
+                      value: run.cost ?? 0,
+                    })
+                  }}
                 </span>
               </div>
             </div>
