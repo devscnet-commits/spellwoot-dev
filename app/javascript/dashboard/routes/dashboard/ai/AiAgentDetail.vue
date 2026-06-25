@@ -96,20 +96,6 @@ const profileOptions = computed(() => [
   ...profiles.value.map(p => ({ value: p.id, label: p.name })),
 ]);
 
-const teams = ref([]);
-const teamOptions = computed(() => [
-  { value: '', label: t('AI_AGENTS.SOBRE.TEAM_ANY') },
-  ...teams.value.map(tm => ({ value: tm.id, label: tm.name })),
-]);
-const fetchTeams = async () => {
-  try {
-    const { data } = await axios.get(`${accountUrl()}/teams`);
-    teams.value = Array.isArray(data) ? data : [];
-  } catch (error) {
-    teams.value = [];
-  }
-};
-
 const stageOptions = computed(() =>
   ['production', 'experimental'].map(s => ({
     value: s,
@@ -335,7 +321,6 @@ const runTest = async () => {
 
 onMounted(async () => {
   await fetchProfiles();
-  fetchTeams();
   await fetchAgent();
   captureAgent();
   await Promise.all([fetchDepartments(), fetchInboxes(), fetchVersions()]);
@@ -529,7 +514,7 @@ onMounted(async () => {
             />
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
             <div class="flex flex-col gap-1.5">
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
@@ -544,15 +529,6 @@ onMounted(async () => {
                 {{ $t('AI_AGENTS.FORM.STAGE') }}
               </span>
               <Select v-model="agentForm.stage" :options="stageOptions" />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.SOBRE.TEAM') }}
-              </span>
-              <Select v-model="agentForm.team_id" :options="teamOptions" />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_AGENTS.SOBRE.TEAM_HINT') }}
-              </span>
             </div>
           </div>
 
