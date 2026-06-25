@@ -558,59 +558,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Roteamento e transferência entre agentes de IA -->
-          <div
-            class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
-          >
-            <div class="flex flex-col gap-0.5">
-              <h3 class="text-sm font-semibold text-n-slate-12">
-                {{ $t('AI_AGENTS.HANDOFF.TITLE') }}
-              </h3>
-              <p class="text-xs text-n-slate-11 mb-0">
-                {{ $t('AI_AGENTS.HANDOFF.DESCRIPTION') }}
-              </p>
-            </div>
-
-            <div class="flex flex-col gap-1.5 max-w-sm">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.HANDOFF.TEAM') }}
-              </span>
-              <Select v-model="agentForm.team_id" :options="teamOptions" />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_AGENTS.HANDOFF.TEAM_HINT') }}
-              </span>
-            </div>
-
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST') }}
-              </span>
-              <p
-                v-if="!handoffTeamOptions.length"
-                class="text-sm text-n-slate-11 mb-0"
-              >
-                {{ $t('AI_AGENTS.HANDOFF.NO_TEAMS') }}
-              </p>
-              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <label
-                  v-for="tm in handoffTeamOptions"
-                  :key="tm.id"
-                  class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="agentForm.handoff_team_ids.includes(tm.id)"
-                    @change="toggleHandoffTeam(tm.id)"
-                  />
-                  <span class="truncate">{{ tm.name }}</span>
-                </label>
-              </div>
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST_HINT') }}
-              </span>
-            </div>
-          </div>
-
           <div class="flex justify-end">
             <Button
               :label="$t('AI_AGENTS.FORM.SAVE')"
@@ -686,6 +633,68 @@ onMounted(async () => {
 
         <!-- CAIXAS -->
         <div v-else-if="activeKey === 'inboxes'" class="flex flex-col gap-4">
+          <!-- Roteamento e transferência entre agentes de IA -->
+          <div
+            class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
+          >
+            <div class="flex flex-col gap-0.5">
+              <h3 class="text-sm font-semibold text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.TITLE') }}
+              </h3>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_AGENTS.HANDOFF.DESCRIPTION') }}
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-1.5 max-w-sm">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.TEAM') }}
+              </span>
+              <Select v-model="agentForm.team_id" :options="teamOptions" />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.HANDOFF.TEAM_HINT') }}
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST') }}
+              </span>
+              <p
+                v-if="!handoffTeamOptions.length"
+                class="text-sm text-n-slate-11 mb-0"
+              >
+                {{ $t('AI_AGENTS.HANDOFF.NO_TEAMS') }}
+              </p>
+              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label
+                  v-for="tm in handoffTeamOptions"
+                  :key="tm.id"
+                  class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="agentForm.handoff_team_ids.includes(tm.id)"
+                    @change="toggleHandoffTeam(tm.id)"
+                  />
+                  <span class="truncate">{{ tm.name }}</span>
+                </label>
+              </div>
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST_HINT') }}
+              </span>
+            </div>
+
+            <div class="flex justify-end">
+              <Button
+                :label="$t('AI_AGENTS.FORM.SAVE')"
+                :is-loading="isSaving"
+                :disabled="!agentDirty"
+                @click="saveAgent"
+              />
+            </div>
+          </div>
+
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_AGENTS.INBOXES.TITLE') }}
