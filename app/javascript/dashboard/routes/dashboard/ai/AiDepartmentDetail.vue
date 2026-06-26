@@ -61,13 +61,12 @@ const form = reactive({
   group_delay_seconds: '',
   max_replies: '',
   max_input_chars: '',
-  followup_enabled: false,
-  followup_delay: '',
-  followup_message: '',
-  followup_max: '',
+  // Follow-up: várias tentativas de envio (não há mais "Ativar" — vazio = desligado).
+  followup_attempts: [],
+  followup_schedule: 'inbox_hours',
+  followup_custom_windows: [],
+  followup_grace: 30,
   followup_when_online: false,
-  followup_window_start: '',
-  followup_window_end: '',
   disabled_custom_attributes: [],
   is_default: false,
   position: 0,
@@ -140,10 +139,79 @@ const parseSteps = arr =>
         }
   );
 
+// --- Follow-up: tentativas como lista (valor + unidade) ---
+let fuUid = 0;
+const nextFuUid = () => {
+  fuUid += 1;
+  return fuUid;
+};
+// delay em minutos <-> {value, unit} para uma UI amigável (10 min, 2 horas...).
+const minutesToVU = dm => {
+  const m = Number(dm) || 0;
+  return m > 0 && m % 60 === 0
+    ? { value: m / 60, unit: 'horas' }
+    : { value: m, unit: 'minutos' };
+};
+const vuToMinutes = a =>
+  (a.unit === 'horas' ? Number(a.value) * 60 : Number(a.value)) || 0;
+const blankAttempt = () => ({
+  uid: nextFuUid(),
+  value: '',
+  unit: 'minutos',
+  message: '',
+});
+const blankWindow = () => ({ uid: nextFuUid(), start: '', end: '' });
+
+// Hidrata as tentativas: novo formato (`attempts`) ou shim do antigo
+// (delay_minutes + max_followups + message).
+const hydrateAttempts = fu => {
+  if (Array.isArray(fu.attempts)) {
+    return fu.attempts.map(a => ({
+      uid: nextFuUid(),
+      ...minutesToVU(a.delay_minutes),
+      message: a.message || '',
+    }));
+  }
+  if (Number(fu.delay_minutes) > 0) {
+    const count = Number(fu.max_followups) > 0 ? Number(fu.max_followups) : 1;
+    return Array.from({ length: count }, () => ({
+      uid: nextFuUid(),
+      ...minutesToVU(fu.delay_minutes),
+      message: fu.message || '',
+    }));
+  }
+  return [];
+};
+// Modo de horário + janelas (shim: window_start/end antigos viram uma janela custom).
+const hydrateSchedule = fu => {
+  if (fu.schedule) {
+    return {
+      schedule: fu.schedule,
+      windows: (Array.isArray(fu.custom_windows) ? fu.custom_windows : []).map(
+        w => ({ uid: nextFuUid(), start: w.start || '', end: w.end || '' })
+      ),
+    };
+  }
+  if (fu.window_start || fu.window_end) {
+    return {
+      schedule: 'custom',
+      windows: [
+        {
+          uid: nextFuUid(),
+          start: fu.window_start || '',
+          end: fu.window_end || '',
+        },
+      ],
+    };
+  }
+  return { schedule: 'inbox_hours', windows: [] };
+};
+
 const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
   const followUp = dept.follow_up || {};
+  const sched = hydrateSchedule(followUp);
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
@@ -155,13 +223,11 @@ const hydrate = dept => {
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
-    followup_enabled: followUp.enabled || false,
-    followup_delay: followUp.delay_minutes ?? '',
-    followup_message: followUp.message || '',
-    followup_max: followUp.max_followups ?? '',
+    followup_attempts: hydrateAttempts(followUp),
+    followup_schedule: sched.schedule,
+    followup_custom_windows: sched.windows,
+    followup_grace: followUp.handoff_grace_minutes ?? 30,
     followup_when_online: followUp.when_agents_online || false,
-    followup_window_start: followUp.window_start || '',
-    followup_window_end: followUp.window_end || '',
     disabled_custom_attributes: Array.isArray(
       behavior.disabled_custom_attributes
     )
@@ -189,6 +255,28 @@ const fetchDepartment = async () => {
   captureDept();
 };
 
+const buildFollowUp = () => {
+  const attempts = form.followup_attempts
+    .filter(a => vuToMinutes(a) > 0)
+    .map(a => ({
+      delay_minutes: vuToMinutes(a),
+      message: (a.message || '').trim(),
+    }));
+  return {
+    enabled: attempts.length > 0,
+    attempts,
+    schedule: form.followup_schedule,
+    custom_windows:
+      form.followup_schedule === 'custom'
+        ? form.followup_custom_windows
+            .filter(w => w.start && w.end)
+            .map(w => ({ start: w.start, end: w.end }))
+        : [],
+    handoff_grace_minutes: Number(form.followup_grace) || 30,
+    when_agents_online: form.followup_when_online,
+  };
+};
+
 const buildPayload = () => ({
   ai_department: {
     name: form.name,
@@ -205,15 +293,7 @@ const buildPayload = () => ({
       reply_scope: 'all',
       disabled_custom_attributes: form.disabled_custom_attributes,
     },
-    follow_up: {
-      enabled: form.followup_enabled,
-      delay_minutes: Number(form.followup_delay) || 0,
-      message: form.followup_message,
-      max_followups: Number(form.followup_max) || 0,
-      when_agents_online: form.followup_when_online,
-      window_start: form.followup_window_start,
-      window_end: form.followup_window_end,
-    },
+    follow_up: buildFollowUp(),
     playbook: {
       objetivo: form.objetivo,
       steps: form.steps
@@ -344,6 +424,23 @@ const cancelStep = () => {
 const removeStep = index => {
   form.steps.splice(index, 1);
 };
+
+// --- Follow-up: tentativas e janelas ---
+const FU_MAX_ATTEMPTS = 10;
+// O número de tentativas dirige quantas caixas de horário aparecem (0–10):
+// aumentar adiciona caixas no fim; diminuir remove as últimas.
+const attemptCount = computed({
+  get: () => form.followup_attempts.length,
+  set: value => {
+    const target = Math.max(0, Math.min(FU_MAX_ATTEMPTS, Number(value) || 0));
+    while (form.followup_attempts.length < target)
+      form.followup_attempts.push(blankAttempt());
+    while (form.followup_attempts.length > target) form.followup_attempts.pop();
+  },
+});
+const removeAttempt = index => form.followup_attempts.splice(index, 1);
+const addWindow = () => form.followup_custom_windows.push(blankWindow());
+const removeWindow = index => form.followup_custom_windows.splice(index, 1);
 
 onMounted(async () => {
   await fetchDepartment();
@@ -722,80 +819,186 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex flex-col gap-0.5 min-w-0">
-                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.TITLE') }}
-                </h2>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.HINT') }}
-                </p>
-              </div>
-              <label
-                class="shrink-0 flex items-center gap-2 text-sm text-n-slate-12"
-              >
-                <input v-model="form.followup_enabled" type="checkbox" />
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.TOGGLE') }}
-              </label>
+            <div class="flex flex-col gap-0.5">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.TITLE') }}
+              </h2>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.HINT') }}
+              </p>
             </div>
 
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FOLLOWUP.MESSAGE') }}
-              <textarea
-                v-model="form.followup_message"
-                rows="3"
-                :placeholder="$t('AI_DEPARTMENTS.FOLLOWUP.MESSAGE_PLACEHOLDER')"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-              />
-            </label>
+            <!-- Tentativas de envio (várias opções de tempo) -->
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPTS_TITLE') }}
+                </span>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPTS_HINT') }}
+                </p>
+              </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.INTERVAL') }}
+              <label
+                class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+              >
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
                 <input
-                  v-model="form.followup_delay"
+                  v-model.number="attemptCount"
                   type="number"
                   min="0"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.MAX') }}
-                <input
-                  v-model="form.followup_max"
-                  type="number"
-                  min="0"
+                  :max="FU_MAX_ATTEMPTS"
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
                 />
                 <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.MAX_HINT') }}
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_HINT') }}
                 </span>
               </label>
+
+              <p
+                v-if="!form.followup_attempts.length"
+                class="text-sm text-n-slate-11 mb-0"
+              >
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPTS_EMPTY') }}
+              </p>
+
+              <div
+                v-for="(attempt, index) in form.followup_attempts"
+                :key="attempt.uid"
+                class="rounded-xl border border-n-weak bg-n-solid-1 p-3 flex flex-col gap-2"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-sm font-medium text-n-slate-12">
+                    {{
+                      $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_LABEL', {
+                        n: index + 1,
+                      })
+                    }}
+                  </span>
+                  <button
+                    type="button"
+                    class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                    :aria-label="$t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_REMOVE')"
+                    @click="removeAttempt(index)"
+                  >
+                    <span class="i-lucide-trash-2 size-4 inline-block" />
+                  </button>
+                </div>
+                <div class="flex flex-wrap items-end gap-3">
+                  <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
+                    <div class="flex items-center gap-2">
+                      <input
+                        v-model="attempt.value"
+                        type="number"
+                        min="0"
+                        class="w-24 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                      />
+                      <select
+                        v-model="attempt.unit"
+                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
+                      >
+                        <option value="minutos">
+                          {{ $t('AI_DEPARTMENTS.FOLLOWUP.UNIT_MINUTES') }}
+                        </option>
+                        <option value="horas">
+                          {{ $t('AI_DEPARTMENTS.FOLLOWUP.UNIT_HOURS') }}
+                        </option>
+                      </select>
+                    </div>
+                  </label>
+                </div>
+                <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE') }}
+                  <textarea
+                    v-model="attempt.message"
+                    rows="2"
+                    :placeholder="
+                      $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER')
+                    "
+                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-none"
+                  />
+                </label>
+              </div>
             </div>
 
+            <!-- Quando enviar (relativo ao horário da caixa) -->
             <div class="flex flex-col gap-1.5">
-              <span class="text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW') }}
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_TITLE') }}
               </span>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model="form.followup_window_start"
-                  type="time"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-                />
-                <span class="text-sm text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
+              <select
+                v-model="form.followup_schedule"
+                class="max-w-xs px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+              >
+                <option value="inbox_hours">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_INBOX') }}
+                </option>
+                <option value="outside_inbox_hours">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_OUTSIDE') }}
+                </option>
+                <option value="custom">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_CUSTOM') }}
+                </option>
+              </select>
+
+              <div
+                v-if="form.followup_schedule === 'custom'"
+                class="flex flex-col gap-2 mt-1"
+              >
+                <div
+                  v-for="(win, index) in form.followup_custom_windows"
+                  :key="win.uid"
+                  class="flex items-center gap-2"
+                >
+                  <input
+                    v-model="win.start"
+                    type="time"
+                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                  />
+                  <span class="text-sm text-n-slate-11">
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
+                  </span>
+                  <input
+                    v-model="win.end"
+                    type="time"
+                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                  />
+                  <button
+                    type="button"
+                    class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                    :aria-label="$t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_REMOVE')"
+                    @click="removeWindow(index)"
+                  >
+                    <span class="i-lucide-x size-4 inline-block" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="self-start text-sm font-medium text-n-brand hover:underline"
+                  @click="addWindow"
+                >
+                  + {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_ADD') }}
+                </button>
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_HINT') }}
                 </span>
-                <input
-                  v-model="form.followup_window_end"
-                  type="time"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-                />
               </div>
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_HINT') }}
-              </span>
             </div>
+
+            <!-- Carência após a última tentativa (fixo/obrigatório) -->
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
+              {{ $t('AI_DEPARTMENTS.FOLLOWUP.GRACE_LABEL') }}
+              <input
+                v-model="form.followup_grace"
+                type="number"
+                min="0"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.GRACE_HINT') }}
+              </span>
+            </label>
 
             <label class="flex items-center gap-2 text-sm text-n-slate-12">
               <input v-model="form.followup_when_online" type="checkbox" />
