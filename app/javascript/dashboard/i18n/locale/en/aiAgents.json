@@ -382,7 +382,7 @@
       "CTX_CUSTOM": "Personalizado",
       "WINDOWS": "Janelas de horário",
       "NO_RESPONSE": "Se o cliente não responder",
-      "NO_RESPONSE_HINT": "Após esgotar as tentativas sem retorno. Se o cliente responder, a IA volta ao fluxo principal do prompt.",
+      "NO_RESPONSE_HINT": "Após esgotar as tentativas e passar o tempo de inatividade (definido na Finalização). Se o cliente responder, a IA volta ao fluxo principal do prompt.",
       "NR_ASSIGN": "Atribuir a um humano",
       "NR_FINALIZE": "Finalizar conversa",
       "NR_DISCARD": "Descartar",
@@ -422,11 +422,11 @@
     },
     "FINALIZATION": {
       "TITLE": "Finalização",
-      "HINT": "Responsável por encerrar conversas.",
+      "HINT": "Responsável por encerrar conversas e pela regra de inatividade que todos os comportamentos de follow-up respeitam.",
+      "INACTIVITY": "Tempo de inatividade (minutos)",
+      "INACTIVITY_HINT": "Após a última mensagem do follow-up, a IA espera esse tempo de silêncio do cliente e então executa a ação definida no comportamento (atribuir, finalizar, etc.). Vale para todos os comportamentos.",
       "MESSAGE": "Mensagem de encerramento",
       "MESSAGE_PLACEHOLDER": "Ex.: Obrigado pelo contato! Qualquer coisa, é só chamar. 😊",
-      "AUTO_CLOSE": "Encerrar automaticamente após inatividade (minutos)",
-      "AUTO_CLOSE_HINT": "0 = não encerrar por inatividade.",
       "SCAFFOLD_NOTE": "Tela em construção: por enquanto só guarda a configuração."
     },
     "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento.",

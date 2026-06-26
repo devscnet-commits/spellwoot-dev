@@ -68,9 +68,10 @@ const form = reactive({
   // Lista de comportamentos de follow-up (1 por contexto de horário); cada um com
   // suas tentativas, carência e a ação se o cliente não responder.
   followup_behaviors: [],
-  // Finalização (close_rules): encerrar conversas. Scaffold.
+  // Finalização (close_rules): tempo de inatividade (vale p/ todos os comportamentos)
+  // + mensagem de encerramento. Scaffold.
   close_message: '',
-  close_auto_minutes: '',
+  inactivity_minutes: 30,
   disabled_custom_attributes: [],
   is_default: false,
   position: 0,
@@ -174,7 +175,6 @@ const blankBehavior = () => ({
   context: 'inbox_hours',
   windows: [],
   attempts: [blankAttempt()],
-  grace: 30,
   no_response_action: 'assign',
 });
 const mapAttempts = arr =>
@@ -196,7 +196,6 @@ const hydrateBehaviors = fu => {
         end: w.end || '',
       })),
       attempts: mapAttempts(b.attempts),
-      grace: b.grace_minutes ?? 30,
       no_response_action: b.no_response_action || 'assign',
     }));
   }
@@ -207,7 +206,6 @@ const hydrateBehaviors = fu => {
         context: 'inbox_hours',
         windows: [],
         attempts: mapAttempts(fu.attempts),
-        grace: fu.handoff_grace_minutes ?? 30,
         no_response_action:
           fu.on_complete_action === 'close' ? 'finalize' : 'assign',
       },
@@ -234,7 +232,7 @@ const hydrate = dept => {
     followup_instructions: followUp.instructions || '',
     followup_behaviors: hydrateBehaviors(followUp),
     close_message: close.message || '',
-    close_auto_minutes: close.auto_close_minutes ?? '',
+    inactivity_minutes: close.inactivity_minutes ?? 30,
     disabled_custom_attributes: Array.isArray(
       behavior.disabled_custom_attributes
     )
@@ -277,7 +275,6 @@ const buildFollowUp = () => {
         delay_minutes: vuToMinutes(a),
         message: (a.message || '').trim(),
       })),
-    grace_minutes: Number(b.grace) || 30,
     no_response_action: b.no_response_action,
   }));
   return {
@@ -290,7 +287,7 @@ const buildFollowUp = () => {
 // Finalização (close_rules) — scaffold; motor depois.
 const buildFinalization = () => ({
   message: (form.close_message || '').trim(),
-  auto_close_minutes: Number(form.close_auto_minutes) || 0,
+  inactivity_minutes: Number(form.inactivity_minutes) || 30,
 });
 
 const buildPayload = () => ({
@@ -1031,19 +1028,6 @@ onMounted(async () => {
                     </label>
                   </div>
 
-                  <!-- Carência -->
-                  <label
-                    class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
-                  >
-                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.GRACE_LABEL') }}
-                    <input
-                      v-model="bhv.grace"
-                      type="number"
-                      min="0"
-                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
-                    />
-                  </label>
-
                   <!-- Ação se o cliente não responder -->
                   <div
                     class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
@@ -1101,15 +1085,15 @@ onMounted(async () => {
             </label>
 
             <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
-              {{ $t('AI_DEPARTMENTS.FINALIZATION.AUTO_CLOSE') }}
+              {{ $t('AI_DEPARTMENTS.FINALIZATION.INACTIVITY') }}
               <input
-                v-model="form.close_auto_minutes"
+                v-model="form.inactivity_minutes"
                 type="number"
                 min="0"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
               />
               <span class="text-xs text-n-slate-11">
-                {{ $t('AI_DEPARTMENTS.FINALIZATION.AUTO_CLOSE_HINT') }}
+                {{ $t('AI_DEPARTMENTS.FINALIZATION.INACTIVITY_HINT') }}
               </span>
             </label>
 
