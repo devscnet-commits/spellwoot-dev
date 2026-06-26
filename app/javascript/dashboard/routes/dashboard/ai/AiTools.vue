@@ -30,6 +30,10 @@ const blank = () => ({
   implementation_type: 'capability',
   capability_key: '',
   integration_link_id: '',
+  // Webhook: requisição HTTP direta (config persistida em webhook_config — backend pendente).
+  webhook_url: '',
+  webhook_method: 'POST',
+  webhook_headers: '',
   status: 'active',
   // args drive the visual builder; input_schema_text stays the canonical value used on save.
   args: [],
@@ -159,12 +163,30 @@ const capabilityLabel = key => {
 const integrationName = id =>
   integrations.value.find(link => link.id === id)?.name || '';
 
+// Subtítulo do card conforme o tipo da ferramenta.
+const toolSubtitle = tool => {
+  if (tool.implementation_type === 'capability')
+    return capabilityLabel(tool.capability_key);
+  if (tool.implementation_type === 'webhook')
+    return tool.webhook_config?.url || t('AI_TOOLS.FORM.TYPE_WEBHOOK');
+  return integrationName(tool.integration_link_id);
+};
+
 const isCapability = computed(() => form.implementation_type === 'capability');
+const isIntegration = computed(
+  () => form.implementation_type === 'integration'
+);
+const isWebhook = computed(() => form.implementation_type === 'webhook');
 
 const typeOptions = computed(() => [
   { value: 'capability', label: t('AI_TOOLS.FORM.TYPE_CAPABILITY') },
   { value: 'integration', label: t('AI_TOOLS.FORM.TYPE_INTEGRATION') },
+  { value: 'webhook', label: t('AI_TOOLS.FORM.TYPE_WEBHOOK') },
 ]);
+const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => ({
+  value: m,
+  label: m,
+}));
 const capabilityOptions = computed(() => [
   { value: '', label: t('AI_TOOLS.FORM.NONE') },
   ...CAPABILITIES.map(c => ({
@@ -234,6 +256,9 @@ const openEdit = tool => {
     implementation_type: tool.implementation_type,
     capability_key: tool.capability_key || '',
     integration_link_id: tool.integration_link_id || '',
+    webhook_url: tool.webhook_config?.url || '',
+    webhook_method: tool.webhook_config?.method || 'POST',
+    webhook_headers: tool.webhook_config?.headers || '',
     status: tool.status,
     args: parseSchema(tool.input_schema || {}),
     input_schema_text: JSON.stringify(tool.input_schema || {}, null, 2),
@@ -261,7 +286,16 @@ const save = async () => {
       description: form.description,
       implementation_type: form.implementation_type,
       capability_key: isCapability.value ? form.capability_key : null,
-      integration_link_id: isCapability.value ? null : form.integration_link_id,
+      integration_link_id: isIntegration.value
+        ? form.integration_link_id
+        : null,
+      webhook_config: isWebhook.value
+        ? {
+            url: form.webhook_url,
+            method: form.webhook_method,
+            headers: form.webhook_headers,
+          }
+        : null,
       governance: 'allowed',
       status: form.status,
       input_schema: inputSchema,
@@ -333,11 +367,7 @@ onMounted(() => {
               {{ tool.name }}
             </p>
             <p class="text-xs text-n-slate-11 truncate mb-0">
-              {{
-                tool.implementation_type === 'capability'
-                  ? capabilityLabel(tool.capability_key)
-                  : integrationName(tool.integration_link_id)
-              }}
+              {{ toolSubtitle(tool) }}
             </p>
           </div>
         </div>
@@ -386,7 +416,10 @@ onMounted(() => {
           <span>{{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}</span>
           <Select v-model="form.capability_key" :options="capabilityOptions" />
         </div>
-        <div v-else class="flex flex-col gap-1 text-sm text-n-slate-12">
+        <div
+          v-else-if="isIntegration"
+          class="flex flex-col gap-1 text-sm text-n-slate-12"
+        >
           <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
           <Select
             v-if="hasIntegrations"
@@ -408,6 +441,35 @@ onMounted(() => {
               {{ $t('AI_TOOLS.FORM.INTEGRATION_CONFIGURE') }}
             </button>
           </div>
+        </div>
+        <div
+          v-else
+          class="flex flex-col gap-3 text-sm text-n-slate-12 sm:col-span-2"
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="flex flex-col gap-1 sm:col-span-2">
+              <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_URL') }}</span>
+              <input
+                v-model="form.webhook_url"
+                type="text"
+                :placeholder="$t('AI_TOOLS.FORM.WEBHOOK_URL_PLACEHOLDER')"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+            <div class="flex flex-col gap-1">
+              <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_METHOD') }}</span>
+              <Select v-model="form.webhook_method" :options="methodOptions" />
+            </div>
+          </div>
+          <label class="flex flex-col gap-1">
+            <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_HEADERS') }}</span>
+            <textarea
+              v-model="form.webhook_headers"
+              rows="2"
+              :placeholder="$t('AI_TOOLS.FORM.WEBHOOK_HEADERS_PLACEHOLDER')"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none font-mono text-xs"
+            />
+          </label>
         </div>
       </div>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">
