@@ -104,6 +104,16 @@
       "TITLE": "Este agente atende:",
       "NONE": "Nenhuma caixa vinculada ainda. Configure na aba Caixas."
     },
+    "INBOX_BOT": {
+      "TITLE": "Atendimento por IA",
+      "DESC": "A atribuição de IA a esta caixa é configurada em Agentes IA → (agente) → Caixas. Aqui você só vê qual agente atende esta caixa.",
+      "LOADING": "Carregando...",
+      "ATTENDED_BY": "Esta caixa é atendida por:",
+      "MODE_LIVE": "No ar",
+      "MODE_SHADOW": "Sombra (observando)",
+      "NONE": "Nenhum agente de IA atende esta caixa ainda.",
+      "MANAGE": "Configurar em Agentes IA"
+    },
     "HANDOFF": {
       "TITLE": "Roteamento e transferência entre IAs",
       "DESCRIPTION": "Defina o time deste agente e para quais setores ele pode transferir uma conversa antes de passar a um humano.",
