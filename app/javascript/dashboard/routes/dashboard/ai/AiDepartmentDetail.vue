@@ -6,6 +6,7 @@ import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Logo from 'next/icon/Logo.vue';
 import Switch from 'dashboard/components-next/switch/Switch.vue';
+import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
 
@@ -53,7 +54,7 @@ const form = reactive({
   objetivo: '',
   instructions: '',
   status: 'active',
-  steps: '',
+  steps: [],
   transfer_when_steps: '',
   close_when_steps: '',
   // Atendimento
@@ -108,6 +109,37 @@ const linesToArray = value =>
     .filter(Boolean);
 const arrayToLines = value => (Array.isArray(value) ? value.join('\n') : '');
 
+// Etapas viram cards arrastáveis: cada etapa é um objeto {name, objective, automation_on_complete}.
+// _uid é uma chave transitória só para o draggable/keys (removida no buildPayload).
+let stepUid = 0;
+const nextStepUid = () => {
+  stepUid += 1;
+  return stepUid;
+};
+const blankStep = () => ({
+  uid: nextStepUid(),
+  name: '',
+  objective: '',
+  automation_on_complete: false,
+});
+// Aceita o formato legado (array de strings) e o novo (array de objetos).
+const parseSteps = arr =>
+  (Array.isArray(arr) ? arr : []).map(s =>
+    typeof s === 'string'
+      ? {
+          uid: nextStepUid(),
+          name: s,
+          objective: '',
+          automation_on_complete: false,
+        }
+      : {
+          uid: nextStepUid(),
+          name: s.name || '',
+          objective: s.objective || '',
+          automation_on_complete: !!s.automation_on_complete,
+        }
+  );
+
 const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
@@ -117,7 +149,7 @@ const hydrate = dept => {
     objetivo: dept.objetivo || '',
     instructions: dept.instructions || behavior.instructions || '',
     status: dept.status || 'active',
-    steps: arrayToLines(playbook.steps),
+    steps: parseSteps(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
@@ -184,7 +216,13 @@ const buildPayload = () => ({
     },
     playbook: {
       objetivo: form.objetivo,
-      steps: linesToArray(form.steps),
+      steps: form.steps
+        .filter(s => (s.name || '').trim())
+        .map(s => ({
+          name: s.name.trim(),
+          objective: (s.objective || '').trim(),
+          automation_on_complete: !!s.automation_on_complete,
+        })),
       transfer_when: linesToArray(form.transfer_when_steps),
       close_when: linesToArray(form.close_when_steps),
     },
@@ -267,6 +305,45 @@ const restoreVersion = async v => {
   }
 };
 const formatVersionDate = iso => (iso ? new Date(iso).toLocaleString() : '');
+
+// --- Etapas (cards arrastáveis) ---
+const MAX_STEPS = 10;
+const remainingSteps = computed(() =>
+  Math.max(0, MAX_STEPS - form.steps.length)
+);
+const showStepForm = ref(false);
+const editingStepIndex = ref(null);
+const stepDraft = reactive(blankStep());
+
+const openNewStep = () => {
+  if (form.steps.length >= MAX_STEPS) return;
+  Object.assign(stepDraft, blankStep());
+  editingStepIndex.value = null;
+  showStepForm.value = true;
+};
+const openEditStep = index => {
+  Object.assign(stepDraft, form.steps[index]);
+  editingStepIndex.value = index;
+  showStepForm.value = true;
+};
+const saveStep = () => {
+  if (!stepDraft.name.trim()) return;
+  const payload = {
+    uid: stepDraft.uid,
+    name: stepDraft.name.trim(),
+    objective: (stepDraft.objective || '').trim(),
+    automation_on_complete: !!stepDraft.automation_on_complete,
+  };
+  if (editingStepIndex.value === null) form.steps.push(payload);
+  else form.steps.splice(editingStepIndex.value, 1, payload);
+  showStepForm.value = false;
+};
+const cancelStep = () => {
+  showStepForm.value = false;
+};
+const removeStep = index => {
+  form.steps.splice(index, 1);
+};
 
 onMounted(async () => {
   await fetchDepartment();
@@ -732,17 +809,160 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
-            <span class="text-sm font-medium text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.STEPS_TITLE') }}
-            </span>
-            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FORM.STEPS') }}
-              <textarea
-                v-model="form.steps"
-                rows="8"
-                class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-32 leading-relaxed"
-              />
-            </label>
+            <div class="flex flex-col gap-0.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.STEPS_TITLE') }}
+              </span>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_DEPARTMENTS.STEPS_DESC') }}
+              </p>
+            </div>
+
+            <p
+              v-if="!form.steps.length && !showStepForm"
+              class="text-sm text-n-slate-11 mb-0"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_EMPTY') }}
+            </p>
+
+            <!-- Cards arrastáveis (reordenar pelo handle) -->
+            <Draggable
+              v-if="form.steps.length"
+              v-model="form.steps"
+              item-key="uid"
+              handle=".step-drag"
+              tag="div"
+              class="flex flex-col gap-2"
+            >
+              <template #item="{ element, index }">
+                <div
+                  class="flex items-center gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-3 py-2.5"
+                >
+                  <span
+                    class="step-drag i-lucide-grip-vertical size-4 shrink-0 text-n-slate-10 cursor-grab"
+                    :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_DRAG')"
+                  />
+                  <span
+                    class="shrink-0 w-5 text-xs font-medium text-n-slate-11"
+                  >
+                    {{ index + 1 }}
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <p
+                      class="text-sm font-medium text-n-slate-12 mb-0 truncate"
+                    >
+                      {{ element.name }}
+                    </p>
+                    <p
+                      v-if="element.objective"
+                      class="text-xs text-n-slate-11 mb-0 truncate"
+                    >
+                      {{ element.objective }}
+                    </p>
+                  </div>
+                  <span
+                    v-if="element.automation_on_complete"
+                    class="shrink-0 i-lucide-zap size-3.5 text-n-amber-11"
+                    :title="$t('AI_DEPARTMENTS.FORM.STEP_AUTOMATION')"
+                  />
+                  <button
+                    type="button"
+                    class="shrink-0 text-n-slate-11 hover:text-n-slate-12"
+                    :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_EDIT')"
+                    @click="openEditStep(index)"
+                  >
+                    <span class="i-lucide-pencil size-4 inline-block" />
+                  </button>
+                  <button
+                    type="button"
+                    class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                    :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_REMOVE')"
+                    @click="removeStep(index)"
+                  >
+                    <span class="i-lucide-trash-2 size-4 inline-block" />
+                  </button>
+                </div>
+              </template>
+            </Draggable>
+
+            <!-- Form criar/editar etapa -->
+            <div
+              v-if="showStepForm"
+              class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
+            >
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_NAME') }}
+                <input
+                  v-model="stepDraft.name"
+                  type="text"
+                  :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_NAME_PLACEHOLDER')"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                />
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE') }}
+                <textarea
+                  v-model="stepDraft.objective"
+                  rows="3"
+                  :placeholder="
+                    $t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE_PLACEHOLDER')
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-none"
+                />
+              </label>
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <label class="flex items-center gap-2 text-sm text-n-slate-12">
+                  <input
+                    v-model="stepDraft.automation_on_complete"
+                    type="checkbox"
+                  />
+                  {{ $t('AI_DEPARTMENTS.FORM.STEP_AUTOMATION') }}
+                </label>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                    @click="cancelStep"
+                  >
+                    {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="!stepDraft.name.trim()"
+                    class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    @click="saveStep"
+                  >
+                    {{
+                      editingStepIndex === null
+                        ? $t('AI_DEPARTMENTS.FORM.STEP_CREATE')
+                        : $t('AI_DEPARTMENTS.FORM.SAVE')
+                    }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Adicionar etapa + contador (máx. 10) -->
+            <div
+              v-if="!showStepForm"
+              class="flex items-center justify-between gap-3"
+            >
+              <span class="text-xs text-n-slate-11">
+                {{
+                  $t('AI_DEPARTMENTS.FORM.STEP_REMAINING', {
+                    count: remainingSteps,
+                  })
+                }}
+              </span>
+              <button
+                type="button"
+                :disabled="form.steps.length >= MAX_STEPS"
+                class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="openNewStep"
+              >
+                + {{ $t('AI_DEPARTMENTS.FORM.STEP_ADD') }}
+              </button>
+            </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
