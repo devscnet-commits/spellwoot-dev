@@ -129,6 +129,22 @@ const toggleHandoffTeam = id => {
   else agentForm.handoff_team_ids.push(id);
 };
 
+// Outras IAs da conta como destino de transferência. O motor roteia por time, então
+// marcar uma IA adiciona o time dela à allowlist. Só IAs com um time podem ser endereçadas.
+const agents = ref([]);
+const fetchAgents = async () => {
+  try {
+    const { data } = await axios.get(agentUrl());
+    agents.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    agents.value = [];
+  }
+};
+const teamName = id => teams.value.find(tm => tm.id === id)?.name || '';
+const handoffAgents = computed(() =>
+  agents.value.filter(a => String(a.id) !== String(agentId.value) && a.team_id)
+);
+
 const stageOptions = computed(() =>
   ['production', 'experimental'].map(s => ({
     value: s,
@@ -355,6 +371,7 @@ const runTest = async () => {
 onMounted(async () => {
   await fetchProfiles();
   fetchTeams();
+  fetchAgents();
   await fetchAgent();
   captureAgent();
   await Promise.all([fetchDepartments(), fetchInboxes(), fetchVersions()]);
@@ -700,6 +717,41 @@ onMounted(async () => {
               </div>
               <span class="text-xs text-n-slate-11">
                 {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST_HINT') }}
+              </span>
+            </div>
+
+            <!-- Outras IAs como destino (roteia pelo time da IA) -->
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.IA_ALLOWLIST') }}
+              </span>
+              <p
+                v-if="!handoffAgents.length"
+                class="text-sm text-n-slate-11 mb-0"
+              >
+                {{ $t('AI_AGENTS.HANDOFF.NO_IA') }}
+              </p>
+              <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label
+                  v-for="ia in handoffAgents"
+                  :key="ia.id"
+                  class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="agentForm.handoff_team_ids.includes(ia.team_id)"
+                    @change="toggleHandoffTeam(ia.team_id)"
+                  />
+                  <span class="min-w-0 truncate">
+                    {{ ia.assistant_name || ia.name }}
+                    <span class="text-n-slate-11">
+                      · {{ teamName(ia.team_id) }}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.HANDOFF.IA_ALLOWLIST_HINT') }}
               </span>
             </div>
 

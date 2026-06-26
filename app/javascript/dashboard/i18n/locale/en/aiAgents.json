@@ -109,9 +109,12 @@
       "DESCRIPTION": "Defina o time deste agente e para quais setores ele pode transferir uma conversa antes de passar a um humano.",
       "TEAM": "Time deste agente",
       "TEAM_HINT": "Quando várias IAs atendem a mesma caixa, esta assume as conversas atribuídas a este time. Deixe em \"Qualquer conversa\" para atender sem distinção de time.",
-      "ALLOWLIST": "Pode transferir para",
-      "ALLOWLIST_HINT": "Se o cliente pedir outro setor, a IA só transfere para os times marcados acima. Sem marcações, a conversa vai para um humano.",
-      "NO_TEAMS": "Nenhum outro time disponível nesta conta."
+      "ALLOWLIST": "Transferir para times (humanos)",
+      "ALLOWLIST_HINT": "Se o cliente pedir outro setor, a IA só transfere para os times marcados. Sem marcações, a conversa vai para um humano.",
+      "NO_TEAMS": "Nenhum outro time disponível nesta conta.",
+      "IA_ALLOWLIST": "Transferir para outras IAs",
+      "IA_ALLOWLIST_HINT": "A IA pode passar a conversa para outra IA. O roteamento usa o time da IA de destino (marcar uma IA libera o time dela acima).",
+      "NO_IA": "Nenhuma outra IA com time vinculado nesta conta."
     },
     "VERSIONS": {
       "TITLE": "Histórico de versões",
