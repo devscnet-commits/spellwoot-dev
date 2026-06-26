@@ -78,6 +78,8 @@
       "COMPANY": "Nome da empresa",
       "SITE": "Site",
       "VERSION": "Versão",
+      "VERSION_HINT": "Fixa a geração de comportamento do agente. Atualizações futuras não quebram um agente já em produção.",
+      "MODEL_OPENAI": "Modelo OpenAI",
       "MODEL": "Nível de atendimento",
       "MANAGE_LEVELS": "Gerenciar níveis",
       "DESCRIPTION_FIELD": "Descrição",

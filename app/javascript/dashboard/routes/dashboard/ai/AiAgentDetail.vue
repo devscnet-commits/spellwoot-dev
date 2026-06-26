@@ -70,6 +70,8 @@ const agentForm = reactive({
   assistant_name: '',
   company_name: '',
   site: '',
+  version: 'v1',
+  model: '',
   identify_as: 'human',
   assistant_avatar: '',
   ai_operation_profile_id: '',
@@ -95,6 +97,16 @@ const stageBadge = computed(
 const profileOptions = computed(() => [
   { value: '', label: t('AI_AGENTS.FORM.NONE') },
   ...profiles.value.map(p => ({ value: p.id, label: p.name })),
+]);
+
+// Versão = geração de comportamento da API (pinning, para uma atualização não quebrar
+// um agente em produção). O motor que respeita a versão fica no backend.
+const versionOptions = ['v1', 'v2', 'v3'].map(v => ({ value: v, label: v }));
+// Modelo OpenAI escolhido diretamente. Backend pendente (coluna + ModelRouter).
+const OPENAI_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'];
+const modelOptions = computed(() => [
+  { value: '', label: t('AI_AGENTS.FORM.NONE') },
+  ...OPENAI_MODELS.map(m => ({ value: m, label: m })),
 ]);
 
 // Teams power AI->AI routing: this agent serves its own team, and may hand off only to the
@@ -521,6 +533,25 @@ onMounted(async () => {
               >
                 {{ $t('AI_AGENTS.SOBRE.MANAGE_LEVELS') }}
               </button>
+            </div>
+          </div>
+
+          <!-- Modelo OpenAI (direto) + Versão de comportamento -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.MODEL_OPENAI') }}
+              </span>
+              <Select v-model="agentForm.model" :options="modelOptions" />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.VERSION') }}
+              </span>
+              <Select v-model="agentForm.version" :options="versionOptions" />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.SOBRE.VERSION_HINT') }}
+              </span>
             </div>
           </div>
 
