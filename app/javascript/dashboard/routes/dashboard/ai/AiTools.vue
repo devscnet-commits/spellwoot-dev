@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import TagInput from 'dashboard/components-next/taginput/TagInput.vue';
 import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
@@ -60,16 +61,9 @@ const blankArg = () => ({
   name: '',
   type: 'string',
   description: '',
-  // For the "Lista" (array) type: the allowed options, typed comma-separated.
-  optionsText: '',
+  // For the "Lista" (array) type: the allowed options as chips (Enter to add).
+  options: [],
 });
-
-// Split the comma-separated options field into a clean enum list.
-const parseOptions = text =>
-  (text || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
 
 // Build a JSON Schema object from the argument rows. Every named argument is required —
 // if the user added it, the action needs it.
@@ -84,9 +78,8 @@ const buildSchema = () => {
       prop = { type: 'string', format: 'date' };
     } else if (arg.type === 'array') {
       // "Lista" = escolha única: a IA deve escolher exatamente uma das opções.
-      const options = parseOptions(arg.optionsText);
       prop = { type: 'string' };
-      if (options.length) prop.enum = options;
+      if (arg.options.length) prop.enum = [...arg.options];
     } else {
       prop = { type: arg.type };
     }
@@ -115,7 +108,7 @@ const parseSchema = schema => {
       name,
       type,
       description: (def && def.description) || '',
-      optionsText: enumList.join(', '),
+      options: Array.isArray(enumList) ? [...enumList] : [],
     };
   });
 };
@@ -547,14 +540,17 @@ onMounted(() => {
             >
               <span class="i-lucide-x size-4 inline-block" />
             </button>
-            <!-- Lista (array): opções que a IA pode escolher, digitadas pelo usuário -->
+            <!-- Lista (array): opções que a IA pode escolher (chip por Enter) -->
             <div v-if="arg.type === 'array'" class="w-full flex flex-col gap-1">
-              <input
-                v-model="arg.optionsText"
-                type="text"
-                :placeholder="$t('AI_TOOLS.FORM.ARG_OPTIONS_PLACEHOLDER')"
-                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
-              />
+              <div
+                class="w-full rounded-lg border border-n-weak bg-n-solid-2 px-3 py-2"
+              >
+                <TagInput
+                  v-model="arg.options"
+                  :placeholder="$t('AI_TOOLS.FORM.ARG_OPTIONS_PLACEHOLDER')"
+                  allow-create
+                />
+              </div>
               <span class="text-xs text-n-slate-11">
                 {{ $t('AI_TOOLS.FORM.ARG_OPTIONS_HINT') }}
               </span>

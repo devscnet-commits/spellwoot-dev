@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import Logo from 'next/icon/Logo.vue';
 import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
+import TagInput from 'dashboard/components-next/taginput/TagInput.vue';
 import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
@@ -124,7 +125,7 @@ const blankLeadVar = () => ({
   var_type: 'texto',
   description: '',
   visible_in_first_chat: false,
-  optionsText: '',
+  options: [],
 });
 const leadVarForm = reactive(blankLeadVar());
 const showLeadVarForm = ref(false);
@@ -144,7 +145,7 @@ const openEditLeadVar = v => {
     var_type: v.var_type || 'texto',
     description: v.description || '',
     visible_in_first_chat: !!v.visible_in_first_chat,
-    optionsText: Array.isArray(v.values) ? v.values.join(', ') : '',
+    options: Array.isArray(v.values) ? [...v.values] : [],
   });
   showLeadVarForm.value = true;
 };
@@ -156,13 +157,7 @@ const saveLeadVar = async () => {
       var_type: leadVarForm.var_type,
       description: (leadVarForm.description || '').trim(),
       visible_in_first_chat: leadVarForm.visible_in_first_chat,
-      values:
-        leadVarForm.var_type === 'lista'
-          ? leadVarForm.optionsText
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean)
-          : [],
+      values: leadVarForm.var_type === 'lista' ? leadVarForm.options : [],
     },
   };
   try {
@@ -871,20 +866,23 @@ onMounted(async () => {
                   />
                 </div>
               </div>
-              <label
+              <div
                 v-if="leadVarForm.var_type === 'lista'"
                 class="flex flex-col gap-1.5 text-sm text-n-slate-12"
               >
-                {{ $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS') }}
-                <input
-                  v-model="leadVarForm.optionsText"
-                  type="text"
-                  :placeholder="
-                    $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS_PLACEHOLDER')
-                  "
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
-                />
-              </label>
+                <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS') }}</span>
+                <div
+                  class="rounded-lg border border-n-weak bg-n-solid-2 px-3 py-2"
+                >
+                  <TagInput
+                    v-model="leadVarForm.options"
+                    :placeholder="
+                      $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS_PLACEHOLDER')
+                    "
+                    allow-create
+                  />
+                </div>
+              </div>
               <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
                 <input
