@@ -62,6 +62,7 @@ const form = reactive({
   max_replies: '',
   max_input_chars: '',
   // Follow-up: várias tentativas de envio (não há mais "Ativar" — vazio = desligado).
+  followup_instructions: '',
   followup_attempts: [],
   followup_schedule: 'inbox_hours',
   followup_custom_windows: [],
@@ -118,7 +119,7 @@ const nextStepUid = () => {
 const blankStep = () => ({
   uid: nextStepUid(),
   name: '',
-  objective: '',
+  instructions: '',
   automation_on_complete: false,
 });
 // Aceita o formato legado (array de strings) e o novo (array de objetos).
@@ -128,13 +129,13 @@ const parseSteps = arr =>
       ? {
           uid: nextStepUid(),
           name: s,
-          objective: '',
+          instructions: '',
           automation_on_complete: false,
         }
       : {
           uid: nextStepUid(),
           name: s.name || '',
-          objective: s.objective || '',
+          instructions: s.instructions || s.objective || '',
           automation_on_complete: !!s.automation_on_complete,
         }
   );
@@ -223,6 +224,7 @@ const hydrate = dept => {
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
+    followup_instructions: followUp.instructions || '',
     followup_attempts: hydrateAttempts(followUp),
     followup_schedule: sched.schedule,
     followup_custom_windows: sched.windows,
@@ -264,6 +266,7 @@ const buildFollowUp = () => {
     }));
   return {
     enabled: attempts.length > 0,
+    instructions: (form.followup_instructions || '').trim(),
     attempts,
     schedule: form.followup_schedule,
     custom_windows:
@@ -300,7 +303,7 @@ const buildPayload = () => ({
         .filter(s => (s.name || '').trim())
         .map(s => ({
           name: s.name.trim(),
-          objective: (s.objective || '').trim(),
+          instructions: (s.instructions || '').trim(),
           automation_on_complete: !!s.automation_on_complete,
         })),
       transfer_when: linesToArray(form.transfer_when_steps),
@@ -310,6 +313,14 @@ const buildPayload = () => ({
 });
 
 const save = async () => {
+  // Obrigatório: pelo menos uma etapa (com nome) quando a aba Etapas está em foco.
+  if (
+    visibleSections.value.has('steps') &&
+    !form.steps.some(s => (s.name || '').trim())
+  ) {
+    useAlert(t('AI_DEPARTMENTS.FORM.STEP_REQUIRED'));
+    return;
+  }
   isSaving.value = true;
   try {
     if (isNew.value) {
@@ -411,7 +422,7 @@ const saveStep = () => {
   const payload = {
     uid: stepDraft.uid,
     name: stepDraft.name.trim(),
-    objective: (stepDraft.objective || '').trim(),
+    instructions: (stepDraft.instructions || '').trim(),
     automation_on_complete: !!stepDraft.automation_on_complete,
   };
   if (editingStepIndex.value === null) form.steps.push(payload);
@@ -828,6 +839,18 @@ onMounted(async () => {
               </p>
             </div>
 
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS') }}
+              <textarea
+                v-model="form.followup_instructions"
+                rows="3"
+                :placeholder="
+                  $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS_PLACEHOLDER')
+                "
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
+            </label>
+
             <!-- Tentativas de envio (várias opções de tempo) -->
             <div class="flex flex-col gap-2">
               <div class="flex flex-col gap-0.5">
@@ -1057,10 +1080,10 @@ onMounted(async () => {
                       {{ element.name }}
                     </p>
                     <p
-                      v-if="element.objective"
+                      v-if="element.instructions"
                       class="text-xs text-n-slate-11 mb-0 truncate"
                     >
-                      {{ element.objective }}
+                      {{ element.instructions }}
                     </p>
                   </div>
                   <span
@@ -1103,12 +1126,12 @@ onMounted(async () => {
                 />
               </label>
               <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE') }}
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS') }}
                 <textarea
-                  v-model="stepDraft.objective"
+                  v-model="stepDraft.instructions"
                   rows="3"
                   :placeholder="
-                    $t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE_PLACEHOLDER')
+                    $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS_PLACEHOLDER')
                   "
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-none"
                 />
