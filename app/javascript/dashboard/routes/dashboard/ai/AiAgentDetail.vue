@@ -454,44 +454,74 @@ onMounted(async () => {
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.IDENTIFY_AS.LABEL') }}
               </span>
-              <!-- Seletor em pílula segmentado (igual ao estilo do follow-up) -->
-              <div
-                class="inline-flex self-start p-1 rounded-full bg-n-alpha-2 gap-1"
-              >
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button
                   type="button"
-                  class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
+                  class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
                   :class="
                     agentForm.identify_as === 'human'
-                      ? 'bg-n-brand text-white'
-                      : 'text-n-slate-11 hover:text-n-slate-12'
+                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
+                      : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
                   "
                   @click="agentForm.identify_as = 'human'"
                 >
-                  <span class="i-lucide-user-round size-4" />
-                  {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN') }}
+                  <span
+                    class="shrink-0 size-10 rounded-full flex items-center justify-center"
+                    :class="
+                      agentForm.identify_as === 'human'
+                        ? 'bg-n-brand text-white'
+                        : 'bg-n-alpha-2 text-n-slate-11'
+                    "
+                  >
+                    <span class="i-lucide-user-round size-5" />
+                  </span>
+                  <span class="flex flex-col gap-0.5 min-w-0">
+                    <span class="text-base font-semibold text-n-slate-12">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN') }}
+                    </span>
+                    <span class="text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT') }}
+                    </span>
+                  </span>
+                  <span
+                    v-if="agentForm.identify_as === 'human'"
+                    class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
+                  />
                 </button>
                 <button
                   type="button"
-                  class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
+                  class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
                   :class="
                     agentForm.identify_as === 'ai'
-                      ? 'bg-n-brand text-white'
-                      : 'text-n-slate-11 hover:text-n-slate-12'
+                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
+                      : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
                   "
                   @click="agentForm.identify_as = 'ai'"
                 >
-                  <span class="i-lucide-bot size-4" />
-                  {{ $t('AI_AGENTS.IDENTIFY_AS.AI') }}
+                  <span
+                    class="shrink-0 size-10 rounded-full flex items-center justify-center"
+                    :class="
+                      agentForm.identify_as === 'ai'
+                        ? 'bg-n-brand text-white'
+                        : 'bg-n-alpha-2 text-n-slate-11'
+                    "
+                  >
+                    <span class="i-lucide-bot size-5" />
+                  </span>
+                  <span class="flex flex-col gap-0.5 min-w-0">
+                    <span class="text-base font-semibold text-n-slate-12">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.AI') }}
+                    </span>
+                    <span class="text-xs text-n-slate-11">
+                      {{ $t('AI_AGENTS.IDENTIFY_AS.AI_HINT') }}
+                    </span>
+                  </span>
+                  <span
+                    v-if="agentForm.identify_as === 'ai'"
+                    class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
+                  />
                 </button>
               </div>
-              <span class="text-xs text-n-slate-11">
-                {{
-                  agentForm.identify_as === 'human'
-                    ? $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT')
-                    : $t('AI_AGENTS.IDENTIFY_AS.AI_HINT')
-                }}
-              </span>
             </div>
           </div>
 
