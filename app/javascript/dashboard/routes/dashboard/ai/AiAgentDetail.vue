@@ -27,7 +27,6 @@ const TAB_KEYS = [
   'about',
   'behavior',
   'followup',
-  'assignment',
   'finalization',
   'steps',
   'tools',
@@ -35,14 +34,7 @@ const TAB_KEYS = [
   'test',
 ];
 // The agent tabs that edit the default department's sections (flattened).
-const DEPT_TABS = [
-  'behavior',
-  'followup',
-  'assignment',
-  'finalization',
-  'steps',
-  'tools',
-];
+const DEPT_TABS = ['behavior', 'followup', 'finalization', 'steps', 'tools'];
 const activeKey = ref(route.query.tab === 'test' ? 'test' : 'about');
 const tabs = computed(() =>
   TAB_KEYS.map(key => ({

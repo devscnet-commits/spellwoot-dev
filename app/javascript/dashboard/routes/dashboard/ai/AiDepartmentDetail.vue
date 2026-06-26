@@ -33,7 +33,6 @@ const activeTab = ref('instructions');
 const SECTION_GROUPS = {
   behavior: ['instructions', 'attendance'],
   followup: ['followup'],
-  assignment: ['assignment'],
   finalization: ['finalization'],
   steps: ['steps'],
   tools: ['tools'],
@@ -44,14 +43,9 @@ const visibleSections = computed(() =>
     : new Set([activeTab.value])
 );
 const showSave = computed(() =>
-  [
-    'instructions',
-    'attendance',
-    'steps',
-    'followup',
-    'assignment',
-    'finalization',
-  ].some(s => visibleSections.value.has(s))
+  ['instructions', 'attendance', 'steps', 'followup', 'finalization'].some(s =>
+    visibleSections.value.has(s)
+  )
 );
 const isSaving = ref(false);
 // Operational summary counts (read-only) served by the departments index serializer.
@@ -74,10 +68,6 @@ const form = reactive({
   // Lista de comportamentos de follow-up (1 por contexto de horário); cada um com
   // suas tentativas, carência e a ação se o cliente não responder.
   followup_behaviors: [],
-  // Atribuição (transfer_rules): decide a entrega para humanos. Scaffold; motor depois.
-  assign_respect_business_hours: true,
-  assign_off_hours_action: 'wait_next_hours',
-  assign_no_agent_action: 'wait_agent',
   // Finalização (close_rules): encerrar conversas. Scaffold.
   close_message: '',
   close_auto_minutes: '',
@@ -229,7 +219,6 @@ const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
   const followUp = dept.follow_up || {};
-  const assign = dept.transfer_rules || {};
   const close = dept.close_rules || {};
   Object.assign(form, {
     name: dept.name || '',
@@ -244,9 +233,6 @@ const hydrate = dept => {
     max_input_chars: behavior.max_input_chars ?? '',
     followup_instructions: followUp.instructions || '',
     followup_behaviors: hydrateBehaviors(followUp),
-    assign_respect_business_hours: assign.respect_business_hours !== false,
-    assign_off_hours_action: assign.off_hours_action || 'wait_next_hours',
-    assign_no_agent_action: assign.no_agent_action || 'wait_agent',
     close_message: close.message || '',
     close_auto_minutes: close.auto_close_minutes ?? '',
     disabled_custom_attributes: Array.isArray(
@@ -301,12 +287,7 @@ const buildFollowUp = () => {
   };
 };
 
-// Atribuição (transfer_rules) e Finalização (close_rules) — scaffold; motor depois.
-const buildAssignment = () => ({
-  respect_business_hours: form.assign_respect_business_hours,
-  off_hours_action: form.assign_off_hours_action,
-  no_agent_action: form.assign_no_agent_action,
-});
+// Finalização (close_rules) — scaffold; motor depois.
 const buildFinalization = () => ({
   message: (form.close_message || '').trim(),
   auto_close_minutes: Number(form.close_auto_minutes) || 0,
@@ -329,7 +310,6 @@ const buildPayload = () => ({
       disabled_custom_attributes: form.disabled_custom_attributes,
     },
     follow_up: buildFollowUp(),
-    transfer_rules: buildAssignment(),
     close_rules: buildFinalization(),
     playbook: {
       objetivo: form.objetivo,
@@ -523,20 +503,6 @@ const setBehaviorAttemptCount = (b, value) => {
   while (b.attempts.length < target) b.attempts.push(blankAttempt());
   while (b.attempts.length > target) b.attempts.pop();
 };
-// Selects (componente Select, não corta) da tela de Atribuição.
-const assignOffHoursOptions = computed(() => [
-  { value: 'wait_next_hours', label: t('AI_DEPARTMENTS.ASSIGNMENT.OFF_WAIT') },
-  { value: 'close', label: t('AI_DEPARTMENTS.ASSIGNMENT.OFF_CLOSE') },
-  { value: 'hold', label: t('AI_DEPARTMENTS.ASSIGNMENT.OFF_HOLD') },
-]);
-const assignNoAgentOptions = computed(() => [
-  { value: 'wait_agent', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_WAIT') },
-  { value: 'escalate', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_ESCALATE') },
-  { value: 'alt_flow', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_ALT') },
-  { value: 'close', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_CLOSE') },
-  { value: 'hold', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_HOLD') },
-]);
-
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
@@ -1102,53 +1068,6 @@ onMounted(async () => {
             >
               + {{ $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIOR_ADD') }}
             </button>
-          </section>
-        </div>
-
-        <!-- ATRIBUIÇÃO (decide a entrega para humanos) -->
-        <div
-          v-if="visibleSections.has('assignment')"
-          class="flex flex-col gap-5"
-        >
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
-          >
-            <div class="flex flex-col gap-0.5">
-              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
-                {{ $t('AI_DEPARTMENTS.ASSIGNMENT.TITLE') }}
-              </h2>
-              <p class="text-xs text-n-slate-11 mb-0">
-                {{ $t('AI_DEPARTMENTS.ASSIGNMENT.HINT') }}
-              </p>
-            </div>
-
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input
-                v-model="form.assign_respect_business_hours"
-                type="checkbox"
-              />
-              {{ $t('AI_DEPARTMENTS.ASSIGNMENT.RESPECT_HOURS') }}
-            </label>
-
-            <div class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm">
-              <span>{{ $t('AI_DEPARTMENTS.ASSIGNMENT.OFF_HOURS') }}</span>
-              <Select
-                v-model="form.assign_off_hours_action"
-                :options="assignOffHoursOptions"
-              />
-            </div>
-
-            <div class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm">
-              <span>{{ $t('AI_DEPARTMENTS.ASSIGNMENT.NO_AGENT') }}</span>
-              <Select
-                v-model="form.assign_no_agent_action"
-                :options="assignNoAgentOptions"
-              />
-            </div>
-
-            <p class="text-xs text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.ASSIGNMENT.SCAFFOLD_NOTE') }}
-            </p>
           </section>
         </div>
 
