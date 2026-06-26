@@ -134,6 +134,8 @@ const blankStep = () => ({
   name: '',
   instructions: '',
   automation_on_complete: false,
+  // Delay de agrupamento desta etapa (segundos). Vazio = usa o delay geral (Comportamento).
+  group_delay_seconds: '',
 });
 // Aceita o formato legado (array de strings) e o novo (array de objetos).
 const parseSteps = arr =>
@@ -144,12 +146,14 @@ const parseSteps = arr =>
           name: s,
           instructions: '',
           automation_on_complete: false,
+          group_delay_seconds: '',
         }
       : {
           uid: nextStepUid(),
           name: s.name || '',
           instructions: s.instructions || s.objective || '',
           automation_on_complete: !!s.automation_on_complete,
+          group_delay_seconds: s.group_delay_seconds ?? '',
         }
   );
 
@@ -335,6 +339,10 @@ const buildPayload = () => ({
           name: s.name.trim(),
           instructions: (s.instructions || '').trim(),
           automation_on_complete: !!s.automation_on_complete,
+          group_delay_seconds:
+            s.group_delay_seconds === '' || s.group_delay_seconds == null
+              ? null
+              : Number(s.group_delay_seconds),
         })),
       transfer_when: linesToArray(form.transfer_when_steps),
       close_when: linesToArray(form.close_when_steps),
@@ -454,6 +462,7 @@ const saveStep = () => {
     name: stepDraft.name.trim(),
     instructions: (stepDraft.instructions || '').trim(),
     automation_on_complete: !!stepDraft.automation_on_complete,
+    group_delay_seconds: stepDraft.group_delay_seconds,
   };
   if (editingStepIndex.value === null) form.steps.push(payload);
   else form.steps.splice(editingStepIndex.value, 1, payload);
@@ -1296,6 +1305,23 @@ onMounted(async () => {
                   "
                   class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-none"
                 />
+              </label>
+              <label
+                class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+              >
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_DELAY') }}
+                <input
+                  v-model="stepDraft.group_delay_seconds"
+                  type="number"
+                  min="0"
+                  :placeholder="
+                    $t('AI_DEPARTMENTS.FORM.STEP_DELAY_PLACEHOLDER')
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.STEP_DELAY_HINT') }}
+                </span>
               </label>
               <div class="flex items-center justify-between gap-3 flex-wrap">
                 <label class="flex items-center gap-2 text-sm text-n-slate-12">
