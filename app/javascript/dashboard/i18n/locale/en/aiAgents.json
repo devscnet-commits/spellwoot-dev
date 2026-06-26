@@ -379,6 +379,26 @@
       "WHEN_ONLINE": "Também retomar quando houver um agente humano cuidando da conversa"
     },
     "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento.",
+    "LEAD_VARS": {
+      "TITLE": "Variáveis do lead",
+      "HINT": "Dados que a IA deve coletar na conversa e salvar. Entram no prompt como informações a coletar.",
+      "EMPTY": "Nenhuma variável. A IA não coleta dados estruturados do lead.",
+      "NAME": "Nome",
+      "NAME_PLACEHOLDER": "ex.: cidade",
+      "TYPE": "Tipo",
+      "TYPE_TEXTO": "Texto",
+      "TYPE_NUMERO": "Número",
+      "TYPE_BOOLEANO": "Sim/Não",
+      "TYPE_LISTA": "Lista",
+      "OPTIONS": "Opções da lista (separadas por vírgula)",
+      "OPTIONS_PLACEHOLDER": "ex.: pequeno, médio, grande",
+      "DESCRIPTION": "Descrição",
+      "DESCRIPTION_PLACEHOLDER": "O que é esse dado e como a IA deve pedir",
+      "FIRST_CHAT": "Perguntar logo no primeiro contato",
+      "ADD": "Adicionar variável",
+      "EDIT": "Editar variável",
+      "REMOVE": "Remover variável"
+    },
     "CUSTOM_ATTRS": {
       "TITLE": "Atributos personalizados",
       "HINT": "Atributos criados no sistema que esta IA pode preencher e consultar nas conversas. Novos atributos entram habilitados; exclua aqui os que esta IA não deve usar (não apaga do sistema).",

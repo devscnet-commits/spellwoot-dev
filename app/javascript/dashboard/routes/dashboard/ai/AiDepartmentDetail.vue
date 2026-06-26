@@ -6,6 +6,7 @@ import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Logo from 'next/icon/Logo.vue';
 import Switch from 'dashboard/components-next/switch/Switch.vue';
+import Select from 'dashboard/components-next/select/Select.vue';
 import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
@@ -100,6 +101,90 @@ const toggleAttr = key => {
   const i = form.disabled_custom_attributes.indexOf(key);
   if (i >= 0) form.disabled_custom_attributes.splice(i, 1);
   else form.disabled_custom_attributes.push(key);
+};
+
+// --- Variáveis do lead: dados que a IA coleta na conversa e salva no banco ---
+// Vão para o prompt como system prompt (PromptCompiler já injeta). Endpoint próprio.
+const LEAD_VAR_TYPES = ['texto', 'numero', 'booleano', 'lista'];
+const leadVars = ref([]);
+const leadVarUrl = () =>
+  `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`;
+const fetchLeadVars = async () => {
+  if (isNew.value) return;
+  try {
+    const { data } = await axios.get(leadVarUrl());
+    leadVars.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    leadVars.value = [];
+  }
+};
+const blankLeadVar = () => ({
+  id: null,
+  name: '',
+  var_type: 'texto',
+  description: '',
+  visible_in_first_chat: false,
+  optionsText: '',
+});
+const leadVarForm = reactive(blankLeadVar());
+const showLeadVarForm = ref(false);
+const leadVarTypeLabel = type =>
+  t(`AI_DEPARTMENTS.LEAD_VARS.TYPE_${(type || 'texto').toUpperCase()}`);
+const leadVarTypeOptions = computed(() =>
+  LEAD_VAR_TYPES.map(v => ({ value: v, label: leadVarTypeLabel(v) }))
+);
+const openNewLeadVar = () => {
+  Object.assign(leadVarForm, blankLeadVar());
+  showLeadVarForm.value = true;
+};
+const openEditLeadVar = v => {
+  Object.assign(leadVarForm, blankLeadVar(), {
+    id: v.id,
+    name: v.name || '',
+    var_type: v.var_type || 'texto',
+    description: v.description || '',
+    visible_in_first_chat: !!v.visible_in_first_chat,
+    optionsText: Array.isArray(v.values) ? v.values.join(', ') : '',
+  });
+  showLeadVarForm.value = true;
+};
+const saveLeadVar = async () => {
+  if (!leadVarForm.name.trim()) return;
+  const payload = {
+    ai_lead_variable: {
+      name: leadVarForm.name.trim(),
+      var_type: leadVarForm.var_type,
+      description: (leadVarForm.description || '').trim(),
+      visible_in_first_chat: leadVarForm.visible_in_first_chat,
+      values:
+        leadVarForm.var_type === 'lista'
+          ? leadVarForm.optionsText
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)
+          : [],
+    },
+  };
+  try {
+    if (leadVarForm.id) {
+      await axios.patch(`${leadVarUrl()}/${leadVarForm.id}`, payload);
+    } else {
+      await axios.post(leadVarUrl(), payload);
+    }
+    useAlert(t('AI_DEPARTMENTS.SAVED'));
+    showLeadVarForm.value = false;
+    fetchLeadVars();
+  } catch (error) {
+    useAlert(t('AI_DEPARTMENTS.ERROR'));
+  }
+};
+const removeLeadVar = async v => {
+  try {
+    await axios.delete(`${leadVarUrl()}/${v.id}`);
+    fetchLeadVars();
+  } catch (error) {
+    useAlert(t('AI_DEPARTMENTS.ERROR'));
+  }
 };
 
 const linesToArray = value =>
@@ -456,7 +541,11 @@ const removeWindow = index => form.followup_custom_windows.splice(index, 1);
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
-  await Promise.all([fetchVersions(), fetchCustomAttributes()]);
+  await Promise.all([
+    fetchVersions(),
+    fetchCustomAttributes(),
+    fetchLeadVars(),
+  ]);
 });
 </script>
 
@@ -696,6 +785,151 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
+          </section>
+
+          <!-- Variáveis do lead: dados que a IA coleta na conversa -->
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <div class="flex flex-col gap-0.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.TITLE') }}
+              </span>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.HINT') }}
+              </p>
+            </div>
+
+            <p
+              v-if="!leadVars.length && !showLeadVarForm"
+              class="text-sm text-n-slate-11 mb-0"
+            >
+              {{ $t('AI_DEPARTMENTS.LEAD_VARS.EMPTY') }}
+            </p>
+
+            <div
+              v-for="v in leadVars"
+              :key="v.id"
+              class="flex items-center justify-between gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-3 py-2.5"
+            >
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-n-slate-12 mb-0 truncate">
+                  {{ v.name }}
+                  <span class="text-xs font-normal text-n-slate-11">
+                    · {{ leadVarTypeLabel(v.var_type) }}
+                  </span>
+                </p>
+                <p
+                  v-if="v.description"
+                  class="text-xs text-n-slate-11 mb-0 truncate"
+                >
+                  {{ v.description }}
+                </p>
+              </div>
+              <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
+                <button
+                  type="button"
+                  class="hover:text-n-slate-12"
+                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.EDIT')"
+                  @click="openEditLeadVar(v)"
+                >
+                  <span class="i-lucide-pencil size-4 inline-block" />
+                </button>
+                <button
+                  type="button"
+                  class="hover:text-n-ruby-11"
+                  :aria-label="$t('AI_DEPARTMENTS.LEAD_VARS.REMOVE')"
+                  @click="removeLeadVar(v)"
+                >
+                  <span class="i-lucide-trash-2 size-4 inline-block" />
+                </button>
+              </div>
+            </div>
+
+            <!-- Form criar/editar variável -->
+            <div
+              v-if="showLeadVarForm"
+              class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
+            >
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.LEAD_VARS.NAME') }}
+                  <input
+                    v-model="leadVarForm.name"
+                    type="text"
+                    :placeholder="
+                      $t('AI_DEPARTMENTS.LEAD_VARS.NAME_PLACEHOLDER')
+                    "
+                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                  />
+                </label>
+                <div class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  <span>{{ $t('AI_DEPARTMENTS.LEAD_VARS.TYPE') }}</span>
+                  <Select
+                    v-model="leadVarForm.var_type"
+                    :options="leadVarTypeOptions"
+                  />
+                </div>
+              </div>
+              <label
+                v-if="leadVarForm.var_type === 'lista'"
+                class="flex flex-col gap-1.5 text-sm text-n-slate-12"
+              >
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS') }}
+                <input
+                  v-model="leadVarForm.optionsText"
+                  type="text"
+                  :placeholder="
+                    $t('AI_DEPARTMENTS.LEAD_VARS.OPTIONS_PLACEHOLDER')
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                />
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION') }}
+                <input
+                  v-model="leadVarForm.description"
+                  type="text"
+                  :placeholder="
+                    $t('AI_DEPARTMENTS.LEAD_VARS.DESCRIPTION_PLACEHOLDER')
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                />
+              </label>
+              <label class="flex items-center gap-2 text-sm text-n-slate-12">
+                <input
+                  v-model="leadVarForm.visible_in_first_chat"
+                  type="checkbox"
+                />
+                {{ $t('AI_DEPARTMENTS.LEAD_VARS.FIRST_CHAT') }}
+              </label>
+              <div class="flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                  @click="showLeadVarForm = false"
+                >
+                  {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
+                </button>
+                <button
+                  type="button"
+                  :disabled="!leadVarForm.name.trim()"
+                  class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  @click="saveLeadVar"
+                >
+                  {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
+                </button>
+              </div>
+            </div>
+
+            <button
+              v-if="!showLeadVarForm"
+              type="button"
+              class="self-start text-sm font-medium text-n-brand hover:underline"
+              @click="openNewLeadVar"
+            >
+              + {{ $t('AI_DEPARTMENTS.LEAD_VARS.ADD') }}
+            </button>
           </section>
         </div>
 
