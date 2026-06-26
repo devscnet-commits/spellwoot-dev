@@ -530,6 +530,18 @@ const attemptCount = computed({
   },
 });
 const removeAttempt = index => form.followup_attempts.splice(index, 1);
+const fuUnitOptions = computed(() => [
+  { value: 'minutos', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_MINUTES') },
+  { value: 'horas', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_HOURS') },
+]);
+const fuScheduleOptions = computed(() => [
+  { value: 'inbox_hours', label: t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_INBOX') },
+  {
+    value: 'outside_inbox_hours',
+    label: t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_OUTSIDE'),
+  },
+  { value: 'custom', label: t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_CUSTOM') },
+]);
 const addWindow = () => form.followup_custom_windows.push(blankWindow());
 const removeWindow = index => form.followup_custom_windows.splice(index, 1);
 
@@ -1149,17 +1161,12 @@ onMounted(async () => {
                         min="0"
                         class="w-24 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
                       />
-                      <select
-                        v-model="attempt.unit"
-                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
-                      >
-                        <option value="minutos">
-                          {{ $t('AI_DEPARTMENTS.FOLLOWUP.UNIT_MINUTES') }}
-                        </option>
-                        <option value="horas">
-                          {{ $t('AI_DEPARTMENTS.FOLLOWUP.UNIT_HOURS') }}
-                        </option>
-                      </select>
+                      <div class="w-36">
+                        <Select
+                          v-model="attempt.unit"
+                          :options="fuUnitOptions"
+                        />
+                      </div>
                     </div>
                   </label>
                 </div>
@@ -1182,20 +1189,12 @@ onMounted(async () => {
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_TITLE') }}
               </span>
-              <select
-                v-model="form.followup_schedule"
-                class="max-w-xs px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-              >
-                <option value="inbox_hours">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_INBOX') }}
-                </option>
-                <option value="outside_inbox_hours">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_OUTSIDE') }}
-                </option>
-                <option value="custom">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_CUSTOM') }}
-                </option>
-              </select>
+              <div class="max-w-xs">
+                <Select
+                  v-model="form.followup_schedule"
+                  :options="fuScheduleOptions"
+                />
+              </div>
 
               <div
                 v-if="form.followup_schedule === 'custom'"
