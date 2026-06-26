@@ -88,14 +88,120 @@ const uploadFile = async file => {
     useAlert(error.response?.data?.errors?.[0] || t('AI_KNOWLEDGE.ERROR'));
   }
 };
+// Importar como: estruturados (CSV -> N entradas) ou Documento (arquivo único).
+const importKind = ref('faq');
+const IMPORT_KINDS = ['faq', 'produto', 'procedimento', 'documento'];
+const IMPORT_COLUMNS = {
+  faq: ['pergunta', 'resposta'],
+  produto: ['nome', 'descricao', 'preco'],
+  procedimento: ['titulo', 'passos'],
+};
+
+// Parser CSV minimalista (aspas, vírgula dentro de aspas, \n e \r\n).
+const parseCsv = text => {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+  const endField = () => {
+    row.push(field);
+    field = '';
+  };
+  const endRow = () => {
+    endField();
+    rows.push(row);
+    row = [];
+  };
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        field += '"';
+        i += 1;
+      } else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') endField();
+    else if (c === '\n') endRow();
+    else if (c !== '\r') field += c;
+  }
+  if (field.length || row.length) endRow();
+  return rows.filter(r => r.some(cell => cell.trim() !== ''));
+};
+
+// Linhas -> fontes de conhecimento conforme o tipo (pula cabeçalho se reconhecido).
+const rowsToSources = (rows, kind) => {
+  const cols = IMPORT_COLUMNS[kind] || IMPORT_COLUMNS.faq;
+  const first = (rows[0] || []).map(c => c.trim().toLowerCase());
+  const data = cols.every((c, i) => (first[i] || '').includes(c))
+    ? rows.slice(1)
+    : rows;
+  return data
+    .map(r => {
+      const title = (r[0] || '').trim();
+      if (!title) return null;
+      const src = { kind, title, raw: (r[1] || '').trim(), status: 'active' };
+      if (kind === 'produto') src.price = (r[2] || '').trim();
+      return src;
+    })
+    .filter(Boolean);
+};
+
+const importCsv = async file => {
+  const text = await file.text();
+  const entries = rowsToSources(parseCsv(text), importKind.value);
+  if (!entries.length) {
+    useAlert(t('AI_KNOWLEDGE.IMPORT_EMPTY'));
+    return;
+  }
+  try {
+    await Promise.all(
+      entries.map(src => axios.post(baseUrl(), { ai_knowledge_source: src }))
+    );
+    useAlert(t('AI_KNOWLEDGE.IMPORTED', { count: entries.length }));
+    fetchSources();
+  } catch (error) {
+    useAlert(error.response?.data?.errors?.[0] || t('AI_KNOWLEDGE.ERROR'));
+  }
+};
+
+const handleFile = file => {
+  if (!file) return;
+  if (importKind.value === 'documento') uploadFile(file);
+  else importCsv(file);
+};
 const onFilePick = e => {
   const file = e.target.files?.[0];
   e.target.value = '';
-  uploadFile(file);
+  handleFile(file);
 };
 const onDrop = e => {
   dragActive.value = false;
-  uploadFile(e.dataTransfer?.files?.[0]);
+  handleFile(e.dataTransfer?.files?.[0]);
+};
+
+// Baixa um CSV modelo (cabeçalho + 1 exemplo) do tipo selecionado.
+const IMPORT_EXAMPLES = {
+  faq: ['Qual o horário de atendimento?', 'Seg a sex, das 8h às 18h.'],
+  produto: ['Plano Pro', 'Plano completo com suporte', 'R$ 99/mês'],
+  procedimento: [
+    'Troca de produto',
+    '1. Solicite no app; 2. Envie o item; 3. Receba o novo',
+  ],
+};
+const downloadModel = () => {
+  const kind = importKind.value;
+  if (kind === 'documento') return;
+  const csv = `${IMPORT_COLUMNS[kind].join(',')}\n${IMPORT_EXAMPLES[kind]
+    .map(v => `"${v}"`)
+    .join(',')}\n`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `modelo-${kind}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 };
 
 // Website: cadastra a URL como fonte de conhecimento. A extração/crawl do conteúdo
@@ -212,14 +318,33 @@ onMounted(fetchSources);
           </div>
         </div>
 
-        <!-- Documentos: dropzone (arrastar/clicar) -->
+        <!-- Documentos: importar (escolhe o tipo) -->
         <div class="flex flex-col gap-2">
-          <span
-            class="inline-flex items-center gap-1.5 text-sm font-medium text-n-slate-12"
-          >
-            <span class="i-lucide-folder-up size-4" />
-            {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS') }}
-          </span>
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <span
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-n-slate-12"
+            >
+              <span class="i-lucide-folder-up size-4" />
+              {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS') }}
+            </span>
+            <!-- Importar como -->
+            <div class="inline-flex p-1 rounded-full bg-n-alpha-2 gap-1">
+              <button
+                v-for="k in IMPORT_KINDS"
+                :key="k"
+                type="button"
+                class="px-3 py-1 rounded-full text-xs font-medium transition-colors"
+                :class="
+                  importKind === k
+                    ? 'bg-n-brand text-white'
+                    : 'text-n-slate-11 hover:text-n-slate-12'
+                "
+                @click="importKind = k"
+              >
+                {{ $t(`AI_KNOWLEDGE.IMPORT_KIND.${k.toUpperCase()}`) }}
+              </button>
+            </div>
+          </div>
           <input
             ref="fileInput"
             type="file"
@@ -248,6 +373,22 @@ onMounted(fetchSources);
               {{ $t('AI_KNOWLEDGE.DROPZONE.FORMATS') }}
             </span>
           </button>
+          <!-- Formato esperado + baixar modelo (só para os tipos estruturados) -->
+          <div
+            v-if="importKind !== 'documento'"
+            class="flex items-center justify-between gap-3 flex-wrap"
+          >
+            <span class="text-xs text-n-slate-11">
+              {{ $t(`AI_KNOWLEDGE.IMPORT_FORMAT.${importKind.toUpperCase()}`) }}
+            </span>
+            <button
+              type="button"
+              class="shrink-0 text-xs font-medium text-n-brand hover:underline"
+              @click="downloadModel"
+            >
+              {{ $t('AI_KNOWLEDGE.DOWNLOAD_MODEL') }}
+            </button>
+          </div>
         </div>
 
         <!-- Website: importar páginas (em breve) -->

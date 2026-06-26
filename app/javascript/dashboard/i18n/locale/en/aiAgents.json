@@ -531,9 +531,23 @@
     "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui — FAQ, produtos, procedimentos — ela usa para responder os clientes.",
     "NEW": "Nova fonte",
     "DROPZONE": {
-      "HINT": "Arraste e solte aqui um arquivo com dados sobre seus produtos e serviços. Ou clique para procurar no seu dispositivo.",
+      "HINT": "Arraste e solte um arquivo aqui, ou clique para procurar. A IA preenche várias entradas de uma vez (ex.: 30 perguntas de FAQ).",
       "FORMATS": "TXT e CSV · máx 5 MB (DOC, DOCX e PDF em breve)"
     },
+    "IMPORT_KIND": {
+      "FAQ": "FAQ",
+      "PRODUTO": "Produtos",
+      "PROCEDIMENTO": "Procedimentos",
+      "DOCUMENTO": "Documento"
+    },
+    "IMPORT_FORMAT": {
+      "FAQ": "CSV com 2 colunas: pergunta, resposta (uma por linha).",
+      "PRODUTO": "CSV com 3 colunas: nome, descrição, preço (um por linha).",
+      "PROCEDIMENTO": "CSV com 2 colunas: título, passos (um por linha)."
+    },
+    "DOWNLOAD_MODEL": "Baixar modelo CSV",
+    "IMPORTED": "{count} itens importados.",
+    "IMPORT_EMPTY": "Nenhuma linha válida encontrada. Confira o formato (baixe o modelo).",
     "WEBSITE_PLACEHOLDER": "https://www.seusite.com.br",
     "SITE_ADD": "Adicionar",
     "SITE_HINT": "A IA usa o conteúdo do site como conhecimento. A leitura automática das páginas é aplicada no processamento.",
