@@ -238,15 +238,20 @@ const readinessPct = computed(() => {
     : 0;
 });
 
-// --- Histórico de versões do playbook ---
+// --- Histórico de versões da configuração do agente (Comportamento + follow-up + etapas) ---
 const versions = ref([]);
 const showVersions = ref(false);
 const versionsUrl = () =>
-  `${deptCollectionUrl()}/${departmentId.value}/ai_playbook_versions`;
+  `${deptCollectionUrl()}/${departmentId.value}/ai_department_versions`;
 const fetchVersions = async () => {
   if (isNew.value) return;
-  const { data } = await axios.get(versionsUrl());
-  versions.value = Array.isArray(data) ? data : [];
+  try {
+    const { data } = await axios.get(versionsUrl());
+    versions.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    // Endpoint ai_department_versions ainda não existe (fase backend): mantém a lista vazia.
+    versions.value = [];
+  }
 };
 const restoreVersion = async v => {
   // eslint-disable-next-line no-alert
@@ -423,16 +428,8 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.NAME') }}
-                <input
-                  v-model="form.name"
-                  type="text"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-              </label>
-            </div>
+            <!-- O nome do agente vem da tela anterior; não repetimos a entrada aqui.
+                 form.name segue hidratado do departamento e é preservado no save. -->
             <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.OBJETIVO_LABEL') }}
               <input
@@ -477,9 +474,10 @@ onMounted(async () => {
             >
               {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EMPTY') }}
             </p>
+            <!-- Lista pode crescer conforme novos atributos da conta; limita a ~7 linhas e rola. -->
             <div
               v-else
-              class="border border-n-weak rounded-xl divide-y divide-n-weak"
+              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-[25rem] overflow-y-auto"
             >
               <div
                 v-for="attr in customAttributes"
@@ -580,6 +578,66 @@ onMounted(async () => {
               />
             </label>
           </section>
+
+          <!-- Histórico de versões da configuração (Comportamento + follow-up + etapas) -->
+          <div
+            v-if="!isNew"
+            class="border-t border-n-weak pt-4 flex flex-col gap-3"
+          >
+            <button
+              type="button"
+              class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
+              @click="showVersions = !showVersions"
+            >
+              <span
+                class="size-4 inline-block"
+                :class="
+                  showVersions
+                    ? 'i-lucide-chevron-down'
+                    : 'i-lucide-chevron-right'
+                "
+              />
+              {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
+              <span class="text-n-slate-11 font-normal">{{
+                `(${versions.length})`
+              }}</span>
+            </button>
+            <div
+              v-if="showVersions"
+              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-72 overflow-auto"
+            >
+              <p
+                v-if="!versions.length"
+                class="text-sm text-n-slate-11 px-4 py-3 mb-0"
+              >
+                {{ $t('AI_AGENTS.VERSIONS.EMPTY') }}
+              </p>
+              <div
+                v-for="v in versions"
+                :key="v.id"
+                class="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm text-n-slate-12 mb-0">
+                    {{ `v${v.version_number}` }}
+                    <span v-if="v.note" class="text-n-slate-11">{{
+                      ` · ${v.note}`
+                    }}</span>
+                  </p>
+                  <p class="text-xs text-n-slate-11 mb-0">
+                    {{ formatVersionDate(v.created_at) }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="shrink-0 text-sm text-n-brand hover:underline"
+                  @click="restoreVersion(v)"
+                >
+                  {{ $t('AI_AGENTS.VERSIONS.RESTORE') }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- FOLLOW-UP -->
@@ -704,66 +762,6 @@ onMounted(async () => {
               </label>
             </div>
           </section>
-
-          <!-- Histórico de versões do playbook -->
-          <div
-            v-if="!isNew"
-            class="border-t border-n-weak pt-4 flex flex-col gap-3"
-          >
-            <button
-              type="button"
-              class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
-              @click="showVersions = !showVersions"
-            >
-              <span
-                class="size-4 inline-block"
-                :class="
-                  showVersions
-                    ? 'i-lucide-chevron-down'
-                    : 'i-lucide-chevron-right'
-                "
-              />
-              {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
-              <span class="text-n-slate-11 font-normal">{{
-                `(${versions.length})`
-              }}</span>
-            </button>
-            <div
-              v-if="showVersions"
-              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-72 overflow-auto"
-            >
-              <p
-                v-if="!versions.length"
-                class="text-sm text-n-slate-11 px-4 py-3 mb-0"
-              >
-                {{ $t('AI_AGENTS.VERSIONS.EMPTY') }}
-              </p>
-              <div
-                v-for="v in versions"
-                :key="v.id"
-                class="flex items-center justify-between gap-3 px-4 py-2.5"
-              >
-                <div class="min-w-0">
-                  <p class="text-sm text-n-slate-12 mb-0">
-                    {{ `v${v.version_number}` }}
-                    <span v-if="v.note" class="text-n-slate-11">{{
-                      ` · ${v.note}`
-                    }}</span>
-                  </p>
-                  <p class="text-xs text-n-slate-11 mb-0">
-                    {{ formatVersionDate(v.created_at) }}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="shrink-0 text-sm text-n-brand hover:underline"
-                  @click="restoreVersion(v)"
-                >
-                  {{ $t('AI_AGENTS.VERSIONS.RESTORE') }}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- FERRAMENTAS -->
