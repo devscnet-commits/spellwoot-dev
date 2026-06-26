@@ -123,8 +123,8 @@
       "ALLOWLIST_HINT": "Se o cliente pedir outro setor, a IA só transfere para os times marcados. Sem marcações, a conversa vai para um humano.",
       "NO_TEAMS": "Nenhum outro time disponível nesta conta.",
       "IA_ALLOWLIST": "Transferir para outras IAs",
-      "IA_ALLOWLIST_HINT": "A IA pode passar a conversa para outra IA. O roteamento usa o time da IA de destino (marcar uma IA libera o time dela acima).",
-      "NO_IA": "Nenhuma outra IA com time vinculado nesta conta."
+      "IA_ALLOWLIST_HINT": "Marque as IAs ativas para as quais esta IA pode transferir a conversa.",
+      "NO_IA": "Nenhuma outra IA ativa nesta conta."
     },
     "VERSIONS": {
       "TITLE": "Histórico de versões",

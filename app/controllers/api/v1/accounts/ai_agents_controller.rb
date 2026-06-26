@@ -54,7 +54,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
       :name, :stage, :status, :category, :assistant_name, :assistant_avatar, :assistant_description,
       :assistant_personality, :assistant_language, :assistant_voice, :base_prompt, :guardrails,
       :ai_operation_profile_id, :company_name, :site, :version, :identify_as, :team_id,
-      handoff_team_ids: []
+      handoff_team_ids: [], handoff_agent_ids: []
     )
   end
 

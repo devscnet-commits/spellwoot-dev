@@ -75,6 +75,7 @@ const agentForm = reactive({
   ai_operation_profile_id: '',
   team_id: '',
   handoff_team_ids: [],
+  handoff_agent_ids: [],
   assistant_personality: '',
   assistant_language: 'pt-BR',
   base_prompt: '',
@@ -121,8 +122,8 @@ const toggleHandoffTeam = id => {
   else agentForm.handoff_team_ids.push(id);
 };
 
-// Outras IAs da conta como destino de transferência. O motor roteia por time, então
-// marcar uma IA adiciona o time dela à allowlist. Só IAs com um time podem ser endereçadas.
+// Outras IAs da conta como destino de transferência (allowlist por agente específico —
+// handoff_agent_ids). Lista as IAs ativas; o motor rotear por agente entra na etapa 2.
 const agents = ref([]);
 const fetchAgents = async () => {
   try {
@@ -134,8 +135,15 @@ const fetchAgents = async () => {
 };
 const teamName = id => teams.value.find(tm => tm.id === id)?.name || '';
 const handoffAgents = computed(() =>
-  agents.value.filter(a => String(a.id) !== String(agentId.value) && a.team_id)
+  agents.value.filter(
+    a => String(a.id) !== String(agentId.value) && a.status === 'active'
+  )
 );
+const toggleHandoffAgent = id => {
+  const i = agentForm.handoff_agent_ids.indexOf(id);
+  if (i >= 0) agentForm.handoff_agent_ids.splice(i, 1);
+  else agentForm.handoff_agent_ids.push(id);
+};
 
 const stageOptions = computed(() =>
   ['production', 'experimental'].map(s => ({
@@ -721,12 +729,12 @@ onMounted(async () => {
                 >
                   <input
                     type="checkbox"
-                    :checked="agentForm.handoff_team_ids.includes(ia.team_id)"
-                    @change="toggleHandoffTeam(ia.team_id)"
+                    :checked="agentForm.handoff_agent_ids.includes(ia.id)"
+                    @change="toggleHandoffAgent(ia.id)"
                   />
                   <span class="min-w-0 truncate">
                     {{ ia.assistant_name || ia.name }}
-                    <span class="text-n-slate-11">
+                    <span v-if="ia.team_id" class="text-n-slate-11">
                       · {{ teamName(ia.team_id) }}
                     </span>
                   </span>
