@@ -558,6 +558,15 @@ const fuContextOptions = computed(() => [
 ]);
 const fuContextLabel = ctx =>
   fuContextOptions.value.find(o => o.value === ctx)?.label || ctx;
+// 1 por contexto fixo (inbox_hours/outside_hours); "custom" é ilimitado. Cada card só
+// oferece os fixos ainda não usados por OUTRO card (mantém o próprio).
+const contextOptionsFor = bhv =>
+  fuContextOptions.value.filter(
+    o =>
+      o.value === 'custom' ||
+      o.value === bhv.context ||
+      !form.followup_behaviors.some(b => b !== bhv && b.context === o.value)
+  );
 const fuNoResponseOptions = computed(() => [
   { value: 'assign', label: t('AI_DEPARTMENTS.FOLLOWUP.NR_ASSIGN') },
   { value: 'finalize', label: t('AI_DEPARTMENTS.FOLLOWUP.NR_FINALIZE') },
@@ -568,7 +577,14 @@ const fuNoResponseOptions = computed(() => [
     label: t('AI_DEPARTMENTS.FOLLOWUP.NR_WAIT_HOURS'),
   },
 ]);
-const addBehavior = () => form.followup_behaviors.push(blankBehavior());
+const addBehavior = () => {
+  const used = new Set(form.followup_behaviors.map(b => b.context));
+  const next =
+    ['inbox_hours', 'outside_hours'].find(c => !used.has(c)) || 'custom';
+  const b = blankBehavior();
+  b.context = next;
+  form.followup_behaviors.push(b);
+};
 const removeBehavior = index => form.followup_behaviors.splice(index, 1);
 const addBehaviorWindow = b => b.windows.push(blankWindow());
 const removeBehaviorWindow = (b, i) => b.windows.splice(i, 1);
@@ -1193,7 +1209,10 @@ onMounted(async () => {
                     class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
                   >
                     <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT') }}</span>
-                    <Select v-model="bhv.context" :options="fuContextOptions" />
+                    <Select
+                      v-model="bhv.context"
+                      :options="contextOptionsFor(bhv)"
+                    />
                   </div>
 
                   <!-- Janelas (somente Personalizado) -->
