@@ -34,6 +34,8 @@ const activeTab = ref('instructions');
 const SECTION_GROUPS = {
   behavior: ['instructions', 'attendance'],
   followup: ['followup'],
+  assignment: ['assignment'],
+  finalization: ['finalization'],
   steps: ['steps'],
   tools: ['tools'],
 };
@@ -43,9 +45,14 @@ const visibleSections = computed(() =>
     : new Set([activeTab.value])
 );
 const showSave = computed(() =>
-  ['instructions', 'attendance', 'steps', 'followup'].some(s =>
-    visibleSections.value.has(s)
-  )
+  [
+    'instructions',
+    'attendance',
+    'steps',
+    'followup',
+    'assignment',
+    'finalization',
+  ].some(s => visibleSections.value.has(s))
 );
 const isSaving = ref(false);
 // Operational summary counts (read-only) served by the departments index serializer.
@@ -63,13 +70,19 @@ const form = reactive({
   group_delay_seconds: '',
   max_replies: '',
   max_input_chars: '',
-  // Follow-up: várias tentativas de envio (não há mais "Ativar" — vazio = desligado).
+  // Follow-up: SÓ retoma a conversa. Decisões de entrega ficam em Atribuição.
   followup_instructions: '',
   followup_attempts: [],
-  followup_schedule: 'inbox_hours',
-  followup_custom_windows: [],
   followup_grace: 30,
-  followup_when_online: false,
+  // Ação ao terminar as tentativas: none | close | assignment
+  followup_on_complete_action: 'none',
+  // Atribuição (transfer_rules): decide a entrega para humanos. Scaffold; motor depois.
+  assign_respect_business_hours: true,
+  assign_off_hours_action: 'wait_next_hours',
+  assign_no_agent_action: 'wait_agent',
+  // Finalização (close_rules): encerrar conversas. Scaffold.
+  close_message: '',
+  close_auto_minutes: '',
   disabled_custom_attributes: [],
   is_default: false,
   position: 0,
@@ -241,8 +254,6 @@ const blankAttempt = () => ({
   unit: 'minutos',
   message: '',
 });
-const blankWindow = () => ({ uid: nextFuUid(), start: '', end: '' });
-
 // Hidrata as tentativas: novo formato (`attempts`) ou shim do antigo
 // (delay_minutes + max_followups + message).
 const hydrateAttempts = fu => {
@@ -263,36 +274,12 @@ const hydrateAttempts = fu => {
   }
   return [];
 };
-// Modo de horário + janelas (shim: window_start/end antigos viram uma janela custom).
-const hydrateSchedule = fu => {
-  if (fu.schedule) {
-    return {
-      schedule: fu.schedule,
-      windows: (Array.isArray(fu.custom_windows) ? fu.custom_windows : []).map(
-        w => ({ uid: nextFuUid(), start: w.start || '', end: w.end || '' })
-      ),
-    };
-  }
-  if (fu.window_start || fu.window_end) {
-    return {
-      schedule: 'custom',
-      windows: [
-        {
-          uid: nextFuUid(),
-          start: fu.window_start || '',
-          end: fu.window_end || '',
-        },
-      ],
-    };
-  }
-  return { schedule: 'inbox_hours', windows: [] };
-};
-
 const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
   const followUp = dept.follow_up || {};
-  const sched = hydrateSchedule(followUp);
+  const assign = dept.transfer_rules || {};
+  const close = dept.close_rules || {};
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
@@ -306,10 +293,13 @@ const hydrate = dept => {
     max_input_chars: behavior.max_input_chars ?? '',
     followup_instructions: followUp.instructions || '',
     followup_attempts: hydrateAttempts(followUp),
-    followup_schedule: sched.schedule,
-    followup_custom_windows: sched.windows,
     followup_grace: followUp.handoff_grace_minutes ?? 30,
-    followup_when_online: followUp.when_agents_online || false,
+    followup_on_complete_action: followUp.on_complete_action || 'none',
+    assign_respect_business_hours: assign.respect_business_hours !== false,
+    assign_off_hours_action: assign.off_hours_action || 'wait_next_hours',
+    assign_no_agent_action: assign.no_agent_action || 'wait_agent',
+    close_message: close.message || '',
+    close_auto_minutes: close.auto_close_minutes ?? '',
     disabled_custom_attributes: Array.isArray(
       behavior.disabled_custom_attributes
     )
@@ -348,17 +338,21 @@ const buildFollowUp = () => {
     enabled: attempts.length > 0,
     instructions: (form.followup_instructions || '').trim(),
     attempts,
-    schedule: form.followup_schedule,
-    custom_windows:
-      form.followup_schedule === 'custom'
-        ? form.followup_custom_windows
-            .filter(w => w.start && w.end)
-            .map(w => ({ start: w.start, end: w.end }))
-        : [],
     handoff_grace_minutes: Number(form.followup_grace) || 30,
-    when_agents_online: form.followup_when_online,
+    on_complete_action: form.followup_on_complete_action,
   };
 };
+
+// Atribuição (transfer_rules) e Finalização (close_rules) — scaffold; motor depois.
+const buildAssignment = () => ({
+  respect_business_hours: form.assign_respect_business_hours,
+  off_hours_action: form.assign_off_hours_action,
+  no_agent_action: form.assign_no_agent_action,
+});
+const buildFinalization = () => ({
+  message: (form.close_message || '').trim(),
+  auto_close_minutes: Number(form.close_auto_minutes) || 0,
+});
 
 const buildPayload = () => ({
   ai_department: {
@@ -377,6 +371,8 @@ const buildPayload = () => ({
       disabled_custom_attributes: form.disabled_custom_attributes,
     },
     follow_up: buildFollowUp(),
+    transfer_rules: buildAssignment(),
+    close_rules: buildFinalization(),
     playbook: {
       objetivo: form.objetivo,
       steps: form.steps
@@ -534,16 +530,29 @@ const fuUnitOptions = computed(() => [
   { value: 'minutos', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_MINUTES') },
   { value: 'horas', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_HOURS') },
 ]);
-const fuScheduleOptions = computed(() => [
-  { value: 'inbox_hours', label: t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_INBOX') },
+// Ação ao terminar as tentativas (cards): nada | encerrar | executar atribuição.
+const fuActionOptions = [
+  { value: 'none', icon: 'i-lucide-circle-slash', i18n: 'ACTION_NONE' },
+  { value: 'close', icon: 'i-lucide-check-circle-2', i18n: 'ACTION_CLOSE' },
   {
-    value: 'outside_inbox_hours',
-    label: t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_OUTSIDE'),
+    value: 'assignment',
+    icon: 'i-lucide-users-round',
+    i18n: 'ACTION_ASSIGNMENT',
   },
-  { value: 'custom', label: t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_CUSTOM') },
+];
+// Selects (componente Select, não corta) da tela de Atribuição.
+const assignOffHoursOptions = computed(() => [
+  { value: 'wait_next_hours', label: t('AI_DEPARTMENTS.ASSIGNMENT.OFF_WAIT') },
+  { value: 'close', label: t('AI_DEPARTMENTS.ASSIGNMENT.OFF_CLOSE') },
+  { value: 'hold', label: t('AI_DEPARTMENTS.ASSIGNMENT.OFF_HOLD') },
 ]);
-const addWindow = () => form.followup_custom_windows.push(blankWindow());
-const removeWindow = index => form.followup_custom_windows.splice(index, 1);
+const assignNoAgentOptions = computed(() => [
+  { value: 'wait_agent', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_WAIT') },
+  { value: 'escalate', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_ESCALATE') },
+  { value: 'alt_flow', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_ALT') },
+  { value: 'close', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_CLOSE') },
+  { value: 'hold', label: t('AI_DEPARTMENTS.ASSIGNMENT.NA_HOLD') },
+]);
 
 onMounted(async () => {
   await fetchDepartment();
@@ -1151,25 +1160,18 @@ onMounted(async () => {
                     <span class="i-lucide-trash-2 size-4 inline-block" />
                   </button>
                 </div>
-                <div class="flex flex-wrap items-end gap-3">
-                  <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
-                    <div class="flex items-center gap-2">
-                      <input
-                        v-model="attempt.value"
-                        type="number"
-                        min="0"
-                        class="w-24 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
-                      />
-                      <div class="w-36">
-                        <Select
-                          v-model="attempt.unit"
-                          :options="fuUnitOptions"
-                        />
-                      </div>
-                    </div>
-                  </label>
-                </div>
+                <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
+                  <div class="flex items-center gap-2">
+                    <input
+                      v-model="attempt.value"
+                      type="number"
+                      min="0"
+                      class="w-20 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
+                    />
+                    <Select v-model="attempt.unit" :options="fuUnitOptions" />
+                  </div>
+                </label>
                 <label class="flex flex-col gap-1 text-sm text-n-slate-12">
                   {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE') }}
                   <textarea
@@ -1184,63 +1186,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <!-- Quando enviar (relativo ao horário da caixa) -->
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.SCHEDULE_TITLE') }}
-              </span>
-              <div class="max-w-xs">
-                <Select
-                  v-model="form.followup_schedule"
-                  :options="fuScheduleOptions"
-                />
-              </div>
-
-              <div
-                v-if="form.followup_schedule === 'custom'"
-                class="flex flex-col gap-2 mt-1"
-              >
-                <div
-                  v-for="(win, index) in form.followup_custom_windows"
-                  :key="win.uid"
-                  class="flex items-center gap-2"
-                >
-                  <input
-                    v-model="win.start"
-                    type="time"
-                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-                  />
-                  <span class="text-sm text-n-slate-11">
-                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
-                  </span>
-                  <input
-                    v-model="win.end"
-                    type="time"
-                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-                  />
-                  <button
-                    type="button"
-                    class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
-                    :aria-label="$t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_REMOVE')"
-                    @click="removeWindow(index)"
-                  >
-                    <span class="i-lucide-x size-4 inline-block" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  class="self-start text-sm font-medium text-n-brand hover:underline"
-                  @click="addWindow"
-                >
-                  + {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_ADD') }}
-                </button>
-                <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_HINT') }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Carência após a última tentativa (fixo/obrigatório) -->
+            <!-- Carência após a última tentativa -->
             <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
               {{ $t('AI_DEPARTMENTS.FOLLOWUP.GRACE_LABEL') }}
               <input
@@ -1254,10 +1200,145 @@ onMounted(async () => {
               </span>
             </label>
 
+            <!-- Ação ao terminar as tentativas (nada / encerrar / atribuição) -->
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ON_COMPLETE_TITLE') }}
+                </span>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ON_COMPLETE_HINT') }}
+                </p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  v-for="opt in fuActionOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="flex items-start gap-3 text-left p-4 rounded-2xl border-2 transition-all"
+                  :class="
+                    form.followup_on_complete_action === opt.value
+                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
+                      : 'border-n-weak bg-n-solid-1 hover:border-n-slate-7'
+                  "
+                  @click="form.followup_on_complete_action = opt.value"
+                >
+                  <span
+                    class="shrink-0 size-9 rounded-full flex items-center justify-center"
+                    :class="
+                      form.followup_on_complete_action === opt.value
+                        ? 'bg-n-brand text-white'
+                        : 'bg-n-alpha-2 text-n-slate-11'
+                    "
+                  >
+                    <span :class="opt.icon" class="size-4" />
+                  </span>
+                  <span class="flex flex-col gap-0.5 min-w-0">
+                    <span class="text-sm font-semibold text-n-slate-12">
+                      {{ $t(`AI_DEPARTMENTS.FOLLOWUP.${opt.i18n}`) }}
+                    </span>
+                    <span class="text-xs text-n-slate-11">
+                      {{ $t(`AI_DEPARTMENTS.FOLLOWUP.${opt.i18n}_HINT`) }}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ATRIBUIÇÃO (decide a entrega para humanos) -->
+        <div
+          v-if="visibleSections.has('assignment')"
+          class="flex flex-col gap-5"
+        >
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
+          >
+            <div class="flex flex-col gap-0.5">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                {{ $t('AI_DEPARTMENTS.ASSIGNMENT.TITLE') }}
+              </h2>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_DEPARTMENTS.ASSIGNMENT.HINT') }}
+              </p>
+            </div>
+
             <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="form.followup_when_online" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.FOLLOWUP.WHEN_ONLINE') }}
+              <input
+                v-model="form.assign_respect_business_hours"
+                type="checkbox"
+              />
+              {{ $t('AI_DEPARTMENTS.ASSIGNMENT.RESPECT_HOURS') }}
             </label>
+
+            <div class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm">
+              <span>{{ $t('AI_DEPARTMENTS.ASSIGNMENT.OFF_HOURS') }}</span>
+              <Select
+                v-model="form.assign_off_hours_action"
+                :options="assignOffHoursOptions"
+              />
+            </div>
+
+            <div class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm">
+              <span>{{ $t('AI_DEPARTMENTS.ASSIGNMENT.NO_AGENT') }}</span>
+              <Select
+                v-model="form.assign_no_agent_action"
+                :options="assignNoAgentOptions"
+              />
+            </div>
+
+            <p class="text-xs text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ASSIGNMENT.SCAFFOLD_NOTE') }}
+            </p>
+          </section>
+        </div>
+
+        <!-- FINALIZAÇÃO (encerrar conversas) -->
+        <div
+          v-if="visibleSections.has('finalization')"
+          class="flex flex-col gap-5"
+        >
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
+          >
+            <div class="flex flex-col gap-0.5">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                {{ $t('AI_DEPARTMENTS.FINALIZATION.TITLE') }}
+              </h2>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_DEPARTMENTS.FINALIZATION.HINT') }}
+              </p>
+            </div>
+
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FINALIZATION.MESSAGE') }}
+              <textarea
+                v-model="form.close_message"
+                rows="3"
+                :placeholder="
+                  $t('AI_DEPARTMENTS.FINALIZATION.MESSAGE_PLACEHOLDER')
+                "
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              />
+            </label>
+
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
+              {{ $t('AI_DEPARTMENTS.FINALIZATION.AUTO_CLOSE') }}
+              <input
+                v-model="form.close_auto_minutes"
+                type="number"
+                min="0"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FINALIZATION.AUTO_CLOSE_HINT') }}
+              </span>
+            </label>
+
+            <p class="text-xs text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.FINALIZATION.SCAFFOLD_NOTE') }}
+            </p>
           </section>
         </div>
 

@@ -15,6 +15,8 @@
       "STEPS": "Etapas",
       "TOOLS": "Ferramentas",
       "FOLLOWUP": "Follow-up",
+      "ASSIGNMENT": "Atribuição",
+      "FINALIZATION": "Finalização",
       "INBOXES": "Caixas",
       "DEPARTMENTS": "Departamentos",
       "TEST": "Teste"
@@ -388,8 +390,41 @@
       "WINDOW_REMOVE": "Remover janela",
       "WINDOW_HINT": "A IA só envia retomadas dentro destas janelas de horário.",
       "GRACE_LABEL": "Tempo após a última tentativa (minutos)",
-      "GRACE_HINT": "Após o último envio, espera esse tempo; sem resposta, a conversa vai para um humano.",
-      "WHEN_ONLINE": "Também retomar quando houver um agente humano cuidando da conversa"
+      "GRACE_HINT": "Após o último envio, espera esse tempo antes de executar a ação escolhida abaixo.",
+      "WHEN_ONLINE": "Também retomar quando houver um agente humano cuidando da conversa",
+      "ON_COMPLETE_TITLE": "Ao terminar as tentativas",
+      "ON_COMPLETE_HINT": "O follow-up só retoma a conversa. Ao esgotar as tentativas, escolha o que fazer.",
+      "ACTION_NONE": "Não fazer nada",
+      "ACTION_NONE_HINT": "Deixa a conversa como está.",
+      "ACTION_CLOSE": "Encerrar conversa",
+      "ACTION_CLOSE_HINT": "Finaliza a conversa automaticamente.",
+      "ACTION_ASSIGNMENT": "Executar regras de atribuição",
+      "ACTION_ASSIGNMENT_HINT": "Entrega para o módulo de Atribuição decidir."
+    },
+    "ASSIGNMENT": {
+      "TITLE": "Regras de atribuição",
+      "HINT": "Decide como a conversa é entregue a um humano (disponibilidade, horário, escalonamento). As decisões de entrega ficam aqui, não no follow-up.",
+      "RESPECT_HOURS": "Respeitar o horário de funcionamento da caixa",
+      "OFF_HOURS": "Fora do horário comercial",
+      "OFF_WAIT": "Aguardar o próximo horário comercial",
+      "OFF_CLOSE": "Encerrar a conversa",
+      "OFF_HOLD": "Permanecer aguardando",
+      "NO_AGENT": "Quando não há agente disponível",
+      "NA_WAIT": "Esperar até existir um agente",
+      "NA_ESCALATE": "Escalar para outro grupo",
+      "NA_ALT": "Executar um fluxo alternativo",
+      "NA_CLOSE": "Encerrar a conversa",
+      "NA_HOLD": "Permanecer aguardando",
+      "SCAFFOLD_NOTE": "Tela em construção: por enquanto só guarda a configuração; o motor de atribuição entra depois."
+    },
+    "FINALIZATION": {
+      "TITLE": "Finalização",
+      "HINT": "Responsável por encerrar conversas.",
+      "MESSAGE": "Mensagem de encerramento",
+      "MESSAGE_PLACEHOLDER": "Ex.: Obrigado pelo contato! Qualquer coisa, é só chamar. 😊",
+      "AUTO_CLOSE": "Encerrar automaticamente após inatividade (minutos)",
+      "AUTO_CLOSE_HINT": "0 = não encerrar por inatividade.",
+      "SCAFFOLD_NOTE": "Tela em construção: por enquanto só guarda a configuração."
     },
     "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento.",
     "LEAD_VARS": {
