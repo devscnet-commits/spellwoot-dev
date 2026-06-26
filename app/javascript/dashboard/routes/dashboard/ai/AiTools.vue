@@ -30,7 +30,6 @@ const blank = () => ({
   implementation_type: 'capability',
   capability_key: '',
   integration_link_id: '',
-  governance: 'allowed',
   status: 'active',
   // args drive the visual builder; input_schema_text stays the canonical value used on save.
   args: [],
@@ -56,25 +55,41 @@ const argTypeOptions = computed(() =>
 const blankArg = () => ({
   name: '',
   type: 'string',
-  required: false,
   description: '',
+  // For the "Lista" (array) type: the allowed options, typed comma-separated.
+  optionsText: '',
 });
 
-// Build a JSON Schema object from the argument rows.
+// Split the comma-separated options field into a clean enum list.
+const parseOptions = text =>
+  (text || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+// Build a JSON Schema object from the argument rows. Every named argument is required —
+// if the user added it, the action needs it.
 const buildSchema = () => {
   const properties = {};
   const required = [];
   form.args.forEach(arg => {
     const key = (arg.name || '').trim();
     if (!key) return;
-    const prop =
-      arg.type === 'date'
-        ? { type: 'string', format: 'date' }
-        : { type: arg.type };
+    let prop;
+    if (arg.type === 'date') {
+      prop = { type: 'string', format: 'date' };
+    } else if (arg.type === 'array') {
+      // "Lista" = escolha única: a IA deve escolher exatamente uma das opções.
+      const options = parseOptions(arg.optionsText);
+      prop = { type: 'string' };
+      if (options.length) prop.enum = options;
+    } else {
+      prop = { type: arg.type };
+    }
     if ((arg.description || '').trim())
       prop.description = arg.description.trim();
     properties[key] = prop;
-    if (arg.required) required.push(key);
+    required.push(key);
   });
   const schema = { type: 'object', properties };
   if (required.length) schema.required = required;
@@ -84,13 +99,21 @@ const buildSchema = () => {
 // Turn an existing JSON Schema back into rows for the builder.
 const parseSchema = schema => {
   const schemaProps = schema && schema.properties ? schema.properties : {};
-  const req = Array.isArray(schema && schema.required) ? schema.required : [];
-  return Object.entries(schemaProps).map(([name, def]) => ({
-    name,
-    type: def && def.format === 'date' ? 'date' : (def && def.type) || 'string',
-    required: req.includes(name),
-    description: (def && def.description) || '',
-  }));
+  return Object.entries(schemaProps).map(([name, def]) => {
+    const hasEnum = def && Array.isArray(def.enum);
+    // A string carrying an enum is shown as the "Lista" (single-choice) builder row;
+    // a date format maps back to the "Data" type.
+    let type = (def && def.type) || 'string';
+    if (def && def.format === 'date') type = 'date';
+    else if (hasEnum) type = 'array';
+    const enumList = hasEnum ? def.enum : [];
+    return {
+      name,
+      type,
+      description: (def && def.description) || '',
+      optionsText: enumList.join(', '),
+    };
+  });
 };
 
 const addArg = () => form.args.push(blankArg());
@@ -133,22 +156,6 @@ const capabilityLabel = key => {
   const cap = CAPABILITIES.find(c => c.key === key);
   return cap ? t(`AI_TOOLS.CAPABILITIES.${cap.i18n}`) : key;
 };
-const GOVERNANCE_I18N = {
-  allowed: 'GOV_ALLOWED',
-  require_confirmation: 'GOV_CONFIRMATION',
-  require_approval: 'GOV_APPROVAL',
-};
-const governanceLabel = g =>
-  t(`AI_TOOLS.FORM.${GOVERNANCE_I18N[g] || 'GOV_ALLOWED'}`);
-const governanceHint = g =>
-  t(`AI_TOOLS.FORM.${GOVERNANCE_I18N[g] || 'GOV_ALLOWED'}_HINT`);
-const governanceBadge = g =>
-  ({
-    allowed: 'bg-n-teal-3 text-n-teal-11',
-    require_confirmation: 'bg-n-amber-3 text-n-amber-11',
-    require_approval: 'bg-n-ruby-3 text-n-ruby-11',
-  })[g] || 'bg-n-alpha-2 text-n-slate-11';
-
 const integrationName = id =>
   integrations.value.find(link => link.id === id)?.name || '';
 
@@ -183,11 +190,6 @@ const goIntegrations = () =>
     name: 'settings_integrations_ai_systems',
     params: { accountId: route.params.accountId },
   });
-const governanceOptions = computed(() => [
-  { value: 'allowed', label: t('AI_TOOLS.FORM.GOV_ALLOWED') },
-  { value: 'require_confirmation', label: t('AI_TOOLS.FORM.GOV_CONFIRMATION') },
-  { value: 'require_approval', label: t('AI_TOOLS.FORM.GOV_APPROVAL') },
-]);
 
 const baseUrl = () => {
   const accountId = route.params.accountId;
@@ -232,7 +234,6 @@ const openEdit = tool => {
     implementation_type: tool.implementation_type,
     capability_key: tool.capability_key || '',
     integration_link_id: tool.integration_link_id || '',
-    governance: tool.governance,
     status: tool.status,
     args: parseSchema(tool.input_schema || {}),
     input_schema_text: JSON.stringify(tool.input_schema || {}, null, 2),
@@ -261,7 +262,7 @@ const save = async () => {
       implementation_type: form.implementation_type,
       capability_key: isCapability.value ? form.capability_key : null,
       integration_link_id: isCapability.value ? null : form.integration_link_id,
-      governance: form.governance,
+      governance: 'allowed',
       status: form.status,
       input_schema: inputSchema,
     },
@@ -339,12 +340,6 @@ onMounted(() => {
               }}
             </p>
           </div>
-          <span
-            class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-            :class="governanceBadge(tool.governance)"
-          >
-            {{ governanceLabel(tool.governance) }}
-          </span>
         </div>
         <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
           <button
@@ -414,13 +409,6 @@ onMounted(() => {
             </button>
           </div>
         </div>
-        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
-          <span>{{ $t('AI_TOOLS.FORM.GOVERNANCE') }}</span>
-          <Select v-model="form.governance" :options="governanceOptions" />
-          <span class="text-xs text-n-slate-11">
-            {{ governanceHint(form.governance) }}
-          </span>
-        </div>
       </div>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">
         {{ $t('AI_TOOLS.FORM.DESCRIPTION') }}
@@ -457,6 +445,19 @@ onMounted(() => {
             {{ $t('AI_TOOLS.FORM.ARGS_EMPTY') }}
           </p>
           <div
+            v-if="form.args.length"
+            class="hidden sm:flex items-center gap-2 px-2 text-xs font-medium text-n-slate-11"
+          >
+            <span class="flex-1 min-w-[8rem]">
+              {{ $t('AI_TOOLS.FORM.ARG_COL_NAME') }}
+            </span>
+            <span class="w-36">{{ $t('AI_TOOLS.FORM.ARG_COL_TYPE') }}</span>
+            <span class="flex-[2] min-w-[10rem]">
+              {{ $t('AI_TOOLS.FORM.ARG_COL_DESC') }}
+            </span>
+            <span class="size-4 shrink-0" />
+          </div>
+          <div
             v-for="(arg, index) in form.args"
             :key="index"
             class="flex flex-wrap items-center gap-2 rounded-lg border border-n-weak bg-n-solid-1 p-2"
@@ -476,12 +477,6 @@ onMounted(() => {
               :placeholder="$t('AI_TOOLS.FORM.ARG_DESC')"
               class="flex-[2] min-w-[10rem] px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
             />
-            <label
-              class="flex items-center gap-1.5 text-xs text-n-slate-12 whitespace-nowrap"
-            >
-              <input v-model="arg.required" type="checkbox" />
-              {{ $t('AI_TOOLS.FORM.ARG_REQUIRED') }}
-            </label>
             <button
               type="button"
               class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
@@ -490,6 +485,18 @@ onMounted(() => {
             >
               <span class="i-lucide-x size-4 inline-block" />
             </button>
+            <!-- Lista (array): opções que a IA pode escolher, digitadas pelo usuário -->
+            <div v-if="arg.type === 'array'" class="w-full flex flex-col gap-1">
+              <input
+                v-model="arg.optionsText"
+                type="text"
+                :placeholder="$t('AI_TOOLS.FORM.ARG_OPTIONS_PLACEHOLDER')"
+                class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_TOOLS.FORM.ARG_OPTIONS_HINT') }}
+              </span>
+            </div>
           </div>
           <button
             type="button"

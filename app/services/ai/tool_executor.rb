@@ -1,7 +1,7 @@
-# Executes a Tool the AI chose, enforcing governance. SAFETY:
+# Executes a Tool the AI chose. Tools are autonomous: in live mode they run immediately.
+# SAFETY:
 #   - shadow mode never executes (records 'skipped');
-#   - allowed -> executes now;
-#   - require_confirmation / require_approval -> records a 'pending' execution awaiting a human;
+#   - inactive tools never execute (records 'skipped');
 #   - every execution is audited (Ai::CapabilityExecution) with rollback data for undo.
 class Ai::ToolExecutor
   def initialize(tool:, input:, conversation:, mode:, run: nil, requested_by: 'ai')
@@ -19,14 +19,7 @@ class Ai::ToolExecutor
     return record('skipped', reason: 'shadow_mode') unless @mode == 'live'
     return record('skipped', reason: 'tool_inactive') unless @tool&.status == 'active'
 
-    case @tool.governance
-    when 'allowed'
-      execute_now
-    when 'require_confirmation', 'require_approval'
-      record('pending', approval: 'pending')
-    else
-      record('skipped', reason: "governance_desconhecida:#{@tool.governance}")
-    end
+    execute_now
   rescue StandardError => e
     Rails.logger.error "[Ai::ToolExecutor] #{e.class}: #{e.message}"
     record('failed', error: "#{e.class}: #{e.message}")
@@ -88,7 +81,7 @@ class Ai::ToolExecutor
       input: @input,
       output: output,
       status: status,
-      governance: @tool&.governance,
+      governance: 'allowed',
       approval_status: approval,
       requested_by: @requested_by,
       rollback_data: rollback_data,

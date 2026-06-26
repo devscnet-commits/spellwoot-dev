@@ -39,7 +39,7 @@ class Api::V1::Accounts::AiToolsController < Api::V1::Accounts::BaseController
 
   def tool_params
     params.require(:ai_tool).permit(:name, :description, :implementation_type, :capability_key,
-                                    :integration_link_id, :governance, :status)
+                                    :integration_link_id, :status)
   end
 
   def schema_params

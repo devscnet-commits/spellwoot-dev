@@ -74,7 +74,7 @@ class Ai::Gateway
          run_id: run_record.id)
 
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
-    # which itself enforces governance (allowed runs now; confirmation/approval stays pending).
+    # which executes the tool immediately (tools are autonomous).
     intended_tool = result.dig(:decision, 'tool')
     if intended_tool.present?
       tool = department.tools.active.find_by(name: intended_tool['name'])
@@ -83,7 +83,7 @@ class Ai::Gateway
           tool: tool, input: intended_tool['input'], conversation: @conversation, mode: @mode, run: run_record
         ).perform
         emit(run_record, 'tool.executed',
-             { tool: tool.name, status: execution.status, governance: tool.governance, execution_id: execution.id })
+             { tool: tool.name, status: execution.status, execution_id: execution.id })
       else
         emit(run_record, 'tool.intended', { tool: intended_tool, executed: false, reason: not_acting_reason(tool) })
       end
