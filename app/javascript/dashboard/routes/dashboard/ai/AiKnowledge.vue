@@ -98,6 +98,29 @@ const onDrop = e => {
   uploadFile(e.dataTransfer?.files?.[0]);
 };
 
+// Website: cadastra a URL como fonte de conhecimento. A extração/crawl do conteúdo
+// da página fica pendente no backend (por ora guarda a URL).
+const websiteUrl = ref('');
+const addWebsite = async () => {
+  const url = websiteUrl.value.trim();
+  if (!url) return;
+  try {
+    await axios.post(baseUrl(), {
+      ai_knowledge_source: {
+        kind: 'website',
+        title: url,
+        raw: url,
+        status: 'active',
+      },
+    });
+    useAlert(t('AI_KNOWLEDGE.SAVED'));
+    websiteUrl.value = '';
+    fetchSources();
+  } catch (error) {
+    useAlert(error.response?.data?.errors?.[0] || t('AI_KNOWLEDGE.ERROR'));
+  }
+};
+
 const openNew = kind => {
   Object.assign(form, blank(), { kind });
   showForm.value = true;
@@ -235,20 +258,26 @@ onMounted(fetchSources);
             <span class="i-lucide-globe size-4" />
             {{ $t('AI_KNOWLEDGE.SOURCES.SITE') }}
           </span>
-          <div class="relative">
+          <div class="flex items-center gap-2">
             <input
-              type="text"
-              disabled
+              v-model="websiteUrl"
+              type="url"
               :placeholder="$t('AI_KNOWLEDGE.WEBSITE_PLACEHOLDER')"
-              class="w-full px-3 py-2 rounded-lg border border-n-weak bg-n-alpha-1 text-sm text-n-slate-11 cursor-not-allowed"
+              class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+              @keyup.enter="addWebsite"
             />
-            <span
-              class="absolute top-1/2 -translate-y-1/2 ltr:right-3 rtl:left-3 inline-flex items-center gap-1 text-xs text-n-slate-10"
+            <button
+              type="button"
+              :disabled="!websiteUrl.trim()"
+              class="shrink-0 text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="addWebsite"
             >
-              <span class="i-lucide-clock size-3" />
-              {{ $t('AI_KNOWLEDGE.SOURCES.SOON') }}
-            </span>
+              {{ $t('AI_KNOWLEDGE.SITE_ADD') }}
+            </button>
           </div>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AI_KNOWLEDGE.SITE_HINT') }}
+          </span>
         </div>
 
         <div

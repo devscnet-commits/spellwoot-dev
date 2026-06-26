@@ -463,7 +463,9 @@
       "HINT": "Arraste e solte aqui um arquivo com dados sobre seus produtos e serviços. Ou clique para procurar no seu dispositivo.",
       "FORMATS": "TXT e CSV · máx 5 MB (DOC, DOCX e PDF em breve)"
     },
-    "WEBSITE_PLACEHOLDER": "Informe a URL do site para importar",
+    "WEBSITE_PLACEHOLDER": "https://www.seusite.com.br",
+    "SITE_ADD": "Adicionar",
+    "SITE_HINT": "A IA usa o conteúdo do site como conhecimento. A leitura automática das páginas é aplicada no processamento.",
     "EMPTY": "Nenhuma fonte de conhecimento cadastrada.",
     "FORM": {
       "KIND": "Tipo",
