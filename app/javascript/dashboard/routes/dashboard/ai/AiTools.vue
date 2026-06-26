@@ -568,8 +568,8 @@ onMounted(() => {
         <textarea
           v-else
           v-model="form.input_schema_text"
-          rows="6"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-none"
+          rows="8"
+          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-y min-h-40"
         />
       </div>
       <div class="flex justify-end gap-2">
