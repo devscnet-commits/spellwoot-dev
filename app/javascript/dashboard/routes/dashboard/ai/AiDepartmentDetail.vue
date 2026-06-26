@@ -72,10 +72,9 @@ const form = reactive({
   max_input_chars: '',
   // Follow-up: SÓ retoma a conversa. Decisões de entrega ficam em Atribuição.
   followup_instructions: '',
-  followup_attempts: [],
-  followup_grace: 30,
-  // Ação ao terminar as tentativas: none | close | assignment
-  followup_on_complete_action: 'none',
+  // Lista de comportamentos de follow-up (1 por contexto de horário); cada um com
+  // suas tentativas, carência e a ação se o cliente não responder.
+  followup_behaviors: [],
   // Atribuição (transfer_rules): decide a entrega para humanos. Scaffold; motor depois.
   assign_respect_business_hours: true,
   assign_off_hours_action: 'wait_next_hours',
@@ -254,23 +253,50 @@ const blankAttempt = () => ({
   unit: 'minutos',
   message: '',
 });
-// Hidrata as tentativas: novo formato (`attempts`) ou shim do antigo
-// (delay_minutes + max_followups + message).
-const hydrateAttempts = fu => {
-  if (Array.isArray(fu.attempts)) {
-    return fu.attempts.map(a => ({
+const blankWindow = () => ({ uid: nextFuUid(), start: '', end: '' });
+const blankBehavior = () => ({
+  uid: nextFuUid(),
+  context: 'inbox_hours',
+  windows: [],
+  attempts: [blankAttempt()],
+  grace: 30,
+  no_response_action: 'assign',
+});
+const mapAttempts = arr =>
+  (Array.isArray(arr) ? arr : []).map(a => ({
+    uid: nextFuUid(),
+    ...minutesToVU(a.delay_minutes),
+    message: a.message || '',
+  }));
+// Hidrata os comportamentos do novo formato (`behaviors`) ou faz shim do antigo
+// (um único follow-up vira um comportamento "dentro do horário").
+const hydrateBehaviors = fu => {
+  if (Array.isArray(fu.behaviors)) {
+    return fu.behaviors.map(b => ({
       uid: nextFuUid(),
-      ...minutesToVU(a.delay_minutes),
-      message: a.message || '',
+      context: b.context || 'inbox_hours',
+      windows: (Array.isArray(b.windows) ? b.windows : []).map(w => ({
+        uid: nextFuUid(),
+        start: w.start || '',
+        end: w.end || '',
+      })),
+      attempts: mapAttempts(b.attempts),
+      grace: b.grace_minutes ?? 30,
+      no_response_action: b.no_response_action || 'assign',
     }));
   }
-  if (Number(fu.delay_minutes) > 0) {
-    const count = Number(fu.max_followups) > 0 ? Number(fu.max_followups) : 1;
-    return Array.from({ length: count }, () => ({
-      uid: nextFuUid(),
-      ...minutesToVU(fu.delay_minutes),
-      message: fu.message || '',
-    }));
+  if (Array.isArray(fu.attempts) && fu.attempts.length) {
+    return [
+      {
+        uid: nextFuUid(),
+        context: 'inbox_hours',
+        windows: [],
+        attempts: mapAttempts(fu.attempts),
+        grace: fu.handoff_grace_minutes ?? 30,
+        no_response_action:
+          fu.on_complete_action === 'close' ? 'finalize' : 'assign',
+      },
+    ];
   }
   return [];
 };
@@ -292,9 +318,7 @@ const hydrate = dept => {
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
     followup_instructions: followUp.instructions || '',
-    followup_attempts: hydrateAttempts(followUp),
-    followup_grace: followUp.handoff_grace_minutes ?? 30,
-    followup_on_complete_action: followUp.on_complete_action || 'none',
+    followup_behaviors: hydrateBehaviors(followUp),
     assign_respect_business_hours: assign.respect_business_hours !== false,
     assign_off_hours_action: assign.off_hours_action || 'wait_next_hours',
     assign_no_agent_action: assign.no_agent_action || 'wait_agent',
@@ -328,18 +352,27 @@ const fetchDepartment = async () => {
 };
 
 const buildFollowUp = () => {
-  const attempts = form.followup_attempts
-    .filter(a => vuToMinutes(a) > 0)
-    .map(a => ({
-      delay_minutes: vuToMinutes(a),
-      message: (a.message || '').trim(),
-    }));
+  const behaviors = form.followup_behaviors.map(b => ({
+    context: b.context,
+    windows:
+      b.context === 'custom'
+        ? b.windows
+            .filter(w => w.start && w.end)
+            .map(w => ({ start: w.start, end: w.end }))
+        : [],
+    attempts: b.attempts
+      .filter(a => vuToMinutes(a) > 0)
+      .map(a => ({
+        delay_minutes: vuToMinutes(a),
+        message: (a.message || '').trim(),
+      })),
+    grace_minutes: Number(b.grace) || 30,
+    no_response_action: b.no_response_action,
+  }));
   return {
-    enabled: attempts.length > 0,
+    enabled: behaviors.length > 0,
     instructions: (form.followup_instructions || '').trim(),
-    attempts,
-    handoff_grace_minutes: Number(form.followup_grace) || 30,
-    on_complete_action: form.followup_on_complete_action,
+    behaviors,
   };
 };
 
@@ -512,34 +545,38 @@ const removeStep = index => {
   form.steps.splice(index, 1);
 };
 
-// --- Follow-up: tentativas e janelas ---
+// --- Follow-up: comportamentos (1 por contexto), cada um com tentativas/ação ---
 const FU_MAX_ATTEMPTS = 10;
-// O número de tentativas dirige quantas caixas de horário aparecem (0–10):
-// aumentar adiciona caixas no fim; diminuir remove as últimas.
-const attemptCount = computed({
-  get: () => form.followup_attempts.length,
-  set: value => {
-    const target = Math.max(0, Math.min(FU_MAX_ATTEMPTS, Number(value) || 0));
-    while (form.followup_attempts.length < target)
-      form.followup_attempts.push(blankAttempt());
-    while (form.followup_attempts.length > target) form.followup_attempts.pop();
-  },
-});
-const removeAttempt = index => form.followup_attempts.splice(index, 1);
 const fuUnitOptions = computed(() => [
   { value: 'minutos', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_MINUTES') },
   { value: 'horas', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_HOURS') },
 ]);
-// Ação ao terminar as tentativas (cards): nada | encerrar | executar atribuição.
-const fuActionOptions = [
-  { value: 'none', icon: 'i-lucide-circle-slash', i18n: 'ACTION_NONE' },
-  { value: 'close', icon: 'i-lucide-check-circle-2', i18n: 'ACTION_CLOSE' },
+const fuContextOptions = computed(() => [
+  { value: 'inbox_hours', label: t('AI_DEPARTMENTS.FOLLOWUP.CTX_INBOX') },
+  { value: 'outside_hours', label: t('AI_DEPARTMENTS.FOLLOWUP.CTX_OUTSIDE') },
+  { value: 'custom', label: t('AI_DEPARTMENTS.FOLLOWUP.CTX_CUSTOM') },
+]);
+const fuContextLabel = ctx =>
+  fuContextOptions.value.find(o => o.value === ctx)?.label || ctx;
+const fuNoResponseOptions = computed(() => [
+  { value: 'assign', label: t('AI_DEPARTMENTS.FOLLOWUP.NR_ASSIGN') },
+  { value: 'finalize', label: t('AI_DEPARTMENTS.FOLLOWUP.NR_FINALIZE') },
+  { value: 'discard', label: t('AI_DEPARTMENTS.FOLLOWUP.NR_DISCARD') },
+  { value: 'wait', label: t('AI_DEPARTMENTS.FOLLOWUP.NR_WAIT') },
   {
-    value: 'assignment',
-    icon: 'i-lucide-users-round',
-    i18n: 'ACTION_ASSIGNMENT',
+    value: 'wait_business_hours',
+    label: t('AI_DEPARTMENTS.FOLLOWUP.NR_WAIT_HOURS'),
   },
-];
+]);
+const addBehavior = () => form.followup_behaviors.push(blankBehavior());
+const removeBehavior = index => form.followup_behaviors.splice(index, 1);
+const addBehaviorWindow = b => b.windows.push(blankWindow());
+const removeBehaviorWindow = (b, i) => b.windows.splice(i, 1);
+const setBehaviorAttemptCount = (b, value) => {
+  const target = Math.max(0, Math.min(FU_MAX_ATTEMPTS, Number(value) || 0));
+  while (b.attempts.length < target) b.attempts.push(blankAttempt());
+  while (b.attempts.length > target) b.attempts.pop();
+};
 // Selects (componente Select, não corta) da tela de Atribuição.
 const assignOffHoursOptions = computed(() => [
   { value: 'wait_next_hours', label: t('AI_DEPARTMENTS.ASSIGNMENT.OFF_WAIT') },
@@ -1104,146 +1141,201 @@ onMounted(async () => {
               />
             </label>
 
-            <!-- Tentativas de envio (várias opções de tempo) -->
-            <div class="flex flex-col gap-2">
-              <div class="flex flex-col gap-0.5">
-                <span class="text-sm font-medium text-n-slate-12">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPTS_TITLE') }}
-                </span>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPTS_HINT') }}
-                </p>
-              </div>
-
-              <label
-                class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
-              >
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
-                <input
-                  v-model.number="attemptCount"
-                  type="number"
-                  min="0"
-                  :max="FU_MAX_ATTEMPTS"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-                />
-                <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_HINT') }}
-                </span>
-              </label>
-
-              <p
-                v-if="!form.followup_attempts.length"
-                class="text-sm text-n-slate-11 mb-0"
-              >
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPTS_EMPTY') }}
+            <div class="flex flex-col gap-0.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIORS_TITLE') }}
+              </span>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIORS_HINT') }}
               </p>
+            </div>
 
-              <div
-                v-for="(attempt, index) in form.followup_attempts"
-                :key="attempt.uid"
-                class="rounded-xl border border-n-weak bg-n-solid-1 p-3 flex flex-col gap-2"
-              >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-sm font-medium text-n-slate-12">
-                    {{
-                      $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_LABEL', {
-                        n: index + 1,
-                      })
-                    }}
-                  </span>
-                  <button
-                    type="button"
-                    class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
-                    :aria-label="$t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_REMOVE')"
-                    @click="removeAttempt(index)"
-                  >
-                    <span class="i-lucide-trash-2 size-4 inline-block" />
-                  </button>
-                </div>
-                <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
+            <p
+              v-if="!form.followup_behaviors.length"
+              class="text-sm text-n-slate-11 mb-0"
+            >
+              {{ $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIORS_EMPTY') }}
+            </p>
+
+            <!-- Comportamentos arrastáveis (1 por contexto de horário) -->
+            <Draggable
+              v-if="form.followup_behaviors.length"
+              v-model="form.followup_behaviors"
+              item-key="uid"
+              handle=".fu-drag"
+              tag="div"
+              class="flex flex-col gap-3"
+            >
+              <template #item="{ element: bhv, index: bi }">
+                <div
+                  class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
+                >
                   <div class="flex items-center gap-2">
+                    <span
+                      class="fu-drag i-lucide-grip-vertical size-4 shrink-0 text-n-slate-10 cursor-grab"
+                    />
+                    <span class="flex-1 text-sm font-medium text-n-slate-12">
+                      {{ fuContextLabel(bhv.context) }}
+                    </span>
+                    <button
+                      type="button"
+                      class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                      :aria-label="
+                        $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIOR_REMOVE')
+                      "
+                      @click="removeBehavior(bi)"
+                    >
+                      <span class="i-lucide-trash-2 size-4 inline-block" />
+                    </button>
+                  </div>
+
+                  <div
+                    class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
+                  >
+                    <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT') }}</span>
+                    <Select v-model="bhv.context" :options="fuContextOptions" />
+                  </div>
+
+                  <!-- Janelas (somente Personalizado) -->
+                  <div
+                    v-if="bhv.context === 'custom'"
+                    class="flex flex-col gap-2"
+                  >
+                    <span class="text-sm text-n-slate-12">
+                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOWS') }}
+                    </span>
+                    <div
+                      v-for="(win, wi) in bhv.windows"
+                      :key="win.uid"
+                      class="flex items-center gap-2"
+                    >
+                      <input
+                        v-model="win.start"
+                        type="time"
+                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
+                      />
+                      <span class="text-sm text-n-slate-11">
+                        {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
+                      </span>
+                      <input
+                        v-model="win.end"
+                        type="time"
+                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                        :aria-label="
+                          $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_REMOVE')
+                        "
+                        @click="removeBehaviorWindow(bhv, wi)"
+                      >
+                        <span class="i-lucide-x size-4 inline-block" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      class="self-start text-sm font-medium text-n-brand hover:underline"
+                      @click="addBehaviorWindow(bhv)"
+                    >
+                      + {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_ADD') }}
+                    </button>
+                  </div>
+
+                  <!-- Tentativas -->
+                  <label
+                    class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+                  >
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
                     <input
-                      v-model="attempt.value"
+                      :value="bhv.attempts.length"
                       type="number"
                       min="0"
-                      class="w-20 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
+                      :max="FU_MAX_ATTEMPTS"
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                      @input="setBehaviorAttemptCount(bhv, $event.target.value)"
                     />
-                    <Select v-model="attempt.unit" :options="fuUnitOptions" />
-                  </div>
-                </label>
-                <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE') }}
-                  <textarea
-                    v-model="attempt.message"
-                    rows="2"
-                    :placeholder="
-                      $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER')
-                    "
-                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-none"
-                  />
-                </label>
-              </div>
-            </div>
+                  </label>
 
-            <!-- Carência após a última tentativa -->
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
-              {{ $t('AI_DEPARTMENTS.FOLLOWUP.GRACE_LABEL') }}
-              <input
-                v-model="form.followup_grace"
-                type="number"
-                min="0"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-              />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_DEPARTMENTS.FOLLOWUP.GRACE_HINT') }}
-              </span>
-            </label>
-
-            <!-- Ação ao terminar as tentativas (nada / encerrar / atribuição) -->
-            <div class="flex flex-col gap-2">
-              <div class="flex flex-col gap-0.5">
-                <span class="text-sm font-medium text-n-slate-12">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ON_COMPLETE_TITLE') }}
-                </span>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.ON_COMPLETE_HINT') }}
-                </p>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  v-for="opt in fuActionOptions"
-                  :key="opt.value"
-                  type="button"
-                  class="flex items-start gap-3 text-left p-4 rounded-2xl border-2 transition-all"
-                  :class="
-                    form.followup_on_complete_action === opt.value
-                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
-                      : 'border-n-weak bg-n-solid-1 hover:border-n-slate-7'
-                  "
-                  @click="form.followup_on_complete_action = opt.value"
-                >
-                  <span
-                    class="shrink-0 size-9 rounded-full flex items-center justify-center"
-                    :class="
-                      form.followup_on_complete_action === opt.value
-                        ? 'bg-n-brand text-white'
-                        : 'bg-n-alpha-2 text-n-slate-11'
-                    "
+                  <div
+                    v-for="(attempt, ai) in bhv.attempts"
+                    :key="attempt.uid"
+                    class="rounded-xl border border-n-weak bg-n-solid-2 p-3 flex flex-col gap-2"
                   >
-                    <span :class="opt.icon" class="size-4" />
-                  </span>
-                  <span class="flex flex-col gap-0.5 min-w-0">
-                    <span class="text-sm font-semibold text-n-slate-12">
-                      {{ $t(`AI_DEPARTMENTS.FOLLOWUP.${opt.i18n}`) }}
+                    <span class="text-sm font-medium text-n-slate-12">
+                      {{
+                        $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_LABEL', {
+                          n: ai + 1,
+                        })
+                      }}
                     </span>
+                    <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
+                      <div class="flex items-center gap-2">
+                        <input
+                          v-model="attempt.value"
+                          type="number"
+                          min="0"
+                          class="w-20 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                        />
+                        <Select
+                          v-model="attempt.unit"
+                          :options="fuUnitOptions"
+                        />
+                      </div>
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE') }}
+                      <textarea
+                        v-model="attempt.message"
+                        rows="2"
+                        :placeholder="
+                          $t(
+                            'AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER'
+                          )
+                        "
+                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                      />
+                    </label>
+                  </div>
+
+                  <!-- Carência -->
+                  <label
+                    class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+                  >
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.GRACE_LABEL') }}
+                    <input
+                      v-model="bhv.grace"
+                      type="number"
+                      min="0"
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                    />
+                  </label>
+
+                  <!-- Ação se o cliente não responder -->
+                  <div
+                    class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
+                  >
+                    <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE') }}</span>
+                    <Select
+                      v-model="bhv.no_response_action"
+                      :options="fuNoResponseOptions"
+                    />
                     <span class="text-xs text-n-slate-11">
-                      {{ $t(`AI_DEPARTMENTS.FOLLOWUP.${opt.i18n}_HINT`) }}
+                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE_HINT') }}
                     </span>
-                  </span>
-                </button>
-              </div>
-            </div>
+                  </div>
+                </div>
+              </template>
+            </Draggable>
+
+            <button
+              type="button"
+              class="self-start text-sm font-medium text-n-brand hover:underline"
+              @click="addBehavior"
+            >
+              + {{ $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIOR_ADD') }}
+            </button>
           </section>
         </div>
 
