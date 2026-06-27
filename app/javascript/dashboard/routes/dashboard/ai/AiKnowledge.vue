@@ -393,18 +393,18 @@ onMounted(fetchSources);
             <span class="i-lucide-globe size-4" />
             {{ $t('AI_KNOWLEDGE.SOURCES.SITE') }}
           </span>
-          <div class="flex items-center gap-2">
+          <div class="flex items-stretch gap-2">
             <input
               v-model="websiteUrl"
               type="url"
               :placeholder="$t('AI_KNOWLEDGE.WEBSITE_PLACEHOLDER')"
-              class="flex-1 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+              class="flex-1 h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
               @keyup.enter="addWebsite"
             />
             <button
               type="button"
               :disabled="!websiteUrl.trim()"
-              class="shrink-0 text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              class="shrink-0 h-10 text-sm font-medium px-4 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
               @click="addWebsite"
             >
               {{ $t('AI_KNOWLEDGE.SITE_ADD') }}
