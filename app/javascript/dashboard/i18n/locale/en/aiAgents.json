@@ -532,6 +532,7 @@
     "NEW": "Nova fonte",
     "DROPZONE": {
       "HINT": "Arraste e solte um arquivo aqui, ou clique para procurar. A IA preenche várias entradas de uma vez (ex.: 30 perguntas de FAQ).",
+      "HINT_DOC": "Arraste e solte um arquivo aqui, ou clique para procurar. O conteúdo vira uma fonte de conhecimento que a IA consulta.",
       "FORMATS": "TXT e CSV · máx 5 MB (DOC, DOCX e PDF em breve)"
     },
     "IMPORT_KIND": {
@@ -548,6 +549,7 @@
       "SITE": "CSV com 1 coluna: url (uma por linha)."
     },
     "SITE_IMPORT": "Importar lista (CSV)",
+    "ADD_MANUAL": "Adicionar manualmente",
     "DOWNLOAD_MODEL": "Baixar modelo CSV",
     "IMPORTED": "{count} itens importados.",
     "IMPORT_EMPTY": "Nenhuma linha válida encontrada. Confira o formato (baixe o modelo).",
@@ -598,6 +600,8 @@
       "PRODUTO_HINT": "Nome, descrição e preço",
       "PROCEDIMENTO": "Procedimentos",
       "PROCEDIMENTO_HINT": "Passo a passo",
+      "DOCUMENTO": "Documento",
+      "DOCUMENTO_HINT": "TXT (texto livre)",
       "DOCUMENTOS": "Documentos",
       "DOCUMENTOS_HINT": "TXT ou CSV",
       "SITE": "Site",

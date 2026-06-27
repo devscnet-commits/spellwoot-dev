@@ -25,10 +25,12 @@ const kindLabel = kind =>
 
 // The user teaches the company by business source, never by "type". These work today as plain
 // text. Documentos (upload) and Site (import) need backend, so they show as "em breve".
+// Os cards do topo selecionam o tipo (kind) que dirige tanto o import quanto o "adicionar manual".
 const CREATABLE = [
   { kind: 'faq', icon: 'i-lucide-help-circle' },
   { kind: 'produto', icon: 'i-lucide-package' },
   { kind: 'procedimento', icon: 'i-lucide-list-checks' },
+  { kind: 'documento', icon: 'i-lucide-file-text' },
 ];
 
 const sources = ref([]);
@@ -90,12 +92,10 @@ const uploadFile = async file => {
 };
 // Importar como: estruturados (CSV -> N entradas) ou Documento (arquivo único).
 const importKind = ref('faq');
-const IMPORT_KINDS = ['faq', 'produto', 'procedimento', 'site', 'documento'];
 const IMPORT_COLUMNS = {
   faq: ['pergunta', 'resposta'],
   produto: ['nome', 'descricao', 'preco'],
   procedimento: ['titulo', 'passos'],
-  site: ['url'],
 };
 
 // Parser CSV minimalista (aspas, vírgula dentro de aspas, \n e \r\n).
@@ -141,13 +141,7 @@ const rowsToSources = (rows, kind) => {
     .map(r => {
       const title = (r[0] || '').trim();
       if (!title) return null;
-      // "site" vira fonte do tipo website (título = URL = conteúdo).
-      const src = {
-        kind: kind === 'site' ? 'website' : kind,
-        title,
-        raw: kind === 'site' ? title : (r[1] || '').trim(),
-        status: 'active',
-      };
+      const src = { kind, title, raw: (r[1] || '').trim(), status: 'active' };
       if (kind === 'produto') src.price = (r[2] || '').trim();
       return src;
     })
@@ -195,7 +189,6 @@ const IMPORT_EXAMPLES = {
     'Troca de produto',
     '1. Solicite no app; 2. Envie o item; 3. Receba o novo',
   ],
-  site: ['https://www.seusite.com.br/faq'],
 };
 const downloadModel = () => {
   const kind = importKind.value;
@@ -302,18 +295,23 @@ onMounted(fetchSources);
       <section
         class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
       >
-        <!-- Fontes de negócio (texto): FAQ, Produtos, Procedimentos -->
+        <!-- O que você quer ensinar? — seleciona o tipo que vai importar/adicionar -->
         <div class="flex flex-col gap-2">
           <span class="text-xs font-medium text-n-slate-11">
             {{ $t('AI_KNOWLEDGE.SOURCES.LABEL') }}
           </span>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               v-for="src in CREATABLE"
               :key="src.kind"
               type="button"
-              class="rounded-xl border border-n-weak bg-n-solid-1 p-3 flex flex-col items-center gap-1 text-center hover:border-n-brand transition-colors"
-              @click="openNew(src.kind)"
+              class="rounded-xl border p-3 flex flex-col items-center gap-1 text-center transition-colors"
+              :class="
+                importKind === src.kind
+                  ? 'border-n-brand bg-n-brand/10'
+                  : 'border-n-weak bg-n-solid-1 hover:border-n-slate-7'
+              "
+              @click="importKind = src.kind"
             >
               <span :class="src.icon" class="size-5 text-n-brand" />
               <span class="text-sm font-medium text-n-slate-12">
@@ -326,33 +324,8 @@ onMounted(fetchSources);
           </div>
         </div>
 
-        <!-- Documentos: importar (escolhe o tipo) -->
+        <!-- Importar/adicionar para o tipo selecionado acima -->
         <div class="flex flex-col gap-2">
-          <div class="flex items-center justify-between gap-3 flex-wrap">
-            <span
-              class="inline-flex items-center gap-1.5 text-sm font-medium text-n-slate-12"
-            >
-              <span class="i-lucide-folder-up size-4" />
-              {{ $t('AI_KNOWLEDGE.SOURCES.DOCUMENTOS') }}
-            </span>
-            <!-- Importar como -->
-            <div class="inline-flex p-1 rounded-full bg-n-alpha-2 gap-1">
-              <button
-                v-for="k in IMPORT_KINDS"
-                :key="k"
-                type="button"
-                class="px-3 py-1 rounded-full text-xs font-medium transition-colors"
-                :class="
-                  importKind === k
-                    ? 'bg-n-brand text-white'
-                    : 'text-n-slate-11 hover:text-n-slate-12'
-                "
-                @click="importKind = k"
-              >
-                {{ $t(`AI_KNOWLEDGE.IMPORT_KIND.${k.toUpperCase()}`) }}
-              </button>
-            </div>
-          </div>
           <input
             ref="fileInput"
             type="file"
@@ -375,13 +348,17 @@ onMounted(fetchSources);
           >
             <span class="i-lucide-upload size-7 text-n-brand" />
             <span class="text-sm text-n-slate-11 max-w-md">
-              {{ $t('AI_KNOWLEDGE.DROPZONE.HINT') }}
+              {{
+                importKind === 'documento'
+                  ? $t('AI_KNOWLEDGE.DROPZONE.HINT_DOC')
+                  : $t('AI_KNOWLEDGE.DROPZONE.HINT')
+              }}
             </span>
             <span class="text-xs text-n-brand">
               {{ $t('AI_KNOWLEDGE.DROPZONE.FORMATS') }}
             </span>
           </button>
-          <!-- Formato esperado + baixar modelo (só para os tipos estruturados) -->
+          <!-- Formato esperado + modelo + adicionar manual (só nos tipos estruturados) -->
           <div
             v-if="importKind !== 'documento'"
             class="flex items-center justify-between gap-3 flex-wrap"
@@ -389,13 +366,22 @@ onMounted(fetchSources);
             <span class="text-xs text-n-slate-11">
               {{ $t(`AI_KNOWLEDGE.IMPORT_FORMAT.${importKind.toUpperCase()}`) }}
             </span>
-            <button
-              type="button"
-              class="shrink-0 text-xs font-medium text-n-brand hover:underline"
-              @click="downloadModel"
-            >
-              {{ $t('AI_KNOWLEDGE.DOWNLOAD_MODEL') }}
-            </button>
+            <div class="shrink-0 flex items-center gap-3">
+              <button
+                type="button"
+                class="text-xs font-medium text-n-brand hover:underline"
+                @click="openNew(importKind)"
+              >
+                {{ $t('AI_KNOWLEDGE.ADD_MANUAL') }}
+              </button>
+              <button
+                type="button"
+                class="text-xs font-medium text-n-brand hover:underline"
+                @click="downloadModel"
+              >
+                {{ $t('AI_KNOWLEDGE.DOWNLOAD_MODEL') }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -424,21 +410,9 @@ onMounted(fetchSources);
               {{ $t('AI_KNOWLEDGE.SITE_ADD') }}
             </button>
           </div>
-          <div class="flex items-center justify-between gap-3 flex-wrap">
-            <span class="text-xs text-n-slate-11">
-              {{ $t('AI_KNOWLEDGE.SITE_HINT') }}
-            </span>
-            <button
-              type="button"
-              class="shrink-0 text-xs font-medium text-n-brand hover:underline"
-              @click="
-                importKind = 'site';
-                triggerUpload();
-              "
-            >
-              {{ $t('AI_KNOWLEDGE.SITE_IMPORT') }}
-            </button>
-          </div>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AI_KNOWLEDGE.SITE_HINT') }}
+          </span>
         </div>
 
         <div
