@@ -84,6 +84,8 @@
       "MODEL": "Nível de atendimento",
       "MODEL_REQUIRED": "Selecione um nível de atendimento para o agente responder.",
       "MANAGE_LEVELS": "Gerenciar níveis",
+      "AVATAR_INVALID_TYPE": "Selecione um arquivo de imagem (PNG, JPG, etc.).",
+      "AVATAR_TOO_LARGE": "Imagem muito grande. Escolha um arquivo de até {mb} MB.",
       "DESCRIPTION_FIELD": "Descrição",
       "PERSONALITY": "Personalidade",
       "VOICE": "Tom de voz",

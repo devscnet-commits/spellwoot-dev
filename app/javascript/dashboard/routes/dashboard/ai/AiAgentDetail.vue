@@ -249,9 +249,22 @@ const fileInput = ref(null);
 const triggerUpload = () => {
   if (fileInput.value) fileInput.value.click();
 };
+// Recusa arquivos que não sejam imagem ou acima do limite, com aviso amigável.
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 const onFilePick = e => {
   const file = e.target.files && e.target.files[0];
-  if (file) onAvatarUpload({ file });
+  // Limpa para permitir reescolher o mesmo arquivo após um erro.
+  e.target.value = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    useAlert(t('AI_AGENTS.SOBRE.AVATAR_INVALID_TYPE'));
+    return;
+  }
+  if (file.size > AVATAR_MAX_BYTES) {
+    useAlert(t('AI_AGENTS.SOBRE.AVATAR_TOO_LARGE', { mb: 5 }));
+    return;
+  }
+  onAvatarUpload({ file });
 };
 const saveAgent = async () => {
   isSaving.value = true;
