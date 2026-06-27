@@ -1000,14 +1000,16 @@ onMounted(async () => {
                     </span>
                     <label class="flex flex-col gap-1 text-sm text-n-slate-12">
                       {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-stretch gap-2">
                         <input
                           v-model="attempt.value"
                           type="number"
                           min="0"
-                          class="w-20 h-9 px-3 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                          class="w-24 h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
                         />
-                        <div class="shrink-0 [&_select]:h-9">
+                        <div
+                          class="shrink-0 [&_select]:!h-10 [&_select]:!py-0 [&>div]:h-full"
+                        >
                           <Select
                             v-model="attempt.unit"
                             :options="fuUnitOptions"
