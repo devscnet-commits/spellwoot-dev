@@ -22,8 +22,14 @@ const aiSystemsUrl = computed(() =>
 const searchQuery = ref('');
 const uiFlags = getters['integrations/getUIFlags'];
 
-const integrationList = computed(
-  () => getters['integrations/getAppIntegrations'].value
+// A chave OpenAI passou a ser configurada apenas em "APIs & Credentials"
+// (integrations-hub) — fonte única lida pelo agente de IA. Por isso o app OpenAI
+// clássico não aparece mais aqui (segue existindo para features legadas).
+const HIDDEN_INTEGRATIONS = ['openai'];
+const integrationList = computed(() =>
+  getters['integrations/getAppIntegrations'].value.filter(
+    item => !HIDDEN_INTEGRATIONS.includes(item.id)
+  )
 );
 
 const filteredIntegrationList = computed(() => {

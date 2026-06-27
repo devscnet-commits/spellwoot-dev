@@ -30,7 +30,8 @@ class Ai::DepartmentResolver
                     "Departamentos:\n#{options}\nResponda APENAS com o nome exato do departamento."
 
     raw = Ai::ModelRouter.call_model(provider: provider, model: model,
-                                     system_prompt: system_prompt, user_message: message_content.to_s)
+                                     system_prompt: system_prompt, user_message: message_content.to_s,
+                                     account_id: agent.account_id)
     return nil if raw[:status] == 'error'
 
     answer = raw[:text].to_s.strip.downcase

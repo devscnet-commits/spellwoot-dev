@@ -15,7 +15,8 @@ class Ai::ShadowEvaluator
       account_id: @account.id, conversation_id: @conversation.id, inbox_id: @conversation.inbox_id,
       run_type: 'shadow_eval', mode: 'shadow', status: 'running'
     )
-    result = Ai::ModelRouter.decide(profile: nil, system_prompt: build_prompt, user_message: transcript)
+    result = Ai::ModelRouter.decide(profile: nil, system_prompt: build_prompt, user_message: transcript,
+                                    account_id: @account.id)
     findings = (result[:decision] || {}).merge('shadow_id' => @shadow.id, 'shadow_name' => @shadow.name)
     run.update!(
       provider: result[:provider], model: result[:model], tokens_in: result[:tokens_in],

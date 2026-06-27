@@ -55,7 +55,8 @@ class Ai::Tester
     end
 
     Ai::ModelRouter.decide(profile: agent.operation_profile, system_prompt: system_prompt,
-                           user_message: message, provider: routing['provider'], model: routing['model'])
+                           user_message: message, provider: routing['provider'], model: routing['model'],
+                           account_id: agent.account_id)
   end
 
   # Returns [department, method] so the Lab can show WHY this department was chosen.

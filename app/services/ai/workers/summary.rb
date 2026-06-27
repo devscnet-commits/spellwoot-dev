@@ -17,7 +17,8 @@ class Ai::Workers::Summary
       model: model_for(profile),
       system_prompt: 'Resuma a conversa em até 3 frases, em português, focando no que o cliente quer ' \
                      'e no estado do atendimento. Responda apenas o resumo.',
-      user_message: transcript
+      user_message: transcript,
+      account_id: agent.account_id
     )
     raw[:status] == 'error' ? nil : raw[:text].to_s.strip.presence
   rescue StandardError => e

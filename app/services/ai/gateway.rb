@@ -60,7 +60,8 @@ class Ai::Gateway
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
     result = Ai::ModelRouter.decide(
-      profile: @agent.operation_profile, system_prompt: system_prompt, user_message: effective_content
+      profile: @agent.operation_profile, system_prompt: system_prompt, user_message: effective_content,
+      account_id: @account.id
     )
     run_record.update!(
       provider: result[:provider], model: result[:model],

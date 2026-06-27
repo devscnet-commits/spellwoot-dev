@@ -44,14 +44,15 @@ class Ai::ModelRouter
     'openrouter' => 'openai/gpt-4.1-mini'
   }.freeze
 
-  def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil)
+  def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil)
     # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
     model    = model.presence || profile&.supervisor_model.presence || DEFAULT_MODELS.fetch(provider, 'gpt-4.1-mini')
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    raw = call_model(provider: provider, model: model, system_prompt: system_prompt, user_message: user_message)
+    raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
+                     user_message: user_message, account_id: account_id)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     decision = raw[:status] == 'error' ? { 'error' => raw[:error] } : parse_decision(raw[:text])
@@ -69,10 +70,10 @@ class Ai::ModelRouter
   end
 
   # NOTE: validate the exact RubyLLM call shape when running; isolated here on purpose.
-  def self.call_model(provider:, model:, system_prompt:, user_message:)
+  def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
-    configure_provider!(provider)
+    configure_provider!(provider, account_id: account_id)
     chat = RubyLLM.chat(model: model)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
     response = chat.ask(user_message)
@@ -87,9 +88,10 @@ class Ai::ModelRouter
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error: "#{e.class}: #{e.message}" }
   end
 
-  # Wires the API key for the chosen provider. OpenAI reuses Chatwoot's existing Llm::Config;
+  # Wires the API key for the chosen provider. OpenAI is read from the account's "APIs & Credentials"
+  # (IntegrationSettingsService: account → global → ENV), with the platform Captain key as fallback;
   # the others read AI_<PROVIDER>_API_KEY from InstallationConfig (or the matching ENV var).
-  def self.configure_provider!(provider)
+  def self.configure_provider!(provider, account_id: nil)
     case provider.to_s
     when 'anthropic'
       key = credential('AI_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY')
@@ -106,9 +108,24 @@ class Ai::ModelRouter
       raise 'openrouter_api_key ausente' if key.blank?
 
       RubyLLM.configure { |c| c.openrouter_api_key = key }
-    else # openai: reuse the platform's existing configuration (CAPTAIN_OPEN_AI_API_KEY)
+    else # openai
+      # One-time endpoint/model-registry wiring (default OpenAI endpoint for most setups).
       Llm::Config.initialize! if defined?(Llm::Config)
+      # Resolve the key per request — account Hub key wins, else the platform Captain key — and set it
+      # explicitly every time so a previous account's key can never leak via the memoized global config.
+      key = account_openai_key(account_id) || credential('CAPTAIN_OPEN_AI_API_KEY', 'OPENAI_API_KEY')
+      RubyLLM.configure { |c| c.openai_api_key = key } if key.present?
     end
+  end
+
+  # OpenAI key from the account's "APIs & Credentials" (integrations-hub), resolved account→global→ENV.
+  def self.account_openai_key(account_id)
+    return nil if account_id.blank? || !defined?(IntegrationSettingsService)
+
+    IntegrationSettingsService.get_config(account_id, 'openai')['apiKey'].presence
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::ModelRouter] openai key lookup falhou: #{e.class}: #{e.message}"
+    nil
   end
 
   def self.credential(installation_name, env_name)

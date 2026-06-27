@@ -31,7 +31,8 @@ class Ai::Copilot
     result = Ai::ModelRouter.decide(
       profile: agent.operation_profile,
       system_prompt: build_prompt(agent, department, knowledge),
-      user_message: transcript
+      user_message: transcript,
+      account_id: @account.id
     )
     run.update!(
       provider: result[:provider], model: result[:model], tokens_in: result[:tokens_in],
