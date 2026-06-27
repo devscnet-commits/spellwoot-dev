@@ -207,10 +207,41 @@ const ensureDefaultDepartment = async () => {
   defaultDeptId.value = data.id;
 };
 
+// Avatares são salvos como base64 inline. Encolhemos no cliente (quadrado, lado
+// máx AVATAR_MAX_PX) para o data URL ficar leve e caber no campo sem inflar o banco.
+const AVATAR_MAX_PX = 192;
+const resizeToDataUrl = (dataUrl, maxPx) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      // Fundo branco para imagens com transparência (JPEG não tem alfa).
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+
 const onAvatarUpload = ({ file }) => {
   const reader = new FileReader();
-  reader.onload = e => {
-    agentForm.assistant_avatar = e.target.result;
+  reader.onload = async e => {
+    try {
+      agentForm.assistant_avatar = await resizeToDataUrl(
+        e.target.result,
+        AVATAR_MAX_PX
+      );
+    } catch {
+      agentForm.assistant_avatar = e.target.result;
+    }
   };
   reader.readAsDataURL(file);
 };

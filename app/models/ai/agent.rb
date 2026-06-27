@@ -17,6 +17,9 @@ class Ai::Agent < ApplicationRecord
   # Every agent must point to a service level (operation profile): it defines the provider/model the
   # agent answers with. Without it the engine would fall back to defaults instead of an explicit choice.
   validates :ai_operation_profile_id, presence: { message: 'selecione um nível de atendimento' }
+  # Avatar is an inline base64 data URL (downscaled on the client). This explicit limit overrides the
+  # generic 20k text cap (ApplicationRecord) while still bounding the payload (~225 KB of base64).
+  validates :assistant_avatar, length: { maximum: 300_000 }
 
   scope :active, -> { where(status: 'active') }
 end
