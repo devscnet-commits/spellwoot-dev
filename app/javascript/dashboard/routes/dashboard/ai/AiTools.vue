@@ -395,23 +395,25 @@ onMounted(() => {
           <input
             v-model="form.name"
             type="text"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
           />
         </label>
-        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
+        <div
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&_select]:!h-10 [&_select]:!py-0"
+        >
           <span>{{ $t('AI_TOOLS.FORM.TYPE') }}</span>
           <Select v-model="form.implementation_type" :options="typeOptions" />
         </div>
         <div
           v-if="isCapability"
-          class="flex flex-col gap-1 text-sm text-n-slate-12"
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&_select]:!h-10 [&_select]:!py-0"
         >
           <span>{{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}</span>
           <Select v-model="form.capability_key" :options="capabilityOptions" />
         </div>
         <div
           v-else-if="isIntegration"
-          class="flex flex-col gap-1 text-sm text-n-slate-12"
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&_select]:!h-10 [&_select]:!py-0"
         >
           <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
           <Select
@@ -446,10 +448,10 @@ onMounted(() => {
                 v-model="form.webhook_url"
                 type="text"
                 :placeholder="$t('AI_TOOLS.FORM.WEBHOOK_URL_PLACEHOLDER')"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
               />
             </label>
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1 [&_select]:!h-10 [&_select]:!py-0">
               <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_METHOD') }}</span>
               <Select v-model="form.webhook_method" :options="methodOptions" />
             </div>
@@ -470,7 +472,7 @@ onMounted(() => {
         <input
           v-model="form.description"
           type="text"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
         />
       </label>
       <!-- Argumentos da ação: construtor visual + JSON avançado opcional -->
@@ -521,16 +523,18 @@ onMounted(() => {
               v-model="arg.name"
               type="text"
               :placeholder="$t('AI_TOOLS.FORM.ARG_NAME')"
-              class="flex-1 min-w-[8rem] px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
+              class="flex-1 min-w-[8rem] h-10 px-3 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
             />
-            <div class="w-36">
+            <div
+              class="w-36 [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
+            >
               <Select v-model="arg.type" :options="argTypeOptions" />
             </div>
             <input
               v-model="arg.description"
               type="text"
               :placeholder="$t('AI_TOOLS.FORM.ARG_DESC')"
-              class="flex-[2] min-w-[10rem] px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
+              class="flex-[2] min-w-[10rem] h-10 px-3 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
             />
             <button
               type="button"
