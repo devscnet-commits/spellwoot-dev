@@ -12,7 +12,8 @@ class Ai::PromptCompiler
     parts << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
     parts << "Instruções: #{department.instructions}." if department.instructions.present?
     if (pb = department.playbook)
-      parts << "Etapas do atendimento: #{Array(pb.steps).join(' -> ')}." if pb.steps.present?
+      step_lines = step_lines(pb.steps)
+      parts << "Etapas do atendimento:\n#{step_lines.join("\n")}" if step_lines.present?
       parts << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
       parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
     end
@@ -32,6 +33,22 @@ class Ai::PromptCompiler
     parts << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
     parts << response_contract
     parts.join("\n\n")
+  end
+
+  # Steps may be the new object form ({name, instructions}) or the legacy string form.
+  # Renders one bullet per step: "- Nome: instruções".
+  def self.step_lines(steps)
+    Array(steps).map do |s|
+      if s.is_a?(Hash)
+        name = (s['name'] || s[:name]).to_s.strip
+        instr = (s['instructions'] || s[:instructions]).to_s.strip
+        next if name.blank?
+
+        instr.present? ? "- #{name}: #{instr}" : "- #{name}"
+      else
+        s.to_s.strip.presence&.then { |line| "- #{line}" }
+      end
+    end.compact
   end
 
   # Identity block: name, company, how it should present itself (human vs IA).
