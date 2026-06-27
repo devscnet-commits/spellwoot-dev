@@ -145,6 +145,14 @@ class Ai::Gateway
   def handle_reply(department, text, run_record)
     return if text.blank?
 
+    # Safety cap: stop replying after the department's max number of AI replies in this
+    # conversation (0 = no limit). Counts 'reply.sent' events, so human agent replies don't count.
+    max_replies = department.behavior.to_h['max_replies'].to_i
+    if max_replies.positive? && ai_replies_count >= max_replies
+      emit(run_record, 'reply.skipped', { reason: 'max_replies_reached', max: max_replies })
+      return
+    end
+
     state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation)
     if state == :live
       Messages::MessageBuilder.new(nil, @conversation, { content: text, private: false }).perform
@@ -156,6 +164,11 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#reply] #{e.class}: #{e.message}"
     emit(run_record, 'reply.failed', { error: "#{e.class}: #{e.message}" })
+  end
+
+  # Number of AI replies already sent in this conversation (across runs/agents).
+  def ai_replies_count
+    Ai::Event.where(conversation_id: @conversation.id, event_type: 'reply.sent').count
   end
 
   # Invisible worker: persist a rolling conversation summary into agent memory.
