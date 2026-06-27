@@ -538,13 +538,16 @@
       "FAQ": "FAQ",
       "PRODUTO": "Produtos",
       "PROCEDIMENTO": "Procedimentos",
+      "SITE": "Site",
       "DOCUMENTO": "Documento"
     },
     "IMPORT_FORMAT": {
       "FAQ": "CSV com 2 colunas: pergunta, resposta (uma por linha).",
       "PRODUTO": "CSV com 3 colunas: nome, descrição, preço (um por linha).",
-      "PROCEDIMENTO": "CSV com 2 colunas: título, passos (um por linha)."
+      "PROCEDIMENTO": "CSV com 2 colunas: título, passos (um por linha).",
+      "SITE": "CSV com 1 coluna: url (uma por linha)."
     },
+    "SITE_IMPORT": "Importar lista (CSV)",
     "DOWNLOAD_MODEL": "Baixar modelo CSV",
     "IMPORTED": "{count} itens importados.",
     "IMPORT_EMPTY": "Nenhuma linha válida encontrada. Confira o formato (baixe o modelo).",

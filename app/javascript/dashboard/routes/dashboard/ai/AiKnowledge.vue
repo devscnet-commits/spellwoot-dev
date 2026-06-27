@@ -90,11 +90,12 @@ const uploadFile = async file => {
 };
 // Importar como: estruturados (CSV -> N entradas) ou Documento (arquivo único).
 const importKind = ref('faq');
-const IMPORT_KINDS = ['faq', 'produto', 'procedimento', 'documento'];
+const IMPORT_KINDS = ['faq', 'produto', 'procedimento', 'site', 'documento'];
 const IMPORT_COLUMNS = {
   faq: ['pergunta', 'resposta'],
   produto: ['nome', 'descricao', 'preco'],
   procedimento: ['titulo', 'passos'],
+  site: ['url'],
 };
 
 // Parser CSV minimalista (aspas, vírgula dentro de aspas, \n e \r\n).
@@ -140,7 +141,13 @@ const rowsToSources = (rows, kind) => {
     .map(r => {
       const title = (r[0] || '').trim();
       if (!title) return null;
-      const src = { kind, title, raw: (r[1] || '').trim(), status: 'active' };
+      // "site" vira fonte do tipo website (título = URL = conteúdo).
+      const src = {
+        kind: kind === 'site' ? 'website' : kind,
+        title,
+        raw: kind === 'site' ? title : (r[1] || '').trim(),
+        status: 'active',
+      };
       if (kind === 'produto') src.price = (r[2] || '').trim();
       return src;
     })
@@ -188,6 +195,7 @@ const IMPORT_EXAMPLES = {
     'Troca de produto',
     '1. Solicite no app; 2. Envie o item; 3. Receba o novo',
   ],
+  site: ['https://www.seusite.com.br/faq'],
 };
 const downloadModel = () => {
   const kind = importKind.value;
@@ -416,9 +424,21 @@ onMounted(fetchSources);
               {{ $t('AI_KNOWLEDGE.SITE_ADD') }}
             </button>
           </div>
-          <span class="text-xs text-n-slate-11">
-            {{ $t('AI_KNOWLEDGE.SITE_HINT') }}
-          </span>
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_KNOWLEDGE.SITE_HINT') }}
+            </span>
+            <button
+              type="button"
+              class="shrink-0 text-xs font-medium text-n-brand hover:underline"
+              @click="
+                importKind = 'site';
+                triggerUpload();
+              "
+            >
+              {{ $t('AI_KNOWLEDGE.SITE_IMPORT') }}
+            </button>
+          </div>
         </div>
 
         <div
