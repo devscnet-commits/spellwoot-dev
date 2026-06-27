@@ -95,7 +95,11 @@ class Ai::Gateway
     )
     decision_kind = (result[:decision] || {})['decision']
     if handoff[:handoff]
-      handle_action('conversation.transfer', { 'unassign' => true }, run_record, 'handoff', extra: { reason: handoff[:reason] })
+      # Try AI->AI routing first (to an allowed agent); otherwise hand to a human.
+      routed = @acts_live && route_to_ai(result[:decision] || {}, run_record)
+      unless routed
+        handle_action('conversation.transfer', { 'unassign' => true }, run_record, 'handoff', extra: { reason: handoff[:reason] })
+      end
     elsif decision_kind == 'close'
       handle_action('conversation.resolve', {}, run_record, 'close')
     elsif decision_kind == 'reply'
@@ -164,6 +168,39 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#reply] #{e.class}: #{e.message}"
     emit(run_record, 'reply.failed', { error: "#{e.class}: #{e.message}" })
+  end
+
+  MAX_AI_HOPS = 2
+
+  # Routes the conversation to another AI agent the model chose (handoff_target), if it is in this
+  # agent's allowlist and passes the anti-loop guard. Routing = set the conversation's team to the
+  # target's team (that decides which AI is live) and re-enqueue the run. Returns true when routed.
+  def route_to_ai(decision, run_record)
+    target_name = decision['handoff_target'].to_s.strip
+    return false if target_name.blank?
+
+    allowed_ids = @agent.respond_to?(:handoff_agent_ids) ? Array(@agent.handoff_agent_ids) : []
+    return false if allowed_ids.empty?
+
+    target = ::Ai::Agent.where(account_id: @account.id, id: allowed_ids)
+                        .find { |a| (a.assistant_name.presence || a.name).to_s.casecmp?(target_name) }
+    return false if target.nil? || target.team_id.blank?
+
+    chain = Array(@conversation.additional_attributes&.dig('ai_handoff_chain'))
+    return false if chain.size >= MAX_AI_HOPS # anti-loop: cap on IA->IA hops
+    return false if chain.include?(target.id)  # never revisit an agent in this chain
+
+    @conversation.update!(team_id: target.team_id)
+    attrs = @conversation.additional_attributes || {}
+    attrs['ai_handoff_chain'] = chain + [target.id]
+    @conversation.update!(additional_attributes: attrs)
+
+    Ai::GatewayRunJob.perform_later(@message.id)
+    emit(run_record, 'handoff.routed', { to_agent_id: target.id, to_team_id: target.team_id, hop: chain.size + 1 })
+    true
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#route_to_ai] #{e.class}: #{e.message}"
+    false
   end
 
   # Number of AI replies already sent in this conversation (across runs/agents).

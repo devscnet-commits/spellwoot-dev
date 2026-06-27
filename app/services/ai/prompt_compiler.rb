@@ -29,10 +29,29 @@ class Ai::PromptCompiler
       parts << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
     end
 
+    targets = handoff_targets(agent)
+    if targets.present?
+      lines = targets.map { |tg| tg[:hint].present? ? "- #{tg[:name]}: #{tg[:hint]}" : "- #{tg[:name]}" }
+      parts << "Você pode transferir para outra IA quando o assunto for melhor atendido por ela. IAs de destino:\n" \
+               "#{lines.join("\n")}\nPara transferir, retorne decision \"handoff\" e o nome EXATO da IA em handoff_target."
+    end
+
     parts << "Base de conhecimento relevante:\n#{knowledge.join("\n---\n")}" if knowledge.present?
     parts << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
     parts << response_contract
     parts.join("\n\n")
+  end
+
+  # AI agents this agent may hand the conversation to (allowlist by agent id).
+  def self.handoff_targets(agent)
+    ids = agent.respond_to?(:handoff_agent_ids) ? Array(agent.handoff_agent_ids) : []
+    return [] if ids.empty?
+
+    ::Ai::Agent.where(account_id: agent.account_id, id: ids).map do |a|
+      { name: (a.assistant_name.presence || a.name).to_s, hint: a.category.to_s.strip.presence }
+    end
+  rescue StandardError
+    []
   end
 
   # Steps may be the new object form ({name, instructions}) or the legacy string form.
@@ -68,7 +87,7 @@ class Ai::PromptCompiler
   def self.response_contract
     <<~TXT.strip
       Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
-      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","confidence":0.0}
+      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","confidence":0.0}
     TXT
   end
 end
