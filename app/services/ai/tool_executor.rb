@@ -42,7 +42,10 @@ class Ai::ToolExecutor
 
   # Dispatches by the tool's implementation type. Returns [output, rollback_data, audit_key].
   def self.run_for(tool, conversation, input)
-    if tool&.implementation_type == 'integration'
+    case tool&.implementation_type
+    when 'webhook'
+      [Ai::WebhookRunner.call(tool.webhook_config, input: input), {}, "webhook:#{tool&.id}"]
+    when 'integration'
       link = Ai::IntegrationLink.find_by(id: tool.integration_link_id)
       [Ai::IntegrationConnector.call(link, input: input), {}, "integration:#{tool&.integration_link_id}"]
     else

@@ -42,12 +42,17 @@ class Api::V1::Accounts::AiToolsController < Api::V1::Accounts::BaseController
                                     :integration_link_id, :status)
   end
 
+  # jsonb fields (input_schema + webhook_config) têm forma dinâmica → permit!.
   def schema_params
     source = params[:ai_tool] || {}
-    value = source[:input_schema]
-    return {} if value.nil?
+    out = {}
+    out[:input_schema] = hashify(source[:input_schema]) unless source[:input_schema].nil?
+    out[:webhook_config] = hashify(source[:webhook_config]) unless source[:webhook_config].nil?
+    out
+  end
 
-    { input_schema: value.respond_to?(:permit!) ? value.permit!.to_h : value }
+  def hashify(value)
+    value.respond_to?(:permit!) ? value.permit!.to_h : value
   end
 
   def save_and_render(tool, ok_status)
