@@ -73,6 +73,9 @@ class Ai::Gateway
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms] },
          run_id: run_record.id)
 
+    # Track which step the conversation is on so message grouping can use that step's delay.
+    track_step(department, result[:decision] || {}) if @acts_live
+
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
     # which executes the tool immediately (tools are autonomous).
     intended_tool = result.dig(:decision, 'tool')
@@ -168,6 +171,24 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#reply] #{e.class}: #{e.message}"
     emit(run_record, 'reply.failed', { error: "#{e.class}: #{e.message}" })
+  end
+
+  # Stores the conversation's current step + its grouping delay (from the playbook) so the next
+  # message-grouping debounce can use the step-specific delay. Falls back to the general delay
+  # when the step has no delay configured (handled in Ai::MessageGrouping).
+  def track_step(department, decision)
+    name = decision['current_step'].to_s.strip
+    return if name.blank?
+
+    steps = Array(department.playbook&.steps)
+    step = steps.find { |s| s.is_a?(Hash) && (s['name'] || s[:name]).to_s.strip.casecmp?(name) }
+    delay = (step && (step['group_delay_seconds'] || step[:group_delay_seconds])).to_i
+
+    attrs = @conversation.additional_attributes || {}
+    attrs['ai_step'] = { 'name' => name, 'grouping_delay_seconds' => (delay.positive? ? delay : nil) }
+    @conversation.update!(additional_attributes: attrs)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#track_step] #{e.class}: #{e.message}"
   end
 
   MAX_AI_HOPS = 2

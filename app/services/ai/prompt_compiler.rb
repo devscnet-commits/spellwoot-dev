@@ -13,7 +13,10 @@ class Ai::PromptCompiler
     parts << "Instruções: #{department.instructions}." if department.instructions.present?
     if (pb = department.playbook)
       step_lines = step_lines(pb.steps)
-      parts << "Etapas do atendimento:\n#{step_lines.join("\n")}" if step_lines.present?
+      if step_lines.present?
+        parts << "Etapas do atendimento:\n#{step_lines.join("\n")}\n" \
+                 "Em current_step, informe o nome EXATO da etapa atual do atendimento."
+      end
       parts << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
       parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
     end
@@ -87,7 +90,7 @@ class Ai::PromptCompiler
   def self.response_contract
     <<~TXT.strip
       Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
-      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","confidence":0.0}
+      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","current_step":"","confidence":0.0}
     TXT
   end
 end

@@ -14,7 +14,7 @@ class Ai::GatewayListener < BaseListener
 
     # Message grouping: when a department sets a delay, defer the run so a burst of messages is
     # answered once (the deferred job processes only the last message and groups the burst).
-    delay = Ai::MessageGrouping.delay_seconds(message.inbox_id)
+    delay = Ai::MessageGrouping.delay_seconds(message.inbox_id, conversation: message.conversation)
     if delay.positive?
       Ai::GatewayRunJob.set(wait: delay.seconds).perform_later(message.id, grouped: true)
     else
