@@ -82,6 +82,7 @@
       "VERSION_HINT": "Fixa a geração de comportamento do agente. Atualizações futuras não quebram um agente já em produção.",
       "MODEL_OPENAI": "Modelo OpenAI",
       "MODEL": "Nível de atendimento",
+      "MODEL_REQUIRED": "Selecione um nível de atendimento para o agente responder.",
       "MANAGE_LEVELS": "Gerenciar níveis",
       "DESCRIPTION_FIELD": "Descrição",
       "PERSONALITY": "Personalidade",

@@ -14,6 +14,9 @@ class Ai::Agent < ApplicationRecord
 
   validates :name, presence: true
   validates :stage, inclusion: { in: STAGES }
+  # Every agent must point to a service level (operation profile): it defines the provider/model the
+  # agent answers with. Without it the engine would fall back to defaults instead of an explicit choice.
+  validates :ai_operation_profile_id, presence: { message: 'selecione um nível de atendimento' }
 
   scope :active, -> { where(status: 'active') }
 end

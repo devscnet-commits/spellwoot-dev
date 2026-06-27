@@ -535,11 +535,18 @@ onMounted(async () => {
             <div class="flex flex-col gap-1.5">
               <span class="text-sm font-medium text-n-slate-12">
                 {{ $t('AI_AGENTS.SOBRE.MODEL') }}
+                <span class="text-n-ruby-9">*</span>
               </span>
               <Select
                 v-model="agentForm.ai_operation_profile_id"
                 :options="profileOptions"
               />
+              <span
+                v-if="!agentForm.ai_operation_profile_id"
+                class="text-xs text-n-ruby-11"
+              >
+                {{ $t('AI_AGENTS.SOBRE.MODEL_REQUIRED') }}
+              </span>
               <button
                 type="button"
                 class="self-start text-xs text-n-slate-11 hover:text-n-brand"
@@ -590,7 +597,8 @@ onMounted(async () => {
               :is-loading="isSaving"
               :disabled="
                 !agentDirty ||
-                !(agentForm.assistant_name || agentForm.name || '').trim()
+                !(agentForm.assistant_name || agentForm.name || '').trim() ||
+                !agentForm.ai_operation_profile_id
               "
               @click="saveAgent"
             />
