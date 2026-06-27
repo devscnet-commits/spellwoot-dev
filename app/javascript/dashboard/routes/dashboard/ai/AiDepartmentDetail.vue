@@ -1005,12 +1005,14 @@ onMounted(async () => {
                           v-model="attempt.value"
                           type="number"
                           min="0"
-                          class="w-20 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                          class="w-20 h-9 px-3 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
                         />
-                        <Select
-                          v-model="attempt.unit"
-                          :options="fuUnitOptions"
-                        />
+                        <div class="shrink-0 [&_select]:h-9">
+                          <Select
+                            v-model="attempt.unit"
+                            :options="fuUnitOptions"
+                          />
+                        </div>
                       </div>
                     </label>
                     <label class="flex flex-col gap-1 text-sm text-n-slate-12">
