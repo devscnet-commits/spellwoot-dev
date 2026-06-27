@@ -72,6 +72,10 @@ const form = reactive({
   // + mensagem de encerramento. Scaffold.
   close_message: '',
   inactivity_minutes: 30,
+  // Decisão direta quando NÃO há follow-up configurado: ao bater a inatividade e
+  // não existir mensagem para disparar, o agente segue por estas decisões (ordem =
+  // prioridade). Cada item é { uid (transitório), type }.
+  no_followup_actions: [],
   disabled_custom_attributes: [],
   is_default: false,
   position: 0,
@@ -213,6 +217,19 @@ const hydrateBehaviors = fu => {
   }
   return [];
 };
+// --- Finalização: decisões para quando não há follow-up (cards arrastáveis) ---
+let nfUid = 0;
+const nextNfUid = () => {
+  nfUid += 1;
+  return nfUid;
+};
+// Aceita lista de strings ('finalize') ou de objetos ({ type: 'finalize' }).
+const parseNoFollowupActions = list =>
+  (Array.isArray(list) ? list : [])
+    .map(a => (typeof a === 'string' ? a : a?.type))
+    .filter(Boolean)
+    .map(type => ({ uid: nextNfUid(), type }));
+
 const hydrate = dept => {
   const playbook = dept.playbook || {};
   const behavior = dept.behavior || {};
@@ -233,6 +250,7 @@ const hydrate = dept => {
     followup_behaviors: hydrateBehaviors(followUp),
     close_message: close.message || '',
     inactivity_minutes: close.inactivity_minutes ?? 30,
+    no_followup_actions: parseNoFollowupActions(close.no_followup_actions),
     disabled_custom_attributes: Array.isArray(
       behavior.disabled_custom_attributes
     )
@@ -288,6 +306,8 @@ const buildFollowUp = () => {
 const buildFinalization = () => ({
   message: (form.close_message || '').trim(),
   inactivity_minutes: Number(form.inactivity_minutes) || 30,
+  // Decisão direta quando não há follow-up (ordem do array = prioridade).
+  no_followup_actions: form.no_followup_actions.map(a => a.type),
 });
 
 const buildPayload = () => ({
@@ -500,6 +520,48 @@ const setBehaviorAttemptCount = (b, value) => {
   while (b.attempts.length < target) b.attempts.push(blankAttempt());
   while (b.attempts.length > target) b.attempts.pop();
 };
+
+// --- Finalização: decisões diretas quando não há follow-up configurado ---
+const nfActionOptions = computed(() => [
+  {
+    value: 'transfer_ai',
+    label: t('AI_DEPARTMENTS.FINALIZATION.NF_TRANSFER_AI'),
+    icon: 'i-lucide-bot',
+  },
+  {
+    value: 'transfer_human',
+    label: t('AI_DEPARTMENTS.FINALIZATION.NF_TRANSFER_HUMAN'),
+    icon: 'i-lucide-user',
+  },
+  {
+    value: 'wait',
+    label: t('AI_DEPARTMENTS.FINALIZATION.NF_WAIT'),
+    icon: 'i-lucide-clock',
+  },
+  {
+    value: 'finalize',
+    label: t('AI_DEPARTMENTS.FINALIZATION.NF_FINALIZE'),
+    icon: 'i-lucide-check-circle',
+  },
+]);
+const nfActionMeta = type =>
+  nfActionOptions.value.find(o => o.value === type) || {
+    label: type,
+    icon: '',
+  };
+// Só oferece opções ainda não escolhidas (1 de cada).
+const nfAvailableOptions = computed(() =>
+  nfActionOptions.value.filter(
+    o => !form.no_followup_actions.some(a => a.type === o.value)
+  )
+);
+const addNoFollowupAction = type => {
+  if (!type || form.no_followup_actions.some(a => a.type === type)) return;
+  form.no_followup_actions.push({ uid: nextNfUid(), type });
+};
+const removeNoFollowupAction = index =>
+  form.no_followup_actions.splice(index, 1);
+
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
@@ -1100,6 +1162,96 @@ onMounted(async () => {
                 {{ $t('AI_DEPARTMENTS.FINALIZATION.INACTIVITY_HINT') }}
               </span>
             </label>
+
+            <!-- Decisão direta quando NÃO há follow-up configurado -->
+            <div class="flex flex-col gap-3 pt-1 border-t border-n-weak">
+              <div class="flex flex-col gap-0.5 pt-3">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FINALIZATION.NF_TITLE') }}
+                </span>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FINALIZATION.NF_HINT') }}
+                </p>
+              </div>
+
+              <p
+                v-if="!form.no_followup_actions.length"
+                class="text-sm text-n-slate-11 mb-0"
+              >
+                {{ $t('AI_DEPARTMENTS.FINALIZATION.NF_EMPTY') }}
+              </p>
+
+              <!-- Cards arrastáveis (ordem = prioridade) -->
+              <Draggable
+                v-if="form.no_followup_actions.length"
+                v-model="form.no_followup_actions"
+                item-key="uid"
+                handle=".nf-drag"
+                tag="div"
+                class="flex flex-col gap-2"
+              >
+                <template #item="{ element, index }">
+                  <div
+                    class="flex items-center gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-3 py-2.5"
+                  >
+                    <span
+                      class="nf-drag i-lucide-grip-vertical size-4 shrink-0 text-n-slate-10 cursor-grab"
+                      :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_DRAG')"
+                    />
+                    <span
+                      class="shrink-0 w-5 text-xs font-medium text-n-slate-11"
+                    >
+                      {{ index + 1 }}
+                    </span>
+                    <span
+                      :class="nfActionMeta(element.type).icon"
+                      class="size-4 shrink-0 text-n-slate-11"
+                    />
+                    <div class="min-w-0 flex-1">
+                      <p
+                        class="text-sm font-medium text-n-slate-12 mb-0 truncate"
+                      >
+                        {{ nfActionMeta(element.type).label }}
+                      </p>
+                      <p
+                        v-if="element.type === 'finalize'"
+                        class="text-xs text-n-slate-11 mb-0 truncate"
+                      >
+                        {{
+                          $t('AI_DEPARTMENTS.FINALIZATION.NF_FINALIZE_BADGE')
+                        }}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                      :aria-label="$t('AI_DEPARTMENTS.FINALIZATION.NF_REMOVE')"
+                      @click="removeNoFollowupAction(index)"
+                    >
+                      <span class="i-lucide-trash-2 size-4 inline-block" />
+                    </button>
+                  </div>
+                </template>
+              </Draggable>
+
+              <!-- Paleta: opções ainda não escolhidas -->
+              <div
+                v-if="nfAvailableOptions.length"
+                class="flex flex-wrap items-center gap-2"
+              >
+                <button
+                  v-for="opt in nfAvailableOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-n-weak px-3 py-1.5 text-sm text-n-slate-11 hover:text-n-slate-12 hover:border-n-slate-8"
+                  @click="addNoFollowupAction(opt.value)"
+                >
+                  <span class="i-lucide-plus size-3.5" />
+                  <span :class="opt.icon" class="size-3.5" />
+                  {{ opt.label }}
+                </button>
+              </div>
+            </div>
 
             <p class="text-xs text-n-slate-11 mb-0">
               {{ $t('AI_DEPARTMENTS.FINALIZATION.SCAFFOLD_NOTE') }}
