@@ -35,11 +35,11 @@ class Ai::Workers::Summary
 
   def self.provider_for(profile)
     profile&.worker_overrides&.dig('summary_provider').presence ||
-      profile&.supervisor_provider.presence || 'anthropic'
+      profile&.supervisor_provider.presence || 'openai'
   end
 
   def self.model_for(profile)
     profile&.worker_overrides&.dig('summary_model').presence ||
-      profile&.supervisor_model.presence || 'claude-3-5-sonnet-latest'
+      profile&.supervisor_model.presence || 'gpt-4.1-mini'
   end
 end

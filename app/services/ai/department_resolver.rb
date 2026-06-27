@@ -22,8 +22,8 @@ class Ai::DepartmentResolver
   # Cheap classification worker: picks the best department by name/objetivo.
   def self.classify(departments, message_content, agent)
     profile = agent.operation_profile
-    provider = profile&.supervisor_provider.presence || 'anthropic'
-    model = profile&.supervisor_model.presence || 'claude-3-5-sonnet-latest'
+    provider = profile&.supervisor_provider.presence || 'openai'
+    model = profile&.supervisor_model.presence || 'gpt-4.1-mini'
 
     options = departments.map { |d| "- #{d.name}: #{d.objetivo}" }.join("\n")
     system_prompt = "Classifique a mensagem do cliente no departamento mais adequado.\n" \

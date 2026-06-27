@@ -35,9 +35,20 @@ class Ai::ModelRouter
 
   # provider/model override the profile's supervisor (used by the confidence router to call the
   # cheap or premium tier). Falls back to the profile's supervisor when not given.
+  # Sensible default model per provider, used only when neither the call nor the profile names one.
+  DEFAULT_MODELS = {
+    'openai' => 'gpt-4.1-mini',
+    'anthropic' => 'claude-3-5-sonnet-latest',
+    'google' => 'gemini-1.5-flash',
+    'gemini' => 'gemini-1.5-flash',
+    'openrouter' => 'openai/gpt-4.1-mini'
+  }.freeze
+
   def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil)
-    provider = provider.presence || profile&.supervisor_provider.presence || 'anthropic'
-    model    = model.presence || profile&.supervisor_model.presence || 'claude-3-5-sonnet-latest'
+    # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
+    # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
+    provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
+    model    = model.presence || profile&.supervisor_model.presence || DEFAULT_MODELS.fetch(provider, 'gpt-4.1-mini')
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt, user_message: user_message)
