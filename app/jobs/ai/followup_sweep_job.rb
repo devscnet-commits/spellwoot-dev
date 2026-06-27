@@ -1,14 +1,22 @@
-# Periodic follow-up sweep: nudges customers who received an AI/agent reply and went quiet.
-# Only live bindings act, and every send goes through Ai::ReplyPolicy (canary / business hours /
-# kill switch).
+# Periodic follow-up sweep. The follow-up ONLY resumes a quiet conversation; delivery decisions
+# live in each behavior's `no_response_action` (the inactivity grace is global, in close_rules).
 #
-# Department follow_up shape (jsonb):
-#   { "enabled": true, "message": "...", "delay_minutes": 60 (interval between nudges),
-#     "max_followups": 3 (after this many with no reply, hand to a human; 0 = unlimited),
-#     "when_agents_online": false (skip if a human is already handling, unless true),
-#     "window_start": "08:00", "window_end": "18:00" (only send within this window; blank = always) }
+# department.follow_up shape (jsonb):
+#   { "instructions": "...",
+#     "behaviors": [ { "context": "inbox_hours" | "outside_hours" | "custom",
+#                      "windows": [ { "start": "08:00", "end": "18:00" } ],   # custom only
+#                      "attempts": [ { "delay_minutes": 10, "message": "..." }, ... ],
+#                      "no_response_action": "assign" | "finalize" | "discard" | "wait" | "wait_business_hours" } ] }
+#
+# department.close_rules: { "message": "...", "inactivity_minutes": 30 }
+#
+# Rules: 1 behavior per fixed context (inbox_hours/outside_hours), custom unlimited. The active
+# behavior is the first whose context matches NOW. After the last attempt + the inactivity window,
+# the behavior's action fires once (idempotent via a 'followup.action' event).
 class Ai::FollowupSweepJob < ApplicationJob
   queue_as :low
+
+  DEFAULT_INACTIVITY = 30
 
   def perform
     Ai::AgentInbox.live.includes(agent: :account).find_each do |binding|
@@ -17,67 +25,171 @@ class Ai::FollowupSweepJob < ApplicationJob
       department = binding.agent.departments.active.first
       next if department.nil?
 
-      follow_up = department.follow_up.to_h
-      next unless follow_up['enabled'] && follow_up['message'].present?
+      behaviors = Array(department.follow_up.to_h['behaviors'])
+      next if behaviors.empty?
 
-      interval = follow_up['delay_minutes'].to_i
-      next unless interval.positive?
-      next unless within_window?(follow_up)
-
-      sweep(binding, department, follow_up, interval)
+      sweep(binding, department, behaviors)
     end
   end
 
   private
 
-  def sweep(binding, department, follow_up, interval)
+  def sweep(binding, department, behaviors)
     account_id = binding.agent.account_id
-    Conversation.where(inbox_id: binding.inbox_id, status: :open)
-                .where('last_activity_at < ?', interval.minutes.ago)
-                .find_each do |conversation|
-      next unless awaiting_customer?(conversation)
-      next if conversation.assignee_id.present? && !follow_up['when_agents_online']
+    inbox = ::Inbox.find_by(id: binding.inbox_id)
+    return if inbox.nil?
 
-      sent = followups_since_incoming(conversation)
-      max = follow_up['max_followups'].to_i
-      if max.positive? && sent.count >= max
-        hand_off(conversation, account_id)
-        next
-      end
-
-      # Space successive nudges by the interval (measured from the last nudge, or last activity).
-      last_at = sent.maximum(:created_at) || conversation.last_activity_at
-      next if last_at && last_at > interval.minutes.ago
-
-      send_follow_up(binding, department, follow_up, conversation, account_id)
+    Conversation.where(inbox_id: binding.inbox_id, status: :open).find_each do |conversation|
+      process(binding, department, behaviors, inbox, conversation, account_id)
     rescue StandardError => e
       Rails.logger.error "[Ai::FollowupSweepJob] conv=#{conversation.id} #{e.class}: #{e.message}"
     end
   end
 
-  def send_follow_up(binding, department, follow_up, conversation, account_id)
-    if Ai::ReplyPolicy.allowed?(mode: binding.mode, department: department, conversation: conversation)
-      Messages::MessageBuilder.new(nil, conversation, { content: follow_up['message'], private: false }).perform
-      emit(account_id, conversation.id, 'followup.sent', { chars: follow_up['message'].to_s.length })
+  def process(binding, department, behaviors, inbox, conversation, account_id)
+    return unless awaiting_customer?(conversation)
+    return if conversation.assignee_id.present? # a human already took over
+    return if acted?(conversation) # terminal action already fired in this silence
+
+    behavior = active_behavior(behaviors, inbox)
+    return if behavior.nil? # no behavior applies at this time
+
+    attempts = Array(behavior['attempts'])
+    sent = followups_since_incoming(conversation)
+
+    if sent.count < attempts.size
+      maybe_send_attempt(binding, department, attempts, sent, conversation, account_id)
     else
-      reason = Ai::ReplyPolicy.skip_reason(mode: binding.mode, department: department, conversation: conversation)
-      emit(account_id, conversation.id, 'followup.intended', { executed: false, reason: reason })
+      maybe_run_action(department, behavior, inbox, conversation, account_id, sent)
     end
   end
 
-  # After the configured number of unanswered follow-ups, stop nudging and flag the conversation
-  # for a human (unassign so it returns to the queue). Recorded so the team can act / report.
-  def hand_off(conversation, account_id)
-    incoming_at = last_incoming_at(conversation) || conversation.created_at
-    already = Ai::Event.where(conversation_id: conversation.id, event_type: 'followup.handoff')
-                       .where('created_at > ?', incoming_at).exists?
-    return if already
+  # --- Sending the next attempt ------------------------------------------------
 
-    conversation.update!(assignee_id: nil) if conversation.assignee_id.present?
-    emit(account_id, conversation.id, 'followup.handoff', { reason: 'max_followups_reached' })
+  def maybe_send_attempt(binding, department, attempts, sent, conversation, account_id)
+    index = sent.count
+    delay = attempts[index]['delay_minutes'].to_i
+    last_at = sent.maximum(:created_at) || last_incoming_at(conversation) || conversation.last_activity_at
+    return if last_at && last_at > delay.minutes.ago # not time yet
+
+    message = effective_message(attempts, index)
+    return if message.blank? # nothing to say (all messages empty up to here)
+
+    if Ai::ReplyPolicy.allowed?(mode: binding.mode, department: department, conversation: conversation)
+      Messages::MessageBuilder.new(nil, conversation, { content: message, private: false }).perform
+      emit(account_id, conversation.id, 'followup.sent', { index: index + 1, chars: message.length })
+    else
+      reason = Ai::ReplyPolicy.skip_reason(mode: binding.mode, department: department, conversation: conversation)
+      emit(account_id, conversation.id, 'followup.intended', { index: index + 1, executed: false, reason: reason })
+    end
   end
 
-  # We only nudge when the last real message was ours (the customer is the one who went quiet).
+  # Empty messages reuse the last non-empty message of the earlier attempts.
+  def effective_message(attempts, index)
+    attempts[0..index].reverse_each do |a|
+      msg = a['message'].to_s.strip
+      return msg if msg.present?
+    end
+    ''
+  end
+
+  # --- Action after the last attempt + inactivity window -----------------------
+
+  def maybe_run_action(department, behavior, inbox, conversation, account_id, sent)
+    inactivity = inactivity_minutes(department)
+    last_send = sent.maximum(:created_at)
+    return if last_send && last_send > inactivity.minutes.ago # still inside the inactivity window
+
+    run_action(behavior['no_response_action'].to_s, department, inbox, conversation, account_id)
+  end
+
+  def run_action(action, department, inbox, conversation, account_id)
+    case action
+    when 'finalize'
+      send_close_message(department, conversation)
+      conversation.update!(status: :resolved)
+      record_action(conversation, account_id, 'finalize')
+    when 'discard'
+      conversation.update!(status: :resolved)
+      record_action(conversation, account_id, 'discard')
+    when 'wait'
+      record_action(conversation, account_id, 'wait') # hold; recorded so we stop re-evaluating
+    when 'wait_business_hours'
+      # Hold until business hours, then assign to a human.
+      if business_hours_open?(inbox)
+        assign_to_human(conversation)
+        record_action(conversation, account_id, 'assign', via: 'wait_business_hours')
+      end
+    else # 'assign' (default)
+      assign_to_human(conversation)
+      record_action(conversation, account_id, 'assign')
+    end
+  end
+
+  def assign_to_human(conversation)
+    conversation.update!(assignee_id: nil) if conversation.assignee_id.present?
+  end
+
+  def send_close_message(department, conversation)
+    message = department.close_rules.to_h['message'].to_s.strip
+    return if message.blank?
+
+    Messages::MessageBuilder.new(nil, conversation, { content: message, private: false }).perform
+  end
+
+  def record_action(conversation, account_id, action, via: nil)
+    emit(account_id, conversation.id, 'followup.action', { action: action, via: via }.compact)
+  end
+
+  # --- Context / business hours ------------------------------------------------
+
+  # First behavior whose context matches NOW (custom may be several; order decides).
+  def active_behavior(behaviors, inbox)
+    inside = business_hours_open?(inbox)
+    behaviors.find do |b|
+      case b['context'].to_s
+      when 'inbox_hours' then inside
+      when 'outside_hours' then !inside
+      when 'custom' then within_custom_window?(b['windows'], inbox)
+      else false
+      end
+    end
+  end
+
+  def business_hours_open?(inbox)
+    inbox.respond_to?(:available_now?) ? inbox.available_now? : true
+  rescue StandardError
+    true
+  end
+
+  def within_custom_window?(windows, inbox)
+    return false if windows.blank?
+
+    now = current_hm(inbox)
+    Array(windows).any? do |w|
+      start_at = w['start'].to_s
+      end_at = w['end'].to_s
+      next false if start_at.blank? || end_at.blank?
+
+      start_at <= end_at ? now.between?(start_at, end_at) : (now >= start_at || now <= end_at)
+    end
+  end
+
+  def current_hm(inbox)
+    tz = inbox.respond_to?(:timezone) ? inbox.timezone : nil
+    (tz.present? ? Time.current.in_time_zone(tz) : Time.current).strftime('%H:%M')
+  rescue StandardError
+    Time.current.strftime('%H:%M')
+  end
+
+  def inactivity_minutes(department)
+    minutes = department.close_rules.to_h['inactivity_minutes'].to_i
+    minutes.positive? ? minutes : DEFAULT_INACTIVITY
+  end
+
+  # --- Conversation state helpers ----------------------------------------------
+
+  # We only resume when the last real message was ours (the customer went quiet).
   def awaiting_customer?(conversation)
     last = conversation.messages.where(message_type: %i[incoming outgoing]).order(:created_at).last
     last&.outgoing?
@@ -94,14 +206,11 @@ class Ai::FollowupSweepJob < ApplicationJob
     incoming_at ? scope.where('created_at > ?', incoming_at) : scope
   end
 
-  # Restrict sends to the configured time window (server time). Supports overnight ranges.
-  def within_window?(follow_up)
-    start_at = follow_up['window_start'].to_s
-    end_at = follow_up['window_end'].to_s
-    return true if start_at.blank? || end_at.blank?
-
-    now = Time.current.strftime('%H:%M')
-    start_at <= end_at ? now.between?(start_at, end_at) : (now >= start_at || now <= end_at)
+  # A terminal action already fired in this silence — don't act again.
+  def acted?(conversation)
+    scope = Ai::Event.where(conversation_id: conversation.id, event_type: 'followup.action')
+    incoming_at = last_incoming_at(conversation)
+    incoming_at ? scope.where('created_at > ?', incoming_at).exists? : scope.exists?
   end
 
   def emit(account_id, conversation_id, type, payload)
