@@ -399,21 +399,21 @@ onMounted(() => {
           />
         </label>
         <div
-          class="flex flex-col gap-1 text-sm text-n-slate-12 [&_select]:!h-10 [&_select]:!py-0"
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
         >
           <span>{{ $t('AI_TOOLS.FORM.TYPE') }}</span>
           <Select v-model="form.implementation_type" :options="typeOptions" />
         </div>
         <div
           v-if="isCapability"
-          class="flex flex-col gap-1 text-sm text-n-slate-12 [&_select]:!h-10 [&_select]:!py-0"
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
         >
           <span>{{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}</span>
           <Select v-model="form.capability_key" :options="capabilityOptions" />
         </div>
         <div
           v-else-if="isIntegration"
-          class="flex flex-col gap-1 text-sm text-n-slate-12 [&_select]:!h-10 [&_select]:!py-0"
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
         >
           <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
           <Select
@@ -451,7 +451,9 @@ onMounted(() => {
                 class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
               />
             </label>
-            <div class="flex flex-col gap-1 [&_select]:!h-10 [&_select]:!py-0">
+            <div
+              class="flex flex-col gap-1 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
+            >
               <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_METHOD') }}</span>
               <Select v-model="form.webhook_method" :options="methodOptions" />
             </div>
@@ -526,7 +528,7 @@ onMounted(() => {
               class="flex-1 min-w-[8rem] h-10 px-3 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
             />
             <div
-              class="w-36 [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
+              class="w-36 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
             >
               <Select v-model="arg.type" :options="argTypeOptions" />
             </div>
