@@ -60,8 +60,8 @@ class Ai::Gateway
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
     result = Ai::ModelRouter.decide(
-      profile: @agent.operation_profile, system_prompt: system_prompt, user_message: effective_content,
-      account_id: @account.id
+      profile: @agent.operation_profile, system_prompt: system_prompt,
+      user_message: build_user_message(effective_content), account_id: @account.id
     )
     run_record.update!(
       provider: result[:provider], model: result[:model],
@@ -134,6 +134,25 @@ class Ai::Gateway
   end
 
   private
+
+  HISTORY_LIMIT = 12
+
+  # The model used to receive ONLY the latest message, so it re-asked things already answered
+  # (city/segment in a loop). Pair the current message with the recent transcript (everything up to
+  # our last reply) so it has the conversation context. The current customer burst is kept separate
+  # because grouping may join several messages into `current`.
+  def build_user_message(current)
+    last_out_id = @conversation.messages.outgoing.maximum(:id) || 0
+    history = @conversation.messages
+                           .where(message_type: %i[incoming outgoing])
+                           .where('messages.id <= ?', last_out_id)
+                           .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
+                           .map { |m| "#{m.incoming? ? 'Cliente' : 'Atendente'}: #{m.content.to_s.strip.first(500)}" }
+                           .reject { |line| line.end_with?(': ') }
+    return current if history.empty?
+
+    "Histórico recente da conversa:\n#{history.join("\n")}\n\nMensagem atual do cliente:\n#{current}"
+  end
 
   # Why an action was not executed: shadow binding, the department toggle off, or a missing tool.
   def not_acting_reason(tool = :present)
