@@ -8,11 +8,16 @@
 #                      "attempts": [ { "delay_minutes": 10, "message": "..." }, ... ],
 #                      "no_response_action": "assign" | "finalize" | "discard" | "wait" | "wait_business_hours" } ] }
 #
-# department.close_rules: { "message": "...", "inactivity_minutes": 30 }
+# department.close_rules: { "message": "...", "inactivity_minutes": 30,
+#                           "no_followup_actions": ["transfer_ai" | "transfer_human" | "wait" | "finalize"] }
 #
 # Rules: 1 behavior per fixed context (inbox_hours/outside_hours), custom unlimited. The active
 # behavior is the first whose context matches NOW. After the last attempt + the inactivity window,
 # the behavior's action fires once (idempotent via a 'followup.action' event).
+#
+# Fallback: when the department has NO follow-up behaviors at all, the inactivity window still
+# applies — once the customer is quiet for close_rules.inactivity_minutes, the first decision in
+# no_followup_actions (order = priority) fires once (same 'followup.action' idempotency).
 class Ai::FollowupSweepJob < ApplicationJob
   queue_as :low
 
@@ -26,30 +31,37 @@ class Ai::FollowupSweepJob < ApplicationJob
       next if department.nil?
 
       behaviors = Array(department.follow_up.to_h['behaviors'])
-      next if behaviors.empty?
+      fallback = fallback_actions(department)
+      next if behaviors.empty? && fallback.empty?
 
-      sweep(binding, department, behaviors)
+      sweep(binding, department, behaviors, fallback)
     end
   end
 
   private
 
-  def sweep(binding, department, behaviors)
+  def sweep(binding, department, behaviors, fallback)
     account_id = binding.agent.account_id
     inbox = ::Inbox.find_by(id: binding.inbox_id)
     return if inbox.nil?
 
     Conversation.where(inbox_id: binding.inbox_id, status: :open).find_each do |conversation|
-      process(binding, department, behaviors, inbox, conversation, account_id)
+      process(binding, department, behaviors, fallback, inbox, conversation, account_id)
     rescue StandardError => e
       Rails.logger.error "[Ai::FollowupSweepJob] conv=#{conversation.id} #{e.class}: #{e.message}"
     end
   end
 
-  def process(binding, department, behaviors, inbox, conversation, account_id)
+  def process(binding, department, behaviors, fallback, inbox, conversation, account_id)
     return unless awaiting_customer?(conversation)
     return if conversation.assignee_id.present? # a human already took over
     return if acted?(conversation) # terminal action already fired in this silence
+
+    # No follow-up configured: skip straight to the no-follow-up decision (close_rules).
+    if behaviors.empty?
+      maybe_run_fallback(department, fallback, inbox, conversation, account_id)
+      return
+    end
 
     behavior = active_behavior(behaviors, inbox)
     return if behavior.nil? # no behavior applies at this time
@@ -126,6 +138,44 @@ class Ai::FollowupSweepJob < ApplicationJob
     end
   end
 
+  # --- Fallback: no follow-up configured (close_rules.no_followup_actions) ------
+
+  # Ordered list of decisions for when the inactivity window passes and there is no
+  # follow-up to fire. Order = priority; the first one wins.
+  def fallback_actions(department)
+    Array(department.close_rules.to_h['no_followup_actions']).map(&:to_s).select(&:present?)
+  end
+
+  def maybe_run_fallback(department, fallback, inbox, conversation, account_id)
+    action = fallback.first
+    return if action.blank?
+
+    quiet_at = quiet_since(conversation)
+    inactivity = inactivity_minutes(department)
+    return if quiet_at && quiet_at > inactivity.minutes.ago # still inside the inactivity window
+
+    run_fallback_action(action, department, inbox, conversation, account_id)
+  end
+
+  def run_fallback_action(action, department, inbox, conversation, account_id)
+    case action
+    when 'finalize'
+      send_close_message(department, conversation)
+      conversation.update!(status: :resolved)
+      record_action(conversation, account_id, 'finalize', via: 'no_followup')
+    when 'transfer_human'
+      assign_to_human(conversation)
+      record_action(conversation, account_id, 'transfer_human', via: 'no_followup')
+    when 'transfer_ai'
+      # Keep the AI in control: no human handoff, conversation stays open so the AI
+      # answers on the customer's next message. Hook point for a future proactive
+      # Ai::Gateway re-invocation.
+      record_action(conversation, account_id, 'transfer_ai', via: 'no_followup')
+    else # 'wait'
+      record_action(conversation, account_id, 'wait', via: 'no_followup')
+    end
+  end
+
   def assign_to_human(conversation)
     conversation.update!(assignee_id: nil) if conversation.assignee_id.present?
   end
@@ -197,6 +247,13 @@ class Ai::FollowupSweepJob < ApplicationJob
 
   def last_incoming_at(conversation)
     conversation.messages.incoming.maximum(:created_at)
+  end
+
+  # When the customer went quiet: the last real message (which, given awaiting_customer?,
+  # is ours). Used as the inactivity reference for the no-follow-up fallback.
+  def quiet_since(conversation)
+    conversation.messages.where(message_type: %i[incoming outgoing]).maximum(:created_at) ||
+      conversation.last_activity_at
   end
 
   # Follow-ups already sent in this silence (since the customer's last incoming message).

@@ -70,4 +70,18 @@ RSpec.describe Ai::FollowupSweepJob do
       expect(job.send(:inactivity_minutes, dept)).to eq(15)
     end
   end
+
+  describe '#fallback_actions' do
+    it 'reads the ordered no_followup_actions list (order = priority)' do
+      dept = instance_double(Ai::Department,
+                             close_rules: { 'no_followup_actions' => ['transfer_human', 'finalize'] })
+      expect(job.send(:fallback_actions, dept)).to eq(%w[transfer_human finalize])
+    end
+
+    it 'drops blanks and is empty when unset' do
+      dept = instance_double(Ai::Department, close_rules: { 'no_followup_actions' => ['', 'wait'] })
+      expect(job.send(:fallback_actions, dept)).to eq(['wait'])
+      expect(job.send(:fallback_actions, instance_double(Ai::Department, close_rules: {}))).to eq([])
+    end
+  end
 end
