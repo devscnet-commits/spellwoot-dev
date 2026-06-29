@@ -110,6 +110,9 @@ class Ai::Gateway
       # Try AI->AI routing first (to an allowed agent); otherwise hand to a human.
       routed = @acts_live && route_to_ai(result[:decision] || {}, run_record)
       unless routed
+        # Tell the customer we're handing off (the model's "transferindo você..." text), THEN
+        # transfer (reopen + unassign for a human). Without the reply the customer saw silence.
+        handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
         handle_action('conversation.transfer', { 'unassign' => true }, run_record, 'handoff', extra: { reason: handoff[:reason] })
       end
     elsif decision_kind == 'close'
