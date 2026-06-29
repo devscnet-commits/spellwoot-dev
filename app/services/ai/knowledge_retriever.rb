@@ -2,7 +2,10 @@
 # (no dependency on the Captain domain). Degrades to a simple text match if embeddings are
 # unavailable, so the pipeline always records what it retrieved.
 class Ai::KnowledgeRetriever
-  TOP_K = 3
+  # Quantos trechos de conhecimento entram no contexto. Baixo demais faz a IA "esconder" itens de
+  # listas (ex.: só 3 planos de vários). Para listas completas (planos), prefira consolidar tudo num
+  # único item de conhecimento ou no prompt — RAG por similaridade não garante trazer todos.
+  TOP_K = 6
 
   def self.retrieve(query:, account_id:)
     retrieve_scored(query: query, account_id: account_id)[:chunks]
