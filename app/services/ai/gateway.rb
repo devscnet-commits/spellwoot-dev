@@ -113,7 +113,10 @@ class Ai::Gateway
         # Tell the customer we're handing off (the model's "transferindo você..." text), THEN
         # transfer (reopen + unassign for a human). Without the reply the customer saw silence.
         handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
-        handle_action('conversation.transfer', { 'unassign' => true }, run_record, 'handoff', extra: { reason: handoff[:reason] })
+        team_id = handoff_team_id(result[:decision] || {})
+        input = { 'unassign' => true }
+        input['team_id'] = team_id if team_id # roteia para o time; senão mantém o atual
+        handle_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: handoff[:reason], team_id: team_id })
       end
     elsif decision_kind == 'close'
       handle_action('conversation.resolve', {}, run_record, 'close')
@@ -276,6 +279,19 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#route_to_ai] #{e.class}: #{e.message}"
     false
+  end
+
+  # Human handoff routing: resolve the destination TEAM from the model's handoff_target (matched by
+  # team name in this account). Returns nil when there's no match — then the transfer keeps the
+  # conversation's current team and just unassigns (native auto-assignment picks a human).
+  def handoff_team_id(decision)
+    name = decision['handoff_target'].to_s.strip
+    return nil if name.blank?
+
+    ::Team.where(account_id: @account.id).find { |team| team.name.to_s.casecmp?(name) }&.id
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#handoff_team_id] #{e.class}: #{e.message}"
+    nil
   end
 
   # Number of AI replies already sent in this conversation (across runs/agents).
