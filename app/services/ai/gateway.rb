@@ -342,13 +342,13 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#assign_human] #{e.class}: #{e.message}"
   end
 
-  # Marca que a IA entregou: a partir daqui a auto-atribuição nativa volta a considerar a conversa.
+  # Marca que a IA entregou e GARANTE status 'open': a partir daqui a auto-atribuição considera a
+  # conversa. Reabre porque uma automação de "marcar como pendente" (ou o fluxo de bot) pode tê-la
+  # deixado em pending — e a atribuição só pega 'open'.
   def mark_handed_off
     attrs = @conversation.additional_attributes || {}
-    return if attrs['ai_handoff']
-
     attrs['ai_handoff'] = true
-    @conversation.update!(additional_attributes: attrs)
+    @conversation.update!(additional_attributes: attrs, status: :open)
   end
 
   def team_assignable_ids(team_id)
