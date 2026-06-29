@@ -217,6 +217,19 @@ class Conversation < ApplicationRecord
     inbox.inbox_type == 'Twitter' && additional_attributes['type'] == 'tweet'
   end
 
+  # A IA é um "agente" próprio: numa caixa com IA live ativa, a conversa pertence à IA até ela
+  # fazer o handoff. A auto-atribuição de humanos deve PULAR essas conversas (não pegar na criação)
+  # e só agir depois que a IA entregar — o handoff marca additional_attributes['ai_handoff'].
+  def ai_assistant_active?
+    return false unless account.feature_enabled?('ai_core')
+
+    Ai::AgentInbox.where(inbox_id: inbox_id, mode: 'live', active: true).exists?
+  end
+
+  def ai_pending_handoff?
+    ai_assistant_active? && !additional_attributes.to_h['ai_handoff']
+  end
+
   def recent_messages
     messages.chat.last(5)
   end

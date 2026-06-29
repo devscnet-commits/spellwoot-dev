@@ -298,22 +298,39 @@ class Ai::Gateway
     nil
   end
 
-  # Atribuição feita DEPOIS do trabalho da IA (no handoff): escolhe um agente ONLINE por round-robin
-  # entre os membros do time (ou da caixa, se não houver time) e atribui. Usa o serviço nativo, que
-  # não depende do toggle de auto-atribuição da caixa — então a caixa pode ficar com auto-assign OFF
-  # (IA atende primeiro) e o humano só entra aqui. Sem agente online, a conversa fica na fila.
+  # Atribuição feita DEPOIS do trabalho da IA (no handoff). A auto-atribuição da caixa pode ficar
+  # LIGADA: enquanto a IA cuida, `ai_pending_handoff?` faz a atribuição nativa pular a conversa.
+  # Aqui marcamos o handoff (vira elegível) e disparamos a atribuição NATIVA — respeitando as
+  # políticas/capacidade dos agentes humanos (job v2 se habilitado; senão round-robin legado).
   def assign_human(team_id, run_record)
-    allowed = if team_id
-                ::Team.find_by(id: team_id, account_id: @account.id)&.members&.ids
-              else
-                @conversation.inbox.members.ids
-              end
-    return if allowed.blank?
-
-    AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
-    emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
+    mark_handed_off
+    inbox = @conversation.inbox
+    if inbox.auto_assignment_v2_enabled?
+      AutoAssignment::AssignmentJob.perform_later(inbox_id: inbox.id)
+      emit(run_record, 'handoff.assign_enqueued', { team_id: team_id, mode: 'v2' })
+    else
+      allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
+      AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
+      emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
+    end
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#assign_human] #{e.class}: #{e.message}"
+  end
+
+  # Marca que a IA entregou: a partir daqui a auto-atribuição nativa volta a considerar a conversa.
+  def mark_handed_off
+    attrs = @conversation.additional_attributes || {}
+    return if attrs['ai_handoff']
+
+    attrs['ai_handoff'] = true
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  def team_assignable_ids(team_id)
+    team = ::Team.find_by(id: team_id, account_id: @account.id)
+    return [] if team.nil?
+
+    @conversation.inbox.member_ids_with_assignment_capacity & team.members.ids
   end
 
   # Number of AI replies already sent in this conversation (across runs/agents).
