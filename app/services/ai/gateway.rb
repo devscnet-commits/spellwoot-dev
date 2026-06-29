@@ -328,8 +328,11 @@ class Ai::Gateway
     mark_handed_off
     inbox = @conversation.inbox
     if inbox.auto_assignment_v2_enabled?
-      AutoAssignment::AssignmentJob.perform_later(inbox_id: inbox.id)
-      emit(run_record, 'handoff.assign_enqueued', { team_id: team_id, mode: 'v2' })
+      # SÍNCRONO (não enfileira): atribui na hora com o estado online do momento do handoff,
+      # evitando a janela em que a presença do agente oscila até o job assíncrono rodar. O job
+      # periódico continua como rede de segurança se ninguém estiver online agora.
+      AutoAssignment::AssignmentService.new(inbox: inbox).perform_bulk_assignment
+      emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id, mode: 'v2' })
     else
       allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
       AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
