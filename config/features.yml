@@ -237,10 +237,14 @@
   display_name: Required Conversation Attributes
   enabled: false
   premium: true
+# IMPORTANTE: ai_core precisa ficar dentro dos 63 primeiros slots. feature_flags é um
+# bigint (FlagShihTzu = 1 bit por feature) e só comporta 63 features; a 64ª usaria o bit
+# 2^63 e estoura o bigint (ActiveModel::RangeError ao salvar). Por isso ai_core fica ANTES
+# de advanced_assignment (premium, não usada neste fork), que herda o slot 64 inutilizável.
+- name: ai_core
+  display_name: AI Core (Agentes IA)
+  enabled: false
 - name: advanced_assignment
   display_name: Advanced Assignment
   enabled: false
   premium: true
-- name: ai_core
-  display_name: AI Core (Agentes IA)
-  enabled: false
