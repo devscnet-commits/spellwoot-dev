@@ -499,8 +499,8 @@ onMounted(fetchSources);
             {{ rawLabel }}
             <textarea
               v-model="form.raw"
-              rows="8"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+              rows="10"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-40 max-h-[70vh]"
             />
           </label>
           <label
