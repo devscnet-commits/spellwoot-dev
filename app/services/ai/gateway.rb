@@ -56,7 +56,8 @@ class Ai::Gateway
     tools  = department.tools.active.to_a
     system_prompt = Ai::PromptCompiler.compile(
       agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
-      collected: @conversation.contact&.custom_attributes || {}
+      collected: (@conversation.contact&.custom_attributes || {})
+        .merge(@conversation.custom_attributes || {})
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
@@ -77,6 +78,9 @@ class Ai::Gateway
 
     # Track which step the conversation is on so message grouping can use that step's delay.
     track_step(department, result[:decision] || {}) if @acts_live
+    # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
+    # devolveu em `attributes`. Assim os campos vão sendo alimentados e reaproveitados (não repergunta).
+    persist_attributes(run_record, (result[:decision] || {})['attributes']) if @acts_live
 
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
     # which executes the tool immediately (tools are autonomous).
@@ -160,6 +164,23 @@ class Ai::Gateway
     return current if history.empty?
 
     "Histórico recente da conversa:\n#{history.join("\n")}\n\nMensagem atual do cliente:\n#{current}"
+  end
+
+  # Persiste nos atributos da conversa os dados que o modelo coletou (campo `attributes` da decisão).
+  # Merge, ignora vazios e no-ops. Na próxima volta o PromptCompiler injeta como "Dados já coletados".
+  def persist_attributes(run_record, attrs)
+    return unless attrs.is_a?(Hash)
+
+    cleaned = attrs.reject { |_k, v| v.to_s.strip.empty? }
+    return if cleaned.empty?
+
+    merged = (@conversation.custom_attributes || {}).merge(cleaned)
+    return if merged == @conversation.custom_attributes
+
+    @conversation.update!(custom_attributes: merged)
+    emit(run_record, 'attributes.updated', { keys: cleaned.keys })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#persist_attributes] #{e.class}: #{e.message}"
   end
 
   # Why an action was not executed: shadow binding, the department toggle off, or a missing tool.

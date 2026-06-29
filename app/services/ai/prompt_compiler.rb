@@ -24,7 +24,9 @@ class Ai::PromptCompiler
     lead_vars = department.lead_variables.to_a
     if lead_vars.present?
       lines = lead_vars.map { |v| "- #{v.name} (#{v.var_type})#{v.description.present? ? ": #{v.description}" : ''}" }
-      parts << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}"
+      parts << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}\n" \
+               "Sempre que o cliente informar um destes dados, inclua-o no campo \"attributes\" do JSON " \
+               "usando a CHAVE exata do nome acima (ex.: {\"cidade\":\"Maravilha\"}). Não invente — só o que o cliente disse."
     end
 
     # Dados que já temos deste cliente (atributos do contato). A IA deve USÁ-LOS e NÃO perguntar de
@@ -98,7 +100,8 @@ class Ai::PromptCompiler
   def self.response_contract
     <<~TXT.strip
       Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
-      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","current_step":"","confidence":0.0}
+      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","current_step":"","confidence":0.0,"attributes":{}}
+      Em "attributes", coloque os dados coletados do cliente (chave: valor); deixe {} se não houver nada novo.
     TXT
   end
 end
