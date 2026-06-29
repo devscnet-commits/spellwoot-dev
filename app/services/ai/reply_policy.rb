@@ -12,6 +12,8 @@ class Ai::ReplyPolicy
     # Convive com o roteamento humano: se um agente já assumiu (assignee), a IA observa mas
     # NÃO envia (resposta/ferramenta/handoff) — não fala por cima do humano. Shadow segue observando.
     return false if conversation.assignee_id.present?
+    # Já entregue a um humano (handoff): a IA sai de cena mesmo antes de a atribuição concluir.
+    return false if conversation.additional_attributes.to_h['ai_handoff']
 
     behavior = department.behavior.to_h
     scope = behavior['reply_scope']
@@ -40,6 +42,7 @@ class Ai::ReplyPolicy
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, department)
     return 'human_assigned' if conversation.assignee_id.present?
+    return 'handed_off' if conversation.additional_attributes.to_h['ai_handoff']
 
     behavior = department.behavior.to_h
     scope = behavior['reply_scope']

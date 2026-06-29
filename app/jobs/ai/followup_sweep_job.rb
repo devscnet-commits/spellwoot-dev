@@ -57,6 +57,8 @@ class Ai::FollowupSweepJob < ApplicationJob
   def process(binding, department, behaviors, fallback, inbox, conversation, account_id)
     return unless awaiting_customer?(conversation)
     return if conversation.assignee_id.present? # a human already took over
+    # Já entregue a um humano (handoff): a IA/follow-up saem de cena — não retomam nem finalizam.
+    return if conversation.additional_attributes.to_h['ai_handoff']
     return if acted?(conversation) # terminal action already fired in this silence
 
     # No follow-up configured: skip straight to the no-follow-up decision (close_rules).
