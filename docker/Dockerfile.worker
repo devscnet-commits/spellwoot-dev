@@ -66,6 +66,11 @@ COPY Gemfile Gemfile.lock ./
 RUN apk update && apk add --no-cache build-base musl ruby-full ruby-dev gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips libxml2-dev libxslt-dev zlib-dev
 RUN bundle config set --local force_ruby_platform true
 
+# O gem `datadog` compila uma extensão nativa de profiling (libdatadog) que falha/estoura a
+# memória ao ser construída no Alpine/musl (force_ruby_platform obriga build do source). Pulamos
+# essa extensão: o tracing segue funcionando; só o profiling nativo (não usado) fica de fora.
+ENV DD_PROFILING_NO_EXTENSION=true
+
 # Do not install development or test gems in production
 RUN if [ "$RAILS_ENV" = "production" ]; then \
   bundle config set without 'development test'; bundle install -j 4 -r 3; \
