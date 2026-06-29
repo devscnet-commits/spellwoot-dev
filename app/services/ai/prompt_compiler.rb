@@ -1,7 +1,7 @@
 # Compiles the final system prompt from structured config (identity + playbook + knowledge +
 # tools + memory). The user never writes this — they fill structure, we generate the prompt.
 class Ai::PromptCompiler
-  def self.compile(agent:, department:, knowledge:, memory:, tools:)
+  def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {})
     parts = []
     parts.concat(identity_lines(agent))
     parts << agent.base_prompt if agent.base_prompt.present?
@@ -25,6 +25,14 @@ class Ai::PromptCompiler
     if lead_vars.present?
       lines = lead_vars.map { |v| "- #{v.name} (#{v.var_type})#{v.description.present? ? ": #{v.description}" : ''}" }
       parts << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}"
+    end
+
+    # Dados que já temos deste cliente (atributos do contato). A IA deve USÁ-LOS e NÃO perguntar de
+    # novo — só pedir o que ainda falta. Sem isso, ela repergunta o que já foi informado.
+    already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
+    if already.present?
+      lines = already.map { |k, v| "- #{k}: #{v}" }
+      parts << "Dados JÁ coletados deste cliente (use-os; NÃO pergunte de novo):\n#{lines.join("\n")}"
     end
 
     if tools.present?
