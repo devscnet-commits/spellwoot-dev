@@ -604,6 +604,17 @@
       "CANCEL": "Cancelar",
       "PLACEHOLDER": "Digite {name} para confirmar"
     },
+    "BULK": {
+      "SELECT_ALL": "Selecionar todos",
+      "CLEAR": "Limpar seleção",
+      "SELECTED": "{count} selecionado(s)",
+      "DELETE": "Excluir selecionados",
+      "CONFIRM_TITLE": "Excluir conhecimentos selecionados",
+      "CONFIRM_MESSAGE": "Tem certeza que deseja excluir {count} item(ns)? Esta ação não pode ser desfeita.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "DELETED": "{count} conhecimento(s) excluído(s)."
+    },
     "SOURCES": {
       "LABEL": "O que você quer ensinar?",
       "FAQ": "FAQ",

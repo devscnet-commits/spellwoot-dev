@@ -298,6 +298,41 @@ const confirmRemove = async () => {
   }
 };
 
+// Seleção em massa: marcar vários e excluir de uma vez (sem digitar o texto a cada item).
+const selectedIds = ref([]);
+const isSelected = id => selectedIds.value.includes(id);
+const toggleSelect = id => {
+  const i = selectedIds.value.indexOf(id);
+  if (i >= 0) selectedIds.value.splice(i, 1);
+  else selectedIds.value.push(id);
+};
+const clearSelection = () => {
+  selectedIds.value = [];
+};
+const allSelected = computed(
+  () =>
+    sources.value.length > 0 &&
+    selectedIds.value.length === sources.value.length
+);
+const toggleSelectAll = () => {
+  selectedIds.value = allSelected.value ? [] : sources.value.map(s => s.id);
+};
+
+const bulkDeleteOpen = ref(false);
+const confirmBulkRemove = async () => {
+  const ids = [...selectedIds.value];
+  try {
+    await Promise.all(ids.map(id => axios.delete(`${baseUrl()}/${id}`)));
+    useAlert(t('AI_KNOWLEDGE.BULK.DELETED', { count: ids.length }));
+  } catch (error) {
+    useAlert(t('AI_KNOWLEDGE.ERROR'));
+  } finally {
+    bulkDeleteOpen.value = false;
+    clearSelection();
+    fetchSources();
+  }
+};
+
 onMounted(fetchSources);
 </script>
 
@@ -448,6 +483,39 @@ onMounted(fetchSources);
           @cancel="closeForm"
         />
 
+        <!-- Seleção em massa -->
+        <div
+          v-if="sources.length"
+          class="flex items-center justify-between gap-3 flex-wrap"
+        >
+          <label
+            class="inline-flex items-center gap-2 text-sm text-n-slate-11 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              :checked="allSelected"
+              class="size-4 cursor-pointer"
+              @change="toggleSelectAll"
+            />
+            {{ $t('AI_KNOWLEDGE.BULK.SELECT_ALL') }}
+          </label>
+          <div v-if="selectedIds.length" class="flex items-center gap-3">
+            <span class="text-xs text-n-slate-11">
+              {{
+                $t('AI_KNOWLEDGE.BULK.SELECTED', { count: selectedIds.length })
+              }}
+            </span>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg bg-n-ruby-9 text-white hover:bg-n-ruby-10"
+              @click="bulkDeleteOpen = true"
+            >
+              <span class="i-lucide-trash-2 size-4" />
+              {{ $t('AI_KNOWLEDGE.BULK.DELETE') }}
+            </button>
+          </div>
+        </div>
+
         <div
           v-if="sources.length"
           class="grid grid-cols-1 sm:grid-cols-2 gap-3"
@@ -468,14 +536,26 @@ onMounted(fetchSources);
             />
             <div
               v-else
-              class="group rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-2"
+              class="group rounded-xl border bg-n-solid-1 p-4 flex flex-col gap-2"
+              :class="
+                isSelected(source.id) ? 'border-n-brand' : 'border-n-weak'
+              "
             >
               <div class="flex items-start justify-between gap-2">
-                <span
-                  class="shrink-0 size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center"
-                >
-                  <span :class="kindIcon(source.kind)" class="size-5" />
-                </span>
+                <div class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    :checked="isSelected(source.id)"
+                    class="size-4 cursor-pointer"
+                    :aria-label="$t('AI_KNOWLEDGE.BULK.SELECT_ALL')"
+                    @change="toggleSelect(source.id)"
+                  />
+                  <span
+                    class="shrink-0 size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center"
+                  >
+                    <span :class="kindIcon(source.kind)" class="size-5" />
+                  </span>
+                </div>
                 <div
                   class="shrink-0 flex items-center gap-1 text-n-slate-11 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
@@ -543,6 +623,20 @@ onMounted(fetchSources);
           "
           @on-confirm="confirmRemove"
           @on-close="deleteTarget = null"
+        />
+
+        <woot-delete-modal
+          v-model:show="bulkDeleteOpen"
+          :on-close="() => (bulkDeleteOpen = false)"
+          :on-confirm="confirmBulkRemove"
+          :title="$t('AI_KNOWLEDGE.BULK.CONFIRM_TITLE')"
+          :message="
+            $t('AI_KNOWLEDGE.BULK.CONFIRM_MESSAGE', {
+              count: selectedIds.length,
+            })
+          "
+          :confirm-text="$t('AI_KNOWLEDGE.BULK.CONFIRM')"
+          :reject-text="$t('AI_KNOWLEDGE.BULK.CANCEL')"
         />
       </section>
     </div>
