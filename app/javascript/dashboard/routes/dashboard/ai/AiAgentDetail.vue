@@ -893,6 +893,8 @@ onMounted(async () => {
                   v-model="agentForm.base_prompt"
                   :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
                   :max-length="4000"
+                  resize
+                  custom-text-area-class="min-h-40 resize-y"
                 />
                 <p class="text-xs text-n-slate-11 mb-0">
                   {{ $t('AI_AGENTS.FORM.BASE_PROMPT_HINT') }}
@@ -903,6 +905,8 @@ onMounted(async () => {
                   v-model="agentForm.guardrails"
                   :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
                   :max-length="2000"
+                  resize
+                  custom-text-area-class="min-h-40 resize-y"
                 />
                 <p class="text-xs text-n-slate-11 mb-0">
                   {{ $t('AI_AGENTS.FORM.GUARDRAILS_HINT') }}
