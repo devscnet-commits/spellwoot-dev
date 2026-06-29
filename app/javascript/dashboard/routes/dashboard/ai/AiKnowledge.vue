@@ -148,8 +148,18 @@ const rowsToSources = (rows, kind) => {
     .filter(Boolean);
 };
 
+// Lê o arquivo respeitando acentuação: tenta UTF-8 e, se vier caractere de
+// substituição (�), reinterpreta como Windows-1252/ISO-8859-1 (padrão do Excel no BR).
+const decodeFileText = async file => {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const utf8 = new TextDecoder('utf-8').decode(bytes);
+  return utf8.includes('�')
+    ? new TextDecoder('windows-1252').decode(bytes)
+    : utf8;
+};
+
 const importCsv = async file => {
-  const text = await file.text();
+  const text = await decodeFileText(file);
   const entries = rowsToSources(parseCsv(text), importKind.value);
   if (!entries.length) {
     useAlert(t('AI_KNOWLEDGE.IMPORT_EMPTY'));
@@ -196,7 +206,8 @@ const downloadModel = () => {
   const csv = `${IMPORT_COLUMNS[kind].join(',')}\n${IMPORT_EXAMPLES[kind]
     .map(v => `"${v}"`)
     .join(',')}\n`;
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  // BOM UTF-8 para o Excel abrir os acentos corretamente (e devolver UTF-8 ao reimportar).
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

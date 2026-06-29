@@ -61,7 +61,18 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     raise UploadError, 'Formato não suportado. Use TXT ou CSV.' unless ALLOWED_UPLOAD_EXTENSIONS.include?(ext)
 
     { kind: 'documento', title: File.basename(file.original_filename.to_s, ext),
-      raw: file.read.to_s.encode('UTF-8', invalid: :replace, undef: :replace), status: 'active' }
+      raw: decode_text(file.read), status: 'active' }
+  end
+
+  # Preserva acentuação: o upload vem como bytes (ASCII-8BIT). Usa como UTF-8 quando válido;
+  # senão assume Windows-1252/ISO-8859-1 (padrão de planilhas/Excel no BR) e transcodifica.
+  # (O encode direto de binário->UTF-8 com :replace destruía os acentos, virando "?".)
+  def decode_text(bytes)
+    raw = bytes.to_s
+    utf8 = raw.dup.force_encoding('UTF-8')
+    return utf8 if utf8.valid_encoding?
+
+    raw.dup.force_encoding('Windows-1252').encode('UTF-8', invalid: :replace, undef: :replace)
   end
 
   def ingest(source)
