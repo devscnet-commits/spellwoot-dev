@@ -6,6 +6,7 @@ import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
+import KnowledgeSourceForm from './KnowledgeSourceForm.vue';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -35,7 +36,8 @@ const CREATABLE = [
 
 const sources = ref([]);
 const isLoading = ref(false);
-const showForm = ref(false);
+const showForm = ref(false); // formulário de criação (acima da lista)
+const editingId = ref(null); // id da fonte em edição inline (no próprio card)
 
 const blank = () => ({
   id: null,
@@ -241,14 +243,21 @@ const addWebsite = async () => {
 
 const openNew = kind => {
   Object.assign(form, blank(), { kind });
+  editingId.value = null;
   showForm.value = true;
   capture();
 };
 
 const openEdit = source => {
   Object.assign(form, blank(), source);
-  showForm.value = true;
+  showForm.value = false;
+  editingId.value = source.id; // edita no próprio card
   capture();
+};
+
+const closeForm = () => {
+  showForm.value = false;
+  editingId.value = null;
 };
 
 const save = async () => {
@@ -268,7 +277,7 @@ const save = async () => {
       await axios.post(baseUrl(), payload);
     }
     useAlert(t('AI_KNOWLEDGE.SAVED'));
-    showForm.value = false;
+    closeForm();
     fetchSources();
   } catch (error) {
     useAlert(t('AI_KNOWLEDGE.ERROR'));
@@ -426,123 +435,93 @@ onMounted(fetchSources);
           </span>
         </div>
 
+        <!-- Criação: aparece no topo da lista (sem rolar) -->
+        <KnowledgeSourceForm
+          v-if="showForm"
+          v-model:form="form"
+          :title-label="titleLabel"
+          :raw-label="rawLabel"
+          :heading-label="kindLabel(form.kind)"
+          :heading-icon="kindIcon(form.kind)"
+          :disable-save="!isDirty"
+          @save="save"
+          @cancel="closeForm"
+        />
+
         <div
           v-if="sources.length"
           class="grid grid-cols-1 sm:grid-cols-2 gap-3"
         >
-          <div
-            v-for="source in sources"
-            :key="source.id"
-            class="group rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-2"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <span
-                class="shrink-0 size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center"
-              >
-                <span :class="kindIcon(source.kind)" class="size-5" />
-              </span>
-              <div
-                class="shrink-0 flex items-center gap-1 text-n-slate-11 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <button
-                  type="button"
-                  class="hover:text-n-slate-12"
-                  :aria-label="$t('AI_KNOWLEDGE.FORM.EDIT')"
-                  @click="openEdit(source)"
+          <template v-for="source in sources" :key="source.id">
+            <!-- Edição no próprio lugar do card -->
+            <KnowledgeSourceForm
+              v-if="editingId === source.id"
+              v-model:form="form"
+              class="sm:col-span-2"
+              :title-label="titleLabel"
+              :raw-label="rawLabel"
+              :heading-label="kindLabel(form.kind)"
+              :heading-icon="kindIcon(form.kind)"
+              :disable-save="!isDirty"
+              @save="save"
+              @cancel="closeForm"
+            />
+            <div
+              v-else
+              class="group rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-2"
+            >
+              <div class="flex items-start justify-between gap-2">
+                <span
+                  class="shrink-0 size-9 rounded-lg bg-n-brand/10 text-n-brand flex items-center justify-center"
                 >
-                  <span class="i-lucide-pencil size-4 inline-block" />
-                </button>
-                <button
-                  type="button"
-                  class="hover:text-n-ruby-11"
-                  :aria-label="$t('AI_KNOWLEDGE.FORM.DELETE')"
-                  @click="deleteTarget = source"
+                  <span :class="kindIcon(source.kind)" class="size-5" />
+                </span>
+                <div
+                  class="shrink-0 flex items-center gap-1 text-n-slate-11 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  <span class="i-lucide-trash-2 size-4 inline-block" />
-                </button>
+                  <button
+                    type="button"
+                    class="hover:text-n-slate-12"
+                    :aria-label="$t('AI_KNOWLEDGE.FORM.EDIT')"
+                    @click="openEdit(source)"
+                  >
+                    <span class="i-lucide-pencil size-4 inline-block" />
+                  </button>
+                  <button
+                    type="button"
+                    class="hover:text-n-ruby-11"
+                    :aria-label="$t('AI_KNOWLEDGE.FORM.DELETE')"
+                    @click="deleteTarget = source"
+                  >
+                    <span class="i-lucide-trash-2 size-4 inline-block" />
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="min-w-0">
-              <p class="text-sm font-medium text-n-slate-12 mb-0 truncate">
-                {{ source.title || kindLabel(source.kind) }}
-              </p>
-              <p
-                v-if="source.price"
-                class="text-xs font-medium text-n-brand mb-0"
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-n-slate-12 mb-0 truncate">
+                  {{ source.title || kindLabel(source.kind) }}
+                </p>
+                <p
+                  v-if="source.price"
+                  class="text-xs font-medium text-n-brand mb-0"
+                >
+                  {{ source.price }}
+                </p>
+                <p
+                  v-if="source.raw"
+                  class="text-xs text-n-slate-11 mb-0 line-clamp-2"
+                >
+                  {{ source.raw }}
+                </p>
+              </div>
+              <span
+                class="self-start inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-n-alpha-2 text-xs text-n-slate-11"
               >
-                {{ source.price }}
-              </p>
-              <p
-                v-if="source.raw"
-                class="text-xs text-n-slate-11 mb-0 line-clamp-2"
-              >
-                {{ source.raw }}
-              </p>
+                <span :class="kindIcon(source.kind)" class="size-3" />
+                {{ kindLabel(source.kind) }}
+              </span>
             </div>
-            <span
-              class="self-start inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-n-alpha-2 text-xs text-n-slate-11"
-            >
-              <span :class="kindIcon(source.kind)" class="size-3" />
-              {{ kindLabel(source.kind) }}
-            </span>
-          </div>
-        </div>
-
-        <div
-          v-if="showForm"
-          class="border border-n-weak rounded-xl p-5 flex flex-col gap-3 bg-n-solid-1"
-        >
-          <h3
-            class="text-sm font-semibold text-n-slate-12 mb-0 flex items-center gap-2"
-          >
-            <span :class="kindIcon(form.kind)" class="size-4 text-n-brand" />
-            {{ kindLabel(form.kind) }}
-          </h3>
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ titleLabel }}
-            <input
-              v-model="form.title"
-              type="text"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            />
-          </label>
-          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-            {{ rawLabel }}
-            <textarea
-              v-model="form.raw"
-              rows="10"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-40 max-h-[70vh]"
-            />
-          </label>
-          <label
-            v-if="form.kind === 'produto'"
-            class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
-          >
-            {{ $t('AI_KNOWLEDGE.FORM.PRICE') }}
-            <input
-              v-model="form.price"
-              type="text"
-              :placeholder="$t('AI_KNOWLEDGE.FORM.PRICE_PLACEHOLDER')"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
-            />
-          </label>
-          <div class="flex justify-end gap-2">
-            <button
-              type="button"
-              class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-              @click="showForm = false"
-            >
-              {{ $t('AI_KNOWLEDGE.FORM.CANCEL') }}
-            </button>
-            <button
-              type="button"
-              :disabled="!isDirty"
-              class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="save"
-            >
-              {{ $t('AI_KNOWLEDGE.FORM.SAVE') }}
-            </button>
-          </div>
+          </template>
         </div>
 
         <ConfirmDeleteModal
