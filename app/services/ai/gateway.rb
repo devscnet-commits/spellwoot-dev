@@ -80,6 +80,7 @@ class Ai::Gateway
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
     # which executes the tool immediately (tools are autonomous).
     intended_tool = result.dig(:decision, 'tool')
+    execution = nil
     if intended_tool.present?
       tool = department.tools.active.find_by(name: intended_tool['name'])
       if @acts_live && tool
@@ -91,6 +92,13 @@ class Ai::Gateway
       else
         emit(run_record, 'tool.intended', { tool: intended_tool, executed: false, reason: not_acting_reason(tool) })
       end
+    end
+
+    # An `invoke_tool` decision only runs the tool — it carries no reply, so the conversation would
+    # stall. Take a SECOND turn feeding the tool result back so the AI answers the customer with it.
+    # Single hop (we don't execute another tool) to avoid loops; `result` is replaced for dispatch.
+    if intended_tool.present? && @acts_live && execution&.status == 'executed'
+      result = tool_followup(run_record, system_prompt, effective_content, intended_tool, execution)
     end
 
     # Intelligent handoff / close. Shadow records intention; live executes the native action.
@@ -107,6 +115,10 @@ class Ai::Gateway
     elsif decision_kind == 'close'
       handle_action('conversation.resolve', {}, run_record, 'close')
     elsif decision_kind == 'reply'
+      handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
+    elsif intended_tool.present? && @acts_live
+      # Safety net: a tool ran but the follow-up decision still isn't a plain reply/close/handoff —
+      # send whatever text we have so the customer is never left waiting after a tool call.
       handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
     end
 
@@ -172,6 +184,25 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#reply] #{e.class}: #{e.message}"
     emit(run_record, 'reply.failed', { error: "#{e.class}: #{e.message}" })
+  end
+
+  # Second model turn after a tool ran: feeds the tool output back so the AI replies to the customer
+  # with the result (e.g. coverage lookup -> "sim, atendemos sua cidade"). Returns the new decision
+  # for the normal dispatch. Single hop — it never triggers another tool execution.
+  def tool_followup(run_record, system_prompt, user_message, tool_call, execution)
+    followup_message = "#{user_message}\n\n[Resultado da ferramenta \"#{tool_call['name']}\"]:\n" \
+                       "#{execution.output.to_json}\n\n" \
+                       'Use esse resultado para responder ao cliente agora (decision: "reply").'
+    result = Ai::ModelRouter.decide(
+      profile: @agent.operation_profile, system_prompt: system_prompt,
+      user_message: followup_message, account_id: @account.id
+    )
+    emit(run_record, 'tool.followup',
+         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms] })
+    result
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#tool_followup] #{e.class}: #{e.message}"
+    { decision: {} }
   end
 
   # Stores the conversation's current step + its grouping delay (from the playbook) so the next
