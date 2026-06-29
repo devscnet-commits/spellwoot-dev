@@ -18,6 +18,8 @@
 # Fallback: when the department has NO follow-up behaviors at all, the inactivity window still
 # applies — once the customer is quiet for close_rules.inactivity_minutes, the first decision in
 # no_followup_actions (order = priority) fires once (same 'followup.action' idempotency).
+# 'transfer_ai' re-runs Ai::GatewayRunJob on the customer's last message so the AI takes another
+# turn; 'transfer_human' unassigns; 'finalize' sends close_rules.message + resolves; 'wait' holds.
 class Ai::FollowupSweepJob < ApplicationJob
   queue_as :low
 
@@ -167,9 +169,11 @@ class Ai::FollowupSweepJob < ApplicationJob
       assign_to_human(conversation)
       record_action(conversation, account_id, 'transfer_human', via: 'no_followup')
     when 'transfer_ai'
-      # Keep the AI in control: no human handoff, conversation stays open so the AI
-      # answers on the customer's next message. Hook point for a future proactive
-      # Ai::Gateway re-invocation.
+      # Re-engage the AI proactively: re-run the Gateway anchored on the customer's last
+      # message so the AI takes another turn (reply/tool/handoff per its own decision).
+      # The Gateway resolves the binding/team routing/mode and respects reply_scope and
+      # max_replies on its own.
+      reengage_ai(conversation)
       record_action(conversation, account_id, 'transfer_ai', via: 'no_followup')
     else # 'wait'
       record_action(conversation, account_id, 'wait', via: 'no_followup')
@@ -178,6 +182,15 @@ class Ai::FollowupSweepJob < ApplicationJob
 
   def assign_to_human(conversation)
     conversation.update!(assignee_id: nil) if conversation.assignee_id.present?
+  end
+
+  # Proactively hand the turn back to the AI by re-running the Gateway on the customer's
+  # last incoming message. No-op when the customer never wrote (nothing to anchor on).
+  def reengage_ai(conversation)
+    anchor = conversation.messages.incoming.order(:created_at).last
+    return if anchor.nil?
+
+    Ai::GatewayRunJob.perform_later(anchor.id)
   end
 
   def send_close_message(department, conversation)
