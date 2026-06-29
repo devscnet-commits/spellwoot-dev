@@ -9,6 +9,9 @@ class Ai::ReplyPolicy
 
   def self.allowed?(mode:, department:, conversation:)
     return false unless acts_live?(mode, department)
+    # Convive com o roteamento humano: se um agente já assumiu (assignee), a IA observa mas
+    # NÃO envia (resposta/ferramenta/handoff) — não fala por cima do humano. Shadow segue observando.
+    return false if conversation.assignee_id.present?
 
     behavior = department.behavior.to_h
     scope = behavior['reply_scope']
@@ -36,6 +39,7 @@ class Ai::ReplyPolicy
   def self.skip_reason(mode:, department:, conversation:)
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, department)
+    return 'human_assigned' if conversation.assignee_id.present?
 
     behavior = department.behavior.to_h
     scope = behavior['reply_scope']

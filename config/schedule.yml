@@ -76,9 +76,12 @@ ai_sla_sweep_job:
   class: 'Ai::SlaSweepJob'
   queue: scheduled_jobs
 
-# executed every 15 minutes
-# nudges quiet customers per the department follow-up config (live + canary gated)
+# executed every minute
+# nudges quiet customers per the department follow-up config (live + canary gated).
+# Roda a cada minuto para honrar intervalos curtos de follow-up (o delay configurado é o
+# silêncio MÍNIMO; a checagem só ocorre quando o cron roda). Em instâncias grandes, se a
+# varredura pesar, suba para '*/2' ou '*/5' aceitando precisão mais grossa.
 ai_followup_sweep_job:
-  cron: '*/15 * * * *'
+  cron: '* * * * *'
   class: 'Ai::FollowupSweepJob'
   queue: scheduled_jobs
