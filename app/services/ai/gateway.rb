@@ -117,6 +117,10 @@ class Ai::Gateway
         input = { 'unassign' => true }
         input['team_id'] = team_id if team_id # roteia para o time; senão mantém o atual
         handle_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: handoff[:reason], team_id: team_id })
+        # Atribuição DEPOIS do trabalho da IA: o próprio handoff atribui um humano (round-robin
+        # entre os agentes online do time/caixa). Mantenha a auto-atribuição da caixa DESLIGADA
+        # para a IA atender primeiro; aqui é o único ponto que entrega a um agente.
+        assign_human(team_id, run_record) if @acts_live
       end
     elsif decision_kind == 'close'
       handle_action('conversation.resolve', {}, run_record, 'close')
@@ -292,6 +296,24 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#handoff_team_id] #{e.class}: #{e.message}"
     nil
+  end
+
+  # Atribuição feita DEPOIS do trabalho da IA (no handoff): escolhe um agente ONLINE por round-robin
+  # entre os membros do time (ou da caixa, se não houver time) e atribui. Usa o serviço nativo, que
+  # não depende do toggle de auto-atribuição da caixa — então a caixa pode ficar com auto-assign OFF
+  # (IA atende primeiro) e o humano só entra aqui. Sem agente online, a conversa fica na fila.
+  def assign_human(team_id, run_record)
+    allowed = if team_id
+                ::Team.find_by(id: team_id, account_id: @account.id)&.members&.ids
+              else
+                @conversation.inbox.members.ids
+              end
+    return if allowed.blank?
+
+    AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
+    emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#assign_human] #{e.class}: #{e.message}"
   end
 
   # Number of AI replies already sent in this conversation (across runs/agents).
