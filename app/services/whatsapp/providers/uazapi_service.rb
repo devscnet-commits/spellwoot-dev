@@ -140,15 +140,18 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
 
   def send_attachment_message(phone_number, message)
     attachment = message.attachments.first
-    type = attachment_type(attachment.file_type)
+    # Figurinha: o WhatsApp trata como sticker (WebP, quadrado, sem legenda).
+    type = sticker_message?(message) ? 'sticker' : attachment_type(attachment.file_type)
 
     body = {
       number: format_phone_number(phone_number),
       type: type,
       file: attachment.download_url
     }
-    body[:text] = message.outgoing_content if message.outgoing_content.present?
-    body[:docName] = attachment.file.filename.to_s if type == 'document'
+    unless type == 'sticker'
+      body[:text] = message.outgoing_content if message.outgoing_content.present?
+      body[:docName] = attachment.file.filename.to_s if type == 'document'
+    end
 
     response = HTTParty.post(
       "#{base_url}/send/media",
@@ -157,6 +160,10 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
     )
 
     process_uazapi_response(response, message)
+  end
+
+  def sticker_message?(message)
+    message.content_type == 'sticker' && message.attachments.present?
   end
 
   def send_interactive_text_message(phone_number, message)
