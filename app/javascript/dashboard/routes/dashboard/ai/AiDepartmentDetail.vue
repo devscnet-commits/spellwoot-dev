@@ -724,13 +724,27 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <div class="flex flex-col gap-0.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.TITLE') }}
-              </span>
-              <p class="text-xs text-n-slate-11 mb-0">
-                {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.HINT') }}
-              </p>
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.TITLE') }}
+                </span>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.HINT') }}
+                </p>
+              </div>
+              <router-link
+                :to="{
+                  name: 'attributes_list',
+                  params: { accountId: route.params.accountId },
+                }"
+                target="_blank"
+                class="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-n-weak px-3 py-1.5 text-xs font-medium text-n-slate-12 hover:bg-n-alpha-1"
+              >
+                <span class="i-lucide-settings-2 size-3.5" />
+                {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MANAGE') }}
+                <span class="i-lucide-external-link size-3 text-n-slate-10" />
+              </router-link>
             </div>
             <p
               v-if="!customAttributes.length"

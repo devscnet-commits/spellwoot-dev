@@ -473,7 +473,8 @@
       "MODEL_CONTACT": "Contato",
       "MODEL_CONVERSATION": "Conversa",
       "USING": "Ativado",
-      "EXCLUDED": "Desativado"
+      "EXCLUDED": "Desativado",
+      "MANAGE": "Gerenciar atributos"
     }
   },
   "AI_TOOLS": {
