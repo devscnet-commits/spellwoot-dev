@@ -9,7 +9,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
 
   def index
     base = ::Ai::Run.where(account_id: Current.account.id)
-    base = base.where('ai_runs.created_at >= ?', period_start) if period_start
+    base = apply_period(base)
 
     runs = filtered(base).order(created_at: :desc).limit(RUN_LIMIT).to_a
     runs = apply_decision_filters(runs)
@@ -34,6 +34,31 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   def period_start
     days = params[:days].to_i
     days.positive? ? days.days.ago : nil
+  end
+
+  # Filtro de data: intervalo customizado (from/to em YYYY-MM-DD) tem prioridade; senão usa ?days=N.
+  def apply_period(scope)
+    from = parse_date(params[:from])
+    to = parse_date(params[:to])
+    if from && to
+      scope.where(created_at: from.beginning_of_day..to.end_of_day)
+    elsif from
+      scope.where('ai_runs.created_at >= ?', from.beginning_of_day)
+    elsif to
+      scope.where('ai_runs.created_at <= ?', to.end_of_day)
+    elsif period_start
+      scope.where('ai_runs.created_at >= ?', period_start)
+    else
+      scope
+    end
+  end
+
+  def parse_date(value)
+    return nil if value.blank?
+
+    Date.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
   end
 
   def filtered(scope)

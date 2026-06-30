@@ -33,6 +33,8 @@ const isLoading = ref(false);
 
 const filters = ref({
   period: '0',
+  from: '',
+  to: '',
   department_id: '',
   error_type: '',
   status: '',
@@ -75,6 +77,7 @@ const periodOptions = computed(() => [
   { value: '0', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_ALL') },
   { value: '7', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_7') },
   { value: '30', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_30') },
+  { value: 'custom', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_CUSTOM') },
 ]);
 const departmentOptions = computed(() => [
   { value: '', label: t('AI_SHADOW_RUNS.FILTERS.DEPARTMENT_ALL') },
@@ -224,11 +227,16 @@ const fetchRuns = async () => {
   try {
     const params = {};
     Object.entries(filters.value).forEach(([key, value]) => {
-      if (key === 'period') return;
+      if (['period', 'from', 'to'].includes(key)) return;
       if (value !== '' && value != null) params[key] = value;
     });
-    const days = Number(filters.value.period) || 0;
-    if (days > 0) params.days = days;
+    if (filters.value.period === 'custom') {
+      if (filters.value.from) params.from = filters.value.from;
+      if (filters.value.to) params.to = filters.value.to;
+    } else {
+      const days = Number(filters.value.period) || 0;
+      if (days > 0) params.days = days;
+    }
     const { data: payload } = await axios.get(
       `/api/v1/accounts/${route.params.accountId}/ai_shadow_runs`,
       { params }
@@ -328,6 +336,34 @@ onMounted(fetchRuns);
                 {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_PERIOD') }}
               </span>
               <Select v-model="filters.period" :options="periodOptions" />
+            </label>
+            <label
+              v-if="filters.period === 'custom'"
+              class="flex flex-col gap-1 min-w-0"
+            >
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.FROM') }}
+              </span>
+              <input
+                v-model="filters.from"
+                type="date"
+                :max="filters.to || undefined"
+                class="h-9 px-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              />
+            </label>
+            <label
+              v-if="filters.period === 'custom'"
+              class="flex flex-col gap-1 min-w-0"
+            >
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.TO') }}
+              </span>
+              <input
+                v-model="filters.to"
+                type="date"
+                :min="filters.from || undefined"
+                class="h-9 px-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              />
             </label>
             <label class="flex flex-col gap-1 min-w-0">
               <span class="text-xs font-medium text-n-slate-11">
