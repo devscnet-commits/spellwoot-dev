@@ -57,7 +57,8 @@ class Ai::Gateway
     system_prompt = Ai::PromptCompiler.compile(
       agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
       collected: (@conversation.contact&.custom_attributes || {})
-        .merge(@conversation.custom_attributes || {})
+        .merge(@conversation.custom_attributes || {}),
+      fillable_attributes: fillable_attributes(department)
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
@@ -164,6 +165,20 @@ class Ai::Gateway
     return current if history.empty?
 
     "Histórico recente da conversa:\n#{history.join("\n")}\n\nMensagem atual do cliente:\n#{current}"
+  end
+
+  # Atributos personalizados de conversa que a IA pode preencher: as definições da conta menos os
+  # que o department desabilitou (lista "Atributos personalizados" da tela). Vira a instrução de
+  # quais chaves preencher em `attributes`.
+  def fillable_attributes(department)
+    disabled = Array(department.behavior.to_h['disabled_custom_attributes'])
+    ::CustomAttributeDefinition
+      .where(account_id: @account.id, attribute_model: :conversation_attribute)
+      .where.not(attribute_key: disabled)
+      .pluck(:attribute_key, :attribute_display_name)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#fillable_attributes] #{e.class}: #{e.message}"
+    []
   end
 
   # Persiste nos atributos da conversa os dados que o modelo coletou (campo `attributes` da decisão).

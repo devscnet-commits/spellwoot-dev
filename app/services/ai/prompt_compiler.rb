@@ -1,7 +1,7 @@
 # Compiles the final system prompt from structured config (identity + playbook + knowledge +
 # tools + memory). The user never writes this — they fill structure, we generate the prompt.
 class Ai::PromptCompiler
-  def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {})
+  def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [])
     parts = []
     parts.concat(identity_lines(agent))
     parts << agent.base_prompt if agent.base_prompt.present?
@@ -27,6 +27,13 @@ class Ai::PromptCompiler
       parts << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}\n" \
                "Sempre que o cliente informar um destes dados, inclua-o no campo \"attributes\" do JSON " \
                "usando a CHAVE exata do nome acima (ex.: {\"cidade\":\"Maravilha\"}). Não invente — só o que o cliente disse."
+    end
+
+    # Atributos personalizados da conversa que a IA pode preencher (chave + rótulo). A IA deve
+    # devolvê-los em "attributes" usando a CHAVE exata quando o cliente informar o dado.
+    if fillable_attributes.present?
+      lines = fillable_attributes.map { |key, label| "- #{key}#{label.present? ? " (#{label})" : ''}" }
+      parts << "Atributos da conversa para preencher quando o cliente informar (use a CHAVE exata em \"attributes\", ex.: {\"cidade\":\"Maravilha\"}):\n#{lines.join("\n")}"
     end
 
     # Dados que já temos deste cliente (atributos do contato). A IA deve USÁ-LOS e NÃO perguntar de
