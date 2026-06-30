@@ -17,8 +17,9 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     dept_names = department_names(runs)
     dept_tools = department_tools(runs)
     methods = routing_methods(runs)
+    questions = questions_for(runs)
 
-    rows = runs.map { |run| row(run, dept_names, dept_tools, methods) }
+    rows = runs.map { |run| row(run, dept_names, dept_tools, methods, questions) }
 
     render json: {
       facets: facets(base),
@@ -52,12 +53,13 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     runs
   end
 
-  def row(run, dept_names, dept_tools, methods)
+  def row(run, dept_names, dept_tools, methods, questions)
     tool = tool_name(run)
     missing = tool.present? && !dept_tools[run.ai_department_id].to_a.include?(tool.downcase)
     {
       id: run.id,
       conversation_id: run.conversation_id,
+      question: questions[run.id],
       department_id: run.ai_department_id,
       department: dept_names[run.ai_department_id],
       routing_method: methods[run.id],
@@ -176,6 +178,25 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
       error_types: scope.where.not(error_type: nil).distinct.pluck(:error_type),
       statuses: scope.distinct.pluck(:status)
     }
+  end
+
+  # Pergunta do cliente que disparou cada run (do evento message.received), p/ o drill-down das
+  # lacunas mostrar "quais perguntas". Uma query batch, casada por janela de tempo como routing.
+  def questions_for(runs)
+    conv_ids = runs.map(&:conversation_id).compact.uniq
+    return {} if conv_ids.empty?
+
+    events = ::Ai::Event.where(conversation_id: conv_ids, event_type: 'message.received')
+                        .pluck(:conversation_id, :created_at, :payload)
+    by_conversation = events.group_by(&:first)
+    runs.each_with_object({}) do |run, acc|
+      candidates = by_conversation[run.conversation_id]
+      next if candidates.blank?
+
+      window = (run.created_at - 5.seconds)..(run.updated_at + 2.seconds)
+      match = candidates.find { |(_conv, created_at, _payload)| window.cover?(created_at) } || candidates.last
+      acc[run.id] = match[2]['content'].to_s.first(200) if match
+    end
   end
 
   def department_names(runs)
