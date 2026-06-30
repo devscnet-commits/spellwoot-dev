@@ -27,6 +27,7 @@ const blank = () => ({
   },
   insights: [],
   runs: [],
+  pagination: { page: 1, per_page: 10, total: 0, total_pages: 1 },
 });
 const data = ref(blank());
 const isLoading = ref(false);
@@ -191,67 +192,30 @@ const toggleInsight = (blockKey, insight) => {
   const k = insightKey(blockKey, insight);
   expandedKey.value = expandedKey.value === k ? null : k;
 };
-const matchRuns = (blockKey, insight) =>
-  (data.value.runs || []).filter(r => {
-    if (blockKey === 'faq') {
-      return (
-        ['unanswered', 'instruction'].includes(r.resolution) &&
-        r.department === insight.department
-      );
-    }
-    if (blockKey === 'instruction') {
-      return (
-        r.confidence != null &&
-        r.confidence < 0.5 &&
-        ['knowledge', 'instruction'].includes(r.resolution) &&
-        r.department === insight.department
-      );
-    }
-    if (blockKey === 'tool') {
-      return (
-        r.tool_missing &&
-        r.department === insight.department &&
-        r.tool === insight.tool
-      );
-    }
-    if (blockKey === 'error') return r.error_type === insight.error_type;
-    return false;
-  });
+// As perguntas-exemplo de cada lacuna vêm do próprio insight (backend), pois a lista de runs
+// agora é paginada e não contém o conjunto completo.
+const insightExamples = insight => insight.examples || [];
 const conversationUrl = id =>
   `/app/accounts/${route.params.accountId}/conversations/${id}`;
 
 const hasData = computed(() => data.value.summary.evaluated > 0);
 
-// Paginação client-side da lista de execuções (a rolagem ficava enorme).
-const perPage = ref(10);
+// Paginação real no servidor: o backend devolve só a página pedida + metadados.
+const perPage = ref('10');
 const currentPage = ref(1);
 const perPageOptions = [
   { value: '10', label: '10' },
   { value: '50', label: '50' },
   { value: '100', label: '100' },
 ];
-const totalRuns = computed(() => data.value.runs.length);
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(totalRuns.value / Number(perPage.value)))
-);
-const pagedRuns = computed(() => {
-  const size = Number(perPage.value);
-  const start = (currentPage.value - 1) * size;
-  return data.value.runs.slice(start, start + size);
-});
+const totalRuns = computed(() => data.value.pagination.total || 0);
+const totalPages = computed(() => data.value.pagination.total_pages || 1);
 const rangeStart = computed(() =>
   totalRuns.value ? (currentPage.value - 1) * Number(perPage.value) + 1 : 0
 );
 const rangeEnd = computed(() =>
   Math.min(currentPage.value * Number(perPage.value), totalRuns.value)
 );
-const goToPage = page => {
-  currentPage.value = Math.min(Math.max(1, page), totalPages.value);
-};
-// Volta para a 1ª página ao trocar tamanho, filtros ou recarregar dados.
-watch([perPage, () => data.value.runs], () => {
-  currentPage.value = 1;
-});
 
 const fetchRuns = async () => {
   isLoading.value = true;
@@ -268,6 +232,8 @@ const fetchRuns = async () => {
       const days = Number(filters.value.period) || 0;
       if (days > 0) params.days = days;
     }
+    params.page = currentPage.value;
+    params.per_page = Number(perPage.value);
     const { data: payload } = await axios.get(
       `/api/v1/accounts/${route.params.accountId}/ai_shadow_runs`,
       { params }
@@ -278,6 +244,13 @@ const fetchRuns = async () => {
   } finally {
     isLoading.value = false;
   }
+};
+
+const goToPage = page => {
+  const target = Math.min(Math.max(1, page), totalPages.value);
+  if (target === currentPage.value) return;
+  currentPage.value = target;
+  fetchRuns();
 };
 
 const clearFilters = () => {
@@ -292,7 +265,15 @@ const clearFilters = () => {
   };
 };
 
-watch(filters, fetchRuns, { deep: true });
+// Filtros ou tamanho de página voltam para a página 1 e recarregam (a navegação usa goToPage).
+watch(
+  [filters, perPage],
+  () => {
+    currentPage.value = 1;
+    fetchRuns();
+  },
+  { deep: true }
+);
 onMounted(fetchRuns);
 </script>
 
@@ -562,7 +543,7 @@ onMounted(fetchRuns);
                 class="mt-2 ml-11 flex flex-col gap-1.5"
               >
                 <a
-                  v-for="r in matchRuns(block.key, insight)"
+                  v-for="r in insightExamples(insight)"
                   :key="r.id"
                   :href="conversationUrl(r.conversation_id)"
                   target="_blank"
@@ -579,7 +560,7 @@ onMounted(fetchRuns);
                   </span>
                 </a>
                 <p
-                  v-if="!matchRuns(block.key, insight).length"
+                  v-if="!insightExamples(insight).length"
                   class="text-xs text-n-slate-11 px-1 mb-0"
                 >
                   {{ $t('AI_SHADOW_RUNS.INSIGHT.NO_EXAMPLES') }}
@@ -655,7 +636,7 @@ onMounted(fetchRuns);
               {{ $t('AI_SHADOW_RUNS.RUN.EMPTY') }}
             </p>
             <div
-              v-for="run in pagedRuns"
+              v-for="run in data.runs"
               :key="run.id"
               class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
             >

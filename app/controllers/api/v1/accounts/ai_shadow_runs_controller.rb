@@ -6,6 +6,9 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   LOW_CONFIDENCE = 0.5
   RECURRING_ERROR_MIN = 2
   RUN_LIMIT = 300
+  DEFAULT_PER_PAGE = 10
+  MAX_PER_PAGE = 100
+  EXAMPLES_PER_INSIGHT = 25
 
   def index
     base = ::Ai::Run.where(account_id: Current.account.id)
@@ -21,15 +24,36 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
 
     rows = runs.map { |run| row(run, dept_names, dept_tools, methods, questions) }
 
+    page, per_page = pagination_params
+    total = rows.size
+    paged = rows.slice((page - 1) * per_page, per_page) || []
+
     render json: {
       facets: facets(base),
       summary: summary(rows),
       insights: insights(rows),
-      runs: rows.first(150)
+      runs: paged,
+      pagination: {
+        page: page,
+        per_page: per_page,
+        total: total,
+        total_pages: [(total.to_f / per_page).ceil, 1].max
+      }
     }
   end
 
   private
+
+  # page (>=1) e per_page (limitado a MAX_PER_PAGE) para a paginação real da lista de execuções.
+  # O resumo/insights continuam calculados sobre toda a janela (RUN_LIMIT), não sobre a página.
+  def pagination_params
+    page = params[:page].to_i
+    page = 1 if page < 1
+    per_page = params[:per_page].to_i
+    per_page = DEFAULT_PER_PAGE if per_page < 1
+    per_page = MAX_PER_PAGE if per_page > MAX_PER_PAGE
+    [page, per_page]
+  end
 
   def period_start
     days = params[:days].to_i
@@ -174,26 +198,34 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   def knowledge_insights(rows)
     rows.select { |r| %w[unanswered instruction].include?(r[:resolution]) && r[:department].present? }
         .group_by { |r| r[:department] }
-        .map { |name, group| { type: 'faq', department: name, count: group.size } }
+        .map { |name, group| { type: 'faq', department: name, count: group.size, examples: examples(group) } }
   end
 
   def instruction_insights(rows)
     rows.select { |r| low_confidence?(r) && r[:department].present? }
         .group_by { |r| r[:department] }
-        .map { |name, group| { type: 'instruction', department: name, count: group.size } }
+        .map { |name, group| { type: 'instruction', department: name, count: group.size, examples: examples(group) } }
   end
 
   def tool_insights(rows)
     rows.select { |r| r[:tool_missing] }
         .group_by { |r| [r[:department], r[:tool]] }
-        .map { |(name, tool), group| { type: 'tool', department: name, tool: tool, count: group.size } }
+        .map { |(name, tool), group| { type: 'tool', department: name, tool: tool, count: group.size, examples: examples(group) } }
   end
 
   def error_insights(rows)
     rows.select { |r| r[:error_type].present? }
         .group_by { |r| r[:error_type] }
         .select { |_type, group| group.size >= RECURRING_ERROR_MIN }
-        .map { |error_type, group| { type: 'error', error_type: error_type, count: group.size } }
+        .map { |error_type, group| { type: 'error', error_type: error_type, count: group.size, examples: examples(group) } }
+  end
+
+  # Amostra de perguntas (conversa + texto) por trás de cada lacuna, p/ o drill-down do front —
+  # antes ele refiltrava a lista completa de runs; agora a paginação só traz 1 página.
+  def examples(group)
+    group.first(EXAMPLES_PER_INSIGHT).map do |r|
+      { id: r[:id], conversation_id: r[:conversation_id], question: r[:question] }
+    end
   end
 
   def facets(scope)
