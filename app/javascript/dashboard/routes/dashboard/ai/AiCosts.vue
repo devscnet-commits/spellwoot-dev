@@ -26,6 +26,8 @@ const formatTokens = value => numberFormat.format(value || 0);
 const data = ref(blank());
 const isLoading = ref(false);
 const period = ref('0');
+const fromDate = ref('');
+const toDate = ref('');
 const agentId = ref('');
 const agents = ref([]);
 
@@ -33,6 +35,7 @@ const periodOptions = computed(() => [
   { value: '0', label: t('AI_COSTS.PERIOD_ALL') },
   { value: '7', label: t('AI_COSTS.PERIOD_7') },
   { value: '30', label: t('AI_COSTS.PERIOD_30') },
+  { value: 'custom', label: t('AI_COSTS.PERIOD_CUSTOM') },
 ]);
 const agentOptions = computed(() => [
   { value: '', label: t('AI_COSTS.AGENT_ALL') },
@@ -62,8 +65,13 @@ const fetchCosts = async () => {
   isLoading.value = true;
   try {
     const params = {};
-    const days = Number(period.value) || 0;
-    if (days > 0) params.days = days;
+    if (period.value === 'custom') {
+      if (fromDate.value) params.from = fromDate.value;
+      if (toDate.value) params.to = toDate.value;
+    } else {
+      const days = Number(period.value) || 0;
+      if (days > 0) params.days = days;
+    }
     if (agentId.value) params.agent_id = agentId.value;
     const { data: payload } = await axios.get(
       `/api/v1/accounts/${route.params.accountId}/ai_costs`,
@@ -75,7 +83,7 @@ const fetchCosts = async () => {
   }
 };
 
-watch([period, agentId], fetchCosts);
+watch([period, agentId, fromDate, toDate], fetchCosts);
 onMounted(() => {
   fetchAgents();
   fetchCosts();
@@ -109,6 +117,28 @@ onMounted(() => {
                 $t('AI_COSTS.PERIOD')
               }}</span>
               <Select v-model="period" :options="periodOptions" />
+            </div>
+            <div v-if="period === 'custom'" class="flex flex-col gap-1.5">
+              <span class="text-xs text-n-slate-11">{{
+                $t('AI_COSTS.FROM')
+              }}</span>
+              <input
+                v-model="fromDate"
+                type="date"
+                :max="toDate || undefined"
+                class="h-9 px-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              />
+            </div>
+            <div v-if="period === 'custom'" class="flex flex-col gap-1.5">
+              <span class="text-xs text-n-slate-11">{{
+                $t('AI_COSTS.TO')
+              }}</span>
+              <input
+                v-model="toDate"
+                type="date"
+                :min="fromDate || undefined"
+                class="h-9 px-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              />
             </div>
           </div>
         </div>
