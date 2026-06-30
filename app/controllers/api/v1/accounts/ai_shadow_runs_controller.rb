@@ -5,16 +5,28 @@
 class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseController
   LOW_CONFIDENCE = 0.5
   RECURRING_ERROR_MIN = 2
-  RUN_LIMIT = 300
+  # Teto de segurança absoluto de linhas carregadas em memória (resumo/insights são em Ruby).
+  # A janela de no máx. 1 ano é a proteção principal; este é só um último anteparo contra OOM.
+  MAX_RUNS = 10_000
+  MAX_WINDOW_DAYS = 365
   DEFAULT_PER_PAGE = 10
   MAX_PER_PAGE = 100
   EXAMPLES_PER_INSIGHT = 25
 
   def index
-    base = ::Ai::Run.where(account_id: Current.account.id)
-    base = apply_period(base)
+    bounds = window_bounds
+    if bounds == :too_large
+      return render(
+        json: { error: 'range_too_large', max_days: MAX_WINDOW_DAYS },
+        status: :unprocessable_entity
+      )
+    end
 
-    runs = filtered(base).order(created_at: :desc).limit(RUN_LIMIT).to_a
+    start_time, finish_time = bounds
+    base = ::Ai::Run.where(account_id: Current.account.id)
+                    .where(created_at: start_time..finish_time)
+
+    runs = filtered(base).order(created_at: :desc).limit(MAX_RUNS).to_a
     runs = apply_decision_filters(runs)
 
     dept_names = department_names(runs)
@@ -45,7 +57,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   private
 
   # page (>=1) e per_page (limitado a MAX_PER_PAGE) para a paginação real da lista de execuções.
-  # O resumo/insights continuam calculados sobre toda a janela (RUN_LIMIT), não sobre a página.
+  # O resumo/insights continuam calculados sobre toda a janela do período, não sobre a página.
   def pagination_params
     page = params[:page].to_i
     page = 1 if page < 1
@@ -55,26 +67,26 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     [page, per_page]
   end
 
-  def period_start
-    days = params[:days].to_i
-    days.positive? ? days.days.ago : nil
-  end
-
-  # Filtro de data: intervalo customizado (from/to em YYYY-MM-DD) tem prioridade; senão usa ?days=N.
-  def apply_period(scope)
+  # Janela de datas efetiva: custom (from/to) tem prioridade, senão ?days=N, senão "Todos".
+  # Como métricas e lista cobrem o período inteiro, limitamos a 1 ano: acima disso devolve
+  # :too_large (o front pede um intervalo menor). "Todos"/sem início = último 1 ano.
+  def window_bounds
     from = parse_date(params[:from])
     to = parse_date(params[:to])
-    if from && to
-      scope.where(created_at: from.beginning_of_day..to.end_of_day)
-    elsif from
-      scope.where('ai_runs.created_at >= ?', from.beginning_of_day)
-    elsif to
-      scope.where('ai_runs.created_at <= ?', to.end_of_day)
-    elsif period_start
-      scope.where('ai_runs.created_at >= ?', period_start)
-    else
-      scope
-    end
+    days = params[:days].to_i
+
+    end_date = to || Date.current
+    start_date =
+      if from
+        from
+      elsif days.positive?
+        days.days.ago.to_date
+      end
+
+    return :too_large if start_date && (end_date - start_date).to_i > MAX_WINDOW_DAYS
+
+    start_date ||= end_date - MAX_WINDOW_DAYS
+    [start_date.beginning_of_day, end_date.end_of_day]
   end
 
   def parse_date(value)

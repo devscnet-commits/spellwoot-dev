@@ -5,6 +5,7 @@
     "REFRESH": "Atualizar",
     "LOADING": "Carregando...",
     "EMPTY": "Nenhuma execução registrada ainda. Crie um analista para começar a avaliar.",
+    "RANGE_TOO_LARGE": "O intervalo escolhido é maior que {days} dias. Selecione um período de no máximo 1 ano para não sobrecarregar o sistema.",
     "NONE": "—",
     "COST_DISCLAIMER": "Os custos exibidos são estimativas do consumo dos modelos de IA. Não incluem impostos, IOF, taxas de câmbio ou outros encargos — portanto podem divergir da fatura final.",
     "FILTERS": {

@@ -31,6 +31,10 @@ const blank = () => ({
 });
 const data = ref(blank());
 const isLoading = ref(false);
+// Teto de 1 ano: intervalo maior que isso é recusado (carregaria histórico demais em memória).
+const MAX_WINDOW_DAYS = 365;
+const rangeError = ref(false);
+const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 
 const filters = ref({
   period: '0',
@@ -218,6 +222,18 @@ const rangeEnd = computed(() =>
 );
 
 const fetchRuns = async () => {
+  // Pré-checagem: intervalo custom acima de 1 ano nem chega ao servidor.
+  if (
+    filters.value.period === 'custom' &&
+    filters.value.from &&
+    filters.value.to &&
+    dayDiff(filters.value.from, filters.value.to) > MAX_WINDOW_DAYS
+  ) {
+    rangeError.value = true;
+    data.value = blank();
+    return;
+  }
+  rangeError.value = false;
   isLoading.value = true;
   try {
     const params = {};
@@ -240,6 +256,7 @@ const fetchRuns = async () => {
     );
     data.value = { ...blank(), ...(payload || {}) };
   } catch (error) {
+    rangeError.value = error.response?.data?.error === 'range_too_large';
     data.value = blank();
   } finally {
     isLoading.value = false;
@@ -426,7 +443,17 @@ onMounted(fetchRuns);
         </div>
 
         <p
-          v-if="!isLoading && !hasData"
+          v-if="rangeError"
+          class="flex items-start gap-2 text-sm text-n-amber-11 rounded-xl border border-n-amber-6 bg-n-amber-3 px-4 py-3 mb-0"
+        >
+          <span class="i-lucide-triangle-alert size-4 shrink-0 mt-0.5" />
+          <span>{{
+            $t('AI_SHADOW_RUNS.RANGE_TOO_LARGE', { days: MAX_WINDOW_DAYS })
+          }}</span>
+        </p>
+
+        <p
+          v-else-if="!isLoading && !hasData"
           class="text-sm text-n-slate-11 py-8 text-center"
         >
           {{ $t('AI_SHADOW_RUNS.EMPTY') }}
