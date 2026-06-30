@@ -49,6 +49,13 @@ class Ai::PromptCompiler
       parts << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
     end
 
+    human_teams = ::Team.where(account_id: agent.account_id).order(:name).pluck(:name)
+    if human_teams.present?
+      lines = human_teams.map { |t| "- #{t}" }
+      parts << "Para transferir para um ATENDENTE HUMANO, NÃO apenas escreva no texto: retorne decision " \
+               "\"handoff\" e o nome EXATO do time em handoff_target. Times disponíveis:\n#{lines.join("\n")}"
+    end
+
     targets = handoff_targets(agent)
     if targets.present?
       lines = targets.map { |tg| tg[:hint].present? ? "- #{tg[:name]}: #{tg[:hint]}" : "- #{tg[:name]}" }
