@@ -155,6 +155,11 @@ class Ai::Gateway
   # our last reply) so it has the conversation context. The current customer burst is kept separate
   # because grouping may join several messages into `current`.
   def build_user_message(current)
+    # Se o cliente RESPONDEU/citou uma mensagem específica (reply do WhatsApp), traz o conteúdo
+    # citado para o modelo entender a referência (ex.: "já enviei" citando onde mandou os dados).
+    quoted = quoted_message_content
+    current = "(O cliente está respondendo a esta mensagem anterior: \"#{quoted}\")\n#{current}" if quoted.present?
+
     last_out_id = @conversation.messages.outgoing.maximum(:id) || 0
     history = @conversation.messages
                            .where(message_type: %i[incoming outgoing])
@@ -179,6 +184,19 @@ class Ai::Gateway
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#fillable_attributes] #{e.class}: #{e.message}"
     []
+  end
+
+  # Conteúdo da mensagem citada quando o cliente responde a uma mensagem específica (reply do canal).
+  # O Chatwoot resolve a citação para o id da mensagem em content_attributes['in_reply_to'].
+  def quoted_message_content
+    ref_id = (@message.in_reply_to if @message.respond_to?(:in_reply_to)) ||
+             @message.content_attributes&.dig('in_reply_to')
+    return nil if ref_id.blank?
+
+    @conversation.messages.find_by(id: ref_id)&.content.to_s.strip.first(300).presence
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#quoted_message_content] #{e.class}: #{e.message}"
+    nil
   end
 
   # Persiste nos atributos da conversa os dados que o modelo coletou (campo `attributes` da decisão).
