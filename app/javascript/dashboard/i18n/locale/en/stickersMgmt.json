@@ -1,7 +1,7 @@
 {
   "STICKERS_MGMT": {
     "HEADER": "Figurinhas",
-    "DESCRIPTION": "Guarde figurinhas (stickers) e envie nos atendimentos. Use arquivos .webp quadrados para melhor resultado no WhatsApp.",
+    "DESCRIPTION": "Guarde figurinhas (stickers) e envie nos atendimentos. Pode subir PNG/JPG/GIF — convertemos automaticamente para o padrão de figurinha (WebP 512×512 transparente). Arquivos .webp são mantidos como estão.",
     "HEADER_BTN_TXT": "Adicionar figurinha",
     "COUNT": "{n} figurinhas",
     "LOADING": "Carregando figurinhas...",
