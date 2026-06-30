@@ -650,6 +650,12 @@ const menuItems = computed(() => {
           to: accountScopedRoute('canned_list'),
         },
         {
+          name: 'Settings Stickers',
+          label: t('SIDEBAR.STICKERS'),
+          icon: 'i-lucide-sticker',
+          to: accountScopedRoute('stickers_list'),
+        },
+        {
           name: 'Settings Integrations',
           label: t('SIDEBAR.INTEGRATIONS'),
           icon: 'i-lucide-blocks',

@@ -21,6 +21,7 @@ import macros from './macros/macros.routes';
 import reports from './reports/reports.routes';
 import store from '../../../store';
 import sla from './sla/sla.routes';
+import stickers from './stickers/stickers.routes';
 import teams from './teams/teams.routes';
 import customRoles from './customRoles/customRole.routes';
 import profile from './profile/profile.routes';
@@ -64,6 +65,7 @@ export default {
     ...macros.routes,
     ...reports.routes,
     ...sla.routes,
+    ...stickers.routes,
     ...teams.routes,
     ...customRoles.routes,
     ...profile.routes,

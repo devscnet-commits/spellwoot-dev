@@ -1,0 +1,34 @@
+{
+  "STICKERS_MGMT": {
+    "HEADER": "Figurinhas",
+    "DESCRIPTION": "Guarde figurinhas (stickers) e envie nos atendimentos. Use arquivos .webp quadrados para melhor resultado no WhatsApp.",
+    "HEADER_BTN_TXT": "Adicionar figurinha",
+    "COUNT": "{n} figurinhas",
+    "LOADING": "Carregando figurinhas...",
+    "LIST": {
+      "404": "Nenhuma figurinha ainda. Adicione a primeira para usar nos atendimentos."
+    },
+    "UPLOAD": {
+      "SUCCESS": "Figurinha adicionada.",
+      "ERROR": "Não foi possível adicionar a figurinha.",
+      "INVALID_TYPE": "Formato não suportado. Envie .webp, .png, .jpg ou .gif.",
+      "TOO_LARGE": "Arquivo muito grande. O limite é 2 MB."
+    },
+    "DELETE": {
+      "BUTTON_TEXT": "Excluir figurinha",
+      "SUCCESS": "Figurinha excluída.",
+      "ERROR": "Não foi possível excluir a figurinha.",
+      "CONFIRM": {
+        "TITLE": "Excluir figurinha",
+        "MESSAGE": "Tem certeza que deseja excluir esta figurinha?",
+        "YES": "Sim, excluir",
+        "NO": "Cancelar"
+      }
+    },
+    "PICKER": {
+      "TITLE": "Figurinhas",
+      "EMPTY": "Nenhuma figurinha. Adicione em Configurações → Figurinhas.",
+      "SEND_ERROR": "Não foi possível enviar a figurinha."
+    }
+  }
+}
