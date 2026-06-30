@@ -505,7 +505,7 @@ onMounted(() => {
           </p>
           <div
             v-if="form.args.length"
-            class="hidden sm:flex items-center gap-2 px-2 text-xs font-medium text-n-slate-11"
+            class="hidden sm:flex items-center gap-2 p-2 border border-transparent text-xs font-medium text-n-slate-11"
           >
             <span class="flex-1 min-w-[8rem]">
               {{ $t('AI_TOOLS.FORM.ARG_COL_NAME') }}
