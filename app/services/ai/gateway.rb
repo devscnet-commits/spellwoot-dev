@@ -37,9 +37,13 @@ class Ai::Gateway
 
     run_record.update!(ai_department_id: department.id)
 
-    # Cap the customer input the model sees, to bound tokens per interaction (anti-abuse).
+    # Limite de caracteres da mensagem do cliente (anti-abuso/tokens). Ação configurável:
+    # 'truncate' (padrão: corta nos N primeiros) ou 'ask_resume' (pede pro cliente resumir e
+    # NÃO processa o texto gigante). Tratado abaixo, após o gate de resposta.
     max_input = department.behavior.to_h['max_input_chars'].to_i
-    effective_content = effective_content.first(max_input) if max_input.positive?
+    input_action = department.behavior.to_h['max_input_action'].presence || 'truncate'
+    input_exceeded = max_input.positive? && effective_content.length > max_input
+    effective_content = effective_content.first(max_input) if input_exceeded && input_action != 'ask_resume'
 
     # Single gate for every outward action (reply, tools, transfer/resolve): the AI only acts when
     # this conversation is effectively live — i.e. live binding + auto_attendance on + within hours
@@ -47,6 +51,16 @@ class Ai::Gateway
     # binding piloted "behind canary" never touches non-canary conversations.
     @acts_live =
       Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation) == :live
+
+    # Mensagem acima do limite + ação "pedir resumo": avisa o cliente e encerra a execução
+    # (não roda o modelo no texto gigante). 'truncate' segue normal (já cortado acima).
+    if input_exceeded && input_action == 'ask_resume'
+      message = department.behavior.to_h['max_input_message'].presence ||
+                'Sua mensagem ficou longa demais para eu entender bem. Pode resumir em poucas linhas, por favor? 🙂'
+      emit(run_record, 'input.too_long', { chars: effective_content.length, max: max_input })
+      handle_reply(department, message, run_record)
+      return finalize(run_record, 'input_too_long')
+    end
 
     knowledge = Ai::KnowledgeRetriever.retrieve(query: effective_content, account_id: @account.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })

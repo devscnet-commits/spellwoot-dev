@@ -63,6 +63,9 @@ const form = reactive({
   group_delay_seconds: '',
   max_replies: '',
   max_input_chars: '',
+  // O que fazer quando a mensagem passa do limite: 'truncate' (corta) ou 'ask_resume' (pede resumo).
+  max_input_action: 'truncate',
+  max_input_message: '',
   // Follow-up: SÓ retoma a conversa. Decisões de entrega ficam em Atribuição.
   followup_instructions: '',
   // Lista de comportamentos de follow-up (1 por contexto de horário); cada um com
@@ -246,6 +249,8 @@ const hydrate = dept => {
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
+    max_input_action: behavior.max_input_action || 'truncate',
+    max_input_message: behavior.max_input_message || '',
     followup_instructions: followUp.instructions || '',
     followup_behaviors: hydrateBehaviors(followUp),
     close_message: close.message || '',
@@ -323,6 +328,8 @@ const buildPayload = () => ({
       grouping: { delay_seconds: Number(form.group_delay_seconds) || 0 },
       max_replies: Number(form.max_replies) || 0,
       max_input_chars: Number(form.max_input_chars) || 0,
+      max_input_action: form.max_input_action || 'truncate',
+      max_input_message: (form.max_input_message || '').trim(),
       reply_scope: 'all',
       disabled_custom_attributes: form.disabled_custom_attributes,
     },
@@ -477,6 +484,17 @@ const FU_MAX_ATTEMPTS = 10;
 const fuUnitOptions = computed(() => [
   { value: 'minutos', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_MINUTES') },
   { value: 'horas', label: t('AI_DEPARTMENTS.FOLLOWUP.UNIT_HOURS') },
+]);
+// O que fazer quando a mensagem do cliente passa do limite de caracteres.
+const inputActionOptions = computed(() => [
+  {
+    value: 'truncate',
+    label: t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_ACTION_TRUNCATE'),
+  },
+  {
+    value: 'ask_resume',
+    label: t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_ACTION_ASK_RESUME'),
+  },
 ]);
 const fuContextOptions = computed(() => [
   { value: 'inbox_hours', label: t('AI_DEPARTMENTS.FOLLOWUP.CTX_INBOX') },
@@ -838,6 +856,29 @@ onMounted(async () => {
                 type="number"
                 min="0"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_ACTION') }}
+              <Select
+                v-model="form.max_input_action"
+                :options="inputActionOptions"
+              />
+            </label>
+            <label
+              v-if="form.max_input_action === 'ask_resume'"
+              class="flex flex-col gap-1 text-sm text-n-slate-12"
+            >
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_MESSAGE') }}
+              <textarea
+                v-model="form.max_input_message"
+                rows="2"
+                :placeholder="
+                  $t(
+                    'AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_MESSAGE_PLACEHOLDER'
+                  )
+                "
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
               />
             </label>
           </section>

@@ -361,7 +361,12 @@
       "MAX_REPLIES_FIELD": "Máximo de respostas (interações)",
       "INPUT_LIMIT_TITLE": "Tamanho das mensagens",
       "INPUT_LIMIT_HINT": "Limita quantos caracteres da mensagem do cliente a IA lê por interação, para conter abuso e consumo de tokens. Não afeta o tamanho da resposta da IA. Deixe 0 para não limitar.",
-      "INPUT_LIMIT_FIELD": "Máximo de caracteres na mensagem do cliente"
+      "INPUT_LIMIT_FIELD": "Máximo de caracteres na mensagem do cliente",
+      "INPUT_LIMIT_ACTION": "Se a mensagem passar do limite",
+      "INPUT_LIMIT_ACTION_TRUNCATE": "Cortar e seguir (lê só o início)",
+      "INPUT_LIMIT_ACTION_ASK_RESUME": "Pedir para o cliente resumir",
+      "INPUT_LIMIT_MESSAGE": "Mensagem ao pedir para resumir",
+      "INPUT_LIMIT_MESSAGE_PLACEHOLDER": "Ex.: Sua mensagem ficou longa demais. Pode resumir em poucas linhas, por favor? 🙂"
     },
     "INTEGRATIONS": {
       "TITLE": "Integrações disponíveis",
