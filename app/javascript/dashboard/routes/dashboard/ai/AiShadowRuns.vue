@@ -377,7 +377,7 @@ onMounted(fetchRuns);
                 v-model="filters.from"
                 type="date"
                 :max="filters.to || undefined"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 leading-tight"
+                class="rounded-lg border-0 outline-1 outline -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 py-2 px-3 text-sm text-n-slate-12"
               />
             </label>
             <label
@@ -391,7 +391,7 @@ onMounted(fetchRuns);
                 v-model="filters.to"
                 type="date"
                 :min="filters.from || undefined"
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 leading-tight"
+                class="rounded-lg border-0 outline-1 outline -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 py-2 px-3 text-sm text-n-slate-12"
               />
             </label>
             <label class="flex flex-col gap-1 min-w-0">
