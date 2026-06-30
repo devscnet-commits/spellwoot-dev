@@ -983,171 +983,160 @@ onMounted(async () => {
               {{ $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIORS_EMPTY') }}
             </p>
 
-            <!-- Comportamentos arrastáveis (1 por contexto de horário) -->
-            <Draggable
+            <!-- 1 comportamento por contexto de horário (sem ordem manual) -->
+            <div
               v-if="form.followup_behaviors.length"
-              v-model="form.followup_behaviors"
-              item-key="uid"
-              handle=".fu-drag"
-              tag="div"
               class="flex flex-col gap-3"
             >
-              <template #item="{ element: bhv, index: bi }">
+              <div
+                v-for="(bhv, bi) in form.followup_behaviors"
+                :key="bhv.uid"
+                class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="flex-1 text-sm font-medium text-n-slate-12">
+                    {{ fuContextLabel(bhv.context) }}
+                  </span>
+                  <button
+                    type="button"
+                    class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                    :aria-label="$t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIOR_REMOVE')"
+                    @click="removeBehavior(bi)"
+                  >
+                    <span class="i-lucide-trash-2 size-4 inline-block" />
+                  </button>
+                </div>
+
                 <div
-                  class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
+                  class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
                 >
-                  <div class="flex items-center gap-2">
-                    <span
-                      class="fu-drag i-lucide-grip-vertical size-4 shrink-0 text-n-slate-10 cursor-grab"
+                  <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT') }}</span>
+                  <Select
+                    v-model="bhv.context"
+                    :options="contextOptionsFor(bhv)"
+                  />
+                </div>
+
+                <!-- Janelas (somente Personalizado) -->
+                <div
+                  v-if="bhv.context === 'custom'"
+                  class="flex flex-col gap-2"
+                >
+                  <span class="text-sm text-n-slate-12">
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOWS') }}
+                  </span>
+                  <div
+                    v-for="(win, wi) in bhv.windows"
+                    :key="win.uid"
+                    class="flex items-center gap-2"
+                  >
+                    <input
+                      v-model="win.start"
+                      type="time"
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
                     />
-                    <span class="flex-1 text-sm font-medium text-n-slate-12">
-                      {{ fuContextLabel(bhv.context) }}
+                    <span class="text-sm text-n-slate-11">
+                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
                     </span>
+                    <input
+                      v-model="win.end"
+                      type="time"
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
+                    />
                     <button
                       type="button"
                       class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
-                      :aria-label="
-                        $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIOR_REMOVE')
-                      "
-                      @click="removeBehavior(bi)"
+                      :aria-label="$t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_REMOVE')"
+                      @click="removeBehaviorWindow(bhv, wi)"
                     >
-                      <span class="i-lucide-trash-2 size-4 inline-block" />
+                      <span class="i-lucide-x size-4 inline-block" />
                     </button>
                   </div>
-
-                  <div
-                    class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
+                  <button
+                    type="button"
+                    class="self-start text-sm font-medium text-n-brand hover:underline"
+                    @click="addBehaviorWindow(bhv)"
                   >
-                    <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT') }}</span>
-                    <Select
-                      v-model="bhv.context"
-                      :options="contextOptionsFor(bhv)"
-                    />
-                  </div>
+                    + {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_ADD') }}
+                  </button>
+                </div>
 
-                  <!-- Janelas (somente Personalizado) -->
-                  <div
-                    v-if="bhv.context === 'custom'"
-                    class="flex flex-col gap-2"
-                  >
-                    <span class="text-sm text-n-slate-12">
-                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOWS') }}
-                    </span>
-                    <div
-                      v-for="(win, wi) in bhv.windows"
-                      :key="win.uid"
-                      class="flex items-center gap-2"
-                    >
+                <!-- Tentativas -->
+                <label
+                  class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+                >
+                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
+                  <input
+                    :value="bhv.attempts.length"
+                    type="number"
+                    min="0"
+                    :max="FU_MAX_ATTEMPTS"
+                    class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+                    @input="setBehaviorAttemptCount(bhv, $event.target.value)"
+                  />
+                </label>
+
+                <div
+                  v-for="(attempt, ai) in bhv.attempts"
+                  :key="attempt.uid"
+                  class="rounded-xl border border-n-weak bg-n-solid-2 p-3 flex flex-col gap-2"
+                >
+                  <span class="text-sm font-medium text-n-slate-12">
+                    {{
+                      $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_LABEL', {
+                        n: ai + 1,
+                      })
+                    }}
+                  </span>
+                  <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
+                    <div class="flex items-stretch gap-2">
                       <input
-                        v-model="win.start"
-                        type="time"
-                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
+                        v-model="attempt.value"
+                        type="number"
+                        min="0"
+                        class="w-24 h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
                       />
-                      <span class="text-sm text-n-slate-11">
-                        {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_TO') }}
-                      </span>
-                      <input
-                        v-model="win.end"
-                        type="time"
-                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm"
-                      />
-                      <button
-                        type="button"
-                        class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
-                        :aria-label="
-                          $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_REMOVE')
-                        "
-                        @click="removeBehaviorWindow(bhv, wi)"
+                      <div
+                        class="shrink-0 [&_select]:!h-10 [&_select]:!py-0 [&>div]:h-full"
                       >
-                        <span class="i-lucide-x size-4 inline-block" />
-                      </button>
+                        <Select
+                          v-model="attempt.unit"
+                          :options="fuUnitOptions"
+                        />
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      class="self-start text-sm font-medium text-n-brand hover:underline"
-                      @click="addBehaviorWindow(bhv)"
-                    >
-                      + {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOW_ADD') }}
-                    </button>
-                  </div>
-
-                  <!-- Tentativas -->
-                  <label
-                    class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
-                  >
-                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
-                    <input
-                      :value="bhv.attempts.length"
-                      type="number"
-                      min="0"
-                      :max="FU_MAX_ATTEMPTS"
-                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
-                      @input="setBehaviorAttemptCount(bhv, $event.target.value)"
+                  </label>
+                  <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE') }}
+                    <textarea
+                      v-model="attempt.message"
+                      rows="2"
+                      :placeholder="
+                        $t(
+                          'AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER'
+                        )
+                      "
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
                     />
                   </label>
-
-                  <div
-                    v-for="(attempt, ai) in bhv.attempts"
-                    :key="attempt.uid"
-                    class="rounded-xl border border-n-weak bg-n-solid-2 p-3 flex flex-col gap-2"
-                  >
-                    <span class="text-sm font-medium text-n-slate-12">
-                      {{
-                        $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_LABEL', {
-                          n: ai + 1,
-                        })
-                      }}
-                    </span>
-                    <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_INTERVAL') }}
-                      <div class="flex items-stretch gap-2">
-                        <input
-                          v-model="attempt.value"
-                          type="number"
-                          min="0"
-                          class="w-24 h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-                        />
-                        <div
-                          class="shrink-0 [&_select]:!h-10 [&_select]:!py-0 [&>div]:h-full"
-                        >
-                          <Select
-                            v-model="attempt.unit"
-                            :options="fuUnitOptions"
-                          />
-                        </div>
-                      </div>
-                    </label>
-                    <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE') }}
-                      <textarea
-                        v-model="attempt.message"
-                        rows="2"
-                        :placeholder="
-                          $t(
-                            'AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER'
-                          )
-                        "
-                        class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-                      />
-                    </label>
-                  </div>
-
-                  <!-- Ação se o cliente não responder -->
-                  <div
-                    class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
-                  >
-                    <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE') }}</span>
-                    <Select
-                      v-model="bhv.no_response_action"
-                      :options="fuNoResponseOptions"
-                    />
-                    <span class="text-xs text-n-slate-11">
-                      {{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE_HINT') }}
-                    </span>
-                  </div>
                 </div>
-              </template>
-            </Draggable>
+
+                <!-- Ação se o cliente não responder -->
+                <div
+                  class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
+                >
+                  <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE') }}</span>
+                  <Select
+                    v-model="bhv.no_response_action"
+                    :options="fuNoResponseOptions"
+                  />
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE_HINT') }}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <button
               type="button"

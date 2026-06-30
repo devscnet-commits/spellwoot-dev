@@ -208,16 +208,21 @@ class Ai::FollowupSweepJob < ApplicationJob
 
   # --- Context / business hours ------------------------------------------------
 
-  # First behavior whose context matches NOW (custom may be several; order decides).
+  # Comportamento que vale AGORA. Não há ordem manual: "custom" é mais específico e
+  # tem prioridade sobre os contextos fixos quando ambos coincidem. Empate entre
+  # vários custom/contextos iguais resolve pela ordem de criação (estável).
   def active_behavior(behaviors, inbox)
     inside = business_hours_open?(inbox)
-    behaviors.find do |b|
-      case b['context'].to_s
-      when 'inbox_hours' then inside
-      when 'outside_hours' then !inside
-      when 'custom' then within_custom_window?(b['windows'], inbox)
-      else false
-      end
+    matching = behaviors.select { |b| behavior_matches?(b, inside, inbox) }
+    matching.min_by { |b| b['context'].to_s == 'custom' ? 0 : 1 }
+  end
+
+  def behavior_matches?(behavior, inside, inbox)
+    case behavior['context'].to_s
+    when 'inbox_hours' then inside
+    when 'outside_hours' then !inside
+    when 'custom' then within_custom_window?(behavior['windows'], inbox)
+    else false
     end
   end
 
