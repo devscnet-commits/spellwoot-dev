@@ -222,6 +222,37 @@ const conversationUrl = id =>
 
 const hasData = computed(() => data.value.summary.evaluated > 0);
 
+// Paginação client-side da lista de execuções (a rolagem ficava enorme).
+const perPage = ref(10);
+const currentPage = ref(1);
+const perPageOptions = [
+  { value: '10', label: '10' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
+];
+const totalRuns = computed(() => data.value.runs.length);
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(totalRuns.value / Number(perPage.value)))
+);
+const pagedRuns = computed(() => {
+  const size = Number(perPage.value);
+  const start = (currentPage.value - 1) * size;
+  return data.value.runs.slice(start, start + size);
+});
+const rangeStart = computed(() =>
+  totalRuns.value ? (currentPage.value - 1) * Number(perPage.value) + 1 : 0
+);
+const rangeEnd = computed(() =>
+  Math.min(currentPage.value * Number(perPage.value), totalRuns.value)
+);
+const goToPage = page => {
+  currentPage.value = Math.min(Math.max(1, page), totalPages.value);
+};
+// Volta para a 1ª página ao trocar tamanho, filtros ou recarregar dados.
+watch([perPage, () => data.value.runs], () => {
+  currentPage.value = 1;
+});
+
 const fetchRuns = async () => {
   isLoading.value = true;
   try {
@@ -601,9 +632,22 @@ onMounted(fetchRuns);
 
           <!-- Execuções detalhadas -->
           <section class="flex flex-col gap-3">
-            <h2 class="text-sm font-semibold text-n-slate-12">
-              {{ $t('AI_SHADOW_RUNS.BLOCKS.RUNS') }}
-            </h2>
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <h2 class="text-sm font-semibold text-n-slate-12">
+                {{ $t('AI_SHADOW_RUNS.BLOCKS.RUNS') }}
+              </h2>
+              <div
+                v-if="data.runs.length"
+                class="flex items-center gap-2 text-xs text-n-slate-11"
+              >
+                <span>{{ $t('AI_SHADOW_RUNS.PAGINATION.PER_PAGE') }}</span>
+                <Select
+                  v-model="perPage"
+                  :options="perPageOptions"
+                  class="w-20"
+                />
+              </div>
+            </div>
             <p
               v-if="!data.runs.length"
               class="text-sm text-n-slate-11 py-4 text-center mb-0"
@@ -611,7 +655,7 @@ onMounted(fetchRuns);
               {{ $t('AI_SHADOW_RUNS.RUN.EMPTY') }}
             </p>
             <div
-              v-for="run in data.runs"
+              v-for="run in pagedRuns"
               :key="run.id"
               class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
             >
@@ -701,6 +745,50 @@ onMounted(fetchRuns);
                     })
                   }}
                 </span>
+              </div>
+            </div>
+
+            <!-- Navegação de páginas -->
+            <div
+              v-if="data.runs.length"
+              class="flex items-center justify-between gap-3 flex-wrap pt-1"
+            >
+              <span class="text-xs text-n-slate-11">
+                {{
+                  $t('AI_SHADOW_RUNS.PAGINATION.RANGE', {
+                    from: rangeStart,
+                    to: rangeEnd,
+                    total: totalRuns,
+                  })
+                }}
+              </span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-n-weak text-xs text-n-slate-12 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-n-alpha-1"
+                  :disabled="currentPage <= 1"
+                  @click="goToPage(currentPage - 1)"
+                >
+                  <span class="i-lucide-chevron-left size-3.5" />
+                  {{ $t('AI_SHADOW_RUNS.PAGINATION.PREV') }}
+                </button>
+                <span class="text-xs text-n-slate-11 px-1">
+                  {{
+                    $t('AI_SHADOW_RUNS.PAGINATION.PAGE', {
+                      current: currentPage,
+                      total: totalPages,
+                    })
+                  }}
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-n-weak text-xs text-n-slate-12 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-n-alpha-1"
+                  :disabled="currentPage >= totalPages"
+                  @click="goToPage(currentPage + 1)"
+                >
+                  {{ $t('AI_SHADOW_RUNS.PAGINATION.NEXT') }}
+                  <span class="i-lucide-chevron-right size-3.5" />
+                </button>
               </div>
             </div>
           </section>

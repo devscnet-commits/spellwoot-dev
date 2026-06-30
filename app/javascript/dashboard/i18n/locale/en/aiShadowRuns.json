@@ -57,6 +57,13 @@
       "BY_DEPARTMENT": "Oportunidades por fluxo",
       "RUNS": "Execuções detalhadas"
     },
+    "PAGINATION": {
+      "PER_PAGE": "Por página",
+      "RANGE": "{from}–{to} de {total}",
+      "PAGE": "Página {current} de {total}",
+      "PREV": "Anterior",
+      "NEXT": "Próxima"
+    },
     "RESOLUTION": {
       "TITLE": "Como a IA resolveu",
       "knowledge": "Por conhecimento",
