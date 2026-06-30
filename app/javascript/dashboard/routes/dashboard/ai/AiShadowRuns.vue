@@ -178,6 +178,45 @@ const diagnosticBlocks = computed(() => [
   { key: 'error', title: 'RECURRING_ERRORS', items: errorInsights.value },
 ]);
 
+// Drill-down: clicar num insight expande a lista das perguntas (runs) daquela lacuna.
+const expandedKey = ref(null);
+const insightKey = (blockKey, insight) =>
+  `${blockKey}:${insight.department || ''}:${insight.tool || ''}:${insight.error_type || ''}`;
+const isExpanded = (blockKey, insight) =>
+  expandedKey.value === insightKey(blockKey, insight);
+const toggleInsight = (blockKey, insight) => {
+  const k = insightKey(blockKey, insight);
+  expandedKey.value = expandedKey.value === k ? null : k;
+};
+const matchRuns = (blockKey, insight) =>
+  (data.value.runs || []).filter(r => {
+    if (blockKey === 'faq') {
+      return (
+        ['unanswered', 'instruction'].includes(r.resolution) &&
+        r.department === insight.department
+      );
+    }
+    if (blockKey === 'instruction') {
+      return (
+        r.confidence != null &&
+        r.confidence < 0.5 &&
+        ['knowledge', 'instruction'].includes(r.resolution) &&
+        r.department === insight.department
+      );
+    }
+    if (blockKey === 'tool') {
+      return (
+        r.tool_missing &&
+        r.department === insight.department &&
+        r.tool === insight.tool
+      );
+    }
+    if (blockKey === 'error') return r.error_type === insight.error_type;
+    return false;
+  });
+const conversationUrl = id =>
+  `/app/accounts/${route.params.accountId}/conversations/${id}`;
+
 const hasData = computed(() => data.value.summary.evaluated > 0);
 
 const fetchRuns = async () => {
@@ -413,34 +452,72 @@ onMounted(fetchRuns);
             >
               {{ $t('AI_SHADOW_RUNS.INSIGHT.EMPTY') }}
             </p>
-            <div
-              v-for="(insight, index) in block.items"
-              :key="index"
-              class="flex items-start gap-3 rounded-xl border border-n-weak bg-n-solid-1 p-3"
-            >
-              <span
-                class="shrink-0 size-8 rounded-lg flex items-center justify-center"
-                :class="INSIGHT_META[block.key].cls"
+            <div v-for="(insight, index) in block.items" :key="index">
+              <button
+                type="button"
+                class="w-full flex items-start gap-3 rounded-xl border border-n-weak bg-n-solid-1 p-3 text-left hover:border-n-brand transition-colors"
+                @click="toggleInsight(block.key, insight)"
               >
-                <span :class="INSIGHT_META[block.key].icon" class="size-4" />
-              </span>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-medium text-n-slate-12 mb-0">
-                  {{
-                    $t(
-                      `AI_SHADOW_RUNS.INSIGHT.${block.key.toUpperCase()}_TITLE`
-                    )
-                  }}
-                </p>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ insightBody(insight) }}
+                <span
+                  class="shrink-0 size-8 rounded-lg flex items-center justify-center"
+                  :class="INSIGHT_META[block.key].cls"
+                >
+                  <span :class="INSIGHT_META[block.key].icon" class="size-4" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-n-slate-12 mb-0">
+                    {{
+                      $t(
+                        `AI_SHADOW_RUNS.INSIGHT.${block.key.toUpperCase()}_TITLE`
+                      )
+                    }}
+                  </p>
+                  <p class="text-xs text-n-slate-11 mb-0">
+                    {{ insightBody(insight) }}
+                  </p>
+                </div>
+                <span
+                  class="shrink-0 inline-flex items-center gap-1.5 text-n-slate-12"
+                >
+                  <span
+                    class="i-lucide-chevron-down size-3.5 text-n-slate-10 transition-transform"
+                    :class="{ 'rotate-180': isExpanded(block.key, insight) }"
+                  />
+                  <span
+                    class="inline-flex items-center justify-center min-w-6 px-1.5 h-6 rounded-full bg-n-alpha-2 text-xs font-medium"
+                  >
+                    {{ insight.count }}
+                  </span>
+                </span>
+              </button>
+              <div
+                v-if="isExpanded(block.key, insight)"
+                class="mt-2 ml-11 flex flex-col gap-1.5"
+              >
+                <a
+                  v-for="r in matchRuns(block.key, insight)"
+                  :key="r.id"
+                  :href="conversationUrl(r.conversation_id)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="block rounded-lg border border-n-weak bg-n-alpha-1 px-3 py-2 hover:border-n-brand transition-colors"
+                >
+                  <span class="block text-xs text-n-slate-12 truncate">
+                    {{ r.question || $t('AI_SHADOW_RUNS.INSIGHT.NO_QUESTION') }}
+                  </span>
+                  <span class="block text-[10px] text-n-slate-10">
+                    {{ $t('AI_SHADOW_RUNS.RUN.CONVERSATION') }} #{{
+                      r.conversation_id
+                    }}
+                  </span>
+                </a>
+                <p
+                  v-if="!matchRuns(block.key, insight).length"
+                  class="text-xs text-n-slate-11 px-1 mb-0"
+                >
+                  {{ $t('AI_SHADOW_RUNS.INSIGHT.NO_EXAMPLES') }}
                 </p>
               </div>
-              <span
-                class="shrink-0 inline-flex items-center justify-center min-w-6 px-1.5 h-6 rounded-full bg-n-alpha-2 text-xs font-medium text-n-slate-12"
-              >
-                {{ insight.count }}
-              </span>
             </div>
           </section>
 

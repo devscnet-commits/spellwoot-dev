@@ -73,7 +73,9 @@
       "TOOL_TITLE": "Ferramenta ausente",
       "TOOL_BODY": "A ferramenta \"{tool}\" foi sugerida {count}× em {department}, mas não está configurada.",
       "ERROR_TITLE": "Erro recorrente",
-      "ERROR_BODY": "{error} aconteceu {count}× — precisa de correção estrutural."
+      "ERROR_BODY": "{error} aconteceu {count}× — precisa de correção estrutural.",
+      "NO_QUESTION": "(sem pergunta registrada)",
+      "NO_EXAMPLES": "Sem exemplos no recorte atual (ajuste os filtros/período)."
     },
     "DEPT": {
       "TOTAL": "execuções",
