@@ -10,6 +10,7 @@ import Select from 'dashboard/components-next/select/Select.vue';
 import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
+import AiStepForm from './AiStepForm.vue';
 
 // When embedded inside the agent (the agent's single default department), ids come by prop
 // and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
@@ -127,14 +128,6 @@ const nextStepUid = () => {
   stepUid += 1;
   return stepUid;
 };
-const blankStep = () => ({
-  uid: nextStepUid(),
-  name: '',
-  instructions: '',
-  automation_on_complete: false,
-  // Delay de agrupamento desta etapa (segundos). Vazio = usa o delay geral (Comportamento).
-  group_delay_seconds: '',
-});
 // Aceita o formato legado (array de strings) e o novo (array de objetos).
 const parseSteps = arr =>
   (Array.isArray(arr) ? arr : []).map(s =>
@@ -433,43 +426,35 @@ const restoreVersion = async v => {
 };
 const formatVersionDate = iso => (iso ? new Date(iso).toLocaleString() : '');
 
-// --- Etapas (cards arrastáveis) ---
+// --- Etapas (cards arrastáveis; edição inline no próprio card) ---
 const MAX_STEPS = 10;
 const remainingSteps = computed(() =>
   Math.max(0, MAX_STEPS - form.steps.length)
 );
-const showStepForm = ref(false);
+// Em edição: número (editar aquele card), 'new' (adicionar) ou null (nada).
 const editingStepIndex = ref(null);
-const stepDraft = reactive(blankStep());
 
 const openNewStep = () => {
   if (form.steps.length >= MAX_STEPS) return;
-  Object.assign(stepDraft, blankStep());
-  editingStepIndex.value = null;
-  showStepForm.value = true;
+  editingStepIndex.value = 'new';
 };
 const openEditStep = index => {
-  Object.assign(stepDraft, form.steps[index]);
   editingStepIndex.value = index;
-  showStepForm.value = true;
 };
-const saveStep = () => {
-  if (!stepDraft.name.trim()) return;
-  const payload = {
-    uid: stepDraft.uid,
-    name: stepDraft.name.trim(),
-    instructions: (stepDraft.instructions || '').trim(),
-    automation_on_complete: !!stepDraft.automation_on_complete,
-    group_delay_seconds: stepDraft.group_delay_seconds,
-  };
-  if (editingStepIndex.value === null) form.steps.push(payload);
-  else form.steps.splice(editingStepIndex.value, 1, payload);
-  showStepForm.value = false;
+const saveStep = payload => {
+  if (editingStepIndex.value === 'new') {
+    form.steps.push({ uid: nextStepUid(), ...payload });
+  } else if (typeof editingStepIndex.value === 'number') {
+    const i = editingStepIndex.value;
+    form.steps.splice(i, 1, { ...form.steps[i], ...payload });
+  }
+  editingStepIndex.value = null;
 };
 const cancelStep = () => {
-  showStepForm.value = false;
+  editingStepIndex.value = null;
 };
 const removeStep = index => {
+  if (editingStepIndex.value === index) editingStepIndex.value = null;
   form.steps.splice(index, 1);
 };
 
@@ -1248,7 +1233,7 @@ onMounted(async () => {
             </div>
 
             <p
-              v-if="!form.steps.length && !showStepForm"
+              v-if="!form.steps.length && editingStepIndex !== 'new'"
               class="text-sm text-n-slate-11 mb-0"
             >
               {{ $t('AI_DEPARTMENTS.FORM.STEP_EMPTY') }}
@@ -1264,133 +1249,82 @@ onMounted(async () => {
               class="flex flex-col gap-2"
             >
               <template #item="{ element, index }">
-                <div
-                  class="flex items-center gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-3 py-2.5"
-                >
-                  <span
-                    class="step-drag i-lucide-grip-vertical size-4 shrink-0 text-n-slate-10 cursor-grab"
-                    :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_DRAG')"
+                <div class="rounded-xl border border-n-weak bg-n-solid-1">
+                  <!-- Edição inline (abre no próprio card) -->
+                  <AiStepForm
+                    v-if="editingStepIndex === index"
+                    :step="element"
+                    :is-new="false"
+                    class="p-4"
+                    @save="saveStep"
+                    @cancel="cancelStep"
                   />
-                  <span
-                    class="shrink-0 w-5 text-xs font-medium text-n-slate-11"
-                  >
-                    {{ index + 1 }}
-                  </span>
-                  <div class="min-w-0 flex-1">
-                    <p
-                      class="text-sm font-medium text-n-slate-12 mb-0 truncate"
+                  <!-- Linha colapsada -->
+                  <div v-else class="flex items-center gap-3 px-3 py-2.5">
+                    <span
+                      class="step-drag i-lucide-grip-vertical size-4 shrink-0 text-n-slate-10 cursor-grab"
+                      :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_DRAG')"
+                    />
+                    <span
+                      class="shrink-0 w-5 text-xs font-medium text-n-slate-11"
                     >
-                      {{ element.name }}
-                    </p>
-                    <p
-                      v-if="element.instructions"
-                      class="text-xs text-n-slate-11 mb-0 truncate"
+                      {{ index + 1 }}
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <p
+                        class="text-sm font-medium text-n-slate-12 mb-0 truncate"
+                      >
+                        {{ element.name }}
+                      </p>
+                      <p
+                        v-if="element.instructions"
+                        class="text-xs text-n-slate-11 mb-0 truncate"
+                      >
+                        {{ element.instructions }}
+                      </p>
+                    </div>
+                    <span
+                      v-if="element.automation_on_complete"
+                      class="shrink-0 i-lucide-zap size-3.5 text-n-amber-11"
+                      :title="$t('AI_DEPARTMENTS.FORM.STEP_AUTOMATION')"
+                    />
+                    <button
+                      type="button"
+                      class="shrink-0 text-n-slate-11 hover:text-n-slate-12"
+                      :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_EDIT')"
+                      @click="openEditStep(index)"
                     >
-                      {{ element.instructions }}
-                    </p>
+                      <span class="i-lucide-pencil size-4 inline-block" />
+                    </button>
+                    <button
+                      type="button"
+                      class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
+                      :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_REMOVE')"
+                      @click="removeStep(index)"
+                    >
+                      <span class="i-lucide-trash-2 size-4 inline-block" />
+                    </button>
                   </div>
-                  <span
-                    v-if="element.automation_on_complete"
-                    class="shrink-0 i-lucide-zap size-3.5 text-n-amber-11"
-                    :title="$t('AI_DEPARTMENTS.FORM.STEP_AUTOMATION')"
-                  />
-                  <button
-                    type="button"
-                    class="shrink-0 text-n-slate-11 hover:text-n-slate-12"
-                    :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_EDIT')"
-                    @click="openEditStep(index)"
-                  >
-                    <span class="i-lucide-pencil size-4 inline-block" />
-                  </button>
-                  <button
-                    type="button"
-                    class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
-                    :aria-label="$t('AI_DEPARTMENTS.FORM.STEP_REMOVE')"
-                    @click="removeStep(index)"
-                  >
-                    <span class="i-lucide-trash-2 size-4 inline-block" />
-                  </button>
                 </div>
               </template>
             </Draggable>
 
-            <!-- Form criar/editar etapa -->
+            <!-- Adicionar nova etapa (mesmo formulário, ao fim da lista) -->
             <div
-              v-if="showStepForm"
-              class="rounded-xl border border-n-weak bg-n-solid-1 p-4 flex flex-col gap-3"
+              v-if="editingStepIndex === 'new'"
+              class="rounded-xl border border-n-weak bg-n-solid-1 p-4"
             >
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.STEP_NAME') }}
-                <input
-                  v-model="stepDraft.name"
-                  type="text"
-                  :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_NAME_PLACEHOLDER')"
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
-                />
-              </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS') }}
-                <textarea
-                  v-model="stepDraft.instructions"
-                  rows="3"
-                  :placeholder="
-                    $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS_PLACEHOLDER')
-                  "
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-none"
-                />
-              </label>
-              <label
-                class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
-              >
-                {{ $t('AI_DEPARTMENTS.FORM.STEP_DELAY') }}
-                <input
-                  v-model="stepDraft.group_delay_seconds"
-                  type="number"
-                  min="0"
-                  :placeholder="
-                    $t('AI_DEPARTMENTS.FORM.STEP_DELAY_PLACEHOLDER')
-                  "
-                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
-                />
-                <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FORM.STEP_DELAY_HINT') }}
-                </span>
-              </label>
-              <div class="flex items-center justify-between gap-3 flex-wrap">
-                <label class="flex items-center gap-2 text-sm text-n-slate-12">
-                  <input
-                    v-model="stepDraft.automation_on_complete"
-                    type="checkbox"
-                  />
-                  {{ $t('AI_DEPARTMENTS.FORM.STEP_AUTOMATION') }}
-                </label>
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-                    @click="cancelStep"
-                  >
-                    {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
-                  </button>
-                  <button
-                    type="button"
-                    :disabled="!stepDraft.name.trim()"
-                    class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    @click="saveStep"
-                  >
-                    {{
-                      editingStepIndex === null
-                        ? $t('AI_DEPARTMENTS.FORM.STEP_CREATE')
-                        : $t('AI_DEPARTMENTS.FORM.SAVE')
-                    }}
-                  </button>
-                </div>
-              </div>
+              <AiStepForm
+                :step="null"
+                is-new
+                @save="saveStep"
+                @cancel="cancelStep"
+              />
             </div>
 
             <!-- Adicionar etapa + contador (máx. 10) -->
             <div
-              v-if="!showStepForm"
+              v-if="editingStepIndex === null"
               class="flex items-center justify-between gap-3"
             >
               <span class="text-xs text-n-slate-11">
