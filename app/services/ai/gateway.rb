@@ -362,17 +362,36 @@ class Ai::Gateway
     inbox = @conversation.inbox
     if inbox.auto_assignment_v2_enabled?
       # SÍNCRONO (não enfileira): atribui na hora com o estado online do momento do handoff,
-      # evitando a janela em que a presença do agente oscila até o job assíncrono rodar. O job
-      # periódico continua como rede de segurança se ninguém estiver online agora.
+      # evitando a janela em que a presença do agente oscila até o job assíncrono rodar.
       AutoAssignment::AssignmentService.new(inbox: inbox).perform_bulk_assignment
-      emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id, mode: 'v2' })
     else
       allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
       AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
-      emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
     end
+    # Fallback: se a atribuição nativa (que exige agente ONLINE) não pegou ninguém, cai num membro
+    # do time mesmo offline — a conversa precisa ter um responsável; ele vê quando voltar. Evita
+    # ficar "no time sem agente" quando a presença/WebSocket não registra ninguém online.
+    fallback_assign_team_member(team_id, run_record) if team_id && @conversation.reload.assignee_id.blank?
+    emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#assign_human] #{e.class}: #{e.message}"
+  end
+
+  # Rede de segurança: atribui um membro do time (independente de estar online), priorizando quem
+  # tem capacidade. Só roda quando a atribuição nativa por presença não encontrou ninguém.
+  def fallback_assign_team_member(team_id, run_record)
+    team = ::Team.find_by(id: team_id, account_id: @account.id)
+    return if team.nil?
+
+    member_ids = team.members.ids
+    return if member_ids.empty?
+
+    with_capacity = (@conversation.inbox.member_ids_with_assignment_capacity & member_ids)
+    assignee_id = with_capacity.first || member_ids.first
+    @conversation.update!(assignee_id: assignee_id)
+    emit(run_record, 'handoff.assigned_fallback', { assignee_id: assignee_id, team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#fallback_assign_team_member] #{e.class}: #{e.message}"
   end
 
   # Marca que a IA entregou e GARANTE status 'open': a partir daqui a auto-atribuição considera a
