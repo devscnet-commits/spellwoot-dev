@@ -126,7 +126,7 @@ onMounted(() => {
                 v-model="fromDate"
                 type="date"
                 :max="toDate || undefined"
-                class="h-9 px-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 leading-tight"
               />
             </div>
             <div v-if="period === 'custom'" class="flex flex-col gap-1.5">
@@ -137,7 +137,7 @@ onMounted(() => {
                 v-model="toDate"
                 type="date"
                 :min="fromDate || undefined"
-                class="h-9 px-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 leading-tight"
               />
             </div>
           </div>
