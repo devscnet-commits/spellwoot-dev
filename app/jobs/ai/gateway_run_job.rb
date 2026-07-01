@@ -6,7 +6,10 @@
 # Team routing: when several agents attend the same inbox, only the agent that owns the
 # conversation's team replies; the others observe (shadow). Team-less agents attend anything.
 class Ai::GatewayRunJob < ApplicationJob
-  queue_as :low
+  # Caminho INTERATIVO da IA (cliente esperando resposta): roda em :medium, acima do trabalho
+  # genérico (default) e do batch de IA (:low — ingest/crawl/shadow/sweeps/per-conversation).
+  # Alinha o "pensar" da IA com o "entregar" (WebhookJob também roda em :medium).
+  queue_as :medium
 
   def perform(message_id, grouped: false)
     message = Message.find_by(id: message_id)
