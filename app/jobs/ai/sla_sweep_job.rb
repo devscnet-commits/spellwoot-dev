@@ -1,50 +1,56 @@
-# Periodic SLA sweep: closes/reclassifies AI-managed conversations whose response window
-# elapsed without customer activity. Shadow-aware: only records intention for shadow bindings;
-# executes for live ones. Schedule via sidekiq-cron (e.g. every 15 min); can also run manually.
+# Dispatcher do SLA: seleciona as conversas candidatas (por binding elegível, usando o cutoff
+# daquele departamento) e enfileira 1 Ai::SlaConversationJob por conversa, que rodam em paralelo.
+# Um lock ($alfred) garante que só um sweep dispara por vez (sem overlap).
 #
-# Department SLA shape (jsonb): { "response_timeout_minutes": 120, "on_timeout": "resolve" }
+# A decisão (resolve-ou-intende) segue idêntica — só foi MOVIDA para o job por-conversa.
 class Ai::SlaSweepJob < ApplicationJob
   queue_as :low
 
+  LOCK_KEY = 'ai:sla_sweep'
+  # TTL de segurança < intervalo do cron (15 min): se o dispatcher morrer sem liberar, o próximo roda.
+  LOCK_TTL = 10.minutes
+
   def perform
-    Ai::AgentInbox.where(active: true).includes(:agent).find_each do |binding|
+    lock = Redis::LockManager.new
+    return unless lock.lock(LOCK_KEY, LOCK_TTL) # outro sweep já está rodando
+
+    begin
+      candidate_ids.each do |conversation_id|
+        Ai::SlaConversationJob.perform_later(conversation_id)
+      end
+    ensure
+      lock.unlock(LOCK_KEY)
+    end
+  end
+
+  private
+
+  # Ids únicos de conversas abertas e além do SLA — o cutoff varia POR DEPARTAMENTO, então
+  # consultamos por binding elegível e unimos num Set. O job por-conversa re-checa no run time.
+  def candidate_ids
+    ids = Set.new
+    eligible_bindings.each do |binding, cutoff|
+      ids.merge(
+        Conversation.where(inbox_id: binding.inbox_id, status: :open)
+                    .where('last_activity_at < ?', cutoff)
+                    .pluck(:id)
+      )
+    end
+    ids
+  end
+
+  # Bindings ativos (live E shadow — o SLA grava intenção p/ shadow também) com departamento
+  # ativo e SLA positivo, cada um com o cutoff do seu departamento (calculado no dispatch p/
+  # estreitar; o job recalcula no run time).
+  def eligible_bindings
+    Ai::AgentInbox.where(active: true).includes(agent: :account).filter_map do |binding|
       department = binding.agent.departments.active.first
       next if department.nil?
 
       timeout = department.sla['response_timeout_minutes'].to_i
       next unless timeout.positive?
 
-      sweep(binding, department, timeout.minutes.ago)
+      [binding, timeout.minutes.ago]
     end
-  end
-
-  private
-
-  def sweep(binding, department, cutoff)
-    account_id = binding.agent.account_id
-    # The per-department auto_attendance toggle is a kill switch for every autonomous action.
-    acts_live = binding.mode == 'live' && department.behavior.to_h['auto_attendance'] != false
-    Conversation.where(inbox_id: binding.inbox_id, status: :open)
-                .where('last_activity_at < ?', cutoff)
-                .find_each do |conversation|
-      if acts_live && department.sla['on_timeout'].to_s == 'resolve'
-        Ai::CapabilityRegistry.execute('conversation.resolve', conversation: conversation, input: {})
-        emit(account_id, conversation.id, 'sla.closed', { executed: true })
-      else
-        emit(account_id, conversation.id, 'sla.intended', { executed: false, reason: sla_skip_reason(binding, acts_live) })
-      end
-    rescue StandardError => e
-      Rails.logger.error "[Ai::SlaSweepJob] conv=#{conversation.id} #{e.class}: #{e.message}"
-    end
-  end
-
-  def sla_skip_reason(binding, acts_live)
-    return binding.mode unless binding.mode == 'live'
-
-    acts_live ? 'on_timeout_none' : 'auto_attendance_off'
-  end
-
-  def emit(account_id, conversation_id, type, payload)
-    Ai::Event.create!(account_id: account_id, conversation_id: conversation_id, event_type: type, payload: payload)
   end
 end
