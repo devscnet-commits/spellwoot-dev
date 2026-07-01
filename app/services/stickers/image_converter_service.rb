@@ -67,9 +67,9 @@ class Stickers::ImageConverterService
 
     out = Tempfile.new(['sticker', '.webp'])
     out.binmode
-    result.webpsave(out.path, **animation_options(image))
-    out.rewind
-    out
+    result.webpsave(out.path, strip: true, **animation_options(image))
+    # Reabre do disco: webpsave grava no path por fora do handle do Tempfile.
+    File.open(out.path, 'rb')
   rescue StandardError => e
     Rails.logger.warn "[Stickers] webp animado falhou: #{e.message}"
     nil
@@ -108,6 +108,7 @@ class Stickers::ImageConverterService
              .source(source)
              .resize_and_pad(TARGET, TARGET, alpha: true) # quadrado + sobras transparentes
              .convert('webp')
+             .saver(strip: true) # remove ICC/EXIF — o WhatsApp recusa figurinha com metadados
              .call
     rewind(result)
   rescue LoadError, StandardError => e
@@ -126,6 +127,7 @@ class Stickers::ImageConverterService
                cmd.background 'none'
                cmd.gravity 'center'
                cmd.extent "#{TARGET}x#{TARGET}"
+               cmd.strip # remove ICC/EXIF
              end
     rewind(result)
   rescue StandardError => e
