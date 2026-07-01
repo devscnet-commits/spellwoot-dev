@@ -153,8 +153,10 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
       body[:docName] = attachment.file.filename.to_s if type == 'document'
     end
 
+    blob = attachment.file.blob if attachment.file.attached?
     Rails.logger.info "[UAZAPI] send/media type=#{type} content_type=#{message.content_type} " \
-                      "file_ct=#{attachment.file_type} url=#{attachment.download_url.to_s.first(80)}"
+                      "blob_ct=#{blob&.content_type} blob_name=#{blob&.filename} " \
+                      "url=#{attachment.download_url.to_s.first(80)}"
 
     response = HTTParty.post(
       "#{base_url}/send/media",

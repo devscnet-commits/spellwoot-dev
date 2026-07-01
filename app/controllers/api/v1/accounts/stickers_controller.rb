@@ -37,11 +37,8 @@ class Api::V1::Accounts::StickersController < Api::V1::Accounts::BaseController
     upload = params[:file]
     return if upload.blank?
 
-    if upload.content_type == 'image/webp'
-      sticker.file.attach(upload)
-      return
-    end
-
+    # Sempre normaliza para WebP 512x512 (figurinha válida no WhatsApp), inclusive .webp
+    # — o conversor preserva animação. Se falhar, anexa o original como fallback.
     converted = Stickers::ImageConverterService.call(upload)
     if converted
       sticker.file.attach(io: converted, filename: webp_filename(upload), content_type: 'image/webp')
