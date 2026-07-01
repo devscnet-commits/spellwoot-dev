@@ -1,5 +1,22 @@
 # Immutable snapshot of an agent's configuration, captured on each save. Enables a visible
 # history and one-click rollback. Only meaningful config fields are stored (not timestamps/ids).
+# == Schema Information
+#
+# Table name: ai_agent_versions
+#
+#  id             :bigint           not null, primary key
+#  note           :string
+#  snapshot       :jsonb            not null
+#  version_number :integer          default(1), not null
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
+#  account_id     :bigint           not null
+#  ai_agent_id    :bigint           not null
+#
+# Indexes
+#
+#  index_ai_agent_versions_on_ai_agent_id_and_version_number  (ai_agent_id,version_number)
+#
 class Ai::AgentVersion < ApplicationRecord
   belongs_to :account, class_name: '::Account'
   belongs_to :agent, class_name: 'Ai::Agent', foreign_key: :ai_agent_id

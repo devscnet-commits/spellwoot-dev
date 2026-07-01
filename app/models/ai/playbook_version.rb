@@ -1,5 +1,23 @@
 # Immutable snapshot of a department playbook (objetivo/steps/transfer/close/messages), captured
 # on each save. Enables history and rollback per department, independent of the agent identity.
+# == Schema Information
+#
+# Table name: ai_playbook_versions
+#
+#  id               :bigint           not null, primary key
+#  note             :string
+#  snapshot         :jsonb            not null
+#  version_number   :integer          default(1), not null
+#  created_at       :datetime         not null
+#  updated_at       :datetime         not null
+#  account_id       :bigint           not null
+#  ai_department_id :bigint           not null
+#  ai_playbook_id   :bigint
+#
+# Indexes
+#
+#  idx_on_ai_department_id_version_number_5c61c735ff  (ai_department_id,version_number)
+#
 class Ai::PlaybookVersion < ApplicationRecord
   belongs_to :account, class_name: '::Account'
   belongs_to :department, class_name: 'Ai::Department', foreign_key: :ai_department_id

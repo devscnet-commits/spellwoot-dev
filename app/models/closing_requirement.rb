@@ -2,6 +2,27 @@
 # under a given OperationalFlow. The condition decides when it applies: always, keyed on the chosen
 # resolution state (canonical_key/polarity), or keyed on another attribute's value ("required IF
 # attribute = one of these answers").
+# == Schema Information
+#
+# Table name: closing_requirements
+#
+#  id                  :bigint           not null, primary key
+#  attribute_key       :string           not null
+#  condition           :jsonb            not null
+#  sort_order          :integer          default(0), not null
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  operational_flow_id :bigint           not null
+#
+# Indexes
+#
+#  idx_closing_requirements_flow_attribute            (operational_flow_id,attribute_key) UNIQUE
+#  index_closing_requirements_on_operational_flow_id  (operational_flow_id)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (operational_flow_id => operational_flows.id)
+#
 class ClosingRequirement < ApplicationRecord
   belongs_to :operational_flow
 

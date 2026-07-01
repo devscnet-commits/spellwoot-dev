@@ -1,3 +1,31 @@
+# == Schema Information
+#
+# Table name: agent_schedules
+#
+#  id             :bigint           not null, primary key
+#  close_hour     :integer
+#  close_minutes  :integer
+#  closed_all_day :boolean          default(FALSE), not null
+#  day_of_week    :integer          not null
+#  open_all_day   :boolean          default(FALSE), not null
+#  open_hour      :integer
+#  open_minutes   :integer
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
+#  account_id     :bigint           not null
+#  user_id        :bigint           not null
+#
+# Indexes
+#
+#  index_agent_schedules_on_account_id               (account_id)
+#  index_agent_schedules_on_user_id                  (user_id)
+#  index_agent_schedules_on_user_id_and_day_of_week  (user_id,day_of_week) UNIQUE
+#
+# Foreign Keys
+#
+#  fk_rails_...  (account_id => accounts.id)
+#  fk_rails_...  (user_id => users.id)
+#
 class AgentSchedule < ApplicationRecord
   belongs_to :user
   belongs_to :account

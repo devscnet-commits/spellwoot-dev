@@ -2,11 +2,12 @@
 #
 # Table name: inbox_members
 #
-#  id         :integer          not null, primary key
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
-#  inbox_id   :integer          not null
-#  user_id    :integer          not null
+#  id                      :integer          not null, primary key
+#  eligible_for_assignment :boolean          default(TRUE), not null
+#  created_at              :datetime         not null
+#  updated_at              :datetime         not null
+#  inbox_id                :integer          not null
+#  user_id                 :integer          not null
 #
 # Indexes
 #

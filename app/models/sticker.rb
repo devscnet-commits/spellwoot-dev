@@ -1,6 +1,20 @@
 # Biblioteca de figurinhas (stickers) por conta. Cada figurinha guarda um arquivo (WebP/PNG/...)
 # via ActiveStorage e é reutilizada no envio manual pelo atendente. O envio em si vira uma
 # mensagem com content_type 'sticker' + anexo, e o UazapiService entrega como figurinha.
+# == Schema Information
+#
+# Table name: stickers
+#
+#  id         :bigint           not null, primary key
+#  name       :string
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  account_id :bigint           not null
+#
+# Indexes
+#
+#  index_stickers_on_account_id  (account_id)
+#
 class Sticker < ApplicationRecord
   include Rails.application.routes.url_helpers
 

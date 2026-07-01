@@ -2,18 +2,23 @@
 #
 # Table name: working_hours
 #
-#  id             :bigint           not null, primary key
-#  close_hour     :integer
-#  close_minutes  :integer
-#  closed_all_day :boolean          default(FALSE)
-#  day_of_week    :integer          not null
-#  open_all_day   :boolean          default(FALSE)
-#  open_hour      :integer
-#  open_minutes   :integer
-#  created_at     :datetime         not null
-#  updated_at     :datetime         not null
-#  account_id     :bigint
-#  inbox_id       :bigint
+#  id                  :bigint           not null, primary key
+#  close_hour          :integer
+#  close_minutes       :integer
+#  closed_all_day      :boolean          default(FALSE)
+#  day_of_week         :integer          not null
+#  has_lunch_break     :boolean          default(FALSE), not null
+#  lunch_end_hour      :integer
+#  lunch_end_minutes   :integer
+#  lunch_start_hour    :integer
+#  lunch_start_minutes :integer
+#  open_all_day        :boolean          default(FALSE)
+#  open_hour           :integer
+#  open_minutes        :integer
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  account_id          :bigint
+#  inbox_id            :bigint
 #
 # Indexes
 #
