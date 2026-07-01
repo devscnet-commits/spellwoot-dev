@@ -73,7 +73,7 @@ class Whatsapp::Providers::Whatsapp360DialogService < Whatsapp::Providers::BaseS
 
   def send_attachment_message(phone_number, message)
     attachment = message.attachments.first
-    type = %w[image audio video].include?(attachment.file_type) ? attachment.file_type : 'document'
+    type = attachment_type(attachment, message)
     type_content = {
       'link': attachment.download_url
     }
@@ -91,6 +91,13 @@ class Whatsapp::Providers::Whatsapp360DialogService < Whatsapp::Providers::BaseS
     )
 
     process_response(response, message)
+  end
+
+  # Figurinha (content_type sticker) sai como 'sticker'; senão pelo file_type do anexo.
+  def attachment_type(attachment, message)
+    return 'sticker' if message.content_type == 'sticker' && attachment.file_type.to_s == 'image'
+
+    %w[image audio video].include?(attachment.file_type) ? attachment.file_type : 'document'
   end
 
   def error_message(response)
