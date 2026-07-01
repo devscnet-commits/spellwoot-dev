@@ -73,8 +73,8 @@ class Ai::ModelRouter
   def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
-    configure_provider!(provider, account_id: account_id)
-    chat = RubyLLM.chat(model: model)
+    context = provider_context(provider, account_id: account_id)
+    chat = context.chat(model: model)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
     response = chat.ask(user_message)
     {
@@ -88,33 +88,36 @@ class Ai::ModelRouter
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error: "#{e.class}: #{e.message}" }
   end
 
-  # Wires the API key for the chosen provider. OpenAI is read from the account's "APIs & Credentials"
-  # (IntegrationSettingsService: account → global → ENV), with the platform Captain key as fallback;
-  # the others read AI_<PROVIDER>_API_KEY from InstallationConfig (or the matching ENV var).
-  def self.configure_provider!(provider, account_id: nil)
+  # Builds an ISOLATED per-call RubyLLM context carrying the provider/account key. It NEVER mutates the
+  # global config (shared across Sidekiq threads — a global mutation leaks keys between tenants under
+  # concurrency). RubyLLM.context dups the global config, so the endpoint/model-registry wiring
+  # (Llm::Config) is inherited; only the key is overridden per call.
+  # OpenAI is read from the account's "APIs & Credentials" (IntegrationSettingsService: account →
+  # global → ENV), with the platform Captain key as fallback; the others read AI_<PROVIDER>_API_KEY
+  # from InstallationConfig (or the matching ENV var).
+  def self.provider_context(provider, account_id: nil)
     case provider.to_s
     when 'anthropic'
       key = credential('AI_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY')
       raise 'anthropic_api_key ausente (defina AI_ANTHROPIC_API_KEY ou ANTHROPIC_API_KEY)' if key.blank?
 
-      RubyLLM.configure { |c| c.anthropic_api_key = key }
+      RubyLLM.context { |c| c.anthropic_api_key = key }
     when 'google', 'gemini'
       key = credential('AI_GEMINI_API_KEY', 'GEMINI_API_KEY')
       raise 'gemini_api_key ausente' if key.blank?
 
-      RubyLLM.configure { |c| c.gemini_api_key = key }
+      RubyLLM.context { |c| c.gemini_api_key = key }
     when 'openrouter'
       key = credential('AI_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY')
       raise 'openrouter_api_key ausente' if key.blank?
 
-      RubyLLM.configure { |c| c.openrouter_api_key = key }
+      RubyLLM.context { |c| c.openrouter_api_key = key }
     else # openai
       # One-time endpoint/model-registry wiring (default OpenAI endpoint for most setups).
       Llm::Config.initialize! if defined?(Llm::Config)
-      # Resolve the key per request — account Hub key wins, else the platform Captain key — and set it
-      # explicitly every time so a previous account's key can never leak via the memoized global config.
+      # Resolve the key per request — account Hub key wins, else the platform Captain key.
       key = account_openai_key(account_id) || credential('CAPTAIN_OPEN_AI_API_KEY', 'OPENAI_API_KEY')
-      RubyLLM.configure { |c| c.openai_api_key = key } if key.present?
+      RubyLLM.context { |c| c.openai_api_key = key if key.present? }
     end
   end
 
