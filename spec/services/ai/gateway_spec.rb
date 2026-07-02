@@ -1,13 +1,13 @@
 require 'rails_helper'
 
-# Golden master do Ai::Gateway — captura o COMPORTAMENTO OBSERVÁVEL atual (sequência de ai_events +
+# Golden master do Ai::Gateway — trava o COMPORTAMENTO OBSERVÁVEL atual (sequência de ai_events +
 # estado do run/conversa/mensagens) como linha de base ANTES de refatorar o God object. Deve passar
 # IDÊNTICO depois da refatoração; qualquer mudança de ordem/nome de evento é regressão.
 #
-# COMO PREENCHER OS GOLDEN (rodar no Docker):
-#   docker compose exec <web> bundle exec rspec spec/services/ai/gateway_spec.rb
-# Os `expect(...).to eq([])` abaixo FALHAM de propósito: o RSpec imprime a sequência REAL no diff —
-# copie-a para dentro do eq(...) e trave. Idem p/ os demais estados marcados com TODO(golden).
+# As sequências de eventos nos `expect(event_types(convo)).to eq(%w[...])` foram CAPTURADAS rodando
+# o próprio spec (não são inventadas). Ao evoluir o Gateway de propósito, atualize o golden aqui.
+#
+# Rodar:  docker compose exec rails bundle exec rspec spec/services/ai/gateway_spec.rb
 #
 # O LLM é isolado stubando o ÚNICO ponto de chamada do Gateway: Ai::ModelRouter.decide.
 RSpec.describe Ai::Gateway do
@@ -154,7 +154,6 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Confere meu cadastro?', binding: binding, mode: 'live')
 
-      # TODO(golden): golden PREVISTO — confirmar na rodada; se falhar, me manda o got:.
       expect(event_types(convo)).to eq(%w[
                                          message.received department.resolved knowledge.retrieved
                                          context.assembled decision.made tool.executed
@@ -175,7 +174,6 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Obrigado, era só isso!', binding: binding, mode: 'live')
 
-      # TODO(golden): golden PREVISTO — confirmar na rodada.
       expect(event_types(convo)).to eq(%w[
                                          message.received department.resolved knowledge.retrieved
                                          context.assembled decision.made close.executed
@@ -198,7 +196,6 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Quero falar sobre a fatura', binding: binding, mode: 'live')
 
-      # TODO(golden): golden PREVISTO — confirmar na rodada.
       expect(event_types(convo)).to eq(%w[
                                          message.received department.resolved knowledge.retrieved
                                          context.assembled decision.made handoff.routed
@@ -218,7 +215,6 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Olá', binding: binding, mode: 'live')
 
-      # TODO(golden): golden PREVISTO — confirmar na rodada.
       expect(event_types(convo)).to eq(%w[message.received department.resolved])
 
       expect(run_for(convo).status).to eq('no_department')
@@ -237,7 +233,6 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Tem cobertura na minha cidade?', binding: binding, mode: 'live')
 
-      # TODO(golden): golden PREVISTO — confirmar na rodada.
       expect(event_types(convo)).to eq(%w[message.received department.resolved])
 
       expect(run_for(convo).status).to eq('error')
