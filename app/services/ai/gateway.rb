@@ -98,10 +98,10 @@ class Ai::Gateway
          run_id: run_record.id)
 
     # Track which step the conversation is on so message grouping can use that step's delay.
-    track_step(department, result[:decision] || {}) if @acts_live
+    state_manager.track_step(department, result[:decision] || {}) if @acts_live
     # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
     # devolveu em `attributes`. Assim os campos vão sendo alimentados e reaproveitados (não repergunta).
-    persist_attributes(run_record, (result[:decision] || {})['attributes']) if @acts_live
+    state_manager.persist_attributes((result[:decision] || {})['attributes']) if @acts_live
 
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
     # which executes the tool immediately (tools are autonomous).
@@ -160,7 +160,7 @@ class Ai::Gateway
       action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
     end
 
-    update_memory(run_record)
+    state_manager.update_memory
     finalize(run_record, result[:status] == 'error' ? 'error' : 'recorded')
   rescue StandardError => e
     error_type = classify_error(e)
@@ -180,21 +180,10 @@ class Ai::Gateway
     )
   end
 
-  # Persiste nos atributos da conversa os dados que o modelo coletou (campo `attributes` da decisão).
-  # Merge, ignora vazios e no-ops. Na próxima volta o PromptCompiler injeta como "Dados já coletados".
-  def persist_attributes(run_record, attrs)
-    return unless attrs.is_a?(Hash)
-
-    cleaned = attrs.reject { |_k, v| v.to_s.strip.empty? }
-    return if cleaned.empty?
-
-    merged = (@conversation.custom_attributes || {}).merge(cleaned)
-    return if merged == @conversation.custom_attributes
-
-    @conversation.update!(custom_attributes: merged)
-    emit(run_record, 'attributes.updated', { keys: cleaned.keys })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#persist_attributes] #{e.class}: #{e.message}"
+  # Escritas de estado derivado (atributos coletados, etapa atual, memória), extraído do Gateway
+  # (Passo 4). Memoizado — só depende de @conversation/@agent (sem restrição de ordem).
+  def state_manager
+    @state_manager ||= Ai::StateManager.new(conversation: @conversation, agent: @agent)
   end
 
   # Execução de ações do pipeline (reply + capabilities nativas), extraído do Gateway (Passo 3).
@@ -255,42 +244,12 @@ class Ai::Gateway
     { decision: {} }
   end
 
-  # Stores the conversation's current step + its grouping delay (from the playbook) so the next
-  # message-grouping debounce can use the step-specific delay. Falls back to the general delay
-  # when the step has no delay configured (handled in Ai::MessageGrouping).
-  def track_step(department, decision)
-    name = decision['current_step'].to_s.strip
-    return if name.blank?
-
-    steps = Array(department.playbook&.steps)
-    step = steps.find { |s| s.is_a?(Hash) && (s['name'] || s[:name]).to_s.strip.casecmp?(name) }
-    delay = (step && (step['group_delay_seconds'] || step[:group_delay_seconds])).to_i
-
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_step'] = { 'name' => name, 'grouping_delay_seconds' => (delay.positive? ? delay : nil) }
-    @conversation.update!(additional_attributes: attrs)
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#track_step] #{e.class}: #{e.message}"
-  end
-
   # Cluster de handoff/atribuição extraído do Gateway (Passo 1 da quebra do God object): route IA->IA,
   # resolução do time de destino e entrega a um humano. Memoizado — criado 1x por run, sob demanda.
   def handoff_coordinator
     @handoff_coordinator ||= Ai::HandoffCoordinator.new(
       conversation: @conversation, account: @account, agent: @agent, message: @message
     )
-  end
-
-  # Invisible worker: persist a rolling conversation summary into agent memory.
-  def update_memory(run_record)
-    summary = Ai::Workers::Summary.generate(conversation: @conversation, agent: @agent)
-    return if summary.blank?
-
-    Ai::AgentMemory.find_or_initialize_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
-                   .update!(summary: summary)
-    emit(run_record, 'memory.updated', { chars: summary.length })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#memory] #{e.class}: #{e.message}"
   end
 
   def finalize(run_record, status)
