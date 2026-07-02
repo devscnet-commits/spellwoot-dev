@@ -136,19 +136,19 @@ class Ai::Gateway
     decision_kind = (result[:decision] || {})['decision']
     if handoff[:handoff]
       # Try AI->AI routing first (to an allowed agent); otherwise hand to a human.
-      routed = @acts_live && route_to_ai(result[:decision] || {}, run_record)
+      routed = @acts_live && handoff_coordinator.route_to_ai(result[:decision] || {})
       unless routed
         # Tell the customer we're handing off (the model's "transferindo você..." text), THEN
         # transfer (reopen + unassign for a human). Without the reply the customer saw silence.
         handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
-        team_id = handoff_team_id(result[:decision] || {})
+        team_id = handoff_coordinator.human_team_id(result[:decision] || {})
         input = { 'unassign' => true }
         input['team_id'] = team_id if team_id # roteia para o time; senão mantém o atual
         handle_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: handoff[:reason], team_id: team_id })
         # Atribuição DEPOIS do trabalho da IA: o próprio handoff atribui um humano (round-robin
         # entre os agentes online do time/caixa). Mantenha a auto-atribuição da caixa DESLIGADA
         # para a IA atender primeiro; aqui é o único ponto que entrega a um agente.
-        assign_human(team_id, run_record) if @acts_live
+        handoff_coordinator.assign_human(team_id) if @acts_live
       end
     elsif decision_kind == 'close'
       handle_action('conversation.resolve', {}, run_record, 'close')
@@ -362,107 +362,12 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#track_step] #{e.class}: #{e.message}"
   end
 
-  MAX_AI_HOPS = 2
-
-  # Routes the conversation to another AI agent the model chose (handoff_target), if it is in this
-  # agent's allowlist and passes the anti-loop guard. Routing = set the conversation's team to the
-  # target's team (that decides which AI is live) and re-enqueue the run. Returns true when routed.
-  def route_to_ai(decision, run_record)
-    target_name = decision['handoff_target'].to_s.strip
-    return false if target_name.blank?
-
-    allowed_ids = @agent.respond_to?(:handoff_agent_ids) ? Array(@agent.handoff_agent_ids) : []
-    return false if allowed_ids.empty?
-
-    target = ::Ai::Agent.where(account_id: @account.id, id: allowed_ids)
-                        .find { |a| (a.assistant_name.presence || a.name).to_s.casecmp?(target_name) }
-    return false if target.nil? || target.team_id.blank?
-
-    chain = Array(@conversation.additional_attributes&.dig('ai_handoff_chain'))
-    return false if chain.size >= MAX_AI_HOPS # anti-loop: cap on IA->IA hops
-    return false if chain.include?(target.id)  # never revisit an agent in this chain
-
-    @conversation.update!(team_id: target.team_id)
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_handoff_chain'] = chain + [target.id]
-    @conversation.update!(additional_attributes: attrs)
-
-    Ai::GatewayRunJob.perform_later(@message.id)
-    emit(run_record, 'handoff.routed', { to_agent_id: target.id, to_team_id: target.team_id, hop: chain.size + 1 })
-    true
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#route_to_ai] #{e.class}: #{e.message}"
-    false
-  end
-
-  # Human handoff routing: resolve the destination TEAM from the model's handoff_target (matched by
-  # team name in this account). Returns nil when there's no match — then the transfer keeps the
-  # conversation's current team and just unassigns (native auto-assignment picks a human).
-  def handoff_team_id(decision)
-    name = decision['handoff_target'].to_s.strip
-    return nil if name.blank?
-
-    ::Team.where(account_id: @account.id).find { |team| team.name.to_s.casecmp?(name) }&.id
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#handoff_team_id] #{e.class}: #{e.message}"
-    nil
-  end
-
-  # Atribuição feita DEPOIS do trabalho da IA (no handoff). A auto-atribuição da caixa pode ficar
-  # LIGADA: enquanto a IA cuida, `ai_pending_handoff?` faz a atribuição nativa pular a conversa.
-  # Aqui marcamos o handoff (vira elegível) e disparamos a atribuição NATIVA — respeitando as
-  # políticas/capacidade dos agentes humanos (job v2 se habilitado; senão round-robin legado).
-  def assign_human(team_id, run_record)
-    mark_handed_off
-    inbox = @conversation.inbox
-    if inbox.auto_assignment_v2_enabled?
-      # SÍNCRONO (não enfileira): atribui na hora com o estado online do momento do handoff,
-      # evitando a janela em que a presença do agente oscila até o job assíncrono rodar.
-      AutoAssignment::AssignmentService.new(inbox: inbox).perform_bulk_assignment
-    else
-      allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
-      AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
-    end
-    # Fallback: se a atribuição nativa (que exige agente ONLINE) não pegou ninguém, cai num membro
-    # do time mesmo offline — a conversa precisa ter um responsável; ele vê quando voltar. Evita
-    # ficar "no time sem agente" quando a presença/WebSocket não registra ninguém online.
-    fallback_assign_team_member(team_id, run_record) if team_id && @conversation.reload.assignee_id.blank?
-    emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#assign_human] #{e.class}: #{e.message}"
-  end
-
-  # Rede de segurança: atribui um membro do time (independente de estar online), priorizando quem
-  # tem capacidade. Só roda quando a atribuição nativa por presença não encontrou ninguém.
-  def fallback_assign_team_member(team_id, run_record)
-    team = ::Team.find_by(id: team_id, account_id: @account.id)
-    return if team.nil?
-
-    member_ids = team.members.ids
-    return if member_ids.empty?
-
-    with_capacity = (@conversation.inbox.member_ids_with_assignment_capacity & member_ids)
-    assignee_id = with_capacity.first || member_ids.first
-    @conversation.update!(assignee_id: assignee_id)
-    emit(run_record, 'handoff.assigned_fallback', { assignee_id: assignee_id, team_id: team_id })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#fallback_assign_team_member] #{e.class}: #{e.message}"
-  end
-
-  # Marca que a IA entregou e GARANTE status 'open': a partir daqui a auto-atribuição considera a
-  # conversa. Reabre porque uma automação de "marcar como pendente" (ou o fluxo de bot) pode tê-la
-  # deixado em pending — e a atribuição só pega 'open'.
-  def mark_handed_off
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_handoff'] = true
-    @conversation.update!(additional_attributes: attrs, status: :open)
-  end
-
-  def team_assignable_ids(team_id)
-    team = ::Team.find_by(id: team_id, account_id: @account.id)
-    return [] if team.nil?
-
-    @conversation.inbox.member_ids_with_assignment_capacity & team.members.ids
+  # Cluster de handoff/atribuição extraído do Gateway (Passo 1 da quebra do God object): route IA->IA,
+  # resolução do time de destino e entrega a um humano. Memoizado — criado 1x por run, sob demanda.
+  def handoff_coordinator
+    @handoff_coordinator ||= Ai::HandoffCoordinator.new(
+      conversation: @conversation, account: @account, agent: @agent, message: @message
+    )
   end
 
   # Number of AI replies already sent in this conversation (across runs/agents).
