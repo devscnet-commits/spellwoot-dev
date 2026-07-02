@@ -61,7 +61,7 @@ class Ai::Gateway
       message = department.behavior.to_h['max_input_message'].presence ||
                 'Sua mensagem ficou longa demais para eu entender bem. Pode resumir em poucas linhas, por favor? 🙂'
       emit(run_record, 'input.too_long', { chars: effective_content.length, max: max_input })
-      handle_reply(department, message, run_record)
+      action_dispatcher.reply(department, message)
       return finalize(run_record, 'input_too_long')
     end
 
@@ -77,14 +77,14 @@ class Ai::Gateway
       agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
       collected: (@conversation.contact&.custom_attributes || {})
         .merge(@conversation.custom_attributes || {}),
-      fillable_attributes: fillable_attributes(department)
+      fillable_attributes: context_builder.fillable_attributes(department)
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
     @stage = :decision
     result = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: build_user_message(effective_content), account_id: @account.id
+      user_message: context_builder.user_message(effective_content), account_id: @account.id
     )
     run_record.update!(
       provider: result[:provider], model: result[:model],
@@ -117,7 +117,7 @@ class Ai::Gateway
         emit(run_record, 'tool.executed',
              { tool: tool.name, status: execution.status, execution_id: execution.id })
       else
-        emit(run_record, 'tool.intended', { tool: intended_tool, executed: false, reason: not_acting_reason(tool) })
+        emit(run_record, 'tool.intended', { tool: intended_tool, executed: false, reason: action_dispatcher.not_acting_reason(tool) })
       end
     end
 
@@ -136,28 +136,28 @@ class Ai::Gateway
     decision_kind = (result[:decision] || {})['decision']
     if handoff[:handoff]
       # Try AI->AI routing first (to an allowed agent); otherwise hand to a human.
-      routed = @acts_live && route_to_ai(result[:decision] || {}, run_record)
+      routed = @acts_live && handoff_coordinator.route_to_ai(result[:decision] || {})
       unless routed
         # Tell the customer we're handing off (the model's "transferindo você..." text), THEN
         # transfer (reopen + unassign for a human). Without the reply the customer saw silence.
-        handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
-        team_id = handoff_team_id(result[:decision] || {})
+        action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
+        team_id = handoff_coordinator.human_team_id(result[:decision] || {})
         input = { 'unassign' => true }
         input['team_id'] = team_id if team_id # roteia para o time; senão mantém o atual
-        handle_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: handoff[:reason], team_id: team_id })
+        action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: handoff[:reason], team_id: team_id })
         # Atribuição DEPOIS do trabalho da IA: o próprio handoff atribui um humano (round-robin
         # entre os agentes online do time/caixa). Mantenha a auto-atribuição da caixa DESLIGADA
         # para a IA atender primeiro; aqui é o único ponto que entrega a um agente.
-        assign_human(team_id, run_record) if @acts_live
+        handoff_coordinator.assign_human(team_id) if @acts_live
       end
     elsif decision_kind == 'close'
-      handle_action('conversation.resolve', {}, run_record, 'close')
+      action_dispatcher.execute_action('conversation.resolve', {}, run_record, 'close')
     elsif decision_kind == 'reply'
-      handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
+      action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
     elsif intended_tool.present? && @acts_live
       # Safety net: a tool ran but the follow-up decision still isn't a plain reply/close/handoff —
       # send whatever text we have so the customer is never left waiting after a tool call.
-      handle_reply(department, (result[:decision] || {})['reply_text'], run_record)
+      action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
     end
 
     update_memory(run_record)
@@ -172,55 +172,12 @@ class Ai::Gateway
 
   private
 
-  HISTORY_LIMIT = 12
-
-  # The model used to receive ONLY the latest message, so it re-asked things already answered
-  # (city/segment in a loop). Pair the current message with the recent transcript (everything up to
-  # our last reply) so it has the conversation context. The current customer burst is kept separate
-  # because grouping may join several messages into `current`.
-  def build_user_message(current)
-    # Se o cliente RESPONDEU/citou uma mensagem específica (reply do WhatsApp), traz o conteúdo
-    # citado para o modelo entender a referência (ex.: "já enviei" citando onde mandou os dados).
-    quoted = quoted_message_content
-    current = "(O cliente está respondendo a esta mensagem anterior: \"#{quoted}\")\n#{current}" if quoted.present?
-
-    last_out_id = @conversation.messages.outgoing.maximum(:id) || 0
-    history = @conversation.messages
-                           .where(message_type: %i[incoming outgoing])
-                           .where('messages.id <= ?', last_out_id)
-                           .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
-                           .map { |m| "#{m.incoming? ? 'Cliente' : 'Atendente'}: #{m.content.to_s.strip.first(500)}" }
-                           .reject { |line| line.end_with?(': ') }
-    return current if history.empty?
-
-    "Histórico recente da conversa:\n#{history.join("\n")}\n\nMensagem atual do cliente:\n#{current}"
-  end
-
-  # Atributos personalizados de conversa que a IA pode preencher: as definições da conta menos os
-  # que o department desabilitou (lista "Atributos personalizados" da tela). Vira a instrução de
-  # quais chaves preencher em `attributes`.
-  def fillable_attributes(department)
-    disabled = Array(department.behavior.to_h['disabled_custom_attributes'])
-    ::CustomAttributeDefinition
-      .where(account_id: @account.id, attribute_model: :conversation_attribute)
-      .where.not(attribute_key: disabled)
-      .pluck(:attribute_key, :attribute_display_name)
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#fillable_attributes] #{e.class}: #{e.message}"
-    []
-  end
-
-  # Conteúdo da mensagem citada quando o cliente responde a uma mensagem específica (reply do canal).
-  # O Chatwoot resolve a citação para o id da mensagem em content_attributes['in_reply_to'].
-  def quoted_message_content
-    ref_id = (@message.in_reply_to if @message.respond_to?(:in_reply_to)) ||
-             @message.content_attributes&.dig('in_reply_to')
-    return nil if ref_id.blank?
-
-    @conversation.messages.find_by(id: ref_id)&.content.to_s.strip.first(300).presence
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#quoted_message_content] #{e.class}: #{e.message}"
-    nil
+  # Montagem do contexto textual do modelo (histórico + citação + atributos preenchíveis), extraído
+  # do Gateway (Passo 2 da quebra do God object). Memoizado — criado 1x por run, sob demanda.
+  def context_builder
+    @context_builder ||= Ai::ContextBuilder.new(
+      conversation: @conversation, message: @message, account: @account
+    )
   end
 
   # Persiste nos atributos da conversa os dados que o modelo coletou (campo `attributes` da decisão).
@@ -240,12 +197,12 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#persist_attributes] #{e.class}: #{e.message}"
   end
 
-  # Why an action was not executed: shadow binding, the department toggle off, or a missing tool.
-  def not_acting_reason(tool = :present)
-    return 'shadow_mode' unless @mode == 'live'
-    return 'auto_attendance_off' unless @acts_live
-
-    tool.nil? ? 'tool_not_found' : 'auto_attendance_off'
+  # Execução de ações do pipeline (reply + capabilities nativas), extraído do Gateway (Passo 3).
+  # Memoizado — depende de @acts_live, então SÓ é acessado depois da resolução do gate (linha ~52).
+  def action_dispatcher
+    @action_dispatcher ||= Ai::ActionDispatcher.new(
+      conversation: @conversation, account: @account, mode: @mode, acts_live: @acts_live
+    )
   end
 
   # Nomes de classes (comparados por NOME p/ não exigir a constante carregada — ex.: PG/Faraday
@@ -277,52 +234,6 @@ class Ai::Gateway
   def timeout_error?(exception)
     ancestors = exception.class.ancestors.filter_map(&:name)
     (ancestors & TIMEOUT_ERROR_NAMES).any? || exception.message.to_s.downcase.include?('timeout')
-  end
-
-  # Executes a native action in live mode (audited) or records intention otherwise.
-  def handle_action(capability_key, input, run_record, label, extra: {})
-    unless @acts_live
-      emit(run_record, "#{label}.intended", extra.merge(executed: false, reason: not_acting_reason))
-      return
-    end
-
-    output = Ai::CapabilityRegistry.execute(capability_key, conversation: @conversation, input: input)
-    Ai::CapabilityExecution.create!(
-      account_id: @account.id, conversation_id: @conversation.id, ai_run_id: run_record.id,
-      capability_key: capability_key, input: input, output: output[:output], status: 'executed',
-      governance: 'allowed', rollback_data: output[:rollback_data], requested_by: 'ai'
-    )
-    emit(run_record, "#{label}.executed", extra.merge(executed: true))
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway##{label}] #{e.class}: #{e.message}"
-    emit(run_record, "#{label}.failed", { error: "#{e.class}: #{e.message}" })
-  end
-
-  # Sends the AI reply to the customer — the only outward-facing action. Gated by the department
-  # reply_scope (off by default): 'all' replies to every live conversation, 'canary' only when the
-  # conversation carries the configured label. Shadow / off / missing label records intention only.
-  def handle_reply(department, text, run_record)
-    return if text.blank?
-
-    # Safety cap: stop replying after the department's max number of AI replies in this
-    # conversation (0 = no limit). Counts 'reply.sent' events, so human agent replies don't count.
-    max_replies = department.behavior.to_h['max_replies'].to_i
-    if max_replies.positive? && ai_replies_count >= max_replies
-      emit(run_record, 'reply.skipped', { reason: 'max_replies_reached', max: max_replies })
-      return
-    end
-
-    state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation)
-    if state == :live
-      Messages::MessageBuilder.new(nil, @conversation, { content: text, private: false }).perform
-      emit(run_record, 'reply.sent', { chars: text.length })
-    else
-      reason = Ai::ReplyPolicy.skip_reason(mode: @mode, department: department, conversation: @conversation)
-      emit(run_record, 'reply.intended', { executed: false, reason: reason })
-    end
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#reply] #{e.class}: #{e.message}"
-    emit(run_record, 'reply.failed', { error: "#{e.class}: #{e.message}" })
   end
 
   # Second model turn after a tool ran: feeds the tool output back so the AI replies to the customer
@@ -362,112 +273,12 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#track_step] #{e.class}: #{e.message}"
   end
 
-  MAX_AI_HOPS = 2
-
-  # Routes the conversation to another AI agent the model chose (handoff_target), if it is in this
-  # agent's allowlist and passes the anti-loop guard. Routing = set the conversation's team to the
-  # target's team (that decides which AI is live) and re-enqueue the run. Returns true when routed.
-  def route_to_ai(decision, run_record)
-    target_name = decision['handoff_target'].to_s.strip
-    return false if target_name.blank?
-
-    allowed_ids = @agent.respond_to?(:handoff_agent_ids) ? Array(@agent.handoff_agent_ids) : []
-    return false if allowed_ids.empty?
-
-    target = ::Ai::Agent.where(account_id: @account.id, id: allowed_ids)
-                        .find { |a| (a.assistant_name.presence || a.name).to_s.casecmp?(target_name) }
-    return false if target.nil? || target.team_id.blank?
-
-    chain = Array(@conversation.additional_attributes&.dig('ai_handoff_chain'))
-    return false if chain.size >= MAX_AI_HOPS # anti-loop: cap on IA->IA hops
-    return false if chain.include?(target.id)  # never revisit an agent in this chain
-
-    @conversation.update!(team_id: target.team_id)
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_handoff_chain'] = chain + [target.id]
-    @conversation.update!(additional_attributes: attrs)
-
-    Ai::GatewayRunJob.perform_later(@message.id)
-    emit(run_record, 'handoff.routed', { to_agent_id: target.id, to_team_id: target.team_id, hop: chain.size + 1 })
-    true
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#route_to_ai] #{e.class}: #{e.message}"
-    false
-  end
-
-  # Human handoff routing: resolve the destination TEAM from the model's handoff_target (matched by
-  # team name in this account). Returns nil when there's no match — then the transfer keeps the
-  # conversation's current team and just unassigns (native auto-assignment picks a human).
-  def handoff_team_id(decision)
-    name = decision['handoff_target'].to_s.strip
-    return nil if name.blank?
-
-    ::Team.where(account_id: @account.id).find { |team| team.name.to_s.casecmp?(name) }&.id
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#handoff_team_id] #{e.class}: #{e.message}"
-    nil
-  end
-
-  # Atribuição feita DEPOIS do trabalho da IA (no handoff). A auto-atribuição da caixa pode ficar
-  # LIGADA: enquanto a IA cuida, `ai_pending_handoff?` faz a atribuição nativa pular a conversa.
-  # Aqui marcamos o handoff (vira elegível) e disparamos a atribuição NATIVA — respeitando as
-  # políticas/capacidade dos agentes humanos (job v2 se habilitado; senão round-robin legado).
-  def assign_human(team_id, run_record)
-    mark_handed_off
-    inbox = @conversation.inbox
-    if inbox.auto_assignment_v2_enabled?
-      # SÍNCRONO (não enfileira): atribui na hora com o estado online do momento do handoff,
-      # evitando a janela em que a presença do agente oscila até o job assíncrono rodar.
-      AutoAssignment::AssignmentService.new(inbox: inbox).perform_bulk_assignment
-    else
-      allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
-      AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
-    end
-    # Fallback: se a atribuição nativa (que exige agente ONLINE) não pegou ninguém, cai num membro
-    # do time mesmo offline — a conversa precisa ter um responsável; ele vê quando voltar. Evita
-    # ficar "no time sem agente" quando a presença/WebSocket não registra ninguém online.
-    fallback_assign_team_member(team_id, run_record) if team_id && @conversation.reload.assignee_id.blank?
-    emit(run_record, 'handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#assign_human] #{e.class}: #{e.message}"
-  end
-
-  # Rede de segurança: atribui um membro do time (independente de estar online), priorizando quem
-  # tem capacidade. Só roda quando a atribuição nativa por presença não encontrou ninguém.
-  def fallback_assign_team_member(team_id, run_record)
-    team = ::Team.find_by(id: team_id, account_id: @account.id)
-    return if team.nil?
-
-    member_ids = team.members.ids
-    return if member_ids.empty?
-
-    with_capacity = (@conversation.inbox.member_ids_with_assignment_capacity & member_ids)
-    assignee_id = with_capacity.first || member_ids.first
-    @conversation.update!(assignee_id: assignee_id)
-    emit(run_record, 'handoff.assigned_fallback', { assignee_id: assignee_id, team_id: team_id })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#fallback_assign_team_member] #{e.class}: #{e.message}"
-  end
-
-  # Marca que a IA entregou e GARANTE status 'open': a partir daqui a auto-atribuição considera a
-  # conversa. Reabre porque uma automação de "marcar como pendente" (ou o fluxo de bot) pode tê-la
-  # deixado em pending — e a atribuição só pega 'open'.
-  def mark_handed_off
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_handoff'] = true
-    @conversation.update!(additional_attributes: attrs, status: :open)
-  end
-
-  def team_assignable_ids(team_id)
-    team = ::Team.find_by(id: team_id, account_id: @account.id)
-    return [] if team.nil?
-
-    @conversation.inbox.member_ids_with_assignment_capacity & team.members.ids
-  end
-
-  # Number of AI replies already sent in this conversation (across runs/agents).
-  def ai_replies_count
-    Ai::Event.where(conversation_id: @conversation.id, event_type: 'reply.sent').count
+  # Cluster de handoff/atribuição extraído do Gateway (Passo 1 da quebra do God object): route IA->IA,
+  # resolução do time de destino e entrega a um humano. Memoizado — criado 1x por run, sob demanda.
+  def handoff_coordinator
+    @handoff_coordinator ||= Ai::HandoffCoordinator.new(
+      conversation: @conversation, account: @account, agent: @agent, message: @message
+    )
   end
 
   # Invisible worker: persist a rolling conversation summary into agent memory.
