@@ -1,3 +1,9 @@
+# Redis::Config vive em lib/ (eager_load, só carregado adiante). Como o config.cache_store abaixo
+# é avaliado já na fase de boot (antes do Zeitwerk e dos initializers), carregamos explicitamente —
+# mesmo padrao do config/initializers/sidekiq.rb. Chatwoot.redis_ssl_verify_mode (usado por
+# Redis::Config.app) ja esta disponivel: vem de config/application.rb, carregado antes deste arquivo.
+require Rails.root.join('lib/redis/config')
+
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
@@ -52,8 +58,18 @@ Rails.application.configure do
   # Prepend all log lines with the following tags.
   config.log_tags = [:request_id]
 
-  # Use a different cache store in production.
-  # config.cache_store = :mem_cache_store
+  # Cache em Redis (db 1, separado do Sidekiq em db 0) — compartilhado entre web+worker e
+  # sobrevive ao redeploy. Reusa Redis::Config.app (url/ssl/senha/sentinels) e só troca o db.
+  config.cache_store = :redis_cache_store, {
+    **Redis::Config.app,
+    db: 1,
+    namespace: 'cache',
+    expires_in: 1.day,
+    pool: { size: ENV.fetch('RAILS_MAX_THREADS', 5).to_i, timeout: 1 },
+    error_handler: lambda do |method:, returning:, exception:|
+      Rails.logger.error("[cache] #{method} falhou (#{exception.class}: #{exception.message}); seguindo sem cache")
+    end
+  }
 
   # Use a real queuing backend for Active Job (and separate queues per environment)
   config.active_job.queue_adapter = :sidekiq
