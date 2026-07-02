@@ -77,14 +77,14 @@ class Ai::Gateway
       agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
       collected: (@conversation.contact&.custom_attributes || {})
         .merge(@conversation.custom_attributes || {}),
-      fillable_attributes: fillable_attributes(department)
+      fillable_attributes: context_builder.fillable_attributes(department)
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
     @stage = :decision
     result = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: build_user_message(effective_content), account_id: @account.id
+      user_message: context_builder.user_message(effective_content), account_id: @account.id
     )
     run_record.update!(
       provider: result[:provider], model: result[:model],
@@ -172,55 +172,12 @@ class Ai::Gateway
 
   private
 
-  HISTORY_LIMIT = 12
-
-  # The model used to receive ONLY the latest message, so it re-asked things already answered
-  # (city/segment in a loop). Pair the current message with the recent transcript (everything up to
-  # our last reply) so it has the conversation context. The current customer burst is kept separate
-  # because grouping may join several messages into `current`.
-  def build_user_message(current)
-    # Se o cliente RESPONDEU/citou uma mensagem específica (reply do WhatsApp), traz o conteúdo
-    # citado para o modelo entender a referência (ex.: "já enviei" citando onde mandou os dados).
-    quoted = quoted_message_content
-    current = "(O cliente está respondendo a esta mensagem anterior: \"#{quoted}\")\n#{current}" if quoted.present?
-
-    last_out_id = @conversation.messages.outgoing.maximum(:id) || 0
-    history = @conversation.messages
-                           .where(message_type: %i[incoming outgoing])
-                           .where('messages.id <= ?', last_out_id)
-                           .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
-                           .map { |m| "#{m.incoming? ? 'Cliente' : 'Atendente'}: #{m.content.to_s.strip.first(500)}" }
-                           .reject { |line| line.end_with?(': ') }
-    return current if history.empty?
-
-    "Histórico recente da conversa:\n#{history.join("\n")}\n\nMensagem atual do cliente:\n#{current}"
-  end
-
-  # Atributos personalizados de conversa que a IA pode preencher: as definições da conta menos os
-  # que o department desabilitou (lista "Atributos personalizados" da tela). Vira a instrução de
-  # quais chaves preencher em `attributes`.
-  def fillable_attributes(department)
-    disabled = Array(department.behavior.to_h['disabled_custom_attributes'])
-    ::CustomAttributeDefinition
-      .where(account_id: @account.id, attribute_model: :conversation_attribute)
-      .where.not(attribute_key: disabled)
-      .pluck(:attribute_key, :attribute_display_name)
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#fillable_attributes] #{e.class}: #{e.message}"
-    []
-  end
-
-  # Conteúdo da mensagem citada quando o cliente responde a uma mensagem específica (reply do canal).
-  # O Chatwoot resolve a citação para o id da mensagem em content_attributes['in_reply_to'].
-  def quoted_message_content
-    ref_id = (@message.in_reply_to if @message.respond_to?(:in_reply_to)) ||
-             @message.content_attributes&.dig('in_reply_to')
-    return nil if ref_id.blank?
-
-    @conversation.messages.find_by(id: ref_id)&.content.to_s.strip.first(300).presence
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#quoted_message_content] #{e.class}: #{e.message}"
-    nil
+  # Montagem do contexto textual do modelo (histórico + citação + atributos preenchíveis), extraído
+  # do Gateway (Passo 2 da quebra do God object). Memoizado — criado 1x por run, sob demanda.
+  def context_builder
+    @context_builder ||= Ai::ContextBuilder.new(
+      conversation: @conversation, message: @message, account: @account
+    )
   end
 
   # Persiste nos atributos da conversa os dados que o modelo coletou (campo `attributes` da decisão).
