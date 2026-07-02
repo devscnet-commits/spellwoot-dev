@@ -11,6 +11,9 @@
 /db/*.sqlite3
 /db/*.sqlite3-journal
 
+# schema_format = :sql (usamos db/structure.sql); schema.rb é gerado espúrio pelo migrate — não versionar.
+/db/schema.rb
+
 # Ignore all logfiles and tempfiles.
 /log/*
 /tmp/*
