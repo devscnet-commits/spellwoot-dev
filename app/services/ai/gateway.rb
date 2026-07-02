@@ -14,6 +14,8 @@ class Ai::Gateway
     @mode = mode || agent_inbox.mode
     # When grouping, the caller passes the whole customer burst as the content to consider.
     @content_override = content_override
+    # Breadcrumb da etapa corrente do pipeline; o rescue do topo usa p/ tipar o erro (classify_error).
+    @stage = nil
   end
 
   def run
@@ -29,6 +31,7 @@ class Ai::Gateway
     base_content = @content_override.presence || @message.content
     effective_content = [base_content, media_text].compact.join("\n").strip
 
+    @stage = :department
     department, resolution = Ai::DepartmentResolver.resolve(
       agent: @agent, inbox_id: @message.inbox_id, message_content: effective_content
     )
@@ -62,12 +65,14 @@ class Ai::Gateway
       return finalize(run_record, 'input_too_long')
     end
 
+    @stage = :knowledge
     knowledge = Ai::KnowledgeRetriever.retrieve(query: effective_content, account_id: @account.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
     run_record.update!(knowledge_count: knowledge.size)
 
     memory = Ai::AgentMemory.find_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
     tools  = department.tools.active.to_a
+    @stage = :context
     system_prompt = Ai::PromptCompiler.compile(
       agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
       collected: (@conversation.contact&.custom_attributes || {})
@@ -76,6 +81,7 @@ class Ai::Gateway
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
+    @stage = :decision
     result = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
       user_message: build_user_message(effective_content), account_id: @account.id
@@ -99,6 +105,7 @@ class Ai::Gateway
 
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
     # which executes the tool immediately (tools are autonomous).
+    @stage = :tool
     intended_tool = result.dig(:decision, 'tool')
     execution = nil
     if intended_tool.present?
@@ -121,6 +128,7 @@ class Ai::Gateway
       result = tool_followup(run_record, system_prompt, effective_content, intended_tool, execution)
     end
 
+    @stage = :dispatch
     # Intelligent handoff / close. Shadow records intention; live executes the native action.
     handoff = Ai::HandoffEvaluator.evaluate(
       decision: result[:decision] || {}, department: department, message_content: effective_content
@@ -155,8 +163,10 @@ class Ai::Gateway
     update_memory(run_record)
     finalize(run_record, result[:status] == 'error' ? 'error' : 'recorded')
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway] conv=#{@conversation&.id} #{e.class}: #{e.message}"
-    run_record.update!(status: 'error', error_type: 'unknown') if defined?(run_record) && run_record&.persisted?
+    error_type = classify_error(e)
+    # Loga a etapa e a categoria junto do erro — o "porquê" fica no log; o "o quê" (agregável) na run.
+    Rails.logger.error "[Ai::Gateway] conv=#{@conversation&.id} stage=#{@stage} type=#{error_type} #{e.class}: #{e.message}"
+    run_record.update!(status: 'error', error_type: error_type) if defined?(run_record) && run_record&.persisted?
     nil
   end
 
@@ -236,6 +246,37 @@ class Ai::Gateway
     return 'auto_attendance_off' unless @acts_live
 
     tool.nil? ? 'tool_not_found' : 'auto_attendance_off'
+  end
+
+  # Nomes de classes (comparados por NOME p/ não exigir a constante carregada — ex.: PG/Faraday
+  # podem não estar em memória) que denotam timeout/queda de conexão.
+  TIMEOUT_ERROR_NAMES = %w[
+    Timeout::Error Net::OpenTimeout Net::ReadTimeout Errno::ETIMEDOUT
+    Redis::TimeoutError Faraday::TimeoutError
+    PG::QueryCanceled ActiveRecord::StatementTimeout ActiveRecord::QueryCanceled
+  ].freeze
+
+  # Traduz a exceção que borbulhou até o rescue do topo numa categoria de Ai::Run::ERROR_TYPES,
+  # cruzando a ETAPA onde estourou (@stage) com a CLASSE da exceção (timeout tem classe
+  # reconhecível). Retorna SEMPRE um valor válido de ERROR_TYPES; 'unknown' é o piso honesto.
+  def classify_error(exception)
+    timed_out = timeout_error?(exception)
+    case @stage
+    when :knowledge  then 'knowledge_timeout'                    # busca RAG/pgvector
+    when :tool       then 'tool_failed'                          # executor de ferramenta estourou
+    when :department then 'classification_failed'                # roteamento/classificação
+    when :decision   then timed_out ? 'provider_timeout' : 'provider_error'
+    else                  timed_out ? 'provider_timeout' : 'unknown'
+    end
+  rescue StandardError
+    'unknown'
+  end
+
+  # Reconhece timeouts por classe (herança, não igualdade) ou pela mensagem, sem referenciar a
+  # constante da classe diretamente (evita NameError se o gem não estiver carregado).
+  def timeout_error?(exception)
+    ancestors = exception.class.ancestors.filter_map(&:name)
+    (ancestors & TIMEOUT_ERROR_NAMES).any? || exception.message.to_s.downcase.include?('timeout')
   end
 
   # Executes a native action in live mode (audited) or records intention otherwise.
