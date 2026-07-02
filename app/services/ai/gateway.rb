@@ -94,7 +94,7 @@ class Ai::Gateway
       error_type: (result[:status] == 'error' ? 'provider_error' : nil)
     )
     emit(run_record, 'decision.made',
-         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms] },
+         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms], temperature: result[:temperature] },
          run_id: run_record.id)
 
     # Track which step the conversation is on so message grouping can use that step's delay.

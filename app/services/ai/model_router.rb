@@ -43,16 +43,21 @@ class Ai::ModelRouter
     'gemini' => 'gemini-1.5-flash',
     'openrouter' => 'openai/gpt-4.1-mini'
   }.freeze
+  # Fallback quando não há profile (a coluna supervisor_temperature já nasce 0.3). Baixa = respostas
+  # mais consistentes/determinísticas, adequado a atendimento.
+  DEFAULT_TEMPERATURE = 0.3
 
-  def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil)
+  def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil, temperature: nil)
     # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
     model    = model.presence || profile&.supervisor_model.presence || DEFAULT_MODELS.fetch(provider, 'gpt-4.1-mini')
+    # Numérico: usar || (não .presence) para preservar 0.0 (determinístico) — 0.0 é truthy em Ruby.
+    temperature = temperature || profile&.supervisor_temperature || DEFAULT_TEMPERATURE
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
-                     user_message: user_message, account_id: account_id)
+                     user_message: user_message, account_id: account_id, temperature: temperature)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     decision = raw[:status] == 'error' ? { 'error' => raw[:error] } : parse_decision(raw[:text])
@@ -60,6 +65,7 @@ class Ai::ModelRouter
     {
       provider: provider,
       model: model,
+      temperature: temperature.to_f,
       decision: decision,
       tokens_in: raw[:tokens_in],
       tokens_out: raw[:tokens_out],
@@ -70,11 +76,13 @@ class Ai::ModelRouter
   end
 
   # NOTE: validate the exact RubyLLM call shape when running; isolated here on purpose.
-  def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil)
+  def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     context = provider_context(provider, account_id: account_id)
     chat = context.chat(model: model)
+    # Builder do ruby_llm (o construtor Chat.new não aceita temperature). to_f: a coluna é BigDecimal.
+    chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
     response = chat.ask(user_message)
     {
