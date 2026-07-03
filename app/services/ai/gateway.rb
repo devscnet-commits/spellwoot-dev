@@ -87,7 +87,7 @@ class Ai::Gateway
     @stage = :decision
     result = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: context_builder.user_message(effective_content), account_id: @account.id
+      user_message: context_builder.user_message(effective_content), account_id: @account.id, json: true
     )
     run_record.update!(
       provider: result[:provider], model: result[:model],
@@ -247,7 +247,7 @@ class Ai::Gateway
                        'Use esse resultado para responder ao cliente agora (decision: "reply").'
     result = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: followup_message, account_id: @account.id
+      user_message: followup_message, account_id: @account.id, json: true
     )
     emit(run_record, 'tool.followup',
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms] })
