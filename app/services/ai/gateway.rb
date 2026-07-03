@@ -71,13 +71,16 @@ class Ai::Gateway
     run_record.update!(knowledge_count: knowledge.size)
 
     memory = Ai::AgentMemory.find_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
+    customer_memory = @conversation.contact_id &&
+                      Ai::CustomerMemory.find_by(contact_id: @conversation.contact_id, account_id: @account.id)
     tools  = department.tools.active.to_a
     @stage = :context
     system_prompt = Ai::PromptCompiler.compile(
       agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
       collected: (@conversation.contact&.custom_attributes || {})
         .merge(@conversation.custom_attributes || {}),
-      fillable_attributes: context_builder.fillable_attributes(department)
+      fillable_attributes: context_builder.fillable_attributes(department),
+      customer_memory: customer_memory
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
