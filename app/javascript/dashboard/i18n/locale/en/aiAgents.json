@@ -670,7 +670,9 @@
     },
     "SUPERVISOR": {
       "TITLE": "Modelo da IA",
-      "DESCRIPTION": "O modelo principal que conduz o atendimento e usa as ferramentas."
+      "DESCRIPTION": "O modelo principal que conduz o atendimento e usa as ferramentas.",
+      "TEMPERATURE": "Temperatura",
+      "TEMPERATURE_HINT": "0 = determinístico, 1 = padrão, 2 = criativo (recomendado: 0.2–0.5 para atendimento)."
     },
     "WORKERS": {
       "TITLE": "Workers (modelos auxiliares)",

@@ -85,6 +85,7 @@ const blank = () => ({
   name: '',
   supervisor_provider: 'openai',
   supervisor_model: '',
+  supervisor_temperature: 0.3,
   workers: emptyWorkers(),
   route_high: 0.95,
   route_low: 0.85,
@@ -178,6 +179,7 @@ const openEdit = profile => {
     name: profile.name,
     supervisor_provider: profile.supervisor_provider,
     supervisor_model: profile.supervisor_model,
+    supervisor_temperature: profile.supervisor_temperature ?? 0.3,
     workers: WORKER_KEYS.reduce((acc, k) => {
       acc[k] = {
         provider: workers[k]?.provider || 'openai',
@@ -198,6 +200,14 @@ const openEdit = profile => {
   capture();
 };
 
+// The Input component doesn't forward `min` to number fields, so enforce the
+// 0–2 range here (fallback to the default when left blank/invalid).
+const clampTemperature = value => {
+  const n = Number(value);
+  if (Number.isNaN(n)) return 0.3;
+  return Math.min(2, Math.max(0, n));
+};
+
 const save = async () => {
   const payload = {
     ai_operation_profile: {
@@ -205,6 +215,7 @@ const save = async () => {
       tier: form.preset,
       supervisor_provider: form.supervisor_provider,
       supervisor_model: form.supervisor_model,
+      supervisor_temperature: clampTemperature(form.supervisor_temperature),
       worker_overrides: form.workers,
       routing_strategy: {
         high_threshold: Number(form.route_high),
@@ -436,6 +447,19 @@ onMounted(fetchProfiles);
                     v-model="form.supervisor_model"
                     :label="$t('AI_PROFILES.FORM.MODEL')"
                   />
+                  <div class="flex flex-col gap-1">
+                    <Input
+                      v-model="form.supervisor_temperature"
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      :label="$t('AI_PROFILES.SUPERVISOR.TEMPERATURE')"
+                    />
+                    <p class="text-xs text-n-slate-11 mb-0">
+                      {{ $t('AI_PROFILES.SUPERVISOR.TEMPERATURE_HINT') }}
+                    </p>
+                  </div>
                 </div>
               </div>
 
