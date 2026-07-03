@@ -224,6 +224,7 @@ Rails.application.routes.draw do
             end
             member do
               get :contactable_inboxes
+              get :ai_memory
               post :destroy_custom_attributes
               delete :avatar
             end
