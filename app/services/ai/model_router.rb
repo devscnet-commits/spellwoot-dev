@@ -3,35 +3,14 @@
 # only OpenAI, so we wire the others here from InstallationConfig or ENV). Defensive: any failure
 # returns an 'error' result + reason so the pipeline records the run instead of crashing.
 class Ai::ModelRouter
-  # List prices in USD per 1k tokens [input, output], most specific match first.
-  # Source: public provider price sheets. These are estimates — review periodically
-  # (caching, batch discounts, image tokens and FX are not reflected here).
-  PRICES = [
-    ['claude-3-5-haiku',  [0.0008, 0.004]],
-    ['claude-3-haiku',    [0.00025, 0.00125]],
-    ['claude-haiku',      [0.0008, 0.004]],
-    ['claude-3-opus',     [0.015, 0.075]],
-    ['claude-opus',       [0.015, 0.075]],
-    ['claude-3-5-sonnet', [0.003, 0.015]],
-    ['claude-sonnet',     [0.003, 0.015]],
-    ['claude',            [0.003, 0.015]],
-    ['gpt-4o-mini',       [0.00015, 0.0006]],
-    ['gpt-4o',            [0.0025, 0.01]],
-    ['gpt-4.1-nano',      [0.0001, 0.0004]],
-    ['gpt-4.1-mini',      [0.0004, 0.0016]],
-    ['gpt-4.1',           [0.002, 0.008]],
-    ['o4-mini',           [0.0011, 0.0044]],
-    ['o3-mini',           [0.0011, 0.0044]],
-    ['gpt',               [0.0005, 0.0015]],
-    ['gemini-2.0-flash',  [0.000075, 0.0003]],
-    ['gemini-1.5-flash',  [0.000075, 0.0003]],
-    ['gemini-flash',      [0.000075, 0.0003]],
-    ['gemini-1.5-pro',    [0.00125, 0.005]],
-    ['gemini-pro',        [0.00125, 0.005]],
-    ['gemini',            [0.0005, 0.0015]]
-  ].freeze
-  # Fallback when the model name matches nothing above (still an estimate, never 0).
-  DEFAULT_PRICE = [0.001, 0.003].freeze
+  # Prices live in config/llm_prices.yml (versioned) and can be overridden without deploy via an
+  # InstallationConfig named AI_LLM_PRICES. See price_table / price_for below.
+  PRICES_CACHE_KEY = 'ai_llm_prices_table'.freeze
+  PRICES_CACHE_TTL = 1.hour
+  PRICES_CONFIG = 'AI_LLM_PRICES'.freeze
+  # Last-resort default if the yml is missing/unreadable AND no override exists — only a crash guard
+  # so estimate_cost never divides against a nil price; the real default comes from the yml.
+  SAFETY_DEFAULT_PRICE = [0.001, 0.003].freeze
 
   # provider/model override the profile's supervisor (used by the confidence router to call the
   # cheap or premium tier). Falls back to the profile's supervisor when not given.
@@ -155,15 +134,88 @@ class Ai::ModelRouter
     { 'decision' => 'reply', 'reply_text' => text }
   end
 
-  # [input, output] price per 1k tokens for a given model (longest/most-specific match wins).
+  # [input, output] price per 1k tokens for a given model (first/most-specific substring match wins).
   def self.price_for(model)
     name = model.to_s.downcase
-    _, price = PRICES.find { |pattern, _| name.include?(pattern) }
-    price || DEFAULT_PRICE
+    table = price_table
+    _, price = table[:prices].find { |pattern, _| name.include?(pattern) }
+    price || table[:default]
   end
 
   def self.estimate_cost(model, tokens_in, tokens_out)
     input_price, output_price = price_for(model)
     ((tokens_in.to_i / 1000.0) * input_price + (tokens_out.to_i / 1000.0) * output_price).round(6)
+  end
+
+  # Cached price table: { default: [in, out], prices: [[match, [in, out]], ...] } (ordered).
+  # Built from config/llm_prices.yml, then the AI_LLM_PRICES InstallationConfig override applied on
+  # top. Cached for 1h so we don't read yml/DB on every run and every Costs-report row.
+  def self.price_table
+    Rails.cache.fetch(PRICES_CACHE_KEY, expires_in: PRICES_CACHE_TTL) { build_price_table }
+  end
+
+  # Drops the cache so an AI_LLM_PRICES change (or a redeploy of the yml) takes effect immediately.
+  def self.reload_prices!
+    Rails.cache.delete(PRICES_CACHE_KEY)
+  end
+
+  def self.build_price_table
+    base = load_yaml_prices
+    apply_price_override(base, load_override)
+  end
+
+  def self.load_yaml_prices
+    raw = YAML.safe_load(File.read(Rails.root.join('config/llm_prices.yml')))
+    {
+      default: normalize_pair(raw['default']) || SAFETY_DEFAULT_PRICE,
+      prices: Array(raw['prices']).filter_map { |row| price_entry(row) }
+    }
+  rescue StandardError => e
+    Rails.logger.error "[Ai::ModelRouter] llm_prices.yml ilegível: #{e.class}: #{e.message}"
+    { default: SAFETY_DEFAULT_PRICE, prices: [] }
+  end
+
+  # Parses the AI_LLM_PRICES InstallationConfig (JSON, same shape as the yml). Returns nil when
+  # absent/blank/invalid so the yml stands alone.
+  def self.load_override
+    raw = (InstallationConfig.find_by(name: PRICES_CONFIG)&.value if defined?(InstallationConfig))
+    return nil if raw.blank?
+
+    parsed = raw.is_a?(String) ? JSON.parse(raw) : raw
+    {
+      default: normalize_pair(parsed['default']),
+      prices: Array(parsed['prices']).filter_map { |row| price_entry(row) }
+    }
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::ModelRouter] AI_LLM_PRICES inválido, usando só o yml: #{e.class}: #{e.message}"
+    nil
+  end
+
+  # Merge override onto base: same-match entries replace in place (keeping position/specificity);
+  # brand-new matches are checked FIRST (specific hotfixes win); default overridden when provided.
+  def self.apply_price_override(base, override)
+    return base if override.nil?
+
+    by_match = override[:prices].to_h
+    merged = base[:prices].map { |match, price| [match, by_match[match] || price] }
+    existing = base[:prices].map(&:first)
+    fresh = override[:prices].reject { |match, _| existing.include?(match) }
+    { default: override[:default] || base[:default], prices: fresh + merged }
+  end
+
+  # Normalizes one price row ({ 'match' =>, 'in' =>, 'out' => }) to [match, [in, out]]; nil if invalid.
+  def self.price_entry(row)
+    return nil unless row.is_a?(Hash)
+
+    match = row['match'].to_s.downcase
+    pair = normalize_pair([row['in'], row['out']])
+    match.present? && pair ? [match, pair] : nil
+  end
+
+  # Coerces a [in, out] pair to two floats; nil if it isn't a usable pair.
+  def self.normalize_pair(pair)
+    return nil unless pair.is_a?(Array) && pair.size == 2 && pair.all? { |n| n.is_a?(Numeric) }
+
+    [pair[0].to_f, pair[1].to_f]
   end
 end
