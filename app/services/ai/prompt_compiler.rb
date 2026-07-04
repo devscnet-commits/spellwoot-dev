@@ -1,7 +1,8 @@
 # Compiles the final system prompt from structured config (identity + playbook + knowledge +
 # tools + memory). The user never writes this — they fill structure, we generate the prompt.
 class Ai::PromptCompiler
-  def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [])
+  def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
+                   customer_memory: nil)
     parts = []
     parts.concat(identity_lines(agent))
     parts << agent.base_prompt if agent.base_prompt.present?
@@ -65,8 +66,24 @@ class Ai::PromptCompiler
 
     parts << "Base de conhecimento relevante:\n#{knowledge.join("\n---\n")}" if knowledge.present?
     parts << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
+    parts.concat(customer_memory_lines(customer_memory))
     parts << response_contract
     parts.join("\n\n")
+  end
+
+  # Persistent memory of THIS contact, built from past conversations (Ai::CustomerMemory). Reuse it
+  # and do NOT re-ask what is already known — same intent as the "Dados JÁ coletados" block, but
+  # spanning conversations. Returns [] when there is no memory yet.
+  def self.customer_memory_lines(customer_memory)
+    return [] if customer_memory.nil?
+
+    facts = customer_memory.key_facts.to_h
+    return [] if customer_memory.summary.blank? && facts.blank?
+
+    lines = ['Memória do cliente (de conversas anteriores — use e NÃO pergunte de novo o que já souber):']
+    lines << "Resumo: #{customer_memory.summary}" if customer_memory.summary.present?
+    lines.concat(facts.map { |k, v| "- #{k}: #{v}" }) if facts.present?
+    [lines.join("\n")]
   end
 
   # AI agents this agent may hand the conversation to (allowlist by agent id).

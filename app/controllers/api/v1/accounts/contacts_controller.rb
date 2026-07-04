@@ -13,7 +13,8 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
 
   before_action :check_authorization
   before_action :set_current_page, only: [:index, :active, :search, :filter]
-  before_action :fetch_contact, only: [:show, :update, :destroy, :avatar, :contactable_inboxes, :destroy_custom_attributes]
+  before_action :fetch_contact,
+                only: [:show, :update, :destroy, :avatar, :contactable_inboxes, :destroy_custom_attributes, :ai_memory]
   before_action :set_include_contact_inboxes, only: [:index, :active, :search, :filter, :show, :update]
 
   def index
@@ -58,6 +59,18 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
   end
 
   def show; end
+
+  # Read-only persistent AI memory of this contact (built across resolved conversations). Returns an
+  # empty shape when there is no memory yet, so the front can render the panel unconditionally.
+  def ai_memory
+    memory = Ai::CustomerMemory.find_by(contact_id: @contact.id, account_id: Current.account.id)
+    render json: {
+      summary: memory&.summary,
+      key_facts: memory&.key_facts || {},
+      conversations_count: memory&.conversations_count || 0,
+      last_updated_at: memory&.last_updated_at
+    }
+  end
 
   def filter
     result = ::Contacts::FilterService.new(Current.account, Current.user, params.permit!).perform
