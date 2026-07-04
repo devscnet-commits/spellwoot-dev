@@ -15,6 +15,7 @@ import ConversationAction from './ConversationAction.vue';
 import ConversationParticipant from './ConversationParticipant.vue';
 import ContactInfo from './contact/ContactInfo.vue';
 import ContactNotes from './contact/ContactNotes.vue';
+import ContactAiMemory from './contact/ContactAiMemory.vue';
 import ConversationInfo from './ConversationInfo.vue';
 import CustomAttributes from './customAttributes/CustomAttributes.vue';
 import Draggable from 'vuedraggable';
@@ -295,6 +296,19 @@ onMounted(() => {
               "
             >
               <ContactNotes :contact-id="contactId" />
+            </AccordionItem>
+          </div>
+          <div v-else-if="element.name === 'contact_ai_memory'">
+            <AccordionItem
+              :title="$t('CONVERSATION_SIDEBAR.ACCORDION.CONTACT_AI_MEMORY')"
+              :is-open="isContactSidebarItemOpen('is_contact_ai_memory_open')"
+              compact
+              @toggle="
+                value =>
+                  toggleSidebarUIState('is_contact_ai_memory_open', value)
+              "
+            >
+              <ContactAiMemory :contact-id="contactId" />
             </AccordionItem>
           </div>
         </template>

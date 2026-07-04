@@ -365,11 +365,16 @@
       "CONVERSATION_LABELS": "Etiquetas da conversa",
       "CONVERSATION_INFO": "Informação da conversa",
       "CONTACT_NOTES": "Notas do contato",
+      "CONTACT_AI_MEMORY": "Memória da IA",
       "CONTACT_ATTRIBUTES": "Atributos do contato",
       "PREVIOUS_CONVERSATION": "Conversas anteriores",
       "MACROS": "Macros",
       "LINEAR_ISSUES": "Problemas do Linear vinculados",
       "SHOPIFY_ORDERS": "Pedidos do Shopify"
+    },
+    "AI_MEMORY": {
+      "EMPTY": "Ainda não há memória — ela é criada automaticamente quando conversas com este contato são resolvidas.",
+      "META": "Atualizado em {date} · {count} conversas"
     },
     "SHOPIFY": {
       "ORDER_ID": "Pedido #{id}",
