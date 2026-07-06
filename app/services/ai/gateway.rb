@@ -23,7 +23,7 @@ class Ai::Gateway
       account_id: @account.id, conversation_id: @conversation.id, ai_agent_id: @agent.id,
       inbox_id: @message.inbox_id, run_type: 'decision', mode: @mode, status: 'running'
     )
-    emit(run_record, 'message.received', { content: @message.content.to_s.first(500) })
+    emit(run_record, 'message.received', { content: @message.content.to_s.first(500), message_id: @message.id })
 
     # Invisible worker: turn media (audio/image) into text the supervisor can use.
     media_text = Ai::Workers::MediaProcessor.process(@message)

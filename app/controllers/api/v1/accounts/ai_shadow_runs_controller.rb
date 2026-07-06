@@ -130,7 +130,8 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     {
       id: run.id,
       conversation_id: run.conversation_id,
-      question: questions[run.id],
+      question: questions.dig(run.id, :text),
+      question_message_id: questions.dig(run.id, :message_id),
       department_id: run.ai_department_id,
       department: dept_names[run.ai_department_id],
       routing_method: methods[run.id],
@@ -274,7 +275,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   # antes ele refiltrava a lista completa de runs; agora a paginação só traz 1 página.
   def examples(group)
     group.first(EXAMPLES_PER_INSIGHT).map do |r|
-      { id: r[:id], conversation_id: r[:conversation_id], question: r[:question] }
+      { id: r[:id], conversation_id: r[:conversation_id], question: r[:question], message_id: r[:question_message_id] }
     end
   end
 
@@ -302,7 +303,10 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
 
       window = (run.created_at - 5.seconds)..(run.updated_at + 2.seconds)
       match = candidates.find { |(_conv, created_at, _payload)| window.cover?(created_at) } || candidates.last
-      acc[run.id] = match[2]['content'].to_s.first(200) if match
+      next unless match
+
+      # message_id só existe em eventos novos; runs antigas ficam sem âncora (abrem no topo).
+      acc[run.id] = { text: match[2]['content'].to_s.first(200), message_id: match[2]['message_id'] }
     end
   end
 
