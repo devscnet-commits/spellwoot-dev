@@ -17,7 +17,8 @@ class Messages::AudioTranscriptionService< Llm::LegacyBaseOpenAiService
     return { error: 'Message not found' } if message.blank?
 
     transcriptions = transcribe_audio
-    Rails.logger.info "Audio transcription successful: #{transcriptions}"
+    # PII: don't log the transcription content (customer speech) — only metadata.
+    Rails.logger.info "Audio transcription successful: message=#{message.id} chars=#{transcriptions.to_s.length}"
     { success: true, transcriptions: transcriptions }
   rescue Faraday::UnauthorizedError
     Rails.logger.warn('Skipping audio transcription: OpenAI configuration is invalid or disabled (401 Unauthorized).')
