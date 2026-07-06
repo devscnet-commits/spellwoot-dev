@@ -31,6 +31,11 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import ConversationResolveAttributesModal from 'dashboard/components-next/ConversationWorkflow/ConversationResolveAttributesModal.vue';
 import ConversationOutcomeButtons from 'dashboard/components-next/ConversationWorkflow/ConversationOutcomeButtons.vue';
 
+defineProps({
+  // Narrow header: show the resolve/reopen button icon-only, with the label moved to a tooltip.
+  compact: { type: Boolean, default: false },
+});
+
 const store = useStore();
 const getters = useStoreGetters();
 const { t } = useI18n();
@@ -336,7 +341,9 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
     >
       <Button
         v-if="isOpen"
-        :label="t('CONVERSATION.HEADER.RESOLVE_ACTION')"
+        v-tooltip="compact ? t('CONVERSATION.HEADER.RESOLVE_ACTION') : ''"
+        :label="compact ? '' : t('CONVERSATION.HEADER.RESOLVE_ACTION')"
+        :icon="compact ? 'i-lucide-circle-check' : ''"
         size="md"
         color="slate"
         no-animation
@@ -345,7 +352,9 @@ useEmitter(CMD_RESOLVE_CONVERSATION, onCmdResolveConversation);
       />
       <Button
         v-else-if="isResolved"
-        :label="t('CONVERSATION.HEADER.REOPEN_ACTION')"
+        v-tooltip="compact ? t('CONVERSATION.HEADER.REOPEN_ACTION') : ''"
+        :label="compact ? '' : t('CONVERSATION.HEADER.REOPEN_ACTION')"
+        :icon="compact ? 'i-lucide-rotate-ccw' : ''"
         size="md"
         color="slate"
         no-animation
