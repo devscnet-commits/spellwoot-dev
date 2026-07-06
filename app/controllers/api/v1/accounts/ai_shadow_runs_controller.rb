@@ -13,6 +13,16 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   MAX_PER_PAGE = 100
   EXAMPLES_PER_INSIGHT = 25
 
+  # Knowledge-gap noise filter: only a substantive customer question counts as a gap. Drops
+  # attachment placeholders, very short messages, and greetings/acknowledgements.
+  MIN_GAP_LENGTH = 10
+  ATTACHMENT_PLACEHOLDERS = ['[document]', '[image]', '[audio]', '[video]'].freeze
+  # Stems of greetings/thanks/acks — matched only when the message is essentially just this (<= 2
+  # words), collapsing 3+ repeated letters so "obrigadaaaa" still matches "obrigad".
+  GREETING_STEMS = %w[
+    obrigad valeu vlw oi ola olá oie bomdia boatarde boanoite tchau ok okay blz beleza sim nao não certo
+  ].freeze
+
   def index
     bounds = window_bounds
     if bounds == :too_large
@@ -171,6 +181,34 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     row[:confidence] && row[:confidence] < LOW_CONFIDENCE && %w[knowledge instruction].include?(row[:resolution])
   end
 
+  # A knowledge gap is a genuinely UNANSWERED run whose customer message is a substantive question.
+  # 'instruction' (an answered reply that just didn't use RAG) is NOT a gap — it stays visible in the
+  # resolution distribution, but no longer inflates the gap count/list with false positives.
+  def knowledge_gap?(row)
+    row[:resolution] == 'unanswered' && substantive_question?(row[:question])
+  end
+
+  # Drops attachment placeholders, very short messages and greetings/acks (Bug 2 noise filter).
+  def substantive_question?(text)
+    stripped = text.to_s.strip
+    return false if stripped.empty?
+    return false if ATTACHMENT_PLACEHOLDERS.include?(stripped.downcase)
+    return false if stripped.length < MIN_GAP_LENGTH
+
+    !greeting_only?(stripped.downcase)
+  end
+
+  # True when the message is essentially just a greeting/ack: <= 2 words matching a stem after
+  # collapsing 3+ repeated letters. So "obrigadaaaa" / "bom dia!" / "okk" are dropped, but a real
+  # question that only STARTS with "obrigada, ..." (3+ words) is kept.
+  def greeting_only?(text)
+    words = text.gsub(/[[:punct:]]/, ' ').split
+    return false if words.empty? || words.size > 2
+
+    stem = words.join.gsub(/(.)\1{2,}/, '\1')
+    GREETING_STEMS.any? { |g| stem.start_with?(g) }
+  end
+
   def summary(rows)
     by_resolution = rows.group_by { |r| r[:resolution] }.transform_values(&:size)
     {
@@ -180,7 +218,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
       low_confidence: rows.count { |r| low_confidence?(r) },
       tools_suggested: rows.count { |r| r[:tool].present? },
       tools_missing: rows.count { |r| r[:tool_missing] },
-      knowledge_gaps: rows.count { |r| %w[unanswered instruction].include?(r[:resolution]) },
+      knowledge_gaps: rows.count { |r| knowledge_gap?(r) },
       by_resolution: by_resolution,
       by_department: by_department(rows),
       by_error: rows.select { |r| r[:error_type].present? }
@@ -208,7 +246,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   end
 
   def knowledge_insights(rows)
-    rows.select { |r| %w[unanswered instruction].include?(r[:resolution]) && r[:department].present? }
+    rows.select { |r| knowledge_gap?(r) && r[:department].present? }
         .group_by { |r| r[:department] }
         .map { |name, group| { type: 'faq', department: name, count: group.size, examples: examples(group) } }
   end
