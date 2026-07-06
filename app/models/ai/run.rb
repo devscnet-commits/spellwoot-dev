@@ -37,7 +37,7 @@ class Ai::Run < ApplicationRecord
   # Structured failure reasons surfaced by Shadow (F1.0/E). Populated by the Gateway (F1.1).
   ERROR_TYPES = %w[
     provider_timeout provider_error knowledge_timeout tool_failed
-    guardrail_blocked budget_exceeded classification_failed unknown
+    guardrail_blocked budget_exceeded classification_failed unparsed_decision unknown
   ].freeze
 
   belongs_to :account, class_name: '::Account'

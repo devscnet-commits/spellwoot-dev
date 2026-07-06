@@ -127,6 +127,7 @@
       "guardrail_blocked": "Bloqueado por regra de segurança",
       "budget_exceeded": "Orçamento excedido",
       "classification_failed": "Falha ao classificar o fluxo",
+      "unparsed_decision": "Resposta da IA ilegível (não enviada)",
       "unknown": "Erro não identificado"
     }
   },

@@ -155,13 +155,17 @@ class Ai::ModelRouter
     ENV.fetch(env_name, nil)
   end
 
+  # When the model returns a parseable decision object we use it. When it DOESN'T (no JSON found or
+  # malformed), we return decision 'unparsed' WITHOUT reply_text — never the raw text as a reply.
+  # The Gateway turns 'unparsed' into an error run and dispatches nothing, so raw JSON/config the
+  # model may emit instead of an answer can no longer leak to the customer (Bug 3).
   def self.parse_decision(text)
     return {} if text.blank?
 
     json = text[/\{.*\}/m]
-    json ? JSON.parse(json) : { 'decision' => 'reply', 'reply_text' => text }
+    json ? JSON.parse(json) : { 'decision' => 'unparsed' }
   rescue JSON::ParserError
-    { 'decision' => 'reply', 'reply_text' => text }
+    { 'decision' => 'unparsed' }
   end
 
   # [input, output] price per 1k tokens for a given model (longest/most-specific match wins).
