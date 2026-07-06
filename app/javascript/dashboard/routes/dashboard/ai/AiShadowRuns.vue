@@ -199,8 +199,11 @@ const toggleInsight = (blockKey, insight) => {
 // As perguntas-exemplo de cada lacuna vêm do próprio insight (backend), pois a lista de runs
 // agora é paginada e não contém o conjunto completo.
 const insightExamples = insight => insight.examples || [];
-const conversationUrl = id =>
-  `/app/accounts/${route.params.accountId}/conversations/${id}`;
+// messageId deep-links to the exact message (ConversationView scrolls to it); omitted for older
+// runs that never recorded it, which then just open at the top.
+const conversationUrl = (id, messageId) =>
+  `/app/accounts/${route.params.accountId}/conversations/${id}` +
+  (messageId ? `?messageId=${messageId}` : '');
 
 const hasData = computed(() => data.value.summary.evaluated > 0);
 
@@ -572,7 +575,7 @@ onMounted(fetchRuns);
                 <a
                   v-for="r in insightExamples(insight)"
                   :key="r.id"
-                  :href="conversationUrl(r.conversation_id)"
+                  :href="conversationUrl(r.conversation_id, r.message_id)"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="block rounded-lg border border-n-weak bg-n-alpha-1 px-3 py-2 hover:border-n-brand transition-colors"
