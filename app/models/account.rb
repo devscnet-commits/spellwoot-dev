@@ -23,8 +23,6 @@
 #
 
 class Account < ApplicationRecord
-  # used for single column multi flags
-  include FlagShihTzu
   include Reportable
   include Featurable
   include CacheKeys
@@ -32,10 +30,9 @@ class Account < ApplicationRecord
   include AccountEmailRateLimitable
   include AccountSettingsSchema
 
-  DEFAULT_QUERY_SETTING = {
-    flag_query_mode: :bit_operator,
-    check_for_column: false
-  }.freeze
+  # The feature_flags bigint bitmask was replaced by enabled_feature_keys (see Featurable). Ignoring
+  # the column decouples the running app from it so the drop migration is safe under a rolling deploy.
+  self.ignored_columns += %w[feature_flags]
 
   validates :name, presence: true
   validates :domain, length: { maximum: 100 }
