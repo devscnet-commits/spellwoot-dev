@@ -1,4 +1,4 @@
-\restrict 9dhfWf7YRuBXEDAKE0g31EKQsqVoCpUZwQFYveXhGzem0oF3FRbwfj8JAVKE0CY
+\restrict fpcU8ElAacGTUUoLQs69zgka66dEYnr6T6MjyrZxV02GqU7Kjj1fTK74rXb6V2v
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -252,13 +252,13 @@ CREATE TABLE public.accounts (
     locale integer DEFAULT 0,
     domain character varying(100),
     support_email character varying(100),
-    feature_flags bigint DEFAULT 0 NOT NULL,
     auto_resolve_duration integer,
     limits jsonb DEFAULT '{}'::jsonb,
     custom_attributes jsonb DEFAULT '{}'::jsonb,
     status integer DEFAULT 0,
     internal_attributes jsonb DEFAULT '{}'::jsonb NOT NULL,
-    settings jsonb DEFAULT '{}'::jsonb
+    settings jsonb DEFAULT '{}'::jsonb,
+    enabled_feature_keys character varying[] DEFAULT '{}'::character varying[] NOT NULL
 );
 
 
@@ -759,6 +759,42 @@ ALTER SEQUENCE public.ai_capability_executions_id_seq OWNED BY public.ai_capabil
 
 
 --
+-- Name: ai_customer_memories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_customer_memories (
+    id bigint NOT NULL,
+    contact_id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    summary text,
+    key_facts jsonb DEFAULT '{}'::jsonb NOT NULL,
+    conversations_count integer DEFAULT 0 NOT NULL,
+    last_updated_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_customer_memories_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_customer_memories_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_customer_memories_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_customer_memories_id_seq OWNED BY public.ai_customer_memories.id;
+
+
+--
 -- Name: ai_department_inboxes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1069,7 +1105,8 @@ CREATE TABLE public.ai_operation_profiles (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     routing_strategy jsonb DEFAULT '{}'::jsonb NOT NULL,
-    tier character varying DEFAULT 'customizado'::character varying NOT NULL
+    tier character varying DEFAULT 'customizado'::character varying NOT NULL,
+    supervisor_temperature numeric(3,2) DEFAULT 0.3 NOT NULL
 );
 
 
@@ -4784,6 +4821,13 @@ ALTER TABLE ONLY public.ai_capability_executions ALTER COLUMN id SET DEFAULT nex
 
 
 --
+-- Name: ai_customer_memories id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_customer_memories ALTER COLUMN id SET DEFAULT nextval('public.ai_customer_memories_id_seq'::regclass);
+
+
+--
 -- Name: ai_department_inboxes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5638,6 +5682,14 @@ ALTER TABLE ONLY public.ai_agents
 
 ALTER TABLE ONLY public.ai_capability_executions
     ADD CONSTRAINT ai_capability_executions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_customer_memories ai_customer_memories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_customer_memories
+    ADD CONSTRAINT ai_customer_memories_pkey PRIMARY KEY (id);
 
 
 --
@@ -6677,6 +6729,13 @@ CREATE INDEX index_account_users_on_user_id ON public.account_users USING btree 
 
 
 --
+-- Name: index_accounts_on_enabled_feature_keys; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_accounts_on_enabled_feature_keys ON public.accounts USING gin (enabled_feature_keys);
+
+
+--
 -- Name: index_accounts_on_status; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6814,6 +6873,20 @@ CREATE INDEX index_ai_capability_executions_on_conversation_id ON public.ai_capa
 --
 
 CREATE INDEX index_ai_capability_executions_on_status ON public.ai_capability_executions USING btree (status);
+
+
+--
+-- Name: index_ai_customer_memories_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_customer_memories_on_account_id ON public.ai_customer_memories USING btree (account_id);
+
+
+--
+-- Name: index_ai_customer_memories_on_contact_id_and_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_ai_customer_memories_on_contact_id_and_account_id ON public.ai_customer_memories USING btree (contact_id, account_id);
 
 
 --
@@ -8954,11 +9027,15 @@ ALTER TABLE ONLY public.meta_conversion_events
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9dhfWf7YRuBXEDAKE0g31EKQsqVoCpUZwQFYveXhGzem0oF3FRbwfj8JAVKE0CY
+\unrestrict fpcU8ElAacGTUUoLQs69zgka66dEYnr6T6MjyrZxV02GqU7Kjj1fTK74rXb6V2v
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260704120000'),
+('20260703120000'),
+('20260702120000'),
+('20260701120000'),
 ('20260630120000'),
 ('20260627130000'),
 ('20260627120000'),
