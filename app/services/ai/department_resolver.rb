@@ -3,6 +3,17 @@
 # -> default department (is_default) -> first candidate. Departments are tried in `position` order.
 # Returns [department, method].
 class Ai::DepartmentResolver
+  # Cheapest model per provider for the routing decision — trivial task, don't burn the supervisor.
+  # Keeps the supervisor's provider (so we reuse its configured key), only drops to the cheap model.
+  CHEAP_MODELS = {
+    'openai' => 'gpt-4.1-nano',
+    'anthropic' => 'claude-3-5-haiku',
+    'google' => 'gemini-2.0-flash',
+    'gemini' => 'gemini-2.0-flash',
+    'openrouter' => 'gpt-4.1-nano'
+  }.freeze
+  CLASSIFIER_TIMEOUT = 10 # seconds — routing is quick; cut hung calls (falls back to default).
+
   def self.resolve(agent:, inbox_id:, message_content:)
     departments = agent.departments.active.order(:position, :id).to_a
     return [nil, 'none'] if departments.empty?
@@ -19,25 +30,31 @@ class Ai::DepartmentResolver
     fallback ? [fallback, 'default'] : [candidates.first, 'fallback']
   end
 
-  # Cheap classification worker: picks the best department by name/objetivo.
+  # Cheap, deterministic classifier: the model replies with the department's INDEX (1..N) or 0 for
+  # "none", so we match by exact index instead of a fragile substring of the name.
   def self.classify(departments, message_content, agent)
-    profile = agent.operation_profile
-    provider = profile&.supervisor_provider.presence || 'openai'
-    model = profile&.supervisor_model.presence || 'gpt-4.1-mini'
+    provider = agent.operation_profile&.supervisor_provider.presence || 'openai'
+    model = CHEAP_MODELS.fetch(provider, 'gpt-4.1-nano')
 
-    options = departments.map { |d| "- #{d.name}: #{d.objetivo}" }.join("\n")
-    system_prompt = "Classifique a mensagem do cliente no departamento mais adequado.\n" \
-                    "Departamentos:\n#{options}\nResponda APENAS com o nome exato do departamento."
-
-    raw = Ai::ModelRouter.call_model(provider: provider, model: model,
-                                     system_prompt: system_prompt, user_message: message_content.to_s,
-                                     account_id: agent.account_id)
+    raw = Ai::ModelRouter.call_model(
+      provider: provider, model: model, system_prompt: numbered_prompt(departments),
+      user_message: message_content.to_s, account_id: agent.account_id, timeout: CLASSIFIER_TIMEOUT
+    )
     return nil if raw[:status] == 'error'
 
-    answer = raw[:text].to_s.strip.downcase
-    departments.find { |d| answer.include?(d.name.to_s.downcase) }
+    # First integer in the reply; 0 / out-of-range / no digit -> nil -> caller falls back to default.
+    index = raw[:text].to_s[/\d+/].to_i
+    index.between?(1, departments.size) ? departments[index - 1] : nil
   rescue StandardError => e
     Rails.logger.error "[Ai::DepartmentResolver] #{e.class}: #{e.message}"
     nil
+  end
+
+  def self.numbered_prompt(departments)
+    options = departments.each_with_index.map { |d, i| "#{i + 1}. #{d.name}: #{d.objetivo}" }.join("\n")
+    "Classifique a mensagem do cliente no departamento mais adequado.\n" \
+      "Departamentos:\n#{options}\n" \
+      "Responda APENAS com o número do departamento (1 a #{departments.size}). " \
+      'Se nenhum se aplicar, responda 0.'
   end
 end

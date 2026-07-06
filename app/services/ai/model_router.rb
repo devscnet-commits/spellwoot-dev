@@ -76,10 +76,10 @@ class Ai::ModelRouter
   end
 
   # NOTE: validate the exact RubyLLM call shape when running; isolated here on purpose.
-  def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil)
+  def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil, timeout: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
-    context = provider_context(provider, account_id: account_id)
+    context = provider_context(provider, account_id: account_id, timeout: timeout)
     chat = context.chat(model: model)
     # Builder do ruby_llm (o construtor Chat.new não aceita temperature). to_f: a coluna é BigDecimal.
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
@@ -103,29 +103,38 @@ class Ai::ModelRouter
   # OpenAI is read from the account's "APIs & Credentials" (IntegrationSettingsService: account →
   # global → ENV), with the platform Captain key as fallback; the others read AI_<PROVIDER>_API_KEY
   # from InstallationConfig (or the matching ENV var).
-  def self.provider_context(provider, account_id: nil)
+  def self.provider_context(provider, account_id: nil, timeout: nil)
     case provider.to_s
     when 'anthropic'
       key = credential('AI_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY')
       raise 'anthropic_api_key ausente (defina AI_ANTHROPIC_API_KEY ou ANTHROPIC_API_KEY)' if key.blank?
 
-      RubyLLM.context { |c| c.anthropic_api_key = key }
+      build_context(timeout) { |c| c.anthropic_api_key = key }
     when 'google', 'gemini'
       key = credential('AI_GEMINI_API_KEY', 'GEMINI_API_KEY')
       raise 'gemini_api_key ausente' if key.blank?
 
-      RubyLLM.context { |c| c.gemini_api_key = key }
+      build_context(timeout) { |c| c.gemini_api_key = key }
     when 'openrouter'
       key = credential('AI_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY')
       raise 'openrouter_api_key ausente' if key.blank?
 
-      RubyLLM.context { |c| c.openrouter_api_key = key }
+      build_context(timeout) { |c| c.openrouter_api_key = key }
     else # openai
       # One-time endpoint/model-registry wiring (default OpenAI endpoint for most setups).
       Llm::Config.initialize! if defined?(Llm::Config)
       # Resolve the key per request — account Hub key wins, else the platform Captain key.
       key = account_openai_key(account_id) || credential('CAPTAIN_OPEN_AI_API_KEY', 'OPENAI_API_KEY')
-      RubyLLM.context { |c| c.openai_api_key = key if key.present? }
+      build_context(timeout) { |c| c.openai_api_key = key if key.present? }
+    end
+  end
+
+  # Isolated per-call RubyLLM context (never mutates the global config). Applies an optional HTTP
+  # request timeout in seconds — guarded because request_timeout= may not exist in every ruby_llm.
+  def self.build_context(timeout)
+    RubyLLM.context do |c|
+      yield c
+      c.request_timeout = timeout if timeout && c.respond_to?(:request_timeout=)
     end
   end
 
