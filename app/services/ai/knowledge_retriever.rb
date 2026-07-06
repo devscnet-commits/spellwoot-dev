@@ -7,15 +7,18 @@ class Ai::KnowledgeRetriever
   # único item de conhecimento ou no prompt — RAG por similaridade não garante trazer todos.
   TOP_K = 6
 
-  def self.retrieve(query:, account_id:)
-    retrieve_scored(query: query, account_id: account_id)[:chunks]
+  def self.retrieve(query:, account_id:, department_id: nil)
+    retrieve_scored(query: query, account_id: account_id, department_id: department_id)[:chunks]
   end
 
   # Like retrieve, but also returns the top cosine similarity (1 - distance) of the best candidate
   # so the routing strategy can decide cache vs cheap vs premium. top_score is nil without vectors.
-  # Knowledge is account-wide (shared library): every agent draws from the same sources, ingested once.
-  def self.retrieve_scored(query:, account_id:)
-    source_ids = Ai::KnowledgeSource.active.where(account_id: account_id).pluck(:id)
+  # Scope: sources of the given department PLUS account-wide shared sources (ai_department_id NULL).
+  # department_id nil = legacy behavior: the whole account library (every source), so no regression.
+  def self.retrieve_scored(query:, account_id:, department_id: nil)
+    sources = Ai::KnowledgeSource.active.where(account_id: account_id)
+    sources = sources.where(ai_department_id: [department_id, nil]) if department_id
+    source_ids = sources.pluck(:id)
     return { chunks: [], top_score: nil } if source_ids.empty? || query.blank?
 
     scope = Ai::KnowledgeChunk.where(ai_knowledge_source_id: source_ids)

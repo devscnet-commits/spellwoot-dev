@@ -66,7 +66,7 @@ class Ai::Gateway
     end
 
     @stage = :knowledge
-    knowledge = Ai::KnowledgeRetriever.retrieve(query: effective_content, account_id: @account.id)
+    knowledge = Ai::KnowledgeRetriever.retrieve(query: effective_content, account_id: @account.id, department_id: department.id)
     emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
     run_record.update!(knowledge_count: knowledge.size)
 

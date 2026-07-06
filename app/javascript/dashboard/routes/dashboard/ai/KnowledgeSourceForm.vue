@@ -1,12 +1,15 @@
 <script setup>
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import Select from 'dashboard/components-next/select/Select.vue';
 
-defineProps({
+const props = defineProps({
   titleLabel: { type: String, default: '' },
   rawLabel: { type: String, default: '' },
   headingLabel: { type: String, default: '' },
   headingIcon: { type: String, default: '' },
   disableSave: { type: Boolean, default: false },
+  departments: { type: Array, default: () => [] },
 });
 defineEmits(['save', 'cancel']);
 // Editor de uma fonte de conhecimento. Reutilizado para criar (acima da lista) e para
@@ -14,6 +17,23 @@ defineEmits(['save', 'cancel']);
 // Objeto reativo compartilhado com o pai (mutação in-place das suas chaves).
 const form = defineModel('form', { type: Object, required: true });
 const { t } = useI18n();
+
+// "Todos / Compartilhado" (valor '') = fonte account-wide (ai_department_id nil); ou escopar num
+// departamento. Valores como String p/ o Select; a conversão de volta ('' -> null) é no save do pai.
+const departmentOptions = computed(() => [
+  { value: '', label: t('AI_KNOWLEDGE.FORM.DEPARTMENT_ALL') },
+  ...props.departments.map(d => ({
+    value: String(d.id),
+    label: d.agent ? `${d.name} · ${d.agent}` : d.name,
+  })),
+]);
+const selectedDepartment = computed({
+  get: () =>
+    form.value.ai_department_id ? String(form.value.ai_department_id) : '',
+  set: value => {
+    form.value.ai_department_id = value === '' ? null : Number(value);
+  },
+});
 </script>
 
 <template>
@@ -42,6 +62,13 @@ const { t } = useI18n();
         class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-40 max-h-[70vh]"
       />
     </label>
+    <div class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
+      <span>{{ t('AI_KNOWLEDGE.FORM.DEPARTMENT') }}</span>
+      <Select v-model="selectedDepartment" :options="departmentOptions" />
+      <span class="text-xs text-n-slate-11">
+        {{ t('AI_KNOWLEDGE.FORM.DEPARTMENT_HINT') }}
+      </span>
+    </div>
     <label
       v-if="form.kind === 'produto'"
       class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"

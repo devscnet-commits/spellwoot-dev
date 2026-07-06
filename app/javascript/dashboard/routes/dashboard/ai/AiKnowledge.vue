@@ -35,6 +35,7 @@ const CREATABLE = [
 ];
 
 const sources = ref([]);
+const departments = ref([]); // opções do seletor de escopo (departamentos da conta)
 const isLoading = ref(false);
 const showForm = ref(false); // formulário de criação (acima da lista)
 const editingId = ref(null); // id da fonte em edição inline (no próprio card)
@@ -46,6 +47,7 @@ const blank = () => ({
   raw: '',
   price: '',
   status: 'active',
+  ai_department_id: null,
 });
 const form = reactive(blank());
 const { isDirty, capture } = useFormDirty(() => ({ ...form }));
@@ -73,6 +75,15 @@ const fetchSources = async () => {
     sources.value = Array.isArray(data) ? data : [];
   } finally {
     isLoading.value = false;
+  }
+};
+
+const fetchDepartments = async () => {
+  try {
+    const { data } = await axios.get(`${baseUrl()}/departments`);
+    departments.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    departments.value = [];
   }
 };
 
@@ -268,6 +279,7 @@ const save = async () => {
       raw: form.raw,
       price: form.kind === 'produto' ? form.price : '',
       status: form.status,
+      ai_department_id: form.ai_department_id || null,
     },
   };
   try {
@@ -333,7 +345,10 @@ const confirmBulkRemove = async () => {
   }
 };
 
-onMounted(fetchSources);
+onMounted(() => {
+  fetchSources();
+  fetchDepartments();
+});
 </script>
 
 <template>
@@ -479,6 +494,7 @@ onMounted(fetchSources);
           :heading-label="kindLabel(form.kind)"
           :heading-icon="kindIcon(form.kind)"
           :disable-save="!isDirty"
+          :departments="departments"
           @save="save"
           @cancel="closeForm"
         />
@@ -531,6 +547,7 @@ onMounted(fetchSources);
               :heading-label="kindLabel(form.kind)"
               :heading-icon="kindIcon(form.kind)"
               :disable-save="!isDirty"
+              :departments="departments"
               @save="save"
               @cancel="closeForm"
             />
