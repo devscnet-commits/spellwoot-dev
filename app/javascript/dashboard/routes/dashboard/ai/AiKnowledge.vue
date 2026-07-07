@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import KnowledgeSourceForm from './KnowledgeSourceForm.vue';
+import Select from 'dashboard/components-next/select/Select.vue';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -87,6 +88,24 @@ const fetchDepartments = async () => {
   }
 };
 
+// Escopo do PRÓXIMO import (CSV/website/documento). '' = compartilhado (ai_department_id nil).
+const importDepartmentId = ref('');
+const importDepartmentOptions = computed(() => [
+  { value: '', label: t('AI_KNOWLEDGE.FORM.DEPARTMENT_ALL') },
+  ...departments.value.map(d => ({
+    value: String(d.id),
+    label: d.agent ? `${d.name} · ${d.agent}` : d.name,
+  })),
+]);
+const importDeptId = () =>
+  importDepartmentId.value ? Number(importDepartmentId.value) : null;
+
+// Nome do departamento de uma source para o badge da listagem; null => "Compartilhado".
+const departmentName = source => {
+  const d = departments.value.find(x => x.id === source.ai_department_id);
+  return d ? d.name : null;
+};
+
 // Documentos: drag-and-drop or click to upload a TXT/CSV file; the backend extracts its text.
 const fileInput = ref(null);
 const dragActive = ref(false);
@@ -95,6 +114,7 @@ const uploadFile = async file => {
   if (!file) return;
   const fd = new FormData();
   fd.append('file', file);
+  if (importDeptId() != null) fd.append('ai_department_id', importDeptId());
   try {
     await axios.post(baseUrl(), fd);
     useAlert(t('AI_KNOWLEDGE.SAVED'));
@@ -154,7 +174,13 @@ const rowsToSources = (rows, kind) => {
     .map(r => {
       const title = (r[0] || '').trim();
       if (!title) return null;
-      const src = { kind, title, raw: (r[1] || '').trim(), status: 'active' };
+      const src = {
+        kind,
+        title,
+        raw: (r[1] || '').trim(),
+        status: 'active',
+        ai_department_id: importDeptId(),
+      };
       if (kind === 'produto') src.price = (r[2] || '').trim();
       return src;
     })
@@ -242,6 +268,7 @@ const addWebsite = async () => {
         title: url,
         raw: url,
         status: 'active',
+        ai_department_id: importDeptId(),
       },
     });
     useAlert(t('AI_KNOWLEDGE.SAVED'));
@@ -392,6 +419,20 @@ onMounted(() => {
               </span>
             </button>
           </div>
+        </div>
+
+        <!-- Escopo: para qual departamento este import vai (ou compartilhado) -->
+        <div class="flex flex-col gap-1.5 max-w-sm">
+          <span class="text-xs font-medium text-n-slate-11">
+            {{ $t('AI_KNOWLEDGE.FORM.DEPARTMENT') }}
+          </span>
+          <Select
+            v-model="importDepartmentId"
+            :options="importDepartmentOptions"
+          />
+          <span class="text-xs text-n-slate-10">
+            {{ $t('AI_KNOWLEDGE.FORM.DEPARTMENT_HINT') }}
+          </span>
         </div>
 
         <!-- Importar/adicionar para o tipo selecionado acima -->
@@ -611,12 +652,25 @@ onMounted(() => {
                   {{ source.raw }}
                 </p>
               </div>
-              <span
-                class="self-start inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-n-alpha-2 text-xs text-n-slate-11"
-              >
-                <span :class="kindIcon(source.kind)" class="size-3" />
-                {{ kindLabel(source.kind) }}
-              </span>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-n-alpha-2 text-xs text-n-slate-11"
+                >
+                  <span :class="kindIcon(source.kind)" class="size-3" />
+                  {{ kindLabel(source.kind) }}
+                </span>
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+                  :class="
+                    departmentName(source)
+                      ? 'bg-n-brand/10 text-n-brand'
+                      : 'bg-n-alpha-2 text-n-slate-11'
+                  "
+                >
+                  <span class="i-lucide-layers size-3" />
+                  {{ departmentName(source) || $t('AI_KNOWLEDGE.SHARED') }}
+                </span>
+              </div>
             </div>
           </template>
         </div>

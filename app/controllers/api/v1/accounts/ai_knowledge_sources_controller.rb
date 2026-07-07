@@ -69,7 +69,9 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     raise UploadError, 'Formato não suportado. Use TXT ou CSV.' unless ALLOWED_UPLOAD_EXTENSIONS.include?(ext)
 
     { kind: 'documento', title: File.basename(file.original_filename.to_s, ext),
-      raw: decode_text(file.read), status: 'active' }
+      raw: decode_text(file.read), status: 'active',
+      # Escopo do import (nil = compartilhado). Validado por department_within_account no model.
+      ai_department_id: params[:ai_department_id].presence }
   end
 
   # Preserva acentuação: o upload vem como bytes (ASCII-8BIT). Usa como UTF-8 quando válido;
