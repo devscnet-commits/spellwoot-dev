@@ -85,3 +85,10 @@ ai_followup_sweep_job:
   cron: '* * * * *'
   class: 'Ai::FollowupSweepJob'
   queue: scheduled_jobs
+
+# executed daily at 03:30 — hard-deletes ai_events older than 12 months (LGPD/PII minimization).
+# ai_events is operational trail; durable facts live in Ai::CustomerMemory. See Ai::EventsRetentionJob.
+ai_events_retention_job:
+  cron: '30 3 * * *'
+  class: 'Ai::EventsRetentionJob'
+  queue: scheduled_jobs

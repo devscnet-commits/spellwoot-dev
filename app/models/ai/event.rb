@@ -18,6 +18,7 @@
 #
 #  index_ai_events_on_ai_run_id        (ai_run_id)
 #  index_ai_events_on_conversation_id  (conversation_id)
+#  index_ai_events_on_created_at       (created_at)
 #
 class Ai::Event < ApplicationRecord
   belongs_to :account, class_name: '::Account'
