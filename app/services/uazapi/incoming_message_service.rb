@@ -97,7 +97,7 @@ class Uazapi::IncomingMessageService
     phone_number = message_data[:from]
     return unless phone_number.present?
 
-    Rails.logger.info "[UAZAPI] Setting contact for phone_number=#{phone_number}"
+    Rails.logger.info "[UAZAPI] Setting contact for phone_number=#{PiiMasking.mask_phone(phone_number)}"
 
     formatted_phone = format_phone_number(phone_number)
     # Remove + for source_id (similar to WhatsApp)

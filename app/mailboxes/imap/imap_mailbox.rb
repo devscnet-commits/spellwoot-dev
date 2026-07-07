@@ -12,7 +12,7 @@ class Imap::ImapMailbox
     load_inbox
     decorate_mail
 
-    Rails.logger.info("Processing Email from: #{@processed_mail.original_sender} : inbox #{@inbox.id} : message_id #{@processed_mail.message_id}")
+    Rails.logger.info("Processing Email from: #{PiiMasking.mask_email(@processed_mail.original_sender)} : inbox #{@inbox.id} : message_id #{@processed_mail.message_id}")
 
     # Skip processing email if it belongs to any of the edge cases
     return unless incoming_email_from_valid_email?

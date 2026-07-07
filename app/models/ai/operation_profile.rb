@@ -4,18 +4,18 @@
 #
 # Table name: ai_operation_profiles
 #
-#  id                  :bigint           not null, primary key
-#  budget              :jsonb            not null
-#  name                :string           not null
-#  routing_strategy    :jsonb            not null
+#  id                     :bigint           not null, primary key
+#  budget                 :jsonb            not null
+#  name                   :string           not null
+#  routing_strategy       :jsonb            not null
 #  supervisor_model       :string           not null
 #  supervisor_provider    :string           not null
 #  supervisor_temperature :decimal(3, 2)    default(0.3), not null
-#  tier                :string           default("customizado"), not null
-#  worker_overrides    :jsonb            not null
-#  created_at          :datetime         not null
-#  updated_at          :datetime         not null
-#  account_id          :bigint           not null
+#  tier                   :string           default("customizado"), not null
+#  worker_overrides       :jsonb            not null
+#  created_at             :datetime         not null
+#  updated_at             :datetime         not null
+#  account_id             :bigint           not null
 #
 # Indexes
 #
