@@ -92,3 +92,10 @@ ai_events_retention_job:
   cron: '30 3 * * *'
   class: 'Ai::EventsRetentionJob'
   queue: scheduled_jobs
+
+# executed daily at 04:00 — renova plan_credits das assinaturas ativas cujo ciclo mensal venceu
+# (reseta ao valor do plano; extra_credits intactos). 04:00 evita colidir com o retention (03:30).
+ai_credits_renewal_job:
+  cron: '0 4 * * *'
+  class: 'Ai::CreditsRenewalJob'
+  queue: scheduled_jobs

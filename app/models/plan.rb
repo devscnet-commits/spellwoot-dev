@@ -2,12 +2,13 @@
 #
 # Table name: plans
 #
-#  id         :bigint           not null, primary key
-#  active     :boolean          default(TRUE), not null
-#  name       :string           not null
-#  slug       :string           not null
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
+#  id                  :bigint           not null, primary key
+#  active              :boolean          default(TRUE), not null
+#  ai_credits_included :integer          default(0), not null
+#  name                :string           not null
+#  slug                :string           not null
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
 #
 # Indexes
 #

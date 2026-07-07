@@ -22,6 +22,7 @@ namespace :plans do
     {
       slug: 'start', name: 'START',
       features: %w[], # nenhuma feature ligada no START
+      ai_credits: 500,
       limits: { 'users' => 3, 'inboxes' => 2, 'ai_agents' => 2, 'crm_pipelines' => 0 }
     },
     {
@@ -30,11 +31,13 @@ namespace :plans do
         webchat_channel facebook_channel ai_copilot dashboards_bi conversion_api webhook_api
         sla_tracking crm_kanban crm_automations message_scheduling custom_llm_api_key
       ], # off no STANDARD: erp_integration, isp_ready_flows, audit_logs, account_manager
+      ai_credits: 1000,
       limits: { 'users' => 10, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }
     },
     {
       slug: 'pro', name: 'PRO',
       features: :all, # todas as MANAGED_FEATURE_KEYS ligadas no PRO (expandido em runtime)
+      ai_credits: 1000,
       limits: { 'users' => 30, 'inboxes' => 20, 'ai_agents' => 10, 'crm_pipelines' => 10 },
       # Overage pago SÓ em 'users' no PRO ("Atendente adicional"): permite exceder 30 e cobra o
       # excedente a R$29,90/usuário (Planos_Conexi_v2). inboxes/ai_agents seguem hard_block.
@@ -43,11 +46,13 @@ namespace :plans do
     }
   ].freeze
 
-  # Referência de créditos de IA por plano (AiCreditBalance.plan_credits, renovados no ciclo):
-  # START=500, STANDARD=1000, PRO=1000. NÃO seedado aqui — a renovação de plan_credits é fase futura.
+  # Créditos de IA por plano (Plan#ai_credits_included; Ai::CreditsRenewalJob reseta
+  # AiCreditBalance#plan_credits para este valor a cada ciclo). START=500, STANDARD=1000, PRO=1000;
+  # interno = valor simbólico alto (não deve ter limite prático). Ver INTERNAL_AI_CREDITS.
   #
   # Overage: 'users' no PRO ("Atendente adicional") já é :paid_overage + overage_price_cents 2990
   # (ver limit_overrides no PRO). A cobrança do excedente em si é débito da Fase 3 (Stripe/Asaas).
+  INTERNAL_AI_CREDITS = 999_999
 
   desc 'Seed idempotente de planos + assinatura interna das 3 contas do grupo'
   task seed: :environment do
@@ -60,7 +65,7 @@ namespace :plans do
   def seed_internal_plan
     feature_keys = Plan::MANAGED_FEATURE_KEYS
     plan = Plan.find_or_initialize_by(slug: INTERNAL_SLUG)
-    plan.update!(name: 'Interno (ilimitado)', active: true)
+    plan.update!(name: 'Interno (ilimitado)', active: true, ai_credits_included: INTERNAL_AI_CREDITS)
     feature_keys.each do |key|
       feature = plan.plan_features.find_or_initialize_by(key: key)
       feature.update!(enabled: true)
@@ -69,14 +74,14 @@ namespace :plans do
       limit = plan.plan_limits.find_or_initialize_by(key: key)
       limit.update!(max_value: nil, overflow_behavior: :hard_block) # nil = ilimitado
     end
-    puts "[plans:seed] plano interno '#{INTERNAL_SLUG}': #{feature_keys.size} features on, #{LIMIT_KEYS.size} limites ilimitados."
+    puts "[plans:seed] plano interno '#{INTERNAL_SLUG}': #{feature_keys.size} features on, #{LIMIT_KEYS.size} limites ilimitados, #{INTERNAL_AI_CREDITS} créditos IA."
   end
 
   def seed_commercial_plans
     feature_keys = Plan::MANAGED_FEATURE_KEYS
     COMMERCIAL_PLANS.each do |attrs|
       plan = Plan.find_or_initialize_by(slug: attrs[:slug])
-      plan.update!(name: attrs[:name], active: true)
+      plan.update!(name: attrs[:name], active: true, ai_credits_included: attrs[:ai_credits])
 
       enabled = attrs[:features] == :all ? feature_keys : attrs[:features]
 
@@ -100,7 +105,7 @@ namespace :plans do
         )
       end
 
-      puts "[plans:seed] plano '#{attrs[:slug]}': #{enabled.size}/#{feature_keys.size} features on, limites #{attrs[:limits]}."
+      puts "[plans:seed] plano '#{attrs[:slug]}': #{enabled.size}/#{feature_keys.size} features on, #{attrs[:ai_credits]} créditos IA, limites #{attrs[:limits]}."
     end
   end
 

@@ -1,4 +1,4 @@
-\restrict Rtk7ai0LxWZXHIupwSz4dt5RM4YNbptpj3ag3tSbrkDsuMDWGuUlcba0jIwlcnj
+\restrict NMK6gtSh7Kvn3vaa9ebxrph3nuwISnLAbkbr6yTAMSB8TA7zp96gcIlNpu1RygH
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -4050,7 +4050,8 @@ CREATE TABLE public.plans (
     slug character varying NOT NULL,
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    ai_credits_included integer DEFAULT 0 NOT NULL
 );
 
 
@@ -4501,7 +4502,8 @@ CREATE TABLE public.subscriptions (
     started_at timestamp(6) without time zone,
     ends_at timestamp(6) without time zone,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    next_renewal_at timestamp(6) without time zone
 );
 
 
@@ -9381,11 +9383,14 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Rtk7ai0LxWZXHIupwSz4dt5RM4YNbptpj3ag3tSbrkDsuMDWGuUlcba0jIwlcnj
+\unrestrict NMK6gtSh7Kvn3vaa9ebxrph3nuwISnLAbkbr6yTAMSB8TA7zp96gcIlNpu1RygH
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260709120001'),
+('20260709120000'),
+('20260708120000'),
 ('20260707120000'),
 ('20260704120000'),
 ('20260703120000'),
