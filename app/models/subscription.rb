@@ -30,4 +30,14 @@ class Subscription < ApplicationRecord
 
   # A "atual" da conta: a mais recente que ainda vale (não cancelada). Mantemos histórico via has_many.
   scope :current, -> { where.not(status: :canceled).order(started_at: :desc, id: :desc) }
+
+  # Ponte: ao criar/mudar assinatura, reflete o plano ATUAL da conta nas feature flags dela.
+  after_save :sync_account_features
+
+  private
+
+  def sync_account_features
+    current_plan = account.subscriptions.current.first&.plan
+    current_plan&.sync_features_to!(account)
+  end
 end

@@ -5,12 +5,9 @@
 # comerciais START/STANDARD/PRO (SEM valores — preencher com Planos_Conexi_v2) e aponta as 3 contas
 # do grupo para o plano interno, para NÃO serem afetadas pelo rollout.
 namespace :plans do
-  # Chaves canônicas (espelham a spec). Os VALORES por plano comercial vêm da planilha.
-  FEATURE_KEYS = %w[
-    webchat_channel facebook_channel ai_copilot erp_integration isp_ready_flows dashboards_bi
-    conversion_api webhook_api sla_tracking audit_logs crm_kanban crm_automations
-    message_scheduling account_manager custom_llm_api_key
-  ].freeze
+  # Chaves canônicas de feature vêm de Plan::MANAGED_FEATURE_KEYS (fonte única, também usada pela
+  # ponte Plano->conta). Referenciadas em RUNTIME dentro das tasks (sob :environment); não no corpo
+  # do namespace, para não acoplar o parse do rake ao autoload do model.
   LIMIT_KEYS = %w[users inboxes ai_agents crm_pipelines].freeze
 
   INTERNAL_SLUG = 'internal_unlimited'.freeze
@@ -37,7 +34,7 @@ namespace :plans do
     },
     {
       slug: 'pro', name: 'PRO',
-      features: FEATURE_KEYS, # todas ligadas no PRO
+      features: :all, # todas as MANAGED_FEATURE_KEYS ligadas no PRO (expandido em runtime)
       limits: { 'users' => 30, 'inboxes' => 20, 'ai_agents' => 10, 'crm_pipelines' => 10 }
     }
   ].freeze
@@ -57,9 +54,10 @@ namespace :plans do
   end
 
   def seed_internal_plan
+    feature_keys = Plan::MANAGED_FEATURE_KEYS
     plan = Plan.find_or_initialize_by(slug: INTERNAL_SLUG)
     plan.update!(name: 'Interno (ilimitado)', active: true)
-    FEATURE_KEYS.each do |key|
+    feature_keys.each do |key|
       feature = plan.plan_features.find_or_initialize_by(key: key)
       feature.update!(enabled: true)
     end
@@ -67,18 +65,21 @@ namespace :plans do
       limit = plan.plan_limits.find_or_initialize_by(key: key)
       limit.update!(max_value: nil, overflow_behavior: :hard_block) # nil = ilimitado
     end
-    puts "[plans:seed] plano interno '#{INTERNAL_SLUG}': #{FEATURE_KEYS.size} features on, #{LIMIT_KEYS.size} limites ilimitados."
+    puts "[plans:seed] plano interno '#{INTERNAL_SLUG}': #{feature_keys.size} features on, #{LIMIT_KEYS.size} limites ilimitados."
   end
 
   def seed_commercial_plans
+    feature_keys = Plan::MANAGED_FEATURE_KEYS
     COMMERCIAL_PLANS.each do |attrs|
       plan = Plan.find_or_initialize_by(slug: attrs[:slug])
       plan.update!(name: attrs[:name], active: true)
 
-      # Grade completa de features (todas as FEATURE_KEYS): ligada se estiver em attrs[:features].
-      FEATURE_KEYS.each do |key|
+      enabled = attrs[:features] == :all ? feature_keys : attrs[:features]
+
+      # Grade completa de features (todas as MANAGED_FEATURE_KEYS): ligada se estiver em `enabled`.
+      feature_keys.each do |key|
         feature = plan.plan_features.find_or_initialize_by(key: key)
-        feature.update!(enabled: attrs[:features].include?(key))
+        feature.update!(enabled: enabled.include?(key))
       end
 
       # Limites numéricos por chave. hard_block em todos (sem overage nesta fase).
@@ -87,7 +88,7 @@ namespace :plans do
         limit.update!(max_value: max_value, overflow_behavior: :hard_block)
       end
 
-      puts "[plans:seed] plano '#{attrs[:slug]}': #{attrs[:features].size}/#{FEATURE_KEYS.size} features on, limites #{attrs[:limits]}."
+      puts "[plans:seed] plano '#{attrs[:slug]}': #{enabled.size}/#{feature_keys.size} features on, limites #{attrs[:limits]}."
     end
   end
 
@@ -103,7 +104,10 @@ namespace :plans do
         sub = account.subscriptions.find_or_initialize_by(plan: internal, status: Subscription.statuses[:active])
         sub.started_at ||= Time.current
         sub.save!
-        puts "[plans:seed] conta ##{account.id} (#{account.name}) -> assinatura interna ativa."
+        # Ponte explícita: em re-run idempotente, sub.save! sem mudanças NÃO dispara o after_save,
+        # então sincronizamos as feature flags da conta aqui para refletir sempre o plano interno.
+        internal.sync_features_to!(account)
+        puts "[plans:seed] conta ##{account.id} (#{account.name}) -> assinatura interna ativa + features sincronizadas."
       end
     end
   end
