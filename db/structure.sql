@@ -1,4 +1,4 @@
-\restrict NMK6gtSh7Kvn3vaa9ebxrph3nuwISnLAbkbr6yTAMSB8TA7zp96gcIlNpu1RygH
+\restrict tY0ddQN8rGQLGOJpqNPsdxJ3ZtVDuoqOspVAJlty6GjiEjFlPy9rR4vi6gNzMSu
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -4051,7 +4051,9 @@ CREATE TABLE public.plans (
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    ai_credits_included integer DEFAULT 0 NOT NULL
+    ai_credits_included integer DEFAULT 0 NOT NULL,
+    monthly_price_cents integer,
+    setup_fee_cents integer
 );
 
 
@@ -9383,11 +9385,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict NMK6gtSh7Kvn3vaa9ebxrph3nuwISnLAbkbr6yTAMSB8TA7zp96gcIlNpu1RygH
+\unrestrict tY0ddQN8rGQLGOJpqNPsdxJ3ZtVDuoqOspVAJlty6GjiEjFlPy9rR4vi6gNzMSu
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260710120000'),
 ('20260709120001'),
 ('20260709120000'),
 ('20260708120000'),
