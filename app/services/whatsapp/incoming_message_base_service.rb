@@ -172,11 +172,18 @@ class Whatsapp::IncomingMessageBaseService
                                     .where.not(status: :resolved).last ||
                         reopenable_conversation_within_window
                     end
-    return if @conversation
+    @conversation ||= ::Conversation.create!(conversation_params)
 
-    @conversation = ::Conversation.create!(conversation_params)
+    capture_meta_attribution
+  end
 
+  # Capture the Click-to-WhatsApp referral on every inbound that carries one — not only when a new
+  # conversation is created. A returning contact who clicks a new ad reuses an existing/reopened
+  # conversation; without this, that ad click's ctwa_clid (and the Lead/Purchase attribution that
+  # depends on it) would be silently dropped. The attribution service is idempotent per event_id.
+  def capture_meta_attribution
     referral = messages_data.first[:referral] || messages_data.first['referral']
+    return if referral.blank?
 
     Rails.logger.info("[ATTRIBUTION] referral payload: #{referral.to_json}")
 
