@@ -17,7 +17,10 @@ namespace :plans do
   # Planos comerciais (Planos_Conexi_v2, Fase 1.1). `features` lista SÓ as features ligadas (as
   # demais de FEATURE_KEYS entram como enabled=false). `limits` = max_value por chave (0 = zero
   # permitido; NUNCA nil aqui — nil seria "ilimitado"). overflow_behavior: hard_block em todos.
-  # SEM preços (não há campo no schema) e SEM overage (manter hard_block até confirmação de valores).
+  #
+  # PREÇO (plans.monthly_price_cents / setup_fee_cents): o schema já tem os campos, mas os valores
+  # da planilha Planos_Conexi_v2 ainda NÃO foram confirmados como oficiais — por isso NÃO populamos
+  # aqui (ficam nil). Quando confirmados, adicionar `monthly_price_cents`/`setup_fee_cents` por plano.
   COMMERCIAL_PLANS = [
     {
       slug: 'start', name: 'START',
