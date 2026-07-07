@@ -1,4 +1,4 @@
-\restrict fpcU8ElAacGTUUoLQs69zgka66dEYnr6T6MjyrZxV02GqU7Kjj1fTK74rXb6V2v
+\restrict Rtk7ai0LxWZXHIupwSz4dt5RM4YNbptpj3ag3tSbrkDsuMDWGuUlcba0jIwlcnj
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -6918,6 +6918,13 @@ CREATE INDEX index_ai_events_on_conversation_id ON public.ai_events USING btree 
 
 
 --
+-- Name: index_ai_events_on_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_events_on_created_at ON public.ai_events USING btree (created_at);
+
+
+--
 -- Name: index_ai_integration_links_on_account_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9027,11 +9034,12 @@ ALTER TABLE ONLY public.meta_conversion_events
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fpcU8ElAacGTUUoLQs69zgka66dEYnr6T6MjyrZxV02GqU7Kjj1fTK74rXb6V2v
+\unrestrict Rtk7ai0LxWZXHIupwSz4dt5RM4YNbptpj3ag3tSbrkDsuMDWGuUlcba0jIwlcnj
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260707120000'),
 ('20260704120000'),
 ('20260703120000'),
 ('20260702120000'),
