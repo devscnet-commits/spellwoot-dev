@@ -686,6 +686,12 @@ const menuItems = computed(() => {
           to: accountScopedRoute('sla_list'),
         },
         {
+          name: 'Settings Plan',
+          label: t('SIDEBAR.PLAN'),
+          icon: 'i-lucide-package',
+          to: accountScopedRoute('plan_settings_list'),
+        },
+        {
           name: 'Conversation Workflow',
           label: t('SIDEBAR.CONVERSATION_WORKFLOW'),
           icon: 'i-lucide-workflow',

@@ -1,0 +1,24 @@
+{
+  "PLAN": {
+    "HEADER": "Meu Plano",
+    "DESCRIPTION": "Visualize seu plano atual, créditos de IA e limites de uso da conta",
+    "LOADING": "Carregando informações do plano...",
+    "CURRENT_PLAN": "Plano Atual",
+    "PLAN_NAME": "Nome do Plano",
+    "NEXT_RENEWAL": "Próxima Renovação",
+    "AI_CREDITS": "Créditos de IA",
+    "PLAN_CREDITS": "Créditos do Plano",
+    "RENEWS_MONTHLY": "Renova mensalmente",
+    "EXTRA_CREDITS": "Créditos Extras",
+    "PURCHASED_SEPARATELY": "Comprados separadamente",
+    "TOTAL_BALANCE": "Saldo Total",
+    "ACCOUNT_LIMITS": "Limites da Conta",
+    "LIMIT_USERS": "Usuários",
+    "LIMIT_INBOXES": "Inboxes",
+    "LIMIT_AI_AGENTS": "Agentes de IA",
+    "LIMIT_CRM_PIPELINES": "Pipelines CRM",
+    "USED": "usado",
+    "UNLIMITED": "Ilimitado",
+    "LIMIT_WARNING": "Você atingiu 80% do limite"
+  }
+}
