@@ -1,4 +1,4 @@
-\restrict fpcU8ElAacGTUUoLQs69zgka66dEYnr6T6MjyrZxV02GqU7Kjj1fTK74rXb6V2v
+\restrict RrT1drI1mhncfDPfj17fRLeLGkaf5bFeKh1dscvXigNeQG0NTUnlnTZkHXhB8ly
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -756,6 +756,39 @@ CREATE SEQUENCE public.ai_capability_executions_id_seq
 --
 
 ALTER SEQUENCE public.ai_capability_executions_id_seq OWNED BY public.ai_capability_executions.id;
+
+
+--
+-- Name: ai_credit_balances; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_credit_balances (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    plan_credits integer DEFAULT 0 NOT NULL,
+    extra_credits integer DEFAULT 0 NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_credit_balances_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_credit_balances_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_credit_balances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_credit_balances_id_seq OWNED BY public.ai_credit_balances.id;
 
 
 --
@@ -3940,6 +3973,107 @@ ALTER SEQUENCE public.operational_flows_id_seq OWNED BY public.operational_flows
 
 
 --
+-- Name: plan_features; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.plan_features (
+    id bigint NOT NULL,
+    plan_id bigint NOT NULL,
+    key character varying NOT NULL,
+    enabled boolean DEFAULT false NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: plan_features_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.plan_features_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: plan_features_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.plan_features_id_seq OWNED BY public.plan_features.id;
+
+
+--
+-- Name: plan_limits; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.plan_limits (
+    id bigint NOT NULL,
+    plan_id bigint NOT NULL,
+    key character varying NOT NULL,
+    max_value integer,
+    overflow_behavior integer DEFAULT 0 NOT NULL,
+    overage_price_cents integer,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: plan_limits_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.plan_limits_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: plan_limits_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.plan_limits_id_seq OWNED BY public.plan_limits.id;
+
+
+--
+-- Name: plans; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.plans (
+    id bigint NOT NULL,
+    name character varying NOT NULL,
+    slug character varying NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: plans_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.plans_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: plans_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.plans_id_seq OWNED BY public.plans.id;
+
+
+--
 -- Name: platform_app_permissibles; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4353,6 +4487,41 @@ CREATE SEQUENCE public.stickers_id_seq
 --
 
 ALTER SEQUENCE public.stickers_id_seq OWNED BY public.stickers.id;
+
+
+--
+-- Name: subscriptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.subscriptions (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    plan_id bigint NOT NULL,
+    status integer DEFAULT 0 NOT NULL,
+    started_at timestamp(6) without time zone,
+    ends_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: subscriptions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.subscriptions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: subscriptions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.subscriptions_id_seq OWNED BY public.subscriptions.id;
 
 
 --
@@ -4818,6 +4987,13 @@ ALTER TABLE ONLY public.ai_agents ALTER COLUMN id SET DEFAULT nextval('public.ai
 --
 
 ALTER TABLE ONLY public.ai_capability_executions ALTER COLUMN id SET DEFAULT nextval('public.ai_capability_executions_id_seq'::regclass);
+
+
+--
+-- Name: ai_credit_balances id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_balances ALTER COLUMN id SET DEFAULT nextval('public.ai_credit_balances_id_seq'::regclass);
 
 
 --
@@ -5409,6 +5585,27 @@ ALTER TABLE ONLY public.operational_flows ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
+-- Name: plan_features id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plan_features ALTER COLUMN id SET DEFAULT nextval('public.plan_features_id_seq'::regclass);
+
+
+--
+-- Name: plan_limits id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plan_limits ALTER COLUMN id SET DEFAULT nextval('public.plan_limits_id_seq'::regclass);
+
+
+--
+-- Name: plans id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plans ALTER COLUMN id SET DEFAULT nextval('public.plans_id_seq'::regclass);
+
+
+--
 -- Name: platform_app_permissibles id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5483,6 +5680,13 @@ ALTER TABLE ONLY public.sla_policies ALTER COLUMN id SET DEFAULT nextval('public
 --
 
 ALTER TABLE ONLY public.stickers ALTER COLUMN id SET DEFAULT nextval('public.stickers_id_seq'::regclass);
+
+
+--
+-- Name: subscriptions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.subscriptions ALTER COLUMN id SET DEFAULT nextval('public.subscriptions_id_seq'::regclass);
 
 
 --
@@ -5682,6 +5886,14 @@ ALTER TABLE ONLY public.ai_agents
 
 ALTER TABLE ONLY public.ai_capability_executions
     ADD CONSTRAINT ai_capability_executions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_credit_balances ai_credit_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_balances
+    ADD CONSTRAINT ai_credit_balances_pkey PRIMARY KEY (id);
 
 
 --
@@ -6365,6 +6577,30 @@ ALTER TABLE ONLY public.operational_flows
 
 
 --
+-- Name: plan_features plan_features_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plan_features
+    ADD CONSTRAINT plan_features_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: plan_limits plan_limits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plan_limits
+    ADD CONSTRAINT plan_limits_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: plans plans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plans
+    ADD CONSTRAINT plans_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: platform_app_permissibles platform_app_permissibles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6458,6 +6694,14 @@ ALTER TABLE ONLY public.sla_policies
 
 ALTER TABLE ONLY public.stickers
     ADD CONSTRAINT stickers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: subscriptions subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
 
 
 --
@@ -6876,6 +7120,13 @@ CREATE INDEX index_ai_capability_executions_on_status ON public.ai_capability_ex
 
 
 --
+-- Name: index_ai_credit_balances_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_ai_credit_balances_on_account_id ON public.ai_credit_balances USING btree (account_id);
+
+
+--
 -- Name: index_ai_customer_memories_on_account_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6915,6 +7166,13 @@ CREATE INDEX index_ai_events_on_ai_run_id ON public.ai_events USING btree (ai_ru
 --
 
 CREATE INDEX index_ai_events_on_conversation_id ON public.ai_events USING btree (conversation_id);
+
+
+--
+-- Name: index_ai_events_on_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_events_on_created_at ON public.ai_events USING btree (created_at);
 
 
 --
@@ -8318,6 +8576,41 @@ CREATE UNIQUE INDEX index_operational_flows_on_account_id_and_name ON public.ope
 
 
 --
+-- Name: index_plan_features_on_plan_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_plan_features_on_plan_id ON public.plan_features USING btree (plan_id);
+
+
+--
+-- Name: index_plan_features_on_plan_id_and_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_plan_features_on_plan_id_and_key ON public.plan_features USING btree (plan_id, key);
+
+
+--
+-- Name: index_plan_limits_on_plan_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_plan_limits_on_plan_id ON public.plan_limits USING btree (plan_id);
+
+
+--
+-- Name: index_plan_limits_on_plan_id_and_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_plan_limits_on_plan_id_and_key ON public.plan_limits USING btree (plan_id, key);
+
+
+--
+-- Name: index_plans_on_slug; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_plans_on_slug ON public.plans USING btree (slug);
+
+
+--
 -- Name: index_platform_app_permissibles_on_permissibles; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8539,6 +8832,27 @@ CREATE INDEX index_sla_policies_on_account_id ON public.sla_policies USING btree
 --
 
 CREATE INDEX index_stickers_on_account_id ON public.stickers USING btree (account_id);
+
+
+--
+-- Name: index_subscriptions_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_subscriptions_on_account_id ON public.subscriptions USING btree (account_id);
+
+
+--
+-- Name: index_subscriptions_on_account_id_and_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_subscriptions_on_account_id_and_status ON public.subscriptions USING btree (account_id, status);
+
+
+--
+-- Name: index_subscriptions_on_plan_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_subscriptions_on_plan_id ON public.subscriptions USING btree (plan_id);
 
 
 --
@@ -8904,6 +9218,14 @@ ALTER TABLE ONLY public.inbox_exceptions
 
 
 --
+-- Name: ai_credit_balances fk_rails_3fe27ef8b8; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_balances
+    ADD CONSTRAINT fk_rails_3fe27ef8b8 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
 -- Name: integration_settings fk_rails_403cbc3abb; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8925,6 +9247,22 @@ ALTER TABLE ONLY public.inbox_holidays
 
 ALTER TABLE ONLY public.resolution_states
     ADD CONSTRAINT fk_rails_50eb07eef8 FOREIGN KEY (operational_flow_id) REFERENCES public.operational_flows(id);
+
+
+--
+-- Name: subscriptions fk_rails_63d3df128b; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT fk_rails_63d3df128b FOREIGN KEY (plan_id) REFERENCES public.plans(id);
+
+
+--
+-- Name: plan_limits fk_rails_69f8b6184f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plan_limits
+    ADD CONSTRAINT fk_rails_69f8b6184f FOREIGN KEY (plan_id) REFERENCES public.plans(id);
 
 
 --
@@ -8957,6 +9295,14 @@ ALTER TABLE ONLY public.active_storage_variant_records
 
 ALTER TABLE ONLY public.inboxes
     ADD CONSTRAINT fk_rails_a1f654bf2d FOREIGN KEY (portal_id) REFERENCES public.portals(id);
+
+
+--
+-- Name: plan_features fk_rails_aa7abbf7ce; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plan_features
+    ADD CONSTRAINT fk_rails_aa7abbf7ce FOREIGN KEY (plan_id) REFERENCES public.plans(id);
 
 
 --
@@ -9024,14 +9370,24 @@ ALTER TABLE ONLY public.meta_conversion_events
 
 
 --
+-- Name: subscriptions fk_rails_eb0e3ffd90; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.subscriptions
+    ADD CONSTRAINT fk_rails_eb0e3ffd90 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fpcU8ElAacGTUUoLQs69zgka66dEYnr6T6MjyrZxV02GqU7Kjj1fTK74rXb6V2v
+\unrestrict RrT1drI1mhncfDPfj17fRLeLGkaf5bFeKh1dscvXigNeQG0NTUnlnTZkHXhB8ly
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260708120000'),
+('20260707120000'),
 ('20260704120000'),
 ('20260703120000'),
 ('20260702120000'),

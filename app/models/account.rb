@@ -6,7 +6,7 @@
 #  auto_resolve_duration :integer
 #  custom_attributes     :jsonb
 #  domain                :string(100)
-#  feature_flags         :bigint           default(0), not null
+#  enabled_feature_keys  :string           default([]), not null, is an Array
 #  internal_attributes   :jsonb            not null
 #  limits                :jsonb
 #  locale                :integer          default("en")
@@ -19,7 +19,8 @@
 #
 # Indexes
 #
-#  index_accounts_on_status  (status)
+#  index_accounts_on_enabled_feature_keys  (enabled_feature_keys) USING gin
+#  index_accounts_on_status                (status)
 #
 
 class Account < ApplicationRecord
@@ -97,6 +98,10 @@ class Account < ApplicationRecord
   has_many :webhooks, dependent: :destroy_async
   has_many :whatsapp_channels, dependent: :destroy_async, class_name: '::Channel::Whatsapp'
   has_many :working_hours, dependent: :destroy_async
+  # Plan/Subscription (Fase 1: dados + gate, sem enforcement). has_many mantém histórico de trocas;
+  # a subscription atual é derivada por scope (Subscription.current) — ver FeatureGate.
+  has_many :subscriptions, dependent: :destroy_async
+  has_one :ai_credit_balance, dependent: :destroy_async
 
   has_one_attached :contacts_export
 
