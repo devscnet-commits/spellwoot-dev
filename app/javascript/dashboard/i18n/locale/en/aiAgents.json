@@ -545,6 +545,7 @@
   },
   "AI_KNOWLEDGE": {
     "TITLE": "Conhecimento",
+    "SHARED": "Compartilhado",
     "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui — FAQ, produtos, procedimentos — ela usa para responder os clientes.",
     "NEW": "Nova fonte",
     "DROPZONE": {
