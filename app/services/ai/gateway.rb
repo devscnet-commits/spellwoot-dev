@@ -35,11 +35,19 @@ class Ai::Gateway
     department, resolution = Ai::DepartmentResolver.resolve(
       agent: @agent, inbox_id: @message.inbox_id, message_content: effective_content
     )
+
+    # A partir daqui NÃO é mais classificação de departamento: gravar o resultado e o estado é
+    # infra/DB. Uma exceção aqui deve virar 'internal_error', não 'classification_failed' (ver
+    # classify_error). Por isso o :department cobre SÓ a chamada de resolve acima.
+    @stage = :persist
     emit(run_record, 'department.resolved', { department_id: department&.id, name: department&.name, method: resolution })
     return finalize(run_record, 'no_department') unless department
 
     run_record.update!(ai_department_id: department.id)
 
+    # Config do departamento + gate de política (reply state) + caminho ask_resume — nada disso é
+    # classificação; erro aqui é 'internal_error', não 'classification_failed'.
+    @stage = :policy
     # Limite de caracteres da mensagem do cliente (anti-abuso/tokens). Ação configurável:
     # 'truncate' (padrão: corta nos N primeiros) ou 'ask_resume' (pede pro cliente resumir e
     # NÃO processa o texto gigante). Tratado abaixo, após o gate de resposta.
@@ -218,14 +226,22 @@ class Ai::Gateway
   # Traduz a exceção que borbulhou até o rescue do topo numa categoria de Ai::Run::ERROR_TYPES,
   # cruzando a ETAPA onde estourou (@stage) com a CLASSE da exceção (timeout tem classe
   # reconhecível). Retorna SEMPRE um valor válido de ERROR_TYPES; 'unknown' é o piso honesto.
+  #
+  # CORTE HISTÓRICO (refactor dos stages, jul/2026): antes, a janela :department cobria também
+  # persistência/política/ask_resume, então erros de DB/policy caíam em 'classification_failed'.
+  # Agora :persist/:policy têm rótulo próprio ('internal_error'). Logo, a partir do deploy deste
+  # commit, a queda de 'classification_failed' e a subida de 'internal_error' é RECLASSIFICAÇÃO —
+  # não mudança de comportamento. O projeto está em sandbox/sem prod, então não há degrau real hoje;
+  # este registro fica pronto para quando a série histórica passar a importar.
   def classify_error(exception)
     timed_out = timeout_error?(exception)
     case @stage
-    when :knowledge  then 'knowledge_timeout'                    # busca RAG/pgvector
-    when :tool       then 'tool_failed'                          # executor de ferramenta estourou
-    when :department then 'classification_failed'                # roteamento/classificação
-    when :decision   then timed_out ? 'provider_timeout' : 'provider_error'
-    else                  timed_out ? 'provider_timeout' : 'unknown'
+    when :knowledge        then 'knowledge_timeout'             # busca RAG/pgvector
+    when :tool             then 'tool_failed'                   # executor de ferramenta estourou
+    when :department       then 'classification_failed'         # SÓ a resolução do departamento
+    when :persist, :policy then 'internal_error'               # write de estado / gate de política (não é classificação)
+    when :decision         then timed_out ? 'provider_timeout' : 'provider_error'
+    else                        timed_out ? 'provider_timeout' : 'unknown'
     end
   rescue StandardError
     'unknown'

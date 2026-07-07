@@ -128,6 +128,7 @@
       "budget_exceeded": "Orçamento excedido",
       "classification_failed": "Falha ao classificar o fluxo",
       "unparsed_decision": "Resposta da IA ilegível (não enviada)",
+      "internal_error": "Erro interno (banco/política)",
       "unknown": "Erro não identificado"
     }
   },

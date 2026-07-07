@@ -1,4 +1,4 @@
-\restrict RrT1drI1mhncfDPfj17fRLeLGkaf5bFeKh1dscvXigNeQG0NTUnlnTZkHXhB8ly
+\restrict Rtk7ai0LxWZXHIupwSz4dt5RM4YNbptpj3ag3tSbrkDsuMDWGuUlcba0jIwlcnj
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -9381,12 +9381,11 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict RrT1drI1mhncfDPfj17fRLeLGkaf5bFeKh1dscvXigNeQG0NTUnlnTZkHXhB8ly
+\unrestrict Rtk7ai0LxWZXHIupwSz4dt5RM4YNbptpj3ag3tSbrkDsuMDWGuUlcba0jIwlcnj
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20260708120000'),
 ('20260707120000'),
 ('20260704120000'),
 ('20260703120000'),
