@@ -66,4 +66,13 @@ class Plan < ApplicationRecord
   def limit_for(key)
     plan_limits.find { |l| l.key == key.to_s }
   end
+
+  # Leitura opcional do preço em reais a partir dos *_cents (fonte da verdade). nil = não definido.
+  def monthly_price
+    monthly_price_cents && monthly_price_cents / 100.0
+  end
+
+  def setup_fee
+    setup_fee_cents && setup_fee_cents / 100.0
+  end
 end
