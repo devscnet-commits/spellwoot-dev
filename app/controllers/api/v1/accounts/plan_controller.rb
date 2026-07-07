@@ -16,9 +16,10 @@ class Api::V1::Accounts::PlanController < Api::V1::Accounts::BaseController
     plan = subscription.plan
     ai_credit_balance = current_account.ai_credit_balance
 
-    # Calcular current_value para cada limite baseado nas chaves reais do PlanLimit
+    # current_value por limite via fonte única de contagem (Billing::LimitUsage). Chaves sem fonte
+    # (ex.: crm_pipelines => nil) caem em 0, preservando o contrato atual da API.
     limits_data = plan.plan_limits.map do |limit|
-      current_value = calculate_current_value(limit.key)
+      current_value = Billing::LimitUsage.current_count(current_account, limit.key) || 0
       {
         key: limit.key,
         max_value: limit.max_value,
@@ -49,21 +50,5 @@ class Api::V1::Accounts::PlanController < Api::V1::Accounts::BaseController
       },
       limits: limits_data
     }
-  end
-
-  def calculate_current_value(key)
-    case key
-    when 'users'
-      current_account.users.count
-    when 'inboxes'
-      current_account.inboxes.count
-    when 'ai_agents'
-      Ai::Agent.where(account_id: current_account.id).count
-    when 'crm_pipelines'
-      # Placeholder: implementar quando CRM module existir
-      0
-    else
-      0
-    end
   end
 end
