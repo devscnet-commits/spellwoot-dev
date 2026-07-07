@@ -1,0 +1,24 @@
+{
+  "PLAN": {
+    "HEADER": "My Plan",
+    "DESCRIPTION": "View your current plan, AI credits and account usage limits",
+    "LOADING": "Loading plan information...",
+    "CURRENT_PLAN": "Current Plan",
+    "PLAN_NAME": "Plan Name",
+    "NEXT_RENEWAL": "Next Renewal",
+    "AI_CREDITS": "AI Credits",
+    "PLAN_CREDITS": "Plan Credits",
+    "RENEWS_MONTHLY": "Renews monthly",
+    "EXTRA_CREDITS": "Extra Credits",
+    "PURCHASED_SEPARATELY": "Purchased separately",
+    "TOTAL_BALANCE": "Total Balance",
+    "ACCOUNT_LIMITS": "Account Limits",
+    "LIMIT_USERS": "Users",
+    "LIMIT_INBOXES": "Inboxes",
+    "LIMIT_AI_AGENTS": "AI Agents",
+    "LIMIT_CRM_PIPELINES": "CRM Pipelines",
+    "USED": "used",
+    "UNLIMITED": "Unlimited",
+    "LIMIT_WARNING": "You've reached 80% of the limit"
+  }
+}

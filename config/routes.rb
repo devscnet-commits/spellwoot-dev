@@ -54,6 +54,8 @@ Rails.application.routes.draw do
             resource :contact_merge, only: [:create]
           end
           resource :bulk_actions, only: [:create]
+          # Plano/assinatura atual da conta (Configurações > Plano/Assinatura). Só leitura.
+          resource :subscription, only: [:show], controller: 'subscription'
           resources :agents, only: [:index, :create, :update, :destroy] do
             post :bulk_create, on: :collection
             member do
@@ -133,6 +135,9 @@ Rails.application.routes.draw do
           end
           resources :assignable_agents, only: [:index]
           resource :audit_logs, only: [:show]
+          resource :plan, only: [] do
+            get :limits
+          end
           resources :callbacks, only: [] do
             collection do
               post :register_facebook_page
