@@ -19,6 +19,18 @@
     "LIMIT_CRM_PIPELINES": "CRM Pipelines",
     "USED": "used",
     "UNLIMITED": "Unlimited",
-    "LIMIT_WARNING": "You've reached 80% of the limit"
+    "LIMIT_WARNING": "You've reached 80% of the limit",
+    "PRICE": "Price",
+    "MONTHLY_PRICE": "Monthly price",
+    "SETUP_FEE": "Setup fee",
+    "PRICE_TBD": "To be defined",
+    "OVERAGE_CHARGES": "Overage charges",
+    "OVERAGE_CYCLE": "Cycle",
+    "OVERAGE_ITEM": "Item",
+    "OVERAGE_AVG": "Average excess",
+    "OVERAGE_TOTAL": "Amount",
+    "OVERAGE_STATUS": "Status",
+    "STATUS_PENDING": "Pending",
+    "STATUS_INVOICED": "Invoiced"
   }
 }
