@@ -31,6 +31,14 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     head :no_content
   end
 
+  # Departments the user can scope a source to (all agents in the account). "Todos/Compartilhado"
+  # (nil) is offered by the front, not here.
+  def departments
+    render json: ::Ai::Department.where(account_id: Current.account.id).includes(:agent).order(:id).map { |d|
+      { id: d.id, name: d.name, agent: d.agent&.assistant_name.presence || d.agent&.name }
+    }
+  end
+
   private
 
   def scope
@@ -43,7 +51,7 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
   end
 
   def source_params
-    params.require(:ai_knowledge_source).permit(:kind, :title, :raw, :status, :price)
+    params.require(:ai_knowledge_source).permit(:kind, :title, :raw, :status, :price, :ai_department_id)
   end
 
   # A file upload (TXT/CSV) becomes a "documento" source whose text is the file content;

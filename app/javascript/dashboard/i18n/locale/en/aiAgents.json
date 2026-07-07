@@ -589,7 +589,10 @@
       "PROC_TITLE": "Título do procedimento",
       "PROC_STEPS": "Passo a passo",
       "PRICE": "Preço",
-      "PRICE_PLACEHOLDER": "ex.: R$ 99,90/mês ou Sob consulta"
+      "PRICE_PLACEHOLDER": "ex.: R$ 99,90/mês ou Sob consulta",
+      "DEPARTMENT": "Departamento",
+      "DEPARTMENT_ALL": "Todos / Compartilhado",
+      "DEPARTMENT_HINT": "Deixe em \"Todos\" para todos os agentes usarem, ou escolha um departamento para restringir este conhecimento a ele."
     },
     "KINDS": {
       "FAQ": "FAQ",

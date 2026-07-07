@@ -24,11 +24,21 @@ class Ai::KnowledgeSource < ApplicationRecord
 
   scope :active, -> { where(status: 'active') }
 
+  # Optional department scope must belong to the SAME account (blocks attaching a source to another
+  # tenant's department). nil = shared/account-wide source.
+  validate :department_within_account
+
   # Keep the retrievable chunks in sync: website sources are crawled (which then ingests),
   # the others are ingested directly from title/raw.
   after_commit :sync_knowledge, on: %i[create update]
 
   private
+
+  def department_within_account
+    return if ai_department_id.blank?
+
+    errors.add(:ai_department_id, 'inválido') unless department && department.account_id == account_id
+  end
 
   def sync_knowledge
     if kind == 'website'

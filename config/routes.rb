@@ -82,7 +82,9 @@ Rails.application.routes.draw do
               end
             end
           end
-          resources :ai_knowledge_sources, only: %i[index create update destroy]
+          resources :ai_knowledge_sources, only: %i[index create update destroy] do
+            get :departments, on: :collection
+          end
           resources :ai_operation_profiles, only: %i[index create update destroy]
           resources :ai_integration_links, only: %i[index create update destroy] do
             member { post :test }
