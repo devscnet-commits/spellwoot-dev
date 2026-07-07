@@ -196,7 +196,8 @@
       "MESSAGE_SIGNATURE_NOT_CONFIGURED": "A assinatura da mensagem não está configurada. Por favor, configure-a nas configurações do perfil.",
       "COPILOT_MSG_INPUT": "Forneça instruções adicionais ao Copiloto ou pergunte algo mais... Pressione Enter para enviar",
       "CLICK_HERE": "Clique aqui para atualizar",
-      "WHATSAPP_TEMPLATES": "Modelos do Whatsapp"
+      "WHATSAPP_TEMPLATES": "Modelos do Whatsapp",
+      "WHATSAPP_TEMPLATES_EMPTY": "Nenhum template disponível. Configure templates no Meta Business Manager."
     },
     "REPLYBOX": {
       "REPLY": "Responder",
