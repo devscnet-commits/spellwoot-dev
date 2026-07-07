@@ -90,6 +90,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    whatsAppTemplatesEmpty: {
+      type: Boolean,
+      default: false,
+    },
     enableContentTemplates: {
       type: Boolean,
       default: false,
@@ -386,7 +390,11 @@ export default {
       />
       <NextButton
         v-if="enableWhatsAppTemplates"
-        v-tooltip.top-end="$t('CONVERSATION.FOOTER.WHATSAPP_TEMPLATES')"
+        v-tooltip.top-end="
+          whatsAppTemplatesEmpty
+            ? $t('CONVERSATION.FOOTER.WHATSAPP_TEMPLATES_EMPTY')
+            : $t('CONVERSATION.FOOTER.WHATSAPP_TEMPLATES')
+        "
         icon="i-ph-whatsapp-logo"
         slate
         faded
