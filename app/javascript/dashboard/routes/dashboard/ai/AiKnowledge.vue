@@ -4,7 +4,6 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
-import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import KnowledgeSourceForm from './KnowledgeSourceForm.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
@@ -323,20 +322,6 @@ const save = async () => {
   }
 };
 
-const deleteTarget = ref(null);
-const sourceName = source =>
-  source ? source.title || kindLabel(source.kind) : '';
-const confirmRemove = async () => {
-  try {
-    await axios.delete(`${baseUrl()}/${deleteTarget.value.id}`);
-    useAlert(t('AI_KNOWLEDGE.DELETED'));
-    deleteTarget.value = null;
-    fetchSources();
-  } catch (error) {
-    useAlert(t('AI_KNOWLEDGE.ERROR'));
-  }
-};
-
 // Seleção em massa: marcar vários e excluir de uma vez (sem digitar o texto a cada item).
 const selectedIds = ref([]);
 const isSelected = id => selectedIds.value.includes(id);
@@ -357,16 +342,55 @@ const toggleSelectAll = () => {
   selectedIds.value = allSelected.value ? [] : sources.value.map(s => s.id);
 };
 
-const bulkDeleteOpen = ref(false);
-const confirmBulkRemove = async () => {
-  const ids = [...selectedIds.value];
+// Exclusão padronizada (individual E lote) no MESMO modal simples — sem digitar o nome do item.
+// `deleteTargets` guarda as sources a excluir: 1 = individual (via card), >1 = lote (via seleção).
+// [] = fechado. Um único componente evita a inconsistência de dois modais separados voltar a surgir.
+const deleteTargets = ref([]);
+const sourceName = source =>
+  source ? source.title || kindLabel(source.kind) : '';
+const deleteCount = computed(() => deleteTargets.value.length);
+const deleteModalOpen = computed({
+  get: () => deleteCount.value > 0,
+  set: open => {
+    if (!open) deleteTargets.value = [];
+  },
+});
+const deleteTitle = computed(() =>
+  deleteCount.value > 1
+    ? t('AI_KNOWLEDGE.BULK.CONFIRM_TITLE')
+    : t('AI_KNOWLEDGE.DELETE_MODAL.TITLE')
+);
+const deleteMessage = computed(() =>
+  deleteCount.value > 1
+    ? t('AI_KNOWLEDGE.BULK.CONFIRM_MESSAGE', { count: deleteCount.value })
+    : t('AI_KNOWLEDGE.DELETE_MODAL.MESSAGE', {
+        name: sourceName(deleteTargets.value[0]),
+      })
+);
+const askDeleteSingle = source => {
+  deleteTargets.value = [source];
+};
+const askDeleteBulk = () => {
+  deleteTargets.value = sources.value.filter(s =>
+    selectedIds.value.includes(s.id)
+  );
+};
+const closeDelete = () => {
+  deleteTargets.value = [];
+};
+const confirmDelete = async () => {
+  const ids = deleteTargets.value.map(s => s.id);
   try {
     await Promise.all(ids.map(id => axios.delete(`${baseUrl()}/${id}`)));
-    useAlert(t('AI_KNOWLEDGE.BULK.DELETED', { count: ids.length }));
+    useAlert(
+      ids.length > 1
+        ? t('AI_KNOWLEDGE.BULK.DELETED', { count: ids.length })
+        : t('AI_KNOWLEDGE.DELETED')
+    );
   } catch (error) {
     useAlert(t('AI_KNOWLEDGE.ERROR'));
   } finally {
-    bulkDeleteOpen.value = false;
+    deleteTargets.value = [];
     clearSelection();
     fetchSources();
   }
@@ -565,7 +589,7 @@ onMounted(() => {
             <button
               type="button"
               class="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg bg-n-ruby-9 text-white hover:bg-n-ruby-10"
-              @click="bulkDeleteOpen = true"
+              @click="askDeleteBulk"
             >
               <span class="i-lucide-trash-2 size-4" />
               {{ $t('AI_KNOWLEDGE.BULK.DELETE') }}
@@ -629,7 +653,7 @@ onMounted(() => {
                     type="button"
                     class="hover:text-n-ruby-11"
                     :aria-label="$t('AI_KNOWLEDGE.FORM.DELETE')"
-                    @click="deleteTarget = source"
+                    @click="askDeleteSingle(source)"
                   >
                     <span class="i-lucide-trash-2 size-4 inline-block" />
                   </button>
@@ -675,39 +699,15 @@ onMounted(() => {
           </template>
         </div>
 
-        <ConfirmDeleteModal
-          v-if="deleteTarget"
-          show
-          :title="$t('AI_KNOWLEDGE.DELETE_MODAL.TITLE')"
-          :message="
-            $t('AI_KNOWLEDGE.DELETE_MODAL.MESSAGE', {
-              name: sourceName(deleteTarget),
-            })
-          "
+        <!-- Modal ÚNICO de exclusão (individual e lote): simples, sem digitar o nome do item. -->
+        <woot-delete-modal
+          v-model:show="deleteModalOpen"
+          :on-close="closeDelete"
+          :on-confirm="confirmDelete"
+          :title="deleteTitle"
+          :message="deleteMessage"
           :confirm-text="$t('AI_KNOWLEDGE.DELETE_MODAL.CONFIRM')"
           :reject-text="$t('AI_KNOWLEDGE.DELETE_MODAL.CANCEL')"
-          :confirm-value="sourceName(deleteTarget)"
-          :confirm-place-holder-text="
-            $t('AI_KNOWLEDGE.DELETE_MODAL.PLACEHOLDER', {
-              name: sourceName(deleteTarget),
-            })
-          "
-          @on-confirm="confirmRemove"
-          @on-close="deleteTarget = null"
-        />
-
-        <woot-delete-modal
-          v-model:show="bulkDeleteOpen"
-          :on-close="() => (bulkDeleteOpen = false)"
-          :on-confirm="confirmBulkRemove"
-          :title="$t('AI_KNOWLEDGE.BULK.CONFIRM_TITLE')"
-          :message="
-            $t('AI_KNOWLEDGE.BULK.CONFIRM_MESSAGE', {
-              count: selectedIds.length,
-            })
-          "
-          :confirm-text="$t('AI_KNOWLEDGE.BULK.CONFIRM')"
-          :reject-text="$t('AI_KNOWLEDGE.BULK.CANCEL')"
         />
       </section>
     </div>
