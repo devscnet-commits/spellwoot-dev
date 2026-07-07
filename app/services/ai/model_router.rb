@@ -26,7 +26,11 @@ class Ai::ModelRouter
   # mais consistentes/determinísticas, adequado a atendimento.
   DEFAULT_TEMPERATURE = 0.3
 
-  def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil, temperature: nil)
+  # json: opt-in to force a JSON-object response (OpenAI response_format). Only the supervisor
+  # decision path sets it — its prompt always carries the JSON contract. Plain-text callers (e.g.
+  # the department classifier) must leave it false so they aren't forced into JSON mode.
+  def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil,
+                  temperature: nil, json: false)
     # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
@@ -36,7 +40,7 @@ class Ai::ModelRouter
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
-                     user_message: user_message, account_id: account_id, temperature: temperature)
+                     user_message: user_message, account_id: account_id, temperature: temperature, json: json)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     decision = raw[:status] == 'error' ? { 'error' => raw[:error] } : parse_decision(raw[:text])
@@ -55,7 +59,8 @@ class Ai::ModelRouter
   end
 
   # NOTE: validate the exact RubyLLM call shape when running; isolated here on purpose.
-  def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil, timeout: nil)
+  def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil,
+                      timeout: nil, json: false)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     context = provider_context(provider, account_id: account_id, timeout: timeout)
@@ -63,6 +68,7 @@ class Ai::ModelRouter
     # Builder do ruby_llm (o construtor Chat.new não aceita temperature). to_f: a coluna é BigDecimal.
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
+    chat = apply_json_format(chat, provider) if json
     response = chat.ask(user_message)
     {
       text: response.respond_to?(:content) ? response.content : response.to_s,
@@ -73,6 +79,23 @@ class Ai::ModelRouter
   rescue StandardError => e
     Rails.logger.error "[Ai::ModelRouter] #{e.class}: #{e.message}"
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error: "#{e.class}: #{e.message}" }
+  end
+
+  # Providers that honor the OpenAI-style `response_format: { type: 'json_object' }`. Anthropic and
+  # Gemini use different mechanisms and OpenRouter only passes it through for some models, so we skip
+  # them and rely on the tolerant parse_decision instead — never risk a "param desconhecido" error.
+  JSON_FORMAT_PROVIDERS = %w[openai].freeze
+
+  # Best-effort: asks OpenAI to emit a strict JSON object. Guarded by provider AND by respond_to?
+  # (older RubyLLM may lack with_params); any failure degrades to the plain chat, never crashes.
+  def self.apply_json_format(chat, provider)
+    return chat unless JSON_FORMAT_PROVIDERS.include?(provider.to_s)
+    return chat unless chat.respond_to?(:with_params)
+
+    chat.with_params(response_format: { type: 'json_object' })
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::ModelRouter] response_format ignorado: #{e.class}: #{e.message}"
+    chat
   end
 
   # Builds an ISOLATED per-call RubyLLM context carrying the provider/account key. It NEVER mutates the
@@ -141,10 +164,16 @@ class Ai::ModelRouter
   def self.parse_decision(text)
     return {} if text.blank?
 
-    json = text[/\{.*\}/m]
+    # Strip markdown code fences (```json ... ```) some providers add despite response_format, then
+    # grab the JSON object. Unparseable -> decision 'unparsed' (Gateway dispatches nothing; Bug 3).
+    json = strip_code_fences(text)[/\{.*\}/m]
     json ? JSON.parse(json) : { 'decision' => 'unparsed' }
   rescue JSON::ParserError
     { 'decision' => 'unparsed' }
+  end
+
+  def self.strip_code_fences(text)
+    text.to_s.strip.sub(/\A```(?:\w*)\s*\n?/, '').sub(/\n?\s*```\s*\z/, '').strip
   end
 
   # [input, output] price per 1k tokens for a given model (first/most-specific substring match wins).
