@@ -102,6 +102,9 @@ class Account < ApplicationRecord
   # a subscription atual é derivada por scope (Subscription.current) — ver FeatureGate.
   has_many :subscriptions, dependent: :destroy_async
   has_one :ai_credit_balance, dependent: :destroy_async
+  # Overage pago (Fase 2): snapshots diários do excedente + cobranças por ciclo (média × preço).
+  has_many :overage_snapshots, dependent: :destroy_async
+  has_many :overage_charges, dependent: :destroy_async
 
   has_one_attached :contacts_export
 

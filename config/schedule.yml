@@ -99,3 +99,11 @@ ai_credits_renewal_job:
   cron: '0 4 * * *'
   class: 'Ai::CreditsRenewalJob'
   queue: scheduled_jobs
+
+# executed daily at 04:30 — grava o snapshot diário do excedente dos limites em paid_overage
+# (base da cobrança por média no fim do ciclo). 04:30 evita colidir com retention (03:30) e
+# credits_renewal (04:00). Ver Billing::OverageSnapshotJob.
+billing_overage_snapshot_job:
+  cron: '30 4 * * *'
+  class: 'Billing::OverageSnapshotJob'
+  queue: scheduled_jobs
