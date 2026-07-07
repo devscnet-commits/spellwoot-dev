@@ -1,6 +1,9 @@
 # CRUD for AI Agents (the "Agentes IA" config). Scoped to the current account; ai_* domain only.
 class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
+  include PlanLimitEnforceable
+
   before_action :set_agent, only: %i[show update destroy test]
+  before_action :validate_plan_ai_agents_limit, only: [:create]
 
   def index
     agents = ::Ai::Agent.where(account_id: Current.account.id)
@@ -43,6 +46,12 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   end
 
   private
+
+  # Limite de agentes IA do plano atual (billing Fase 2). Sem plano/limite => não bloqueia.
+  def validate_plan_ai_agents_limit
+    count = ::Ai::Agent.where(account_id: Current.account.id).count
+    enforce_plan_limit('ai_agents', count, 'Limite de agentes IA do seu plano atingido.')
+  end
 
   def set_agent
     @agent = ::Ai::Agent.find_by(id: params[:id], account_id: Current.account.id)

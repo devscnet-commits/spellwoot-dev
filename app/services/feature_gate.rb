@@ -25,6 +25,22 @@ class FeatureGate
       current_count.to_i <= limit.max_value
     end
 
+    # Ação de enforcement ao criar MAIS UM registro de `limit_key`, dado `count` = total resultante.
+    # Retorna :allow (dentro do limite, ilimitado, ou sem plano/limite), :block (excedeu e hard_block),
+    # ou :allow_with_overage (excedeu e paid_overage — cria mesmo assim; a cobrança do excedente é
+    # débito da Fase 3). soft_warning ainda não é usado por nenhum PlanLimit; tratado como :block
+    # (fallback conservador).
+    def limit_action(account, limit_key, count)
+      limit = limit_for(account, limit_key)
+      return :allow if limit.nil? || limit.max_value.nil?
+      return :allow if count.to_i <= limit.max_value
+
+      case limit.overflow_behavior
+      when 'paid_overage' then :allow_with_overage
+      else :block # hard_block e soft_warning (fallback)
+      end
+    end
+
     # Plano da subscription atual da conta, memoizado por request.
     def current_plan(account)
       return nil if account.nil?
