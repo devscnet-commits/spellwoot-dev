@@ -608,10 +608,9 @@
     "ERROR": "Algo deu errado ao salvar.",
     "DELETE_MODAL": {
       "TITLE": "Excluir conhecimento",
-      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "MESSAGE": "Tem certeza que deseja excluir \"{name}\"? Esta ação não pode ser desfeita.",
       "CONFIRM": "Excluir",
-      "CANCEL": "Cancelar",
-      "PLACEHOLDER": "Digite {name} para confirmar"
+      "CANCEL": "Cancelar"
     },
     "BULK": {
       "SELECT_ALL": "Selecionar todos",
