@@ -35,15 +35,19 @@ namespace :plans do
     {
       slug: 'pro', name: 'PRO',
       features: :all, # todas as MANAGED_FEATURE_KEYS ligadas no PRO (expandido em runtime)
-      limits: { 'users' => 30, 'inboxes' => 20, 'ai_agents' => 10, 'crm_pipelines' => 10 }
+      limits: { 'users' => 30, 'inboxes' => 20, 'ai_agents' => 10, 'crm_pipelines' => 10 },
+      # Overage pago SÓ em 'users' no PRO ("Atendente adicional"): permite exceder 30 e cobra o
+      # excedente a R$29,90/usuário (Planos_Conexi_v2). inboxes/ai_agents seguem hard_block.
+      # A cobrança de fato é débito da Fase 3 (Stripe/Asaas); aqui só grava a política no limite.
+      limit_overrides: { 'users' => { overflow_behavior: :paid_overage, overage_price_cents: 2990 } }
     }
   ].freeze
 
   # Referência de créditos de IA por plano (AiCreditBalance.plan_credits, renovados no ciclo):
   # START=500, STANDARD=1000, PRO=1000. NÃO seedado aqui — a renovação de plan_credits é fase futura.
   #
-  # Nota overage: 'users' no PRO ("Atendente adicional") pode virar overflow_behavior: :paid_overage
-  # + overage_price_cents no futuro. Mantido hard_block até haver preço oficial confirmado.
+  # Overage: 'users' no PRO ("Atendente adicional") já é :paid_overage + overage_price_cents 2990
+  # (ver limit_overrides no PRO). A cobrança do excedente em si é débito da Fase 3 (Stripe/Asaas).
 
   desc 'Seed idempotente de planos + assinatura interna das 3 contas do grupo'
   task seed: :environment do
@@ -82,10 +86,18 @@ namespace :plans do
         feature.update!(enabled: enabled.include?(key))
       end
 
-      # Limites numéricos por chave. hard_block em todos (sem overage nesta fase).
+      # Limites numéricos por chave. hard_block por padrão; limit_overrides ajusta política/preço por
+      # chave (hoje só users no PRO => paid_overage). overage_price_cents nil quando não há override
+      # (idempotente: re-run reseta chaves sem override).
+      overrides = attrs[:limit_overrides] || {}
       attrs[:limits].each do |key, max_value|
         limit = plan.plan_limits.find_or_initialize_by(key: key)
-        limit.update!(max_value: max_value, overflow_behavior: :hard_block)
+        ov = overrides[key] || {}
+        limit.update!(
+          max_value: max_value,
+          overflow_behavior: ov[:overflow_behavior] || :hard_block,
+          overage_price_cents: ov[:overage_price_cents]
+        )
       end
 
       puts "[plans:seed] plano '#{attrs[:slug]}': #{enabled.size}/#{feature_keys.size} features on, limites #{attrs[:limits]}."
