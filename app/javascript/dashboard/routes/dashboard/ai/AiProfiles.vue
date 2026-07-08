@@ -15,10 +15,11 @@ const { t } = useI18n();
 
 const PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter'];
 const providerOptions = PROVIDERS.map(p => ({ value: p, label: p }));
-const WORKER_KEYS = ['ocr', 'classification', 'summary', 'translation', 'rag'];
-// Classification fed the (now removed) flow routing; keep it in the data model
-// for backend compatibility, but hide it from the form.
-const HIDDEN_WORKERS = ['classification'];
+const WORKER_KEYS = ['ocr', 'summary', 'translation', 'rag'];
+// Nenhum worker escondido hoje. O antigo 'classification' era vestígio do "flow routing" removido e
+// foi retirado de WORKER_KEYS: o classificador de departamento é INTERNO ao DepartmentResolver
+// (provider do supervisor + modelo barato), não um worker configurável. Ver Ai::DepartmentResolver.
+const HIDDEN_WORKERS = [];
 const visibleWorkers = computed(() =>
   WORKER_KEYS.filter(w => !HIDDEN_WORKERS.includes(w))
 );
@@ -32,7 +33,6 @@ const PRESETS = {
     model: ['openai', 'gpt-4.1-mini'],
     workers: {
       ocr: ['openai', 'gpt-4.1-mini'],
-      classification: ['openai', 'gpt-4.1-mini'],
       summary: ['openai', 'gpt-4.1-mini'],
       translation: ['openai', 'gpt-4.1-mini'],
       rag: ['openai', 'text-embedding-3-small'],
@@ -45,7 +45,6 @@ const PRESETS = {
     model: ['openai', 'gpt-4.1'],
     workers: {
       ocr: ['openai', 'gpt-4.1-mini'],
-      classification: ['openai', 'gpt-4.1-mini'],
       summary: ['openai', 'gpt-4.1-mini'],
       translation: ['openai', 'gpt-4.1-mini'],
       rag: ['openai', 'text-embedding-3-small'],
@@ -58,7 +57,6 @@ const PRESETS = {
     model: ['anthropic', 'claude-3-5-sonnet-latest'],
     workers: {
       ocr: ['openai', 'gpt-4.1'],
-      classification: ['openai', 'gpt-4.1-mini'],
       summary: ['openai', 'gpt-4.1'],
       translation: ['openai', 'gpt-4.1'],
       rag: ['openai', 'text-embedding-3-large'],
