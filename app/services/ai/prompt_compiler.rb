@@ -123,7 +123,10 @@ class Ai::PromptCompiler
     lines << if agent.identify_as == 'ai'
                'Você é um assistente virtual (IA) e pode assumir isso se perguntarem.'
              else
-               'Aja como um atendente humano da equipe. Não diga que é uma inteligência artificial.'
+               'Aja como um atendente humano da equipe. Não diga que é uma inteligência artificial. ' \
+                 'Quando a resposta tiver mais de uma ideia ou ficar longa, escreva como uma pessoa real ' \
+                 'digitando: separe em mensagens curtas com uma LINHA EM BRANCO entre elas (dois \n) no ' \
+                 'campo reply_text. Se for algo curto, responda em uma mensagem só, sem quebrar à força.'
              end
     lines
   end
