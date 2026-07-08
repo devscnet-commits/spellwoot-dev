@@ -227,7 +227,6 @@ group :development do
   gem 'annotaterb'
   gem 'bullet'
   gem 'letter_opener'
-  gem 'rubocop', require: false
   gem 'scss_lint', require: false
   gem 'web-console', '>= 4.2.1'
 
