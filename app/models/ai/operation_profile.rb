@@ -11,6 +11,7 @@
 #  supervisor_model       :string           not null
 #  supervisor_provider    :string           not null
 #  supervisor_temperature :decimal(3, 2)    default(0.3), not null
+#  temperature_position   :integer          default(20), not null
 #  tier                   :string           default("customizado"), not null
 #  worker_overrides       :jsonb            not null
 #  created_at             :datetime         not null
@@ -34,4 +35,13 @@ class Ai::OperationProfile < ApplicationRecord
   # LEGADO: supervisor_temperature (cru, 0-2) não é mais usado no fluxo (substituído por
   # temperature_position + TemperatureMapper). Mantido por ora; dropar em limpeza futura.
   validates :supervisor_temperature, numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 2 }
+
+  # Config do worker auxiliar `key` (ex.: 'ocr', 'summary', 'translation', 'rag'). worker_overrides é
+  # SEMPRE aninhado (a UI salva { key => { 'provider'=>, 'model'=> } }). Centralizado aqui porque ler
+  # flat (ex.: worker_overrides['summary_provider']) foi um bug recorrente — Summary e OCR usam este
+  # método. Retorna {} quando não configurado; o caller decide o fallback (OCR = opt-in, sem
+  # supervisor; Summary = cai no supervisor).
+  def worker(key)
+    worker_overrides&.dig(key.to_s) || {}
+  end
 end

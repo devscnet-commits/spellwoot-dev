@@ -34,13 +34,15 @@ class Ai::Workers::Summary
                 .join("\n")
   end
 
+  # worker_overrides é aninhado ({ 'summary' => { 'provider'=>, 'model'=> } }) — ver
+  # Ai::OperationProfile#worker. Antes lia flat ('summary_provider') e sempre caía no supervisor.
   def self.provider_for(profile)
-    profile&.worker_overrides&.dig('summary_provider').presence ||
+    profile&.worker(:summary)&.dig('provider').presence ||
       profile&.supervisor_provider.presence || 'openai'
   end
 
   def self.model_for(profile)
-    profile&.worker_overrides&.dig('summary_model').presence ||
+    profile&.worker(:summary)&.dig('model').presence ||
       profile&.supervisor_model.presence || 'gpt-4.1-mini'
   end
 end
