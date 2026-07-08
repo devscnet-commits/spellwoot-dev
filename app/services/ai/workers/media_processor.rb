@@ -13,6 +13,17 @@ class Ai::Workers::MediaProcessor
                          'comprovante de pagamento com valor/data, foto de equipamento, documento). ' \
                          'Não invente dados que não estão visíveis. Responda apenas a descrição.'
 
+  # Documentos: PDF de texto (pdf-reader), PDF escaneado (visão, Opção B — PDF direto ao worker), docx
+  # (gem docx). Cap de páginas p/ não estourar custo/latência em docs longos.
+  MAX_DOC_PAGES = 10
+  PAGE_CAP_NOTE = '[Documento tem mais de 10 páginas — processadas apenas as primeiras 10]'
+  # docx não tem "páginas" fixas → cap por caracteres p/ bound de tokens.
+  MAX_DOC_CHARS = 15_000
+  DOC_TRUNC_NOTE = '[Documento longo — texto truncado]'
+  # Heurística texto vs escaneado: abaixo de ~20 chars por página lida, tratamos como PDF escaneado
+  # (sem texto selecionável) e caímos no caminho de visão.
+  MIN_CHARS_PER_PAGE = 20
+
   def self.process(message, profile = nil)
     attachments = message.attachments.to_a
     return nil if attachments.empty?
@@ -28,7 +39,7 @@ class Ai::Workers::MediaProcessor
     case attachment.file_type
     when 'audio' then transcribe(attachment, account_id) || '[O cliente enviou um áudio]'
     when 'image' then ocr(attachment, account_id, profile) || '[O cliente enviou uma imagem]'
-    when 'file'  then '[O cliente enviou um arquivo]'
+    when 'file'  then document(attachment, account_id, profile) || '[O cliente enviou um arquivo]'
     when 'video' then '[O cliente enviou um vídeo]'
     end
   end
@@ -122,6 +133,97 @@ class Ai::Workers::MediaProcessor
   def self.ocr_worker(profile)
     cfg = profile&.worker_overrides&.dig('ocr') || {}
     [cfg['provider'].presence || 'openai', cfg['model'].presence]
+  end
+
+  # Extração de documento (PDF texto/escaneado + docx). Tipos não suportados (xlsx/txt/...) ou falha
+  # => nil => marcador. Logs distintos: sem-arquivo / (escaneado) sem-worker / erro de processamento.
+  def self.document(attachment, account_id, profile)
+    unless attachment.file.attached?
+      Rails.logger.warn '[Ai::Workers::MediaProcessor] documento sem arquivo anexado (download da mídia falhou?), extração pulada'
+      return nil
+    end
+
+    content_type = attachment.file.blob.content_type.to_s
+    filename = attachment.file.blob.filename.to_s.downcase
+    if pdf?(content_type, filename)
+      extract_pdf(attachment, account_id, profile)
+    elsif docx?(content_type, filename)
+      extract_docx(attachment)
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Workers::MediaProcessor] documento: #{e.class}: #{e.message}"
+    nil
+  end
+
+  # PDF: tenta texto real (pdf-reader, primeiras MAX_DOC_PAGES páginas). Vazio/curto demais => PDF
+  # escaneado => visão (Opção B: manda o PDF INTEIRO ao worker; ruby_llm aceita PDF nativo, sem
+  # rasterizar/poppler). Cap real por página no caminho escaneado exigiria rasterização (futuro); por
+  # ora anexamos só a nota de >10 páginas.
+  def self.extract_pdf(attachment, account_id, profile)
+    reader = PDF::Reader.new(StringIO.new(attachment.file.download))
+    page_count = reader.page_count
+    pages = reader.pages.first(MAX_DOC_PAGES)
+    text = pages.map { |p| p.text.to_s }.join("\n").strip
+
+    if text.present? && text.length >= pages.size * MIN_CHARS_PER_PAGE
+      out = "[Documento (PDF)]: #{text.first(MAX_DOC_CHARS)}"
+      out += "\n#{DOC_TRUNC_NOTE}" if text.length > MAX_DOC_CHARS
+      out += "\n#{PAGE_CAP_NOTE}" if page_count > MAX_DOC_PAGES
+      out
+    else
+      scanned_pdf_via_vision(attachment, account_id, profile, page_count)
+    end
+  end
+
+  # PDF escaneado -> visão. Reusa o worker de OCR do perfil e o ModelRouter (mesma chamada da imagem,
+  # só passando o PDF em image:). Opt-in: sem worker configurado, não roda.
+  def self.scanned_pdf_via_vision(attachment, account_id, profile, page_count)
+    provider, model = ocr_worker(profile)
+    if model.blank?
+      Rails.logger.warn '[Ai::Workers::MediaProcessor] PDF escaneado mas sem worker de OCR configurado, extração pulada'
+      return nil
+    end
+
+    raw = Ai::ModelRouter.call_model(
+      provider: provider, model: model,
+      system_prompt: VISION_SYSTEM_PROMPT,
+      user_message: 'Extraia e descreva o conteúdo deste documento.',
+      account_id: account_id, image: attachment.file
+    )
+    if raw[:status] == 'error'
+      Rails.logger.warn "[Ai::Workers::MediaProcessor] visão (PDF) falhou: #{raw[:error]}"
+      return nil
+    end
+
+    text = raw[:text].to_s.strip
+    return nil if text.blank?
+
+    out = "[Documento (PDF escaneado)]: #{text}"
+    page_count > MAX_DOC_PAGES ? "#{out}\n#{PAGE_CAP_NOTE}" : out
+  end
+
+  # docx: texto dos parágrafos (gem docx = rubyzip + nokogiri). Cap por caracteres.
+  def self.extract_docx(attachment)
+    Tempfile.create(['ai-doc', '.docx']) do |tmp|
+      tmp.binmode
+      tmp.write(attachment.file.download)
+      tmp.rewind
+      doc = Docx::Document.open(tmp.path)
+      text = doc.paragraphs.map(&:text).reject(&:blank?).join("\n").strip
+      return nil if text.blank?
+
+      out = "[Documento (docx)]: #{text.first(MAX_DOC_CHARS)}"
+      text.length > MAX_DOC_CHARS ? "#{out}\n#{DOC_TRUNC_NOTE}" : out
+    end
+  end
+
+  def self.pdf?(content_type, filename)
+    content_type == 'application/pdf' || filename.end_with?('.pdf')
+  end
+
+  def self.docx?(content_type, filename)
+    content_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      filename.end_with?('.docx')
   end
 
   # Mensagem de erro do Whisper (OpenAI devolve {"error":{"message":...}}) para o log — sem PII/áudio.
