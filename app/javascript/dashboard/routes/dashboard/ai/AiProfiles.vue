@@ -85,7 +85,7 @@ const blank = () => ({
   name: '',
   supervisor_provider: 'openai',
   supervisor_model: '',
-  supervisor_temperature: 0.3,
+  temperature_position: 20,
   workers: emptyWorkers(),
   route_high: 0.95,
   route_low: 0.85,
@@ -179,7 +179,7 @@ const openEdit = profile => {
     name: profile.name,
     supervisor_provider: profile.supervisor_provider,
     supervisor_model: profile.supervisor_model,
-    supervisor_temperature: profile.supervisor_temperature ?? 0.3,
+    temperature_position: profile.temperature_position ?? 20,
     workers: WORKER_KEYS.reduce((acc, k) => {
       acc[k] = {
         provider: workers[k]?.provider || 'openai',
@@ -200,12 +200,12 @@ const openEdit = profile => {
   capture();
 };
 
-// The Input component doesn't forward `min` to number fields, so enforce the
-// 0–2 range here (fallback to the default when left blank/invalid).
-const clampTemperature = value => {
+// Posição abstrata do slider (0-100). O backend (Ai::TemperatureMapper) traduz para a temperatura
+// real de cada provider — o front nunca manda o número cru de temperatura.
+const clampPosition = value => {
   const n = Number(value);
-  if (Number.isNaN(n)) return 0.3;
-  return Math.min(2, Math.max(0, n));
+  if (Number.isNaN(n)) return 20;
+  return Math.min(100, Math.max(0, Math.round(n)));
 };
 
 const save = async () => {
@@ -215,7 +215,7 @@ const save = async () => {
       tier: form.preset,
       supervisor_provider: form.supervisor_provider,
       supervisor_model: form.supervisor_model,
-      supervisor_temperature: clampTemperature(form.supervisor_temperature),
+      temperature_position: clampPosition(form.temperature_position),
       worker_overrides: form.workers,
       routing_strategy: {
         high_threshold: Number(form.route_high),
@@ -447,15 +447,31 @@ onMounted(fetchProfiles);
                     v-model="form.supervisor_model"
                     :label="$t('AI_PROFILES.FORM.MODEL')"
                   />
-                  <div class="flex flex-col gap-1">
-                    <Input
-                      v-model="form.supervisor_temperature"
-                      type="number"
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-sm font-medium text-n-slate-12">
+                      {{ $t('AI_PROFILES.SUPERVISOR.TEMPERATURE') }}
+                    </label>
+                    <input
+                      v-model.number="form.temperature_position"
+                      type="range"
                       min="0"
-                      max="2"
-                      step="0.1"
-                      :label="$t('AI_PROFILES.SUPERVISOR.TEMPERATURE')"
+                      max="100"
+                      step="5"
+                      class="w-full accent-n-brand"
                     />
+                    <div
+                      class="flex justify-between text-xs text-n-slate-11 select-none"
+                    >
+                      <span>{{
+                        $t('AI_PROFILES.SUPERVISOR.TEMPERATURE_RIGID')
+                      }}</span>
+                      <span>{{
+                        $t('AI_PROFILES.SUPERVISOR.TEMPERATURE_BALANCED')
+                      }}</span>
+                      <span>{{
+                        $t('AI_PROFILES.SUPERVISOR.TEMPERATURE_CREATIVE')
+                      }}</span>
+                    </div>
                     <p class="text-xs text-n-slate-11 mb-0">
                       {{ $t('AI_PROFILES.SUPERVISOR.TEMPERATURE_HINT') }}
                     </p>
