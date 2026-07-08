@@ -5,7 +5,9 @@
 #  id                  :bigint           not null, primary key
 #  active              :boolean          default(TRUE), not null
 #  ai_credits_included :integer          default(0), not null
+#  monthly_price_cents :integer
 #  name                :string           not null
+#  setup_fee_cents     :integer
 #  slug                :string           not null
 #  created_at          :datetime         not null
 #  updated_at          :datetime         not null
