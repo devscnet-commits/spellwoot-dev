@@ -127,11 +127,11 @@ class Ai::Workers::MediaProcessor
     nil
   end
 
-  # Worker de OCR do perfil. worker_overrides é aninhado: { 'ocr' => { 'provider'=>, 'model'=> } }.
-  # Sem fallback pro supervisor (diferente do Summary) — visão é opt-in. provider default 'openai'
-  # quando só o modelo está setado. Retorna [provider, model] (model nil => não configurado).
+  # Worker de OCR do perfil (via Ai::OperationProfile#worker — leitura aninhada centralizada). Sem
+  # fallback pro supervisor (diferente do Summary) — visão é opt-in. provider default 'openai' quando
+  # só o modelo está setado. Retorna [provider, model] (model nil => não configurado).
   def self.ocr_worker(profile)
-    cfg = profile&.worker_overrides&.dig('ocr') || {}
+    cfg = profile&.worker(:ocr) || {}
     [cfg['provider'].presence || 'openai', cfg['model'].presence]
   end
 
