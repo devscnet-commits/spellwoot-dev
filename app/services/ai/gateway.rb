@@ -211,8 +211,11 @@ class Ai::Gateway
   # Execução de ações do pipeline (reply + capabilities nativas), extraído do Gateway (Passo 3).
   # Memoizado — depende de @acts_live, então SÓ é acessado depois da resolução do gate (linha ~52).
   def action_dispatcher
+    # as_human é constante por run (o agente é fixo), então injetamos na construção em vez de repetir
+    # nos 4 call-sites de reply. No modo humano o dispatcher quebra a resposta em várias mensagens.
     @action_dispatcher ||= Ai::ActionDispatcher.new(
-      conversation: @conversation, account: @account, mode: @mode, acts_live: @acts_live
+      conversation: @conversation, account: @account, mode: @mode, acts_live: @acts_live,
+      as_human: @agent.identify_as == 'human'
     )
   end
 

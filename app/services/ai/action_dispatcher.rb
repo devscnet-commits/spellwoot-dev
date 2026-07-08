@@ -7,11 +7,18 @@
 # ATENÇÃO: recebe `acts_live` por injeção — logo o Gateway só pode criar este dispatcher DEPOIS de
 # resolver @acts_live (após o department). Todos os call-sites do run são posteriores a isso.
 class Ai::ActionDispatcher
-  def initialize(conversation:, account:, mode:, acts_live:)
+  # Delay incremental entre as partes quando o agente responde "como humano" (várias mensagens curtas
+  # simulando alguém digitando). Fase 2 possível: emitir presença "digitando" (uazapi toggle_typing)
+  # entre as partes — não implementado agora.
+  PART_DELAY_SECONDS = 2
+
+  def initialize(conversation:, account:, mode:, acts_live:, as_human: false)
     @conversation = conversation
     @account = account
     @mode = mode
     @acts_live = acts_live
+    # No modo humano (Ai::Agent.identify_as == 'human') a resposta é quebrada em várias mensagens.
+    @as_human = as_human
   end
 
   # Why an action was not executed: shadow binding, the department toggle off, or a missing tool.
@@ -57,7 +64,9 @@ class Ai::ActionDispatcher
 
     state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation)
     if state == :live
-      Messages::MessageBuilder.new(nil, @conversation, { content: text, private: false }).perform
+      deliver(text)
+      # UMA ÚNICA vez por resposta, mesmo quando vira N mensagens: max_replies conta reply.sent e
+      # multiplicar quebraria o limite. chars = texto COMPLETO da resposta (antes do split).
       emit('reply.sent', { chars: text.length })
     else
       reason = Ai::ReplyPolicy.skip_reason(mode: @mode, department: department, conversation: @conversation)
@@ -69,6 +78,33 @@ class Ai::ActionDispatcher
   end
 
   private
+
+  # Envia a resposta. No modo humano quebra em partes por linha em branco (\n\n) e as manda em
+  # sequência com delay incremental (a 1ª imediata, as demais agendadas). Se não houver \n\n (modelo
+  # não quebrou) ou no modo IA, envia mensagem única — nunca quebra de forma forçada.
+  def deliver(text)
+    parts = @as_human ? split_parts(text) : [text]
+    parts.each_with_index do |part, index|
+      if index.zero?
+        send_message(part)
+      else
+        # Fase 2 possível: presença "digitando" antes de cada parte agendada.
+        Ai::SplitReplyJob.set(wait: (index * PART_DELAY_SECONDS).seconds)
+                         .perform_later(@conversation.id, part)
+      end
+    end
+  end
+
+  # Quebra por 1+ linhas em branco; só divide se sobrar mais de uma parte não-vazia. Caso contrário
+  # devolve o texto original inteiro (fallback: mensagem única).
+  def split_parts(text)
+    parts = text.split(/\n{2,}/).map(&:strip).reject(&:blank?)
+    parts.length > 1 ? parts : [text]
+  end
+
+  def send_message(content)
+    Messages::MessageBuilder.new(nil, @conversation, { content: content, private: false }).perform
+  end
 
   # Number of AI replies already sent in this conversation (across runs/agents).
   def ai_replies_count
