@@ -5,6 +5,11 @@
 class Ai::DepartmentResolver
   # Cheapest model per provider for the routing decision — trivial task, don't burn the supervisor.
   # Keeps the supervisor's provider (so we reuse its configured key), only drops to the cheap model.
+  #
+  # DELIBERADO: o classificador de departamento NÃO é um worker configurável pelo usuário. Usa o
+  # provider do supervisor + o modelo mais barato hardcoded aqui. A chave worker_overrides['classification']
+  # do perfil é VESTIGIAL (sobra de uma feature de "flow routing" removida) — NÃO deve ser lida/usada;
+  # não confundir com os 4 workers reais expostos na UI (OCR, Summary, Tradução, RAG).
   CHEAP_MODELS = {
     'openai' => 'gpt-4.1-nano',
     'anthropic' => 'claude-3-5-haiku',
