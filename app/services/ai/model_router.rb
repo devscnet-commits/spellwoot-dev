@@ -67,8 +67,10 @@ class Ai::ModelRouter
   end
 
   # NOTE: validate the exact RubyLLM call shape when running; isolated here on purpose.
+  # image: anexo para modelos de VISÃO (aceita ActiveStorage::Attached/Blob, path ou URL — o ruby_llm
+  # resolve o tipo). nil = chamada de texto normal (comportamento inalterado: `with: nil` == sem anexo).
   def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil,
-                      timeout: nil, json: false)
+                      timeout: nil, json: false, image: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     context = provider_context(provider, account_id: account_id, timeout: timeout)
@@ -77,7 +79,8 @@ class Ai::ModelRouter
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
     chat = apply_json_format(chat, provider) if json
-    response = chat.ask(user_message)
+    # Só passa `with:` no caminho de visão — o de texto fica idêntico ao anterior (sem mudança).
+    response = image ? chat.ask(user_message, with: image) : chat.ask(user_message)
     {
       text: response.respond_to?(:content) ? response.content : response.to_s,
       tokens_in: response.try(:input_tokens).to_i,

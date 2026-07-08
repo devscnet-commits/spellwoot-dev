@@ -25,8 +25,9 @@ class Ai::Gateway
     )
     emit(run_record, 'message.received', { content: @message.content.to_s.first(500), message_id: @message.id })
 
-    # Invisible worker: turn media (audio/image) into text the supervisor can use.
-    media_text = Ai::Workers::MediaProcessor.process(@message)
+    # Invisible worker: turn media (audio/image) into text the supervisor can use. Passa o profile
+    # do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']).
+    media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile)
     emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
     base_content = @content_override.presence || @message.content
     effective_content = [base_content, media_text].compact.join("\n").strip
