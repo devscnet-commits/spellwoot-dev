@@ -35,8 +35,16 @@ class Ai::ModelRouter
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
     model    = model.presence || profile&.supervisor_model.presence || DEFAULT_MODELS.fetch(provider, 'gpt-4.1-mini')
-    # Numérico: usar || (não .presence) para preservar 0.0 (determinístico) — 0.0 é truthy em Ruby.
-    temperature = temperature || profile&.supervisor_temperature || DEFAULT_TEMPERATURE
+    # Temperatura: um override cru explícito (ex.: confidence router) vence e passa direto; senão
+    # traduz a POSIÇÃO abstrata do perfil (0-100) para a temperatura real do provider via
+    # TemperatureMapper. Sem perfil, cai no default. `.nil?` (não ||) preserva um override 0.0.
+    temperature = if !temperature.nil?
+                    temperature
+                  elsif profile
+                    Ai::TemperatureMapper.resolve(provider, profile.temperature_position)
+                  else
+                    DEFAULT_TEMPERATURE
+                  end
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt,

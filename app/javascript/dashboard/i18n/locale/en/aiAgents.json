@@ -674,8 +674,11 @@
     "SUPERVISOR": {
       "TITLE": "Modelo da IA",
       "DESCRIPTION": "O modelo principal que conduz o atendimento e usa as ferramentas.",
-      "TEMPERATURE": "Temperatura",
-      "TEMPERATURE_HINT": "0 = determinístico, 1 = padrão, 2 = criativo (recomendado: 0.2–0.5 para atendimento)."
+      "TEMPERATURE": "Criatividade das respostas",
+      "TEMPERATURE_HINT": "Mais rígido = respostas consistentes e previsíveis (recomendado para atendimento). Mais criativo = respostas variadas. O valor real é ajustado automaticamente para cada provedor.",
+      "TEMPERATURE_RIGID": "Rígido",
+      "TEMPERATURE_BALANCED": "Equilibrado",
+      "TEMPERATURE_CREATIVE": "Criativo"
     },
     "WORKERS": {
       "TITLE": "Workers (modelos auxiliares)",
