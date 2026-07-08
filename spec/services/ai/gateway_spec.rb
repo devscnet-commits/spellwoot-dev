@@ -126,10 +126,13 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Quero falar com um humano', binding: binding, mode: 'live')
 
+      # O inbox de teste não tem membros humanos atribuíveis e o agente não tem team_id → a atribuição
+      # não acha ninguém e agora emite handoff.assign_failed (antes era handoff.assigned silencioso com
+      # assignee nil). Com um membro/time configurado, o terminal seria handoff.assigned/_fallback.
       expect(event_types(convo)).to eq(%w[
                                          message.received department.resolved knowledge.retrieved
                                          context.assembled decision.made reply.sent
-                                         handoff.executed handoff.assigned
+                                         handoff.executed handoff.assign_failed
                                        ])
 
       # Efeitos do handoff: reabre, marca handoff e registra a transferência nativa.

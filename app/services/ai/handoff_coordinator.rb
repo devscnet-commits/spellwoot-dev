@@ -45,16 +45,32 @@ class Ai::HandoffCoordinator
     false
   end
 
-  # Resolve o TIME de destino a partir do handoff_target do modelo (casado por nome do time na conta).
-  # nil quando não casa — aí a transferência mantém o time atual e só desatribui.
+  # TIME de destino do handoff. PRIMÁRIO: time configurado no agente (Ai::Agent.team_id) —
+  # determinístico, não depende do LLM. FALLBACK: match NORMALIZADO (sem acento, caixa baixa, trim)
+  # do handoff_target do modelo contra Team.name. O handoff_target puro deixou de ser o mecanismo
+  # primário: o modelo variar o texto (não-determinismo) quebrava a atribuição de forma intermitente.
   def human_team_id(decision)
-    name = decision['handoff_target'].to_s.strip
-    return nil if name.blank?
+    target = decision['handoff_target'].to_s.strip
+    return @agent.team_id if @agent.team_id.present?
 
-    ::Team.where(account_id: @account.id).find { |team| team.name.to_s.casecmp?(name) }&.id
+    Rails.logger.info "[Ai::HandoffCoordinator] agente sem team_id; match por nome: #{target.inspect}" if target.present?
+    match_team_by_name(target)
+  end
+
+  # Match tolerante do nome do time (só fallback, quando o agente não tem team_id).
+  def match_team_by_name(name)
+    key = normalize(name)
+    return nil if key.blank?
+
+    ::Team.where(account_id: @account.id).find { |team| normalize(team.name) == key }&.id
   rescue StandardError => e
-    Rails.logger.error "[Ai::HandoffCoordinator#human_team_id] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::HandoffCoordinator#match_team_by_name] #{e.class}: #{e.message}"
     nil
+  end
+
+  # Normaliza p/ comparação tolerante: remove acentos (NFKD + drop combining marks), downcase, strip.
+  def normalize(str)
+    str.to_s.unicode_normalize(:nfkd).gsub(/\p{Mn}/, '').downcase.strip
   end
 
   # Atribuição feita DEPOIS do trabalho da IA: marca o handoff (reabre), dispara a atribuição NATIVA
@@ -70,29 +86,46 @@ class Ai::HandoffCoordinator
       allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
       AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
     end
-    fallback_assign_team_member(team_id) if team_id && @conversation.reload.assignee_id.blank?
-    emit('handoff.assigned', { assignee_id: @conversation.reload.assignee_id, team_id: team_id })
+
+    if @conversation.reload.assignee_id.present?
+      emit('handoff.assigned', { assignee_id: @conversation.assignee_id, team_id: team_id })
+    else
+      # Ninguém pego pela presença → rede de segurança (não mais gated por team_id).
+      ensure_assignee(team_id)
+    end
   rescue StandardError => e
+    # Antes o erro era ENGOLIDO (só log) — a mensagem já saiu, mas a atribuição falhava no escuro.
+    # Agora emitimos um evento de erro rastreável (status 'error') além do log.
     Rails.logger.error "[Ai::HandoffCoordinator#assign_human] #{e.class}: #{e.message}"
+    emit('handoff.assign_failed', { team_id: team_id, error: "#{e.class}: #{e.message}" }, status: 'error')
   end
 
   private
 
-  # Rede de segurança: atribui um membro do time (mesmo offline), priorizando quem tem capacidade.
-  # Só roda quando a atribuição nativa por presença não encontrou ninguém.
-  def fallback_assign_team_member(team_id)
-    team = ::Team.find_by(id: team_id, account_id: @account.id)
-    return if team.nil?
+  # Rede de segurança quando a atribuição nativa (por presença) não pegou ninguém: atribui um membro
+  # do TIME resolvido; SEM time, cai em qualquer membro do inbox (comportamento observado quando
+  # funciona). Sem candidato algum → handoff.assign_failed visível (não mais falha silenciosa).
+  def ensure_assignee(team_id)
+    candidate_ids = fallback_candidate_ids(team_id)
+    if candidate_ids.empty?
+      Rails.logger.warn "[Ai::HandoffCoordinator] handoff sem candidato para atribuir (team_id=#{team_id.inspect})"
+      return emit('handoff.assign_failed', { team_id: team_id, reason: 'no_assignable_member' }, status: 'error')
+    end
 
-    member_ids = team.members.ids
-    return if member_ids.empty?
-
-    with_capacity = (@conversation.inbox.member_ids_with_assignment_capacity & member_ids)
-    assignee_id = with_capacity.first || member_ids.first
+    with_capacity = @conversation.inbox.member_ids_with_assignment_capacity & candidate_ids
+    assignee_id = with_capacity.first || candidate_ids.first
     @conversation.update!(assignee_id: assignee_id)
     emit('handoff.assigned_fallback', { assignee_id: assignee_id, team_id: team_id })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::HandoffCoordinator#fallback_assign_team_member] #{e.class}: #{e.message}"
+  end
+
+  # Candidatos p/ o fallback: membros do time resolvido; sem time, qualquer membro do inbox.
+  def fallback_candidate_ids(team_id)
+    if team_id
+      team = ::Team.find_by(id: team_id, account_id: @account.id)
+      team ? team.members.ids : []
+    else
+      @conversation.inbox.members.ids
+    end
   end
 
   # Marca que a IA entregou e GARANTE status 'open' (a auto-atribuição só pega 'open').
@@ -111,10 +144,10 @@ class Ai::HandoffCoordinator
 
   # Espelha o Ai::Gateway#emit: grava o ai_event na MESMA stream (account/conversation), com
   # ai_run_id nil (os eventos de handoff nunca setavam run_id) — preserva o golden master.
-  def emit(type, payload)
+  def emit(type, payload, status: 'ok')
     Ai::Event.create!(
       account_id: @account.id, conversation_id: @conversation.id,
-      ai_run_id: nil, event_type: type, payload: payload, status: 'ok'
+      ai_run_id: nil, event_type: type, payload: payload, status: status
     )
   end
 end

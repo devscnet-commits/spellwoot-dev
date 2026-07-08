@@ -160,9 +160,14 @@ class Ai::Gateway
       # Try AI->AI routing first (to an allowed agent); otherwise hand to a human.
       routed = @acts_live && handoff_coordinator.route_to_ai(result[:decision] || {})
       unless routed
+        # Idempotência: se JÁ houve handoff nesta conversa e ela seguiu SEM responsável (1ª atribuição
+        # falhou), NÃO reenvia a mensagem de transição — só refaz a atribuição (transfer + assign),
+        # evitando a mensagem duplicada quando o cliente cobra e o fluxo re-executa.
+        retrying_handoff = @conversation.additional_attributes&.dig('ai_handoff').present? &&
+                           @conversation.assignee_id.blank?
         # Tell the customer we're handing off (the model's "transferindo você..." text), THEN
         # transfer (reopen + unassign for a human). Without the reply the customer saw silence.
-        action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
+        action_dispatcher.reply(department, (result[:decision] || {})['reply_text']) unless retrying_handoff
         team_id = handoff_coordinator.human_team_id(result[:decision] || {})
         input = { 'unassign' => true }
         input['team_id'] = team_id if team_id # roteia para o time; senão mantém o atual
