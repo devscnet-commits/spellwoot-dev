@@ -3,6 +3,7 @@ import { mapGetters } from 'vuex';
 import { ref } from 'vue';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useAlert } from 'dashboard/composables';
 import { useWindowSize } from '@vueuse/core';
 import ChatList from '../../../components/ChatList.vue';
 import ConversationBox from '../../../components/widgets/conversation/ConversationBox.vue';
@@ -72,7 +73,10 @@ export default {
       const startWidth = contactPanelWidth.value;
       function onMove(ev) {
         const delta = startX - ev.clientX;
-        contactPanelWidth.value = Math.min(MAX_CONTACT_WIDTH, Math.max(MIN_CONTACT_WIDTH, startWidth + delta));
+        contactPanelWidth.value = Math.min(
+          MAX_CONTACT_WIDTH,
+          Math.max(MIN_CONTACT_WIDTH, startWidth + delta)
+        );
       }
       function onUp() {
         isContactResizing.value = false;
@@ -131,8 +135,14 @@ export default {
     },
   },
   watch: {
-    conversationId() {
-      this.fetchConversationIfUnavailable();
+    // immediate: garante o fetch no LOAD INICIAL (deep-link em aba nova / bookmark), não só na
+    // transição de valor em navegação in-app. Antes, no boot fresco o carregamento dependia do
+    // timing do ChatList emitir conversationLoad — se não disparasse, a conversa nunca abria.
+    conversationId: {
+      immediate: true,
+      handler() {
+        this.fetchConversationIfUnavailable();
+      },
     },
   },
 
@@ -168,10 +178,18 @@ export default {
       if (!this.conversationId) {
         return;
       }
-      const chat = this.findConversation();
-      if (!chat) {
-        this.$store.dispatch('getConversation', this.conversationId);
+      if (this.findConversation()) {
+        return;
       }
+      this.$store
+        .dispatch('getConversation', this.conversationId)
+        .then(conversation => {
+          // getConversation não lança (captura o erro e retorna null). null => o carregamento falhou
+          // (404/403/etc.) => feedback em vez de "selecione uma conversa" sem explicação.
+          if (!conversation) {
+            useAlert(this.$t('CONVERSATION.404'));
+          }
+        });
     },
     findConversation() {
       const conversationId = parseInt(this.conversationId, 10);
