@@ -35,7 +35,10 @@ class Api::V1::Accounts::PlanController < Api::V1::Accounts::BaseController
         id: plan.id,
         name: plan.name,
         slug: plan.slug,
-        ai_credits_included: plan.ai_credits_included
+        ai_credits_included: plan.ai_credits_included,
+        # Preço: nullable (valores provisórios, ainda não confirmados). Front trata nil.
+        monthly_price_cents: plan.monthly_price_cents,
+        setup_fee_cents: plan.setup_fee_cents
       },
       ai_credit_balance: {
         plan_credits: ai_credit_balance&.plan_credits || 0,
@@ -48,7 +51,25 @@ class Api::V1::Accounts::PlanController < Api::V1::Accounts::BaseController
         status: subscription.status,
         ends_at: subscription.ends_at
       },
-      limits: limits_data
+      limits: limits_data,
+      overage_charges: recent_overage_charges
     }
+  end
+
+  # Histórico recente de cobranças de excedente (só exibição; mais novas primeiro, teto de 12).
+  def recent_overage_charges
+    current_account.overage_charges
+                   .order(cycle_end: :desc, id: :desc)
+                   .limit(12)
+                   .map do |charge|
+      {
+        plan_limit_key: charge.plan_limit_key,
+        cycle_start: charge.cycle_start,
+        cycle_end: charge.cycle_end,
+        average_excess: charge.average_excess.to_f,
+        total_cents: charge.total_cents,
+        status: charge.status
+      }
+    end
   end
 end
