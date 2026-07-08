@@ -1,23 +1,33 @@
-# Invisible worker: turns a message's media attachments into text for the context. For now it
-# emits a marker per attachment so the supervisor knows media arrived (and can ask or hand off).
-# Real transcription (audio) is implemented via Whisper; OCR (image) is a clearly-marked extension
-# point — plug a provider call into ocr when chosen.
+# Invisible worker: turns a message's media attachments into text for the context. Real transcription
+# (audio, Whisper) and image analysis (visão via o worker de OCR do perfil) já implementados; se
+# faltar config/arquivo/API cai no marcador genérico. `profile` = Ai::OperationProfile do agente,
+# necessário para o OCR ler o worker configurado (worker_overrides['ocr']).
 class Ai::Workers::MediaProcessor
-  def self.process(message)
+  # Cap defensivo de tamanho da imagem. WhatsApp comprime (geralmente < 2MB); redimensionar com
+  # mini_magick/image_processing fica p/ o futuro se algum provider exigir menor.
+  MAX_IMAGE_BYTES = 20 * 1024 * 1024
+
+  VISION_SYSTEM_PROMPT = 'Você analisa imagens enviadas por clientes num atendimento. Descreva de ' \
+                         'forma OBJETIVA e concisa, em português, o que a imagem mostra e o que é ' \
+                         'relevante para o atendimento (ex.: print de erro com a mensagem exibida, ' \
+                         'comprovante de pagamento com valor/data, foto de equipamento, documento). ' \
+                         'Não invente dados que não estão visíveis. Responda apenas a descrição.'
+
+  def self.process(message, profile = nil)
     attachments = message.attachments.to_a
     return nil if attachments.empty?
 
     account_id = message.account_id
-    attachments.map { |attachment| extract(attachment, account_id) }.compact.join("\n").presence
+    attachments.map { |attachment| extract(attachment, account_id, profile) }.compact.join("\n").presence
   rescue StandardError => e
     Rails.logger.error "[Ai::Workers::MediaProcessor] #{e.class}: #{e.message}"
     nil
   end
 
-  def self.extract(attachment, account_id)
+  def self.extract(attachment, account_id, profile = nil)
     case attachment.file_type
     when 'audio' then transcribe(attachment, account_id) || '[O cliente enviou um áudio]'
-    when 'image' then ocr(attachment) || '[O cliente enviou uma imagem]'
+    when 'image' then ocr(attachment, account_id, profile) || '[O cliente enviou uma imagem]'
     when 'file'  then '[O cliente enviou um arquivo]'
     when 'video' then '[O cliente enviou um vídeo]'
     end
@@ -66,9 +76,52 @@ class Ai::Workers::MediaProcessor
     nil
   end
 
-  # Extension point: integrate a vision/OCR provider here.
-  def self.ocr(_attachment)
+  # Análise de imagem (visão) usando o provider/modelo do WORKER de OCR do perfil (dinâmico, NÃO
+  # hardcoded). Lê a imagem direto do ActiveStorage e passa ao ModelRouter (mesma resolução de chave
+  # multi-provider do modelo principal). Qualquer falha retorna nil (caller usa o marcador genérico),
+  # com log distinto para diferenciar sem-arquivo / sem-worker / erro-de-API — sem logar a imagem.
+  def self.ocr(attachment, account_id, profile)
+    unless attachment.file.attached?
+      Rails.logger.warn '[Ai::Workers::MediaProcessor] imagem sem arquivo anexado (download da mídia falhou?), OCR pulado'
+      return nil
+    end
+
+    provider, model = ocr_worker(profile)
+    if model.blank?
+      # OCR/visão é opt-in (mais caro): sem worker configurado no perfil, não roda.
+      Rails.logger.warn '[Ai::Workers::MediaProcessor] sem worker de OCR configurado no perfil, OCR pulado'
+      return nil
+    end
+
+    if attachment.file.blob.byte_size > MAX_IMAGE_BYTES
+      Rails.logger.warn "[Ai::Workers::MediaProcessor] imagem grande demais (#{attachment.file.blob.byte_size} bytes), OCR pulado"
+      return nil
+    end
+
+    raw = Ai::ModelRouter.call_model(
+      provider: provider, model: model,
+      system_prompt: VISION_SYSTEM_PROMPT,
+      user_message: 'Descreva o conteúdo desta imagem.',
+      account_id: account_id, image: attachment.file
+    )
+    if raw[:status] == 'error'
+      Rails.logger.warn "[Ai::Workers::MediaProcessor] visão falhou: #{raw[:error]}"
+      return nil
+    end
+
+    text = raw[:text].to_s.strip
+    text.present? ? "[Imagem]: #{text}" : nil
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Workers::MediaProcessor] OCR: #{e.class}: #{e.message}"
     nil
+  end
+
+  # Worker de OCR do perfil. worker_overrides é aninhado: { 'ocr' => { 'provider'=>, 'model'=> } }.
+  # Sem fallback pro supervisor (diferente do Summary) — visão é opt-in. provider default 'openai'
+  # quando só o modelo está setado. Retorna [provider, model] (model nil => não configurado).
+  def self.ocr_worker(profile)
+    cfg = profile&.worker_overrides&.dig('ocr') || {}
+    [cfg['provider'].presence || 'openai', cfg['model'].presence]
   end
 
   # Mensagem de erro do Whisper (OpenAI devolve {"error":{"message":...}}) para o log — sem PII/áudio.
