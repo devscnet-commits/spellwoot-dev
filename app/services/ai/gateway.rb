@@ -109,8 +109,10 @@ class Ai::Gateway
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms], temperature: result[:temperature] },
          run_id: run_record.id)
 
-    # Track which step the conversation is on so message grouping can use that step's delay.
-    state_manager.track_step(department, result[:decision] || {}) if @acts_live
+    # Track which step the conversation is on so message grouping can use that step's delay; also
+    # fires the step's completion automations when the model signals step_completed (audited actions
+    # reuse this run's dispatcher). track_step swallows its own errors — never breaks the Gateway.
+    state_manager.track_step(department, result[:decision] || {}, dispatcher: action_dispatcher, run: run_record) if @acts_live
     # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
     # devolveu em `attributes`. Assim os campos vão sendo alimentados e reaproveitados (não repergunta).
     state_manager.persist_attributes((result[:decision] || {})['attributes']) if @acts_live

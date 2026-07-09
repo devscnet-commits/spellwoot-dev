@@ -29,7 +29,7 @@ class Ai::StateManager
   # Stores the conversation's current step + its grouping delay (from the playbook) so the next
   # message-grouping debounce can use the step-specific delay. Falls back to the general delay
   # when the step has no delay configured (handled in Ai::MessageGrouping).
-  def track_step(department, decision)
+  def track_step(department, decision, dispatcher: nil, run: nil)
     name = decision['current_step'].to_s.strip
     return if name.blank?
 
@@ -40,6 +40,8 @@ class Ai::StateManager
     attrs = @conversation.additional_attributes || {}
     attrs['ai_step'] = { 'name' => name, 'grouping_delay_seconds' => (delay.positive? ? delay : nil) }
     @conversation.update!(additional_attributes: attrs)
+
+    run_step_automations(department, decision, step, name, dispatcher, run)
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#track_step] #{e.class}: #{e.message}"
   end
@@ -57,6 +59,34 @@ class Ai::StateManager
   end
 
   private
+
+  # Dispara as automações da etapa CONCLUÍDA. Só quando o modelo sinaliza step_completed E ainda não
+  # disparamos para essa etapa nesta conversa (idempotência via ai_completed_steps) — nunca em toda
+  # leitura de current_step. Marca como concluída ANTES de rodar (não reprocessa se algo demorar/falhar).
+  # Precisa do dispatcher + run (do Gateway) para as ações auditadas; sem eles, não roda.
+  def run_step_automations(department, decision, step, name, dispatcher, run)
+    return unless dispatcher && run
+    return unless truthy?(decision['step_completed'])
+
+    completed = Array(@conversation.additional_attributes&.dig('ai_completed_steps'))
+    return if completed.include?(name)
+
+    attrs = @conversation.additional_attributes || {}
+    attrs['ai_completed_steps'] = completed + [name]
+    @conversation.update!(additional_attributes: attrs)
+
+    automations = Array(step && (step['automations'] || step[:automations]))
+    return if automations.blank?
+
+    Ai::StepAutomationRunner.new(
+      conversation: @conversation, account: @conversation.account, agent: @agent,
+      dispatcher: dispatcher, run: run
+    ).run(step)
+  end
+
+  def truthy?(value)
+    value == true || value.to_s.strip.casecmp?('true')
+  end
 
   # Espelha o Ai::Gateway#emit: grava o ai_event na MESMA stream, com ai_run_id nil (attributes.updated
   # e memory.updated nunca setavam run_id). account_id vem da conversa (== @account.id do Gateway).
