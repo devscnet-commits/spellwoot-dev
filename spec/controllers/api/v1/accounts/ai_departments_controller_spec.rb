@@ -53,4 +53,20 @@ RSpec.describe 'AI Departments API — step automations validation', type: :requ
 
     expect(response).to have_http_status(:success)
   end
+
+  it 'accepts change_ai_department with a department_id and persists it' do
+    target = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Vendas', status: 'active',
+                                    behavior: {})
+    patch_steps([{ name: 'Coleta',
+                   automations: [{ type: 'change_ai_department', params: { department_id: target.id } }] }])
+
+    expect(response).to have_http_status(:success)
+    expect(department.reload.playbook.steps.first['automations'].first).to include('type' => 'change_ai_department')
+  end
+
+  it 'rejects change_ai_department without department_id' do
+    patch_steps([{ name: 'Coleta', automations: [{ type: 'change_ai_department', params: {} }] }])
+
+    expect(response).to have_http_status(:unprocessable_entity)
+  end
 end

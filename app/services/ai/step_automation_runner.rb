@@ -32,6 +32,7 @@ class Ai::StepAutomationRunner
     when 'tag' then apply_tag(params)
     when 'webhook' then fire_webhook(params)
     when 'change_team' then change_team(params)
+    when 'change_ai_department' then set_department_override(params)
     when 'update_attribute' then update_attribute(params)
     else emit('step_automation.skipped', { type: type, reason: 'tipo desconhecido' }, status: 'error')
     end
@@ -70,6 +71,19 @@ class Ai::StepAutomationRunner
 
     @conversation.update!(team_id: team_id)
     emit('step_automation.change_team', { team_id: team_id })
+  end
+
+  # change_ai_department: grava um override determinístico do department na conversa (último vence,
+  # mesmo padrão de change_team). A validação (existe? ativo? mesma conta/agente?) fica SÓ no
+  # Ai::DepartmentResolver (fonte única) — aqui só persiste o id em additional_attributes.
+  def set_department_override(params)
+    department_id = params[:department_id]
+    raise 'department_id vazio' if department_id.blank?
+
+    attrs = @conversation.additional_attributes || {}
+    attrs['ai_department_override'] = department_id.to_i
+    @conversation.update!(additional_attributes: attrs)
+    emit('step_automation.change_ai_department', { department_id: department_id.to_i })
   end
 
   def resolve_team_id(params)

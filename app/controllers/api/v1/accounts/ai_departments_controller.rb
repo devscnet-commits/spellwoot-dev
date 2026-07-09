@@ -14,8 +14,9 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     behavior.disabled_custom_attributes
   ].freeze
 
-  # Tipos válidos de automação ao concluir etapa (Fase 1). change_ai_department fica p/ Fase 2.
-  STEP_AUTOMATION_TYPES = %w[tag webhook change_team update_attribute].freeze
+  # Tipos válidos de automação ao concluir etapa. change_ai_department (Fase 2) fixa o department
+  # da conversa via override (validado no DepartmentResolver).
+  STEP_AUTOMATION_TYPES = %w[tag webhook change_team update_attribute change_ai_department].freeze
 
   before_action :set_agent
   before_action :set_department, only: %i[update destroy]
@@ -153,6 +154,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     when 'webhook' then filled.call('url') ? [] : ['url']
     when 'update_attribute' then filled.call('key') ? [] : ['key']
     when 'change_team' then (filled.call('team_id') || filled.call('team_name')) ? [] : ['team_id ou team_name']
+    when 'change_ai_department' then filled.call('department_id') ? [] : ['department_id']
     else []
     end
   end
