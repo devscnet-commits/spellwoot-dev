@@ -109,6 +109,30 @@ const fetchCustomAttributes = async () => {
   }
 };
 const attrEnabled = key => !form.disabled_custom_attributes.includes(key);
+
+// Fontes para os seletores das automações de etapa (tag/time). Falha → lista vazia (não quebra a tela).
+const labels = ref([]);
+const fetchLabels = async () => {
+  try {
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/labels`
+    );
+    labels.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    labels.value = [];
+  }
+};
+const teams = ref([]);
+const fetchTeams = async () => {
+  try {
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/teams`
+    );
+    teams.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    teams.value = [];
+  }
+};
 const toggleAttr = key => {
   const i = form.disabled_custom_attributes.indexOf(key);
   if (i >= 0) form.disabled_custom_attributes.splice(i, 1);
@@ -137,14 +161,14 @@ const parseSteps = arr =>
           uid: nextStepUid(),
           name: s,
           instructions: '',
-          automation_on_complete: false,
+          automations: [],
           group_delay_seconds: '',
         }
       : {
           uid: nextStepUid(),
           name: s.name || '',
           instructions: s.instructions || s.objective || '',
-          automation_on_complete: !!s.automation_on_complete,
+          automations: Array.isArray(s.automations) ? s.automations : [],
           group_delay_seconds: s.group_delay_seconds ?? '',
         }
   );
@@ -332,7 +356,7 @@ const buildPayload = () => ({
         .map(s => ({
           name: s.name.trim(),
           instructions: (s.instructions || '').trim(),
-          automation_on_complete: !!s.automation_on_complete,
+          automations: Array.isArray(s.automations) ? s.automations : [],
           group_delay_seconds:
             s.group_delay_seconds === '' || s.group_delay_seconds == null
               ? null
@@ -529,7 +553,7 @@ const nfActionOptions = computed(() => [
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
-  await fetchCustomAttributes();
+  await Promise.all([fetchCustomAttributes(), fetchLabels(), fetchTeams()]);
 });
 </script>
 
@@ -1177,6 +1201,9 @@ onMounted(async () => {
                     v-if="editingStepIndex === index"
                     :step="element"
                     :is-new="false"
+                    :labels="labels"
+                    :teams="teams"
+                    :custom-attributes="customAttributes"
                     class="p-4"
                     @save="saveStep"
                     @cancel="cancelStep"
@@ -1239,6 +1266,9 @@ onMounted(async () => {
               <AiStepForm
                 :step="null"
                 is-new
+                :labels="labels"
+                :teams="teams"
+                :custom-attributes="customAttributes"
                 @save="saveStep"
                 @cancel="cancelStep"
               />
