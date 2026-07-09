@@ -134,7 +134,8 @@ class Ai::PromptCompiler
   def self.response_contract
     <<~TXT.strip
       Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
-      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","current_step":"","confidence":0.0,"attributes":{}}
+      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"confidence":0.0,"attributes":{}}
+      Em "current_step", informe o nome EXATO da etapa EM ANDAMENTO agora. Em "step_completed", responda true SOMENTE no turno em que você CONCLUIR essa etapa (já obteve tudo que ela exigia e vai avançar para a próxima); nos demais turnos responda false. NÃO confunda os dois: current_step = a etapa em que você está; step_completed = se você acabou de terminá-la.
       Em "attributes", coloque os dados coletados do cliente (chave: valor); deixe {} se não houver nada novo.
     TXT
   end
