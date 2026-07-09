@@ -5,7 +5,13 @@ require 'rails_helper'
 # restore that deep-merges into jsonb columns without dropping sibling keys.
 RSpec.describe Ai::Version do
   let(:account) { create(:account) }
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active') }
+  let(:profile) do
+    Ai::OperationProfile.create!(account_id: account.id, name: 'balanceado',
+                                 supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
+  end
+  let(:agent) do
+    Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
+  end
   let(:department) do
     Ai::Department.create!(
       account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
