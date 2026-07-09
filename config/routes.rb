@@ -82,6 +82,9 @@ Rails.application.routes.draw do
               resources :ai_playbook_versions, only: [:index] do
                 member { post :restore }
               end
+              resources :ai_department_versions, only: [:index] do
+                member { post :restore }
+              end
             end
           end
           resources :ai_knowledge_sources, only: %i[index create update destroy] do

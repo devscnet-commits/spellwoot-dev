@@ -1,4 +1,4 @@
-\restrict WwZFbKuADVCmn0hg3LCXzUPPonmpJ3Z4BphTeVgwnpwlu9H51VbFRFIaxAchsYh
+\restrict t76WRB2aCbg1tgYbeNPsKYT3icyYRjjefNXLlzctIDmShenhUp8AXnd5xvHP6dt
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -1393,6 +1393,42 @@ CREATE SEQUENCE public.ai_tools_id_seq
 --
 
 ALTER SEQUENCE public.ai_tools_id_seq OWNED BY public.ai_tools.id;
+
+
+--
+-- Name: ai_versions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_versions (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    versionable_type character varying NOT NULL,
+    versionable_id bigint NOT NULL,
+    version_number integer DEFAULT 1 NOT NULL,
+    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
+    note character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_versions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_versions_id_seq OWNED BY public.ai_versions.id;
 
 
 --
@@ -5187,6 +5223,13 @@ ALTER TABLE ONLY public.ai_tools ALTER COLUMN id SET DEFAULT nextval('public.ai_
 
 
 --
+-- Name: ai_versions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_versions ALTER COLUMN id SET DEFAULT nextval('public.ai_versions_id_seq'::regclass);
+
+
+--
 -- Name: applied_slas id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -6114,6 +6157,14 @@ ALTER TABLE ONLY public.ai_shadows
 
 ALTER TABLE ONLY public.ai_tools
     ADD CONSTRAINT ai_tools_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_versions ai_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_versions
+    ADD CONSTRAINT ai_versions_pkey PRIMARY KEY (id);
 
 
 --
@@ -7379,6 +7430,13 @@ CREATE INDEX index_ai_shadows_on_account_id ON public.ai_shadows USING btree (ac
 --
 
 CREATE INDEX index_ai_tools_on_ai_department_id ON public.ai_tools USING btree (ai_department_id);
+
+
+--
+-- Name: index_ai_versions_on_versionable_type_and_versionable_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_versions_on_versionable_type_and_versionable_id ON public.ai_versions USING btree (versionable_type, versionable_id);
 
 
 --
@@ -9541,11 +9599,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WwZFbKuADVCmn0hg3LCXzUPPonmpJ3Z4BphTeVgwnpwlu9H51VbFRFIaxAchsYh
+\unrestrict t76WRB2aCbg1tgYbeNPsKYT3icyYRjjefNXLlzctIDmShenhUp8AXnd5xvHP6dt
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260713120000'),
 ('20260712120000'),
 ('20260711120001'),
 ('20260711120000'),
