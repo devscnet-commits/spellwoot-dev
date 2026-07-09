@@ -442,8 +442,7 @@
       "NF_TRANSFER_HUMAN": "Transferir para humano",
       "NF_WAIT": "Aguardar",
       "NF_FINALIZE": "Finalizar conversa",
-      "NF_FINALIZE_BADGE": "Envia a mensagem de encerramento acima.",
-      "SCAFFOLD_NOTE": "Tela em construção: por enquanto só guarda a configuração."
+      "NF_FINALIZE_BADGE": "Envia a mensagem de encerramento acima."
     },
     "DETAIL_DESCRIPTION": "Configure o processo operacional deste departamento.",
     "LEAD_VARS": {

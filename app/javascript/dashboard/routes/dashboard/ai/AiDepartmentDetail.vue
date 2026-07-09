@@ -294,7 +294,9 @@ const buildFollowUp = () => {
   };
 };
 
-// Finalização (close_rules) — scaffold; motor depois.
+// Finalização (close_rules). O motor roda em Ai::FollowupConversationJob
+// (run_action/run_fallback_action 'finalize'): envia a mensagem de encerramento
+// e resolve a conversa após a janela de inatividade.
 const buildFinalization = () => ({
   message: (form.close_message || '').trim(),
   inactivity_minutes: Number(form.inactivity_minutes) || 30,
@@ -1211,10 +1213,6 @@ onMounted(async () => {
                 {{ $t('AI_DEPARTMENTS.FINALIZATION.NF_FINALIZE_BADGE') }}
               </p>
             </div>
-
-            <p class="text-xs text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.FINALIZATION.SCAFFOLD_NOTE') }}
-            </p>
           </section>
         </div>
 
