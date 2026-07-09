@@ -1,5 +1,19 @@
 # CRUD for an agent's departments (+ its structured playbook). Nested under ai_agents.
 class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseController
+  # Keys inside ai_departments.behavior (jsonb) that make up the "Comportamento" tab and are
+  # versioned via Ai::Version on each update. base_prompt/guardrails are NOT here — they live on
+  # ai_agents and are already covered by Ai::AgentVersion (no duplication).
+  DEPARTMENT_BEHAVIOR_FIELDS = %w[
+    behavior.auto_attendance
+    behavior.reply_scope
+    behavior.grouping.delay_seconds
+    behavior.max_replies
+    behavior.max_input_chars
+    behavior.max_input_action
+    behavior.max_input_message
+    behavior.disabled_custom_attributes
+  ].freeze
+
   before_action :set_agent
   before_action :set_department, only: %i[update destroy]
 
@@ -24,6 +38,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
 
     ensure_single_default(@department)
     upsert_playbook(@department)
+    ::Ai::Version.snapshot!(@department, snapshot_fields: DEPARTMENT_BEHAVIOR_FIELDS, note: params[:note])
     render json: serialize(@department)
   end
 
