@@ -14,6 +14,9 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     behavior.disabled_custom_attributes
   ].freeze
 
+  # Tipos válidos de automação ao concluir etapa (Fase 1). change_ai_department fica p/ Fase 2.
+  STEP_AUTOMATION_TYPES = %w[tag webhook change_team update_attribute].freeze
+
   before_action :set_agent
   before_action :set_department, only: %i[update destroy]
 
@@ -23,6 +26,9 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
   end
 
   def create
+    errors = step_automation_errors
+    return render(json: { errors: errors }, status: :unprocessable_entity) if errors.present?
+
     department = @agent.departments.new(scalar_params.merge(account_id: Current.account.id))
     department.assign_attributes(jsonb_params)
     return render(json: { errors: department.errors.full_messages }, status: :unprocessable_entity) unless department.save
@@ -33,6 +39,9 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
   end
 
   def update
+    errors = step_automation_errors
+    return render(json: { errors: errors }, status: :unprocessable_entity) if errors.present?
+
     @department.assign_attributes(scalar_params.merge(jsonb_params))
     return render(json: { errors: @department.errors.full_messages }, status: :unprocessable_entity) unless @department.save
 
@@ -103,6 +112,49 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     )
     playbook.save!
     ::Ai::PlaybookVersion.snapshot!(playbook)
+  end
+
+  # Valida os automations[] de cada etapa do playbook recebido: rejeita tipo desconhecido ou
+  # parâmetro obrigatório faltando. Retorna [] quando válido ou quando não há playbook/steps.
+  def step_automation_errors
+    raw = params.dig(:ai_department, :playbook, :steps)
+    return [] if raw.blank?
+
+    steps = Array(raw).map { |s| s.respond_to?(:to_unsafe_h) ? s.to_unsafe_h : s }.map do |s|
+      s.respond_to?(:deep_stringify_keys) ? s.deep_stringify_keys : s
+    end
+
+    errors = []
+    steps.each_with_index do |step, idx|
+      next unless step.is_a?(Hash)
+
+      Array(step['automations']).each do |automation|
+        next unless automation.is_a?(Hash)
+
+        type = automation['type'].to_s
+        unless STEP_AUTOMATION_TYPES.include?(type)
+          errors << "etapa #{idx + 1}: automação com tipo inválido (#{type.presence || 'vazio'})"
+          next
+        end
+
+        missing = missing_automation_params(type, automation['params'])
+        errors << "etapa #{idx + 1}: automação '#{type}' sem parâmetro obrigatório (#{missing.join(', ')})" if missing.present?
+      end
+    end
+    errors
+  end
+
+  # Parâmetros obrigatórios por tipo de automação; retorna a lista de faltantes ([] = ok).
+  def missing_automation_params(type, params_hash)
+    p = (params_hash.is_a?(Hash) ? params_hash : {})
+    filled = ->(key) { p[key].to_s.strip.present? }
+    case type
+    when 'tag' then filled.call('label') ? [] : ['label']
+    when 'webhook' then filled.call('url') ? [] : ['url']
+    when 'update_attribute' then filled.call('key') ? [] : ['key']
+    when 'change_team' then (filled.call('team_id') || filled.call('team_name')) ? [] : ['team_id ou team_name']
+    else []
+    end
   end
 
   def serialize(department)
