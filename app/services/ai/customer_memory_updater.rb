@@ -22,7 +22,7 @@ class Ai::CustomerMemoryUpdater
 
     result = Ai::ModelRouter.decide(
       profile: nil, provider: 'openai', model: MODEL,
-      system_prompt: build_prompt(memory), user_message: lines, account_id: @account.id
+      system_prompt: build_prompt(memory), user_message: lines, account_id: @account.id, json: true
     )
     record_run(run, result)
     apply(memory, result[:decision] || {})
