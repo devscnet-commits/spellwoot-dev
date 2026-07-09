@@ -663,6 +663,42 @@ ALTER SEQUENCE public.ai_agent_versions_id_seq OWNED BY public.ai_agent_versions
 
 
 --
+-- Name: ai_versions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_versions (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    versionable_type character varying NOT NULL,
+    versionable_id bigint NOT NULL,
+    version_number integer DEFAULT 1 NOT NULL,
+    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
+    note character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_versions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_versions_id_seq OWNED BY public.ai_versions.id;
+
+
+--
 -- Name: ai_agents; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5054,6 +5090,13 @@ ALTER TABLE ONLY public.ai_agent_versions ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
+-- Name: ai_versions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_versions ALTER COLUMN id SET DEFAULT nextval('public.ai_versions_id_seq'::regclass);
+
+
+--
 -- Name: ai_agents id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5962,6 +6005,14 @@ ALTER TABLE ONLY public.ai_agent_memory
 
 ALTER TABLE ONLY public.ai_agent_versions
     ADD CONSTRAINT ai_agent_versions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_versions ai_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_versions
+    ADD CONSTRAINT ai_versions_pkey PRIMARY KEY (id);
 
 
 --
@@ -7190,6 +7241,13 @@ CREATE UNIQUE INDEX index_ai_agent_memory_on_conversation_id_and_ai_agent_id ON 
 --
 
 CREATE INDEX index_ai_agent_versions_on_ai_agent_id_and_version_number ON public.ai_agent_versions USING btree (ai_agent_id, version_number);
+
+
+--
+-- Name: index_ai_versions_on_versionable_type_and_versionable_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_versions_on_versionable_type_and_versionable_id ON public.ai_versions USING btree (versionable_type, versionable_id);
 
 
 --
@@ -9546,6 +9604,7 @@ ALTER TABLE ONLY public.subscriptions
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260713120000'),
 ('20260712120000'),
 ('20260711120001'),
 ('20260711120000'),
