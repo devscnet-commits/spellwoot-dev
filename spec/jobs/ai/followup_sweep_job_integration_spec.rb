@@ -2,7 +2,12 @@ require 'rails_helper'
 
 # Integration coverage for the follow-up engine: real records + real DB side effects
 # (messages, ai_events, conversation status). The model is never called on this path.
-# Unit coverage for the decision helpers lives in followup_sweep_job_spec.rb.
+#
+# The sweep is a dispatcher now: it enqueues one Ai::FollowupConversationJob per candidate.
+# We drain those jobs inline (perform_enqueued_jobs, scoped to the conversation job so we don't
+# also run unrelated jobs from message callbacks) so the end-to-end side effects still assert.
+# Unit coverage: dispatcher in followup_sweep_job_spec.rb, decision helpers in
+# followup_conversation_job_spec.rb.
 RSpec.describe Ai::FollowupSweepJob do
   let(:account) { create(:account) }
   let(:inbox) { create(:inbox, account: account) }
@@ -46,6 +51,13 @@ RSpec.describe Ai::FollowupSweepJob do
     Ai::Event.find_by(conversation_id: convo.id, event_type: 'followup.action')
   end
 
+  # Run the dispatcher AND the per-conversation jobs it enqueues, all inline. Scoped to the
+  # conversation job so message-callback jobs (webhooks, etc.) stay enqueued, matching the old
+  # inline-sweep behavior where they were never executed within these examples.
+  def run_sweep
+    perform_enqueued_jobs(only: Ai::FollowupConversationJob) { described_class.new.perform }
+  end
+
   describe 'scheduled attempts (behaviors)' do
     it 'sends the first attempt once its delay has elapsed' do
       create_department(follow_up: {
@@ -57,7 +69,7 @@ RSpec.describe Ai::FollowupSweepJob do
                         })
       convo = quiet_conversation(incoming_ago: 60.minutes.ago, outgoing_ago: 55.minutes.ago)
 
-      described_class.new.perform
+      run_sweep
 
       expect(convo.messages.where(message_type: :outgoing, content: 'Ainda está por aí?')).to exist
       expect(Ai::Event.where(conversation_id: convo.id, event_type: 'followup.sent')).to exist
@@ -73,7 +85,7 @@ RSpec.describe Ai::FollowupSweepJob do
                         })
       convo = quiet_conversation(incoming_ago: 30.minutes.ago, outgoing_ago: 25.minutes.ago)
 
-      described_class.new.perform
+      run_sweep
 
       expect(Ai::Event.where(conversation_id: convo.id, event_type: 'followup.sent')).not_to exist
     end
@@ -88,7 +100,7 @@ RSpec.describe Ai::FollowupSweepJob do
                         })
       convo = quiet_conversation(incoming_ago: 120.minutes.ago, outgoing_ago: 90.minutes.ago)
 
-      described_class.new.perform
+      run_sweep
 
       expect(convo.reload.status).to eq('resolved')
       expect(convo.messages.where(content: 'Encerrando por aqui. Até logo!')).to exist
@@ -102,7 +114,7 @@ RSpec.describe Ai::FollowupSweepJob do
                         })
       convo = quiet_conversation(incoming_ago: 120.minutes.ago, outgoing_ago: 90.minutes.ago)
 
-      described_class.new.perform
+      run_sweep
 
       # transfer_human wins (first in the list): it hands off without resolving.
       expect(convo.reload.status).to eq('open')
@@ -118,7 +130,7 @@ RSpec.describe Ai::FollowupSweepJob do
 
       expect(Ai::GatewayRunJob).to receive(:perform_later).with(last_incoming.id)
 
-      described_class.new.perform
+      run_sweep
 
       expect(last_action(convo).payload).to include('action' => 'transfer_ai', 'via' => 'no_followup')
     end
@@ -129,7 +141,7 @@ RSpec.describe Ai::FollowupSweepJob do
                         })
       convo = quiet_conversation(incoming_ago: 30.minutes.ago, outgoing_ago: 20.minutes.ago)
 
-      described_class.new.perform
+      run_sweep
 
       expect(convo.reload.status).to eq('open')
       expect(last_action(convo)).to be_nil
@@ -141,8 +153,8 @@ RSpec.describe Ai::FollowupSweepJob do
                         })
       convo = quiet_conversation(incoming_ago: 120.minutes.ago, outgoing_ago: 90.minutes.ago)
 
-      described_class.new.perform
-      described_class.new.perform
+      run_sweep
+      run_sweep
 
       expect(Ai::Event.where(conversation_id: convo.id, event_type: 'followup.action').count).to eq(1)
     end
@@ -154,7 +166,7 @@ RSpec.describe Ai::FollowupSweepJob do
       convo = quiet_conversation(incoming_ago: 120.minutes.ago, outgoing_ago: 90.minutes.ago)
       convo.update!(assignee: create(:user, account: account, role: :agent))
 
-      described_class.new.perform
+      run_sweep
 
       expect(convo.reload.status).to eq('open')
       expect(last_action(convo)).to be_nil
