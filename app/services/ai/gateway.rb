@@ -34,13 +34,16 @@ class Ai::Gateway
 
     @stage = :department
     department, resolution = Ai::DepartmentResolver.resolve(
-      agent: @agent, inbox_id: @message.inbox_id, message_content: effective_content
+      agent: @agent, inbox_id: @message.inbox_id, message_content: effective_content, conversation: @conversation
     )
 
     # A partir daqui NÃO é mais classificação de departamento: gravar o resultado e o estado é
     # infra/DB. Uma exceção aqui deve virar 'internal_error', não 'classification_failed' (ver
     # classify_error). Por isso o :department cobre SÓ a chamada de resolve acima.
     @stage = :persist
+    # Fase 2: override de department pedido mas NÃO honrado (deletado/inativo/outra conta) -> tag de
+    # visibilidade + segue normal (o department já veio do fluxo padrão). Nunca interrompe o run.
+    flag_unavailable_department_override(resolution)
     emit(run_record, 'department.resolved', { department_id: department&.id, name: department&.name, method: resolution })
     return finalize(run_record, 'no_department') unless department
 
@@ -290,6 +293,20 @@ class Ai::Gateway
     @handoff_coordinator ||= Ai::HandoffCoordinator.new(
       conversation: @conversation, account: @account, agent: @agent, message: @message
     )
+  end
+
+  # Aplica a tag de visibilidade quando um override de department foi pedido mas não pôde ser honrado
+  # (department deletado/inativo/de outra conta). Best-effort: NUNCA interrompe o run. Reusa o handler
+  # conversation_add_label direto (sem auditoria/gate live-shadow) porque roda no stage :department,
+  # antes do action_dispatcher existir — e é um sinal operacional que deve aparecer mesmo em shadow.
+  def flag_unavailable_department_override(resolution)
+    return if resolution == 'override'
+    return if @conversation.additional_attributes&.dig('ai_department_override').blank?
+
+    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation,
+                                                             input: { 'label' => 'department-override-indisponivel' })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#flag_unavailable_department_override] #{e.class}: #{e.message}"
   end
 
   def finalize(run_record, status)
