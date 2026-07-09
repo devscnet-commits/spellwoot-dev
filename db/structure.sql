@@ -1,4 +1,4 @@
-\restrict tY0ddQN8rGQLGOJpqNPsdxJ3ZtVDuoqOspVAJlty6GjiEjFlPy9rR4vi6gNzMSu
+\restrict WwZFbKuADVCmn0hg3LCXzUPPonmpJ3Z4BphTeVgwnpwlu9H51VbFRFIaxAchsYh
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -1139,7 +1139,8 @@ CREATE TABLE public.ai_operation_profiles (
     updated_at timestamp(6) without time zone NOT NULL,
     routing_strategy jsonb DEFAULT '{}'::jsonb NOT NULL,
     tier character varying DEFAULT 'customizado'::character varying NOT NULL,
-    supervisor_temperature numeric(3,2) DEFAULT 0.3 NOT NULL
+    supervisor_temperature numeric(3,2) DEFAULT 0.3 NOT NULL,
+    temperature_position integer DEFAULT 20 NOT NULL
 );
 
 
@@ -3973,6 +3974,79 @@ ALTER SEQUENCE public.operational_flows_id_seq OWNED BY public.operational_flows
 
 
 --
+-- Name: overage_charges; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.overage_charges (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    subscription_id bigint NOT NULL,
+    plan_limit_key character varying NOT NULL,
+    cycle_start timestamp(6) without time zone,
+    cycle_end timestamp(6) without time zone,
+    average_excess numeric(10,2),
+    unit_price_cents integer,
+    total_cents integer,
+    status integer DEFAULT 0 NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: overage_charges_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.overage_charges_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: overage_charges_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.overage_charges_id_seq OWNED BY public.overage_charges.id;
+
+
+--
+-- Name: overage_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.overage_snapshots (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    plan_limit_key character varying NOT NULL,
+    excess_count integer DEFAULT 0 NOT NULL,
+    snapshot_date date NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: overage_snapshots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.overage_snapshots_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: overage_snapshots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.overage_snapshots_id_seq OWNED BY public.overage_snapshots.id;
+
+
+--
 -- Name: plan_features; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5589,6 +5663,20 @@ ALTER TABLE ONLY public.operational_flows ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
+-- Name: overage_charges id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges ALTER COLUMN id SET DEFAULT nextval('public.overage_charges_id_seq'::regclass);
+
+
+--
+-- Name: overage_snapshots id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_snapshots ALTER COLUMN id SET DEFAULT nextval('public.overage_snapshots_id_seq'::regclass);
+
+
+--
 -- Name: plan_features id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -6578,6 +6666,22 @@ ALTER TABLE ONLY public.operational_flow_reasons
 
 ALTER TABLE ONLY public.operational_flows
     ADD CONSTRAINT operational_flows_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: overage_charges overage_charges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges
+    ADD CONSTRAINT overage_charges_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: overage_snapshots overage_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_snapshots
+    ADD CONSTRAINT overage_snapshots_pkey PRIMARY KEY (id);
 
 
 --
@@ -8580,6 +8684,34 @@ CREATE UNIQUE INDEX index_operational_flows_on_account_id_and_name ON public.ope
 
 
 --
+-- Name: index_overage_charges_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_overage_charges_on_account_id ON public.overage_charges USING btree (account_id);
+
+
+--
+-- Name: index_overage_charges_on_subscription_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_overage_charges_on_subscription_id ON public.overage_charges USING btree (subscription_id);
+
+
+--
+-- Name: index_overage_snapshots_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_overage_snapshots_on_account_id ON public.overage_snapshots USING btree (account_id);
+
+
+--
+-- Name: index_overage_snapshots_unique_daily; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_overage_snapshots_unique_daily ON public.overage_snapshots USING btree (account_id, plan_limit_key, snapshot_date);
+
+
+--
 -- Name: index_plan_features_on_plan_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9254,6 +9386,14 @@ ALTER TABLE ONLY public.resolution_states
 
 
 --
+-- Name: overage_snapshots fk_rails_5b8dd58073; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_snapshots
+    ADD CONSTRAINT fk_rails_5b8dd58073 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
 -- Name: subscriptions fk_rails_63d3df128b; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9270,6 +9410,14 @@ ALTER TABLE ONLY public.plan_limits
 
 
 --
+-- Name: overage_charges fk_rails_6e8847b20f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges
+    ADD CONSTRAINT fk_rails_6e8847b20f FOREIGN KEY (subscription_id) REFERENCES public.subscriptions(id);
+
+
+--
 -- Name: team_inboxes fk_rails_7f2a0b2bdc; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9283,6 +9431,14 @@ ALTER TABLE ONLY public.team_inboxes
 
 ALTER TABLE ONLY public.provider_instances
     ADD CONSTRAINT fk_rails_854bec9570 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
+-- Name: overage_charges fk_rails_917b0d439c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges
+    ADD CONSTRAINT fk_rails_917b0d439c FOREIGN KEY (account_id) REFERENCES public.accounts(id);
 
 
 --
@@ -9385,11 +9541,14 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tY0ddQN8rGQLGOJpqNPsdxJ3ZtVDuoqOspVAJlty6GjiEjFlPy9rR4vi6gNzMSu
+\unrestrict WwZFbKuADVCmn0hg3LCXzUPPonmpJ3Z4BphTeVgwnpwlu9H51VbFRFIaxAchsYh
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260712120000'),
+('20260711120001'),
+('20260711120000'),
 ('20260710120000'),
 ('20260709120001'),
 ('20260709120000'),
