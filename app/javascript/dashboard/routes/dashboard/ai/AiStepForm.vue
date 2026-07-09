@@ -12,6 +12,7 @@ const props = defineProps({
   labels: { type: Array, default: () => [] },
   teams: { type: Array, default: () => [] },
   customAttributes: { type: Array, default: () => [] },
+  departments: { type: Array, default: () => [] },
 });
 const emit = defineEmits(['save', 'cancel']);
 const { t } = useI18n();
@@ -40,6 +41,10 @@ const typeOptions = computed(() => [
     label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_CHANGE_TEAM'),
   },
   {
+    value: 'change_ai_department',
+    label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_CHANGE_AI_DEPARTMENT'),
+  },
+  {
     value: 'update_attribute',
     label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_UPDATE_ATTRIBUTE'),
   },
@@ -50,6 +55,9 @@ const labelOptions = computed(() =>
 );
 const teamOptions = computed(() =>
   props.teams.map(tm => ({ value: tm.id, label: tm.name }))
+);
+const departmentOptions = computed(() =>
+  props.departments.map(d => ({ value: d.id, label: d.name }))
 );
 // Só atributos de CONVERSA (a automação grava em conversation.custom_attributes).
 const attributeOptions = computed(() =>
@@ -207,6 +215,21 @@ const onSave = () => {
             v-model="automation.params.team_id"
             :options="teamOptions"
             :placeholder="$t('AI_DEPARTMENTS.FORM.AUTOMATION_TEAM_PLACEHOLDER')"
+          />
+        </label>
+
+        <!-- change_ai_department -->
+        <label
+          v-else-if="automation.type === 'change_ai_department'"
+          class="flex flex-col gap-1 text-xs text-n-slate-11"
+        >
+          {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_DEPARTMENT') }}
+          <Select
+            v-model="automation.params.department_id"
+            :options="departmentOptions"
+            :placeholder="
+              $t('AI_DEPARTMENTS.FORM.AUTOMATION_DEPARTMENT_PLACEHOLDER')
+            "
           />
         </label>
 

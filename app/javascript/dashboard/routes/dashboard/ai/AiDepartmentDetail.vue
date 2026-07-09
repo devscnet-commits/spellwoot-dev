@@ -133,6 +133,16 @@ const fetchTeams = async () => {
     teams.value = [];
   }
 };
+// Departamentos irmãos do agente (destino da automação change_ai_department).
+const departmentsList = ref([]);
+const fetchDepartmentsList = async () => {
+  try {
+    const { data } = await axios.get(deptCollectionUrl());
+    departmentsList.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    departmentsList.value = [];
+  }
+};
 const toggleAttr = key => {
   const i = form.disabled_custom_attributes.indexOf(key);
   if (i >= 0) form.disabled_custom_attributes.splice(i, 1);
@@ -553,7 +563,12 @@ const nfActionOptions = computed(() => [
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
-  await Promise.all([fetchCustomAttributes(), fetchLabels(), fetchTeams()]);
+  await Promise.all([
+    fetchCustomAttributes(),
+    fetchLabels(),
+    fetchTeams(),
+    fetchDepartmentsList(),
+  ]);
 });
 </script>
 
@@ -1204,6 +1219,7 @@ onMounted(async () => {
                     :labels="labels"
                     :teams="teams"
                     :custom-attributes="customAttributes"
+                    :departments="departmentsList"
                     class="p-4"
                     @save="saveStep"
                     @cancel="cancelStep"
@@ -1269,6 +1285,7 @@ onMounted(async () => {
                 :labels="labels"
                 :teams="teams"
                 :custom-attributes="customAttributes"
+                :departments="departmentsList"
                 @save="saveStep"
                 @cancel="cancelStep"
               />

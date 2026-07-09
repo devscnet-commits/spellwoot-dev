@@ -242,4 +242,44 @@ RSpec.describe Ai::Gateway do
       expect(run_for(convo).error_type).to eq('knowledge_timeout')
     end
   end
+
+  # === Cenário 9: OVERRIDE de department por conversa (Fase 2) =========================
+  context 'override de department por conversa (Fase 2)' do
+    def deliver_with_override(content, override_id, binding:)
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open',
+                                    additional_attributes: { 'ai_department_override' => override_id })
+      message = create(:message, account: account, inbox: inbox, conversation: convo,
+                                 message_type: 'incoming', content: content)
+      described_class.new(message: message, agent_inbox: binding, mode: 'live').run
+      convo.reload
+    end
+
+    it 'honors a valid override (department.resolved method = override) and skips the classifier' do
+      create_department
+      dept_b = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Vendas', status: 'active',
+                                      behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      allow(Ai::DepartmentResolver).to receive(:classify).and_return(nil) # se rodasse, não seria 'override'
+
+      convo = deliver_with_override('oi', dept_b.id, binding: binding)
+
+      event = Ai::Event.find_by(conversation_id: convo.id, event_type: 'department.resolved')
+      expect(event.payload['method']).to eq('override')
+      expect(event.payload['department_id']).to eq(dept_b.id)
+      expect(Ai::DepartmentResolver).not_to have_received(:classify)
+    end
+
+    it 'tags department-override-indisponivel and proceeds normally when the override is unavailable' do
+      create_department # 1 department ativo -> override para outro id cai em 'single'
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      convo = deliver_with_override('oi', 999_999, binding: binding)
+
+      expect(convo.label_list).to include('department-override-indisponivel')
+      expect(run_for(convo).status).to eq('recorded')
+      expect(convo.messages.outgoing.count).to eq(1)
+    end
+  end
 end
