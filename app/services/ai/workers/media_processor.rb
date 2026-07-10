@@ -23,16 +23,26 @@ class Ai::Workers::MediaProcessor
                          'comprovante de pagamento com valor/data, foto de equipamento, documento). ' \
                          'Não invente dados que não estão visíveis. Responda apenas a descrição.'
 
-  # Documentos: PDF de texto (pdf-reader), PDF escaneado (visão, Opção B — PDF direto ao worker), docx
-  # (gem docx). Cap de páginas p/ não estourar custo/latência em docs longos.
+  # Documentos: PDF de texto (pdf-reader), PDF escaneado -> visão (Opção A: rasteriza a página em imagem
+  # e manda ao worker de OCR — input de imagem que qualquer modelo de visão aceita). docx (gem docx).
+  # Cap de páginas p/ não estourar custo/latência em docs longos.
   MAX_DOC_PAGES = 10
   PAGE_CAP_NOTE = '[Documento tem mais de 10 páginas — processadas apenas as primeiras 10]'
   # docx não tem "páginas" fixas → cap por caracteres p/ bound de tokens.
   MAX_DOC_CHARS = 15_000
   DOC_TRUNC_NOTE = '[Documento longo — texto truncado]'
-  # Heurística texto vs escaneado: abaixo de ~20 chars por página lida, tratamos como PDF escaneado
-  # (sem texto selecionável) e caímos no caminho de visão.
-  MIN_CHARS_PER_PAGE = 20
+  # Extração pobre (PDF escaneado/foto): a camada de texto traz só rótulos do template e muito espaço
+  # em branco onde ficam a imagem/campos. Calibrado no caso real (CNH: 387 não-brancos, 62% whitespace).
+  # Cai pra visão se: conteúdo (não-brancos) por página < MIN_CONTENT_CHARS_PER_PAGE, OU o texto é
+  # majoritariamente espaço em branco (> MAX_WHITESPACE_RATIO). Falso-positivo (texto real curto -> visão)
+  # é inofensivo (a visão lê mesmo assim); o perigo é o falso-negativo (escaneado tratado como texto).
+  MIN_CONTENT_CHARS_PER_PAGE = 600
+  MAX_WHITESPACE_RATIO = 0.55
+  # Rasterização PDF->imagem: nº máx. de páginas mandadas à visão (cada uma = 1 chamada/1 Ai::Run) e o
+  # DPI. 150 DPI = bom p/ OCR sem estourar tamanho; cap de páginas bounda custo (docs de cliente costumam
+  # ter 1-2 págs).
+  MAX_VISION_PAGES = 5
+  PDF_RASTER_DPI = 150
 
   def self.process(message, profile = nil)
     attachments = message.attachments.to_a
@@ -192,14 +202,55 @@ class Ai::Workers::MediaProcessor
     pages = reader.pages.first(MAX_DOC_PAGES)
     text = pages.map { |p| p.text.to_s }.join("\n").strip
 
-    if text.present? && text.length >= pages.size * MIN_CHARS_PER_PAGE
-      out = "[Documento (PDF)]: #{text.first(MAX_DOC_CHARS)}"
-      out += "\n#{DOC_TRUNC_NOTE}" if text.length > MAX_DOC_CHARS
-      out += "\n#{PAGE_CAP_NOTE}" if page_count > MAX_DOC_PAGES
-      out
-    else
+    if poor_extraction?(text, pages.size)
       scanned_pdf_via_vision(attachment, account_id, profile, page_count)
+    else
+      pdf_text_result(text, page_count)
     end
+  end
+
+  # Monta o resultado do PDF de TEXTO (extração boa). Cap de chars + notas de truncamento/páginas.
+  def self.pdf_text_result(text, page_count)
+    out = "[Documento (PDF)]: #{text.first(MAX_DOC_CHARS)}"
+    out += "\n#{DOC_TRUNC_NOTE}" if text.length > MAX_DOC_CHARS
+    out += "\n#{PAGE_CAP_NOTE}" if page_count > MAX_DOC_PAGES
+    out
+  end
+
+  # Extração "pobre" = provável PDF escaneado/foto: pouco conteúdo real (não-brancos) por página OU
+  # texto majoritariamente espaço em branco. Calibrado no caso real da CNH (387 não-brancos, 62% ws).
+  # Vazio => pobre. NÃO usa alnum-ratio: o cabeçalho da CNH é todo alfabético, não distinguiria.
+  def self.poor_extraction?(text, pages_read)
+    raw = text.to_s.length
+    return true if raw.zero?
+
+    nonws = text.scan(/\S/).length
+    ws_ratio = (raw - nonws).to_f / raw
+    pages = [pages_read, 1].max
+    nonws < pages * MIN_CONTENT_CHARS_PER_PAGE || ws_ratio > MAX_WHITESPACE_RATIO
+  end
+
+  # Rasteriza UMA página do PDF em PNG (ImageMagick via mini_magick; precisa de `ghostscript` no
+  # container — ver Dockerfile*). Retorna um Tempfile PNG (o caller fecha) ou nil se falhar / sem o
+  # delegate instalado (degrada pro marcador, sem quebrar). page_index é 0-based.
+  def self.pdf_page_to_png(pdf_path, page_index)
+    require 'mini_magick'
+
+    png = Tempfile.new(['ai-pdf-page', '.png'])
+    png.binmode
+    MiniMagick::Tool::Convert.new do |convert|
+      convert.density(PDF_RASTER_DPI)
+      convert << "#{pdf_path}[#{page_index}]"
+      convert.background('white')
+      convert.flatten
+      convert << png.path
+    end
+    png.rewind
+    png
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::Workers::MediaProcessor] rasterização PDF->png falhou (pág #{page_index}): #{e.class}: #{e.message}"
+    png&.close!
+    nil
   end
 
   # PDF escaneado -> visão. Reusa o worker de OCR do perfil e o ModelRouter (mesma chamada da imagem,
