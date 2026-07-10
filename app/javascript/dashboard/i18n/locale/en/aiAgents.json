@@ -137,6 +137,21 @@
       "RESTORED": "Versão restaurada.",
       "CONFIRM": "Restaurar a configuração da v{n}? A versão atual fica salva no histórico."
     },
+    "PROMPT_ASSISTANT": {
+      "TITLE_BASE_PROMPT": "Assistente de prompt base",
+      "TITLE_STEP_INSTRUCTIONS": "Assistente de instruções da etapa",
+      "SUBTITLE": "Descreva o que você quer e gere uma sugestão. Nada é preenchido automaticamente — copie se gostar.",
+      "BRIEF_LABEL": "O que você precisa?",
+      "BRIEF_PLACEHOLDER": "Ex.: agente comercial de uma provedora de internet; coleta a cidade e o tipo de cliente (residencial/empresa) antes de apresentar planos.",
+      "GENERATE": "Gerar sugestão",
+      "RESULT_LABEL": "Sugestão",
+      "COPY": "Copiar",
+      "COPIED": "Copiado para a área de transferência.",
+      "EMPTY_BRIEF": "Descreva o que você quer antes de gerar.",
+      "ERROR": "Não consegui gerar agora. Tente novamente.",
+      "OPEN": "Ajuda para escrever",
+      "CLOSE": "Fechar"
+    },
     "INBOXES": {
       "TITLE": "Onde este agente atende",
       "DESCRIPTION": "Marque as caixas que este agente atende. Quando atende, ele responde ao cliente.",
