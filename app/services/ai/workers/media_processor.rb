@@ -7,6 +7,16 @@ class Ai::Workers::MediaProcessor
   # mini_magick/image_processing fica p/ o futuro se algum provider exigir menor.
   MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
+  # content_type real do blob -> extensão do tempfile enviado ao Whisper. O WhatsApp/uazapi às vezes
+  # entrega opus com filename ".mp3"; nomear o arquivo pelo tipo real evita ambiguidade no multipart.
+  # Só os formatos aceitos pelo Whisper (o conteúdo é sniffado, mas mantemos coerente).
+  AUDIO_EXTENSIONS = {
+    'audio/opus' => '.ogg', 'audio/ogg' => '.ogg', 'audio/oga' => '.ogg',
+    'audio/mpeg' => '.mp3', 'audio/mp3' => '.mp3', 'audio/mpga' => '.mp3',
+    'audio/mp4' => '.m4a', 'audio/m4a' => '.m4a', 'audio/x-m4a' => '.m4a', 'audio/aac' => '.m4a',
+    'audio/wav' => '.wav', 'audio/x-wav' => '.wav', 'audio/webm' => '.webm'
+  }.freeze
+
   VISION_SYSTEM_PROMPT = 'Você analisa imagens enviadas por clientes num atendimento. Descreva de ' \
                          'forma OBJETIVA e concisa, em português, o que a imagem mostra e o que é ' \
                          'relevante para o atendimento (ex.: print de erro com a mensagem exibida, ' \
@@ -44,11 +54,14 @@ class Ai::Workers::MediaProcessor
     end
   end
 
-  # Audio transcription via OpenAI Whisper. A chave é resolvida como no ModelRouter: chave da CONTA
-  # (Hub "APIs & Credentials") primeiro, senão a chave da plataforma — assim uma conta que só
-  # configurou a OpenAI no Hub (IA própria) transcreve, e a conta com "IA integrada" (sem chave
-  # própria) cai na plataforma normalmente. Qualquer falha retorna nil (caller usa o marcador
-  # genérico), mas agora deixando rastro no log para diferenciar sem-arquivo / sem-chave / erro-API.
+  # Audio transcription via OpenAI Whisper, usando o client ruby-openai (Faraday multipart). A
+  # implementação anterior montava o multipart à mão via HTTParty e o OpenAI rejeitava o corpo com
+  # "Could not parse multipart form" — ou seja, transcrição NENHUMA passava. A chave é resolvida como
+  # no ModelRouter: chave da CONTA (Hub "APIs & Credentials") primeiro, senão a chave da plataforma —
+  # assim uma conta que só configurou a OpenAI no Hub (IA própria) transcreve, e a conta com "IA
+  # integrada" (sem chave própria) cai na plataforma normalmente. Qualquer falha retorna nil (caller
+  # usa o marcador genérico), deixando rastro no log para diferenciar sem-arquivo / sem-chave /
+  # erro-API. Áudio sem fala transcritível => text vazio => nil => marcador (sem regressão).
   def self.transcribe(attachment, account_id = nil)
     unless attachment.file.attached?
       # Sem arquivo local: o download da mídia falhou no recebimento (uazapi cai em external_url só).
@@ -62,29 +75,43 @@ class Ai::Workers::MediaProcessor
       return nil
     end
 
-    extension = File.extname(attachment.file.blob.filename.to_s).presence || '.ogg'
-    Tempfile.create(['ai-audio', extension]) do |tmp|
+    Tempfile.create(['ai-audio', audio_extension(attachment)]) do |tmp|
       tmp.binmode
       tmp.write(attachment.file.download)
       tmp.rewind
-      response = HTTParty.post(
-        'https://api.openai.com/v1/audio/transcriptions',
-        headers: { 'Authorization' => "Bearer #{api_key}" },
-        multipart: true,
-        body: { model: 'whisper-1', file: tmp }
-      )
-      unless response.success?
-        # Falha REAL de API (auth, formato, tamanho) — não logamos o áudio, só o status/erro do Whisper.
-        Rails.logger.warn "[Ai::Workers::MediaProcessor] Whisper falhou: HTTP #{response.code}#{whisper_error(response)}"
-        return nil
-      end
 
-      text = response.parsed_response.is_a?(Hash) ? response.parsed_response['text'] : nil
+      text = whisper_transcribe(api_key, tmp.path)
       return text.present? ? "[Transcrição do áudio]: #{text}" : nil
     end
   rescue StandardError => e
     Rails.logger.error "[Ai::Workers::MediaProcessor] transcrição: #{e.class}: #{e.message}"
     nil
+  end
+
+  # Chamada ao Whisper via ruby-openai (multipart correto, Faraday). Retorna o texto transcrito ou nil.
+  # Falha de API é logada sem expor o áudio (só a classe/mensagem do erro do OpenAI).
+  def self.whisper_transcribe(api_key, path)
+    client = OpenAI::Client.new(access_token: api_key)
+    file = File.open(path, 'rb')
+    begin
+      response = client.audio.transcribe(
+        parameters: { model: 'whisper-1', file: file, language: 'pt' }
+      )
+    ensure
+      file.close
+    end
+    response.is_a?(Hash) ? response['text'] : nil
+  rescue Faraday::Error => e
+    Rails.logger.warn "[Ai::Workers::MediaProcessor] Whisper falhou: #{e.class}#{whisper_error(e)}"
+    nil
+  end
+
+  # Extensão do tempfile a partir do content_type REAL do blob (o filename do WhatsApp/uazapi às vezes
+  # mente: opus entregue como ".mp3"). Cai pra extensão do filename e por fim ".ogg".
+  def self.audio_extension(attachment)
+    blob = attachment.file.blob
+    AUDIO_EXTENSIONS[blob.content_type.to_s.downcase] ||
+      File.extname(blob.filename.to_s).presence || '.ogg'
   end
 
   # Análise de imagem (visão) usando o provider/modelo do WORKER de OCR do perfil (dinâmico, NÃO
@@ -226,9 +253,13 @@ class Ai::Workers::MediaProcessor
       filename.end_with?('.docx')
   end
 
-  # Mensagem de erro do Whisper (OpenAI devolve {"error":{"message":...}}) para o log — sem PII/áudio.
-  def self.whisper_error(response)
-    msg = response.parsed_response.is_a?(Hash) ? response.parsed_response.dig('error', 'message') : nil
+  # Mensagem de erro do Whisper para o log — sem PII/áudio. ruby-openai levanta Faraday::Error com
+  # .response ({ status:, body: }); o body vem como Hash (json middleware) ou String. Retorna
+  # " - <mensagem>" ou ''.
+  def self.whisper_error(error)
+    body = error.respond_to?(:response) && error.response.is_a?(Hash) ? error.response[:body] : nil
+    parsed = body.is_a?(String) ? (JSON.parse(body) rescue nil) : body
+    msg = parsed.is_a?(Hash) ? parsed.dig('error', 'message') : nil
     msg.present? ? " - #{msg}" : ''
   rescue StandardError
     ''
