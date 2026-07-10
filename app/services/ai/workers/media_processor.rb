@@ -203,7 +203,7 @@ class Ai::Workers::MediaProcessor
     text = pages.map { |p| p.text.to_s }.join("\n").strip
 
     if poor_extraction?(text, pages.size)
-      scanned_pdf_via_vision(attachment, account_id, profile, page_count)
+      pdf_via_vision(attachment, account_id, profile, page_count)
     else
       pdf_text_result(text, page_count)
     end
@@ -253,31 +253,58 @@ class Ai::Workers::MediaProcessor
     nil
   end
 
-  # PDF escaneado -> visão. Reusa o worker de OCR do perfil e o ModelRouter (mesma chamada da imagem,
-  # só passando o PDF em image:). Opt-in: sem worker configurado, não roda.
-  def self.scanned_pdf_via_vision(attachment, account_id, profile, page_count)
+  # PDF escaneado -> visão (Opção A): rasteriza as primeiras páginas em PNG e manda cada uma ao worker
+  # de OCR do perfil (MESMO caminho da imagem — input de imagem que qualquer modelo de visão aceita).
+  # Opt-in: sem worker configurado, não roda. Precisa do delegate de rasterização (ghostscript) no
+  # container; sem ele, pdf_page_to_png degrada pra nil e caímos no marcador.
+  def self.pdf_via_vision(attachment, account_id, profile, page_count)
     provider, model = ocr_worker(profile)
     if model.blank?
       Rails.logger.warn '[Ai::Workers::MediaProcessor] PDF escaneado mas sem worker de OCR configurado, extração pulada'
       return nil
     end
 
-    raw = Ai::ModelRouter.call_model(
-      provider: provider, model: model,
-      system_prompt: VISION_SYSTEM_PROMPT,
-      user_message: 'Extraia e descreva o conteúdo deste documento.',
-      account_id: account_id, image: attachment.file
-    )
-    if raw[:status] == 'error'
-      Rails.logger.warn "[Ai::Workers::MediaProcessor] visão (PDF) falhou: #{raw[:error]}"
-      return nil
+    vision_pages = [page_count, MAX_VISION_PAGES].min
+    texts = pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages)
+    return nil if texts.blank?
+
+    out = "[Documento (PDF escaneado)]: #{texts.join("\n").strip}"
+    return out unless page_count > vision_pages
+
+    "#{out}\n[Documento tem #{page_count} páginas — processadas apenas as primeiras #{vision_pages} via visão]"
+  end
+
+  # Rasteriza e processa cada página; devolve os textos (não-vazios) da visão. Isola o PDF num tempfile
+  # p/ o rasterizador. Cada página = 1 chamada de visão independente (o PNG é fechado após uso).
+  def self.pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages)
+    texts = []
+    Tempfile.create(['ai-doc', '.pdf']) do |pdf|
+      pdf.binmode
+      pdf.write(attachment.file.download)
+      pdf.rewind
+
+      (0...vision_pages).each do |i|
+        png = pdf_page_to_png(pdf.path, i)
+        next unless png
+
+        begin
+          raw = Ai::ModelRouter.call_model(
+            provider: provider, model: model, system_prompt: VISION_SYSTEM_PROMPT,
+            user_message: 'Extraia e descreva o conteúdo desta página de documento.',
+            account_id: account_id, image: png.path
+          )
+          if raw[:status] == 'error'
+            Rails.logger.warn "[Ai::Workers::MediaProcessor] visão (PDF pág #{i}) falhou: #{raw[:error]}"
+          else
+            t = raw[:text].to_s.strip
+            texts << t if t.present?
+          end
+        ensure
+          png.close!
+        end
+      end
     end
-
-    text = raw[:text].to_s.strip
-    return nil if text.blank?
-
-    out = "[Documento (PDF escaneado)]: #{text}"
-    page_count > MAX_DOC_PAGES ? "#{out}\n#{PAGE_CAP_NOTE}" : out
+    texts
   end
 
   # docx: texto dos parágrafos (gem docx = rubyzip + nokogiri). Cap por caracteres.
