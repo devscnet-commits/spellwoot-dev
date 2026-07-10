@@ -1,9 +1,30 @@
 # Account-scoped, dev-time prompt/step-instructions assistant. Suggestion-only; nothing is sent to
 # any customer. Uses ::Ai::PromptAssistant (top-level) to avoid namespace collision.
 class Api::V1::Accounts::AiPromptAssistantController < Api::V1::Accounts::BaseController
+  RATE_LIMIT = 10   # requisições
+  RATE_WINDOW = 60  # segundos (janela fixa por conta)
+
   def create
+    if throttled?
+      return render(json: { error: 'muitas requisições, tente novamente em instantes' },
+                    status: :too_many_requests)
+    end
+
     render json: ::Ai::PromptAssistant.new(
       account: Current.account, kind: params[:kind], brief: params[:brief], requested_by: Current.user&.id
     ).suggest
+  end
+
+  private
+
+  # Rate limit de janela fixa por conta (Redis). Best-effort: se o Redis falhar, NÃO bloqueia.
+  def throttled?
+    key = "ai_prompt_assistant:throttle:#{Current.account.id}"
+    count = Redis::Alfred.incr(key)
+    Redis::Alfred.expire(key, RATE_WINDOW) if count == 1
+    count > RATE_LIMIT
+  rescue StandardError => e
+    Rails.logger.error "[AiPromptAssistantController#throttled?] #{e.class}: #{e.message}"
+    false
   end
 end
