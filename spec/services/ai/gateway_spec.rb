@@ -282,4 +282,58 @@ RSpec.describe Ai::Gateway do
       expect(convo.messages.outgoing.count).to eq(1)
     end
   end
+
+  # === Cenário 10: GUARDA ANTI-LOOP (rede de segurança) ================================
+  context 'anti-loop (rede de segurança)' do
+    # Semeia 2 respostas anteriores parafraseadas (dados reais do bug) + incoming do cliente entre elas.
+    def seed_loop_history(convo)
+      Ai::Run.create!(account_id: account.id, conversation_id: convo.id, ai_agent_id: agent.id,
+                      run_type: 'decision', mode: 'live', status: 'recorded', created_at: 6.minutes.ago,
+                      decision: { 'decision' => 'reply',
+                                  'reply_text' => 'Você mencionou que quer contratar internet para Cunha Porá, correto?' })
+      create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming',
+                       content: 'sim', created_at: 5.minutes.ago)
+      Ai::Run.create!(account_id: account.id, conversation_id: convo.id, ai_agent_id: agent.id,
+                      run_type: 'decision', mode: 'live', status: 'recorded', created_at: 4.minutes.ago,
+                      decision: { 'decision' => 'reply',
+                                  'reply_text' => 'Você deseja contratar internet em Cunha Porá, correto?' })
+      create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming',
+                       content: 'sim', created_at: 3.minutes.ago)
+    end
+
+    def deliver_after_loop_history(reply_texts)
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      seed_loop_history(convo)
+      message = create(:message, account: account, inbox: inbox, conversation: convo,
+                                 message_type: 'incoming', content: 'sim')
+      stub_decisions(*reply_texts.map { |t| { 'decision' => 'reply', 'reply_text' => t } })
+      described_class.new(message: message, agent_inbox: create_binding(mode: 'live'), mode: 'live').run
+      convo.reload
+    end
+
+    before { create_department }
+
+    it '1ª detecção: nudge + retry; envia a resposta regenerada (fora do loop)' do
+      convo = deliver_after_loop_history([
+                                           'Você está interessado em contratar internet em Cunha Porá, correto?',
+                                           'Perfeito! Temos os planos Fibra 300, 500 e 1 Giga. Qual te interessa?'
+                                         ])
+
+      expect(event_types(convo)).to include('reply.loop_detected', 'reply.loop_retry', 'reply.sent')
+      expect(convo.messages.outgoing.last&.content)
+        .to eq('Perfeito! Temos os planos Fibra 300, 500 e 1 Giga. Qual te interessa?')
+    end
+
+    it 'persistência: retry ainda em loop -> handoff forçado, sem enviar a resposta problemática' do
+      convo = deliver_after_loop_history([
+                                           'Você está interessado em contratar internet em Cunha Porá, correto?',
+                                           'Você deseja contratar internet em Cunha Porá, correto?'
+                                         ])
+
+      events = event_types(convo)
+      expect(events).to include('reply.loop_detected', 'reply.loop_retry', 'handoff.loop_forced')
+      expect(events).not_to include('reply.sent')
+      expect(convo.messages.outgoing.count).to eq(0)
+    end
+  end
 end
