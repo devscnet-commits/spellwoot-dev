@@ -185,7 +185,9 @@ class Ai::Gateway
     elsif decision_kind == 'close'
       action_dispatcher.execute_action('conversation.resolve', {}, run_record, 'close')
     elsif decision_kind == 'reply'
-      action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
+      safe_reply = guard_against_loop(run_record, system_prompt, effective_content,
+                                      (result[:decision] || {})['reply_text'])
+      action_dispatcher.reply(department, safe_reply) if safe_reply
     elsif intended_tool.present? && @acts_live
       # Safety net: a tool ran but the follow-up decision still isn't a plain reply/close/handoff —
       # send whatever text we have so the customer is never left waiting after a tool call.
@@ -307,6 +309,61 @@ class Ai::Gateway
                                                              input: { 'label' => 'department-override-indisponivel' })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#flag_unavailable_department_override] #{e.class}: #{e.message}"
+  end
+
+  # Rede de segurança anti-loop de repergunta (defesa em profundidade). Se o reply_text repete as 2
+  # últimas respostas (parafraseando) COM o cliente respondendo entre elas, tenta 1 vez com um nudge;
+  # se AINDA repetir, força handoff e NÃO envia. Retorna o texto a enviar, ou nil (quando escalou p/
+  # handoff). Só age ao vivo; em shadow devolve o texto original (sem efeito colateral).
+  def guard_against_loop(run_record, system_prompt, user_message, reply_text)
+    return reply_text unless @acts_live && reply_text.present?
+
+    guard = Ai::LoopGuard.new(conversation: @conversation, current_run: run_record)
+    return reply_text unless guard.loop?(reply_text)
+
+    emit(run_record, 'reply.loop_detected', { chars: reply_text.length })
+    retried = loop_retry(run_record, system_prompt, user_message)
+    new_reply = (retried[:decision] || {})['reply_text'].to_s
+
+    if new_reply.present? && !guard.loop?(new_reply)
+      # A resposta regenerada saiu do loop: passa a valer (mantém a run auditável coerente).
+      run_record.update!(decision: retried[:decision]) if retried[:decision].is_a?(Hash)
+      return new_reply
+    end
+
+    # Loop persistiu mesmo após o retry -> handoff forçado, sem enviar a resposta problemática.
+    force_loop_handoff(run_record)
+    nil
+  end
+
+  # Regenera a decisão com um nudge anti-repetição no fim do system prompt. UMA tentativa só (nunca
+  # entra em loop de retry). Devolve o result do ModelRouter (ou vazio em erro).
+  def loop_retry(run_record, system_prompt, user_message)
+    nudge = "\n\nATENÇÃO: você já fez esta mesma pergunta/confirmação antes, de forma muito parecida. " \
+            'NÃO repita. Trate o que o cliente já respondeu como confirmado e AVANCE para o próximo ' \
+            'passo; se não for possível avançar, peça ajuda humana.'
+    result = Ai::ModelRouter.decide(
+      profile: @agent.operation_profile, system_prompt: "#{system_prompt}#{nudge}",
+      user_message: user_message, account_id: @account.id, json: true
+    )
+    emit(run_record, 'reply.loop_retry', { status: result[:status] })
+    result
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#loop_retry] #{e.class}: #{e.message}"
+    { decision: {} }
+  end
+
+  # Handoff forçado quando o loop persiste após o retry: entrega ao humano no time PADRÃO do agente,
+  # reaproveitando o mesmo fluxo do handoff normal (transfer + assign). Não envia texto ao cliente.
+  def force_loop_handoff(run_record)
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'loop' })
+    handoff_coordinator.assign_human(team_id)
+    emit(run_record, 'handoff.loop_forced', { team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_loop_handoff] #{e.class}: #{e.message}"
   end
 
   def finalize(run_record, status)
