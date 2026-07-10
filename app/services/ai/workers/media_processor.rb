@@ -49,17 +49,18 @@ class Ai::Workers::MediaProcessor
     return nil if attachments.empty?
 
     account_id = message.account_id
-    attachments.map { |attachment| extract(attachment, account_id, profile) }.compact.join("\n").presence
+    conversation_id = message.conversation_id
+    attachments.map { |attachment| extract(attachment, account_id, profile, conversation_id) }.compact.join("\n").presence
   rescue StandardError => e
     Rails.logger.error "[Ai::Workers::MediaProcessor] #{e.class}: #{e.message}"
     nil
   end
 
-  def self.extract(attachment, account_id, profile = nil)
+  def self.extract(attachment, account_id, profile = nil, conversation_id = nil)
     case attachment.file_type
     when 'audio' then transcribe(attachment, account_id) || '[O cliente enviou um áudio]'
-    when 'image' then ocr(attachment, account_id, profile) || '[O cliente enviou uma imagem]'
-    when 'file'  then document(attachment, account_id, profile) || '[O cliente enviou um arquivo]'
+    when 'image' then ocr(attachment, account_id, profile, conversation_id) || '[O cliente enviou uma imagem]'
+    when 'file'  then document(attachment, account_id, profile, conversation_id) || '[O cliente enviou um arquivo]'
     when 'video' then '[O cliente enviou um vídeo]'
     end
   end
@@ -128,7 +129,7 @@ class Ai::Workers::MediaProcessor
   # hardcoded). Lê a imagem direto do ActiveStorage e passa ao ModelRouter (mesma resolução de chave
   # multi-provider do modelo principal). Qualquer falha retorna nil (caller usa o marcador genérico),
   # com log distinto para diferenciar sem-arquivo / sem-worker / erro-de-API — sem logar a imagem.
-  def self.ocr(attachment, account_id, profile)
+  def self.ocr(attachment, account_id, profile, conversation_id = nil)
     unless attachment.file.attached?
       Rails.logger.warn '[Ai::Workers::MediaProcessor] imagem sem arquivo anexado (download da mídia falhou?), OCR pulado'
       return nil
@@ -146,12 +147,8 @@ class Ai::Workers::MediaProcessor
       return nil
     end
 
-    raw = Ai::ModelRouter.call_model(
-      provider: provider, model: model,
-      system_prompt: VISION_SYSTEM_PROMPT,
-      user_message: 'Descreva o conteúdo desta imagem.',
-      account_id: account_id, image: attachment.file
-    )
+    raw = vision_call(provider: provider, model: model, user_message: 'Descreva o conteúdo desta imagem.',
+                      account_id: account_id, conversation_id: conversation_id, image: attachment.file)
     if raw[:status] == 'error'
       Rails.logger.warn "[Ai::Workers::MediaProcessor] visão falhou: #{raw[:error]}"
       return nil
@@ -164,6 +161,27 @@ class Ai::Workers::MediaProcessor
     nil
   end
 
+  # Chamada de visão COM DÉBITO: grava um Ai::Run (run_type 'vision_ocr') para auditoria/cobrança —
+  # antes NENHUMA chamada de visão (imagem ou PDF) debitava crédito. account_id sempre; conversation_id
+  # quando houver (aqui sempre há, é anexo de conversa). Custo via ModelRouter.estimate_cost (call_model
+  # devolve tokens mas não custo). Retorna o mesmo hash de call_model.
+  def self.vision_call(provider:, model:, user_message:, account_id:, conversation_id:, image:)
+    run = Ai::Run.create!(account_id: account_id, conversation_id: conversation_id,
+                          run_type: 'vision_ocr', mode: 'worker', worker: 'ocr', status: 'running')
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    raw = Ai::ModelRouter.call_model(
+      provider: provider, model: model, system_prompt: VISION_SYSTEM_PROMPT,
+      user_message: user_message, account_id: account_id, image: image
+    )
+    latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+    tin = raw[:tokens_in].to_i
+    tout = raw[:tokens_out].to_i
+    run.update!(provider: provider, model: model, tokens_in: tin, tokens_out: tout,
+                cost: Ai::ModelRouter.estimate_cost(model, tin, tout), latency_ms: latency_ms,
+                status: raw[:status] == 'error' ? 'error' : 'recorded')
+    raw
+  end
+
   # Worker de OCR do perfil (via Ai::OperationProfile#worker — leitura aninhada centralizada). Sem
   # fallback pro supervisor (diferente do Summary) — visão é opt-in. provider default 'openai' quando
   # só o modelo está setado. Retorna [provider, model] (model nil => não configurado).
@@ -174,7 +192,7 @@ class Ai::Workers::MediaProcessor
 
   # Extração de documento (PDF texto/escaneado + docx). Tipos não suportados (xlsx/txt/...) ou falha
   # => nil => marcador. Logs distintos: sem-arquivo / (escaneado) sem-worker / erro de processamento.
-  def self.document(attachment, account_id, profile)
+  def self.document(attachment, account_id, profile, conversation_id = nil)
     unless attachment.file.attached?
       Rails.logger.warn '[Ai::Workers::MediaProcessor] documento sem arquivo anexado (download da mídia falhou?), extração pulada'
       return nil
@@ -183,7 +201,7 @@ class Ai::Workers::MediaProcessor
     content_type = attachment.file.blob.content_type.to_s
     filename = attachment.file.blob.filename.to_s.downcase
     if pdf?(content_type, filename)
-      extract_pdf(attachment, account_id, profile)
+      extract_pdf(attachment, account_id, profile, conversation_id)
     elsif docx?(content_type, filename)
       extract_docx(attachment)
     end
@@ -196,14 +214,14 @@ class Ai::Workers::MediaProcessor
   # escaneado => visão (Opção B: manda o PDF INTEIRO ao worker; ruby_llm aceita PDF nativo, sem
   # rasterizar/poppler). Cap real por página no caminho escaneado exigiria rasterização (futuro); por
   # ora anexamos só a nota de >10 páginas.
-  def self.extract_pdf(attachment, account_id, profile)
+  def self.extract_pdf(attachment, account_id, profile, conversation_id = nil)
     reader = PDF::Reader.new(StringIO.new(attachment.file.download))
     page_count = reader.page_count
     pages = reader.pages.first(MAX_DOC_PAGES)
     text = pages.map { |p| p.text.to_s }.join("\n").strip
 
     if poor_extraction?(text, pages.size)
-      pdf_via_vision(attachment, account_id, profile, page_count)
+      pdf_via_vision(attachment, account_id, profile, page_count, conversation_id)
     else
       pdf_text_result(text, page_count)
     end
@@ -257,7 +275,7 @@ class Ai::Workers::MediaProcessor
   # de OCR do perfil (MESMO caminho da imagem — input de imagem que qualquer modelo de visão aceita).
   # Opt-in: sem worker configurado, não roda. Precisa do delegate de rasterização (ghostscript) no
   # container; sem ele, pdf_page_to_png degrada pra nil e caímos no marcador.
-  def self.pdf_via_vision(attachment, account_id, profile, page_count)
+  def self.pdf_via_vision(attachment, account_id, profile, page_count, conversation_id = nil)
     provider, model = ocr_worker(profile)
     if model.blank?
       Rails.logger.warn '[Ai::Workers::MediaProcessor] PDF escaneado mas sem worker de OCR configurado, extração pulada'
@@ -265,7 +283,7 @@ class Ai::Workers::MediaProcessor
     end
 
     vision_pages = [page_count, MAX_VISION_PAGES].min
-    texts = pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages)
+    texts = pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages, conversation_id)
     return nil if texts.blank?
 
     out = "[Documento (PDF escaneado)]: #{texts.join("\n").strip}"
@@ -276,7 +294,7 @@ class Ai::Workers::MediaProcessor
 
   # Rasteriza e processa cada página; devolve os textos (não-vazios) da visão. Isola o PDF num tempfile
   # p/ o rasterizador. Cada página = 1 chamada de visão independente (o PNG é fechado após uso).
-  def self.pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages)
+  def self.pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages, conversation_id = nil)
     texts = []
     Tempfile.create(['ai-doc', '.pdf']) do |pdf|
       pdf.binmode
@@ -288,10 +306,10 @@ class Ai::Workers::MediaProcessor
         next unless png
 
         begin
-          raw = Ai::ModelRouter.call_model(
-            provider: provider, model: model, system_prompt: VISION_SYSTEM_PROMPT,
+          raw = vision_call(
+            provider: provider, model: model,
             user_message: 'Extraia e descreva o conteúdo desta página de documento.',
-            account_id: account_id, image: png.path
+            account_id: account_id, conversation_id: conversation_id, image: png.path
           )
           if raw[:status] == 'error'
             Rails.logger.warn "[Ai::Workers::MediaProcessor] visão (PDF pág #{i}) falhou: #{raw[:error]}"

@@ -86,4 +86,48 @@ RSpec.describe Ai::Workers::MediaProcessor do
       end
     end
   end
+
+  describe 'débito de crédito (Ai::Run vision_ocr)' do
+    let(:account) { create(:account) }
+    let(:conversation) { create(:conversation, account: account) }
+    let(:message) { create(:message, conversation: conversation) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'balanceado',
+                                   supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini',
+                                   worker_overrides: { 'ocr' => { 'provider' => 'openai', 'model' => 'gpt-4.1-mini' } })
+    end
+
+    it 'grava um Ai::Run vision_ocr no OCR de imagem (antes não debitava nada)' do
+      att = message.attachments.create!(account: account, file_type: :image)
+      att.file.attach(io: StringIO.new('fake-image-bytes'), filename: 'foto.jpg', content_type: 'image/jpeg')
+      allow(Ai::ModelRouter).to receive(:call_model)
+        .and_return({ text: 'foto de um comprovante', status: 'recorded', tokens_in: 3, tokens_out: 7 })
+
+      expect { described_class.ocr(att, account.id, profile, conversation.id) }
+        .to change(Ai::Run.where(run_type: 'vision_ocr'), :count).by(1)
+
+      run = Ai::Run.where(run_type: 'vision_ocr').last
+      expect(run.account_id).to eq(account.id)
+      expect(run.conversation_id).to eq(conversation.id)
+      expect(run.tokens_in).to eq(3)
+      expect(run.tokens_out).to eq(7)
+      expect(run.status).to eq('recorded')
+    end
+
+    it 'grava um Ai::Run vision_ocr no fallback de PDF pobre' do
+      att = message.attachments.create!(account: account, file_type: :file)
+      att.file.attach(io: StringIO.new('%PDF-1.4 binario'), filename: 'CNH.pdf', content_type: 'application/pdf')
+      allow(PDF::Reader).to receive(:new)
+        .and_return(double('reader', page_count: 1, pages: [double(text: ('a' * 300) + ("\n" * 800))]))
+      allow(described_class).to receive(:pdf_page_to_png)
+        .and_return(instance_double(Tempfile, path: '/tmp/p.png', close!: nil))
+      allow(Ai::ModelRouter).to receive(:call_model)
+        .and_return({ text: 'CNH de João', status: 'recorded', tokens_in: 4, tokens_out: 9 })
+
+      expect { described_class.document(att, account.id, profile, conversation.id) }
+        .to change(Ai::Run.where(run_type: 'vision_ocr'), :count).by(1)
+
+      expect(Ai::Run.where(run_type: 'vision_ocr').last.conversation_id).to eq(conversation.id)
+    end
+  end
 end
