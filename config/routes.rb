@@ -96,6 +96,7 @@ Rails.application.routes.draw do
           end
           resources :ai_costs, only: [:index]
           post 'conversations/:conversation_id/ai_copilot', to: 'ai_copilot#create'
+          post 'ai_prompt_assistant', to: 'ai_prompt_assistant#create'
           namespace :captain do
             resource :preferences, only: [:show, :update]
             resources :assistants do
