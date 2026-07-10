@@ -1,7 +1,8 @@
 <script setup>
-import { reactive, computed } from 'vue';
+import { reactive, computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import AiPromptAssistant from './AiPromptAssistant.vue';
 
 // Formulário de uma etapa, usado tanto na edição inline (dentro do card) quanto ao adicionar.
 // Mantém um rascunho local e devolve o payload no save (o pai grava em form.steps).
@@ -16,6 +17,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['save', 'cancel']);
 const { t } = useI18n();
+const assistantOpen = ref(false);
 
 const WEBHOOK_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE'];
 
@@ -99,7 +101,15 @@ const onSave = () => {
       />
     </label>
     <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-      {{ $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS') }}
+      <span class="flex items-center gap-1.5">
+        {{ $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS') }}
+        <button
+          type="button"
+          class="i-lucide-help-circle size-4 text-n-slate-10 hover:text-n-brand"
+          :title="$t('AI_AGENTS.PROMPT_ASSISTANT.OPEN')"
+          @click="assistantOpen = true"
+        />
+      </span>
       <textarea
         v-model="draft.instructions"
         rows="3"
@@ -290,5 +300,7 @@ const onSave = () => {
         }}
       </button>
     </div>
+
+    <AiPromptAssistant v-model:open="assistantOpen" kind="step_instructions" />
   </div>
 </template>
