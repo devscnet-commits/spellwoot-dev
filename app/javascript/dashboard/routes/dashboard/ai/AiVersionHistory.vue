@@ -4,8 +4,8 @@
 // between the copies are now props/events: the endpoint (baseUrl), the error i18n key (errorKey)
 // and the post-restore refresh of the parent record (@restored). The version object shape
 // { id, version_number, note, created_at } and the AI_AGENTS.VERSIONS.* i18n namespace are shared.
+/* global axios */
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Button from 'dashboard/components-next/button/Button.vue';
@@ -27,7 +27,14 @@ const fetchVersions = async () => {
     const { data } = await axios.get(props.baseUrl);
     versions.value = Array.isArray(data) ? data : [];
   } catch (error) {
-    // Endpoint indisponível/sem versões ainda: mantém a lista vazia sem quebrar a tela.
+    // eslint-disable-next-line no-console
+    console.error(
+      '[AiVersionHistory] falha ao buscar versões:',
+      props.baseUrl,
+      error?.response?.status,
+      error
+    );
+    useAlert(t(props.errorKey));
     versions.value = [];
   }
 };
