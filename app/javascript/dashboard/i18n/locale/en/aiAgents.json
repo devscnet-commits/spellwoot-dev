@@ -140,7 +140,7 @@
     "PROMPT_ASSISTANT": {
       "TITLE_BASE_PROMPT": "Assistente de prompt base",
       "TITLE_STEP_INSTRUCTIONS": "Assistente de instruções da etapa",
-      "SUBTITLE": "Descreva o que você quer e gere uma sugestão. Nada é preenchido automaticamente — copie se gostar.",
+      "SUBTITLE": "Descreva o que você precisa e receba uma sugestão de texto. Nenhuma alteração é aplicada automaticamente; revise antes de utilizar.",
       "BRIEF_LABEL": "O que você precisa?",
       "BRIEF_PLACEHOLDER": "Ex.: agente comercial de uma provedora de internet; coleta a cidade e o tipo de cliente (residencial/empresa) antes de apresentar planos.",
       "GENERATE": "Gerar sugestão",
