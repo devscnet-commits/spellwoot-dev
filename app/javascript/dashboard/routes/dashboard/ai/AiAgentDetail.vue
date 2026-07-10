@@ -10,6 +10,7 @@ import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import AiVersionHistory from './AiVersionHistory.vue';
+import AiPromptAssistant from './AiPromptAssistant.vue';
 import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
 import Logo from 'next/icon/Logo.vue';
 import AiDepartmentDetail from './AiDepartmentDetail.vue';
@@ -306,6 +307,7 @@ const saveAgent = async () => {
 const versionsBaseUrl = computed(
   () => `${agentUrl()}/${agentId.value}/ai_agent_versions`
 );
+const promptAssistantOpen = ref(false);
 
 const goBack = () => router.push({ name: 'ai_agents_index' });
 // Managing/creating custom levels is an advanced surface, off the main nav.
@@ -815,6 +817,14 @@ onMounted(async () => {
               class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
             >
               <div class="flex flex-col gap-1">
+                <div class="flex justify-end -mb-1">
+                  <button
+                    type="button"
+                    class="i-lucide-help-circle size-4 text-n-slate-10 hover:text-n-brand"
+                    :title="$t('AI_AGENTS.PROMPT_ASSISTANT.OPEN')"
+                    @click="promptAssistantOpen = true"
+                  />
+                </div>
                 <TextArea
                   v-model="agentForm.base_prompt"
                   :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
@@ -826,6 +836,10 @@ onMounted(async () => {
                   {{ $t('AI_AGENTS.FORM.BASE_PROMPT_HINT') }}
                 </p>
               </div>
+              <AiPromptAssistant
+                v-model:open="promptAssistantOpen"
+                kind="base_prompt"
+              />
               <div class="flex flex-col gap-1">
                 <TextArea
                   v-model="agentForm.guardrails"
