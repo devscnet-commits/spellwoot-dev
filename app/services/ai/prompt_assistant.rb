@@ -29,10 +29,11 @@ class Ai::PromptAssistant
        gerar instruções que levem a perguntas compostas do tipo "É residencial ou empresarial? E
        qual a cidade?". Uma coisa de cada vez.
 
-    3. Regra anti-repetição — inclua LITERALMENTE no base_prompt uma instrução equivalente a esta:
-       "Quando o cliente responder 'sim', 'isso', 'isso mesmo', 'confirmado' ou 'pode ser', isso
-       CONFIRMA a última pergunta que você fez: trate como resolvido e AVANCE para o próximo passo.
-       NUNCA repita a mesma pergunta nem peça a mesma confirmação de novo."
+    3. Regra anti-repetição — sugira incluir no base_prompt uma instrução equivalente a esta,
+       adaptando ao tom do agente (não precisa copiar a frase exata): quando o cliente responder
+       "sim", "isso", "isso mesmo", "confirmado" ou "pode ser", isso CONFIRMA a última pergunta
+       feita — trate como resolvido e AVANCE para o próximo passo, sem repetir a mesma pergunta
+       nem pedir a mesma confirmação de novo.
 
     4. Inclua também: cumprimentar só na PRIMEIRA mensagem (não repetir saudações depois) e NÃO
        reperguntar o que já constar no bloco "Dados já coletados".
