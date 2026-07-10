@@ -2,10 +2,16 @@
 . "$(dirname "$0")/_/husky.sh"
 
 # lint js and vue files
-npx --no-install lint-staged
+# --no-stash: desliga o backup stash + recovery destrutivo do lint-staged (git checkout --force /
+# git reset --hard), que já reverteu trabalho staged neste projeto. Ver memória precommit-hook-switches-branch.
+npx --no-install lint-staged --no-stash
 
-# lint only staged ruby files that still exist (not deleted)
-git diff --name-only --cached | xargs -I {} sh -c 'test -f "{}" && echo "{}"' | grep '\.rb$' | xargs -I {} bundle exec rubocop --force-exclusion -a "{}" || true
+# lint only staged ruby files that still exist (not deleted); guarda a lista dos que processamos
+rb_list="$(mktemp)"
+git diff --name-only --cached | xargs -I {} sh -c 'test -f "{}" && echo "{}"' | grep '\.rb$' > "$rb_list" || true
+xargs -I {} bundle exec rubocop --force-exclusion -a "{}" < "$rb_list" || true
 
-# stage rubocop changes to files
-git diff --name-only --cached | xargs -I {} sh -c 'test -f "{}" && git add "{}"' || true
+# stage ONLY os arquivos .rb que o rubocop pode ter alterado (não todo o cached — o re-add cego de
+# tudo que estava staged podia gravar conteúdo não intencional no commit)
+xargs -I {} git add "{}" < "$rb_list" || true
+rm -f "$rb_list"
