@@ -420,8 +420,10 @@ const goBack = () =>
 
 // Operational readiness (%): a checklist over data already loaded — no backend.
 const readinessChecks = computed(() => [
+  // 'INSTRUCTIONS' removido: era um ✓ enganoso para uma coluna legada sem editor na UI
+  // (ai_departments.instructions). O % é dinâmico (divide por checks.length), então some sem
+  // desalinhar a conta.
   { key: 'OBJETIVO', ok: !!form.objetivo?.trim() },
-  { key: 'INSTRUCTIONS', ok: !!form.instructions?.trim() },
   { key: 'STEPS', ok: summary.value.steps > 0 },
   { key: 'KNOWLEDGE', ok: summary.value.knowledge > 0 },
   { key: 'TOOLS', ok: summary.value.tools > 0 },
