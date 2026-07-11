@@ -56,7 +56,6 @@ const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 const form = reactive({
   name: '',
   objetivo: '',
-  instructions: '',
   status: 'active',
   steps: [],
   transfer_when_steps: '',
@@ -263,7 +262,6 @@ const hydrate = dept => {
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
-    instructions: dept.instructions || behavior.instructions || '',
     status: dept.status || 'active',
     steps: parseSteps(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
@@ -343,7 +341,6 @@ const buildPayload = () => ({
   ai_department: {
     name: form.name,
     objetivo: form.objetivo,
-    instructions: form.instructions,
     status: form.status,
     is_default: true,
     position: form.position,
