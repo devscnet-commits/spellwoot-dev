@@ -132,6 +132,8 @@
     },
     "VERSIONS": {
       "TITLE": "Histórico de versões",
+      "TITLE_PROMPT": "Histórico do Prompt",
+      "TITLE_SETTINGS": "Histórico das Configurações",
       "EMPTY": "Nenhuma versão registrada ainda.",
       "RESTORE": "Restaurar",
       "RESTORED": "Versão restaurada.",

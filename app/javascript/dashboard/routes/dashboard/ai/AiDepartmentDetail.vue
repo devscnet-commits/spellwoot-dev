@@ -886,6 +886,11 @@ onMounted(async () => {
           <AiVersionHistory
             v-if="!isNew"
             :base-url="versionsBaseUrl"
+            :title-key="
+              embedded
+                ? 'AI_AGENTS.VERSIONS.TITLE_SETTINGS'
+                : 'AI_AGENTS.VERSIONS.TITLE'
+            "
             error-key="AI_DEPARTMENTS.ERROR"
             @restored="fetchDepartment"
           />

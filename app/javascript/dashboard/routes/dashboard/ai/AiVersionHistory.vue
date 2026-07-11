@@ -15,6 +15,9 @@ const props = defineProps({
   baseUrl: { type: String, required: true },
   // i18n key for the restore-failure alert (agent vs department scopes differ here).
   errorKey: { type: String, default: 'AI_AGENTS.ERROR' },
+  // i18n key for the panel title. Default keeps the generic label; callers that show more than one
+  // panel side by side (ex.: aba Comportamento: prompt vs. configurações) passam chaves distintas.
+  titleKey: { type: String, default: 'AI_AGENTS.VERSIONS.TITLE' },
 });
 const emit = defineEmits(['restored']);
 
@@ -71,7 +74,7 @@ onMounted(fetchVersions);
           showVersions ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'
         "
       />
-      {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
+      {{ $t(titleKey) }}
       <span class="text-n-slate-11 font-normal">{{
         `(${versions.length})`
       }}</span>
