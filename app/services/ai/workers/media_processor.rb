@@ -248,20 +248,24 @@ class Ai::Workers::MediaProcessor
     nonws < pages * MIN_CONTENT_CHARS_PER_PAGE || ws_ratio > MAX_WHITESPACE_RATIO
   end
 
-  # Rasteriza UMA página do PDF em PNG (ImageMagick via mini_magick; precisa de `ghostscript` no
-  # container — ver Dockerfile*). Retorna um Tempfile PNG (o caller fecha) ou nil se falhar / sem o
-  # delegate instalado (degrada pro marcador, sem quebrar). page_index é 0-based.
+  # Rasteriza UMA página do PDF em PNG. Usa o binário UNIFICADO `magick` (MiniMagick::Tool::Magick) —
+  # o ImageMagick v7 depreciou o subcomando `convert` (e o mini_magick, mesmo detectando o v7, gera
+  # `magick convert`, o modo-compat depreciado). `Tool::Magick` emite `magick -density N input.pdf[i]
+  # -background white -flatten output.png`, a forma nativa do v7. Precisa de `ghostscript` no container
+  # (delegate de PDF — ver Dockerfile*). Retorna um Tempfile PNG (o caller fecha) ou nil se falhar /
+  # sem o delegate (degrada pro marcador, sem quebrar). page_index é 0-based.
   def self.pdf_page_to_png(pdf_path, page_index)
     require 'mini_magick'
 
     png = Tempfile.new(['ai-pdf-page', '.png'])
     png.binmode
-    MiniMagick::Tool::Convert.new do |convert|
-      convert.density(PDF_RASTER_DPI)
-      convert << "#{pdf_path}[#{page_index}]"
-      convert.background('white')
-      convert.flatten
-      convert << png.path
+    # -density ANTES do input: define a resolução de rasterização do PDF na leitura.
+    MiniMagick::Tool::Magick.new do |magick|
+      magick.density(PDF_RASTER_DPI)
+      magick << "#{pdf_path}[#{page_index}]"
+      magick.background('white')
+      magick.flatten
+      magick << png.path
     end
     png.rewind
     png
