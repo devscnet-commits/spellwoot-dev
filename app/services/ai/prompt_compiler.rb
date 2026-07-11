@@ -11,7 +11,9 @@ class Ai::PromptCompiler
     parts << "Regras de segurança (nunca viole): #{agent.guardrails}." if agent.guardrails.present?
 
     parts << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
-    parts << "Instruções: #{department.instructions}." if department.instructions.present?
+    # NÃO injetar `department.instructions`: coluna legada, sem editor na UI (comportamento é montado
+    # por objetivo + steps do playbook). Ficava como ruído órfão no prompt. Coluna mantida no schema
+    # (aposentada só a leitura) — cleanup de schema é débito separado.
     if (pb = department.playbook)
       step_lines = step_lines(pb.steps)
       if step_lines.present?

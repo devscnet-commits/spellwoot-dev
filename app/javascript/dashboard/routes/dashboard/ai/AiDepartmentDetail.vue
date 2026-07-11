@@ -56,7 +56,6 @@ const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 const form = reactive({
   name: '',
   objetivo: '',
-  instructions: '',
   status: 'active',
   steps: [],
   transfer_when_steps: '',
@@ -263,7 +262,6 @@ const hydrate = dept => {
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
-    instructions: dept.instructions || behavior.instructions || '',
     status: dept.status || 'active',
     steps: parseSteps(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
@@ -343,7 +341,6 @@ const buildPayload = () => ({
   ai_department: {
     name: form.name,
     objetivo: form.objetivo,
-    instructions: form.instructions,
     status: form.status,
     is_default: true,
     position: form.position,
@@ -420,8 +417,10 @@ const goBack = () =>
 
 // Operational readiness (%): a checklist over data already loaded — no backend.
 const readinessChecks = computed(() => [
+  // 'INSTRUCTIONS' removido: era um ✓ enganoso para uma coluna legada sem editor na UI
+  // (ai_departments.instructions). O % é dinâmico (divide por checks.length), então some sem
+  // desalinhar a conta.
   { key: 'OBJETIVO', ok: !!form.objetivo?.trim() },
-  { key: 'INSTRUCTIONS', ok: !!form.instructions?.trim() },
   { key: 'STEPS', ok: summary.value.steps > 0 },
   { key: 'KNOWLEDGE', ok: summary.value.knowledge > 0 },
   { key: 'TOOLS', ok: summary.value.tools > 0 },
