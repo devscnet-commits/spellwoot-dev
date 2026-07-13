@@ -208,6 +208,7 @@ Rails.application.routes.draw do
               get :closing_flow
               get :attachments
               get :inbox_assistant
+              get :ai_handoff_summary
               get :reporting_events if ChatwootApp.enterprise?
             end
           end
