@@ -78,6 +78,16 @@ class Ai::ActionDispatcher
     emit('reply.failed', { error: "#{e.class}: #{e.message}" })
   end
 
+  # Nota INTERNA (privada) para o atendente humano — não vai para o cliente. Usada no handoff por
+  # crédito esgotado (billing Fase 2). Erro é logado sem interromper o handoff.
+  def internal_note(text)
+    return if text.blank?
+
+    Messages::MessageBuilder.new(nil, @conversation, { content: text, private: true }).perform
+  rescue StandardError => e
+    Rails.logger.error "[Ai::ActionDispatcher#internal_note] #{e.class}: #{e.message}"
+  end
+
   private
 
   # Envia a resposta. No modo humano quebra em partes por linha em branco (\n\n) e as manda em
