@@ -861,7 +861,7 @@ onMounted(async () => {
                 />
               </div>
 
-              <!-- Histórico do prompt do agente (base_prompt/guardrails via Ai::AgentVersion).
+              <!-- Histórico do prompt do agente (base_prompt/guardrails via Ai::Version).
                    Fica DENTRO desta seção, junto aos campos que restaura — distinto do
                    "Histórico das Configurações" (ai_department_versions) que vem no AiDepartmentDetail. -->
               <AiVersionHistory
