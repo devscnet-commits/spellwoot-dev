@@ -142,6 +142,7 @@ Rails.application.routes.draw do
           resource :plan, only: [] do
             get :limits
           end
+          resources :credit_requests, only: [:index, :create]
           resources :callbacks, only: [] do
             collection do
               post :register_facebook_page
@@ -716,6 +717,10 @@ Rails.application.routes.draw do
       resources :accounts, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         post :seed, on: :member
         post :reset_cache, on: :member
+      end
+      resources :credit_requests, only: [:index, :show] do
+        post :approve, on: :member
+        post :reject, on: :member
       end
       resources :users, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         delete :avatar, on: :member, action: :destroy_avatar

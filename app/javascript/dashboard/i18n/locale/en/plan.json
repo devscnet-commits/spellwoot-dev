@@ -31,6 +31,20 @@
     "OVERAGE_TOTAL": "Amount",
     "OVERAGE_STATUS": "Status",
     "STATUS_PENDING": "Pending",
-    "STATUS_INVOICED": "Invoiced"
+    "STATUS_INVOICED": "Invoiced",
+    "CREDIT_REQUEST": {
+      "BUTTON": "Request more credits",
+      "TITLE": "Request more AI credits",
+      "AMOUNT_LABEL": "How many credits?",
+      "AMOUNT_PLACEHOLDER": "e.g. 1000",
+      "REASON_LABEL": "Reason (optional)",
+      "REASON_PLACEHOLDER": "Tell us why you need more credits",
+      "SUBMIT": "Send request",
+      "CANCEL": "Cancel",
+      "SENT": "Request sent. Our team will review it.",
+      "ERROR": "Could not send the request. Please try again.",
+      "INVALID_AMOUNT": "Enter an amount greater than zero.",
+      "PENDING": "You have a pending request for {amount} credits — awaiting approval."
+    }
   }
 }

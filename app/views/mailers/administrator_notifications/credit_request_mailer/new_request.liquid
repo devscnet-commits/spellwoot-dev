@@ -1,0 +1,16 @@
+<p>Olá,</p>
+
+<p>Um cliente solicitou <strong>mais créditos de IA</strong> e a solicitação aguarda aprovação da SCNET.</p>
+
+<p>
+  <strong>Instalação:</strong> {{ meta.instance_url }}<br>
+  <strong>Conta:</strong> #{{ meta.account_id }} — {{ meta.account_name }}<br>
+  <strong>Solicitado por:</strong> {{ meta.requested_by }} ({{ meta.requested_by_email }})<br>
+  <strong>Créditos solicitados:</strong> {{ meta.amount_requested }}<br>
+  <strong>Motivo:</strong> {{ meta.reason }}<br>
+  <strong>Quando:</strong> {{ meta.requested_at }}
+</p>
+
+<p>Aprove ou rejeite no painel super admin: <a href="{{ action_url }}">{{ action_url }}</a></p>
+
+<p>— SCNET</p>

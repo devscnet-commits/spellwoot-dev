@@ -1,4 +1,4 @@
-\restrict t76WRB2aCbg1tgYbeNPsKYT3icyYRjjefNXLlzctIDmShenhUp8AXnd5xvHP6dt
+\restrict fHE7of2fiNcAei3ufnJ3o0Hwbk5zoHuZlqqnhMua8XomScFl8voqPCE2euw8E8D
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -789,6 +789,44 @@ CREATE SEQUENCE public.ai_credit_balances_id_seq
 --
 
 ALTER SEQUENCE public.ai_credit_balances_id_seq OWNED BY public.ai_credit_balances.id;
+
+
+--
+-- Name: ai_credit_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_credit_requests (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    requested_by_id bigint NOT NULL,
+    approved_by_id bigint,
+    amount_requested integer NOT NULL,
+    status integer DEFAULT 0 NOT NULL,
+    reason text,
+    review_note text,
+    reviewed_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_credit_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_credit_requests_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_credit_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_credit_requests_id_seq OWNED BY public.ai_credit_requests.id;
 
 
 --
@@ -5111,6 +5149,13 @@ ALTER TABLE ONLY public.ai_credit_balances ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
+-- Name: ai_credit_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests ALTER COLUMN id SET DEFAULT nextval('public.ai_credit_requests_id_seq'::regclass);
+
+
+--
 -- Name: ai_customer_memories id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -6029,6 +6074,14 @@ ALTER TABLE ONLY public.ai_capability_executions
 
 ALTER TABLE ONLY public.ai_credit_balances
     ADD CONSTRAINT ai_credit_balances_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_credit_requests ai_credit_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT ai_credit_requests_pkey PRIMARY KEY (id);
 
 
 --
@@ -7283,6 +7336,27 @@ CREATE INDEX index_ai_capability_executions_on_status ON public.ai_capability_ex
 --
 
 CREATE UNIQUE INDEX index_ai_credit_balances_on_account_id ON public.ai_credit_balances USING btree (account_id);
+
+
+--
+-- Name: index_ai_credit_requests_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_credit_requests_on_account_id ON public.ai_credit_requests USING btree (account_id);
+
+
+--
+-- Name: index_ai_credit_requests_on_approved_by_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_credit_requests_on_approved_by_id ON public.ai_credit_requests USING btree (approved_by_id);
+
+
+--
+-- Name: index_ai_credit_requests_on_requested_by_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_credit_requests_on_requested_by_id ON public.ai_credit_requests USING btree (requested_by_id);
 
 
 --
@@ -9388,6 +9462,14 @@ ALTER TABLE ONLY public.operational_flow_reasons
 
 
 --
+-- Name: ai_credit_requests fk_rails_17bf5d7955; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT fk_rails_17bf5d7955 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
 -- Name: operational_flows fk_rails_1b1a9ccaa8; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9401,6 +9483,14 @@ ALTER TABLE ONLY public.operational_flows
 
 ALTER TABLE ONLY public.agent_schedules
     ADD CONSTRAINT fk_rails_1df0c6ac44 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
+-- Name: ai_credit_requests fk_rails_2e635b4b99; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT fk_rails_2e635b4b99 FOREIGN KEY (approved_by_id) REFERENCES public.users(id);
 
 
 --
@@ -9425,6 +9515,14 @@ ALTER TABLE ONLY public.ai_credit_balances
 
 ALTER TABLE ONLY public.integration_settings
     ADD CONSTRAINT fk_rails_403cbc3abb FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
+-- Name: ai_credit_requests fk_rails_4cbb02d7de; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT fk_rails_4cbb02d7de FOREIGN KEY (requested_by_id) REFERENCES public.users(id);
 
 
 --
@@ -9599,11 +9697,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict t76WRB2aCbg1tgYbeNPsKYT3icyYRjjefNXLlzctIDmShenhUp8AXnd5xvHP6dt
+\unrestrict fHE7of2fiNcAei3ufnJ3o0Hwbk5zoHuZlqqnhMua8XomScFl8voqPCE2euw8E8D
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260714120000'),
 ('20260713120000'),
 ('20260712120000'),
 ('20260711120001'),
