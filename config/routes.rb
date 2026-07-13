@@ -142,6 +142,7 @@ Rails.application.routes.draw do
           resource :plan, only: [] do
             get :limits
           end
+          resources :credit_requests, only: [:index, :create]
           resources :callbacks, only: [] do
             collection do
               post :register_facebook_page
