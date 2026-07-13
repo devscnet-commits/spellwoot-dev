@@ -4,16 +4,18 @@ class Api::V1::Accounts::AiPlaybookVersionsController < Api::V1::Accounts::BaseC
   before_action :set_department
 
   def index
-    render json: ::Ai::PlaybookVersion.where(ai_department_id: @department.id).recent
+    playbook = @department.playbook
+    render json: playbook ? ::Ai::Version.for_record(playbook).recent.map { |version| serialize(version) } : []
   end
 
   def restore
-    version = ::Ai::PlaybookVersion.find_by(id: params[:id], ai_department_id: @department.id)
+    playbook = @department.playbook
+    version = playbook && ::Ai::Version.for_record(playbook).find_by(id: params[:id])
     return render(json: { error: 'versão não encontrada' }, status: :not_found) if version.nil?
 
-    playbook = @department.playbook || @department.build_playbook(active: true)
-    playbook.update!(version.snapshot.slice(*::Ai::PlaybookVersion::SNAPSHOT_FIELDS))
-    ::Ai::PlaybookVersion.snapshot!(playbook, note: "Restaurado da v#{version.version_number}")
+    version.restore!(::Ai::Playbook::SNAPSHOT_FIELDS)
+    ::Ai::Version.snapshot!(playbook, snapshot_fields: ::Ai::Playbook::SNAPSHOT_FIELDS,
+                                      note: "Restaurado da v#{version.version_number}")
     render json: playbook
   end
 
@@ -23,5 +25,10 @@ class Api::V1::Accounts::AiPlaybookVersionsController < Api::V1::Accounts::BaseC
     agent = ::Ai::Agent.find_by(id: params[:ai_agent_id], account_id: Current.account.id)
     @department = agent&.departments&.find_by(id: params[:ai_department_id])
     render(json: { error: 'departamento não encontrado' }, status: :not_found) if @department.nil?
+  end
+
+  # Mesma shape enxuta do ai_department_versions ({ id, version_number, note, created_at }).
+  def serialize(version)
+    version.slice(:id, :version_number, :note, :created_at)
   end
 end

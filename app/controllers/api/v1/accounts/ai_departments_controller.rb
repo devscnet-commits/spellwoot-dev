@@ -112,7 +112,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
       active: true
     )
     playbook.save!
-    ::Ai::PlaybookVersion.snapshot!(playbook)
+    ::Ai::Version.snapshot!(playbook, snapshot_fields: ::Ai::Playbook::SNAPSHOT_FIELDS)
   end
 
   # Valida os automations[] de cada etapa do playbook recebido: rejeita tipo desconhecido ou
