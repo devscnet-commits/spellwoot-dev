@@ -1,4 +1,4 @@
-\restrict fHE7of2fiNcAei3ufnJ3o0Hwbk5zoHuZlqqnhMua8XomScFl8voqPCE2euw8E8D
+\restrict f4zbrtL7r0TXALYNVdEBZo7lQGdXYV77oH092Y8yJZtLzK7bBwEODOBgIFNeffd
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -768,7 +768,8 @@ CREATE TABLE public.ai_credit_balances (
     plan_credits integer DEFAULT 0 NOT NULL,
     extra_credits integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    low_balance_notified_at timestamp(6) without time zone
 );
 
 
@@ -9697,11 +9698,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fHE7of2fiNcAei3ufnJ3o0Hwbk5zoHuZlqqnhMua8XomScFl8voqPCE2euw8E8D
+\unrestrict f4zbrtL7r0TXALYNVdEBZo7lQGdXYV77oH092Y8yJZtLzK7bBwEODOBgIFNeffd
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260715120000'),
 ('20260714120000'),
 ('20260713120000'),
 ('20260712120000'),
