@@ -1,8 +1,8 @@
 require 'rails_helper'
 
-# Unit coverage for the GENERIC polymorphic version model. It must NOT affect Ai::AgentVersion /
-# Ai::PlaybookVersion (those keep their own tables/specs). Focus: flat-path snapshot, dedupe, and
-# restore that deep-merges into jsonb columns without dropping sibling keys.
+# Unit coverage for the polymorphic version model — the single versioning substrate for agents,
+# playbooks and departments. Focus: flat-path snapshot, dedupe, restore that SUBSTITUTES plain
+# columns and DEEP-MERGES dotted jsonb paths (preserving sibling keys).
 RSpec.describe Ai::Version do
   let(:account) { create(:account) }
   let(:profile) do
@@ -65,12 +65,6 @@ RSpec.describe Ai::Version do
 
       expect(noted.version_number).to eq(2)
       expect(noted.note).to eq('Restaurado da v1')
-    end
-
-    it 'does not leak into Ai::AgentVersion / Ai::PlaybookVersion' do
-      expect { described_class.snapshot!(department, snapshot_fields: fields) }
-        .to not_change(Ai::AgentVersion, :count)
-        .and not_change(Ai::PlaybookVersion, :count)
     end
   end
 

@@ -1,7 +1,7 @@
-# Polymorphic, immutable snapshot of a versionable record's configuration. It is a GENERIC sibling
-# of Ai::AgentVersion / Ai::PlaybookVersion (which stay exactly as they are): instead of a fixed
-# SNAPSHOT_FIELDS + a dedicated table per scope, the caller passes `snapshot_fields` and the
-# `versionable` association points at any record.
+# Polymorphic, immutable snapshot of a versionable record's configuration — the single versioning
+# substrate for agents, playbooks and departments. Instead of a fixed SNAPSHOT_FIELDS + a dedicated
+# table per scope, the caller passes `snapshot_fields` and the `versionable` association points at
+# any record (Ai::Agent, Ai::Playbook, Ai::Department).
 #
 # `snapshot_fields` may be plain column names ("objetivo") OR dotted paths into a jsonb column
 # ("behavior.max_replies", "behavior.grouping.delay_seconds"). The stored snapshot is a FLAT map
@@ -32,8 +32,8 @@ class Ai::Version < ApplicationRecord
   scope :recent, -> { order(version_number: :desc) }
   scope :for_record, ->(record) { where(versionable: record) }
 
-  # Records a new version unless the snapshot is identical to the latest one and there is no note —
-  # same dedupe rule as Ai::AgentVersion.snapshot! (avoids noise on no-op saves).
+  # Records a new version unless the snapshot is identical to the latest one and there is no note
+  # (avoids noise on no-op saves).
   def self.snapshot!(record, snapshot_fields:, note: nil)
     data = read_paths(record, snapshot_fields)
     last = for_record(record).recent.first

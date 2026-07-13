@@ -1,8 +1,7 @@
 require 'rails_helper'
 
-# Request coverage for the new ai_department_versions endpoint: automatic snapshot on department
-# update, listing, and restore (merge into behavior jsonb without wiping sibling keys). Ai::AgentVersion
-# / Ai::PlaybookVersion are untouched.
+# Request coverage for the ai_department_versions endpoint: automatic snapshot on department update,
+# listing, and restore (merge into behavior jsonb without wiping sibling keys).
 RSpec.describe 'AI Department Versions API', type: :request do
   let(:account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
