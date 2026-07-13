@@ -29,8 +29,10 @@ class Ai::ModelRouter
   # json: opt-in to force a JSON-object response (OpenAI response_format). Only the supervisor
   # decision path sets it — its prompt always carries the JSON contract. Plain-text callers (e.g.
   # the department classifier) must leave it false so they aren't forced into JSON mode.
+  # force_global_key: BYOK (billing Fase 3). Quando true, ignora a chave própria da conta e usa a chave
+  # global da SCNET — o Gateway aciona isso no retry após a chave do cliente falhar por auth (401).
   def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil,
-                  temperature: nil, json: false)
+                  temperature: nil, json: false, force_global_key: false)
     # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
@@ -48,7 +50,8 @@ class Ai::ModelRouter
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
-                     user_message: user_message, account_id: account_id, temperature: temperature, json: json)
+                     user_message: user_message, account_id: account_id, temperature: temperature, json: json,
+                     force_global_key: force_global_key)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     decision = raw[:status] == 'error' ? { 'error' => raw[:error] } : parse_decision(raw[:text])
@@ -62,7 +65,9 @@ class Ai::ModelRouter
       tokens_out: raw[:tokens_out],
       cost: estimate_cost(model, raw[:tokens_in], raw[:tokens_out]),
       latency_ms: latency_ms,
-      status: raw[:status]
+      status: raw[:status],
+      # BYOK: 'auth_error' (401) vs 'provider_error' (demais) — o Gateway usa isso para o fallback.
+      error_type: raw[:error_type]
     }
   end
 
@@ -70,10 +75,10 @@ class Ai::ModelRouter
   # image: anexo para modelos de VISÃO (aceita ActiveStorage::Attached/Blob, path ou URL — o ruby_llm
   # resolve o tipo). nil = chamada de texto normal (comportamento inalterado: `with: nil` == sem anexo).
   def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil,
-                      timeout: nil, json: false, image: nil)
+                      timeout: nil, json: false, image: nil, force_global_key: false)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
-    context = provider_context(provider, account_id: account_id, timeout: timeout)
+    context = provider_context(provider, account_id: account_id, timeout: timeout, force_global_key: force_global_key)
     # Groq: endpoint OpenAI-compatible (openai_api_base no context) + modelo FORA do registry (oculto,
     # só do classificador) -> assume_model_exists exige provider explícito (:openai adapter). Os demais
     # seguem a validação normal contra o llm_models.json.
@@ -94,9 +99,14 @@ class Ai::ModelRouter
       tokens_out: response.try(:output_tokens).to_i,
       status: 'recorded'
     }
+  rescue RubyLLM::UnauthorizedError => e
+    # 401: chave inválida/revogada. Distinto do erro genérico para o Gateway poder cair no fallback da
+    # chave global (BYOK — billing Fase 3). Não entra na lista de retry do ruby_llm (não é transiente).
+    Rails.logger.error "[Ai::ModelRouter] UNAUTHORIZED: #{e.message}"
+    { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error_type: 'auth_error', error: "#{e.class}: #{e.message}" }
   rescue StandardError => e
     Rails.logger.error "[Ai::ModelRouter] #{e.class}: #{e.message}"
-    { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error: "#{e.class}: #{e.message}" }
+    { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
   end
 
   # Providers that honor the OpenAI-style `response_format: { type: 'json_object' }`. Anthropic and
@@ -123,28 +133,28 @@ class Ai::ModelRouter
   # OpenAI is read from the account's "APIs & Credentials" (IntegrationSettingsService: account →
   # global → ENV), with the platform Captain key as fallback; the others read AI_<PROVIDER>_API_KEY
   # from InstallationConfig (or the matching ENV var).
-  def self.provider_context(provider, account_id: nil, timeout: nil)
+  def self.provider_context(provider, account_id: nil, timeout: nil, force_global_key: false)
     case provider.to_s
     when 'anthropic'
-      key = credential('AI_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY')
+      # BYOK: a chave própria da conta (Hub) vence; senão a global da SCNET. force_global_key força a global.
+      key = byok_key(account_id, 'anthropic', force_global_key) || credential('AI_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY')
       raise 'anthropic_api_key ausente (defina AI_ANTHROPIC_API_KEY ou ANTHROPIC_API_KEY)' if key.blank?
 
       build_context(timeout) { |c| c.anthropic_api_key = key }
     when 'google', 'gemini'
-      key = credential('AI_GEMINI_API_KEY', 'GEMINI_API_KEY')
+      key = byok_key(account_id, 'gemini', force_global_key) || credential('AI_GEMINI_API_KEY', 'GEMINI_API_KEY')
       raise 'gemini_api_key ausente' if key.blank?
 
       build_context(timeout) { |c| c.gemini_api_key = key }
     when 'openrouter'
-      key = credential('AI_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY')
+      key = byok_key(account_id, 'openrouter', force_global_key) || credential('AI_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY')
       raise 'openrouter_api_key ausente' if key.blank?
 
       build_context(timeout) { |c| c.openrouter_api_key = key }
     when 'groq'
       # Groq é OpenAI-compatible: reaproveita o adapter da OpenAI apontando o endpoint para api.groq.com
-      # (sem client novo). NÃO é exposto como provider na UI — uso interno (classificador de department,
-      # CHEAP_MODELS). A key vem de AI_GROQ_API_KEY / GROQ_API_KEY.
-      key = credential('AI_GROQ_API_KEY', 'GROQ_API_KEY')
+      # (sem client novo). A key própria da conta (BYOK) vence; senão AI_GROQ_API_KEY / GROQ_API_KEY.
+      key = byok_key(account_id, 'groq', force_global_key) || credential('AI_GROQ_API_KEY', 'GROQ_API_KEY')
       raise 'groq_api_key ausente (defina AI_GROQ_API_KEY ou GROQ_API_KEY)' if key.blank?
 
       build_context(timeout) do |c|
@@ -154,10 +164,35 @@ class Ai::ModelRouter
     else # openai
       # One-time endpoint/model-registry wiring (default OpenAI endpoint for most setups).
       Llm::Config.initialize! if defined?(Llm::Config)
-      # Resolve the key per request — account Hub key wins, else the platform Captain key.
-      key = account_openai_key(account_id) || credential('CAPTAIN_OPEN_AI_API_KEY', 'OPENAI_API_KEY')
+      # Resolve the key per request — account Hub key wins, else the platform Captain key. force_global_key
+      # (retry pós-falha de auth) ignora a chave da conta e vai direto na Captain.
+      account_key = force_global_key ? nil : account_openai_key(account_id)
+      key = account_key || credential('CAPTAIN_OPEN_AI_API_KEY', 'OPENAI_API_KEY')
       build_context(timeout) { |c| c.openai_api_key = key if key.present? }
     end
+  end
+
+  # BYOK (billing Fase 3): chave própria da conta para um provider de LLM, ou nil. force_global_key
+  # curto-circuita (o retry pós-falha usa a chave global). O gate de feature vive em account_provider_key.
+  def self.byok_key(account_id, provider, force_global_key)
+    return nil if force_global_key
+
+    account_provider_key(account_id, provider)
+  end
+
+  # Chave própria da conta (Hub: account→global→ENV) para o provider, SÓ se a conta tem a feature
+  # custom_llm_api_key (fail-safe: mesmo que exista uma linha órfã no Hub, sem a feature não é usada).
+  # Também é o ponto que o Gateway consulta para saber se a chamada usou chave própria (fallback).
+  def self.account_provider_key(account_id, provider)
+    return nil if account_id.blank? || !defined?(IntegrationSettingsService)
+
+    account = Account.find_by(id: account_id)
+    return nil unless account&.feature_enabled?('custom_llm_api_key')
+
+    IntegrationSettingsService.get_config(account_id, provider.to_s)['apiKey'].presence
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::ModelRouter] #{provider} key lookup falhou: #{e.class}: #{e.message}"
+    nil
   end
 
   # Isolated per-call RubyLLM context (never mutates the global config). Applies an optional HTTP

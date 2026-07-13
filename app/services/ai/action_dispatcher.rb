@@ -121,7 +121,14 @@ class Ai::ActionDispatcher
   # conta sem balance/plano não debita nada (fail-open). best-effort: se o saldo já zerou entre o
   # pré-cheque do Gateway e aqui (leitura stale), o rescue deixa passar — o bloqueio primário é o
   # pré-cheque; deixar 1 resposta a mais é aceitável (não trava uma resposta já enviada).
+  #
+  # BYOK (billing Fase 3): conta com chave própria (custom_llm_api_key) NÃO consome aqui — a resposta na
+  # chave do cliente é grátis para a SCNET. O único débito de conta BYOK é o do FALLBACK (chave própria
+  # falhou -> chave da SCNET), cobrado explicitamente no Ai::Gateway. Sem esse gate, um saldo
+  # auto-provisionado num fallback anterior faria toda resposta com chave própria cobrar indevidamente.
   def consume_credit
+    return if @account.feature_enabled?('custom_llm_api_key')
+
     @account.ai_credit_balance&.consume!(1)
   rescue AiCreditBalance::InsufficientCredits => e
     Rails.logger.info "[Ai::ActionDispatcher] saldo insuficiente ao consumir crédito: #{e.message}"
