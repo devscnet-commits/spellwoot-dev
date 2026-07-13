@@ -1,4 +1,4 @@
-\restrict ntKct6viWLSB9PqvpuIAycgT6VfTQFRS0Y9nrdjG0WKrS5xApZIuBk3TCZrqmTD
+\restrict k7NcE2m73LiJpn34fj0DlUcbTXxPblQSlozhBCO0uEyWm6qoU1FCWVjgxMHSIfw
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -975,6 +975,41 @@ CREATE SEQUENCE public.ai_events_id_seq
 --
 
 ALTER SEQUENCE public.ai_events_id_seq OWNED BY public.ai_events.id;
+
+
+--
+-- Name: ai_handoff_summaries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_handoff_summaries (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    conversation_id bigint NOT NULL,
+    ai_run_id bigint,
+    reason character varying NOT NULL,
+    content text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_handoff_summaries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_handoff_summaries_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_handoff_summaries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_handoff_summaries_id_seq OWNED BY public.ai_handoff_summaries.id;
 
 
 --
@@ -5114,6 +5149,13 @@ ALTER TABLE ONLY public.ai_events ALTER COLUMN id SET DEFAULT nextval('public.ai
 
 
 --
+-- Name: ai_handoff_summaries id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries ALTER COLUMN id SET DEFAULT nextval('public.ai_handoff_summaries_id_seq'::regclass);
+
+
+--
 -- Name: ai_integration_links id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -6030,6 +6072,14 @@ ALTER TABLE ONLY public.ai_departments
 
 ALTER TABLE ONLY public.ai_events
     ADD CONSTRAINT ai_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_handoff_summaries ai_handoff_summaries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT ai_handoff_summaries_pkey PRIMARY KEY (id);
 
 
 --
@@ -7292,6 +7342,27 @@ CREATE INDEX index_ai_events_on_conversation_id ON public.ai_events USING btree 
 --
 
 CREATE INDEX index_ai_events_on_created_at ON public.ai_events USING btree (created_at);
+
+
+--
+-- Name: index_ai_handoff_summaries_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_handoff_summaries_on_account_id ON public.ai_handoff_summaries USING btree (account_id);
+
+
+--
+-- Name: index_ai_handoff_summaries_on_ai_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_handoff_summaries_on_ai_run_id ON public.ai_handoff_summaries USING btree (ai_run_id);
+
+
+--
+-- Name: index_ai_handoff_summaries_on_conversation_id_and_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_handoff_summaries_on_conversation_id_and_created_at ON public.ai_handoff_summaries USING btree (conversation_id, created_at);
 
 
 --
@@ -9332,6 +9403,14 @@ CREATE TRIGGER conversations_before_insert_row_tr BEFORE INSERT ON public.conver
 
 
 --
+-- Name: ai_handoff_summaries fk_rails_0861b82b8d; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT fk_rails_0861b82b8d FOREIGN KEY (ai_run_id) REFERENCES public.ai_runs(id);
+
+
+--
 -- Name: working_periods fk_rails_1206a1c65d; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9385,6 +9464,14 @@ ALTER TABLE ONLY public.ai_credit_requests
 
 ALTER TABLE ONLY public.inbox_exceptions
     ADD CONSTRAINT fk_rails_38c5e693b5 FOREIGN KEY (inbox_id) REFERENCES public.inboxes(id);
+
+
+--
+-- Name: ai_handoff_summaries fk_rails_3e8aa93908; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT fk_rails_3e8aa93908 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
 
 
 --
@@ -9465,6 +9552,14 @@ ALTER TABLE ONLY public.overage_charges
 
 ALTER TABLE ONLY public.team_inboxes
     ADD CONSTRAINT fk_rails_7f2a0b2bdc FOREIGN KEY (team_id) REFERENCES public.teams(id);
+
+
+--
+-- Name: ai_handoff_summaries fk_rails_854731489d; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT fk_rails_854731489d FOREIGN KEY (conversation_id) REFERENCES public.conversations(id);
 
 
 --
@@ -9583,11 +9678,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ntKct6viWLSB9PqvpuIAycgT6VfTQFRS0Y9nrdjG0WKrS5xApZIuBk3TCZrqmTD
+\unrestrict k7NcE2m73LiJpn34fj0DlUcbTXxPblQSlozhBCO0uEyWm6qoU1FCWVjgxMHSIfw
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260717120000'),
 ('20260716120000'),
 ('20260715120000'),
 ('20260714120000'),
