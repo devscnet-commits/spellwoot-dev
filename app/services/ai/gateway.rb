@@ -110,6 +110,9 @@ class Ai::Gateway
       profile: @agent.operation_profile, system_prompt: system_prompt,
       user_message: context_builder.user_message(effective_content), account_id: @account.id, json: true
     )
+    # BYOK (billing Fase 3): se a chave PRÓPRIA do cliente falhou por auth (401), sinaliza com tag,
+    # refaz a decisão na chave global da SCNET e cobra 1 crédito SCNET desse retry. Substitui `result`.
+    result = maybe_byok_fallback(run_record, system_prompt, effective_content, result)
     run_record.update!(
       provider: result[:provider], model: result[:model],
       tokens_in: result[:tokens_in], tokens_out: result[:tokens_out],
@@ -423,6 +426,52 @@ class Ai::Gateway
     emit(run_record, 'handoff.credit_exhausted', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_credit_handoff] #{e.class}: #{e.message}"
+  end
+
+  # BYOK (billing Fase 3): a chave própria do cliente foi recusada por auth (401). Só age ao vivo e só
+  # quando a 1ª chamada REALMENTE usou a chave própria (account_provider_key presente = feature ligada +
+  # chave no Hub) — assim um 401 da chave global da SCNET NÃO é rotulado como "chave-propria-falhou".
+  # Aplica a tag de visibilidade, refaz a decisão forçando a chave global e, se o retry der certo, cobra
+  # 1 crédito SCNET (auto-provisiona um AiCreditBalance zerado se a conta BYOK ainda não tiver um — daí a
+  # Fase 2 assume o handoff por saldo esgotado nas próximas mensagens). Best-effort: qualquer erro
+  # devolve o result original (a IA segue o caminho de erro normal).
+  def maybe_byok_fallback(run_record, system_prompt, user_message, result)
+    return result unless @acts_live
+    return result unless result[:status] == 'error' && result[:error_type] == 'auth_error'
+    return result if Ai::ModelRouter.account_provider_key(@account.id, result[:provider]).blank?
+
+    apply_label('chave-propria-falhou')
+    emit(run_record, 'decision.byok_fallback', { provider: result[:provider] })
+    retried = Ai::ModelRouter.decide(
+      profile: @agent.operation_profile, system_prompt: system_prompt,
+      user_message: context_builder.user_message(user_message), account_id: @account.id, json: true,
+      force_global_key: true
+    )
+    consume_byok_fallback_credit if retried[:status] != 'error'
+    retried
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#maybe_byok_fallback] #{e.class}: #{e.message}"
+    result
+  end
+
+  # Cobra 1 crédito SCNET do fallback BYOK, FURANDO o short-circuit de billing_balance (que retorna nil
+  # para contas custom_llm_api_key): acessa o AiCreditBalance direto, auto-provisionando um zerado se
+  # ainda não existir. Sem saldo, o InsufficientCredits é engolido (a resposta já sai; a Fase 2 bloqueia
+  # a partir da próxima mensagem, pois agora existe um balance esgotado).
+  def consume_byok_fallback_credit
+    balance = AiCreditBalance.find_or_create_by(account_id: @account.id)
+    balance.consume!(1)
+  rescue AiCreditBalance::InsufficientCredits => e
+    Rails.logger.info "[Ai::Gateway] fallback BYOK sem saldo SCNET: #{e.message}"
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#consume_byok_fallback_credit] #{e.class}: #{e.message}"
+  end
+
+  # Tag de visibilidade best-effort (mesmo handler direto do flag_unavailable_department_override).
+  def apply_label(label)
+    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation, input: { 'label' => label })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#apply_label] #{e.class}: #{e.message}"
   end
 
   def finalize(run_record, status)
