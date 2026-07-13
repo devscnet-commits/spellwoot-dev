@@ -36,15 +36,15 @@
       <p>Aprovar adiciona <strong><%= page.resource.amount_requested %></strong> créditos avulsos (permanentes) à conta <strong>#<%= page.resource.account_id %></strong> e marca a solicitação como aprovada.</p>
     </div>
 
-    <%= form_for([:approve, namespace, page.resource], method: :post, html: { class: "form" }) do |f| %>
+    <%= form_with url: approve_super_admin_credit_request_path(page.resource), method: :post, class: "form" do %>
       <div class="form-actions">
-        <%= f.submit "Aprovar e creditar" %>
+        <%= submit_tag "Aprovar e creditar" %>
       </div>
     <% end %>
 
     <hr/>
 
-    <%= form_for([:reject, namespace, page.resource], method: :post, html: { class: "form" }) do %>
+    <%= form_with url: reject_super_admin_credit_request_path(page.resource), method: :post, class: "form" do %>
       <div class="pb-3">
         <label>Motivo da rejeição (opcional)</label><br/>
         <%= text_area_tag :review_note, nil, rows: 2 %>
