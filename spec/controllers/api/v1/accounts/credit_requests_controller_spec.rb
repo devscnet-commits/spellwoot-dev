@@ -5,6 +5,25 @@ RSpec.describe 'Credit Requests API', type: :request do
 
   let(:account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
+  let(:agent) { create(:user, account: account, role: :agent) }
+
+  describe 'autorização (server-side)' do
+    it 'retorna 403 e NÃO cria o registro para um usuário não-admin (agent)' do
+      expect do
+        post "/api/v1/accounts/#{account.id}/credit_requests",
+             params: { credit_request: { amount_requested: 1000, reason: 'preciso' } },
+             headers: agent.create_new_auth_token, as: :json
+      end.not_to change(AiCreditRequest, :count)
+
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it 'bloqueia o index (403) para um usuário não-admin (agent)' do
+      get "/api/v1/accounts/#{account.id}/credit_requests", headers: agent.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
 
   describe 'POST /api/v1/accounts/:account_id/credit_requests' do
     it 'cria a solicitação pending e enfileira o mailer de notificação' do
