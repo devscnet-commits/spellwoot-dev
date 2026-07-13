@@ -22,4 +22,14 @@
 #
 class Ai::Playbook < ApplicationRecord
   belongs_to :department, class_name: 'Ai::Department', foreign_key: :ai_department_id
+
+  # O playbook não tem account_id próprio; vem do department. Necessário para ser um `versionable`
+  # válido do Ai::Version (snapshot! grava account_id lido do record). Antes o Ai::PlaybookVersion
+  # resolvia isso manualmente via playbook.department.account_id.
+  delegate :account_id, to: :department
+
+  # Campos versionados (histórico + rollback) via Ai::Version polimórfico. Colunas planas: o restore
+  # SUBSTITUI o valor inteiro — inclusive steps (array) e default_messages (hash), que nunca são
+  # mesclados com o estado atual. Antes viviam em Ai::PlaybookVersion::SNAPSHOT_FIELDS.
+  SNAPSHOT_FIELDS = %w[objetivo steps transfer_when close_when default_messages].freeze
 end
