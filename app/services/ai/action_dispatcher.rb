@@ -68,6 +68,7 @@ class Ai::ActionDispatcher
       # UMA ÚNICA vez por resposta, mesmo quando vira N mensagens: max_replies conta reply.sent e
       # multiplicar quebraria o limite. chars = texto COMPLETO da resposta (antes do split).
       emit('reply.sent', { chars: text.length })
+      consume_credit
     else
       reason = Ai::ReplyPolicy.skip_reason(mode: @mode, department: department, conversation: @conversation)
       emit('reply.intended', { executed: false, reason: reason })
@@ -75,6 +76,16 @@ class Ai::ActionDispatcher
   rescue StandardError => e
     Rails.logger.error "[Ai::ActionDispatcher#reply] #{e.class}: #{e.message}"
     emit('reply.failed', { error: "#{e.class}: #{e.message}" })
+  end
+
+  # Nota INTERNA (privada) para o atendente humano — não vai para o cliente. Usada no handoff por
+  # crédito esgotado (billing Fase 2). Erro é logado sem interromper o handoff.
+  def internal_note(text)
+    return if text.blank?
+
+    Messages::MessageBuilder.new(nil, @conversation, { content: text, private: true }).perform
+  rescue StandardError => e
+    Rails.logger.error "[Ai::ActionDispatcher#internal_note] #{e.class}: #{e.message}"
   end
 
   private
@@ -104,6 +115,16 @@ class Ai::ActionDispatcher
 
   def send_message(content)
     Messages::MessageBuilder.new(nil, @conversation, { content: content, private: false }).perform
+  end
+
+  # Consome 1 crédito de IA por resposta EFETIVAMENTE enviada ao cliente (billing Fase 2). nil-safe:
+  # conta sem balance/plano não debita nada (fail-open). best-effort: se o saldo já zerou entre o
+  # pré-cheque do Gateway e aqui (leitura stale), o rescue deixa passar — o bloqueio primário é o
+  # pré-cheque; deixar 1 resposta a mais é aceitável (não trava uma resposta já enviada).
+  def consume_credit
+    @account.ai_credit_balance&.consume!(1)
+  rescue AiCreditBalance::InsufficientCredits => e
+    Rails.logger.info "[Ai::ActionDispatcher] saldo insuficiente ao consumir crédito: #{e.message}"
   end
 
   # Number of AI replies already sent in this conversation (across runs/agents).

@@ -11,6 +11,24 @@ class AdministratorNotifications::CreditRequestMailer < AdministratorNotificatio
     send_notification(subject, to: instance_admin_email, action_url: super_admin_url, meta: build_meta(credit_request, account))
   end
 
+  # Aviso PROATIVO (billing Fase 2): o saldo de créditos de IA da conta chegou a <=10% do teto do
+  # plano. Mesmo mecanismo (mira o admin da plataforma), dando tempo de agir antes de esgotar.
+  def low_balance_warning(account, remaining, cap)
+    return if instance_admin_email.blank?
+
+    subject = "[SCNET] Saldo de créditos de IA baixo — conta ##{account.id} (#{account.name})"
+    meta = {
+      'instance_url' => instance_url,
+      'account_id' => account.id,
+      'account_name' => account.name,
+      'remaining' => remaining,
+      'cap' => cap,
+      'percentage_used' => cap.to_i.positive? ? (100 - (remaining.to_f / cap * 100)).round : nil
+    }
+
+    send_notification(subject, to: instance_admin_email, action_url: super_admin_url, meta: meta)
+  end
+
   private
 
   def build_meta(credit_request, account)

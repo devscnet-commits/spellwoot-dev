@@ -67,6 +67,15 @@ class Ai::Gateway
     @acts_live =
       Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation) == :live
 
+    # Billing Fase 2: aviso proativo de saldo baixo (90% usado) + bloqueio ao ESGOTAR. Só ao vivo p/
+    # o bloqueio; conta sem balance/plano ou com chave própria (custom_llm_api_key) = LIBERA
+    # (fail-open). Ao esgotar, entrega ao humano com nota interna e NÃO roda o modelo (zero custo).
+    maybe_notify_low_balance(run_record)
+    if @acts_live && credit_exhausted?
+      force_credit_handoff(run_record)
+      return finalize(run_record, 'credit_exhausted')
+    end
+
     # Mensagem acima do limite + ação "pedir resumo": avisa o cliente e encerra a execução
     # (não roda o modelo no texto gigante). 'truncate' segue normal (já cortado acima).
     if input_exceeded && input_action == 'ask_resume'
@@ -364,6 +373,56 @@ class Ai::Gateway
     emit(run_record, 'handoff.loop_forced', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_loop_handoff] #{e.class}: #{e.message}"
+  end
+
+  # Saldo de créditos de IA relevante para enforcement (billing Fase 2). nil = NÃO enforça (fail-open):
+  # conta sem balance/plano, ou conta com chave própria (custom_llm_api_key — BYOK). A flag é sempre
+  # false hoje (Fase 3 não implementada); o check é fail-safe, preparado pro futuro.
+  def billing_balance
+    return nil if @account.feature_enabled?('custom_llm_api_key')
+
+    @account.ai_credit_balance
+  end
+
+  def credit_exhausted?
+    balance = billing_balance
+    balance.present? && balance.total <= 0
+  end
+
+  # Aviso proativo de 90% usado: quando plan_credits <= 10% do teto do plano, notifica a SCHNET UMA
+  # vez por ciclo (guardado por low_balance_notified_at, resetado na renovação). O short-circuit pelo
+  # flag roda ANTES da query do plano, então o caso comum (já avisado) é barato.
+  def maybe_notify_low_balance(run_record)
+    balance = billing_balance
+    return if balance.nil? || balance.low_balance_notified_at.present?
+
+    cap = current_plan_credits_cap
+    return if cap <= 0 || balance.plan_credits > cap * 0.1
+
+    AdministratorNotifications::CreditRequestMailer.low_balance_warning(@account, balance.total, cap).deliver_later
+    balance.update!(low_balance_notified_at: Time.current)
+    emit(run_record, 'credit.low_balance_notified', { remaining: balance.total, cap: cap })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#maybe_notify_low_balance] #{e.class}: #{e.message}"
+  end
+
+  def current_plan_credits_cap
+    @account.subscriptions.current.first&.plan&.ai_credits_included.to_i
+  end
+
+  # Handoff forçado quando o saldo de créditos de IA esgota: nota interna + entrega ao humano no time
+  # PADRÃO do agente, reaproveitando o mesmo fluxo do force_loop_handoff (transfer + assign). NÃO
+  # envia texto ao cliente (a IA simplesmente não responde; um humano assume).
+  def force_credit_handoff(run_record)
+    action_dispatcher.internal_note('⚠️ Crédito de IA esgotado — atendimento transferido para um humano.')
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'credit_exhausted' })
+    handoff_coordinator.assign_human(team_id)
+    emit(run_record, 'handoff.credit_exhausted', { team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_credit_handoff] #{e.class}: #{e.message}"
   end
 
   def finalize(run_record, status)

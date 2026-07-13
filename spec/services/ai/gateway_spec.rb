@@ -117,6 +117,53 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === Cenário 2b: CRÉDITO DE IA ESGOTADO (billing Fase 2) ============================
+  context 'crédito de IA esgotado (saldo zerado)' do
+    it 'não responde: handoff pro humano, nota interna, sem reply.sent nem decisão' do
+      create_department
+      binding = create_binding(mode: 'live')
+      account.create_ai_credit_balance!(plan_credits: 0, extra_credits: 0)
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'NÃO deveria responder' })
+
+      convo = deliver('Preciso de ajuda', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to eq(%w[
+                                         message.received department.resolved
+                                         handoff.executed handoff.assign_failed handoff.credit_exhausted
+                                       ])
+      # A IA não respondeu ao cliente (a nota interna é privada); o modelo nem foi chamado.
+      expect(convo.messages.outgoing.where(private: false).count).to eq(0)
+      expect(convo.messages.where(private: true).count).to eq(1)
+      expect(Ai::ModelRouter).not_to have_received(:decide)
+      expect(convo.additional_attributes['ai_handoff']).to be(true)
+      expect(run_for(convo).status).to eq('credit_exhausted')
+    end
+
+    it 'conta SEM balance responde normalmente (fail-open)' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'Claro!' })
+
+      convo = deliver('oi', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to include('reply.sent')
+      expect(event_types(convo)).not_to include('handoff.credit_exhausted')
+    end
+
+    it 'com custom_llm_api_key ativo, pula o enforcement mesmo com saldo zerado' do
+      create_department
+      binding = create_binding(mode: 'live')
+      account.create_ai_credit_balance!(plan_credits: 0, extra_credits: 0)
+      account.enable_features!('custom_llm_api_key')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'Respondo com a chave própria' })
+
+      convo = deliver('oi', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to include('reply.sent')
+      expect(event_types(convo)).not_to include('handoff.credit_exhausted')
+    end
+  end
+
   # === Cenário 3: HANDOFF → HUMANO ====================================================
   context 'handoff para humano (modelo pede transferência; agente sem rota IA→IA)' do
     it 'replies, transfers and hands to a human' do

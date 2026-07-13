@@ -2,12 +2,13 @@
 #
 # Table name: ai_credit_balances
 #
-#  id            :bigint           not null, primary key
-#  extra_credits :integer          default(0), not null
-#  plan_credits  :integer          default(0), not null
-#  created_at    :datetime         not null
-#  updated_at    :datetime         not null
-#  account_id    :bigint           not null
+#  id                      :bigint           not null, primary key
+#  extra_credits           :integer          default(0), not null
+#  low_balance_notified_at :datetime
+#  plan_credits            :integer          default(0), not null
+#  created_at              :datetime         not null
+#  updated_at              :datetime         not null
+#  account_id              :bigint           not null
 #
 # Indexes
 #
