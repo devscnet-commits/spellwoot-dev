@@ -30,7 +30,8 @@ class Ai::CreditsRenewalJob < ApplicationJob
 
     account = subscription.account
     balance = account.ai_credit_balance || account.build_ai_credit_balance
-    balance.update!(plan_credits: subscription.plan.ai_credits_included)
+    # Reseta também o flag de aviso de saldo baixo (Fase 2): novo ciclo, pode avisar de novo.
+    balance.update!(plan_credits: subscription.plan.ai_credits_included, low_balance_notified_at: nil)
 
     subscription.update!(next_renewal_at: advance_renewal(subscription.next_renewal_at))
   end
