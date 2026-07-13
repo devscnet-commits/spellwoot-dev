@@ -43,4 +43,13 @@ class AiCreditBalance < ApplicationRecord
     end
     true
   end
+
+  # Adiciona créditos avulsos (permanentes). Usado ao aprovar uma AiCreditRequest. Atômico (row lock).
+  def credit_extra!(amount)
+    amount = amount.to_i
+    raise ArgumentError, 'amount deve ser positivo' if amount <= 0
+
+    with_lock { update!(extra_credits: extra_credits + amount) }
+    true
+  end
 end

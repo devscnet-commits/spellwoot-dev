@@ -36,11 +36,34 @@ class AiCreditRequest < ApplicationRecord
 
   enum status: { pending: 0, approved: 1, rejected: 2 }
 
+  InvalidTransition = Class.new(StandardError)
+
   validates :amount_requested, numericality: { only_integer: true, greater_than: 0 }
   # Uma solicitação pendente por conta de cada vez — evita fila duplicada e pedido em dobro pela UI.
   validate :single_pending_per_account, on: :create
 
   scope :recent_first, -> { order(created_at: :desc) }
+
+  # Aprova: credita amount_requested nos extra_credits (permanentes) da conta e marca approved.
+  # Atômico; idempotente por guarda (só pending aprova) — evita crédito em dobro num duplo-clique.
+  def approve!(by:)
+    raise InvalidTransition, 'solicitação não está pendente' unless pending?
+
+    transaction do
+      balance = account.ai_credit_balance || account.create_ai_credit_balance!
+      balance.credit_extra!(amount_requested)
+      update!(status: :approved, approved_by: by, reviewed_at: Time.current)
+    end
+    true
+  end
+
+  # Rejeita (não credita nada). note = motivo opcional da SCNET.
+  def reject!(by:, note: nil)
+    raise InvalidTransition, 'solicitação não está pendente' unless pending?
+
+    update!(status: :rejected, approved_by: by, reviewed_at: Time.current, review_note: note.presence)
+    true
+  end
 
   private
 

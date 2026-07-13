@@ -718,6 +718,10 @@ Rails.application.routes.draw do
         post :seed, on: :member
         post :reset_cache, on: :member
       end
+      resources :credit_requests, only: [:index, :show] do
+        post :approve, on: :member
+        post :reject, on: :member
+      end
       resources :users, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         delete :avatar, on: :member, action: :destroy_avatar
       end
