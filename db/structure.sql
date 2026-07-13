@@ -1,4 +1,4 @@
-\restrict f4zbrtL7r0TXALYNVdEBZo7lQGdXYV77oH092Y8yJZtLzK7bBwEODOBgIFNeffd
+\restrict ntKct6viWLSB9PqvpuIAycgT6VfTQFRS0Y9nrdjG0WKrS5xApZIuBk3TCZrqmTD
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -628,41 +628,6 @@ ALTER SEQUENCE public.ai_agent_memory_id_seq OWNED BY public.ai_agent_memory.id;
 
 
 --
--- Name: ai_agent_versions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.ai_agent_versions (
-    id bigint NOT NULL,
-    account_id bigint NOT NULL,
-    ai_agent_id bigint NOT NULL,
-    version_number integer DEFAULT 1 NOT NULL,
-    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
-    note character varying,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: ai_agent_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.ai_agent_versions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: ai_agent_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.ai_agent_versions_id_seq OWNED BY public.ai_agent_versions.id;
-
-
---
 -- Name: ai_agents; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1200,42 +1165,6 @@ CREATE SEQUENCE public.ai_operation_profiles_id_seq
 --
 
 ALTER SEQUENCE public.ai_operation_profiles_id_seq OWNED BY public.ai_operation_profiles.id;
-
-
---
--- Name: ai_playbook_versions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.ai_playbook_versions (
-    id bigint NOT NULL,
-    account_id bigint NOT NULL,
-    ai_department_id bigint NOT NULL,
-    ai_playbook_id bigint,
-    version_number integer DEFAULT 1 NOT NULL,
-    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
-    note character varying,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: ai_playbook_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.ai_playbook_versions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: ai_playbook_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.ai_playbook_versions_id_seq OWNED BY public.ai_playbook_versions.id;
 
 
 --
@@ -5122,13 +5051,6 @@ ALTER TABLE ONLY public.ai_agent_memory ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- Name: ai_agent_versions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_agent_versions ALTER COLUMN id SET DEFAULT nextval('public.ai_agent_versions_id_seq'::regclass);
-
-
---
 -- Name: ai_agents id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5224,13 +5146,6 @@ ALTER TABLE ONLY public.ai_lead_variables ALTER COLUMN id SET DEFAULT nextval('p
 --
 
 ALTER TABLE ONLY public.ai_operation_profiles ALTER COLUMN id SET DEFAULT nextval('public.ai_operation_profiles_id_seq'::regclass);
-
-
---
--- Name: ai_playbook_versions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_playbook_versions ALTER COLUMN id SET DEFAULT nextval('public.ai_playbook_versions_id_seq'::regclass);
 
 
 --
@@ -6046,14 +5961,6 @@ ALTER TABLE ONLY public.ai_agent_memory
 
 
 --
--- Name: ai_agent_versions ai_agent_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_agent_versions
-    ADD CONSTRAINT ai_agent_versions_pkey PRIMARY KEY (id);
-
-
---
 -- Name: ai_agents ai_agents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6163,14 +6070,6 @@ ALTER TABLE ONLY public.ai_lead_variables
 
 ALTER TABLE ONLY public.ai_operation_profiles
     ADD CONSTRAINT ai_operation_profiles_pkey PRIMARY KEY (id);
-
-
---
--- Name: ai_playbook_versions ai_playbook_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_playbook_versions
-    ADD CONSTRAINT ai_playbook_versions_pkey PRIMARY KEY (id);
 
 
 --
@@ -7102,13 +7001,6 @@ CREATE UNIQUE INDEX idx_on_agent_capacity_policy_id_inbox_id_71c7ec4caf ON publi
 
 
 --
--- Name: idx_on_ai_department_id_version_number_5c61c735ff; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_on_ai_department_id_version_number_5c61c735ff ON public.ai_playbook_versions USING btree (ai_department_id, version_number);
-
-
---
 -- Name: idx_provider_instances_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7288,13 +7180,6 @@ CREATE INDEX index_ai_agent_inboxes_on_inbox_id_and_mode ON public.ai_agent_inbo
 --
 
 CREATE UNIQUE INDEX index_ai_agent_memory_on_conversation_id_and_ai_agent_id ON public.ai_agent_memory USING btree (conversation_id, ai_agent_id);
-
-
---
--- Name: index_ai_agent_versions_on_ai_agent_id_and_version_number; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_ai_agent_versions_on_ai_agent_id_and_version_number ON public.ai_agent_versions USING btree (ai_agent_id, version_number);
 
 
 --
@@ -9698,11 +9583,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict f4zbrtL7r0TXALYNVdEBZo7lQGdXYV77oH092Y8yJZtLzK7bBwEODOBgIFNeffd
+\unrestrict ntKct6viWLSB9PqvpuIAycgT6VfTQFRS0Y9nrdjG0WKrS5xApZIuBk3TCZrqmTD
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260716120000'),
 ('20260715120000'),
 ('20260714120000'),
 ('20260713120000'),

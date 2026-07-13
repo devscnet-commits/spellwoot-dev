@@ -1,8 +1,7 @@
 # History + rollback for a department's "Comportamento" config (the behavior jsonb). Uses the
-# generic polymorphic Ai::Version (versionable = the department), independent of Ai::AgentVersion /
-# Ai::PlaybookVersion. Restore deep-merges the snapshotted behavior keys back into the department and
-# records the rollback as a new version (so history is never lost). JSON shape matches
-# ai_agent_versions: { id, version_number, note, created_at }.
+# polymorphic Ai::Version (versionable = the department). Restore deep-merges the snapshotted behavior
+# keys back into the department and records the rollback as a new version (so history is never lost).
+# JSON shape matches ai_agent_versions: { id, version_number, note, created_at }.
 class Api::V1::Accounts::AiDepartmentVersionsController < Api::V1::Accounts::BaseController
   before_action :set_department
 

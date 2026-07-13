@@ -2,7 +2,7 @@
 class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseController
   # Keys inside ai_departments.behavior (jsonb) that make up the "Comportamento" tab and are
   # versioned via Ai::Version on each update. base_prompt/guardrails are NOT here — they live on
-  # ai_agents and are already covered by Ai::AgentVersion (no duplication).
+  # ai_agents and are versioned separately via Ai::Version (versionable=Ai::Agent), no duplication.
   DEPARTMENT_BEHAVIOR_FIELDS = %w[
     behavior.auto_attendance
     behavior.reply_scope
