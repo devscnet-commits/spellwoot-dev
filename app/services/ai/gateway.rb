@@ -67,9 +67,10 @@ class Ai::Gateway
     @acts_live =
       Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation) == :live
 
-    # Billing Fase 2: bloqueio ao ESGOTAR o saldo de créditos de IA. Só ao vivo; conta sem balance/
-    # plano ou com chave própria (custom_llm_api_key) = LIBERA (fail-open). Ao esgotar, entrega ao
-    # humano com nota interna e NÃO roda o modelo (pula todo o resto — zero custo de LLM/RAG).
+    # Billing Fase 2: aviso proativo de saldo baixo (90% usado) + bloqueio ao ESGOTAR. Só ao vivo p/
+    # o bloqueio; conta sem balance/plano ou com chave própria (custom_llm_api_key) = LIBERA
+    # (fail-open). Ao esgotar, entrega ao humano com nota interna e NÃO roda o modelo (zero custo).
+    maybe_notify_low_balance(run_record)
     if @acts_live && credit_exhausted?
       force_credit_handoff(run_record)
       return finalize(run_record, 'credit_exhausted')
@@ -386,6 +387,27 @@ class Ai::Gateway
   def credit_exhausted?
     balance = billing_balance
     balance.present? && balance.total <= 0
+  end
+
+  # Aviso proativo de 90% usado: quando plan_credits <= 10% do teto do plano, notifica a SCHNET UMA
+  # vez por ciclo (guardado por low_balance_notified_at, resetado na renovação). O short-circuit pelo
+  # flag roda ANTES da query do plano, então o caso comum (já avisado) é barato.
+  def maybe_notify_low_balance(run_record)
+    balance = billing_balance
+    return if balance.nil? || balance.low_balance_notified_at.present?
+
+    cap = current_plan_credits_cap
+    return if cap <= 0 || balance.plan_credits > cap * 0.1
+
+    AdministratorNotifications::CreditRequestMailer.low_balance_warning(@account, balance.total, cap).deliver_later
+    balance.update!(low_balance_notified_at: Time.current)
+    emit(run_record, 'credit.low_balance_notified', { remaining: balance.total, cap: cap })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#maybe_notify_low_balance] #{e.class}: #{e.message}"
+  end
+
+  def current_plan_credits_cap
+    @account.subscriptions.current.first&.plan&.ai_credits_included.to_i
   end
 
   # Handoff forçado quando o saldo de créditos de IA esgota: nota interna + entrega ao humano no time
