@@ -43,11 +43,17 @@ class Ai::Version < ApplicationRecord
             version_number: last ? last.version_number + 1 : 1, snapshot: data)
   end
 
-  # Re-applies the snapshotted fields onto the versionable record. jsonb columns are DEEP-MERGED so
-  # sibling keys outside snapshot_fields are preserved. Restores only the fields of the given scope,
-  # ignoring any stale keys a snapshot might still carry.
+  # Re-applies the snapshotted fields onto the versionable record.
+  #
+  # A field given as a DOTTED path ("behavior.max_replies") targets a sub-key of a jsonb column and is
+  # DEEP-MERGED into the current column so sibling keys outside the scope are preserved (department
+  # versioning relies on this). A field given as a PLAIN column name ("default_messages", "steps")
+  # SUBSTITUTES the whole column value — even when that value is itself a Hash/Array — matching the
+  # old slice+update! behavior of Ai::AgentVersion/Ai::PlaybookVersion (restoring a playbook's steps
+  # or default_messages replaces the list/map, never mixes stale entries in).
   def restore!(snapshot_fields)
-    patches = {} # column name (String) => scalar value OR nested Hash to deep-merge
+    patches = {}          # column name (String) => value to assign (scalar/Array/Hash)
+    merge_columns = Set.new # columns fed by a dotted path -> deep-merge into current; others substitute
     snapshot_fields.each do |path|
       next unless snapshot.key?(path)
 
@@ -56,15 +62,20 @@ class Ai::Version < ApplicationRecord
       if segments.length == 1
         patches[column] = snapshot[path]
       else
+        merge_columns << column
         nested = segments[1..].reverse.reduce(snapshot[path]) { |acc, key| { key => acc } }
         patches[column] = (patches[column] || {}).deep_merge(nested)
       end
     end
 
     assignments = patches.to_h do |column, patch|
-      current = versionable.public_send(column)
-      value = patch.is_a?(Hash) && current.is_a?(Hash) ? current.deep_merge(patch) : patch
-      [column, value]
+      if merge_columns.include?(column)
+        current = versionable.public_send(column)
+        value = current.is_a?(Hash) ? current.deep_merge(patch) : patch
+        [column, value]
+      else
+        [column, patch] # plain column: substitui o valor inteiro (sem merge)
+      end
     end
     versionable.update!(assignments)
   end

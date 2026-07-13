@@ -39,6 +39,13 @@
 class Ai::Agent < ApplicationRecord
   STAGES = %w[production staging sandbox experimental].freeze
 
+  # Campos versionados (histórico + rollback) via Ai::Version polimórfico. São colunas planas, então
+  # o restore SUBSTITUI cada valor (sem merge). Antes viviam em Ai::AgentVersion::SNAPSHOT_FIELDS.
+  SNAPSHOT_FIELDS = %w[name assistant_name category company_name site version identify_as
+                       assistant_avatar assistant_description assistant_personality
+                       assistant_language assistant_voice base_prompt guardrails stage status
+                       ai_operation_profile_id].freeze
+
   belongs_to :account, class_name: '::Account'
   belongs_to :operation_profile, class_name: 'Ai::OperationProfile',
                                   foreign_key: :ai_operation_profile_id, optional: true

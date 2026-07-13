@@ -74,7 +74,35 @@ RSpec.describe Ai::Version do
     end
   end
 
-  describe '#restore!' do
+  describe '#restore! (plain columns SUBSTITUEM, sem merge)' do
+    let(:playbook) do
+      Ai::Playbook.create!(department: department, objetivo: 'v1', active: true,
+                           steps: [{ 'name' => 'a' }, { 'name' => 'b' }], transfer_when: [], close_when: [],
+                           default_messages: { 'greeting' => 'oi', 'bye' => 'tchau' })
+    end
+    let(:pb_fields) { Ai::Playbook::SNAPSHOT_FIELDS }
+
+    it 'substitui a lista inteira de steps (array), sem misturar itens antigos com novos' do
+      v1 = described_class.snapshot!(playbook, snapshot_fields: pb_fields)
+      playbook.update!(steps: [{ 'name' => 'x' }, { 'name' => 'y' }, { 'name' => 'z' }])
+
+      v1.restore!(pb_fields)
+
+      expect(playbook.reload.steps).to eq([{ 'name' => 'a' }, { 'name' => 'b' }])
+    end
+
+    it 'substitui default_messages (hash) inteiro, sem deep-merge das chaves atuais' do
+      v1 = described_class.snapshot!(playbook, snapshot_fields: pb_fields)
+      playbook.update!(default_messages: { 'greeting' => 'hello', 'extra' => 'novo' })
+
+      v1.restore!(pb_fields)
+
+      # a chave 'extra' (inexistente na v1) NÃO sobrevive; volta exatamente ao estado v1
+      expect(playbook.reload.default_messages).to eq({ 'greeting' => 'oi', 'bye' => 'tchau' })
+    end
+  end
+
+  describe '#restore! (dotted paths fazem DEEP-MERGE)' do
     it 'reverts the versioned behavior keys, DEEP-MERGING so sibling keys are preserved' do
       v1 = described_class.snapshot!(department, snapshot_fields: fields)
       department.update!(behavior: department.behavior.merge(
