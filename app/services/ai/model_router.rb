@@ -74,7 +74,14 @@ class Ai::ModelRouter
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     context = provider_context(provider, account_id: account_id, timeout: timeout)
-    chat = context.chat(model: model)
+    # Groq: endpoint OpenAI-compatible (openai_api_base no context) + modelo FORA do registry (oculto,
+    # só do classificador) -> assume_model_exists exige provider explícito (:openai adapter). Os demais
+    # seguem a validação normal contra o llm_models.json.
+    chat = if provider.to_s == 'groq'
+             context.chat(model: model, provider: :openai, assume_model_exists: true)
+           else
+             context.chat(model: model)
+           end
     # Builder do ruby_llm (o construtor Chat.new não aceita temperature). to_f: a coluna é BigDecimal.
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
@@ -133,6 +140,17 @@ class Ai::ModelRouter
       raise 'openrouter_api_key ausente' if key.blank?
 
       build_context(timeout) { |c| c.openrouter_api_key = key }
+    when 'groq'
+      # Groq é OpenAI-compatible: reaproveita o adapter da OpenAI apontando o endpoint para api.groq.com
+      # (sem client novo). NÃO é exposto como provider na UI — uso interno (classificador de department,
+      # CHEAP_MODELS). A key vem de AI_GROQ_API_KEY / GROQ_API_KEY.
+      key = credential('AI_GROQ_API_KEY', 'GROQ_API_KEY')
+      raise 'groq_api_key ausente (defina AI_GROQ_API_KEY ou GROQ_API_KEY)' if key.blank?
+
+      build_context(timeout) do |c|
+        c.openai_api_key = key
+        c.openai_api_base = 'https://api.groq.com/openai/v1'
+      end
     else # openai
       # One-time endpoint/model-registry wiring (default OpenAI endpoint for most setups).
       Llm::Config.initialize! if defined?(Llm::Config)

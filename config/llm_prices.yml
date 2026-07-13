@@ -34,3 +34,5 @@ prices:
   - { match: "gemini-1.5-pro", in: 0.00125, out: 0.005 }
   - { match: "gemini-pro", in: 0.00125, out: 0.005 }
   - { match: "gemini", in: 0.0005, out: 0.0015 }
+  # Groq (OpenAI-compatible; uso interno no classificador de department). Preço real da Groq.
+  - { match: "llama-3.1-8b-instant", in: 0.00005, out: 0.00008 }
