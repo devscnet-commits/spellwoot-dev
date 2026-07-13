@@ -860,6 +860,16 @@ onMounted(async () => {
                   @click="saveAgent"
                 />
               </div>
+
+              <!-- Histórico do prompt do agente (base_prompt/guardrails via Ai::AgentVersion).
+                   Fica DENTRO desta seção, junto aos campos que restaura — distinto do
+                   "Histórico das Configurações" (ai_department_versions) que vem no AiDepartmentDetail. -->
+              <AiVersionHistory
+                v-if="!isNew"
+                :base-url="versionsBaseUrl"
+                title-key="AI_AGENTS.VERSIONS.TITLE_PROMPT"
+                @restored="fetchAgent"
+              />
             </section>
 
             <AiDepartmentDetail
