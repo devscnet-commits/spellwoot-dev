@@ -76,8 +76,14 @@ class Ai::HandoffCoordinator
   # Atribuição feita DEPOIS do trabalho da IA: marca o handoff (reabre), dispara a atribuição NATIVA
   # (v2 síncrona se habilitada; senão round-robin legado) e cai num fallback offline se ninguém pegou —
   # a conversa precisa ter um responsável.
-  def assign_human(team_id)
+  #
+  # reason: quando presente, este handoff é AUTOMÁTICO da IA (loop/credit_exhausted/nativo) e dispara a
+  # geração assíncrona do resumo para o atendente. Transferência manual de humano não passa por aqui, e
+  # os call-sites sem reason (se houver) não geram resumo. Enfileirado ANTES da atribuição para não
+  # depender do resultado dela.
+  def assign_human(team_id, reason: nil)
     mark_handed_off
+    enqueue_handoff_summary(reason)
     inbox = @conversation.inbox
     if inbox.auto_assignment_v2_enabled?
       # SÍNCRONO: atribui com o estado online do momento do handoff (evita a janela do job assíncrono).
@@ -101,6 +107,16 @@ class Ai::HandoffCoordinator
   end
 
   private
+
+  # Resumo de handoff (para o card do atendente): só em handoff AUTOMÁTICO da IA (reason presente).
+  # Assíncrono e best-effort — o handoff já ocorreu; falha aqui não afeta a transferência/atribuição.
+  def enqueue_handoff_summary(reason)
+    return if reason.blank?
+
+    Ai::HandoffSummaryJob.perform_later(@conversation.id, reason.to_s)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::HandoffCoordinator#enqueue_handoff_summary] #{e.class}: #{e.message}"
+  end
 
   # Rede de segurança quando a atribuição nativa (por presença) não pegou ninguém: atribui um membro
   # do TIME resolvido; SEM time, cai em qualquer membro do inbox (comportamento observado quando

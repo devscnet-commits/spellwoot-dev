@@ -368,6 +368,7 @@
       "CONVERSATION_INFO": "Conversation Information",
       "CONTACT_NOTES": "Contact Notes",
       "CONTACT_AI_MEMORY": "AI Memory",
+      "CONVERSATION_HANDOFF_SUMMARY": "AI Handoff Summary",
       "CONTACT_ATTRIBUTES": "Contact Attributes",
       "PREVIOUS_CONVERSATION": "Previous Conversations",
       "MACROS": "Macros",
@@ -377,6 +378,16 @@
     "AI_MEMORY": {
       "EMPTY": "No memory yet — it's built automatically when conversations with this contact are resolved.",
       "META": "Updated {date} · {count} conversations"
+    },
+    "HANDOFF_SUMMARY": {
+      "EMPTY": "No AI handoff yet — a summary appears here when the AI transfers this conversation to a human.",
+      "META": "Generated {date}",
+      "REASONS": {
+        "LOOP": "AI got stuck in a loop",
+        "CREDIT_EXHAUSTED": "AI credits ran out",
+        "MODEL_REQUESTED": "AI chose to transfer",
+        "KEYWORD": "Customer requested a human"
+      }
     },
     "SHOPIFY": {
       "ORDER_ID": "Order #{id}",

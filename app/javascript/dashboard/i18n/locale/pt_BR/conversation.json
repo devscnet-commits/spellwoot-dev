@@ -368,6 +368,7 @@
       "CONVERSATION_INFO": "Informação da conversa",
       "CONTACT_NOTES": "Notas do contato",
       "CONTACT_AI_MEMORY": "Memória da IA",
+      "CONVERSATION_HANDOFF_SUMMARY": "Resumo da transferência",
       "CONTACT_ATTRIBUTES": "Atributos do contato",
       "PREVIOUS_CONVERSATION": "Conversas anteriores",
       "MACROS": "Macros",
@@ -377,6 +378,16 @@
     "AI_MEMORY": {
       "EMPTY": "Ainda não há memória — ela é criada automaticamente quando conversas com este contato são resolvidas.",
       "META": "Atualizado em {date} · {count} conversas"
+    },
+    "HANDOFF_SUMMARY": {
+      "EMPTY": "Nenhuma transferência automática ainda — um resumo aparece aqui quando a IA transfere esta conversa para um humano.",
+      "META": "Gerado em {date}",
+      "REASONS": {
+        "LOOP": "IA entrou em loop",
+        "CREDIT_EXHAUSTED": "Créditos de IA esgotados",
+        "MODEL_REQUESTED": "IA decidiu transferir",
+        "KEYWORD": "Cliente pediu um humano"
+      }
     },
     "SHOPIFY": {
       "ORDER_ID": "Pedido #{id}",
