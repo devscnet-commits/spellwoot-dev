@@ -191,8 +191,9 @@ class Ai::Gateway
         action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: handoff[:reason], team_id: team_id })
         # Atribuição DEPOIS do trabalho da IA: o próprio handoff atribui um humano (round-robin
         # entre os agentes online do time/caixa). Mantenha a auto-atribuição da caixa DESLIGADA
-        # para a IA atender primeiro; aqui é o único ponto que entrega a um agente.
-        handoff_coordinator.assign_human(team_id) if @acts_live
+        # para a IA atender primeiro; aqui é o único ponto que entrega a um agente. reason vem do
+        # HandoffEvaluator (modelo_pediu_transferencia / palavra_chave) -> dispara o resumo do handoff.
+        handoff_coordinator.assign_human(team_id, reason: handoff[:reason]) if @acts_live
       end
     elsif decision_kind == 'close'
       action_dispatcher.execute_action('conversation.resolve', {}, run_record, 'close')
@@ -372,7 +373,7 @@ class Ai::Gateway
     input = { 'unassign' => true }
     input['team_id'] = team_id if team_id
     action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'loop' })
-    handoff_coordinator.assign_human(team_id)
+    handoff_coordinator.assign_human(team_id, reason: 'loop')
     emit(run_record, 'handoff.loop_forced', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_loop_handoff] #{e.class}: #{e.message}"
@@ -422,7 +423,7 @@ class Ai::Gateway
     input = { 'unassign' => true }
     input['team_id'] = team_id if team_id
     action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'credit_exhausted' })
-    handoff_coordinator.assign_human(team_id)
+    handoff_coordinator.assign_human(team_id, reason: 'credit_exhausted')
     emit(run_record, 'handoff.credit_exhausted', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_credit_handoff] #{e.class}: #{e.message}"
