@@ -15,6 +15,18 @@
 #  ai_run_id       :bigint
 #  conversation_id :bigint           not null
 #
+# Indexes
+#
+#  index_ai_handoff_summaries_on_account_id                      (account_id)
+#  index_ai_handoff_summaries_on_ai_run_id                       (ai_run_id)
+#  index_ai_handoff_summaries_on_conversation_id_and_created_at  (conversation_id,created_at)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (account_id => accounts.id)
+#  fk_rails_...  (ai_run_id => ai_runs.id)
+#  fk_rails_...  (conversation_id => conversations.id) ON DELETE => cascade
+#
 class Ai::HandoffSummary < ApplicationRecord
   belongs_to :account, class_name: '::Account'
   belongs_to :conversation, class_name: '::Conversation'
