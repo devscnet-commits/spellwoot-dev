@@ -512,6 +512,25 @@ const fuNoResponseOptions = computed(() => [
     label: t('AI_DEPARTMENTS.FOLLOWUP.NR_WAIT_HOURS'),
   },
 ]);
+// O label do contador de tentativas reflete a ação escolhida em "Se o cliente não responder"
+// (bhv.no_response_action — o VALUE não muda, só o texto). Fallback para COUNT_LABEL se vier
+// vazio/inválido. Chaves estáticas por caso (evita o dynamic-key do intlify e reage em tempo real).
+const followupCountLabel = action => {
+  switch (action) {
+    case 'assign':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_ASSIGN');
+    case 'finalize':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_FINALIZE');
+    case 'discard':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_DISCARD');
+    case 'wait':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_WAIT');
+    case 'wait_business_hours':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_WAIT_BUSINESS_HOURS');
+    default:
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL');
+  }
+};
 const addBehavior = () => {
   const used = new Set(form.followup_behaviors.map(b => b.context));
   const next =
@@ -1019,7 +1038,7 @@ onMounted(async () => {
                 <label
                   class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
                 >
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
+                  {{ followupCountLabel(bhv.no_response_action) }}
                   <input
                     :value="bhv.attempts.length"
                     type="number"
