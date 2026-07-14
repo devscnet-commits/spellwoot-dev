@@ -60,10 +60,10 @@ const form = reactive({
   steps: [],
   transfer_when_steps: '',
   close_when_steps: '',
-  // Transferência DETERMINÍSTICA (department.transfer_rules): keywords = match exato de substring
-  // na mensagem do cliente (HandoffEvaluator); min_confidence = transfere se a confiança da IA for
-  // menor que o valor (0 = desligado). Diferente de transfer_when (que é só sugestão no prompt).
-  transfer_keywords: '',
+  // Transferência por confiança (department.transfer_rules.min_confidence): transfere se a confiança
+  // da IA for menor que o valor (0 = desligado). É o único gatilho determinístico — o match por
+  // palavra-chave foi removido (substring sem contexto gerava falso positivo). Diferente de
+  // transfer_when, que é só sugestão no prompt.
   transfer_min_confidence: 0,
   // Atendimento
   group_delay_seconds: '',
@@ -272,7 +272,6 @@ const hydrate = dept => {
     steps: parseSteps(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
-    transfer_keywords: arrayToLines(transferRules.keywords),
     transfer_min_confidence: Number(transferRules.min_confidence) || 0,
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
@@ -364,10 +363,9 @@ const buildPayload = () => ({
     },
     follow_up: buildFollowUp(),
     close_rules: buildFinalization(),
-    // Transferência determinística (HandoffEvaluator). keywords = substring exata; min_confidence
-    // 0 = desligado. Aceito pelo jsonb_params do controller (sem mudança de backend).
+    // Transferência determinística (HandoffEvaluator): min_confidence 0 = desligado. Aceito pelo
+    // jsonb_params do controller (sem mudança de backend). Keywords foi removido (falso positivo).
     transfer_rules: {
-      keywords: linesToArray(form.transfer_keywords),
       min_confidence: Number(form.transfer_min_confidence) || 0,
     },
     playbook: {
@@ -1358,20 +1356,6 @@ onMounted(async () => {
               </label>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_KEYWORDS') }}
-                <textarea
-                  v-model="form.transfer_keywords"
-                  rows="4"
-                  :placeholder="
-                    $t('AI_DEPARTMENTS.FORM.TRANSFER_KEYWORDS_PLACEHOLDER')
-                  "
-                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-24 leading-relaxed"
-                />
-                <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_KEYWORDS_HINT') }}
-                </span>
-              </label>
               <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_MIN_CONFIDENCE') }}
                 <input
