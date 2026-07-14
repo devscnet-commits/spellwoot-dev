@@ -240,7 +240,7 @@
       "CANCEL": "Cancelar",
       "NONE": "Nenhum"
     },
-    "SAVED": "Agente salvo.",
+    "SAVED": "Salvo.",
     "DELETED": "Agente excluído.",
     "ERROR": "Algo deu errado ao salvar.",
     "DELETE_MODAL": {
@@ -356,7 +356,7 @@
       "DELETE": "Excluir"
     },
     "CONFIRM_DELETE": "Excluir este departamento?",
-    "SAVED": "Departamento salvo.",
+    "SAVED": "Salvo.",
     "DELETED": "Departamento excluído.",
     "ERROR": "Algo deu errado ao salvar.",
     "TOOLS_LINK": "Ferramentas",
