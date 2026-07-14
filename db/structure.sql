@@ -1,4 +1,4 @@
-\restrict k7NcE2m73LiJpn34fj0DlUcbTXxPblQSlozhBCO0uEyWm6qoU1FCWVjgxMHSIfw
+\restrict Y6c9cDLscoJKEndvCfTCraBrQBUGoy8xgqE3i8VBXcSVurayoQdZhcanfDgUfTf
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -9559,7 +9559,7 @@ ALTER TABLE ONLY public.team_inboxes
 --
 
 ALTER TABLE ONLY public.ai_handoff_summaries
-    ADD CONSTRAINT fk_rails_854731489d FOREIGN KEY (conversation_id) REFERENCES public.conversations(id);
+    ADD CONSTRAINT fk_rails_854731489d FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
 
 
 --
@@ -9678,11 +9678,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict k7NcE2m73LiJpn34fj0DlUcbTXxPblQSlozhBCO0uEyWm6qoU1FCWVjgxMHSIfw
+\unrestrict Y6c9cDLscoJKEndvCfTCraBrQBUGoy8xgqE3i8VBXcSVurayoQdZhcanfDgUfTf
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260718120000'),
 ('20260717120000'),
 ('20260716120000'),
 ('20260715120000'),
