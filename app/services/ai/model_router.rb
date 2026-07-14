@@ -20,7 +20,10 @@ class Ai::ModelRouter
     'anthropic' => 'claude-3-5-sonnet-latest',
     'google' => 'gemini-1.5-flash',
     'gemini' => 'gemini-1.5-flash',
-    'openrouter' => 'openai/gpt-4.1-mini'
+    'openrouter' => 'openai/gpt-4.1-mini',
+    # Groq: rede de segurança para o campo de modelo vazio. Só o gpt-oss-120b foi aprovado no smoke
+    # test (os llama saíram do personagem / alucinaram). Ver Ai::OperationProfile::GROQ_APPROVED_MODELS.
+    'groq' => 'openai/gpt-oss-120b'
   }.freeze
   # Fallback quando não há profile (a coluna supervisor_temperature já nasce 0.3). Baixa = respostas
   # mais consistentes/determinísticas, adequado a atendimento.
