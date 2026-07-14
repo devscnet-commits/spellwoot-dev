@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import { scopeOptionLabel } from './knowledgeScope';
 
 const props = defineProps({
   titleLabel: { type: String, default: '' },
@@ -24,7 +25,7 @@ const departmentOptions = computed(() => [
   { value: '', label: t('AI_KNOWLEDGE.FORM.DEPARTMENT_ALL') },
   ...props.departments.map(d => ({
     value: String(d.id),
-    label: d.agent ? `${d.name} · ${d.agent}` : d.name,
+    label: scopeOptionLabel(d),
   })),
 ]);
 const selectedDepartment = computed({
