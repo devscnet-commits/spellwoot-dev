@@ -60,6 +60,11 @@ const form = reactive({
   steps: [],
   transfer_when_steps: '',
   close_when_steps: '',
+  // Transferência DETERMINÍSTICA (department.transfer_rules): keywords = match exato de substring
+  // na mensagem do cliente (HandoffEvaluator); min_confidence = transfere se a confiança da IA for
+  // menor que o valor (0 = desligado). Diferente de transfer_when (que é só sugestão no prompt).
+  transfer_keywords: '',
+  transfer_min_confidence: 0,
   // Atendimento
   group_delay_seconds: '',
   max_replies: '',
@@ -259,6 +264,7 @@ const hydrate = dept => {
   const behavior = dept.behavior || {};
   const followUp = dept.follow_up || {};
   const close = dept.close_rules || {};
+  const transferRules = dept.transfer_rules || {};
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
@@ -266,6 +272,8 @@ const hydrate = dept => {
     steps: parseSteps(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
+    transfer_keywords: arrayToLines(transferRules.keywords),
+    transfer_min_confidence: Number(transferRules.min_confidence) || 0,
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
@@ -356,6 +364,12 @@ const buildPayload = () => ({
     },
     follow_up: buildFollowUp(),
     close_rules: buildFinalization(),
+    // Transferência determinística (HandoffEvaluator). keywords = substring exata; min_confidence
+    // 0 = desligado. Aceito pelo jsonb_params do controller (sem mudança de backend).
+    transfer_rules: {
+      keywords: linesToArray(form.transfer_keywords),
+      min_confidence: Number(form.transfer_min_confidence) || 0,
+    },
     playbook: {
       objetivo: form.objetivo,
       steps: form.steps
@@ -438,15 +452,10 @@ const versionsBaseUrl = computed(
 );
 
 // --- Etapas (cards arrastáveis; edição inline no próprio card) ---
-const MAX_STEPS = 10;
-const remainingSteps = computed(() =>
-  Math.max(0, MAX_STEPS - form.steps.length)
-);
 // Em edição: número (editar aquele card), 'new' (adicionar) ou null (nada).
 const editingStepIndex = ref(null);
 
 const openNewStep = () => {
-  if (form.steps.length >= MAX_STEPS) return;
   editingStepIndex.value = 'new';
 };
 const openEditStep = index => {
@@ -512,6 +521,25 @@ const fuNoResponseOptions = computed(() => [
     label: t('AI_DEPARTMENTS.FOLLOWUP.NR_WAIT_HOURS'),
   },
 ]);
+// O label do contador de tentativas reflete a ação escolhida em "Se o cliente não responder"
+// (bhv.no_response_action — o VALUE não muda, só o texto). Fallback para COUNT_LABEL se vier
+// vazio/inválido. Chaves estáticas por caso (evita o dynamic-key do intlify e reage em tempo real).
+const followupCountLabel = action => {
+  switch (action) {
+    case 'assign':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_ASSIGN');
+    case 'finalize':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_FINALIZE');
+    case 'discard':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_DISCARD');
+    case 'wait':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_WAIT');
+    case 'wait_business_hours':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_WAIT_BUSINESS_HOURS');
+    default:
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL');
+  }
+};
 const addBehavior = () => {
   const used = new Set(form.followup_behaviors.map(b => b.context));
   const next =
@@ -917,7 +945,7 @@ onMounted(async () => {
                 :placeholder="
                   $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS_PLACEHOLDER')
                 "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem]"
               />
             </label>
 
@@ -1019,7 +1047,7 @@ onMounted(async () => {
                 <label
                   class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
                 >
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
+                  {{ followupCountLabel(bhv.no_response_action) }}
                   <input
                     :value="bhv.attempts.length"
                     type="number"
@@ -1071,7 +1099,7 @@ onMounted(async () => {
                           'AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER'
                         )
                       "
-                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
                     />
                   </label>
                 </div>
@@ -1127,7 +1155,7 @@ onMounted(async () => {
                 :placeholder="
                   $t('AI_DEPARTMENTS.FINALIZATION.MESSAGE_PLACEHOLDER')
                 "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem]"
               />
             </label>
 
@@ -1295,22 +1323,11 @@ onMounted(async () => {
               />
             </div>
 
-            <!-- Adicionar etapa + contador (máx. 10) -->
-            <div
-              v-if="editingStepIndex === null"
-              class="flex items-center justify-between gap-3"
-            >
-              <span class="text-xs text-n-slate-11">
-                {{
-                  $t('AI_DEPARTMENTS.FORM.STEP_REMAINING', {
-                    count: remainingSteps,
-                  })
-                }}
-              </span>
+            <!-- Adicionar etapa (sem limite) -->
+            <div v-if="editingStepIndex === null" class="flex justify-end">
               <button
                 type="button"
-                :disabled="form.steps.length >= MAX_STEPS"
-                class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white"
                 @click="openNewStep"
               >
                 + {{ $t('AI_DEPARTMENTS.FORM.STEP_ADD') }}
@@ -1324,6 +1341,9 @@ onMounted(async () => {
                   rows="6"
                   class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
                 />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN_HINT') }}
+                </span>
               </label>
               <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
@@ -1332,6 +1352,39 @@ onMounted(async () => {
                   rows="6"
                   class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
                 />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
+                </span>
+              </label>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_KEYWORDS') }}
+                <textarea
+                  v-model="form.transfer_keywords"
+                  rows="4"
+                  :placeholder="
+                    $t('AI_DEPARTMENTS.FORM.TRANSFER_KEYWORDS_PLACEHOLDER')
+                  "
+                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-24 leading-relaxed"
+                />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_KEYWORDS_HINT') }}
+                </span>
+              </label>
+              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_MIN_CONFIDENCE') }}
+                <input
+                  v-model="form.transfer_min_confidence"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  class="w-32 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_MIN_CONFIDENCE_HINT') }}
+                </span>
               </label>
             </div>
           </section>

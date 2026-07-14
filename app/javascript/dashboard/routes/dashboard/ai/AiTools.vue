@@ -464,7 +464,7 @@ onMounted(() => {
               v-model="form.webhook_headers"
               rows="2"
               :placeholder="$t('AI_TOOLS.FORM.WEBHOOK_HEADERS_PLACEHOLDER')"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none font-mono text-xs"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16 font-mono text-xs"
             />
           </label>
         </div>

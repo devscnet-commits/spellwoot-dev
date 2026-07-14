@@ -17,7 +17,7 @@ const props = defineProps({
   customTextAreaWrapperClass: { type: String, default: '' },
   showCharacterCount: { type: Boolean, default: false },
   autoHeight: { type: Boolean, default: false },
-  resize: { type: Boolean, default: false },
+  resize: { type: Boolean, default: true },
   minHeight: { type: String, default: '4rem' },
   maxHeight: { type: String, default: '12rem' },
   autofocus: { type: Boolean, default: false },
@@ -172,6 +172,7 @@ onMounted(() => {
         :class="[
           customTextAreaClass,
           {
+            'resize-y': resize,
             'resize-none': !resize,
           },
         ]"
