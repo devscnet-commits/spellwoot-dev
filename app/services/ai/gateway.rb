@@ -196,6 +196,12 @@ class Ai::Gateway
         handoff_coordinator.assign_human(team_id, reason: handoff[:reason]) if @acts_live
       end
     elsif decision_kind == 'close'
+      # Despedida antes de resolver (fix do encerramento silencioso): a mensagem da aba Finalização
+      # (close_rules['message']) tem prioridade; senão o reply_text que o modelo gerou nesta decisão
+      # (antes descartado); se nenhum existir, fecha em silêncio como antes. Usa o mesmo mecanismo de
+      # reply (respeita live/shadow, reply_scope e max_replies).
+      farewell = close_farewell(department, result[:decision] || {})
+      action_dispatcher.reply(department, farewell) if farewell.present?
       action_dispatcher.execute_action('conversation.resolve', {}, run_record, 'close')
     elsif decision_kind == 'reply'
       safe_reply = guard_against_loop(run_record, system_prompt, effective_content,
@@ -473,6 +479,12 @@ class Ai::Gateway
     Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation, input: { 'label' => label })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#apply_label] #{e.class}: #{e.message}"
+  end
+
+  # Mensagem de despedida ao encerrar proativamente (decision 'close'): mensagem da Finalização
+  # (close_rules['message']) tem prioridade; senão o reply_text da própria decisão; senão nil (silêncio).
+  def close_farewell(department, decision)
+    department.close_rules.to_h['message'].presence || decision['reply_text'].presence
   end
 
   def finalize(run_record, status)
