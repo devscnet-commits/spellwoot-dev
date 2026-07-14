@@ -34,9 +34,10 @@ RSpec.describe Ai::Gateway do
   # --- Helpers (sem factory nova; cria direto como o resto do repo) --------------------
 
   # Um único department ativo → DepartmentResolver resolve por 'single' SEM chamar o classificador.
-  def create_department(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' }, transfer_rules: {})
+  def create_department(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' }, transfer_rules: {}, close_rules: {})
     Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento',
-                           status: 'active', behavior: behavior, transfer_rules: transfer_rules)
+                           status: 'active', behavior: behavior, transfer_rules: transfer_rules,
+                           close_rules: close_rules)
   end
 
   def create_binding(mode:)
@@ -215,9 +216,10 @@ RSpec.describe Ai::Gateway do
     end
   end
 
-  # === Cenário 5: CLOSE (ao vivo) — resolve a conversa ================================
+  # === Cenário 5: CLOSE (ao vivo) — despedida + resolve ===============================
   context 'close (ao vivo)' do
-    it 'resolves the conversation' do
+    # (c) Sem mensagem da Finalização E sem reply_text: fecha em SILÊNCIO (comportamento preservado).
+    it 'sem mensagem nem reply_text: resolve em silêncio (como antes)' do
       create_department
       binding = create_binding(mode: 'live')
       stub_decision({ 'decision' => 'close' })
@@ -228,7 +230,41 @@ RSpec.describe Ai::Gateway do
                                          message.received department.resolved knowledge.retrieved
                                          context.assembled decision.made close.executed
                                        ])
+      expect(convo.messages.outgoing.count).to eq(0)
+      expect(convo.status).to eq('resolved')
+    end
 
+    # (a) Mensagem da Finalização presente: enviada como despedida ANTES de resolver (prioridade máxima,
+    # vence até o reply_text do modelo).
+    it 'com close_rules[message]: envia a despedida da Finalização e resolve' do
+      create_department(close_rules: { 'message' => 'Foi um prazer! Até a próxima 👋' })
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'close', 'reply_text' => 'tchau gerado pelo modelo' })
+
+      convo = deliver('Obrigado!', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to eq(%w[
+                                         message.received department.resolved knowledge.retrieved
+                                         context.assembled decision.made reply.sent close.executed
+                                       ])
+      expect(convo.messages.outgoing.last.content).to eq('Foi um prazer! Até a próxima 👋')
+      expect(convo.status).to eq('resolved')
+    end
+
+    # (b) Sem mensagem da Finalização, mas o modelo gerou reply_text: usa a despedida do modelo (fallback,
+    # antes descartada).
+    it 'sem close_rules[message] mas com reply_text: usa a despedida do modelo' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'close', 'reply_text' => 'Foi ótimo te ajudar, até logo!' })
+
+      convo = deliver('valeu', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to eq(%w[
+                                         message.received department.resolved knowledge.retrieved
+                                         context.assembled decision.made reply.sent close.executed
+                                       ])
+      expect(convo.messages.outgoing.last.content).to eq('Foi ótimo te ajudar, até logo!')
       expect(convo.status).to eq('resolved')
     end
   end
