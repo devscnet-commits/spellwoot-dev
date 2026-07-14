@@ -1331,46 +1331,51 @@ onMounted(async () => {
                 + {{ $t('AI_DEPARTMENTS.FORM.STEP_ADD') }}
               </button>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
-                <textarea
-                  v-model="form.transfer_when_steps"
-                  rows="6"
-                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
-                />
-                <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN_HINT') }}
+            <!-- Quando transferir para um humano: transfer_when (orienta a IA) + min_confidence
+                 (gatilho determinístico). UMA explicação no topo do bloco, não uma por campo. -->
+            <div class="flex flex-col gap-3 pt-1 border-t border-n-weak">
+              <div class="flex flex-col gap-0.5 pt-3">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_TITLE') }}
                 </span>
-              </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
-                <textarea
-                  v-model="form.close_when_steps"
-                  rows="6"
-                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
-                />
-                <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
-                </span>
-              </label>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_INTRO') }}
+                </p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
+                  <textarea
+                    v-model="form.transfer_when_steps"
+                    rows="6"
+                    class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
+                  />
+                </label>
+                <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_MIN_CONFIDENCE') }}
+                  <input
+                    v-model="form.transfer_min_confidence"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    class="w-32 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                  />
+                </label>
+              </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_MIN_CONFIDENCE') }}
-                <input
-                  v-model="form.transfer_min_confidence"
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  class="w-32 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
-                />
-                <span class="text-xs text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_MIN_CONFIDENCE_HINT') }}
-                </span>
-              </label>
-            </div>
+            <!-- Encerrar quando (close_when): fica em Etapas por ora — Commit 3 move p/ Finalização -->
+            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
+              <textarea
+                v-model="form.close_when_steps"
+                rows="6"
+                class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
+              </span>
+            </label>
           </section>
         </div>
 
