@@ -936,7 +936,7 @@ onMounted(async () => {
                 :placeholder="
                   $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS_PLACEHOLDER')
                 "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem]"
               />
             </label>
 
@@ -1090,7 +1090,7 @@ onMounted(async () => {
                           'AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER'
                         )
                       "
-                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
                     />
                   </label>
                 </div>
@@ -1146,7 +1146,7 @@ onMounted(async () => {
                 :placeholder="
                   $t('AI_DEPARTMENTS.FINALIZATION.MESSAGE_PLACEHOLDER')
                 "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem]"
               />
             </label>
 
