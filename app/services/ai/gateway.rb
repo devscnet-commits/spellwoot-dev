@@ -4,6 +4,10 @@
 # In shadow it NEVER replies, NEVER executes a tool, NEVER writes operational changes — it only
 # records intention, runs and events.
 class Ai::Gateway
+  # Valores VÁLIDOS do campo `decision` no contrato do LLM (ver Ai::PromptCompiler#response_contract).
+  # Qualquer outro valor é "fora do contrato" e cai na rede de segurança do dispatch (decision.unknown_kind).
+  KNOWN_DECISION_KINDS = %w[reply invoke_tool handoff close noop].freeze
+
   def initialize(message:, agent_inbox:, mode: nil, content_override: nil)
     @message = message
     @agent_inbox = agent_inbox
@@ -205,6 +209,22 @@ class Ai::Gateway
       # Safety net: a tool ran but the follow-up decision still isn't a plain reply/close/handoff —
       # send whatever text we have so the customer is never left waiting after a tool call.
       action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
+    elsif KNOWN_DECISION_KINDS.include?(decision_kind)
+      # noop (a IA escolheu não agir) ou invoke_tool sem execução ao vivo: valores VÁLIDOS do contrato,
+      # sem ação de saída aqui. Não é desvio — não registra decision.unknown_kind.
+    else
+      # Rede de segurança: decision FORA do contrato (ex.: "text"). Sem isto, o Gateway descartava um
+      # reply_text VÁLIDO em SILÊNCIO (cliente sem resposta, sem handoff, sem erro). Com texto, trata
+      # como reply (mesmo caminho — passa por LoopGuard e pelo consumo de crédito do reply). Sem texto,
+      # só registra o desvio para observabilidade (não some sem rastro).
+      unknown_reply = (result[:decision] || {})['reply_text']
+      if unknown_reply.present?
+        emit(run_record, 'decision.unknown_kind', { decision: decision_kind, handled: 'reply' })
+        safe_reply = guard_against_loop(run_record, system_prompt, effective_content, unknown_reply)
+        action_dispatcher.reply(department, safe_reply) if safe_reply
+      else
+        emit(run_record, 'decision.unknown_kind', { decision: decision_kind, handled: 'none' })
+      end
     end
 
     state_manager.update_memory

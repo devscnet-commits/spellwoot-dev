@@ -233,6 +233,51 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === Cenário 5b: DECISION FORA DO CONTRATO (rede de segurança) =======================
+  # O modelo às vezes devolve um `decision` inválido (ex.: "text") com um reply_text válido. Antes o
+  # Gateway descartava tudo em silêncio; agora trata como reply (com texto) ou registra o desvio.
+  context 'decision desconhecida (fora do contrato)' do
+    it 'com reply_text: envia como reply normalmente + registra decision.unknown_kind' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'text', 'reply_text' => 'Qual seu nome pra seguirmos? 😊' })
+
+      convo = deliver('Queria contratar', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to eq(%w[
+                                         message.received department.resolved knowledge.retrieved
+                                         context.assembled decision.made decision.unknown_kind reply.sent
+                                       ])
+      expect(convo.messages.outgoing.last&.content).to eq('Qual seu nome pra seguirmos? 😊')
+    end
+
+    it 'sem reply_text: só registra decision.unknown_kind, não envia nada e não quebra' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'sei_la', 'reply_text' => '' })
+
+      convo = deliver('oi', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to eq(%w[
+                                         message.received department.resolved knowledge.retrieved
+                                         context.assembled decision.made decision.unknown_kind
+                                       ])
+      expect(convo.messages.outgoing.count).to eq(0)
+      expect(run_for(convo).status).to eq('recorded')
+    end
+
+    it 'noop (valor VÁLIDO do contrato) NÃO dispara decision.unknown_kind nem envia nada' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'noop' })
+
+      convo = deliver('...', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).not_to include('decision.unknown_kind')
+      expect(convo.messages.outgoing.count).to eq(0)
+    end
+  end
+
   # === Cenário 6: HANDOFF → IA (roteia para outro agente e re-enfileira) ==============
   context 'handoff para outra IA (agente de destino na allowlist)' do
     it 'routes to the target team and re-enqueues the Gateway' do
