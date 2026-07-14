@@ -1157,6 +1157,20 @@ onMounted(async () => {
               />
             </label>
 
+            <!-- Encerrar quando (close_when): mora em ai_playbooks.close_when; aqui é só a posição
+                 visual, perto da mensagem de encerramento que é enviada quando o gatilho dispara. -->
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
+              <textarea
+                v-model="form.close_when_steps"
+                rows="4"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem] leading-relaxed"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
+              </span>
+            </label>
+
             <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
               {{ $t('AI_DEPARTMENTS.FINALIZATION.INACTIVITY') }}
               <input
@@ -1364,18 +1378,6 @@ onMounted(async () => {
                 </label>
               </div>
             </div>
-            <!-- Encerrar quando (close_when): fica em Etapas por ora — Commit 3 move p/ Finalização -->
-            <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
-              <textarea
-                v-model="form.close_when_steps"
-                rows="6"
-                class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
-              />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
-              </span>
-            </label>
           </section>
         </div>
 

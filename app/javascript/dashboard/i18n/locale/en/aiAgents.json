@@ -344,7 +344,7 @@
       "TRANSFER_INTRO": "Esses campos ajudam a IA a decidir quando a conversa precisa de um humano. O texto abaixo orienta a IA, mas não garante a ação — o modelo pode não seguir em todos os casos. A confiança mínima é um sinal mais direto: dispara quando a própria IA está insegura da resposta.",
       "TRANSFER_WHEN": "Transferir para humano quando (uma por linha)",
       "CLOSE_WHEN": "Encerrar quando (uma por linha)",
-      "CLOSE_WHEN_HINT": "Isso orienta a IA, mas não garante — o modelo pode não encerrar em todos os casos.",
+      "CLOSE_WHEN_HINT": "Situações em que a IA deve encerrar a conversa. Isso orienta a IA, mas não garante — o modelo pode não encerrar em todos os casos. Quando encerra, a mensagem de encerramento acima é enviada.",
       "TRANSFER_MIN_CONFIDENCE": "Transferir se a IA estiver insegura",
       "GREETING": "Mensagem de saudação",
       "SAVE": "Salvar",
