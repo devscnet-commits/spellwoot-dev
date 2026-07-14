@@ -27,6 +27,8 @@ prices:
   - { match: "gpt-4.1", in: 0.002, out: 0.008 }
   - { match: "o4-mini", in: 0.0011, out: 0.0044 }
   - { match: "o3-mini", in: 0.0011, out: 0.0044 }
+  # gpt-oss (Groq) ANTES do catch-all "gpt" — senão o substring match cairia no preço genérico.
+  - { match: "gpt-oss-120b", in: 0.00015, out: 0.0006 }
   - { match: "gpt", in: 0.0005, out: 0.0015 }
   - { match: "gemini-2.0-flash", in: 0.000075, out: 0.0003 }
   - { match: "gemini-1.5-flash", in: 0.000075, out: 0.0003 }

@@ -1,6 +1,6 @@
 <script setup>
 /* global axios */
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
@@ -13,8 +13,17 @@ import { useFormDirty } from 'dashboard/composables/useFormDirty';
 const route = useRoute();
 const { t } = useI18n();
 
-const PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter'];
+const PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter', 'groq'];
 const providerOptions = PROVIDERS.map(p => ({ value: p, label: p }));
+// Groq é RESTRITO: só modelos APROVADOS no smoke test. Motivo de SEGURANÇA (não só qualidade): um
+// modelo Groq (llama-3.1-8b-instant) recomendou concorrentes da empresa numa resposta de teste. Para
+// groq, o campo de modelo vira um dropdown fechado com esta lista (os outros providers seguem texto
+// livre). Manter em sincronia com Ai::OperationProfile::GROQ_APPROVED_MODELS (validação server-side).
+const GROQ_APPROVED_MODELS = ['openai/gpt-oss-120b'];
+const groqModelOptions = GROQ_APPROVED_MODELS.map(m => ({
+  value: m,
+  label: m,
+}));
 const WORKER_KEYS = ['ocr', 'summary', 'translation', 'rag'];
 // Nenhum worker escondido hoje. O antigo 'classification' era vestígio do "flow routing" removido e
 // foi retirado de WORKER_KEYS: o classificador de departamento é INTERNO ao DepartmentResolver
@@ -96,6 +105,21 @@ const blank = () => ({
 });
 const form = reactive(blank());
 const { isDirty, capture } = useFormDirty(() => ({ ...form }));
+
+// Ao trocar o provider do supervisor para 'groq', se o modelo atual não for aprovado, seleciona o
+// default aprovado — assim o dropdown fechado nunca fica com um valor inválido (e não salva um modelo
+// Groq não permitido). Trocar PARA outro provider não mexe no modelo (mantém o comportamento livre).
+watch(
+  () => form.supervisor_provider,
+  provider => {
+    if (
+      provider === 'groq' &&
+      !GROQ_APPROVED_MODELS.includes(form.supervisor_model)
+    ) {
+      form.supervisor_model = GROQ_APPROVED_MODELS[0];
+    }
+  }
+);
 
 // The whole engine (supervisor/workers/routing/budget) lives behind a single
 // "Avançado" disclosure so the main flow is just: pick a level + name it.
@@ -441,7 +465,21 @@ onMounted(fetchProfiles);
                       :options="providerOptions"
                     />
                   </div>
+                  <!-- Groq: dropdown FECHADO só com modelos aprovados (segurança). Demais providers: texto livre. -->
+                  <div
+                    v-if="form.supervisor_provider === 'groq'"
+                    class="flex flex-col gap-1.5"
+                  >
+                    <span class="text-sm font-medium text-n-slate-12">{{
+                      $t('AI_PROFILES.FORM.MODEL')
+                    }}</span>
+                    <Select
+                      v-model="form.supervisor_model"
+                      :options="groqModelOptions"
+                    />
+                  </div>
                   <Input
+                    v-else
                     v-model="form.supervisor_model"
                     :label="$t('AI_PROFILES.FORM.MODEL')"
                   />
