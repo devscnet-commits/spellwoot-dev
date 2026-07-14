@@ -1357,6 +1357,9 @@ onMounted(async () => {
                   rows="6"
                   class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
                 />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN_HINT') }}
+                </span>
               </label>
               <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
@@ -1365,6 +1368,9 @@ onMounted(async () => {
                   rows="6"
                   class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
                 />
+                <span class="text-xs text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
+                </span>
               </label>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
