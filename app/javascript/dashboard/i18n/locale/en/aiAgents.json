@@ -337,7 +337,6 @@
       "STEP_ADD": "Nova etapa",
       "STEP_CREATE": "Criar",
       "STEP_EMPTY": "Nenhuma etapa criada ainda.",
-      "STEP_REMAINING": "Você pode adicionar mais {count} etapas.",
       "STEP_EDIT": "Editar etapa",
       "STEP_REMOVE": "Remover etapa",
       "STEP_DRAG": "Arraste para reordenar",

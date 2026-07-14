@@ -452,15 +452,10 @@ const versionsBaseUrl = computed(
 );
 
 // --- Etapas (cards arrastáveis; edição inline no próprio card) ---
-const MAX_STEPS = 10;
-const remainingSteps = computed(() =>
-  Math.max(0, MAX_STEPS - form.steps.length)
-);
 // Em edição: número (editar aquele card), 'new' (adicionar) ou null (nada).
 const editingStepIndex = ref(null);
 
 const openNewStep = () => {
-  if (form.steps.length >= MAX_STEPS) return;
   editingStepIndex.value = 'new';
 };
 const openEditStep = index => {
@@ -1328,22 +1323,11 @@ onMounted(async () => {
               />
             </div>
 
-            <!-- Adicionar etapa + contador (máx. 10) -->
-            <div
-              v-if="editingStepIndex === null"
-              class="flex items-center justify-between gap-3"
-            >
-              <span class="text-xs text-n-slate-11">
-                {{
-                  $t('AI_DEPARTMENTS.FORM.STEP_REMAINING', {
-                    count: remainingSteps,
-                  })
-                }}
-              </span>
+            <!-- Adicionar etapa (sem limite) -->
+            <div v-if="editingStepIndex === null" class="flex justify-end">
               <button
                 type="button"
-                :disabled="form.steps.length >= MAX_STEPS"
-                class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white"
                 @click="openNewStep"
               >
                 + {{ $t('AI_DEPARTMENTS.FORM.STEP_ADD') }}
