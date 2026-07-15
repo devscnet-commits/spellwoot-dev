@@ -133,4 +133,55 @@ RSpec.describe Ai::StateManager do
       track(step_completed: true, with_context: false)
     end
   end
+
+  describe '#persist_attributes — validação de chave' do
+    def define_attr(key, display = key.capitalize)
+      CustomAttributeDefinition.create!(
+        account: account, attribute_key: key, attribute_display_name: display,
+        attribute_model: 'conversation_attribute', attribute_display_type: 'text'
+      )
+    end
+
+    def unknown_key_events
+      Ai::Event.where(conversation_id: conversation.id, event_type: 'attributes.unknown_key')
+    end
+
+    it 'persiste normalmente uma chave que bate com um attribute_key real' do
+      define_attr('cidade')
+
+      manager.persist_attributes({ 'cidade' => 'Maravilha' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('Maravilha')
+      expect(unknown_key_events).to be_empty
+    end
+
+    it 'NÃO persiste uma chave desconhecida e emite attributes.unknown_key com chave+valor' do
+      define_attr('cidade')
+
+      manager.persist_attributes({ 'cidade_usuario' => 'Maravilha' }, department)
+
+      expect(conversation.reload.custom_attributes).not_to have_key('cidade_usuario')
+      event = unknown_key_events.last
+      expect(event.payload['key']).to eq('cidade_usuario')
+      expect(event.payload['value']).to eq('Maravilha')
+    end
+
+    it 'na mistura de chaves, só as válidas persistem e o evento sai só para as inválidas' do
+      define_attr('cidade')
+
+      manager.persist_attributes({ 'cidade' => 'Maravilha', 'lixo' => 'x' }, department)
+
+      attrs = conversation.reload.custom_attributes
+      expect(attrs['cidade']).to eq('Maravilha')
+      expect(attrs).not_to have_key('lixo')
+      expect(unknown_key_events.pluck(:payload).map { |p| p['key'] }).to eq(['lixo'])
+    end
+
+    it 'não quebra quando a conta não tem nenhuma definição de atributo' do
+      expect { manager.persist_attributes({ 'cidade' => 'Maravilha' }, department) }.not_to raise_error
+
+      expect(conversation.reload.custom_attributes).not_to have_key('cidade')
+      expect(unknown_key_events.last.payload['key']).to eq('cidade')
+    end
+  end
 end
