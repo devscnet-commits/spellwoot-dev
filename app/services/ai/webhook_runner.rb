@@ -11,17 +11,26 @@ class Ai::WebhookRunner
     raise 'webhook sem URL' if url.blank?
 
     method = (cfg[:method].presence || 'POST').to_s.downcase.to_sym
-    options = { headers: parse_headers(cfg[:headers]), timeout: TIMEOUT }
-    if %i[get delete].include?(method)
-      options[:query] = input || {}
-    else
-      options[:body] = (input || {}).to_json
-    end
 
-    response = HTTParty.send(method, url, **options)
+    # Ai::SafeHttp valida o destino contra SSRF (IP privado/metadados/redirect inseguro) — a URL é
+    # controlada pelo usuário (webhook_config), então nunca deve bater em rede interna. Ver CVE-2026-5205.
+    response = Ai::SafeHttp.request(method, url, **request_args(cfg, method, input))
     { 'status' => response.code, 'body' => safe_parse(response.body) }
+  rescue Ai::SafeHttp::BlockedUrlError => e
+    raise "webhook bloqueado por segurança (URL não permitida): #{e.message}"
   rescue StandardError => e
     raise "webhook falhou: #{e.class}: #{e.message}"
+  end
+
+  # Monta headers/timeout + corpo (POST/PUT/PATCH) ou query (GET/DELETE) para o Ai::SafeHttp.
+  def self.request_args(cfg, method, input)
+    args = { headers: parse_headers(cfg[:headers]), timeout: TIMEOUT }
+    if %i[get delete].include?(method)
+      args[:query] = input || {}
+    else
+      args[:body] = (input || {}).to_json
+    end
+    args
   end
 
   # Cabeçalhos vêm como texto "Chave: Valor" (uma por linha).
