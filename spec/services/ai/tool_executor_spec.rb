@@ -48,4 +48,18 @@ RSpec.describe Ai::ToolExecutor do
     expect(execution.output['reason']).to eq('tool_inactive')
     expect(conversation.reload.status).to eq('open')
   end
+
+  # Uma Ferramenta do tipo webhook herda o guard SSRF do Ai::WebhookRunner → Ai::SafeHttp: uma URL
+  # apontando para rede interna/metadados é rejeitada e auditada como 'failed', sem derrubar o run.
+  it 'records a webhook tool with a private/metadata URL as failed (SSRF blocked, no crash)' do
+    webhook_tool = Ai::Tool.create!(account: account, name: 'meta', implementation_type: 'webhook',
+                                    status: 'active',
+                                    webhook_config: { 'url' => 'http://169.254.169.254/latest/meta-data/',
+                                                      'method' => 'POST' })
+    execution = described_class.new(tool: webhook_tool, input: {}, conversation: conversation,
+                                    mode: 'live').perform
+
+    expect(execution.status).to eq('failed')
+    expect(execution.error).to match(/bloqueado por segurança/)
+  end
 end

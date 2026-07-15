@@ -13,8 +13,10 @@ class Ai::SiteCrawlJob < ApplicationJob
     url = normalize_url(source.title.to_s.strip)
     return if url.blank?
 
-    response = HTTParty.get(url, timeout: TIMEOUT, follow_redirects: true,
-                                 headers: { 'User-Agent' => 'ConexiiaBot/1.0' })
+    # url vem de um KnowledgeSource (título editável pelo usuário) → valida contra SSRF. O SafeHttp
+    # segue redirects, mas REVALIDA cada hop (antes o follow_redirects: true cru permitia um redirect
+    # para 169.254.169.254/rede interna). Ver CVE-2026-5205.
+    response = Ai::SafeHttp.request(:get, url, headers: { 'User-Agent' => 'ConexiiaBot/1.0' }, timeout: TIMEOUT)
     text = extract_text(response.body.to_s)
     return if text.blank?
 
