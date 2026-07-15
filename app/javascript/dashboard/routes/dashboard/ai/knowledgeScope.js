@@ -63,3 +63,16 @@ export const buildScopeChips = (
   }
   return chips;
 };
+
+// Mesma lógica/contagem de buildScopeChips, já formatada como options do <Select> do filtro: a
+// contagem entra no label ("Todos (19)", "Maya v5.0 (0)") e o value é idêntico (all|shared|orphan|
+// <deptId>). Presentação separada do dado para o dropdown reaproveitar sem duplicar a contagem.
+export const buildScopeOptions = (
+  departments = [],
+  sources = [],
+  labels = {}
+) =>
+  buildScopeChips(departments, sources, labels).map(chip => ({
+    value: chip.value,
+    label: `${chip.label} (${chip.count})`,
+  }));
