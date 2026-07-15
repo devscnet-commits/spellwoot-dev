@@ -2,7 +2,7 @@
 # tools + memory). The user never writes this — they fill structure, we generate the prompt.
 class Ai::PromptCompiler
   def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
-                   customer_memory: nil)
+                   customer_memory: nil, step_index: nil)
     parts = []
     parts.concat(identity_lines(agent))
     parts << agent.base_prompt if agent.base_prompt.present?
@@ -17,8 +17,10 @@ class Ai::PromptCompiler
     if (pb = department.playbook)
       step_lines = step_lines(pb.steps)
       if step_lines.present?
-        parts << "Etapas do atendimento:\n#{step_lines.join("\n")}\n" \
-                 "Em current_step, informe o nome EXATO da etapa atual do atendimento."
+        block = "Etapas do atendimento (na ordem):\n#{step_lines.join("\n")}"
+        anchor = current_step_line(pb.steps, step_index)
+        block += "\n#{anchor}" if anchor
+        parts << block
       end
       parts << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
       parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
@@ -100,6 +102,26 @@ class Ai::PromptCompiler
     []
   end
 
+  # Âncora determinística: informa ao modelo em QUAL etapa ele está, pelo índice rastreado pelo
+  # servidor (Ai::StateManager) — não deixa o modelo se autolocalizar (que o fazia retroceder).
+  # Indexa o MESMO array que o StateManager (Array(playbook.steps)) para o índice bater. nil => 0.
+  # Retorna nil quando não há etapas.
+  def self.current_step_line(steps, step_index)
+    list = Array(steps)
+    return nil if list.empty?
+
+    idx = step_index.to_i.clamp(0, list.size - 1)
+    name = step_name_of(list[idx])
+    label = name.present? ? "#{idx + 1} de #{list.size} — \"#{name}\"" : "#{idx + 1} de #{list.size}"
+    "ETAPA ATUAL (definida pelo sistema, não por você): #{label}. Trabalhe SOMENTE nesta etapa " \
+      'agora; NÃO volte a etapas anteriores nem pule adiante — o sistema avança automaticamente ' \
+      'quando você sinalizar step_completed. Dados de etapas passadas já aparecem em "Dados já coletados".'
+  end
+
+  def self.step_name_of(step)
+    step.is_a?(Hash) ? (step['name'] || step[:name]).to_s.strip : step.to_s.strip
+  end
+
   # Steps may be the new object form ({name, instructions}) or the legacy string form.
   # Renders one bullet per step: "- Nome: instruções".
   def self.step_lines(steps)
@@ -138,7 +160,7 @@ class Ai::PromptCompiler
       Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
       {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"confidence":0.0,"attributes":{}}
       O campo "decision" aceita SOMENTE um destes 5 valores: reply, invoke_tool, handoff, close, noop. NÃO invente outros (ex.: "text", "message", "resposta"). Para responder ao cliente use SEMPRE "reply".
-      Em "current_step", informe o nome EXATO da etapa EM ANDAMENTO agora. Em "step_completed", responda true SOMENTE no turno em que você CONCLUIR essa etapa (já obteve tudo que ela exigia e vai avançar para a próxima); nos demais turnos responda false. NÃO confunda os dois: current_step = a etapa em que você está; step_completed = se você acabou de terminá-la.
+      A etapa atual é DEFINIDA PELO SISTEMA (ver "ETAPA ATUAL" acima) — você NÃO escolhe nem muda de etapa. Em "current_step", apenas repita o nome dessa etapa atual como CONFIRMAÇÃO/registro (é só log; não decide o avanço). Em "step_completed", responda true SOMENTE no turno em que CONCLUIR essa etapa (já obteve tudo que ela exigia); nesse momento o SISTEMA avança sozinho para a próxima. Nos demais turnos, responda false. Nunca volte para uma etapa anterior por conta própria.
       Em "attributes", coloque os dados coletados do cliente (chave: valor); deixe {} se não houver nada novo.
     TXT
   end

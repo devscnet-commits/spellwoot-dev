@@ -47,4 +47,48 @@ RSpec.describe Ai::PromptCompiler do
     expect(prompt).to include('Departamento: Comercial')
     expect(prompt).not_to include('Instruções:')
   end
+
+  describe 'âncora determinística de etapa (step_index)' do
+    def build_dept_with_steps(steps)
+      pb = double('playbook', steps: steps, transfer_when: [], close_when: [])
+      double('dept', name: 'Comercial', objetivo: 'Converter leads', instructions: nil,
+                     playbook: pb, lead_variables: [])
+    end
+
+    def compile_step(steps, step_index: nil)
+      described_class.compile(agent: build_agent, department: build_dept_with_steps(steps),
+                              knowledge: [], memory: nil, tools: [], step_index: step_index)
+    end
+
+    let(:steps) { [{ 'name' => 'Coleta' }, { 'name' => 'Proposta' }, { 'name' => 'Fechamento' }] }
+
+    it 'ancora o modelo na etapa do índice informado (não deixa ele se autolocalizar)' do
+      prompt = compile_step(steps, step_index: 1)
+
+      expect(prompt).to include('ETAPA ATUAL (definida pelo sistema, não por você): 2 de 3 — "Proposta"')
+      expect(prompt).to include('NÃO volte a etapas anteriores')
+      # o texto legado que pedia o modelo se localizar sozinho saiu
+      expect(prompt).not_to include('informe o nome EXATO da etapa atual')
+    end
+
+    it 'assume a primeira etapa (índice 0) quando nenhum índice é passado' do
+      prompt = compile_step(steps, step_index: nil)
+
+      expect(prompt).to include('ETAPA ATUAL (definida pelo sistema, não por você): 1 de 3 — "Coleta"')
+    end
+
+    it 'clampa um índice fora do range na última etapa' do
+      prompt = compile_step(steps, step_index: 99)
+
+      expect(prompt).to include('3 de 3 — "Fechamento"')
+    end
+
+    it 'lista as etapas na ordem para contexto' do
+      prompt = compile_step(steps, step_index: 0)
+
+      expect(prompt).to include('Etapas do atendimento (na ordem):')
+      expect(prompt).to include('- Coleta')
+      expect(prompt).to include('- Fechamento')
+    end
+  end
 end

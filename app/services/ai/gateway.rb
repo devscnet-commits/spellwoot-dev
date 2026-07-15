@@ -105,7 +105,10 @@ class Ai::Gateway
       collected: (@conversation.contact&.custom_attributes || {})
         .merge(@conversation.custom_attributes || {}),
       fillable_attributes: context_builder.fillable_attributes(department),
-      customer_memory: customer_memory
+      customer_memory: customer_memory,
+      # Índice determinístico da etapa (fonte de verdade no servidor). O PromptCompiler ancora o
+      # modelo nesta etapa em vez de deixá-lo se autolocalizar. StateManager#track_step avança no fim.
+      step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 

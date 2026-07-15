@@ -26,22 +26,28 @@ class Ai::StateManager
     Rails.logger.error "[Ai::StateManager#persist_attributes] #{e.class}: #{e.message}"
   end
 
-  # Stores the conversation's current step + its grouping delay (from the playbook) so the next
-  # message-grouping debounce can use the step-specific delay. Falls back to the general delay
-  # when the step has no delay configured (handled in Ai::MessageGrouping).
+  # Progressão DETERMINÍSTICA de etapa. O índice (additional_attributes['ai_step_index'], inteiro,
+  # inicia em 0) é a FONTE DE VERDADE — não o texto que o modelo relata. O servidor decide "onde
+  # estamos"; o modelo só sinaliza step_completed para AVANÇAR (+1). Nunca retrocede, nunca pula,
+  # trava na última etapa. Antes, current_step era texto livre e o modelo se autolocalizava — o que
+  # o fazia "esquecer" a etapa e voltar sozinho (bug recorrente em conversas reais).
+  #
+  # Também grava ai_step.grouping_delay_seconds (da etapa ATUAL após o avanço) p/ o MessageGrouping,
+  # e ai_step.reported_name (o current_step livre do modelo) só como LOG/observabilidade — nada o
+  # consome; serve para comparar o que o modelo achava vs. o índice real.
   def track_step(department, decision, dispatcher: nil, run: nil)
-    name = decision['current_step'].to_s.strip
-    return if name.blank?
-
     steps = Array(department.playbook&.steps)
-    step = steps.find { |s| s.is_a?(Hash) && (s['name'] || s[:name]).to_s.strip.casecmp?(name) }
-    delay = (step && (step['group_delay_seconds'] || step[:group_delay_seconds])).to_i
+    return if steps.empty? # playbook sem etapas = no-op
 
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_step'] = { 'name' => name, 'grouping_delay_seconds' => (delay.positive? ? delay : nil) }
-    @conversation.update!(additional_attributes: attrs)
+    max_index = steps.size - 1
+    index = current_step_index(max_index)
 
-    run_step_automations(department, decision, step, name, dispatcher, run)
+    # Dispara as automações da etapa ATUAL na transição de conclusão (idempotente por índice).
+    fire_step_automations(decision, steps[index], index, dispatcher, run)
+
+    # Avança só quando o modelo conclui a etapa; clamp no máximo. Nunca retrocede/pula.
+    new_index = truthy?(decision['step_completed']) ? (index + 1).clamp(0, max_index) : index
+    persist_step_state(steps[new_index], new_index, decision)
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#track_step] #{e.class}: #{e.message}"
   end
@@ -60,28 +66,70 @@ class Ai::StateManager
 
   private
 
-  # Dispara as automações da etapa CONCLUÍDA. Só quando o modelo sinaliza step_completed E ainda não
-  # disparamos para essa etapa nesta conversa (idempotência via ai_completed_steps) — nunca em toda
-  # leitura de current_step. Marca como concluída ANTES de rodar (não reprocessa se algo demorar/falhar).
-  # Precisa do dispatcher + run (do Gateway) para as ações auditadas; sem eles, não roda.
-  def run_step_automations(department, decision, step, name, dispatcher, run)
+  # Índice atual da conversa (clampado no range válido do playbook). Default 0 (primeira etapa).
+  def current_step_index(max_index)
+    (@conversation.additional_attributes || {})['ai_step_index'].to_i.clamp(0, max_index)
+  end
+
+  # Grava o índice (fonte de verdade) + o hash ai_step (delay p/ MessageGrouping e reported_name p/ log).
+  # Re-lê os atributos porque fire_step_automations / StepAutomationRunner podem tê-los mutado.
+  def persist_step_state(current, new_index, decision)
+    delay = step_delay(current)
+    attrs = @conversation.additional_attributes || {}
+    attrs['ai_step_index'] = new_index
+    attrs['ai_step'] = {
+      'name' => step_name(current),
+      'grouping_delay_seconds' => (delay.positive? ? delay : nil),
+      'reported_name' => decision['current_step'].to_s.strip.presence # só log; não é fonte de verdade
+    }
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  # Dispara as automações da etapa CONCLUÍDA na transição de índice. Só quando o modelo sinaliza
+  # step_completed E ainda não disparamos para este índice (idempotência via ai_step_last_fired_index).
+  # Marca ANTES de rodar (não reprocessa se algo demorar/falhar). Precisa do dispatcher + run (do
+  # Gateway) para as ações auditadas; sem eles, não roda.
+  def fire_step_automations(decision, step, index, dispatcher, run)
     return unless dispatcher && run
     return unless truthy?(decision['step_completed'])
+    return if already_fired?(index)
 
-    completed = Array(@conversation.additional_attributes&.dig('ai_completed_steps'))
-    return if completed.include?(name)
-
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_completed_steps'] = completed + [name]
-    @conversation.update!(additional_attributes: attrs)
-
-    automations = Array(step && (step['automations'] || step[:automations]))
-    return if automations.blank?
+    mark_fired(index)
+    return if step_automations(step).blank?
 
     Ai::StepAutomationRunner.new(
       conversation: @conversation, account: @conversation.account, agent: @agent,
       dispatcher: dispatcher, run: run
     ).run(step)
+  end
+
+  # Idempotência: só dispara uma vez por índice (o avanço é monotônico, então last_fired >= index
+  # significa que a etapa já disparou).
+  def already_fired?(index)
+    last = (@conversation.additional_attributes || {})['ai_step_last_fired_index']
+    last.is_a?(Integer) && last >= index
+  end
+
+  def mark_fired(index)
+    attrs = @conversation.additional_attributes || {}
+    attrs['ai_step_last_fired_index'] = index
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  def step_automations(step)
+    Array(step && (step['automations'] || step[:automations]))
+  end
+
+  def step_name(step)
+    return '' unless step.is_a?(Hash)
+
+    (step['name'] || step[:name]).to_s.strip
+  end
+
+  def step_delay(step)
+    return 0 unless step.is_a?(Hash)
+
+    (step['group_delay_seconds'] || step[:group_delay_seconds]).to_i
   end
 
   def truthy?(value)
