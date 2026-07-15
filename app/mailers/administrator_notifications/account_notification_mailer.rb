@@ -58,6 +58,21 @@ class AdministratorNotifications::AccountNotificationMailer < AdministratorNotif
     send_notification(subject, action_url: action_url, meta: meta)
   end
 
+  # Handoff da IA sem agente atribuível: o time de destino não tem membro disponível e a conversa
+  # ficou sem dono. Avisa os admins da conta (destinatário padrão do send_notification) para corrigir
+  # a composição do time. Disparado por Ai::HandoffCoordinator#alert_no_assignable_member.
+  def handoff_no_agent_available(conversation, team_name)
+    subject = "Conversa sem agente disponível — o time \"#{team_name}\" não tem ninguém para atender"
+    action_url = "#{ENV.fetch('FRONTEND_URL', nil)}/app/accounts/#{conversation.account_id}/conversations/#{conversation.display_id}"
+    meta = {
+      'team_name' => team_name,
+      'conversation_id' => conversation.display_id,
+      'account_name' => conversation.account.name
+    }
+
+    send_notification(subject, action_url: action_url, meta: meta)
+  end
+
   private
 
   def format_deletion_date(deletion_date_str)

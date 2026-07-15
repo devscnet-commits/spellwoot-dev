@@ -7,6 +7,13 @@
 # próprio, mantendo o golden master intacto.
 class Ai::HandoffCoordinator
   MAX_AI_HOPS = 2
+  # Tag de visibilidade quando o handoff não acha NENHUM agente atribuível (mesmo padrão dos outros
+  # fallbacks: department-override-indisponivel, chave-propria-falhou).
+  NO_AGENT_LABEL = 'sem-agente-disponivel'.freeze
+  # Throttle do e-mail ao admin: 1 aviso por time a cada janela (evita flood quando o mesmo time
+  # vazio recebe várias conversas em sequência). Cache-based (perder o estado = no máximo 1 e-mail
+  # extra) — barato e sem migração, suficiente para "não spammar".
+  NO_AGENT_NOTIFY_TTL = 15.minutes
 
   def initialize(conversation:, account:, agent:, message:)
     @conversation = conversation
@@ -123,15 +130,52 @@ class Ai::HandoffCoordinator
   # funciona). Sem candidato algum → handoff.assign_failed visível (não mais falha silenciosa).
   def ensure_assignee(team_id)
     candidate_ids = fallback_candidate_ids(team_id)
-    if candidate_ids.empty?
-      Rails.logger.warn "[Ai::HandoffCoordinator] handoff sem candidato para atribuir (team_id=#{team_id.inspect})"
-      return emit('handoff.assign_failed', { team_id: team_id, reason: 'no_assignable_member' }, status: 'error')
-    end
+    return alert_no_assignable_member(team_id) if candidate_ids.empty?
 
     with_capacity = @conversation.inbox.member_ids_with_assignment_capacity & candidate_ids
     assignee_id = with_capacity.first || candidate_ids.first
     @conversation.update!(assignee_id: assignee_id)
     emit('handoff.assigned_fallback', { assignee_id: assignee_id, team_id: team_id })
+  end
+
+  # Sem NENHUM membro atribuível: a conversa ficaria parada, sem dono e sem ninguém sabendo. Torna o
+  # problema VISÍVEL — tag na conversa + e-mail ao admin da conta (throttled) — além do evento.
+  def alert_no_assignable_member(team_id)
+    Rails.logger.warn "[Ai::HandoffCoordinator] handoff sem candidato para atribuir (team_id=#{team_id.inspect})"
+    apply_no_agent_label
+    notify_admin_no_agent(team_id)
+    emit('handoff.assign_failed', { team_id: team_id, reason: 'no_assignable_member' }, status: 'error')
+  end
+
+  # Tag best-effort (mesmo handler direto dos outros fallbacks de visibilidade).
+  def apply_no_agent_label
+    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation,
+                                                             input: { 'label' => NO_AGENT_LABEL })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::HandoffCoordinator#apply_no_agent_label] #{e.class}: #{e.message}"
+  end
+
+  # E-mail ao admin da conta (mesmo mecanismo do aviso de saldo baixo). Throttled por time p/ não
+  # spammar. Best-effort: nunca derruba o handoff (a conversa já foi entregue ao time).
+  def notify_admin_no_agent(team_id)
+    return unless notify_throttle_allows?(team_id)
+
+    team_name = (team_id && ::Team.find_by(id: team_id, account_id: @account.id)&.name).presence || 'sem time'
+    AdministratorNotifications::AccountNotificationMailer
+      .with(account: @account)
+      .handoff_no_agent_available(@conversation, team_name)
+      .deliver_later
+  rescue StandardError => e
+    Rails.logger.error "[Ai::HandoffCoordinator#notify_admin_no_agent] #{e.class}: #{e.message}"
+  end
+
+  # 1 e-mail por (conta, time) a cada NO_AGENT_NOTIFY_TTL. Escreve a marca ao permitir.
+  def notify_throttle_allows?(team_id)
+    key = "ai:handoff_no_agent:#{@account.id}:#{team_id || 'none'}"
+    return false if Rails.cache.read(key)
+
+    Rails.cache.write(key, true, expires_in: NO_AGENT_NOTIFY_TTL)
+    true
   end
 
   # Candidatos p/ o fallback: membros do time resolvido; sem time, qualquer membro do inbox.
