@@ -598,6 +598,13 @@
   "AI_KNOWLEDGE": {
     "TITLE": "Conhecimento",
     "SHARED": "Compartilhado",
+    "ORPHAN": "Fonte órfã",
+    "FILTER": {
+      "SCOPE_ALL": "Todos",
+      "KIND_LABEL": "Tipo",
+      "KIND_ALL": "Todos os tipos",
+      "EMPTY": "Nenhuma fonte neste filtro."
+    },
     "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui — FAQ, produtos, procedimentos — ela usa para responder os clientes.",
     "NEW": "Nova fonte",
     "DROPZONE": {
@@ -643,9 +650,9 @@
       "PROC_STEPS": "Passo a passo",
       "PRICE": "Preço",
       "PRICE_PLACEHOLDER": "ex.: R$ 99,90/mês ou Sob consulta",
-      "DEPARTMENT": "Departamento",
+      "DEPARTMENT": "Agente",
       "DEPARTMENT_ALL": "Todos / Compartilhado",
-      "DEPARTMENT_HINT": "Deixe em \"Todos\" para todos os agentes usarem, ou escolha um departamento para restringir este conhecimento a ele."
+      "DEPARTMENT_HINT": "Deixe em \"Todos\" para todos os agentes usarem, ou escolha um agente para restringir este conhecimento a ele."
     },
     "KINDS": {
       "FAQ": "FAQ",
