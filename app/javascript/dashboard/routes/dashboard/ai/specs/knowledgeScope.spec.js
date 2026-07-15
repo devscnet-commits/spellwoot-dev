@@ -1,4 +1,8 @@
-import { scopeOptionLabel, sourceScope } from '../knowledgeScope';
+import {
+  scopeOptionLabel,
+  sourceScope,
+  buildScopeChips,
+} from '../knowledgeScope';
 
 describe('knowledgeScope', () => {
   describe('scopeOptionLabel', () => {
@@ -61,6 +65,79 @@ describe('knowledgeScope', () => {
       expect(orphan.status).toBe('orphan');
       expect(shared.status).toBe('shared');
       expect(orphan.status).not.toBe(shared.status);
+    });
+  });
+
+  describe('buildScopeChips', () => {
+    const departments = [
+      { id: 10, name: 'Maya v5.0', agent: 'Maya v5.0' },
+      { id: 20, name: 'Suporte Técnico', agent: 'Joana v2' },
+    ];
+    const labels = {
+      all: 'Todos',
+      shared: 'Compartilhado',
+      orphan: 'Fonte órfã',
+    };
+
+    it('lista TODOS os agentes da conta, mesmo os sem nenhuma fonte (contagem 0)', () => {
+      // Só o dept 10 tem fonte; o dept 20 (agente novo/vazio) precisa aparecer com count 0.
+      const sources = [
+        { ai_department_id: 10 },
+        { ai_department_id: 10 },
+        { ai_department_id: null },
+      ];
+      const chips = buildScopeChips(departments, sources, labels);
+      const joana = chips.find(c => c.value === '20');
+      expect(joana).toBeTruthy();
+      expect(joana.count).toBe(0);
+      // não deriva dos sources: os 2 agentes aparecem mesmo com só 1 tendo fonte
+      expect(
+        chips.filter(c => c.value === '10' || c.value === '20')
+      ).toHaveLength(2);
+    });
+
+    it('conta as fontes por agente, compartilhado e total corretamente', () => {
+      const sources = [
+        { ai_department_id: 10 },
+        { ai_department_id: 20 },
+        { ai_department_id: 20 },
+        { ai_department_id: null },
+      ];
+      const chips = buildScopeChips(departments, sources, labels);
+      const by = v => chips.find(c => c.value === v);
+      expect(by('all').count).toBe(4);
+      expect(by('shared').count).toBe(1);
+      expect(by('10').count).toBe(1);
+      expect(by('20').count).toBe(2);
+    });
+
+    it('sempre começa por Todos e Compartilhado, nessa ordem', () => {
+      const chips = buildScopeChips(departments, [], labels);
+      expect(chips[0].value).toBe('all');
+      expect(chips[1].value).toBe('shared');
+    });
+
+    it('mostra o chip Fonte órfã (com contagem) só quando há fonte apontando p/ dept inexistente', () => {
+      const semOrfa = buildScopeChips(
+        departments,
+        [{ ai_department_id: 10 }],
+        labels
+      );
+      expect(semOrfa.some(c => c.value === 'orphan')).toBe(false);
+
+      const comOrfa = buildScopeChips(
+        departments,
+        [{ ai_department_id: 999 }, { ai_department_id: 999 }],
+        labels
+      );
+      const orphan = comOrfa.find(c => c.value === 'orphan');
+      expect(orphan).toBeTruthy();
+      expect(orphan.count).toBe(2);
+    });
+
+    it('não quebra com listas vazias/indefinidas', () => {
+      expect(buildScopeChips(undefined, undefined, labels)).toHaveLength(2);
+      expect(buildScopeChips([], [], labels)[0].count).toBe(0);
     });
   });
 });

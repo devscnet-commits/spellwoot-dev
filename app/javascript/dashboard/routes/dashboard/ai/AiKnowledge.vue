@@ -7,7 +7,11 @@ import { useI18n } from 'vue-i18n';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import KnowledgeSourceForm from './KnowledgeSourceForm.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
-import { scopeOptionLabel, sourceScope } from './knowledgeScope';
+import {
+  scopeOptionLabel,
+  sourceScope,
+  buildScopeChips,
+} from './knowledgeScope';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -351,30 +355,16 @@ const isOrphan = source =>
   source.ai_department_id != null &&
   !departments.value.some(d => d.id === source.ai_department_id);
 
-// Chips de escopo: Todos + Compartilhado + um por agente/department PRESENTE nas fontes
-// (+ "Fonte órfã" só se houver alguma fonte apontando para department inexistente).
-const scopeChips = computed(() => {
-  const chips = [
-    { value: 'all', label: t('AI_KNOWLEDGE.FILTER.SCOPE_ALL') },
-    { value: 'shared', label: t('AI_KNOWLEDGE.SHARED') },
-  ];
-  const seen = new Set();
-  let hasOrphan = false;
-  sources.value.forEach(s => {
-    if (s.ai_department_id == null) return;
-    const d = departments.value.find(x => x.id === s.ai_department_id);
-    if (!d) {
-      hasOrphan = true;
-      return;
-    }
-    if (seen.has(d.id)) return;
-    seen.add(d.id);
-    chips.push({ value: String(d.id), label: scopeOptionLabel(d) });
-  });
-  if (hasOrphan)
-    chips.push({ value: 'orphan', label: t('AI_KNOWLEDGE.ORPHAN') });
-  return chips;
-});
+// Chips de escopo: Todos + Compartilhado + TODOS os agentes da conta (mesma lista do dropdown de
+// criação, não só os presentes nas fontes) + "Fonte órfã" quando houver. Cada chip traz a contagem
+// (0 inclusive). Ver buildScopeChips em ./knowledgeScope.
+const scopeChips = computed(() =>
+  buildScopeChips(departments.value, sources.value, {
+    all: t('AI_KNOWLEDGE.FILTER.SCOPE_ALL'),
+    shared: t('AI_KNOWLEDGE.SHARED'),
+    orphan: t('AI_KNOWLEDGE.ORPHAN'),
+  })
+);
 
 // Dropdown de tipo: Todos + tipos presentes nas fontes.
 const kindFilterOptions = computed(() => [
@@ -662,6 +652,7 @@ onMounted(() => {
               @click="scopeFilter = chip.value"
             >
               {{ chip.label }}
+              <span class="ml-1 tabular-nums opacity-60">{{ chip.count }}</span>
             </button>
           </div>
           <div class="shrink-0 flex items-center gap-2">
