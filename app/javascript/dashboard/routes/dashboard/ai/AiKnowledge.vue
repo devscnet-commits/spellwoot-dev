@@ -10,7 +10,7 @@ import Select from 'dashboard/components-next/select/Select.vue';
 import {
   scopeOptionLabel,
   sourceScope,
-  buildScopeChips,
+  buildScopeOptions,
 } from './knowledgeScope';
 
 const route = useRoute();
@@ -355,11 +355,11 @@ const isOrphan = source =>
   source.ai_department_id != null &&
   !departments.value.some(d => d.id === source.ai_department_id);
 
-// Chips de escopo: Todos + Compartilhado + TODOS os agentes da conta (mesma lista do dropdown de
-// criação, não só os presentes nas fontes) + "Fonte órfã" quando houver. Cada chip traz a contagem
-// (0 inclusive). Ver buildScopeChips em ./knowledgeScope.
-const scopeChips = computed(() =>
-  buildScopeChips(departments.value, sources.value, {
+// Options do dropdown de escopo: Todos + Compartilhado + TODOS os agentes da conta (mesma lista do
+// dropdown de criação, não só os presentes nas fontes) + "Fonte órfã" quando houver. Cada option
+// traz a contagem no label (0 inclusive). Ver buildScopeOptions em ./knowledgeScope.
+const scopeOptions = computed(() =>
+  buildScopeOptions(departments.value, sources.value, {
     all: t('AI_KNOWLEDGE.FILTER.SCOPE_ALL'),
     shared: t('AI_KNOWLEDGE.SHARED'),
     orphan: t('AI_KNOWLEDGE.ORPHAN'),
@@ -633,30 +633,20 @@ onMounted(() => {
           @cancel="closeForm"
         />
 
-        <!-- Filtro da biblioteca: escopo (compartilhado / por agente / órfã) + tipo -->
-        <div
-          v-if="sources.length"
-          class="flex items-center justify-between gap-3 flex-wrap"
-        >
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <button
-              v-for="chip in scopeChips"
-              :key="chip.value"
-              type="button"
-              class="text-xs font-medium px-3 py-1.5 rounded-full border transition-colors"
-              :class="
-                scopeFilter === chip.value
-                  ? 'border-n-brand bg-n-brand/10 text-n-brand'
-                  : 'border-n-weak bg-n-solid-1 text-n-slate-11 hover:border-n-slate-7'
-              "
-              @click="scopeFilter = chip.value"
-            >
-              {{ chip.label }}
-              <span class="ml-1 tabular-nums opacity-60">{{ chip.count }}</span>
-            </button>
-          </div>
-          <div class="shrink-0 flex items-center gap-2">
-            <span class="text-xs text-n-slate-11">
+        <!-- Filtro da biblioteca: escopo (dropdown, mesmo estilo do campo Agente) + tipo, lado a lado -->
+        <div v-if="sources.length" class="flex flex-wrap items-end gap-3">
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            <span class="text-xs font-medium text-n-slate-11">
+              {{ $t('AI_KNOWLEDGE.FILTER.SCOPE_LABEL') }}
+            </span>
+            <Select
+              v-model="scopeFilter"
+              :options="scopeOptions"
+              class="min-w-52"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            <span class="text-xs font-medium text-n-slate-11">
               {{ $t('AI_KNOWLEDGE.FILTER.KIND_LABEL') }}
             </span>
             <Select
@@ -664,7 +654,7 @@ onMounted(() => {
               :options="kindFilterOptions"
               class="min-w-36"
             />
-          </div>
+          </label>
         </div>
 
         <!-- Seleção em massa -->

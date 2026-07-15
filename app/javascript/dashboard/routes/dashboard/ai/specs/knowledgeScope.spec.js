@@ -2,6 +2,7 @@ import {
   scopeOptionLabel,
   sourceScope,
   buildScopeChips,
+  buildScopeOptions,
 } from '../knowledgeScope';
 
 describe('knowledgeScope', () => {
@@ -138,6 +139,60 @@ describe('knowledgeScope', () => {
     it('não quebra com listas vazias/indefinidas', () => {
       expect(buildScopeChips(undefined, undefined, labels)).toHaveLength(2);
       expect(buildScopeChips([], [], labels)[0].count).toBe(0);
+    });
+  });
+
+  describe('buildScopeOptions', () => {
+    const departments = [
+      { id: 10, name: 'Maya v5.0', agent: 'Maya v5.0' },
+      { id: 20, name: 'Suporte Técnico', agent: 'Joana v2' },
+    ];
+    const labels = {
+      all: 'Todos',
+      shared: 'Compartilhado',
+      orphan: 'Fonte órfã',
+    };
+
+    it('devolve options do Select ({ value, label }) com a contagem embutida no label', () => {
+      const sources = [
+        { ai_department_id: 10 },
+        { ai_department_id: 10 },
+        { ai_department_id: null },
+      ];
+      const options = buildScopeOptions(departments, sources, labels);
+
+      expect(options[0]).toEqual({ value: 'all', label: 'Todos (3)' });
+      expect(options[1]).toEqual({
+        value: 'shared',
+        label: 'Compartilhado (1)',
+      });
+      expect(options.find(o => o.value === '10')).toEqual({
+        value: '10',
+        label: 'Maya v5.0 (2)',
+      });
+      // agente vazio continua aparecendo, com (0)
+      expect(options.find(o => o.value === '20')).toEqual({
+        value: '20',
+        label: 'Joana v2 · Suporte Técnico (0)',
+      });
+    });
+
+    it('preserva os values usados pela filtragem (all|shared|orphan|<deptId>)', () => {
+      const options = buildScopeOptions(
+        departments,
+        [{ ai_department_id: 999 }],
+        labels
+      );
+      expect(options.map(o => o.value)).toEqual([
+        'all',
+        'shared',
+        '10',
+        '20',
+        'orphan',
+      ]);
+      expect(options.find(o => o.value === 'orphan').label).toBe(
+        'Fonte órfã (1)'
+      );
     });
   });
 });

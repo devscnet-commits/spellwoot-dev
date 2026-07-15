@@ -597,6 +597,7 @@
     "SHARED": "Compartilhado",
     "ORPHAN": "Fonte órfã",
     "FILTER": {
+      "SCOPE_LABEL": "Agente",
       "SCOPE_ALL": "Todos",
       "KIND_LABEL": "Tipo",
       "KIND_ALL": "Todos os tipos",
