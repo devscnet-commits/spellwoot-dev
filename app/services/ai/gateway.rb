@@ -136,8 +136,9 @@ class Ai::Gateway
     # reuse this run's dispatcher). track_step swallows its own errors — never breaks the Gateway.
     state_manager.track_step(department, result[:decision] || {}, dispatcher: action_dispatcher, run: run_record) if @acts_live
     # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
-    # devolveu em `attributes`. Assim os campos vão sendo alimentados e reaproveitados (não repergunta).
-    state_manager.persist_attributes((result[:decision] || {})['attributes']) if @acts_live
+    # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
+    # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.
+    state_manager.persist_attributes((result[:decision] || {})['attributes'], department) if @acts_live
 
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
     # which executes the tool immediately (tools are autonomous).

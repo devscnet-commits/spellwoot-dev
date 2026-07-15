@@ -10,20 +10,54 @@ class Ai::StateManager
   end
 
   # Persiste nos atributos da conversa os dados que o modelo coletou (campo `attributes` da decisão).
-  # Merge, ignora vazios e no-ops. Na próxima volta o PromptCompiler injeta como "Dados já coletados".
-  def persist_attributes(attrs)
+  # SÓ grava chaves que batem com um attribute_key REAL (mesma fonte do fillable_attributes do prompt:
+  # definições da conta menos as desabilitadas pelo department). Antes era merge cego — o modelo devolver
+  # uma chave livre (ex.: "cidade_usuario" em vez de "cidade") gravava lixo solto no JSON e o campo real
+  # ficava vazio (perda silenciosa de dado). Chave desconhecida NÃO persiste e emite attributes.unknown_key
+  # (observabilidade, mesmo padrão do decision.unknown_kind). Merge, ignora vazios e no-ops.
+  def persist_attributes(attrs, department)
     return unless attrs.is_a?(Hash)
 
-    cleaned = attrs.reject { |_k, v| v.to_s.strip.empty? }
+    cleaned = reject_blank_values(attrs)
     return if cleaned.empty?
 
-    merged = (@conversation.custom_attributes || {}).merge(cleaned)
+    known = filter_known_attributes(cleaned, department)
+    return if known.empty?
+
+    merged = (@conversation.custom_attributes || {}).merge(known)
     return if merged == @conversation.custom_attributes
 
     @conversation.update!(custom_attributes: merged)
-    emit('attributes.updated', { keys: cleaned.keys })
+    emit('attributes.updated', { keys: known.keys })
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#persist_attributes] #{e.class}: #{e.message}"
+  end
+
+  def reject_blank_values(attrs)
+    attrs.reject { |_k, v| v.to_s.strip.empty? }
+  end
+
+  # Mantém só as chaves que batem com um attribute_key real; as demais NÃO entram no JSON e viram
+  # attributes.unknown_key (observabilidade). Retorna o Hash das chaves válidas.
+  def filter_known_attributes(cleaned, department)
+    valid_keys = fillable_attribute_keys(department)
+    known, unknown = cleaned.partition { |k, _v| valid_keys.include?(k.to_s) }
+    unknown.each { |k, v| emit('attributes.unknown_key', { key: k.to_s, value: v.to_s.first(200) }) }
+    known.to_h
+  end
+
+  # Chaves de atributo de CONVERSA que a IA pode preencher — espelha o Ai::ContextBuilder#fillable_attributes
+  # (definições da conta menos as desabilitadas pelo department). É o allowlist do persist_attributes.
+  def fillable_attribute_keys(department)
+    disabled = Array(department&.behavior.to_h['disabled_custom_attributes'])
+    ::CustomAttributeDefinition
+      .where(account_id: @conversation.account_id, attribute_model: :conversation_attribute)
+      .where.not(attribute_key: disabled)
+      .pluck(:attribute_key)
+      .map(&:to_s)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#fillable_attribute_keys] #{e.class}: #{e.message}"
+    []
   end
 
   # Progressão DETERMINÍSTICA de etapa. O índice (additional_attributes['ai_step_index'], inteiro,
