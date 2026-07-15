@@ -175,7 +175,7 @@ class Ai::Gateway
 
     # Intelligent handoff / close. Shadow records intention; live executes the native action.
     handoff = Ai::HandoffEvaluator.evaluate(
-      decision: result[:decision] || {}, department: department, message_content: effective_content
+      decision: result[:decision] || {}, department: department
     )
     if handoff[:handoff]
       # Try AI->AI routing first (to an allowed agent); otherwise hand to a human.
