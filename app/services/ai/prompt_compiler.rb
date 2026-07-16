@@ -68,7 +68,13 @@ class Ai::PromptCompiler
                "#{lines.join("\n")}\nPara transferir, retorne decision \"handoff\" e o nome EXATO da IA em handoff_target."
     end
 
-    parts << "Base de conhecimento relevante:\n#{knowledge.join("\n---\n")}" if knowledge.present?
+    if knowledge.present?
+      parts << "Base de conhecimento relevante:\n#{knowledge.join("\n---\n")}\n\n" \
+               "Use APENAS os produtos, planos, valores e informações citados acima. " \
+               "NUNCA invente nome de produto, valor, característica ou promoção que não esteja " \
+               "literalmente neste bloco. Se a informação pedida não estiver aqui, diga que vai " \
+               "verificar ou transfira para um humano — não improvise."
+    end
     parts << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
     parts.concat(customer_memory_lines(customer_memory))
     parts << response_contract

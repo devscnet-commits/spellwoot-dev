@@ -48,6 +48,29 @@ RSpec.describe Ai::PromptCompiler do
     expect(prompt).not_to include('Instruções:')
   end
 
+  describe 'bloco de conhecimento (uso restrito — anti-alucinação)' do
+    def compile_with_knowledge(knowledge)
+      described_class.compile(agent: build_agent, department: build_dept(instructions: nil),
+                              knowledge: knowledge, memory: nil, tools: [])
+    end
+
+    it 'injeta o conhecimento E a instrução de usar SÓ ele / nunca inventar produto/valor' do
+      prompt = compile_with_knowledge(["Internet Fibra 300 Mega\nPlano residencial R$ 89,90"])
+
+      expect(prompt).to include('Base de conhecimento relevante')
+      expect(prompt).to include('Internet Fibra 300 Mega') # o conteúdo do RAG entrou
+      expect(prompt).to include('Use APENAS os produtos, planos, valores')
+      expect(prompt).to include('NUNCA invente')
+    end
+
+    it 'não injeta o bloco (nem a instrução) quando não há conhecimento' do
+      prompt = compile_with_knowledge([])
+
+      expect(prompt).not_to include('Base de conhecimento relevante')
+      expect(prompt).not_to include('NUNCA invente')
+    end
+  end
+
   describe 'âncora determinística de etapa (step_index)' do
     def build_dept_with_steps(steps)
       pb = double('playbook', steps: steps, transfer_when: [], close_when: [])
