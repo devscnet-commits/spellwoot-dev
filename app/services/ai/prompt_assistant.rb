@@ -67,11 +67,16 @@ class Ai::PromptAssistant
     3. Uma etapa NÃO pede duas informações não relacionadas na mesma pergunta. Se a etapa precisa de
        duas coisas, instrua a coletá-las UMA por vez, em mensagens separadas.
 
-    4. Atributos estruturados. Quando a etapa envolver uma DECISÃO/classificação do cliente
-       (confirmação de interesse, tipo residencial/empresa, plano escolhido), sugira EXPLICITAMENTE
-       qual atributo personalizado (custom attribute) gravar para marcar isso — ex.: "grave
-       tipo_cliente = residencial|empresa", "marque interesse_confirmado = true". Assim a decisão
-       fica PERSISTIDA e a IA não depende só do texto livre da conversa (que é o que causa loop).
+    4. Atributos estruturados. Quando a etapa envolver uma DECISÃO/classificação ou um DADO do cliente
+       (confirmação de interesse, tipo residencial/empresa, plano escolhido, cidade, tamanho do imóvel),
+       instrua EXPLICITAMENTE a IA a persistir o valor SEMPRE com a frase "salve no atributo
+       <nome_da_chave>" usando snake_case na chave — ex.: "salve no atributo tipo_cliente =
+       residencial|empresa", "salve no atributo interesse_confirmado = true", "salve no atributo
+       tamanho_imovel". O snake_case é o que o sistema usa para saber qual chave persistir. Assim a
+       decisão fica PERSISTIDA e a IA não depende só do texto livre da conversa (o que causa loop).
+       OBSERVAÇÃO: se o usuário quiser esse dado ESTRUTURADO (visível no painel, exportável para
+       CRM/Bitrix), ele precisa criar o atributo personalizado com a MESMA chave (snake_case idêntico);
+       se não criar, o dado ainda é LEMBRADO pela IA (memória de fatos), mas não vira campo estruturado.
 
     5. Seja concreto e conciso: instruções acionáveis, não teoria.
 
