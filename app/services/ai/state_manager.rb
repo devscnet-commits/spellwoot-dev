@@ -21,6 +21,14 @@ class Ai::StateManager
     cleaned = reject_blank_values(attrs)
     return if cleaned.empty?
 
+    # 1. Memória de fatos AO VIVO (por conversa): grava TODO dado coletado não-vazio, SEM allowlist.
+    #    É o que alimenta "Dados JÁ coletados" no prompt mesmo sem CustomAttributeDefinition —
+    #    evita a IA reperguntar o que já foi dito (bug do loop, conversa 350/352).
+    persist_collected_facts(cleaned)
+
+    # 2. Espelha para custom_attributes SÓ as chaves com campo cadastrado (protege Bitrix/relatórios).
+    #    Chave sem campo NÃO é mais descartada — já foi salva em ai_collected_facts acima; aqui só não
+    #    há campo estruturado para espelhar (o attributes.unknown_key vira telemetria disso).
     known = filter_known_attributes(cleaned, department)
     return if known.empty?
 
@@ -31,6 +39,26 @@ class Ai::StateManager
     emit('attributes.updated', { keys: known.keys })
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#persist_attributes] #{e.class}: #{e.message}"
+  end
+
+  # Memória de fatos coletados ao vivo (additional_attributes['ai_collected_facts']), sem allowlist.
+  # Read-modify-write do hash INTEIRO, lendo additional_attributes o mais TARDE possível (não reusar
+  # leitura antiga) — track_step/persist_step_state gravam no MESMO campo neste run, então a leitura
+  # fresca aqui preserva ai_step_index/ai_step (senão o último write clobbaria o outro).
+  #
+  # PREMISSA (frágil se o fluxo mudar): a segurança deste read-modify-write depende de rodar no MESMO
+  # processo/objeto que track_step, EM SEQUÊNCIA (gateway: track_step -> persist_attributes, mesmo
+  # state_manager memoizado). Se um dia persist_attributes virar ASYNC (fila), OU houver um
+  # @conversation.reload entre as chamadas, OU dois runs concorrentes na MESMA conversa (dois workers
+  # Sidekiq), o "último update! vence" vira race e pode perder ai_step_index ou ai_collected_facts —
+  # aí migrar para update ATÔMICO de jsonb no Postgres (jsonb_set) em vez do read-modify-write do hash.
+  def persist_collected_facts(cleaned)
+    attrs = @conversation.additional_attributes || {}
+    facts = (attrs['ai_collected_facts'] || {}).merge(cleaned)
+    return if facts == attrs['ai_collected_facts']
+
+    attrs['ai_collected_facts'] = facts
+    @conversation.update!(additional_attributes: attrs)
   end
 
   def reject_blank_values(attrs)

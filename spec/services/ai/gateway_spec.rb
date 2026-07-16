@@ -464,4 +464,32 @@ RSpec.describe Ai::Gateway do
       expect(convo.messages.outgoing.count).to eq(0)
     end
   end
+
+  # === collected — a memória de fatos ao vivo (ai_collected_facts) entra no prompt =====
+  context 'collected inclui a memória de fatos ao vivo' do
+    it 'passa ai_collected_facts em collected, com custom_attributes da conversa por cima' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'noop' })
+
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open',
+                                    custom_attributes: { 'cidade' => 'Maravilha' },
+                                    additional_attributes: {
+                                      'ai_collected_facts' => { 'cidade' => 'Chapeco', 'tamanho_imovel' => '70m2' }
+                                    })
+      message = create(:message, account: account, inbox: inbox, conversation: convo,
+                                 message_type: 'incoming', content: 'oi')
+
+      captured = nil
+      allow(Ai::PromptCompiler).to receive(:compile) do |**kwargs|
+        captured = kwargs[:collected]
+        'prompt-stub'
+      end
+
+      described_class.new(message: message, agent_inbox: binding, mode: 'live').run
+
+      expect(captured['tamanho_imovel']).to eq('70m2') # fato ao vivo entra no prompt
+      expect(captured['cidade']).to eq('Maravilha')    # custom_attribute da conversa vence o fato ao vivo
+    end
+  end
 end

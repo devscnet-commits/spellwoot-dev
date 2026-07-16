@@ -184,4 +184,61 @@ RSpec.describe Ai::StateManager do
       expect(unknown_key_events.last.payload['key']).to eq('cidade')
     end
   end
+
+  describe '#persist_attributes — memória de fatos ao vivo (ai_collected_facts)' do
+    def define_attr(key)
+      CustomAttributeDefinition.create!(account: account, attribute_key: key, attribute_display_name: key.capitalize,
+                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
+    end
+
+    def collected_facts
+      conversation.reload.additional_attributes['ai_collected_facts']
+    end
+
+    it 'grava dado SEM campo cadastrado em ai_collected_facts (não em custom_attributes)' do
+      manager.persist_attributes({ 'tamanho_imovel' => '70m2' }, department) # sem CustomAttributeDefinition
+
+      expect(conversation.reload.custom_attributes).not_to have_key('tamanho_imovel')
+      expect(collected_facts['tamanho_imovel']).to eq('70m2')
+    end
+
+    it 'grava dado COM campo cadastrado nos DOIS (custom_attributes E ai_collected_facts)' do
+      define_attr('cidade')
+
+      manager.persist_attributes({ 'cidade' => 'Maravilha' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('Maravilha')
+      expect(collected_facts['cidade']).to eq('Maravilha')
+    end
+
+    it 'rejeita valores vazios (não entram em ai_collected_facts)' do
+      manager.persist_attributes({ 'vazio' => '   ', 'valido' => 'x' }, department)
+
+      expect(collected_facts).to eq({ 'valido' => 'x' })
+    end
+
+    it 'preserva false/0 como fatos válidos (v.to_s.strip não os remove)' do
+      manager.persist_attributes({ 'aparelhos_conectados' => 0, 'tem_wifi' => false }, department)
+
+      expect(collected_facts['aparelhos_conectados']).to eq(0)
+      expect(collected_facts['tem_wifi']).to be(false)
+    end
+
+    it 'acumula (merge) com fatos de turnos anteriores' do
+      manager.persist_attributes({ 'cidade' => 'Maravilha' }, department)
+      manager.persist_attributes({ 'tamanho_imovel' => '70m2' }, department)
+
+      expect(collected_facts).to include('cidade' => 'Maravilha', 'tamanho_imovel' => '70m2')
+    end
+
+    it 'NÃO sobrescreve ai_step_index gravado por track_step no mesmo fluxo (concorrência)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 2 })
+
+      manager.persist_attributes({ 'tamanho_imovel' => '70m2' }, department)
+
+      attrs = conversation.reload.additional_attributes
+      expect(attrs['ai_step_index']).to eq(2)                            # preservado
+      expect(attrs['ai_collected_facts']['tamanho_imovel']).to eq('70m2') # adicionado
+    end
+  end
 end
