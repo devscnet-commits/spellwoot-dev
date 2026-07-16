@@ -22,7 +22,7 @@ class Ai::KnowledgeRetriever
     return { chunks: [], top_score: nil } if source_ids.empty? || query.blank?
 
     scope = Ai::KnowledgeChunk.where(ai_knowledge_source_id: source_ids)
-    vector = embed(query, account_id)
+    vector = embed(query)
     if vector.present?
       records = scope.nearest_neighbors(:embedding, vector, distance: 'cosine').first(TOP_K)
       distance = records.first&.neighbor_distance
@@ -37,10 +37,10 @@ class Ai::KnowledgeRetriever
     { chunks: [], top_score: nil }
   end
 
-  def self.embed(text, account_id)
-    return nil unless defined?(Captain::Llm::EmbeddingService)
-
-    Captain::Llm::EmbeddingService.new(account_id: account_id).get_embedding(text)
+  # Embute a PERGUNTA para a busca vetorial. Ai::Embedder degrada em nil quando não há chave ou a
+  # chave é inválida (auth); um erro transitório também vira nil aqui -> o retriever cai no ILIKE.
+  def self.embed(text)
+    Ai::Embedder.embed(text)
   rescue StandardError => e
     Rails.logger.warn "[Ai::KnowledgeRetriever] embedding indisponível: #{e.message}"
     nil

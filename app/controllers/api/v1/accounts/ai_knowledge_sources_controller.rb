@@ -95,10 +95,11 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     pieces.each { |content| source.chunks.create!(content: content, embedding: embed(content).presence) }
   end
 
+  # Embedding inline (síncrono, no request). Ai::Embedder usa a chave FRESCA da tela do sistema
+  # (sem restart). Degrada em nil em qualquer falha — o Ai::KnowledgeIngestJob (async, com retry) e
+  # o Ai::EmbeddingBackfillJob (cron) recuperam o vetor depois; a resposta do request nunca quebra.
   def embed(text)
-    return nil unless defined?(Captain::Llm::EmbeddingService)
-
-    Captain::Llm::EmbeddingService.new(account_id: Current.account.id).get_embedding(text)
+    Ai::Embedder.embed(text)
   rescue StandardError => e
     Rails.logger.warn "[AiKnowledge] embedding indisponível: #{e.message}"
     nil
