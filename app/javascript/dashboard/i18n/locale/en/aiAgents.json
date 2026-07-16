@@ -144,7 +144,7 @@
       "TITLE_STEP_INSTRUCTIONS": "Assistente de instruções da etapa",
       "SUBTITLE": "Descreva o que você precisa e receba uma sugestão de texto. Nenhuma alteração é aplicada automaticamente; revise antes de utilizar.",
       "BRIEF_LABEL": "O que você precisa?",
-      "BRIEF_PLACEHOLDER": "Ex.: agente comercial de uma provedora de internet; coleta a cidade e o tipo de cliente (residencial/empresa) antes de apresentar planos.",
+      "BRIEF_PLACEHOLDER": "Ex.: agente comercial de uma provedora de internet; coleta a cidade e o tipo de cliente (residencial/empresa) antes de apresentar planos. Ex.: se o cliente não informar o tamanho do imóvel após perguntar de forma diferente uma vez, estime como 'até 70m²' e confirme brevemente antes de avançar.",
       "GENERATE": "Gerar sugestão",
       "RESULT_LABEL": "Sugestão",
       "COPY": "Copiar",

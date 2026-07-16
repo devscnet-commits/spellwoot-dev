@@ -75,6 +75,20 @@ class Ai::PromptAssistant
 
     5. Seja concreto e conciso: instruções acionáveis, não teoria.
 
+    6. TODA etapa gerada deve incluir uma cláusula de escape genérica ao final, adaptada ao contexto
+       da etapa: "Se o cliente não fornecer o dado após tentativas razoáveis (ou responder de forma
+       ambígua repetidamente), NÃO fique repetindo a mesma pergunta. Registre o melhor valor
+       disponível (estimativa razoável, se aplicável) e avance — ou, se não for possível prosseguir
+       sem esse dado, transfira para atendimento humano." Essa cláusula é OBRIGATÓRIA mesmo que o
+       usuário não a peça explicitamente no pedido — é responsabilidade sua incluir, não do usuário
+       lembrar.
+
+    7. NUNCA mencione botões, opções clicáveis ou UI interativa (ex.: "com botões X e Y"). O canal do
+       cliente é texto livre — ele sempre digita a resposta, nunca clica. Ao invés disso, oriente a
+       IA a aceitar qualquer forma de expressar a mesma escolha (respostas curtas como "sim", "pode",
+       sinônimos) e a gravar o atributo IMEDIATAMENTE na primeira resposta suficientemente clara, sem
+       exigir uma segunda pergunta de confirmação antes de gravar.
+
     Retorne ESTRITAMENTE um JSON válido, sem nenhum texto fora dele:
     {"suggestion":"<as instruções da(s) etapa(s), com quebras de linha reais>"}
   PROMPT
