@@ -103,6 +103,7 @@ class Ai::Gateway
     system_prompt = Ai::PromptCompiler.compile(
       agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
       collected: (@conversation.contact&.custom_attributes || {})
+        .merge(@conversation.additional_attributes&.dig('ai_collected_facts') || {})
         .merge(@conversation.custom_attributes || {}),
       fillable_attributes: context_builder.fillable_attributes(department),
       customer_memory: customer_memory,
