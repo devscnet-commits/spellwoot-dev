@@ -230,84 +230,126 @@ RSpec.describe Ai::StateManager do
       Ai::Event.where(conversation_id: conversation.id, event_type: type)
     end
 
-    describe 'Camada A — extração determinística do slot' do
-      it 'extrai o CPF do texto e AVANÇA mesmo sem o modelo devolver attributes' do
+    describe 'Camada A / Parte 2 — captura do slot (extrator OU texto cru, sempre gravável)' do
+      it 'extrai o CPF (tipo conhecido) e AVANÇA mesmo sem o modelo devolver attributes' do
         track_msg({ 'step_completed' => false }, 'meu cpf é 111.444.777-35')
 
         expect(facts['cpf']).to eq('111.444.777-35')
         expect(step_index).to eq(1)
-        expect(events('slot.extracted').count).to eq(1)
-        expect(events('slot.extracted').last.payload).to include('attribute' => 'cpf', 'type' => 'cpf')
+        expect(events('slot.captured').last.payload).to include('attribute' => 'cpf', 'source' => 'extractor')
       end
 
-      it 'NÃO extrai nada de type=text (nome é ambíguo) — não avança nesse turno' do
-        set_index(1) # etapa Nome (type=text)
+      it 'captura o TEXTO CRU num slot de texto e AVANÇA (guarda e segue, sem reperguntar)' do
+        set_index(1) # etapa Nome (type=text) — o extrator não pega, grava o cru
 
         track_msg({ 'step_completed' => false }, 'meu nome é Jaque')
 
-        expect(facts['nome']).to be_nil
-        expect(step_index).to eq(1)
-        expect(events('slot.extracted')).to be_empty
+        expect(facts['nome']).to eq('meu nome é Jaque')
+        expect(step_index).to eq(2)
+        expect(events('slot.captured').last.payload).to include('attribute' => 'nome', 'source' => 'raw')
       end
     end
 
-    describe 'Camada B — SINALIZA handoff por trava (NÃO força avanço)' do
-      # X configurável via transfer_rules['stuck_handoff_turns'] (tela). 0 = desligado.
-      def track_msg_limit(decision, text, limit)
+    describe 'Camada B/#259 — handoff por trava só quando o cliente SOME (message_text vazio)' do
+      def track_blank(limit)
         safety_department.update!(transfer_rules: { 'stuck_handoff_turns' => limit })
-        track_msg(decision, text)
+        manager.track_step(safety_department, { 'step_completed' => false },
+                           dispatcher: dispatcher, run: run, message_text: '')
       end
 
-      # TESTE-CHAVE: etapa slot type=text, o modelo NUNCA coopera, X=3.
-      it 'NÃO sinaliza nos turnos 1 e 2; no turno 3 retorna stuck_handoff (slot, nome da etapa, turns=3)' do
-        set_index(1) # Nome (type=text) — extração nunca preenche
+      it 'cliente RESPONDENDO (mesmo junk) NÃO conta como trava — captura e avança' do
+        set_index(1)
+        safety_department.update!(transfer_rules: { 'stuck_handoff_turns' => 3 })
 
-        expect(track_msg_limit({ 'step_completed' => false }, 'oi', 3)).to be_nil    # turno 1
-        expect(stuck_turns).to eq(1)
-        expect(track_msg_limit({ 'step_completed' => false }, 'blá', 3)).to be_nil   # turno 2
-        expect(stuck_turns).to eq(2)
+        sig = track_msg({ 'step_completed' => false }, 'oi')
 
-        sig = track_msg_limit({ 'step_completed' => false }, 'oi de novo', 3)         # turno 3 -> handoff
-        expect(sig).to eq(stuck_handoff: { attribute: 'nome', step_name: 'Nome', turns: 3 })
-        expect(step_index).to eq(1) # PERMANECE — nunca força avanço com dado faltando
+        expect(sig).to be_nil
+        expect(step_index).to eq(2)   # avançou (guarda e segue)
+        expect(stuck_turns).to be_nil # nunca contou trava
       end
 
-      it 'X=0 desliga: nunca sinaliza handoff por trava, permanece na etapa' do
+      it 'cliente SUMIDO (msg vazia): conta trava e no limite sinaliza stuck_handoff' do
         set_index(1)
 
-        5.times { |i| expect(track_msg_limit({ 'step_completed' => false }, "m#{i}", 0)).to be_nil }
+        expect(track_blank(3)).to be_nil # turno 1
+        expect(stuck_turns).to eq(1)
+        expect(track_blank(3)).to be_nil # turno 2
+        expect(stuck_turns).to eq(2)
+
+        sig = track_blank(3) # turno 3 -> handoff
+        expect(sig).to eq(stuck_handoff: { attribute: 'nome', step_name: 'Nome', turns: 3 })
         expect(step_index).to eq(1)
       end
 
-      it 'não emite mais step.forced_advance (comportamento removido)' do
+      it 'X=0 desliga: cliente sumido nunca sinaliza handoff, permanece na etapa' do
         set_index(1)
-        track_msg_limit({ 'step_completed' => false }, 'a', 3)
-        track_msg_limit({ 'step_completed' => false }, 'b', 3)
-        track_msg_limit({ 'step_completed' => false }, 'c', 3)
 
-        expect(events('step.forced_advance')).to be_empty
+        5.times { expect(track_blank(0)).to be_nil }
+        expect(step_index).to eq(1)
       end
 
-      it 'zera o contador quando a etapa avança por preenchimento' do
-        set_index(1)
-        track_msg_limit({ 'step_completed' => false }, 'oi', 3) # contador -> 1
-        expect(stuck_turns).to eq(1)
-
-        track_msg_limit({ 'attributes' => { 'nome' => 'Jaque' }, 'step_completed' => false }, 'sou a Jaque', 3)
-        expect(step_index).to eq(2)
-        expect(stuck_turns).to eq(0)
-      end
-
-      it 'concorrência: o contador não sobrescreve ai_step_index nem ai_collected_facts' do
+      it 'concorrência: o contador (msg vazia) não sobrescreve ai_step_index nem ai_collected_facts' do
         conversation.update!(additional_attributes: { 'ai_step_index' => 1,
                                                        'ai_collected_facts' => { 'x' => '1' } })
 
-        track_msg_limit({ 'step_completed' => false }, 'oi', 3) # etapa 1 (Nome/text) — fica parado
+        track_blank(3) # etapa 1 (Nome/text), cliente sumido — fica parado
 
         attrs = conversation.reload.additional_attributes
         expect(attrs['ai_step_index']).to eq(1)
         expect(attrs['ai_collected_facts']).to eq({ 'x' => '1' })
         expect(attrs['ai_step_stuck_turns']).to eq(1)
+      end
+    end
+
+    # === CONSERTO: slot inferido da instrução + confirmação-única de valor estranho ================
+    describe 'conserto — slot inferido + confirma 1x se estranho, nunca fica preso' do
+      let(:infer_department) do
+        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro2',
+                                      status: 'active', behavior: {})
+        # etapa SEM collect declarado; a instrução manda gravar no atributo email (criada antes do #259)
+        dept.create_playbook!(active: true, steps: [
+                                { 'name' => 'CADASTRO de email',
+                                  'instructions' => 'Peça e grave o e-mail do cliente no atributo email.' },
+                                { 'name' => 'Fim' }
+                              ])
+        dept
+      end
+
+      def track_infer(decision, text)
+        infer_department.update!(transfer_rules: { 'stuck_handoff_turns' => 3 })
+        manager.track_step(infer_department, decision, dispatcher: dispatcher, run: run, message_text: text)
+      end
+
+      it 'infere o slot "email" da instrução (sem collect, sem atributo personalizado)' do
+        expect(Ai::StepSlot.required_attribute(infer_department.playbook.steps.first)).to eq('email')
+      end
+
+      it 'e-mail MALFORMADO + cliente TEIMA: confirma 1x, depois grava como veio e AVANÇA (sem loop)' do
+        # turno 1: valor estranho -> confirma UMA vez (hold, não avança), grava o valor
+        expect(track_infer({ 'step_completed' => false }, 'Hgdd@()(.com')).to be_nil
+        expect(step_index).to eq(0)
+        expect(facts['email']).to eq('Hgdd@()(.com')
+        expect(conversation.reload.additional_attributes['ai_step_confirm_index']).to eq(0)
+
+        # turno 2: cliente teima -> NÃO confirma de novo, grava como veio e AVANÇA
+        expect(track_infer({ 'step_completed' => false }, 'já mandei')).to be_nil
+        expect(step_index).to eq(1)             # avançou
+        expect(facts['email']).to eq('Hgdd@()(.com') # manteve o valor original
+      end
+
+      it 'e-mail VÁLIDO: grava e avança direto, SEM confirmar' do
+        track_infer({ 'step_completed' => false }, 'joao@empresa.com')
+
+        expect(facts['email']).to eq('joao@empresa.com')
+        expect(step_index).to eq(1)
+        expect(conversation.reload.additional_attributes['ai_step_confirm_index']).to be_nil
+      end
+
+      it 'confirma no máximo UMA vez por etapa (nunca pergunta o mesmo dado uma 3ª vez)' do
+        track_infer({ 'step_completed' => false }, 'aaa')   # estranho -> confirma (hold)
+        track_infer({ 'step_completed' => false }, 'bbb')   # teima -> grava e avança
+        # de volta forçado ao índice 0 não acontece no fluxo; garantimos que não houve 2º hold:
+        expect(step_index).to eq(1)
       end
     end
   end

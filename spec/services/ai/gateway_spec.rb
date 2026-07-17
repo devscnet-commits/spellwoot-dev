@@ -483,8 +483,7 @@ RSpec.describe Ai::Gateway do
       convo.reload
     end
 
-    # o modelo nunca preenche 'nome' (type=text não extrai); só responde (textos distintos p/ não acionar loop-guard)
-    def stub_never_fills
+    def stub_reply
       stub_decisions(
         { 'decision' => 'reply', 'reply_text' => 'Qual seu nome?' },
         { 'decision' => 'reply', 'reply_text' => 'Pode me dizer seu nome?' },
@@ -492,37 +491,36 @@ RSpec.describe Ai::Gateway do
       )
     end
 
-    it 'X=3: nos turnos 1 e 2 responde normal e NÃO transfere por trava' do
+    it 'cliente RESPONDENDO (mesmo junk) captura o valor e NÃO transfere por trava' do
       slot_department(3)
       binding = create_binding(mode: 'live')
       convo = create(:conversation, account: account, inbox: inbox, status: 'open')
-      stub_never_fills
+      stub_reply
 
-      run_turn(convo, binding, 'oi')        # turno 1
-      run_turn(convo, binding, 'tudo bem?') # turno 2
+      run_turn(convo, binding, 'oi') # captura "oi" como nome (guarda e segue)
 
       expect(event_types(convo)).not_to include('step.stuck_handoff')
-      expect(convo.additional_attributes['ai_step_stuck_turns']).to eq(2)
+      expect(convo.additional_attributes['ai_collected_facts']).to include('nome' => 'oi')
     end
 
-    it 'X=3: no 3º turno avisa o cliente ANTES, transfere, registra motivo e emite step.stuck_handoff' do
+    # Cliente SUMIDO = mensagens sem texto usável (branco): nada a capturar -> conta trava -> handoff.
+    it 'X=3: cliente sumido por 3 turnos -> avisa o cliente ANTES, transfere e emite step.stuck_handoff' do
       slot_department(3)
       binding = create_binding(mode: 'live')
       convo = create(:conversation, account: account, inbox: inbox, status: 'open')
       allow(Ai::HandoffSummaryJob).to receive(:perform_later)
-      stub_never_fills
+      stub_reply
 
-      run_turn(convo, binding, 'oi')
-      run_turn(convo, binding, 'tudo bem?')
-      run_turn(convo, binding, 'e aí') # turno 3 -> handoff
+      run_turn(convo, binding, '') # turno 1 (sem texto usável)
+      run_turn(convo, binding, '') # turno 2
+      run_turn(convo, binding, '') # turno 3 -> handoff
 
       aggregate_failures do
         expect(event_types(convo)).to include('step.stuck_handoff')
         # avisou o cliente (a última mensagem enviada é o aviso, não a pergunta do modelo)
         expect(convo.messages.outgoing.last.content).to include('encaminhar')
-        # transferiu de verdade (ação nativa de transfer) e NÃO forçou avanço (índice preso em 0)
+        # transferiu de verdade (ação nativa de transfer) e NÃO forçou avanço com dado faltando
         expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.transfer')).to exist
-        expect(convo.additional_attributes['ai_step_index']).to eq(0)
         # motivo específico no Resumo da transferência (nome da etapa + nº de turnos)
         expect(Ai::HandoffSummaryJob).to have_received(:perform_later)
           .with(convo.id, a_string_matching(/coletar "Nome completo" por 3 mensagens/))
@@ -532,18 +530,13 @@ RSpec.describe Ai::Gateway do
       end
     end
 
-    it 'X=0 desligado: nunca transfere por trava, permanece na etapa' do
+    it 'X=0 desligado: cliente sumido nunca transfere por trava' do
       slot_department(0)
       binding = create_binding(mode: 'live')
       convo = create(:conversation, account: account, inbox: inbox, status: 'open')
-      stub_decisions(
-        { 'decision' => 'reply', 'reply_text' => 'Qual seu nome?' },
-        { 'decision' => 'reply', 'reply_text' => 'Pode dizer seu nome?' },
-        { 'decision' => 'reply', 'reply_text' => 'Me diz seu nome?' },
-        { 'decision' => 'reply', 'reply_text' => 'Seu nome, por favor?' }
-      )
+      stub_reply
 
-      4.times { |i| run_turn(convo, binding, "m#{i}") }
+      4.times { run_turn(convo, binding, '') } # cliente sumido, mas X=0
 
       expect(event_types(convo)).not_to include('step.stuck_handoff')
       expect(convo.additional_attributes['ai_step_index']).to eq(0)
