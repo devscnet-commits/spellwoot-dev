@@ -465,6 +465,91 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === Camada B: etapa de slot travada -> avisa o cliente e TRANSFERE (não força avanço) ==========
+  context 'rede de segurança: etapa de slot travada -> handoff para humano' do
+    def slot_department(turns)
+      dept = create_department(transfer_rules: { 'stuck_handoff_turns' => turns })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Nome completo',
+                                'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true } }
+                            ])
+      dept
+    end
+
+    def run_turn(convo, binding, text)
+      message = create(:message, account: account, inbox: inbox, conversation: convo,
+                                 message_type: 'incoming', content: text)
+      described_class.new(message: message, agent_inbox: binding, mode: 'live').run
+      convo.reload
+    end
+
+    # o modelo nunca preenche 'nome' (type=text não extrai); só responde (textos distintos p/ não acionar loop-guard)
+    def stub_never_fills
+      stub_decisions(
+        { 'decision' => 'reply', 'reply_text' => 'Qual seu nome?' },
+        { 'decision' => 'reply', 'reply_text' => 'Pode me dizer seu nome?' },
+        { 'decision' => 'reply', 'reply_text' => 'Preciso do seu nome, por favor.' }
+      )
+    end
+
+    it 'X=3: nos turnos 1 e 2 responde normal e NÃO transfere por trava' do
+      slot_department(3)
+      binding = create_binding(mode: 'live')
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      stub_never_fills
+
+      run_turn(convo, binding, 'oi')        # turno 1
+      run_turn(convo, binding, 'tudo bem?') # turno 2
+
+      expect(event_types(convo)).not_to include('step.stuck_handoff')
+      expect(convo.additional_attributes['ai_step_stuck_turns']).to eq(2)
+    end
+
+    it 'X=3: no 3º turno avisa o cliente ANTES, transfere, registra motivo e emite step.stuck_handoff' do
+      slot_department(3)
+      binding = create_binding(mode: 'live')
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      allow(Ai::HandoffSummaryJob).to receive(:perform_later)
+      stub_never_fills
+
+      run_turn(convo, binding, 'oi')
+      run_turn(convo, binding, 'tudo bem?')
+      run_turn(convo, binding, 'e aí') # turno 3 -> handoff
+
+      aggregate_failures do
+        expect(event_types(convo)).to include('step.stuck_handoff')
+        # avisou o cliente (a última mensagem enviada é o aviso, não a pergunta do modelo)
+        expect(convo.messages.outgoing.last.content).to include('encaminhar')
+        # transferiu de verdade (ação nativa de transfer) e NÃO forçou avanço (índice preso em 0)
+        expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.transfer')).to exist
+        expect(convo.additional_attributes['ai_step_index']).to eq(0)
+        # motivo específico no Resumo da transferência (nome da etapa + nº de turnos)
+        expect(Ai::HandoffSummaryJob).to have_received(:perform_later)
+          .with(convo.id, a_string_matching(/coletar "Nome completo" por 3 mensagens/))
+        # telemetria
+        ev = Ai::Event.where(conversation_id: convo.id, event_type: 'step.stuck_handoff').last
+        expect(ev.payload).to include('attribute' => 'nome', 'step_name' => 'Nome completo', 'turns' => 3)
+      end
+    end
+
+    it 'X=0 desligado: nunca transfere por trava, permanece na etapa' do
+      slot_department(0)
+      binding = create_binding(mode: 'live')
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      stub_decisions(
+        { 'decision' => 'reply', 'reply_text' => 'Qual seu nome?' },
+        { 'decision' => 'reply', 'reply_text' => 'Pode dizer seu nome?' },
+        { 'decision' => 'reply', 'reply_text' => 'Me diz seu nome?' },
+        { 'decision' => 'reply', 'reply_text' => 'Seu nome, por favor?' }
+      )
+
+      4.times { |i| run_turn(convo, binding, "m#{i}") }
+
+      expect(event_types(convo)).not_to include('step.stuck_handoff')
+      expect(convo.additional_attributes['ai_step_index']).to eq(0)
+    end
+  end
+
   # === collected — a memória de fatos ao vivo (ai_collected_facts) entra no prompt =====
   context 'collected inclui a memória de fatos ao vivo' do
     it 'passa ai_collected_facts em collected, com custom_attributes da conversa por cima' do

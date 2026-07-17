@@ -25,6 +25,14 @@ const draft = reactive({
   name: props.step?.name || '',
   instructions: props.step?.instructions || '',
   group_delay_seconds: props.step?.group_delay_seconds ?? '',
+  // Slot declarado (collect): a chave do dado que ESTA etapa coleta. Vazio = etapa informativa
+  // (avança pelo sinal do modelo). Preenchido = o sistema avança sozinho quando o dado é coletado.
+  collectAttribute: props.step?.collect?.attribute || '',
+  collectType: props.step?.collect?.type || 'text',
+  collectRequired: props.step?.collect?.required ?? true,
+  collectOptions: Array.isArray(props.step?.collect?.options)
+    ? props.step.collect.options.join('\n')
+    : '',
   // automation_on_complete (booleano) é legado/ignorado; agora usamos automations: [{type, params}].
   automations: (Array.isArray(props.step?.automations)
     ? props.step.automations
@@ -34,6 +42,19 @@ const draft = reactive({
     params: { ...(a?.params || {}) },
   })),
 });
+
+const slotTypeOptions = computed(() => [
+  { value: 'text', label: t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE_TEXT') },
+  { value: 'email', label: t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE_EMAIL') },
+  { value: 'cpf', label: t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE_CPF') },
+  { value: 'phone', label: t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE_PHONE') },
+  { value: 'number', label: t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE_NUMBER') },
+  { value: 'choice', label: t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE_CHOICE') },
+  {
+    value: 'attachment',
+    label: t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE_ATTACHMENT'),
+  },
+]);
 
 const typeOptions = computed(() => [
   { value: 'tag', label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_TAG') },
@@ -77,7 +98,9 @@ const onTypeChange = i => {
 
 const onSave = () => {
   if (!draft.name.trim()) return;
-  emit('save', {
+  const attribute = (draft.collectAttribute || '').trim();
+  const hasSlot = !!attribute;
+  const payload = {
     name: draft.name.trim(),
     instructions: (draft.instructions || '').trim(),
     group_delay_seconds: draft.group_delay_seconds,
@@ -85,7 +108,27 @@ const onSave = () => {
       type: a.type,
       params: a.params,
     })),
-  });
+  };
+  if (hasSlot) {
+    // Etapa com slot: o backend (StateManager) avança determinísticamente quando o slot é preenchido.
+    payload.collect = {
+      attribute,
+      type: draft.collectType || 'text',
+      required: draft.collectRequired,
+    };
+    if (draft.collectType === 'choice') {
+      payload.collect.options = (draft.collectOptions || '')
+        .split('\n')
+        .map(o => o.trim())
+        .filter(Boolean);
+    }
+    payload.complete_when = 'attribute_present';
+  } else {
+    // Etapa informativa: sem coleta, avança pelo sinal do modelo (step_completed).
+    payload.collect = null;
+    payload.complete_when = 'always';
+  }
+  emit('save', payload);
 };
 </script>
 
@@ -130,6 +173,57 @@ const onSave = () => {
         {{ $t('AI_DEPARTMENTS.FORM.STEP_DELAY_HINT') }}
       </span>
     </label>
+
+    <!-- O que esta etapa coleta (slot declarado) -->
+    <div class="flex flex-col gap-2 border-t border-n-weak pt-3">
+      <div class="flex flex-col gap-0.5">
+        <span class="text-sm font-medium text-n-slate-12">
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TITLE') }}
+        </span>
+        <span class="text-xs text-n-slate-11">
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_HINT') }}
+        </span>
+      </div>
+
+      <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+        {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE') }}
+        <input
+          v-model="draft.collectAttribute"
+          type="text"
+          :placeholder="
+            $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE_PLACEHOLDER')
+          "
+          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
+        />
+      </label>
+
+      <template v-if="draft.collectAttribute.trim()">
+        <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
+          <Select v-model="draft.collectType" :options="slotTypeOptions" />
+        </label>
+
+        <label
+          v-if="draft.collectType === 'choice'"
+          class="flex flex-col gap-1.5 text-sm text-n-slate-12"
+        >
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
+          <textarea
+            v-model="draft.collectOptions"
+            rows="2"
+            :placeholder="
+              $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
+            "
+            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-y"
+          />
+        </label>
+
+        <label class="flex items-center gap-2 text-sm text-n-slate-12">
+          <input v-model="draft.collectRequired" type="checkbox" />
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_REQUIRED') }}
+        </label>
+      </template>
+    </div>
 
     <!-- Automações ao concluir a etapa -->
     <div class="flex flex-col gap-2 border-t border-n-weak pt-3">

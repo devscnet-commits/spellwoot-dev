@@ -65,6 +65,9 @@ const form = reactive({
   // palavra-chave foi removido (substring sem contexto gerava falso positivo). Diferente de
   // transfer_when, que é só sugestão no prompt.
   transfer_min_confidence: 0,
+  // Transferir para humano se a IA travar numa etapa de coleta por X mensagens
+  // (department.transfer_rules.stuck_handoff_turns). Default 3; 0 = desligado (nunca transfere por trava).
+  stuck_handoff_turns: 3,
   // Atendimento
   group_delay_seconds: '',
   max_replies: '',
@@ -273,6 +276,8 @@ const hydrate = dept => {
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
     transfer_min_confidence: Number(transferRules.min_confidence) || 0,
+    // ?? 3: chave ausente (department antigo) => default 3; valor 0 explícito é preservado.
+    stuck_handoff_turns: Number(transferRules.stuck_handoff_turns ?? 3),
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
@@ -367,6 +372,8 @@ const buildPayload = () => ({
     // jsonb_params do controller (sem mudança de backend). Keywords foi removido (falso positivo).
     transfer_rules: {
       min_confidence: Number(form.transfer_min_confidence) || 0,
+      // 0 = desligado; senão transfere para humano após X mensagens travado numa etapa de coleta.
+      stuck_handoff_turns: Number(form.stuck_handoff_turns) || 0,
     },
     playbook: {
       objetivo: form.objetivo,
@@ -1375,6 +1382,19 @@ onMounted(async () => {
                     step="0.1"
                     class="w-32 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
                   />
+                </label>
+                <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.STUCK_HANDOFF_TURNS') }}
+                  <input
+                    v-model="form.stuck_handoff_turns"
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="w-32 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                  />
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_DEPARTMENTS.FORM.STUCK_HANDOFF_TURNS_HINT') }}
+                  </span>
                 </label>
               </div>
             </div>

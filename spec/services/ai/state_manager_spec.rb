@@ -134,6 +134,184 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  describe '#track_step — avanço DETERMINÍSTICO por slot (collect)' do
+    let(:slot_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ColetaSlot',
+                                    status: 'active', behavior: {})
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Nome',
+                                'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true },
+                                'automations' => [{ 'type' => 'tag', 'params' => { 'label' => 'coletado' } }] },
+                              { 'name' => 'Planos', 'complete_when' => 'always' },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def track_slot(decision)
+      manager.track_step(slot_department, decision, dispatcher: dispatcher, run: run)
+    end
+
+    it 'avança quando o slot é preenchido no MESMO turno (decision[attributes]), mesmo com step_completed=false' do
+      expect { track_slot('step_completed' => false, 'attributes' => { 'nome' => 'Jaque' }) }
+        .to change { step_index }.from(nil).to(1)
+    end
+
+    it 'avança quando o slot já está em ai_collected_facts (turno anterior), sem attributes e sem step_completed' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0,
+                                                     'ai_collected_facts' => { 'nome' => 'Jaque' } })
+      track_slot('step_completed' => false)
+      expect(step_index).to eq(1)
+    end
+
+    it 'NÃO avança com o slot vazio, mesmo se o modelo mandar step_completed=true (o código decide)' do
+      track_slot('step_completed' => true, 'attributes' => {})
+      expect(step_index).to eq(0)
+    end
+
+    it 'ignora valor em branco no slot (não avança)' do
+      track_slot('step_completed' => false, 'attributes' => { 'nome' => '   ' })
+      expect(step_index).to eq(0)
+    end
+
+    it 'etapa informativa (complete_when=always, sem collect) avança só pelo sinal do modelo' do
+      set_index(1) # Planos
+      track_slot('step_completed' => false)
+      expect(step_index).to eq(1) # sem sinal -> fica
+      track_slot('step_completed' => true)
+      expect(step_index).to eq(2) # com sinal -> avança
+    end
+
+    it 'dispara a automação da etapa ao concluir POR SLOT (step_completed=false) — correção do gating' do
+      runner = instance_double(Ai::StepAutomationRunner, run: nil)
+      allow(Ai::StepAutomationRunner).to receive(:new).and_return(runner)
+
+      track_slot('step_completed' => false, 'attributes' => { 'nome' => 'Jaque' })
+
+      expect(runner).to have_received(:run).once
+      expect(step_index).to eq(1)
+    end
+
+    it 'NÃO dispara a automação da etapa de slot enquanto o slot não é preenchido' do
+      expect(Ai::StepAutomationRunner).not_to receive(:new)
+
+      track_slot('step_completed' => true, 'attributes' => {}) # step_completed true é ignorado (slot vazio)
+      expect(step_index).to eq(0)
+    end
+  end
+
+  describe '#track_step — rede de segurança (Camada A extração + Camada B fallback)' do
+    let(:safety_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro',
+                                    status: 'active', behavior: {})
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'CPF',
+                                'collect' => { 'attribute' => 'cpf', 'type' => 'cpf', 'required' => true } },
+                              { 'name' => 'Nome',
+                                'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true } },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def track_msg(decision, text)
+      manager.track_step(safety_department, decision, dispatcher: dispatcher, run: run, message_text: text)
+    end
+
+    def facts
+      conversation.reload.additional_attributes['ai_collected_facts'] || {}
+    end
+
+    def stuck_turns
+      conversation.reload.additional_attributes['ai_step_stuck_turns']
+    end
+
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    describe 'Camada A — extração determinística do slot' do
+      it 'extrai o CPF do texto e AVANÇA mesmo sem o modelo devolver attributes' do
+        track_msg({ 'step_completed' => false }, 'meu cpf é 111.444.777-35')
+
+        expect(facts['cpf']).to eq('111.444.777-35')
+        expect(step_index).to eq(1)
+        expect(events('slot.extracted').count).to eq(1)
+        expect(events('slot.extracted').last.payload).to include('attribute' => 'cpf', 'type' => 'cpf')
+      end
+
+      it 'NÃO extrai nada de type=text (nome é ambíguo) — não avança nesse turno' do
+        set_index(1) # etapa Nome (type=text)
+
+        track_msg({ 'step_completed' => false }, 'meu nome é Jaque')
+
+        expect(facts['nome']).to be_nil
+        expect(step_index).to eq(1)
+        expect(events('slot.extracted')).to be_empty
+      end
+    end
+
+    describe 'Camada B — SINALIZA handoff por trava (NÃO força avanço)' do
+      # X configurável via transfer_rules['stuck_handoff_turns'] (tela). 0 = desligado.
+      def track_msg_limit(decision, text, limit)
+        safety_department.update!(transfer_rules: { 'stuck_handoff_turns' => limit })
+        track_msg(decision, text)
+      end
+
+      # TESTE-CHAVE: etapa slot type=text, o modelo NUNCA coopera, X=3.
+      it 'NÃO sinaliza nos turnos 1 e 2; no turno 3 retorna stuck_handoff (slot, nome da etapa, turns=3)' do
+        set_index(1) # Nome (type=text) — extração nunca preenche
+
+        expect(track_msg_limit({ 'step_completed' => false }, 'oi', 3)).to be_nil    # turno 1
+        expect(stuck_turns).to eq(1)
+        expect(track_msg_limit({ 'step_completed' => false }, 'blá', 3)).to be_nil   # turno 2
+        expect(stuck_turns).to eq(2)
+
+        sig = track_msg_limit({ 'step_completed' => false }, 'oi de novo', 3)         # turno 3 -> handoff
+        expect(sig).to eq(stuck_handoff: { attribute: 'nome', step_name: 'Nome', turns: 3 })
+        expect(step_index).to eq(1) # PERMANECE — nunca força avanço com dado faltando
+      end
+
+      it 'X=0 desliga: nunca sinaliza handoff por trava, permanece na etapa' do
+        set_index(1)
+
+        5.times { |i| expect(track_msg_limit({ 'step_completed' => false }, "m#{i}", 0)).to be_nil }
+        expect(step_index).to eq(1)
+      end
+
+      it 'não emite mais step.forced_advance (comportamento removido)' do
+        set_index(1)
+        track_msg_limit({ 'step_completed' => false }, 'a', 3)
+        track_msg_limit({ 'step_completed' => false }, 'b', 3)
+        track_msg_limit({ 'step_completed' => false }, 'c', 3)
+
+        expect(events('step.forced_advance')).to be_empty
+      end
+
+      it 'zera o contador quando a etapa avança por preenchimento' do
+        set_index(1)
+        track_msg_limit({ 'step_completed' => false }, 'oi', 3) # contador -> 1
+        expect(stuck_turns).to eq(1)
+
+        track_msg_limit({ 'attributes' => { 'nome' => 'Jaque' }, 'step_completed' => false }, 'sou a Jaque', 3)
+        expect(step_index).to eq(2)
+        expect(stuck_turns).to eq(0)
+      end
+
+      it 'concorrência: o contador não sobrescreve ai_step_index nem ai_collected_facts' do
+        conversation.update!(additional_attributes: { 'ai_step_index' => 1,
+                                                       'ai_collected_facts' => { 'x' => '1' } })
+
+        track_msg_limit({ 'step_completed' => false }, 'oi', 3) # etapa 1 (Nome/text) — fica parado
+
+        attrs = conversation.reload.additional_attributes
+        expect(attrs['ai_step_index']).to eq(1)
+        expect(attrs['ai_collected_facts']).to eq({ 'x' => '1' })
+        expect(attrs['ai_step_stuck_turns']).to eq(1)
+      end
+    end
+  end
+
   describe '#persist_attributes — validação de chave' do
     def define_attr(key, display = key.capitalize)
       CustomAttributeDefinition.create!(

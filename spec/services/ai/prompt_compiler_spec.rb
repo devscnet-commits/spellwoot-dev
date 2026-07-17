@@ -114,4 +114,68 @@ RSpec.describe Ai::PromptCompiler do
       expect(prompt).to include('- Fechamento')
     end
   end
+
+  describe 'ESTADO DA COLETA (reforço ativo — JÁ TENHO / FALTA agora)' do
+    def build_dept_with_steps(steps)
+      pb = double('playbook', steps: steps, transfer_when: [], close_when: [])
+      double('dept', name: 'Comercial', objetivo: 'Converter leads', instructions: nil,
+                     playbook: pb, lead_variables: [])
+    end
+
+    def compile_state(steps:, step_index:, collected: {})
+      described_class.compile(agent: build_agent, department: build_dept_with_steps(steps),
+                              knowledge: [], memory: nil, tools: [], collected: collected,
+                              step_index: step_index)
+    end
+
+    let(:steps) do
+      [{ 'name' => 'Nome', 'collect' => { 'attribute' => 'nome', 'required' => true } },
+       { 'name' => 'Cidade', 'collect' => { 'attribute' => 'cidade', 'required' => true } },
+       { 'name' => 'Planos', 'complete_when' => 'always' }]
+    end
+
+    it 'mostra "JÁ TENHO" com os fatos coletados e a regra anti-repetição' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).to include('ESTADO DA COLETA')
+      expect(prompt).to include('✓ JÁ TENHO: nome=Jaque')
+      expect(prompt).to include('NUNCA peça de novo um dado da lista "JÁ TENHO"')
+    end
+
+    it 'mostra "FALTA agora" com a CHAVE do slot da etapa atual quando ainda não coletado' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).to include('◦ FALTA agora')
+      expect(prompt).to include('cidade')
+    end
+
+    it 'NÃO mostra "FALTA agora" quando o slot da etapa atual já foi coletado' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque', 'cidade' => 'Chapecó' })
+
+      expect(prompt).not_to include('◦ FALTA agora')
+      expect(prompt).to include('✓ JÁ TENHO: nome=Jaque, cidade=Chapecó')
+    end
+
+    it 'não injeta "FALTA agora" em etapa informativa (sem collect)' do
+      prompt = compile_state(steps: steps, step_index: 2, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).not_to include('◦ FALTA agora')
+    end
+
+    it 'omite o bloco inteiro quando não há nada coletado e a etapa não declara slot' do
+      informational = [{ 'name' => 'Boas-vindas', 'complete_when' => 'always' }]
+      prompt = compile_state(steps: informational, step_index: 0, collected: {})
+
+      expect(prompt).not_to include('ESTADO DA COLETA')
+    end
+
+    it 'em etapa de slot sem nada coletado, mostra só "FALTA agora" (sem "JÁ TENHO")' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      expect(prompt).to include('ESTADO DA COLETA')
+      expect(prompt).to include('◦ FALTA agora')
+      expect(prompt).to include('nome')
+      expect(prompt).not_to include('✓ JÁ TENHO')
+    end
+  end
 end

@@ -4,6 +4,11 @@
 # `run_record` NÃO é necessário (só ia pro emit, que ignorava) — some das assinaturas. Emite os MESMOS
 # ai_events de antes (attributes.updated / memory.updated) via emit próprio.
 class Ai::StateManager
+  # Camada B: nº PADRÃO de turnos parado numa etapa de slot antes de TRANSFERIR para humano, quando o
+  # department não define transfer_rules['stuck_handoff_turns']. O valor real vem da tela (0 = desligado).
+  # Default aplicado também às etapas de departments antigos (rede de segurança ligada por padrão).
+  DEFAULT_STUCK_HANDOFF_TURNS = 3
+
   def initialize(conversation:, agent:)
     @conversation = conversation
     @agent = agent
@@ -97,21 +102,44 @@ class Ai::StateManager
   # Também grava ai_step.grouping_delay_seconds (da etapa ATUAL após o avanço) p/ o MessageGrouping,
   # e ai_step.reported_name (o current_step livre do modelo) só como LOG/observabilidade — nada o
   # consome; serve para comparar o que o modelo achava vs. o índice real.
-  def track_step(department, decision, dispatcher: nil, run: nil)
+  # Retorna nil normalmente; ou { stuck_handoff: {attribute, step_name, turns} } quando a etapa de slot
+  # travou por N turnos (Camada B) — SINAL para o Gateway TRANSFERIR para humano (o Gateway tem o
+  # action_dispatcher + handoff_coordinator; aqui só decidimos, não executamos o handoff).
+  def track_step(department, decision, dispatcher: nil, run: nil, message_text: nil)
     steps = Array(department.playbook&.steps)
     return if steps.empty? # playbook sem etapas = no-op
 
-    max_index = steps.size - 1
-    index = current_step_index(max_index)
+    index = current_step_index(steps.size - 1)
+    step = steps[index]
+    slot = Ai::StepSlot.required_attribute(step)
 
-    # Dispara as automações da etapa ATUAL na transição de conclusão (idempotente por índice).
-    fire_step_automations(decision, steps[index], index, dispatcher, run)
+    # Camada A (rede de segurança): se a etapa coleta um slot ainda vazio, tenta extrair o valor
+    # DETERMINISTICAMENTE do texto do cliente (cpf/email/phone/number/choice) e grava — o avanço
+    # deixa de depender de o modelo devolver `attributes`. Ver #extract_slot_if_needed.
+    extract_slot_if_needed(step, slot, decision, message_text) if slot
 
-    # Avança só quando o modelo conclui a etapa; clamp no máximo. Nunca retrocede/pula.
-    new_index = truthy?(decision['step_completed']) ? (index + 1).clamp(0, max_index) : index
-    persist_step_state(steps[new_index], new_index, decision)
+    # Conclusão + rede de segurança contra travamento (Camada B). Ver #resolve_completion.
+    outcome = resolve_completion(step, slot, decision, stuck_handoff_limit(department))
+
+    # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
+    # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
+    # de disparar em etapas com avanço por slot (step_completed pode ser false quando o código avança).
+    fire_step_automations(outcome[:completed], step, index, dispatcher, run)
+    persist_progress(steps, index, outcome, decision)
+
+    # Camada B: NÃO força avanço (dado faltando). outcome[:signal] leva o pedido de handoff ao Gateway.
+    outcome[:signal]
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#track_step] #{e.class}: #{e.message}"
+    nil
+  end
+
+  # Persiste o avanço da etapa (clamp no máximo; nunca retrocede/pula) + o contador de trava. Extraído
+  # do track_step (mantém-no enxuto). O contador zera ao avançar/transferir e incrementa ao permanecer.
+  def persist_progress(steps, index, outcome, decision)
+    new_index = outcome[:completed] ? (index + 1).clamp(0, steps.size - 1) : index
+    persist_step_state(steps[new_index], new_index, decision)
+    persist_stuck_turns(outcome[:stuck])
   end
 
   # Invisible worker: persist a rolling conversation summary into agent memory.
@@ -147,13 +175,94 @@ class Ai::StateManager
     @conversation.update!(additional_attributes: attrs)
   end
 
-  # Dispara as automações da etapa CONCLUÍDA na transição de índice. Só quando o modelo sinaliza
-  # step_completed E ainda não disparamos para este índice (idempotência via ai_step_last_fired_index).
-  # Marca ANTES de rodar (não reprocessa se algo demorar/falhar). Precisa do dispatcher + run (do
-  # Gateway) para as ações auditadas; sem eles, não roda.
-  def fire_step_automations(decision, step, index, dispatcher, run)
+  # Conclusão DETERMINÍSTICA da etapa atual (código decide o avanço, não o modelo):
+  #  - etapa com slot obrigatório (collect.attribute) -> concluída quando o slot está PREENCHIDO. O
+  #    valor pode vir do turno ATUAL (decision['attributes'], que ainda NÃO foi persistido — track_step
+  #    roda ANTES de persist_attributes no Gateway) OU de fatos já gravados (ai_collected_facts). Por
+  #    isso checamos os dois, com prioridade para o valor do turno (senão o avanço atrasaria 1 turno =
+  #    a repergunta que queremos matar).
+  #  - complete_when == 'always' (etapa informativa, sem coleta) -> avança pelo sinal do modelo.
+  #  - sem collect e sem complete_when (etapas antigas) -> sinal do modelo (compat total, zero migração).
+  def step_completed?(step, decision)
+    return truthy?(decision['step_completed']) if Ai::StepSlot.criterion(step) == 'always'
+
+    slot = Ai::StepSlot.required_attribute(step)
+    return slot_filled?(slot, decision) if slot
+
+    truthy?(decision['step_completed'])
+  end
+
+  # O slot está preenchido? Prioriza o valor recém-devolvido pelo modelo NESTE turno (decision,
+  # ainda não persistido), depois os fatos já gravados. Preserva false/0 como preenchidos.
+  def slot_filled?(slot, decision)
+    pending = decision['attributes']
+    return true if pending.is_a?(Hash) && pending[slot].to_s.strip.present?
+
+    facts = (@conversation.additional_attributes || {})['ai_collected_facts']
+    facts.is_a?(Hash) && facts[slot].to_s.strip.present?
+  end
+
+  # Decide a conclusão da etapa + a rede de segurança anti-travamento (Camada B). Retorna um hash
+  # { completed:, stuck:, signal: (opcional) }, onde `signal` (consumido pelo Gateway) pede o handoff
+  # por trava, com o nome amigável da etapa (ou a chave) e o nº de turnos p/ o motivo/telemetria:
+  #  - etapa SEM slot (informativa/antiga): comportamento padrão (step_completed do modelo), sem contador.
+  #  - slot PREENCHIDO (inclui o que a Camada A acabou de extrair): conclui, zera o contador.
+  #  - slot VAZIO: este turno conta como "parado". Ao atingir o limite (>0), sinaliza HANDOFF (não força
+  #    avanço com dado faltando); senão permanece (o PR-3 reforça a chave no próximo turno). Limite 0 =
+  #    desligado: nunca transfere por trava (só acumula o contador como telemetria).
+  def resolve_completion(step, slot, decision, stuck_limit)
+    return { completed: step_completed?(step, decision), stuck: 0 } unless slot
+    return { completed: true, stuck: 0 } if slot_filled?(slot, decision)
+
+    stuck = (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i + 1
+    return { completed: false, stuck: stuck } unless stuck_limit.positive? && stuck >= stuck_limit
+
+    name = step_name(step).presence || slot
+    { completed: false, stuck: 0, signal: { stuck_handoff: { attribute: slot, step_name: name, turns: stuck } } }
+  end
+
+  # Limite de turnos parado antes de transferir (Camada B), da config do agente (tela). Chave ausente =>
+  # DEFAULT_STUCK_HANDOFF_TURNS (rede ligada por padrão, inclusive p/ departments antigos); 0 = desligado.
+  def stuck_handoff_limit(department)
+    rules = department.transfer_rules || {}
+    rules.key?('stuck_handoff_turns') ? rules['stuck_handoff_turns'].to_i : DEFAULT_STUCK_HANDOFF_TURNS
+  end
+
+  # Camada A: preenche o slot a partir do texto do cliente SEM depender do modelo. Só quando a etapa
+  # tem slot ainda vazio. Grava no MESMO caminho do persist_collected_facts (ai_collected_facts) e
+  # emite slot.extracted para telemetria. type=text não extrai (ambíguo) -> SlotExtractor devolve nil.
+  def extract_slot_if_needed(step, slot, decision, message_text)
+    return if message_text.to_s.strip.empty?
+    return if slot_filled?(slot, decision) # modelo já devolveu, ou turno anterior — não sobrescreve
+
+    type = Ai::StepSlot.type(step)
+    value = Ai::SlotExtractor.extract(attribute_type: type, text: message_text, options: Ai::StepSlot.options(step))
+    return if value.to_s.strip.empty?
+
+    persist_collected_facts({ slot => value })
+    emit('slot.extracted', { attribute: slot, type: type })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#extract_slot_if_needed] #{e.class}: #{e.message}"
+  end
+
+  # Read-modify-write só da chave do contador, lendo FRESCO (após persist_step_state gravar o índice)
+  # — preserva ai_step_index/ai_collected_facts, mesma disciplina de concorrência dos demais writes.
+  # Só grava quando muda (evita write à toa quando já está em 0 e permanece em 0).
+  def persist_stuck_turns(count)
+    attrs = @conversation.additional_attributes || {}
+    return if attrs['ai_step_stuck_turns'].to_i == count
+
+    attrs['ai_step_stuck_turns'] = count
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  # Dispara as automações da etapa CONCLUÍDA na transição de índice. Só quando a etapa foi concluída
+  # (mesma condição determinística do avanço — ver #step_completed?) E ainda não disparamos para este
+  # índice (idempotência via ai_step_last_fired_index). Marca ANTES de rodar (não reprocessa se algo
+  # demorar/falhar). Precisa do dispatcher + run (do Gateway) para as ações auditadas; sem eles, não roda.
+  def fire_step_automations(completed, step, index, dispatcher, run)
     return unless dispatcher && run
-    return unless truthy?(decision['step_completed'])
+    return unless completed
     return if already_fired?(index)
 
     mark_fired(index)

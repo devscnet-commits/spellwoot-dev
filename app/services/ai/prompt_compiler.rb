@@ -41,13 +41,11 @@ class Ai::PromptCompiler
       parts << "Atributos da conversa para preencher quando o cliente informar (use a CHAVE exata em \"attributes\", ex.: {\"cidade\":\"Maravilha\"}):\n#{lines.join("\n")}"
     end
 
-    # Dados que já temos deste cliente (atributos do contato). A IA deve USÁ-LOS e NÃO perguntar de
-    # novo — só pedir o que ainda falta. Sem isso, ela repergunta o que já foi informado.
+    # Estado da coleta (reforço ATIVO por turno): o que já temos + o slot que a etapa ATUAL ainda
+    # precisa. Montado pelo CÓDIGO (não pelo modelo) — mata a repergunta em etapa de vários turnos.
     already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
-    if already.present?
-      lines = already.map { |k, v| "- #{k}: #{v}" }
-      parts << "Dados JÁ coletados deste cliente (use-os; NÃO pergunte de novo):\n#{lines.join("\n")}"
-    end
+    state_block = collection_state_block(department.playbook&.steps, step_index, already)
+    parts << state_block if state_block
 
     if tools.present?
       lines = tools.map { |t| "- #{t.name}: #{t.description} (input: #{t.input_schema.to_json})" }
@@ -79,6 +77,36 @@ class Ai::PromptCompiler
     parts.concat(customer_memory_lines(customer_memory))
     parts << response_contract
     parts.join("\n\n")
+  end
+
+  # ESTADO DA COLETA — reforço ATIVO, remontado deterministicamente pelo código a cada turno (não pelo
+  # modelo). O modelo tende a ignorar contexto passivo após alguns turnos; precisa ser LEMBRADO
+  # ativamente. "JÁ TENHO" = fatos já coletados (não reperguntar). "FALTA agora" = o slot da etapa
+  # ATUAL, se ainda não preenchido — diz exatamente qual dado pedir e com QUE chave salvar (a mesma que
+  # o Ai::StateManager usa para destravar a etapa). Substitui o antigo bloco "Dados JÁ coletados".
+  def self.collection_state_block(steps, step_index, already)
+    slot = pending_slot(steps, step_index, already)
+    return nil if already.blank? && slot.nil?
+
+    lines = ['ESTADO DA COLETA (mantido pelo sistema — NÃO repita o que já está aqui):']
+    lines << "✓ JÁ TENHO: #{already.map { |k, v| "#{k}=#{v}" }.join(', ')}" if already.present?
+    lines << "◦ FALTA agora (peça este dado e salve em \"attributes\" com a CHAVE exata): #{slot}" if slot
+    lines << 'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. Se o cliente ' \
+             'já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.'
+    lines.join("\n")
+  end
+
+  # Chave do slot que a etapa ATUAL coleta e que AINDA não temos. nil quando a etapa não declara slot
+  # (collect.attribute) ou o dado já foi coletado. Espelha a leitura do Ai::StateManager (fonte única
+  # do avanço) para o prompt pedir exatamente a chave que conclui a etapa.
+  def self.pending_slot(steps, step_index, already)
+    list = Array(steps)
+    return nil if list.empty?
+
+    key = Ai::StepSlot.attribute(list[step_index.to_i.clamp(0, list.size - 1)])
+    return nil if key.nil? || (already || {}).key?(key)
+
+    key
   end
 
   # Persistent memory of THIS contact, built from past conversations (Ai::CustomerMemory). Reuse it
