@@ -70,7 +70,8 @@ class Ai::KnowledgeIngestJob < ApplicationJob
   end
 
   def source_text(source)
-    [source.title, source.raw].map { |s| s.to_s.strip }.reject(&:blank?).uniq.join("\n")
+    price_line = source.price.present? ? "Preço: #{source.price}" : nil
+    [source.title, source.raw, price_line].map { |s| s.to_s.strip }.reject(&:blank?).uniq.join("\n")
   end
 
   # Split on blank lines, then pack paragraphs into ~CHUNK_SIZE pieces (hard-splitting any huge one).

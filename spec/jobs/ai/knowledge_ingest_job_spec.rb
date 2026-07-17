@@ -21,6 +21,27 @@ RSpec.describe Ai::KnowledgeIngestJob do
     end
   end
 
+  describe '#source_text (preço entra no chunk)' do
+    it 'inclui "Preço: <valor>" quando price está preenchido' do
+      src = double(title: 'Internet Fibra 1 Giga', raw: 'Plano residencial', price: 'R$ 169,90/mês')
+
+      text = job.send(:source_text, src)
+
+      expect(text).to include('Internet Fibra 1 Giga')
+      expect(text).to include('Plano residencial')
+      expect(text).to include('Preço: R$ 169,90/mês')
+    end
+
+    it 'NÃO adiciona linha de preço quando price está vazio/nil (comportamento atual)' do
+      src = double(title: 'FAQ', raw: 'Pergunta e resposta', price: nil)
+
+      text = job.send(:source_text, src)
+
+      expect(text).not_to include('Preço:')
+      expect(text).to eq("FAQ\nPergunta e resposta")
+    end
+  end
+
   describe '#perform — embedding robusto' do
     let(:account) { create(:account) }
     let(:vector) { Array.new(1536, 0.01) }
