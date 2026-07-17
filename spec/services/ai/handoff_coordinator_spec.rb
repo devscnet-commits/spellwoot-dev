@@ -99,4 +99,170 @@ RSpec.describe Ai::HandoffCoordinator do
         .with('conversation.add_label', hash_including(input: { 'label' => 'sem-agente-disponivel' }))
     end
   end
+
+  # === Mudanças 1 + 2: o roteamento passa a LER a lista handoff_team_ids ==========================
+  describe '#human_team_id — ordem de resolução (team_id -> nome[allowlist] -> lista -> nil)' do
+    let(:t_comercial) { create(:team, account: account, name: 'Comerciais') }
+    let(:t_midia) { create(:team, account: account, name: 'Comercial Mídia Paga') }
+    let(:t_outro) { create(:team, account: account, name: 'Financeiro') }
+
+    it 'usa @agent.team_id quando presente (primário, mantido)' do
+      agent.update!(team_id: t_outro.id)
+      expect(coordinator.human_team_id({ 'handoff_target' => 'Comerciais' })).to eq(t_outro.id)
+    end
+
+    it 'sem team_id e com handoff_team_ids: resolve pela lista mesmo SEM handoff_target (caso do loop)' do
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
+      expect([t_comercial.id, t_midia.id]).to include(coordinator.human_team_id({}))
+    end
+
+    it 'casa handoff_target quando ele ESTÁ na allowlist (acento/caixa tolerados)' do
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
+      expect(coordinator.human_team_id({ 'handoff_target' => 'comercial midia paga' })).to eq(t_midia.id)
+    end
+
+    it 'handoff_target FORA da allowlist não casa; segue para um time da lista' do
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
+      result = coordinator.human_team_id({ 'handoff_target' => 'Financeiro' })
+      expect([t_comercial.id, t_midia.id]).to include(result)
+      expect(result).not_to eq(t_outro.id)
+    end
+
+    it 'sem team_id, sem allowlist e sem match -> nil' do
+      agent.update!(team_id: nil, handoff_team_ids: [])
+      expect(coordinator.human_team_id({})).to be_nil
+    end
+  end
+
+  describe '#configured_handoff_team_id — respeita a ORDEM marcada (array), não o id (Ajuste 1)' do
+    let(:t1) { create(:team, account: account, name: 'T1') } # criado 1º => id MENOR
+    let(:t2) { create(:team, account: account, name: 'T2') } # id MAIOR
+    let(:u1) { create(:user) } # membro de t1
+    let(:u2) { create(:user) } # membro de t2
+
+    # Capacidade é determinística via stub (no ambiente de teste ela depende de online/v2). Stuba na
+    # instância memoizada de conversation.inbox (a MESMA que o coordinator lê em @conversation.inbox).
+    def stub_capacity(user_ids)
+      allow(conversation.inbox).to receive(:member_ids_with_assignment_capacity).and_return(user_ids)
+    end
+
+    before do
+      create(:account_user, account: account, user: u1)
+      create(:account_user, account: account, user: u2)
+      create(:team_member, team: t1, user: u1)
+      create(:team_member, team: t2, user: u2)
+    end
+
+    it 'ambos com capacidade: escolhe o PRIMEIRO do array (t2), não o de menor id (t1)' do
+      stub_capacity([u1.id, u2.id])
+      agent.update!(handoff_team_ids: [t2.id, t1.id]) # t2 marcado 1º
+
+      expect(coordinator.send(:configured_handoff_team_id)).to eq(t2.id)
+    end
+
+    it 'só o SEGUNDO do array (t1) tem membro com capacidade: escolhe t1' do
+      stub_capacity([u1.id]) # só u1 (de t1)
+      agent.update!(handoff_team_ids: [t2.id, t1.id]) # t2 marcado 1º, mas sem capacidade
+
+      expect(coordinator.send(:configured_handoff_team_id)).to eq(t1.id)
+    end
+
+    it 'ninguém com capacidade: cai no PRIMEIRO do array (t2), não no menor id' do
+      stub_capacity([])
+      agent.update!(handoff_team_ids: [t2.id, t1.id])
+
+      expect(coordinator.send(:configured_handoff_team_id)).to eq(t2.id)
+    end
+
+    it 'lista vazia -> nil' do
+      agent.update!(handoff_team_ids: [])
+      expect(coordinator.send(:configured_handoff_team_id)).to be_nil
+    end
+  end
+
+  # === Mudança 3: aponta a conversa ao time resolvido ANTES da atribuição =========================
+  # É o que faz o caminho v2 (perform_bulk_assignment -> filter_agents_by_team) restringir aos membros
+  # do time, e o legado via team_assignable_ids. Aqui basta provar que conversation.team_id é setado.
+  describe '#assign_human — fixa o time na conversa antes de atribuir' do
+    let(:team) { create(:team, account: account) }
+
+    before { allow(Ai::CapabilityRegistry).to receive(:execute) }
+
+    it 'seta conversation.team_id = time resolvido' do
+      coordinator.assign_human(team.id, reason: 'loop')
+      expect(conversation.reload.team_id).to eq(team.id)
+    end
+  end
+
+  # === Mudança 4: sem time nenhum -> alerta, NÃO atribui aleatório =================================
+  describe '#assign_human — sem time configurado (nem team_id, nem allowlist)' do
+    let(:member) { create(:inbox_member, inbox: inbox) } # a CAIXA tem membro (senão viraria assign_failed)
+
+    before do
+      create(:account_user, account: account, user: member.user)
+      agent.update!(team_id: nil, handoff_team_ids: [])
+      allow(Ai::CapabilityRegistry).to receive(:execute)
+    end
+
+    it 'emite handoff.no_team_configured e NÃO atribui um membro aleatório' do
+      coordinator.assign_human(nil, reason: 'loop')
+
+      expect(conversation.reload.assignee_id).to be_nil
+      ev = Ai::Event.where(conversation_id: conversation.id, event_type: 'handoff.no_team_configured').last
+      expect(ev).to be_present
+      expect(ev.payload).to include('inbox_id' => inbox.id, 'conversation_id' => conversation.id)
+      expect(ev.status).to eq('error')
+    end
+
+    it 'aplica a tag "sem-time-configurado" (visibilidade para o dono)' do
+      coordinator.assign_human(nil, reason: 'loop')
+
+      expect(Ai::CapabilityRegistry).to have_received(:execute)
+        .with('conversation.add_label', hash_including(input: { 'label' => 'sem-time-configurado' }))
+    end
+
+    # Ajuste 2: o motivo VAI no "Resumo da transferência" (campo visível = HandoffSummary.content).
+    it 'grava o motivo no Resumo da transferência (content visível na UI)' do
+      coordinator.assign_human(nil, reason: 'loop')
+
+      summary = Ai::HandoffSummary.latest_for(conversation.id)
+      expect(summary).to be_present
+      expect(summary.content).to include('Nenhum time de atendimento configurado')
+      expect(summary.reason).to eq('no_team_configured')
+    end
+
+    it 'NÃO enfileira o resumo async genérico e é IDEMPOTENTE (sem resumo duplicado no retry)' do
+      expect { coordinator.assign_human(nil, reason: 'loop') }
+        .not_to have_enqueued_job(Ai::HandoffSummaryJob)
+
+      coordinator.assign_human(nil, reason: 'loop') # reexecução (retry)
+      expect(Ai::HandoffSummary.where(conversation_id: conversation.id).count).to eq(1)
+    end
+  end
+
+  # === Reprodução do caso real (user 15): loop com allowlist e sem team_id ========================
+  describe 'reprodução: loop forçado com handoff_team_ids e @agent.team_id vazio' do
+    let(:t_comercial) { create(:team, account: account, name: 'Comerciais') }
+    let(:t_midia) { create(:team, account: account, name: 'Comercial Mídia Paga') }
+    let(:member) { create(:inbox_member, inbox: inbox) }
+
+    before do
+      create(:account_user, account: account, user: member.user)
+      create(:team_member, team: t_comercial, user: member.user) # comerciais tem gente
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
+      allow(Ai::CapabilityRegistry).to receive(:execute)
+      allow(OnlineStatusTracker).to receive(:get_available_users).and_return({})
+    end
+
+    it 'a conversa vai para um time comercial (membro do time), NÃO para membro aleatório da caixa' do
+      team_id = coordinator.human_team_id({}) # loop: decision vazio
+      expect(team_id).to eq(t_comercial.id)
+
+      coordinator.assign_human(team_id, reason: 'loop')
+
+      expect(conversation.reload.team_id).to eq(t_comercial.id)
+      expect(conversation.assignee_id).to eq(member.user_id) # membro do comercial, não um qualquer
+      expect(Ai::Event.where(conversation_id: conversation.id, event_type: 'handoff.no_team_configured')).to be_empty
+    end
+  end
 end
