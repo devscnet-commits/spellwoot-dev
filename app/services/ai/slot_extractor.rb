@@ -23,6 +23,26 @@ class Ai::SlotExtractor
     end
   end
 
+  # "Parece estranho?" (conserto Parte 3): SÓ para tipos conhecidos DERIVADOS DA CHAVE do slot
+  # (email/cpf/telefone). Malformado = não passa no formato. Chave genérica => false (nunca estranho).
+  # Serve só para decidir a confirmação-única; NUNCA bloqueia a gravação do dado.
+  def self.malformed?(attribute, value)
+    type = type_for_key(attribute)
+    return false unless type
+
+    extract(attribute_type: type, text: value.to_s).blank?
+  end
+
+  # Tipo inferido do NOME da chave (não do collect.type) — só os que dá para validar por formato.
+  def self.type_for_key(key)
+    k = key.to_s.downcase
+    return 'email' if k.include?('email') || k.include?('e_mail')
+    return 'cpf' if k.include?('cpf')
+    return 'phone' if k.match?(/telefone|celular|whatsapp|phone|fone/)
+
+    nil
+  end
+
   # CPF válido (com/sem pontuação): valida os 2 dígitos verificadores e rejeita sequências repetidas.
   # Retorna formatado (000.000.000-00).
   def self.extract_cpf(text)

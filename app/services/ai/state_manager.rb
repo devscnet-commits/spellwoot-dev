@@ -113,13 +113,15 @@ class Ai::StateManager
     step = steps[index]
     slot = Ai::StepSlot.required_attribute(step)
 
-    # Camada A (rede de segurança): se a etapa coleta um slot ainda vazio, tenta extrair o valor
-    # DETERMINISTICAMENTE do texto do cliente (cpf/email/phone/number/choice) e grava — o avanço
-    # deixa de depender de o modelo devolver `attributes`. Ver #extract_slot_if_needed.
-    extract_slot_if_needed(step, slot, decision, message_text) if slot
+    # Captura (Camada A + Parte 2): grava o que o cliente respondeu para o slot — via SlotExtractor
+    # (tipo conhecido) OU o TEXTO CRU (genérico). Não depende do modelo devolver `attributes` nem do
+    # valor bater com um formato. Ver Ai::SlotCollector#capture.
+    if slot && (source = slot_collector.capture(step, slot, decision, message_text))
+      emit('slot.captured', { attribute: slot, source: source })
+    end
 
-    # Conclusão + rede de segurança contra travamento (Camada B). Ver #resolve_completion.
-    outcome = resolve_completion(step, slot, decision, stuck_handoff_limit(department))
+    # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259).
+    outcome = resolve_completion(step, slot, decision, stuck_handoff_limit(department), index)
 
     # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
     # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
@@ -192,27 +194,27 @@ class Ai::StateManager
     truthy?(decision['step_completed'])
   end
 
-  # O slot está preenchido? Prioriza o valor recém-devolvido pelo modelo NESTE turno (decision,
-  # ainda não persistido), depois os fatos já gravados. Preserva false/0 como preenchidos.
-  def slot_filled?(slot, decision)
-    pending = decision['attributes']
-    return true if pending.is_a?(Hash) && pending[slot].to_s.strip.present?
-
-    facts = (@conversation.additional_attributes || {})['ai_collected_facts']
-    facts.is_a?(Hash) && facts[slot].to_s.strip.present?
+  # Coletor de slot (captura + confirmação-única). Memoizado — só depende de @conversation.
+  def slot_collector
+    @slot_collector ||= Ai::SlotCollector.new(conversation: @conversation)
   end
 
-  # Decide a conclusão da etapa + a rede de segurança anti-travamento (Camada B). Retorna um hash
-  # { completed:, stuck:, signal: (opcional) }, onde `signal` (consumido pelo Gateway) pede o handoff
-  # por trava, com o nome amigável da etapa (ou a chave) e o nº de turnos p/ o motivo/telemetria:
-  #  - etapa SEM slot (informativa/antiga): comportamento padrão (step_completed do modelo), sem contador.
-  #  - slot PREENCHIDO (inclui o que a Camada A acabou de extrair): conclui, zera o contador.
-  #  - slot VAZIO: este turno conta como "parado". Ao atingir o limite (>0), sinaliza HANDOFF (não força
-  #    avanço com dado faltando); senão permanece (o PR-3 reforça a chave no próximo turno). Limite 0 =
-  #    desligado: nunca transfere por trava (só acumula o contador como telemetria).
-  def resolve_completion(step, slot, decision, stuck_limit)
+  def slot_filled?(slot, decision)
+    slot_collector.filled?(slot, decision)
+  end
+
+  # Decide a conclusão da etapa + confirmação-única (Parte 3) + rede de segurança anti-travamento
+  # (Camada B/#259). Retorna { completed:, stuck:, confirm: (opcional), signal: (opcional) }:
+  #  - etapa SEM slot (informativa/antiga): comportamento padrão (step_completed do modelo).
+  #  - slot PREENCHIDO (a captura já gravou o que o cliente deu):
+  #      * valor parece ESTRANHO p/ o tipo (email/cpf/telefone derivado da chave) E ainda não confirmamos
+  #        nesta etapa -> HOLD pedindo confirmação UMA vez (confirm:), stuck=0 (Parte 4: não conta trava).
+  #      * senão (valor ok, ou já confirmado uma vez) -> AVANÇA. Nunca repergunta 3x, nunca entra em loop.
+  #  - slot VAZIO (cliente não respondeu NADA usável neste turno = message_text vazio): rede de segurança
+  #    do #259 — conta "parado"; ao atingir o limite (>0), sinaliza HANDOFF (cliente sumido). Limite 0 = off.
+  def resolve_completion(step, slot, decision, stuck_limit, index)
     return { completed: step_completed?(step, decision), stuck: 0 } unless slot
-    return { completed: true, stuck: 0 } if slot_filled?(slot, decision)
+    return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, decision)
 
     stuck = (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i + 1
     return { completed: false, stuck: stuck } unless stuck_limit.positive? && stuck >= stuck_limit
@@ -221,28 +223,19 @@ class Ai::StateManager
     { completed: false, stuck: 0, signal: { stuck_handoff: { attribute: slot, step_name: name, turns: stuck } } }
   end
 
+  # Slot já preenchido (a captura gravou o que o cliente deu): Parte 3 — se o valor parece estranho e
+  # ainda não confirmamos nesta etapa, pede confirmação UMA vez (hold, stuck=0); senão AVANÇA.
+  def resolve_filled_slot(slot, decision, index)
+    return { completed: false, stuck: 0, confirm: true } if slot_collector.needs_confirmation?(slot, decision, index)
+
+    { completed: true, stuck: 0 }
+  end
+
   # Limite de turnos parado antes de transferir (Camada B), da config do agente (tela). Chave ausente =>
   # DEFAULT_STUCK_HANDOFF_TURNS (rede ligada por padrão, inclusive p/ departments antigos); 0 = desligado.
   def stuck_handoff_limit(department)
     rules = department.transfer_rules || {}
     rules.key?('stuck_handoff_turns') ? rules['stuck_handoff_turns'].to_i : DEFAULT_STUCK_HANDOFF_TURNS
-  end
-
-  # Camada A: preenche o slot a partir do texto do cliente SEM depender do modelo. Só quando a etapa
-  # tem slot ainda vazio. Grava no MESMO caminho do persist_collected_facts (ai_collected_facts) e
-  # emite slot.extracted para telemetria. type=text não extrai (ambíguo) -> SlotExtractor devolve nil.
-  def extract_slot_if_needed(step, slot, decision, message_text)
-    return if message_text.to_s.strip.empty?
-    return if slot_filled?(slot, decision) # modelo já devolveu, ou turno anterior — não sobrescreve
-
-    type = Ai::StepSlot.type(step)
-    value = Ai::SlotExtractor.extract(attribute_type: type, text: message_text, options: Ai::StepSlot.options(step))
-    return if value.to_s.strip.empty?
-
-    persist_collected_facts({ slot => value })
-    emit('slot.extracted', { attribute: slot, type: type })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::StateManager#extract_slot_if_needed] #{e.class}: #{e.message}"
   end
 
   # Read-modify-write só da chave do contador, lendo FRESCO (após persist_step_state gravar o índice)

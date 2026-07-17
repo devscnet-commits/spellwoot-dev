@@ -93,6 +93,10 @@ class Ai::PromptCompiler
     lines << "◦ FALTA agora (peça este dado e salve em \"attributes\" com a CHAVE exata): #{slot}" if slot
     lines << 'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. Se o cliente ' \
              'já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.'
+    lines << 'Se o valor que o cliente enviar parecer incompleto/estranho para o dado pedido, confirme ' \
+             'UMA única vez mostrando o que recebeu ("Recebi \'X\', está correto assim?"). Se ele ' \
+             'corrigir, use o valor corrigido; se confirmar, repetir ou insistir, ACEITE como veio e ' \
+             'siga — NUNCA peça o mesmo dado uma terceira vez.'
     lines.join("\n")
   end
 
