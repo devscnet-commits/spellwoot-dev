@@ -10,6 +10,13 @@ class Ai::HandoffCoordinator
   # Tag de visibilidade quando o handoff não acha NENHUM agente atribuível (mesmo padrão dos outros
   # fallbacks: department-override-indisponivel, chave-propria-falhou).
   NO_AGENT_LABEL = 'sem-agente-disponivel'.freeze
+  # Tag quando não há NENHUM time configurado para transferência (nem "Time deste agente" nem
+  # "Transferir para times"): sinaliza ao dono que faltou configurar, em vez de cair em membro aleatório.
+  NO_TEAM_LABEL = 'sem-time-configurado'.freeze
+  # reason + texto do "Resumo da transferência" (campo visível na UI) quando não há time configurado.
+  NO_TEAM_REASON = 'no_team_configured'.freeze
+  NO_TEAM_SUMMARY = 'Nenhum time de atendimento configurado para transferência. Configure em ' \
+                    'Atendimentos e transferências para direcionar automaticamente.'.freeze
   # Throttle do e-mail ao admin: 1 aviso por time a cada janela (evita flood quando o mesmo time
   # vazio recebe várias conversas em sequência). Cache-based (perder o estado = no máximo 1 e-mail
   # extra) — barato e sem migração, suficiente para "não spammar".
@@ -52,26 +59,53 @@ class Ai::HandoffCoordinator
     false
   end
 
-  # TIME de destino do handoff. PRIMÁRIO: time configurado no agente (Ai::Agent.team_id) —
-  # determinístico, não depende do LLM. FALLBACK: match NORMALIZADO (sem acento, caixa baixa, trim)
-  # do handoff_target do modelo contra Team.name. O handoff_target puro deixou de ser o mecanismo
-  # primário: o modelo variar o texto (não-determinismo) quebrava a atribuição de forma intermitente.
+  # TIME de destino do handoff, na ordem: 1) time único do agente (Ai::Agent.team_id, determinístico);
+  # 2) setor pedido pelo modelo (handoff_target) casado por NOME — restrito à allowlist do agente quando
+  # houver; 3) a lista "Transferir para times (humanos)" (handoff_team_ids), escolhendo UM time dela
+  # (é o que resolve o handoff por LOOP, que chega sem handoff_target); 4) nil. Antes parava em (1)/(2)
+  # e a lista era órfã (nenhum roteamento a lia) — por isso caía no fallback de membro aleatório da caixa.
   def human_team_id(decision)
     target = decision['handoff_target'].to_s.strip
     return @agent.team_id if @agent.team_id.present?
 
     Rails.logger.info "[Ai::HandoffCoordinator] agente sem team_id; match por nome: #{target.inspect}" if target.present?
-    match_team_by_name(target)
+    match_team_by_name(target) || configured_handoff_team_id
   end
 
-  # Match tolerante do nome do time (só fallback, quando o agente não tem team_id).
+  # Match tolerante do nome do time — restrito aos times ELEGÍVEIS: a allowlist handoff_team_ids quando
+  # configurada; senão todos os da conta. Assim "a IA só transfere para os times marcados": um setor
+  # pedido fora da allowlist não casa e segue para o configured_handoff_team_id.
   def match_team_by_name(name)
     key = normalize(name)
     return nil if key.blank?
 
-    ::Team.where(account_id: @account.id).find { |team| normalize(team.name) == key }&.id
+    ids = Array(@agent.handoff_team_ids)
+    scope = ::Team.where(account_id: @account.id)
+    scope = scope.where(id: ids) if ids.present?
+    scope.find { |team| normalize(team.name) == key }&.id
   rescue StandardError => e
     Rails.logger.error "[Ai::HandoffCoordinator#match_team_by_name] #{e.class}: #{e.message}"
+    nil
+  end
+
+  # Destino a partir da lista "Transferir para times (humanos)" (handoff_team_ids). Regra simples e
+  # robusta: o 1º time NA ORDEM MARCADA na tela (ordem do array, não do banco) COM membro com
+  # capacidade; se nenhum tiver, o 1º marcado. Sem round-robin por ora (simplicidade). Vazia => nil
+  # (aí entra o alerta de "sem time configurado").
+  def configured_handoff_team_id
+    ids = Array(@agent.handoff_team_ids)
+    return nil if ids.empty?
+
+    # Carrega os Team e REORDENA pela ordem do array (o ActiveRecord voltaria por id) — a ordem dos
+    # checkboxes é a intenção do usuário. compact descarta ids de times deletados.
+    by_id = ::Team.where(account_id: @account.id, id: ids).index_by(&:id)
+    ordered = ids.filter_map { |id| by_id[id] }
+    return nil if ordered.empty?
+
+    capacity = @conversation.inbox.member_ids_with_assignment_capacity
+    (ordered.find { |t| t.members.ids.intersect?(capacity) } || ordered.first).id
+  rescue StandardError => e
+    Rails.logger.error "[Ai::HandoffCoordinator#configured_handoff_team_id] #{e.class}: #{e.message}"
     nil
   end
 
@@ -90,15 +124,21 @@ class Ai::HandoffCoordinator
   # depender do resultado dela.
   def assign_human(team_id, reason: nil)
     mark_handed_off
+
+    # Sem NENHUM time resolvido (nem "Time deste agente", nem allowlist, nem match) e com a caixa tendo
+    # membros: NÃO atribuir ninguém em silêncio — nem a atribuição PRIMÁRIA inbox-wide, nem o fallback.
+    # É configuração faltando; alerta e para (o dono precisa ver). Ver #alert_no_team_configured. Vem
+    # ANTES do enqueue_handoff_summary: o alerta grava o SEU próprio resumo, sem o async genérico (evita
+    # a chamada de LLM e o resumo duplicado).
+    return alert_no_team_configured if team_id.blank? && @conversation.inbox.members.exists?
+
     enqueue_handoff_summary(reason)
-    inbox = @conversation.inbox
-    if inbox.auto_assignment_v2_enabled?
-      # SÍNCRONO: atribui com o estado online do momento do handoff (evita a janela do job assíncrono).
-      AutoAssignment::AssignmentService.new(inbox: inbox).perform_bulk_assignment
-    else
-      allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
-      AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
-    end
+
+    # Aponta a conversa para o time resolvido ANTES da atribuição (idempotente — o conversation.transfer
+    # pode já ter setado): no v2 (perform_bulk_assignment) o filter_agents_by_team restringe aos membros
+    # do time; no legado o team_assignable_ids já restringe. Sem time (nil/blank) é no-op.
+    @conversation.update!(team_id: team_id) if team_id.present? && @conversation.team_id != team_id
+    perform_native_assignment(team_id)
 
     if @conversation.reload.assignee_id.present?
       emit('handoff.assigned', { assignee_id: @conversation.assignee_id, team_id: team_id })
@@ -114,6 +154,19 @@ class Ai::HandoffCoordinator
   end
 
   private
+
+  # Atribuição nativa: v2 síncrono (perform_bulk_assignment, respeita conversation.team_id via
+  # filter_agents_by_team) OU round-robin legado restrito aos membros do time resolvido. Extraído do
+  # assign_human para mantê-lo enxuto.
+  def perform_native_assignment(team_id)
+    inbox = @conversation.inbox
+    if inbox.auto_assignment_v2_enabled?
+      AutoAssignment::AssignmentService.new(inbox: inbox).perform_bulk_assignment
+    else
+      allowed = team_id ? team_assignable_ids(team_id) : inbox.member_ids_with_assignment_capacity
+      AutoAssignment::AgentAssignmentService.new(conversation: @conversation, allowed_agent_ids: allowed).perform
+    end
+  end
 
   # Resumo de handoff (para o card do atendente): só em handoff AUTOMÁTICO da IA (reason presente).
   # Assíncrono e best-effort — o handoff já ocorreu; falha aqui não afeta a transferência/atribuição.
@@ -142,17 +195,42 @@ class Ai::HandoffCoordinator
   # problema VISÍVEL — tag na conversa + e-mail ao admin da conta (throttled) — além do evento.
   def alert_no_assignable_member(team_id)
     Rails.logger.warn "[Ai::HandoffCoordinator] handoff sem candidato para atribuir (team_id=#{team_id.inspect})"
-    apply_no_agent_label
+    add_label(NO_AGENT_LABEL)
     notify_admin_no_agent(team_id)
     emit('handoff.assign_failed', { team_id: team_id, reason: 'no_assignable_member' }, status: 'error')
   end
 
-  # Tag best-effort (mesmo handler direto dos outros fallbacks de visibilidade).
-  def apply_no_agent_label
-    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation,
-                                                             input: { 'label' => NO_AGENT_LABEL })
+  # NENHUM time configurado para transferência (nem "Time deste agente" nem "Transferir para times").
+  # O dono PRECISA ver que faltou configurar. Registra o motivo no "Resumo da transferência" (campo
+  # VISÍVEL na UI = HandoffSummary.content) + tag + e-mail ao admin + evento rastreável. NÃO atribui um
+  # membro aleatório da caixa. Mesmo mecanismo do alert_no_assignable_member (integrado).
+  def alert_no_team_configured
+    Rails.logger.warn "[Ai::HandoffCoordinator] handoff sem time configurado (agente=#{@agent.id} inbox=#{@conversation.inbox_id})"
+    record_no_team_summary
+    add_label(NO_TEAM_LABEL)
+    notify_admin_no_agent(nil)
+    emit('handoff.no_team_configured',
+         { inbox_id: @conversation.inbox_id, conversation_id: @conversation.id }, status: 'error')
+  end
+
+  # Grava o motivo DIRETO no "Resumo da transferência" (campo visível = HandoffSummary.content), sem
+  # chamar o LLM (é config faltando, não precisa de resumo gerado). Idempotente: não duplica o resumo
+  # de "sem time" desta conversa se assign_human for reexecutado (retry do Sidekiq).
+  def record_no_team_summary
+    return if Ai::HandoffSummary.exists?(conversation_id: @conversation.id, reason: NO_TEAM_REASON)
+
+    Ai::HandoffSummary.create!(account_id: @account.id, conversation_id: @conversation.id,
+                               reason: NO_TEAM_REASON, content: NO_TEAM_SUMMARY)
   rescue StandardError => e
-    Rails.logger.error "[Ai::HandoffCoordinator#apply_no_agent_label] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::HandoffCoordinator#record_no_team_summary] #{e.class}: #{e.message}"
+  end
+
+  # Tag best-effort (mesmo handler direto dos outros fallbacks de visibilidade).
+  def add_label(label)
+    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation,
+                                                             input: { 'label' => label })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::HandoffCoordinator#add_label] #{e.class}: #{e.message}"
   end
 
   # E-mail ao admin da conta (mesmo mecanismo do aviso de saldo baixo). Throttled por time p/ não
