@@ -103,20 +103,10 @@ class Ai::PromptCompiler
     list = Array(steps)
     return nil if list.empty?
 
-    key = step_collect_attribute(list[step_index.to_i.clamp(0, list.size - 1)])
+    key = Ai::StepSlot.attribute(list[step_index.to_i.clamp(0, list.size - 1)])
     return nil if key.nil? || (already || {}).key?(key)
 
     key
-  end
-
-  # collect.attribute (chave snake_case) que a etapa coleta, ou nil quando ela não declara slot.
-  def self.step_collect_attribute(step)
-    return nil unless step.is_a?(Hash)
-
-    collect = step['collect'] || step[:collect]
-    return nil unless collect.is_a?(Hash)
-
-    (collect['attribute'] || collect[:attribute]).to_s.strip.presence
   end
 
   # Persistent memory of THIS contact, built from past conversations (Ai::CustomerMemory). Reuse it

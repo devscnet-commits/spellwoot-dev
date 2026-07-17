@@ -134,12 +134,27 @@ class Ai::Gateway
 
     # Track which step the conversation is on so message grouping can use that step's delay; also
     # fires the step's completion automations when the model signals step_completed (audited actions
-    # reuse this run's dispatcher). track_step swallows its own errors — never breaks the Gateway.
-    state_manager.track_step(department, result[:decision] || {}, dispatcher: action_dispatcher, run: run_record) if @acts_live
-    # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
-    # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
-    # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.
-    state_manager.persist_attributes((result[:decision] || {})['attributes'], department) if @acts_live
+    # reuse this run's dispatcher). message_text alimenta a extração determinística de slot (Camada A).
+    # track_step swallows its own errors — never breaks the Gateway. Devolve um sinal quando a etapa de
+    # slot travou por N turnos (Camada B) — tratado logo abaixo.
+    step_signal = nil
+    if @acts_live
+      step_signal = state_manager.track_step(department, result[:decision] || {}, dispatcher: action_dispatcher,
+                                                                                  run: run_record, message_text: effective_content)
+      # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
+      # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
+      # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.
+      state_manager.persist_attributes((result[:decision] || {})['attributes'], department)
+    end
+
+    # Camada B (rede de segurança do avanço-por-slot): a IA ficou presa numa etapa de COLETA por N
+    # mensagens sem obter o dado. NÃO forçamos avanço (cadastro incompleto): avisamos o cliente e
+    # TRANSFERIMOS para humano, com motivo claro no resumo. Curto-circuita antes de qualquer dispatch.
+    if step_signal.is_a?(Hash) && step_signal[:stuck_handoff]
+      force_stuck_handoff(run_record, department, step_signal[:stuck_handoff])
+      state_manager.update_memory
+      return finalize(run_record, 'recorded')
+    end
 
     # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
     # which executes the tool immediately (tools are autonomous).
@@ -408,6 +423,41 @@ class Ai::Gateway
     emit(run_record, 'handoff.loop_forced', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_loop_handoff] #{e.class}: #{e.message}"
+  end
+
+  # Camada B da rede de segurança do avanço-por-slot: a IA ficou presa numa etapa de COLETA por N
+  # mensagens sem obter o dado (o modelo não devolveu o attribute e a extração determinística não pegou).
+  # Em vez de FORÇAR o avanço com dado faltando (cadastro incompleto), na sequência: (1) AVISA o cliente,
+  # (2) TRANSFERE para humano reaproveitando o mesmo fluxo do force_loop_handoff (transfer + assign), (3)
+  # registra o motivo específico no resumo do handoff (o reason vira o "Resumo da transferência"), (4)
+  # emite step.stuck_handoff para telemetria (quais etapas travam mais).
+  def force_stuck_handoff(run_record, department, info)
+    action_dispatcher.reply(department, stuck_handoff_warning(department)) # aviso ANTES da transferência
+    reason = stuck_handoff_reason(info)
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: reason })
+    handoff_coordinator.assign_human(team_id, reason: reason) # reason livre -> vira o Resumo da transferência
+    emit(run_record, 'step.stuck_handoff',
+         { attribute: info[:attribute], step_name: info[:step_name], turns: info[:turns] })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_stuck_handoff] #{e.class}: #{e.message}"
+  end
+
+  # Mensagem de aviso ao cliente antes de transferir (configurável via transfer_rules['stuck_message'];
+  # senão uma default acolhedora em pt-BR — o cliente não pode sentir corte seco).
+  def stuck_handoff_warning(department)
+    (department.transfer_rules || {})['stuck_message'].presence ||
+      'Vou te encaminhar para um especialista do nosso time que vai te ajudar melhor com isso, tá? 😊'
+  end
+
+  # Motivo específico e honesto — o HandoffSummaryGenerator usa este texto livre (reason desconhecido)
+  # no "Resumo da transferência". Usa o nome amigável da etapa quando houver, não só a chave técnica.
+  def stuck_handoff_reason(info)
+    label = info[:step_name].presence || info[:attribute]
+    "Transferido automaticamente: a IA tentou coletar \"#{label}\" por #{info[:turns]} mensagens sem " \
+      'sucesso. Encaminhado para atendimento humano para não travar o cliente.'
   end
 
   # Saldo de créditos de IA relevante para enforcement (billing Fase 2). nil = NÃO enforça (fail-open):

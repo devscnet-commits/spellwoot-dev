@@ -361,6 +361,8 @@
       "CLOSE_WHEN": "Encerrar quando (uma por linha)",
       "CLOSE_WHEN_HINT": "Situações em que a IA deve encerrar a conversa. Isso orienta a IA, mas não garante — o modelo pode não encerrar em todos os casos. Quando encerra, a mensagem de encerramento acima é enviada.",
       "TRANSFER_MIN_CONFIDENCE": "Transferir se a IA estiver insegura",
+      "STUCK_HANDOFF_TURNS": "Transferir para humano se travar em uma etapa por (X) mensagens",
+      "STUCK_HANDOFF_TURNS_HINT": "Se a IA não conseguir coletar o dado de uma etapa após X mensagens, avisa o cliente e transfere para um humano (em vez de ficar repetindo). Padrão 3; 0 = desligado.",
       "GREETING": "Mensagem de saudação",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar",
