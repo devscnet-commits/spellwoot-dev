@@ -103,12 +103,20 @@ class Ai::StateManager
 
     max_index = steps.size - 1
     index = current_step_index(max_index)
+    step = steps[index]
 
-    # Dispara as automações da etapa ATUAL na transição de conclusão (idempotente por índice).
-    fire_step_automations(decision, steps[index], index, dispatcher, run)
+    # Conclusão DETERMINÍSTICA: se a etapa declara um slot obrigatório (collect), o CÓDIGO decide
+    # (slot preenchido) — não o palpite do modelo. Etapa informativa (sem slot) avança pelo sinal
+    # step_completed. Etapas antigas (sem collect/complete_when) => sinal do modelo (compat). Ver #step_completed?.
+    completed = step_completed?(step, decision)
 
-    # Avança só quando o modelo conclui a etapa; clamp no máximo. Nunca retrocede/pula.
-    new_index = truthy?(decision['step_completed']) ? (index + 1).clamp(0, max_index) : index
+    # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
+    # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
+    # de disparar em etapas com avanço por slot (step_completed pode ser false quando o código avança).
+    fire_step_automations(completed, step, index, dispatcher, run)
+
+    # Avança só quando a etapa conclui; clamp no máximo. Nunca retrocede/pula.
+    new_index = completed ? (index + 1).clamp(0, max_index) : index
     persist_step_state(steps[new_index], new_index, decision)
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#track_step] #{e.class}: #{e.message}"
@@ -147,13 +155,65 @@ class Ai::StateManager
     @conversation.update!(additional_attributes: attrs)
   end
 
-  # Dispara as automações da etapa CONCLUÍDA na transição de índice. Só quando o modelo sinaliza
-  # step_completed E ainda não disparamos para este índice (idempotência via ai_step_last_fired_index).
-  # Marca ANTES de rodar (não reprocessa se algo demorar/falhar). Precisa do dispatcher + run (do
-  # Gateway) para as ações auditadas; sem eles, não roda.
-  def fire_step_automations(decision, step, index, dispatcher, run)
+  # Conclusão DETERMINÍSTICA da etapa atual (código decide o avanço, não o modelo):
+  #  - etapa com slot obrigatório (collect.attribute) -> concluída quando o slot está PREENCHIDO. O
+  #    valor pode vir do turno ATUAL (decision['attributes'], que ainda NÃO foi persistido — track_step
+  #    roda ANTES de persist_attributes no Gateway) OU de fatos já gravados (ai_collected_facts). Por
+  #    isso checamos os dois, com prioridade para o valor do turno (senão o avanço atrasaria 1 turno =
+  #    a repergunta que queremos matar).
+  #  - complete_when == 'always' (etapa informativa, sem coleta) -> avança pelo sinal do modelo.
+  #  - sem collect e sem complete_when (etapas antigas) -> sinal do modelo (compat total, zero migração).
+  def step_completed?(step, decision)
+    slot = required_slot(step)
+    return truthy?(decision['step_completed']) if step_criterion(step) == 'always'
+    return slot_filled?(slot, decision) if slot
+
+    truthy?(decision['step_completed'])
+  end
+
+  # Chave do slot que ESTA etapa coleta, se declarada e obrigatória. Default: obrigatória quando
+  # collect existe (required só desliga se vier explicitamente falso). nil quando não coleta nada.
+  def required_slot(step)
+    return nil unless step.is_a?(Hash)
+
+    collect = step['collect'] || step[:collect]
+    return nil unless collect.is_a?(Hash)
+
+    key = (collect['attribute'] || collect[:attribute]).to_s.strip
+    return nil if key.empty? || slot_optional?(collect)
+
+    key
+  end
+
+  # collect.required só DESLIGA a obrigatoriedade se vier explicitamente falso; ausente => obrigatório.
+  def slot_optional?(collect)
+    required = collect.key?('required') ? collect['required'] : collect[:required]
+    !required.nil? && !truthy?(required)
+  end
+
+  def step_criterion(step)
+    return '' unless step.is_a?(Hash)
+
+    (step['complete_when'] || step[:complete_when]).to_s.strip
+  end
+
+  # O slot está preenchido? Prioriza o valor recém-devolvido pelo modelo NESTE turno (decision,
+  # ainda não persistido), depois os fatos já gravados. Preserva false/0 como preenchidos.
+  def slot_filled?(slot, decision)
+    pending = decision['attributes']
+    return true if pending.is_a?(Hash) && pending[slot].to_s.strip.present?
+
+    facts = (@conversation.additional_attributes || {})['ai_collected_facts']
+    facts.is_a?(Hash) && facts[slot].to_s.strip.present?
+  end
+
+  # Dispara as automações da etapa CONCLUÍDA na transição de índice. Só quando a etapa foi concluída
+  # (mesma condição determinística do avanço — ver #step_completed?) E ainda não disparamos para este
+  # índice (idempotência via ai_step_last_fired_index). Marca ANTES de rodar (não reprocessa se algo
+  # demorar/falhar). Precisa do dispatcher + run (do Gateway) para as ações auditadas; sem eles, não roda.
+  def fire_step_automations(completed, step, index, dispatcher, run)
     return unless dispatcher && run
-    return unless truthy?(decision['step_completed'])
+    return unless completed
     return if already_fired?(index)
 
     mark_fired(index)

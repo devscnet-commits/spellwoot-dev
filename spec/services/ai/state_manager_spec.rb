@@ -134,6 +134,72 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  describe '#track_step — avanço DETERMINÍSTICO por slot (collect)' do
+    let(:slot_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ColetaSlot',
+                                    status: 'active', behavior: {})
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Nome',
+                                'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true },
+                                'automations' => [{ 'type' => 'tag', 'params' => { 'label' => 'coletado' } }] },
+                              { 'name' => 'Planos', 'complete_when' => 'always' },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def track_slot(decision)
+      manager.track_step(slot_department, decision, dispatcher: dispatcher, run: run)
+    end
+
+    it 'avança quando o slot é preenchido no MESMO turno (decision[attributes]), mesmo com step_completed=false' do
+      expect { track_slot('step_completed' => false, 'attributes' => { 'nome' => 'Jaque' }) }
+        .to change { step_index }.from(nil).to(1)
+    end
+
+    it 'avança quando o slot já está em ai_collected_facts (turno anterior), sem attributes e sem step_completed' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0,
+                                                     'ai_collected_facts' => { 'nome' => 'Jaque' } })
+      track_slot('step_completed' => false)
+      expect(step_index).to eq(1)
+    end
+
+    it 'NÃO avança com o slot vazio, mesmo se o modelo mandar step_completed=true (o código decide)' do
+      track_slot('step_completed' => true, 'attributes' => {})
+      expect(step_index).to eq(0)
+    end
+
+    it 'ignora valor em branco no slot (não avança)' do
+      track_slot('step_completed' => false, 'attributes' => { 'nome' => '   ' })
+      expect(step_index).to eq(0)
+    end
+
+    it 'etapa informativa (complete_when=always, sem collect) avança só pelo sinal do modelo' do
+      set_index(1) # Planos
+      track_slot('step_completed' => false)
+      expect(step_index).to eq(1) # sem sinal -> fica
+      track_slot('step_completed' => true)
+      expect(step_index).to eq(2) # com sinal -> avança
+    end
+
+    it 'dispara a automação da etapa ao concluir POR SLOT (step_completed=false) — correção do gating' do
+      runner = instance_double(Ai::StepAutomationRunner, run: nil)
+      allow(Ai::StepAutomationRunner).to receive(:new).and_return(runner)
+
+      track_slot('step_completed' => false, 'attributes' => { 'nome' => 'Jaque' })
+
+      expect(runner).to have_received(:run).once
+      expect(step_index).to eq(1)
+    end
+
+    it 'NÃO dispara a automação da etapa de slot enquanto o slot não é preenchido' do
+      expect(Ai::StepAutomationRunner).not_to receive(:new)
+
+      track_slot('step_completed' => true, 'attributes' => {}) # step_completed true é ignorado (slot vazio)
+      expect(step_index).to eq(0)
+    end
+  end
+
   describe '#persist_attributes — validação de chave' do
     def define_attr(key, display = key.capitalize)
       CustomAttributeDefinition.create!(
