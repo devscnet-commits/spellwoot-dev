@@ -370,6 +370,41 @@ RSpec.describe Ai::StateManager do
         # NÃO criou o slot lixo "personalizado"
         expect(facts).not_to have_key('personalizado')
       end
+
+      # BUG 2 (conv 359): slot capturado (source raw) deve ESPELHAR para custom_attributes quando há
+      # CustomAttributeDefinition — antes ficava só em ai_collected_facts (invisível no painel/Bitrix).
+      it 'espelha o slot capturado para custom_attributes quando a chave tem campo cadastrado' do
+        CustomAttributeDefinition.create!(account: account, attribute_key: 'cidade',
+                                          attribute_display_name: 'Cidade', attribute_model: 'conversation_attribute',
+                                          attribute_display_type: 'text')
+        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cidade', status: 'active',
+                                      behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        dept.create_playbook!(active: true, steps: [
+                                { 'name' => 'Cidade', 'instructions' => 'Pergunte e grave a cidade conforme informado.' },
+                                { 'name' => 'Fim' }
+                              ])
+
+        manager.track_step(dept, { 'step_completed' => false },
+                           dispatcher: dispatcher, run: run, message_text: 'MARAVILHA')
+
+        expect(facts['cidade']).to eq('MARAVILHA')                       # memória (ai_collected_facts)
+        expect(conversation.reload.custom_attributes['cidade']).to eq('MARAVILHA') # painel/Bitrix
+      end
+
+      it 'slot capturado SEM campo cadastrado fica só em ai_collected_facts (não em custom_attributes)' do
+        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cidade2', status: 'active',
+                                      behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        dept.create_playbook!(active: true, steps: [
+                                { 'name' => 'Cidade', 'instructions' => 'Pergunte e grave a cidade conforme informado.' },
+                                { 'name' => 'Fim' }
+                              ])
+
+        manager.track_step(dept, { 'step_completed' => false },
+                           dispatcher: dispatcher, run: run, message_text: 'MARAVILHA')
+
+        expect(facts['cidade']).to eq('MARAVILHA')
+        expect(conversation.reload.custom_attributes).not_to have_key('cidade')
+      end
     end
   end
 
