@@ -351,6 +351,25 @@ RSpec.describe Ai::StateManager do
         # de volta forçado ao índice 0 não acontece no fluxo; garantimos que não houve 2º hold:
         expect(step_index).to eq(1)
       end
+
+      # Reprodução da conv 358: etapa com a forma DIRETA "Grave endereco_completo ..." (sem "atributo").
+      it 'conv 358: etapa "Grave endereco_completo com o texto fornecido." captura o endereço e AVANÇA' do
+        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro3',
+                                      status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        dept.create_playbook!(active: true, steps: [
+                                { 'name' => 'Endereço',
+                                  'instructions' => 'Peça o endereço. Grave endereco_completo com o texto fornecido.' },
+                                { 'name' => 'Fim' }
+                              ])
+
+        manager.track_step(dept, { 'step_completed' => false },
+                           dispatcher: dispatcher, run: run, message_text: 'Rua das Flores 123, Maravilha')
+
+        expect(facts['endereco_completo']).to eq('Rua das Flores 123, Maravilha')
+        expect(step_index).to eq(1) # avançou (zero repergunta)
+        # NÃO criou o slot lixo "personalizado"
+        expect(facts).not_to have_key('personalizado')
+      end
     end
   end
 
