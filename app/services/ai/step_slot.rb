@@ -7,20 +7,28 @@ module Ai::StepSlot
 
   # PART 1 do conserto: infere o slot da INSTRUÇÃO que o usuário já escreveu, para etapas SEM collect
   # declarado (criadas antes do #259). NÃO exige criar atributo nem marcar collect na tela — deriva o
-  # slot em runtime. Reconhece três formas (a cláusula de avanço tem PREFERÊNCIA):
-  #   1. forma direta:  "grave/salve/guarde/registre <chave>"  (ex.: "Grave endereco_completo com ...")
-  #   2. forma explícita: "... no atributo <chave>"            (ex.: "Grave o e-mail no atributo email")
-  #   3. cláusula de avanço: "assim que <chave> estiver capturado/preenchido" (reforça a mesma chave)
-  # Chave = token snake_case ASCII. A forma direta só aceita a chave se ela tem "_" OU vem seguida de um
-  # conector (conforme|com|no|a partir) — evita capturar palavra solta. BLACKLIST barra genéricos que
-  # NUNCA são chave (ex.: "personalizado" de "atributo personalizado"). Nenhum match claro => nil.
-  SAVE_RE = /(?:grave|salve|guarde|registre)\s+(?:o |a |os |as |um |uma )?(?<key>[a-z][a-z0-9_]*)/i
-  ATTR_RE = /\batributo\s+["']?(?<key>[a-z][a-z0-9_]*)/i
+  # slot em runtime. Reconhece três formas (a cláusula de avanço tem PREFERÊNCIA, depois "atributo X",
+  # depois a forma direta):
+  #   1. cláusula de avanço: "assim que <chave> estiver capturado/preenchido"
+  #   2. explícita: "...no atributo <chave>"  (ex.: "Grave o e-mail no atributo email")
+  #   3. direta:    "grave/salve/guarde/registre <chave>"  (ex.: "Grave endereco_completo com ...")
+  # Ao escanear, PULA palavras genéricas (BLACKLIST: advérbios/adjetivos/rótulos como "imediatamente",
+  # "customizado", "personalizado") e stopwords (artigos/preposições), continuando até a chave REAL na
+  # mesma frase — e PREFERE a chave com "_". A forma direta só aceita a chave se tem "_" OU vem seguida
+  # de um conector (evita palavra solta). Nenhum candidato plausível => nil (etapa informativa).
+  SAVE_VERB_RE = /\b(?:grave|salve|guarde|registre)\b/i
+  ATTR_ANCHOR_RE = /\batributo\b/i
   ADVANCE_RE = /assim\s+que\s+(?:o |a )?(?<key>[a-z][a-z0-9_]*)\s+estiver\s+(?:capturad|preenchid)/i
-  CONNECTOR_RE = /\A\s+(?:conforme|com|no|a\s+partir)\b/i
-  # Palavras genéricas que nunca são a chave de um slot (barram o falso positivo do bug da conv 358).
-  BLACKLIST = %w[personalizado atributo informacao informação dado valor resposta cliente contato
-                 historico histórico].freeze
+  CONNECTOR_TOKEN_RE = /([a-z][a-z0-9_]*)\s+(?:conforme|com|no|a\s+partir)\b/i
+  KEY_TOKEN_RE = /[a-z][a-z0-9_]*/i
+  SENTENCE_HEAD_RE = /\A[^.!?\n]*/ # até o fim da frase (não cruza para a próxima)
+  # Genéricos que NUNCA são a chave de um slot (advérbios/adjetivos/rótulos + o falso positivo da conv 358).
+  BLACKLIST = %w[personalizado customizado atributo imediatamente novamente corretamente sempre apenas
+                 somente exatamente informacao informação dado valor resposta cliente contato historico
+                 histórico].freeze
+  # Artigos/preposições/conjunções que aparecem no meio da frase e nunca são chave.
+  STOPWORDS = %w[o a os as um uma uns umas de do da dos das no na nos nas em ao aos com por para pra e
+                 ou que se seu sua seus suas].freeze
 
   # O hash `collect` da etapa, ou nil quando a etapa não declara coleta.
   def collect_of(step)
@@ -39,39 +47,71 @@ module Ai::StepSlot
   end
 
   # Chave inferida da instrução (só quando NÃO há collect declarado). nil se não achar padrão claro —
-  # aí a etapa segue INFORMATIVA (avanço por step_completed do modelo, compat total). A cláusula de
-  # avanço ("assim que X estiver ...") tem preferência (fica em 1º), depois a forma direta, depois o
-  # "atributo X". Genéricos da BLACKLIST são descartados.
+  # aí a etapa segue INFORMATIVA (avanço por step_completed do modelo, compat total).
   def infer(step)
     return nil unless step.is_a?(Hash)
     return nil if collect_of(step)
 
     text = (step['instructions'] || step[:instructions]).to_s
-    [advance_key(text), save_key(text), valid_key(ATTR_RE.match(text)&.[](:key))].compact.first
+    [advance_key(text), attr_key(text), grave_key(text)].compact.first
   end
 
   # "assim que <chave> estiver capturado/preenchido" — reforço/confirmação da chave (preferência).
   def advance_key(text)
-    valid_key(ADVANCE_RE.match(text)&.[](:key))
+    m = ADVANCE_RE.match(text)
+    m && usable_key(m[:key])
   end
 
-  # "grave/salve/... <chave>": aceita se a chave tem "_" OU vem seguida de um conector (evita palavra solta).
-  def save_key(text)
-    m = SAVE_RE.match(text)
+  # "...atributo <chave>": pula genéricos/stopwords logo após "atributo" (ex.: "atributo personalizado
+  # cidade" -> "cidade"; "atributo customizado periodo_reservado" -> "periodo_reservado") e prefere "_".
+  def attr_key(text)
+    m = ATTR_ANCHOR_RE.match(text)
     return nil unless m
 
-    key = m[:key]
-    return nil unless key.include?('_') || text[m.end(:key)..].to_s.match?(CONNECTOR_RE)
-
-    valid_key(key)
+    best_key(sentence_tokens(text, m.end(0)))
   end
 
-  # Normaliza a caixa; nil se vazio ou se cair numa palavra genérica da BLACKLIST.
-  def valid_key(key)
-    return nil if key.nil?
+  # Forma direta "grave <chave>": a 1ª chave com "_" na frase (pulando genéricos); senão a 1ª chave
+  # (não genérica) SEGUIDA de um conector. Sem "_" e sem conector => nil (conservador).
+  def grave_key(text)
+    m = SAVE_VERB_RE.match(text)
+    return nil unless m
 
-    k = key.downcase
-    BLACKLIST.include?(k) ? nil : k
+    seg = text[m.end(0)..].to_s[SENTENCE_HEAD_RE]
+    underscore_key(seg) || connector_key(seg)
+  end
+
+  # 1ª chave com "_" (não genérica) na frase.
+  def underscore_key(seg)
+    seg.scan(KEY_TOKEN_RE).map(&:downcase).find { |t| t.include?('_') && usable?(t) }
+  end
+
+  # 1ª chave (não genérica) SEGUIDA de um conector (conforme|com|no|a partir).
+  def connector_key(seg)
+    seg.scan(CONNECTOR_TOKEN_RE).each { |(tok)| return tok.downcase if usable?(tok) }
+    nil
+  end
+
+  # Tokens snake_case da frase a partir de `from` (para no fim da frase — não cruza para a próxima).
+  def sentence_tokens(text, from)
+    text[from..].to_s[SENTENCE_HEAD_RE].scan(KEY_TOKEN_RE).map(&:downcase)
+  end
+
+  # Melhor chave entre os tokens: prefere a que tem "_"; senão a 1ª usável. Descarta genéricos/stopwords.
+  def best_key(tokens)
+    usable = tokens.select { |t| usable?(t) }
+    usable.find { |t| t.include?('_') } || usable.first
+  end
+
+  # Token pode ser chave? não vazio, não genérico (BLACKLIST) e não stopword.
+  def usable?(token)
+    t = token.to_s.downcase
+    t.present? && BLACKLIST.exclude?(t) && STOPWORDS.exclude?(t)
+  end
+
+  def usable_key(key)
+    k = key.to_s.downcase
+    usable?(k) ? k : nil
   end
 
   # Chave (snake_case) do dado que a etapa coleta: DECLARADA (collect) OU INFERIDA da instrução.

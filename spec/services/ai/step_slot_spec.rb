@@ -77,5 +77,24 @@ RSpec.describe Ai::StepSlot do
     it 'instrução de PLANOS (só apresenta) -> nil (etapa informativa)' do
       expect(infer('Apresente os planos disponíveis e seus preços ao cliente.')).to be_nil
     end
+
+    # === Bugs do dump real (com #263 deployado) — pular genéricos e seguir para a chave real ===
+    it '[2] advérbio após "grave" + "atributo <chave>": pega escolha_caminho, não "imediatamente"' do
+      expect(infer('Pergunte e grave IMEDIATAMENTE no mesmo turno o atributo escolha_caminho da opção.'))
+        .to eq('escolha_caminho')
+    end
+
+    it '[11] "atributo customizado <chave>": pula "customizado", pega periodo_reservado' do
+      expect(infer('Grave o atributo customizado periodo_reservado com o valor informado.'))
+        .to eq('periodo_reservado')
+    end
+
+    it '[1] "atributo personalizado <chave>": pula "personalizado", pega cidade' do
+      expect(infer('Grave o nome da cidade no atributo personalizado cidade.')).to eq('cidade')
+    end
+
+    it 'preferência por "_": token com underscore vence o sem underscore na mesma frase' do
+      expect(infer('Grave no atributo cidade endereco_completo do cliente.')).to eq('endereco_completo')
+    end
   end
 end
