@@ -1267,6 +1267,7 @@ onMounted(async () => {
                     v-if="editingStepIndex === index"
                     :step="element"
                     :is-new="false"
+                    :index="index"
                     :labels="labels"
                     :teams="teams"
                     :custom-attributes="customAttributes"
@@ -1333,6 +1334,7 @@ onMounted(async () => {
               <AiStepForm
                 :step="null"
                 is-new
+                :index="form.steps.length"
                 :labels="labels"
                 :teams="teams"
                 :custom-attributes="customAttributes"
