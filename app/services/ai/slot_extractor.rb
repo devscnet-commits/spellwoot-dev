@@ -8,6 +8,8 @@ class Ai::SlotExtractor
   # Telefone BR: +55 opcional, DDD (2 díg, com/sem parênteses), 8-9 díg com separador livre.
   PHONE_RE = /(?:\+?55[\s-]?)?\(?\d{2}\)?[\s-]?\d{4,5}[\s-]?\d{4}/
   NUMBER_RE = /-?\d+(?:[.,]\d+)?/
+  # Tipos com FORMATO validável (não 'text'). Só estes participam da distinção tentativa/não-tentativa.
+  KNOWN_FORMATS = %w[cpf email phone number choice].freeze
 
   def self.extract(attribute_type:, text:, options: nil)
     txt = text.to_s
@@ -20,6 +22,27 @@ class Ai::SlotExtractor
     when 'phone' then extract_phone(txt)
     when 'number' then extract_number(txt)
     when 'choice' then extract_choice(txt, options)
+    end
+  end
+
+  # Tipo tem formato validável (não é 'text'/desconhecido)? Só esses distinguem tentativa de não-tentativa.
+  def self.known_format?(attribute_type)
+    KNOWN_FORMATS.include?(attribute_type.to_s)
+  end
+
+  # Houve TENTATIVA de responder o slot deste tipo? Determinístico, por formato conhecido:
+  #   cpf/phone/number -> o texto contém algum dígito; email -> contém "@"; choice -> casa uma option.
+  # Distingue "não tentou responder" (ex.: cliente fez uma pergunta) de "tentou mas malformado" — hoje os
+  # dois colapsam em extract=nil. Só faz sentido para KNOWN_FORMATS; 'text' não passa por aqui.
+  def self.attempt?(attribute_type:, text:, options: nil)
+    txt = text.to_s
+    return false if txt.strip.empty?
+
+    case attribute_type.to_s
+    when 'cpf', 'phone', 'number' then txt.match?(/\d/)
+    when 'email' then txt.include?('@')
+    when 'choice' then extract_choice(txt, options).present?
+    else false
     end
   end
 

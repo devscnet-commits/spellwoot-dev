@@ -29,12 +29,35 @@ class Ai::SlotCollector
     return if filled?(slot, decision)
     return if message_text.to_s.strip.empty?
 
-    extracted = Ai::SlotExtractor.extract(attribute_type: Ai::StepSlot.type(step), text: message_text,
-                                          options: Ai::StepSlot.options(step))
-    { value: extracted.presence || message_text.to_s.strip, source: extracted ? 'extractor' : 'raw' }
+    type = effective_type(step, slot)
+    options = Ai::StepSlot.options(step)
+    extracted = Ai::SlotExtractor.extract(attribute_type: type, text: message_text, options: options)
+    return { value: extracted, source: 'extractor' } if extracted.present?
+
+    # (B) Slot de tipo com FORMATO conhecido em que o cliente NÃO tentou responder (ex.: fez uma
+    # pergunta): NÃO grava o cru — devolve :no_attempt para o caller recusar e observar (slot.no_attempt).
+    # Slot 'text' (sem formato derivável): comportamento INALTERADO — grava o texto cru.
+    return { no_attempt: true, type: type } if no_attempt?(type, message_text, options)
+
+    { value: message_text.to_s.strip, source: 'raw' }
   rescue StandardError => e
     Rails.logger.error "[Ai::SlotCollector#capture_value] #{e.class}: #{e.message}"
     nil
+  end
+
+  # (A) Tipo EFETIVO do slot: o declarado em `collect` vence; se for 'text', tenta derivar do NOME da
+  # chave (email/cpf/telefone via SlotExtractor.type_for_key). Chave sem tipo derivável continua 'text'.
+  def effective_type(step, slot)
+    declared = Ai::StepSlot.type(step)
+    return declared unless declared == 'text'
+
+    Ai::SlotExtractor.type_for_key(slot) || 'text'
+  end
+
+  # Tipo com formato conhecido E o cliente não fez tentativa de resposta neste turno.
+  def no_attempt?(type, message_text, options)
+    Ai::SlotExtractor.known_format?(type) &&
+      !Ai::SlotExtractor.attempt?(attribute_type: type, text: message_text, options: options)
   end
 
   # Parte 3: deve pedir confirmação UMA vez? true quando o valor parece estranho (formato) E ainda não

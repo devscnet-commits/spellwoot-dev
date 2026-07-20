@@ -346,8 +346,9 @@ RSpec.describe Ai::StateManager do
       end
 
       it 'confirma no máximo UMA vez por etapa (nunca pergunta o mesmo dado uma 3ª vez)' do
-        track_infer({ 'step_completed' => false }, 'aaa')   # estranho -> confirma (hold)
-        track_infer({ 'step_completed' => false }, 'bbb')   # teima -> grava e avança
+        # Valores COM "@" (tentativa de e-mail malformada); sem "@" seriam no_attempt e não capturariam.
+        track_infer({ 'step_completed' => false }, 'a@b')   # estranho -> confirma (hold)
+        track_infer({ 'step_completed' => false }, 'c@d')   # teima -> grava e avança
         # de volta forçado ao índice 0 não acontece no fluxo; garantimos que não houve 2º hold:
         expect(step_index).to eq(1)
       end
@@ -579,6 +580,108 @@ RSpec.describe Ai::StateManager do
       expect(facts['localizacao_recebida']).to be(true)
       expect(facts['documento_recebido']).to be(true)
       expect(facts['documento_arquivo']).to eq('recibo.pdf')
+    end
+  end
+
+  # Conserto do FALLBACK CRU: em etapa SEM collect (slot inferido), o tipo é derivado do NOME da chave
+  # (cpf/email/telefone) e o cru só é gravado quando houve TENTATIVA de resposta. Turno sem tentativa é
+  # recusado (slot.no_attempt), não avança e NÃO conta travamento. Slot 'text' fica inalterado.
+  describe '#track_step — fallback cru: tipo derivado da chave + distinção de tentativa' do
+    def facts
+      conversation.reload.additional_attributes['ai_collected_facts'] || {}
+    end
+
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    def stuck
+      conversation.reload.additional_attributes['ai_step_stuck_turns']
+    end
+
+    def incoming(text)
+      create(:message, conversation: conversation, account: account, inbox: inbox,
+                       message_type: :incoming, content: text)
+    end
+
+    # Etapa SEM collect: o slot é inferido da instrução ("grave <chave> conforme informado.").
+    def infer_dept(name, instruction)
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Coleta', 'instructions' => instruction },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def run_turn(dept, text)
+      msg = incoming(text)
+      manager.track_step(dept, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: text, message: msg)
+    end
+
+    it 'cpf: pergunta do cliente ("quais os valores?") NÃO é tentativa — não grava, emite slot.no_attempt, não avança, não conta trava' do
+      dept = infer_dept('CPF-A', 'Peça e grave cpf conforme informado.')
+      run_turn(dept, 'quais os valores?')
+
+      expect(facts).not_to have_key('cpf')
+      expect(step_index).to eq(0)
+      expect(stuck).to be_nil # NÃO contou travamento
+      expect(events('slot.no_attempt').last.payload).to include('attribute' => 'cpf', 'type' => 'cpf')
+      expect(events('slot.captured')).to be_empty
+    end
+
+    it 'cpf: tentativa malformada com dígitos ("meu cpf é 123") grava como veio (source raw) e conta trava (confirmação-única)' do
+      dept = infer_dept('CPF-B', 'Peça e grave cpf conforme informado.')
+      run_turn(dept, 'meu cpf é 123')
+
+      expect(facts['cpf']).to eq('meu cpf é 123')
+      expect(events('slot.captured').last.payload).to include('attribute' => 'cpf', 'source' => 'raw')
+      expect(events('slot.no_attempt')).to be_empty
+      expect(stuck).to eq(1)      # tentativa malformada conta 1 (hold de confirmação)
+      expect(step_index).to eq(0) # confirmação-única segura este turno (não é 3ª pergunta)
+    end
+
+    it 'cpf: CPF válido é extraído e normalizado (source extractor) e avança' do
+      dept = infer_dept('CPF-C', 'Peça e grave cpf conforme informado.')
+      run_turn(dept, 'segue meu cpf 111.444.777-35 obrigado')
+
+      expect(facts['cpf']).to eq('111.444.777-35')
+      expect(events('slot.captured').last.payload).to include('attribute' => 'cpf', 'source' => 'extractor')
+      expect(step_index).to eq(1)
+    end
+
+    it 'email: texto sem "@" não é tentativa (não grava); com "@" válido é extraído e avança' do
+      dept = infer_dept('Email-A', 'Peça e grave o e-mail do cliente no atributo email.')
+
+      run_turn(dept, 'aguardando os planos')
+      expect(facts).not_to have_key('email')
+      expect(events('slot.no_attempt').last.payload).to include('attribute' => 'email', 'type' => 'email')
+
+      run_turn(dept, 'jaque@x.com')
+      expect(facts['email']).to eq('jaque@x.com')
+      expect(events('slot.captured').last.payload).to include('source' => 'extractor')
+      expect(step_index).to eq(1)
+    end
+
+    it 'telefone: "dia 5" TEM dígito (é tentativa) e grava como veio (source raw) — comportamento esperado/documentado' do
+      dept = infer_dept('Fone-A', 'Peça e grave o telefone_secundario conforme informado.')
+      run_turn(dept, 'dia 5')
+
+      expect(facts['telefone_secundario']).to eq('dia 5')
+      expect(events('slot.captured').last.payload).to include('attribute' => 'telefone_secundario', 'source' => 'raw')
+      expect(events('slot.no_attempt')).to be_empty
+    end
+
+    it "text (endereco_completo): sem tipo derivável, grava o cru como hoje e avança (regressão INALTERADA)" do
+      dept = infer_dept('Endereco-A', 'Peça e grave endereco_completo conforme informado.')
+      run_turn(dept, 'pode ser')
+
+      expect(facts['endereco_completo']).to eq('pode ser')
+      expect(events('slot.captured').last.payload).to include('attribute' => 'endereco_completo', 'source' => 'raw')
+      expect(events('slot.no_attempt')).to be_empty
+      expect(step_index).to eq(1)
     end
   end
 
