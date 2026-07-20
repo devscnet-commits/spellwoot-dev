@@ -24,7 +24,9 @@ const groqModelOptions = GROQ_APPROVED_MODELS.map(m => ({
   value: m,
   label: m,
 }));
-const WORKER_KEYS = ['ocr', 'summary', 'translation', 'rag'];
+const WORKER_KEYS = ['ocr', 'summary', 'translation', 'rag', 'capture_judge'];
+// Juiz de captura: nasce DESLIGADO (modo 'off'). Modos de acionamento (worker_overrides.capture_judge.mode).
+const JUDGE_MODES = ['off', 'when_silent', 'always'];
 // Nenhum worker escondido hoje. O antigo 'classification' era vestígio do "flow routing" removido e
 // foi retirado de WORKER_KEYS: o classificador de departamento é INTERNO ao DepartmentResolver
 // (provider do supervisor + modelo barato), não um worker configurável. Ver Ai::DepartmentResolver.
@@ -45,6 +47,7 @@ const PRESETS = {
       summary: ['openai', 'gpt-4.1-mini'],
       translation: ['openai', 'gpt-4.1-mini'],
       rag: ['openai', 'text-embedding-3-small'],
+      capture_judge: ['openai', 'gpt-4.1-mini'],
     },
     budget: 50,
     on_limit: 'stop',
@@ -57,6 +60,7 @@ const PRESETS = {
       summary: ['openai', 'gpt-4.1-mini'],
       translation: ['openai', 'gpt-4.1-mini'],
       rag: ['openai', 'text-embedding-3-small'],
+      capture_judge: ['openai', 'gpt-4.1-mini'],
     },
     budget: 150,
     on_limit: 'downgrade',
@@ -69,6 +73,7 @@ const PRESETS = {
       summary: ['openai', 'gpt-4.1'],
       translation: ['openai', 'gpt-4.1'],
       rag: ['openai', 'text-embedding-3-large'],
+      capture_judge: ['openai', 'gpt-4.1'],
     },
     budget: 500,
     on_limit: 'alert',
@@ -102,6 +107,7 @@ const blank = () => ({
   premium_model: '',
   budget_usd: '',
   on_limit: 'downgrade',
+  judge_mode: 'off',
 });
 const form = reactive(blank());
 const { isDirty, capture } = useFormDirty(() => ({ ...form }));
@@ -138,6 +144,13 @@ const onLimitOptions = computed(() =>
   ['stop', 'downgrade', 'alert'].map(v => ({
     value: v,
     label: t(`AI_PROFILES.BUDGET.ON_LIMIT_${v.toUpperCase()}`),
+  }))
+);
+
+const judgeModeOptions = computed(() =>
+  JUDGE_MODES.map(v => ({
+    value: v,
+    label: t(`AI_PROFILES.WORKERS.JUDGE_MODE_${v.toUpperCase()}`),
   }))
 );
 
@@ -217,6 +230,7 @@ const openEdit = profile => {
     premium_model: routing.premium_model || '',
     budget_usd: budget.monthly_usd ?? '',
     on_limit: budget.on_limit || 'downgrade',
+    judge_mode: workers.capture_judge?.mode || 'off',
   });
   showForm.value = true;
   capture();
@@ -238,7 +252,11 @@ const save = async () => {
       supervisor_provider: form.supervisor_provider,
       supervisor_model: form.supervisor_model,
       temperature_position: clampPosition(form.temperature_position),
-      worker_overrides: form.workers,
+      worker_overrides: {
+        ...form.workers,
+        // Juiz de captura carrega o modo de acionamento junto do provider/model.
+        capture_judge: { ...form.workers.capture_judge, mode: form.judge_mode },
+      },
       routing_strategy: {
         high_threshold: Number(form.route_high),
         low_threshold: Number(form.route_low),
@@ -540,6 +558,17 @@ onMounted(fetchProfiles);
                   <Input
                     v-model="form.workers[w].model"
                     :placeholder="$t('AI_PROFILES.FORM.MODEL')"
+                  />
+                </div>
+                <div
+                  class="grid grid-cols-1 sm:grid-cols-[8rem,1fr] gap-2 items-center"
+                >
+                  <span class="text-sm text-n-slate-12">{{
+                    $t('AI_PROFILES.WORKERS.JUDGE_MODE')
+                  }}</span>
+                  <Select
+                    v-model="form.judge_mode"
+                    :options="judgeModeOptions"
                   />
                 </div>
               </div>
