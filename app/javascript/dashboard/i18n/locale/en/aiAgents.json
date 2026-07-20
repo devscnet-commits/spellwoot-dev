@@ -776,7 +776,12 @@
       "CLASSIFICATION": "Classificação (fluxo)",
       "SUMMARY": "Resumo da conversa",
       "TRANSLATION": "Tradução",
-      "RAG": "RAG (embeddings)"
+      "RAG": "RAG (embeddings)",
+      "CAPTURE_JUDGE": "Juiz de captura",
+      "JUDGE_MODE": "Juiz de captura — acionamento",
+      "JUDGE_MODE_OFF": "Desligado",
+      "JUDGE_MODE_WHEN_SILENT": "Quando o modelo não extrai",
+      "JUDGE_MODE_ALWAYS": "Sempre"
     },
     "BUDGET": {
       "TITLE": "Orçamento",

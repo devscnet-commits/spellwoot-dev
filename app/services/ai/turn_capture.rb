@@ -12,9 +12,10 @@
 # para custom_attributes (#265). Opera sobre a MESMA conversa do StateManager (a sincronização em memória
 # do claim preserva os RMW seguintes de persist_step_state).
 class Ai::TurnCapture
-  def initialize(conversation:, persister:)
+  def initialize(conversation:, persister:, agent: nil)
     @conversation = conversation
     @persister = persister
+    @agent = agent
     @claimed = []
   end
 
@@ -44,14 +45,19 @@ class Ai::TurnCapture
       return capture_from_text(step, slot, decision, message_text, department)
     elsif !attrs.key?(slot)
       emit('slot.model_key_mismatch', { expected: slot, got: attrs.keys })
+      # (E) modo 'always': o worker também julga o turno na divergência de chave (não-default). O evento
+      # de mismatch acima fica INALTERADO; isto só ADICIONA a passagem pelo juiz quando o modo é 'always'.
+      return capture_by_judge(step, slot, message_text, department) if judge_mode == 'always'
     end
     nil
   end
 
-  # Modelo MUDO (sem attributes): captura pelo texto do cliente (extractor OU cru, via SlotCollector).
-  # Recusa o cru quando o slot tem tipo conhecido e não houve tentativa -> devolve :no_attempt (o
-  # StateManager não conta travamento nesse turno). Caso contrário devolve nil.
+  # Modelo MUDO (sem attributes): worker de julgamento LIGADO decide (when_silent/always); DESLIGADO cai
+  # no caminho determinístico do #269 (SlotCollector, extractor OU cru), BIT A BIT como antes. O worker
+  # só entra com texto presente — mensagem vazia (cliente sumido) segue pela rede de segurança do #259.
   def capture_from_text(step, slot, decision, message_text, department)
+    return capture_by_judge(step, slot, message_text, department) if judge_active? && message_text.present?
+
     cap = Ai::SlotCollector.new(conversation: @conversation).capture_value(step, slot, decision, message_text)
     return unless cap
     return refuse_no_attempt(slot, cap[:type]) if cap[:no_attempt]
@@ -62,6 +68,56 @@ class Ai::TurnCapture
   end
 
   private
+
+  # Modo de acionamento do worker (worker_overrides['capture_judge']['mode']): 'off' (PADRÃO — nasce
+  # desligado), 'when_silent' (roda quando o modelo não devolveu attributes) ou 'always' (também na
+  # divergência de chave). Sem perfil/sem config => 'off'.
+  def judge_mode
+    @agent&.operation_profile&.worker(:capture_judge)&.dig('mode').to_s.presence || 'off'
+  end
+
+  # Worker roda no caminho "modelo mudo"? (when_silent e always).
+  def judge_active?
+    %w[when_silent always].include?(judge_mode)
+  end
+
+  # (B)+(C)+(D) Julga o turno pelo worker e age pelo status: answered -> grava normalizado (source
+  # 'judge'); malformed -> grava como veio (source 'judge_raw', a confirmação-única cuida). Recusa
+  # (not_an_answer / falha) -> não grava, não avança, NÃO conta o contador normal, e devolve
+  # { refusal: ... } para o StateManager acumular no contador SEPARADO de recusas (teto -> handoff).
+  def capture_by_judge(step, slot, message_text, department)
+    result = Ai::Workers::CaptureJudge.judge(
+      step: step, slot: slot, message_text: message_text,
+      profile: @agent&.operation_profile, conversation: @conversation
+    )
+    case result[:status]
+    when 'answered'
+      persist_judged(slot, normalize_judged(result[:value], step, slot), department, 'judge', 'answered')
+    when 'malformed'
+      persist_judged(slot, result[:value], department, 'judge_raw', 'malformed')
+    when 'not_an_answer'
+      emit('slot.no_attempt', { attribute: slot, status: 'not_an_answer' })
+      { refusal: 'not_an_answer' }
+    else
+      emit('judge.failed', { attribute: slot, status: result[:status], reason: result[:reason] })
+      { refusal: 'judge_failed' }
+    end
+  end
+
+  def persist_judged(slot, value, department, source, status)
+    @persister.persist_attributes({ slot => value }, department)
+    emit('slot.captured', { attribute: slot, source: source, status: status })
+    nil
+  end
+
+  # (C) NORMALIZAÇÃO, não bloqueio: se o tipo é reconhecível, normaliza pelo extractor; se ele não
+  # reconhece o tipo OU não casa, usa o value do worker COMO VEIO (o extractor nunca descarta o aprovado).
+  def normalize_judged(value, step, slot)
+    type = Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
+    return value unless Ai::SlotExtractor.known_format?(type)
+
+    Ai::SlotExtractor.extract(attribute_type: type, text: value, options: Ai::StepSlot.options(step)).presence || value
+  end
 
   # UPDATE conversations SET ...ai_last_captured_message_id = <id> WHERE id = ? AND (atual IS DISTINCT
   # FROM <id>). Só 1 run afeta a linha (checagem de linhas afetadas); quem perde afeta 0 e não captura.
@@ -121,8 +177,9 @@ class Ai::TurnCapture
     attrs.reject { |_k, v| v.to_s.strip.empty? }
   end
 
-  # (D) O cru foi RECUSADO por não ser tentativa de resposta (slot de tipo conhecido). Observabilidade +
-  # sinal (:no_attempt) para o StateManager NÃO contar travamento neste turno. Não persiste nada.
+  # (#269) O cru foi RECUSADO por não ser tentativa de resposta (slot de tipo conhecido sem tentativa).
+  # Observabilidade + sinal (:no_attempt) para o StateManager NÃO contar travamento neste turno. Não
+  # persiste nada. (A recusa do JUIZ é tratada em capture_by_judge — devolve { refusal: ... }.)
   def refuse_no_attempt(slot, type)
     emit('slot.no_attempt', { attribute: slot, type: type })
     :no_attempt

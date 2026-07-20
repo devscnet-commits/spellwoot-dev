@@ -632,14 +632,14 @@ RSpec.describe Ai::StateManager do
       expect(events('slot.captured')).to be_empty
     end
 
-    it 'cpf: tentativa malformada com dígitos ("meu cpf é 123") grava como veio (source raw) e conta trava (confirmação-única)' do
+    it 'cpf: tentativa malformada com dígitos ("meu cpf é 123") grava como veio (source raw); hold NÃO conta trava' do
       dept = infer_dept('CPF-B', 'Peça e grave cpf conforme informado.')
       run_turn(dept, 'meu cpf é 123')
 
       expect(facts['cpf']).to eq('meu cpf é 123')
       expect(events('slot.captured').last.payload).to include('attribute' => 'cpf', 'source' => 'raw')
       expect(events('slot.no_attempt')).to be_empty
-      expect(stuck).to eq(1)      # tentativa malformada conta 1 (hold de confirmação)
+      expect(stuck).to be_nil      # malformado É coleta -> confirmação-única; o contador de trava NÃO sobe
       expect(step_index).to eq(0) # confirmação-única segura este turno (não é 3ª pergunta)
     end
 
@@ -682,6 +682,196 @@ RSpec.describe Ai::StateManager do
       expect(events('slot.captured').last.payload).to include('attribute' => 'endereco_completo', 'source' => 'raw')
       expect(events('slot.no_attempt')).to be_empty
       expect(step_index).to eq(1)
+    end
+  end
+
+  # Worker de julgamento de captura (Ai::Workers::CaptureJudge): opt-in, DESLIGADO por padrão. Cobre os
+  # slots SEM formato validável (endereco_completo) e o caso "para o dia 10" (tem dígito, o #269 gravaria
+  # cru). O worker é stubado aqui — o teste unitário do worker vive em workers/capture_judge_spec.rb.
+  describe '#track_step — worker de julgamento de captura' do
+    def facts
+      conversation.reload.additional_attributes['ai_collected_facts'] || {}
+    end
+
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    def stuck
+      conversation.reload.additional_attributes['ai_step_stuck_turns']
+    end
+
+    def incoming(text)
+      create(:message, conversation: conversation, account: account, inbox: inbox,
+                       message_type: :incoming, content: text)
+    end
+
+    def infer_dept(name, instruction)
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Coleta', 'instructions' => instruction },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def enable_judge(mode = 'when_silent')
+      profile.update!(worker_overrides: { 'capture_judge' => { 'mode' => mode } })
+    end
+
+    def run_turn(dept, text)
+      manager.track_step(dept, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: text, message: incoming(text))
+    end
+
+    it 'DESLIGADO (default): worker NÃO roda, cai no caminho determinístico do #269 (regressão)' do
+      expect(Ai::Workers::CaptureJudge).not_to receive(:judge)
+      dept = infer_dept('J-off', 'Peça e grave endereco_completo conforme informado.')
+
+      run_turn(dept, 'pode ser')
+
+      expect(facts['endereco_completo']).to eq('pode ser') # #269: slot text grava cru, inalterado
+      expect(step_index).to eq(1)
+    end
+
+    it 'LIGADO + not_an_answer (endereco_completo, "qual plano?"): não grava, não avança, não conta trava' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
+      dept = infer_dept('J-na', 'Peça e grave endereco_completo conforme informado.')
+
+      run_turn(dept, 'qual plano?')
+
+      expect(facts).not_to have_key('endereco_completo')
+      expect(step_index).to eq(0)
+      expect(stuck).to be_nil
+      expect(events('slot.no_attempt').last.payload).to include('attribute' => 'endereco_completo', 'status' => 'not_an_answer')
+    end
+
+    it 'LIGADO + not_an_answer (telefone_secundario, "para o dia 10" — TEM dígito): não grava (motivo do PR)' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
+      dept = infer_dept('J-fone-na', 'Peça e grave o telefone_secundario conforme informado.')
+
+      run_turn(dept, 'para o dia 10')
+
+      expect(facts).not_to have_key('telefone_secundario')
+      expect(events('slot.no_attempt')).not_to be_empty
+    end
+
+    it 'LIGADO + answered (telefone_secundario, "4998564780"): grava normalizado, source judge, avança' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'answered', value: '4998564780' })
+      dept = infer_dept('J-ans', 'Peça e grave o telefone_secundario conforme informado.')
+
+      run_turn(dept, 'meu numero: 4998564780')
+
+      expect(facts['telefone_secundario']).to eq('4998564780') # normalizado pelo extractor (phone)
+      expect(events('slot.captured').last.payload).to include('attribute' => 'telefone_secundario', 'source' => 'judge', 'status' => 'answered')
+      expect(step_index).to eq(1)
+    end
+
+    it 'LIGADO + malformed (documento_cpf, "meu cpf é 123"): grava como veio (judge_raw), confirmação-única segura' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'malformed', value: 'meu cpf é 123' })
+      dept = infer_dept('J-mal', 'Peça e grave documento_cpf conforme informado.')
+
+      run_turn(dept, 'meu cpf é 123')
+
+      expect(facts['documento_cpf']).to eq('meu cpf é 123')
+      expect(events('slot.captured').last.payload).to include('source' => 'judge_raw', 'status' => 'malformed')
+      expect(step_index).to eq(0) # confirmação-única segura este turno (não é 3ª pergunta)
+    end
+
+    it 'LIGADO + failed (worker falhou): judge.failed, não grava, não avança' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'failed', reason: 'invalid_json' })
+      dept = infer_dept('J-fail', 'Peça e grave endereco_completo conforme informado.')
+
+      run_turn(dept, 'rua qualquer 123')
+
+      expect(facts).not_to have_key('endereco_completo')
+      expect(step_index).to eq(0)
+      expect(events('judge.failed').last.payload).to include('attribute' => 'endereco_completo', 'reason' => 'invalid_json')
+    end
+
+    it 'modelo devolveu attributes válidos: worker NÃO é chamado (Opção B intacta)' do
+      enable_judge
+      expect(Ai::Workers::CaptureJudge).not_to receive(:judge)
+      dept = infer_dept('J-model', 'Peça e grave endereco_completo conforme informado.')
+
+      manager.track_step(dept, { 'step_completed' => false, 'attributes' => { 'endereco_completo' => 'Rua X 1' } },
+                         dispatcher: dispatcher, run: run, message_text: 'Rua X 1', message: incoming('Rua X 1'))
+
+      expect(step_index).to eq(1)
+    end
+
+    # AJUSTE 1 — teto para recusas CONSECUTIVAS (não_travar de verdade). Teto = 2 × stuck_handoff_turns
+    # (default 3 -> 6). Contador SEPARADO (ai_slot_refusals), sem tocar o contador normal.
+    def refusals
+      conversation.reload.additional_attributes['ai_slot_refusals']
+    end
+
+    it 'not_an_answer consecutivo ABAIXO do teto (2×3=6): não transfere, contador normal intacto' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
+      dept = infer_dept('J-ceil-below', 'Peça e grave endereco_completo conforme informado.')
+
+      5.times { expect(run_turn(dept, 'qual plano?')).to be_nil }
+
+      expect(refusals).to eq(5)
+      expect(stuck).to be_nil       # contador NORMAL não sobe (cliente engajado não é punido)
+      expect(step_index).to eq(0)
+    end
+
+    it 'not_an_answer: ao ATINGIR o teto (6ª recusa) sinaliza stuck_handoff com reason not_an_answer' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
+      dept = infer_dept('J-ceil-na', 'Peça e grave endereco_completo conforme informado.')
+
+      5.times { run_turn(dept, 'qual plano?') }
+      sig = run_turn(dept, 'e o preço?')
+
+      expect(sig).to eq(stuck_handoff: { attribute: 'endereco_completo', step_name: 'Coleta', turns: 6, reason: 'not_an_answer' })
+      expect(refusals).to eq(0) # zerado ao transferir
+    end
+
+    it 'judge_failed consecutivo: ao atingir o teto sinaliza stuck_handoff com reason judge_failed' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'failed', reason: 'invalid_json' })
+      dept = infer_dept('J-ceil-fail', 'Peça e grave endereco_completo conforme informado.')
+
+      5.times { run_turn(dept, 'rua x') }
+      sig = run_turn(dept, 'rua y')
+
+      expect(sig).to eq(stuck_handoff: { attribute: 'endereco_completo', step_name: 'Coleta', turns: 6, reason: 'judge_failed' })
+    end
+
+    it 'captura bem-sucedida no meio da sequência ZERA o contador de recusas' do
+      enable_judge
+      dept = infer_dept('J-zero', 'Peça e grave o telefone_secundario conforme informado.')
+
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
+      2.times { run_turn(dept, 'qual plano?') }
+      expect(refusals).to eq(2)
+
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'answered', value: '4998564780' })
+      run_turn(dept, 'meu numero 4998564780')
+
+      expect(facts['telefone_secundario']).to eq('4998564780')
+      expect(refusals).to eq(0)
+      expect(step_index).to eq(1)
+    end
+
+    it 'stuck_handoff_turns = 0: teto DESLIGADO, recusas nunca transferem (rede off)' do
+      enable_judge
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
+      dept = infer_dept('J-ceil-off', 'Peça e grave endereco_completo conforme informado.')
+      dept.update!(transfer_rules: { 'stuck_handoff_turns' => 0 })
+
+      10.times { expect(run_turn(dept, 'qual plano?')).to be_nil }
+
+      expect(step_index).to eq(0)
     end
   end
 

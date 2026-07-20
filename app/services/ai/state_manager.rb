@@ -124,13 +124,15 @@ class Ai::StateManager
 
     # Captura desta mensagem (anexo BUG 3 -> modelo Opção B -> texto cru), no MÁXIMO um slot por mensagem
     # (a idempotência acima já garantiu que este é o 1º run). Sempre chamada — o anexo vira fato mesmo em
-    # etapa sem slot; internamente é no-op se não há slot nem anexo. Devolve :no_attempt quando o cliente
-    # enviou algo que NÃO é tentativa de resposta num slot de tipo conhecido (o cru foi recusado).
+    # etapa sem slot; internamente é no-op se não há slot nem anexo. Devolve nil (capturou/nada),
+    # :no_attempt (#269, slot de tipo conhecido sem tentativa) ou { refusal: 'not_an_answer'|'judge_failed' }
+    # (worker de julgamento recusou o turno) — ver Ai::TurnCapture.
     capture_signal = turn_capture.capture(step, decision, message_text, message, department)
 
-    # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259). O
-    # turno sem tentativa (:no_attempt) NÃO conta travamento — o cliente está engajado, só não respondeu.
-    outcome = resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal == :no_attempt)
+    # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259). Nem
+    # :no_attempt nem a recusa do juiz contam o contador NORMAL (cliente engajado); a recusa do juiz tem
+    # um contador SEPARADO com teto próprio (ver resolve_empty_slot / resolve_judge_refusal).
+    outcome = step_resolver.resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal)
 
     # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
     # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
@@ -151,6 +153,7 @@ class Ai::StateManager
     new_index = outcome[:completed] ? (index + 1).clamp(0, steps.size - 1) : index
     persist_step_state(steps[new_index], new_index, decision)
     persist_stuck_turns(outcome[:stuck])
+    persist_slot_refusals(outcome[:refusals])
   end
 
   # Invisible worker: persist a rolling conversation summary into agent memory.
@@ -175,7 +178,7 @@ class Ai::StateManager
   # Colaborador da captura do turno (BUG 1 idempotência atômica + BUG 3 anexo + Opção B). Memoizado
   # por run (mesma instância do StateManager) -> mantém o guard em memória do claim. Persiste por aqui.
   def turn_capture
-    @turn_capture ||= Ai::TurnCapture.new(conversation: @conversation, persister: self)
+    @turn_capture ||= Ai::TurnCapture.new(conversation: @conversation, persister: self, agent: @agent)
   end
 
   # Grava o índice (fonte de verdade) + o hash ai_step (delay p/ MessageGrouping e reported_name p/ log).
@@ -200,64 +203,10 @@ class Ai::StateManager
   #    a repergunta que queremos matar).
   #  - complete_when == 'always' (etapa informativa, sem coleta) -> avança pelo sinal do modelo.
   #  - sem collect e sem complete_when (etapas antigas) -> sinal do modelo (compat total, zero migração).
-  def step_completed?(step, decision)
-    return truthy?(decision['step_completed']) if Ai::StepSlot.criterion(step) == 'always'
-
-    slot = Ai::StepSlot.required_attribute(step)
-    return slot_filled?(slot, decision) if slot
-
-    truthy?(decision['step_completed'])
-  end
-
-  # Coletor de slot (captura + confirmação-única). Memoizado — só depende de @conversation.
-  def slot_collector
-    @slot_collector ||= Ai::SlotCollector.new(conversation: @conversation)
-  end
-
-  def slot_filled?(slot, decision)
-    slot_collector.filled?(slot, decision)
-  end
-
-  # Decide a conclusão da etapa + confirmação-única (Parte 3) + rede de segurança anti-travamento
-  # (Camada B/#259). Retorna { completed:, stuck:, confirm: (opcional), signal: (opcional) }:
-  #  - etapa SEM slot (informativa/antiga): comportamento padrão (step_completed do modelo).
-  #  - slot PREENCHIDO (a captura já gravou o que o cliente deu):
-  #      * valor parece ESTRANHO p/ o tipo (email/cpf/telefone derivado da chave) E ainda não confirmamos
-  #        nesta etapa -> HOLD pedindo confirmação UMA vez (confirm:), stuck=0 (Parte 4: não conta trava).
-  #      * senão (valor ok, ou já confirmado uma vez) -> AVANÇA. Nunca repergunta 3x, nunca entra em loop.
-  #  - slot VAZIO: se o cliente enviou algo que NÃO é tentativa de resposta (no_attempt, slot de tipo
-  #    conhecido) -> NÃO conta travamento (mantém o contador; ele está engajado). Senão (cliente sumido,
-  #    message_text vazio, #259) -> conta "parado"; ao atingir o limite (>0), sinaliza HANDOFF. 0 = off.
-  def resolve_completion(step, decision, stuck_limit, index, no_attempt)
-    slot = Ai::StepSlot.required_attribute(step)
-    return { completed: step_completed?(step, decision), stuck: 0 } unless slot
-    return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, decision)
-
-    resolve_empty_slot(step, slot, stuck_limit, no_attempt)
-  end
-
-  # Slot VAZIO: (C) turno sem tentativa (no_attempt — cliente engajado, mas não respondeu o dado) NÃO
-  # conta travamento (mantém o contador). Senão (#259, cliente sumido) conta "parado" e, ao atingir o
-  # limite (>0), sinaliza HANDOFF.
-  def resolve_empty_slot(step, slot, stuck_limit, no_attempt)
-    current = (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i
-    return { completed: false, stuck: current } if no_attempt
-
-    stuck = current + 1
-    return { completed: false, stuck: stuck } unless stuck_limit.positive? && stuck >= stuck_limit
-
-    name = step_name(step).presence || slot
-    { completed: false, stuck: 0, signal: { stuck_handoff: { attribute: slot, step_name: name, turns: stuck } } }
-  end
-
-  # Slot já preenchido (a captura gravou o que o cliente deu): Parte 3 — se o valor parece estranho e
-  # ainda não confirmamos nesta etapa, pede confirmação UMA vez (hold) e conta 1 no contador de trava
-  # (tentativa malformada não é engajamento neutro; confirma 1x e no próximo turno AVANÇA); senão AVANÇA.
-  def resolve_filled_slot(slot, decision, index)
-    return { completed: true, stuck: 0 } unless slot_collector.needs_confirmation?(slot, decision, index)
-
-    stuck = (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i + 1
-    { completed: false, stuck: stuck, confirm: true }
+  # Decisão de conclusão da etapa (confirmação-única + rede #259 + teto de recusas do juiz). Colaborador
+  # PURO (não persiste) — o StateManager grava o outcome em persist_progress. Memoizado por run.
+  def step_resolver
+    @step_resolver ||= Ai::StepResolver.new(conversation: @conversation)
   end
 
   # Limite de turnos parado antes de transferir (Camada B), da config do agente (tela). Chave ausente =>
@@ -275,6 +224,19 @@ class Ai::StateManager
     return if attrs['ai_step_stuck_turns'].to_i == count
 
     attrs['ai_step_stuck_turns'] = count
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  # Contador SEPARADO de recusas consecutivas do juiz (ai_slot_refusals). nil no outcome => não mexe
+  # (só os caminhos que sabem o valor o informam: captura zera; recusa acumula/estoura). Mesma
+  # disciplina do persist_stuck_turns (só grava quando muda).
+  def persist_slot_refusals(count)
+    return if count.nil?
+
+    attrs = @conversation.additional_attributes || {}
+    return if attrs['ai_slot_refusals'].to_i == count
+
+    attrs['ai_slot_refusals'] = count
     @conversation.update!(additional_attributes: attrs)
   end
 
@@ -323,10 +285,6 @@ class Ai::StateManager
     return 0 unless step.is_a?(Hash)
 
     (step['group_delay_seconds'] || step[:group_delay_seconds]).to_i
-  end
-
-  def truthy?(value)
-    value == true || value.to_s.strip.casecmp?('true')
   end
 
   # Espelha o Ai::Gateway#emit: grava o ai_event na MESMA stream, com ai_run_id nil (attributes.updated
