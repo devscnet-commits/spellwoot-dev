@@ -1,9 +1,9 @@
-# Captura e validação leve de um slot de etapa (conserto). Grava o dado que o cliente forneceu
-# (SlotExtractor por tipo OU texto cru — sempre gravável, Parte 2), decide se precisa confirmar UMA vez
-# (valor estranho para o tipo derivado da chave, Parte 3) e gerencia o flag de confirmação por etapa.
-# Opera sobre a conversa (ai_collected_facts + ai_step_confirm_index em additional_attributes), com a
-# mesma disciplina read-modify-write do Ai::StateManager. Extraído do StateManager (que já concentrava
-# persist #256 + steps #259 + captura) para não crescer sem limite.
+# Captura e validação leve de um slot de etapa (conserto). DECIDE o dado que o cliente forneceu
+# (SlotExtractor por tipo OU texto cru — sempre gravável, Parte 2) SEM persistir (quem grava é o
+# StateManager, via persist_attributes, que já espelha para custom_attributes); decide se precisa
+# confirmar UMA vez (valor estranho para o tipo derivado da chave, Parte 3) e gerencia o flag de
+# confirmação por etapa. Extraído do StateManager (que já concentrava persist #256 + steps #259 +
+# captura) para não crescer sem limite.
 class Ai::SlotCollector
   def initialize(conversation:)
     @conversation = conversation
@@ -19,19 +19,21 @@ class Ai::SlotCollector
     facts.is_a?(Hash) && facts[slot].to_s.strip.present?
   end
 
-  # Grava o dado do cliente se o slot ainda está vazio e há mensagem: tenta o SlotExtractor (tipo
-  # conhecido); se não extrair, grava o TEXTO CRU (genérico). Não sobrescreve valor já presente (evita
-  # gravar "já mandei" por cima). Retorna 'extractor' | 'raw' | nil (nada capturado).
-  def capture(step, slot, decision, message_text)
+  # DECIDE o dado do cliente para o slot (não persiste): tenta o SlotExtractor (tipo conhecido); se não
+  # extrair, usa o TEXTO CRU (genérico). Só quando o slot está vazio (não sobrescreve valor já presente
+  # — evita gravar "já mandei" por cima). Retorna { value:, source: 'extractor'|'raw' } ou nil (nada a
+  # capturar). Quem GRAVA é o StateManager (via persist_attributes, que também espelha para
+  # custom_attributes quando a chave tem campo cadastrado) — assim a captura reaproveita o mesmo
+  # caminho de persistência/espelhamento do modelo, sem duplicar a regra.
+  def capture_value(step, slot, decision, message_text)
     return if filled?(slot, decision)
     return if message_text.to_s.strip.empty?
 
     extracted = Ai::SlotExtractor.extract(attribute_type: Ai::StepSlot.type(step), text: message_text,
                                           options: Ai::StepSlot.options(step))
-    write_fact(slot, extracted.presence || message_text.to_s.strip)
-    extracted ? 'extractor' : 'raw'
+    { value: extracted.presence || message_text.to_s.strip, source: extracted ? 'extractor' : 'raw' }
   rescue StandardError => e
-    Rails.logger.error "[Ai::SlotCollector#capture] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::SlotCollector#capture_value] #{e.class}: #{e.message}"
     nil
   end
 
@@ -61,15 +63,6 @@ class Ai::SlotCollector
 
   def confirmed_index
     (@conversation.additional_attributes || {})['ai_step_confirm_index']
-  end
-
-  def write_fact(slot, value)
-    attrs = @conversation.additional_attributes || {}
-    facts = (attrs['ai_collected_facts'] || {}).merge(slot => value)
-    return if facts == attrs['ai_collected_facts']
-
-    attrs['ai_collected_facts'] = facts
-    @conversation.update!(additional_attributes: attrs)
   end
 
   def mark_confirmed(index)

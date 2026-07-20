@@ -113,12 +113,8 @@ class Ai::StateManager
     step = steps[index]
     slot = Ai::StepSlot.required_attribute(step)
 
-    # Captura (Camada A + Parte 2): grava o que o cliente respondeu para o slot — via SlotExtractor
-    # (tipo conhecido) OU o TEXTO CRU (genérico). Não depende do modelo devolver `attributes` nem do
-    # valor bater com um formato. Ver Ai::SlotCollector#capture.
-    if slot && (source = slot_collector.capture(step, slot, decision, message_text))
-      emit('slot.captured', { attribute: slot, source: source })
-    end
+    # Captura (Camada A + Parte 2): o que o cliente respondeu para o slot. Ver #capture_slot.
+    capture_slot(step, slot, decision, message_text, department) if slot
 
     # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259).
     outcome = resolve_completion(step, slot, decision, stuck_handoff_limit(department), index)
@@ -134,6 +130,17 @@ class Ai::StateManager
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#track_step] #{e.class}: #{e.message}"
     nil
+  end
+
+  # Captura o dado do cliente para o slot (via SlotCollector) e PERSISTE pelo MESMO persist_attributes
+  # do caminho do modelo: grava em ai_collected_facts E espelha para custom_attributes quando a chave
+  # tem campo cadastrado (BUG 2: antes o dado capturado — source raw — não aparecia no painel/Bitrix).
+  def capture_slot(step, slot, decision, message_text, department)
+    cap = slot_collector.capture_value(step, slot, decision, message_text)
+    return unless cap
+
+    persist_attributes({ slot => cap[:value] }, department)
+    emit('slot.captured', { attribute: slot, source: cap[:source] })
   end
 
   # Persiste o avanço da etapa (clamp no máximo; nunca retrocede/pula) + o contador de trava. Extraído
