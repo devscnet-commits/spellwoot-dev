@@ -121,15 +121,16 @@ class Ai::StateManager
 
     index = current_step_index(steps.size - 1)
     step = steps[index]
-    slot = Ai::StepSlot.required_attribute(step)
 
     # Captura desta mensagem (anexo BUG 3 -> modelo Opção B -> texto cru), no MÁXIMO um slot por mensagem
     # (a idempotência acima já garantiu que este é o 1º run). Sempre chamada — o anexo vira fato mesmo em
-    # etapa sem slot; internamente é no-op se não há slot nem anexo. Ver Ai::TurnCapture#capture.
-    turn_capture.capture(step, decision, message_text, message, department)
+    # etapa sem slot; internamente é no-op se não há slot nem anexo. Devolve :no_attempt quando o cliente
+    # enviou algo que NÃO é tentativa de resposta num slot de tipo conhecido (o cru foi recusado).
+    capture_signal = turn_capture.capture(step, decision, message_text, message, department)
 
-    # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259).
-    outcome = resolve_completion(step, slot, decision, stuck_handoff_limit(department), index)
+    # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259). O
+    # turno sem tentativa (:no_attempt) NÃO conta travamento — o cliente está engajado, só não respondeu.
+    outcome = resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal == :no_attempt)
 
     # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
     # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
@@ -224,13 +225,25 @@ class Ai::StateManager
   #      * valor parece ESTRANHO p/ o tipo (email/cpf/telefone derivado da chave) E ainda não confirmamos
   #        nesta etapa -> HOLD pedindo confirmação UMA vez (confirm:), stuck=0 (Parte 4: não conta trava).
   #      * senão (valor ok, ou já confirmado uma vez) -> AVANÇA. Nunca repergunta 3x, nunca entra em loop.
-  #  - slot VAZIO (cliente não respondeu NADA usável neste turno = message_text vazio): rede de segurança
-  #    do #259 — conta "parado"; ao atingir o limite (>0), sinaliza HANDOFF (cliente sumido). Limite 0 = off.
-  def resolve_completion(step, slot, decision, stuck_limit, index)
+  #  - slot VAZIO: se o cliente enviou algo que NÃO é tentativa de resposta (no_attempt, slot de tipo
+  #    conhecido) -> NÃO conta travamento (mantém o contador; ele está engajado). Senão (cliente sumido,
+  #    message_text vazio, #259) -> conta "parado"; ao atingir o limite (>0), sinaliza HANDOFF. 0 = off.
+  def resolve_completion(step, decision, stuck_limit, index, no_attempt)
+    slot = Ai::StepSlot.required_attribute(step)
     return { completed: step_completed?(step, decision), stuck: 0 } unless slot
     return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, decision)
 
-    stuck = (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i + 1
+    resolve_empty_slot(step, slot, stuck_limit, no_attempt)
+  end
+
+  # Slot VAZIO: (C) turno sem tentativa (no_attempt — cliente engajado, mas não respondeu o dado) NÃO
+  # conta travamento (mantém o contador). Senão (#259, cliente sumido) conta "parado" e, ao atingir o
+  # limite (>0), sinaliza HANDOFF.
+  def resolve_empty_slot(step, slot, stuck_limit, no_attempt)
+    current = (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i
+    return { completed: false, stuck: current } if no_attempt
+
+    stuck = current + 1
     return { completed: false, stuck: stuck } unless stuck_limit.positive? && stuck >= stuck_limit
 
     name = step_name(step).presence || slot
@@ -238,11 +251,13 @@ class Ai::StateManager
   end
 
   # Slot já preenchido (a captura gravou o que o cliente deu): Parte 3 — se o valor parece estranho e
-  # ainda não confirmamos nesta etapa, pede confirmação UMA vez (hold, stuck=0); senão AVANÇA.
+  # ainda não confirmamos nesta etapa, pede confirmação UMA vez (hold) e conta 1 no contador de trava
+  # (tentativa malformada não é engajamento neutro; confirma 1x e no próximo turno AVANÇA); senão AVANÇA.
   def resolve_filled_slot(slot, decision, index)
-    return { completed: false, stuck: 0, confirm: true } if slot_collector.needs_confirmation?(slot, decision, index)
+    return { completed: true, stuck: 0 } unless slot_collector.needs_confirmation?(slot, decision, index)
 
-    { completed: true, stuck: 0 }
+    stuck = (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i + 1
+    { completed: false, stuck: stuck, confirm: true }
   end
 
   # Limite de turnos parado antes de transferir (Camada B), da config do agente (tela). Chave ausente =>

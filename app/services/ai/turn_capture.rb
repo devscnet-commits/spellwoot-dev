@@ -41,14 +41,24 @@ class Ai::TurnCapture
 
     attrs = decision['attributes'].is_a?(Hash) ? reject_blank(decision['attributes']) : {}
     if attrs.empty?
-      cap = Ai::SlotCollector.new(conversation: @conversation).capture_value(step, slot, decision, message_text)
-      return unless cap
-
-      @persister.persist_attributes({ slot => cap[:value] }, department)
-      emit('slot.captured', { attribute: slot, source: cap[:source] })
+      return capture_from_text(step, slot, decision, message_text, department)
     elsif !attrs.key?(slot)
       emit('slot.model_key_mismatch', { expected: slot, got: attrs.keys })
     end
+    nil
+  end
+
+  # Modelo MUDO (sem attributes): captura pelo texto do cliente (extractor OU cru, via SlotCollector).
+  # Recusa o cru quando o slot tem tipo conhecido e não houve tentativa -> devolve :no_attempt (o
+  # StateManager não conta travamento nesse turno). Caso contrário devolve nil.
+  def capture_from_text(step, slot, decision, message_text, department)
+    cap = Ai::SlotCollector.new(conversation: @conversation).capture_value(step, slot, decision, message_text)
+    return unless cap
+    return refuse_no_attempt(slot, cap[:type]) if cap[:no_attempt]
+
+    @persister.persist_attributes({ slot => cap[:value] }, department)
+    emit('slot.captured', { attribute: slot, source: cap[:source] })
+    nil
   end
 
   private
@@ -109,6 +119,13 @@ class Ai::TurnCapture
 
   def reject_blank(attrs)
     attrs.reject { |_k, v| v.to_s.strip.empty? }
+  end
+
+  # (D) O cru foi RECUSADO por não ser tentativa de resposta (slot de tipo conhecido). Observabilidade +
+  # sinal (:no_attempt) para o StateManager NÃO contar travamento neste turno. Não persiste nada.
+  def refuse_no_attempt(slot, type)
+    emit('slot.no_attempt', { attribute: slot, type: type })
+    :no_attempt
   end
 
   def emit(type, payload)
