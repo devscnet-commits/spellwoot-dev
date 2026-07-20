@@ -140,7 +140,8 @@ class Ai::Gateway
     step_signal = nil
     if @acts_live
       step_signal = state_manager.track_step(department, result[:decision] || {}, dispatcher: action_dispatcher,
-                                                                                  run: run_record, message_text: effective_content)
+                                                                                  run: run_record, message_text: effective_content,
+                                                                                  message: @message)
       # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
       # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
       # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.

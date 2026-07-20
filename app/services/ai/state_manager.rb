@@ -105,16 +105,28 @@ class Ai::StateManager
   # Retorna nil normalmente; ou { stuck_handoff: {attribute, step_name, turns} } quando a etapa de slot
   # travou por N turnos (Camada B) — SINAL para o Gateway TRANSFERIR para humano (o Gateway tem o
   # action_dispatcher + handoff_coordinator; aqui só decidimos, não executamos o handoff).
-  def track_step(department, decision, dispatcher: nil, run: nil, message_text: nil)
+  # rubocop:disable Metrics/ParameterLists -- seam de orquestração: o quê (department, decision) +
+  # contexto de automação do run (dispatcher, run) + input da vez (message_text agrupado, message p/
+  # anexo/idempotência). Agrupar seria só cosmético e rippla por ~9 call sites de spec + o Gateway.
+  def track_step(department, decision, dispatcher: nil, run: nil, message_text: nil, message: nil)
+    # rubocop:enable Metrics/ParameterLists
     steps = Array(department.playbook&.steps)
     return if steps.empty? # playbook sem etapas = no-op
+
+    # BUG 1 (idempotência por mensagem, ATÔMICA): só o PRIMEIRO run/binding desta mensagem processa a
+    # etapa — captura E avanço. Re-run/binding/re-enfileiramento da MESMA mensagem é no-op (a mesma
+    # mensagem não preenche 2 slots nem re-avança, mesmo que a etapa tenha avançado no run anterior).
+    # Sem message_id (follow-up/teste) => processa normal. Ver Ai::TurnCapture#claim.
+    return unless turn_capture.claim(message)
 
     index = current_step_index(steps.size - 1)
     step = steps[index]
     slot = Ai::StepSlot.required_attribute(step)
 
-    # Captura (Camada A + Parte 2): o que o cliente respondeu para o slot. Ver #capture_slot.
-    capture_slot(step, slot, decision, message_text, department) if slot
+    # Captura desta mensagem (anexo BUG 3 -> modelo Opção B -> texto cru), no MÁXIMO um slot por mensagem
+    # (a idempotência acima já garantiu que este é o 1º run). Sempre chamada — o anexo vira fato mesmo em
+    # etapa sem slot; internamente é no-op se não há slot nem anexo. Ver Ai::TurnCapture#capture.
+    turn_capture.capture(step, decision, message_text, message, department)
 
     # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259).
     outcome = resolve_completion(step, slot, decision, stuck_handoff_limit(department), index)
@@ -130,17 +142,6 @@ class Ai::StateManager
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#track_step] #{e.class}: #{e.message}"
     nil
-  end
-
-  # Captura o dado do cliente para o slot (via SlotCollector) e PERSISTE pelo MESMO persist_attributes
-  # do caminho do modelo: grava em ai_collected_facts E espelha para custom_attributes quando a chave
-  # tem campo cadastrado (BUG 2: antes o dado capturado — source raw — não aparecia no painel/Bitrix).
-  def capture_slot(step, slot, decision, message_text, department)
-    cap = slot_collector.capture_value(step, slot, decision, message_text)
-    return unless cap
-
-    persist_attributes({ slot => cap[:value] }, department)
-    emit('slot.captured', { attribute: slot, source: cap[:source] })
   end
 
   # Persiste o avanço da etapa (clamp no máximo; nunca retrocede/pula) + o contador de trava. Extraído
@@ -168,6 +169,12 @@ class Ai::StateManager
   # Índice atual da conversa (clampado no range válido do playbook). Default 0 (primeira etapa).
   def current_step_index(max_index)
     (@conversation.additional_attributes || {})['ai_step_index'].to_i.clamp(0, max_index)
+  end
+
+  # Colaborador da captura do turno (BUG 1 idempotência atômica + BUG 3 anexo + Opção B). Memoizado
+  # por run (mesma instância do StateManager) -> mantém o guard em memória do claim. Persiste por aqui.
+  def turn_capture
+    @turn_capture ||= Ai::TurnCapture.new(conversation: @conversation, persister: self)
   end
 
   # Grava o índice (fonte de verdade) + o hash ai_step (delay p/ MessageGrouping e reported_name p/ log).

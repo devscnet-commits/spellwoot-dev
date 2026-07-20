@@ -26,8 +26,9 @@ class Ai::ContextBuilder
     history = @conversation.messages
                            .where(message_type: %i[incoming outgoing])
                            .where('messages.id <= ?', last_out_id)
+                           .includes(:attachments)
                            .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
-                           .map { |m| "#{m.incoming? ? 'Cliente' : 'Atendente'}: #{m.content.to_s.strip.first(500)}" }
+                           .map { |m| "#{m.incoming? ? 'Cliente' : 'Atendente'}: #{message_body(m)}" }
                            .reject { |line| line.end_with?(': ') }
     return current if history.empty?
 
@@ -49,6 +50,34 @@ class Ai::ContextBuilder
   end
 
   private
+
+  # Corpo da mensagem no histórico: o texto; ou, se não houver texto MAS houver anexo (BUG 3), um
+  # placeholder pelo tipo do anexo — para a IA saber, nos turnos seguintes, que o anexo existiu (antes
+  # a linha virava "Cliente: " e era descartada -> a IA repergunta localização/comprovante já recebidos).
+  def message_body(message)
+    text = message.content.to_s.strip.first(500)
+    return text if text.present?
+
+    attachment_placeholder(message)
+  end
+
+  def attachment_placeholder(message)
+    att = message.attachments.to_a.first
+    return '' unless att
+
+    case att.file_type.to_s
+    when 'location' then '[enviou uma localização]'
+    when 'file' then "[enviou um documento: #{attachment_name(att)}]"
+    when 'image' then '[enviou uma imagem]'
+    when 'audio' then '[enviou um áudio]'
+    when 'video' then '[enviou um vídeo]'
+    else '[enviou um anexo]'
+    end
+  end
+
+  def attachment_name(att)
+    (att.file.attached? ? att.file.blob.filename.to_s : att.fallback_title.to_s).presence || 'arquivo'
+  end
 
   # Conteúdo da mensagem citada quando o cliente responde a uma mensagem específica (reply do canal).
   # O Chatwoot resolve a citação para o id da mensagem em content_attributes['in_reply_to'].

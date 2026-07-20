@@ -408,6 +408,180 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  # BUG 1 (conv 359): a MESMA mensagem preenchia DOIS slots num mesmo run (o texto cru caía no slot da
+  # etapa corrente E o modelo gravava a chave certa) — valores trocados indo pro painel/Bitrix. Opção B:
+  # se o modelo devolveu attributes, ELE é dono do turno; o texto cru só entra quando o modelo é mudo.
+  describe '#track_step — BUG 1: precedência do modelo (Opção B) + idempotência por mensagem' do
+    let(:cascade_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cascata', status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Caminho',
+                                'collect' => { 'attribute' => 'escolha_caminho', 'type' => 'text', 'required' => true } },
+                              { 'name' => 'Cidade',
+                                'collect' => { 'attribute' => 'cidade', 'type' => 'text', 'required' => true } },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def facts
+      conversation.reload.additional_attributes['ai_collected_facts'] || {}
+    end
+
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    def incoming(text)
+      create(:message, conversation: conversation, account: account, inbox: inbox,
+                       message_type: :incoming, content: text)
+    end
+
+    it 'MISMATCH: modelo devolve attributes cuja chave NÃO é o slot corrente — NÃO grava o texto cru no slot' do
+      # etapa 0 = escolha_caminho; modelo grava {cidade:'MARAVILHA'} (o valor ecoa, mas é de OUTRO slot).
+      msg = incoming('MARAVILHA')
+      manager.track_step(cascade_department, { 'step_completed' => false, 'attributes' => { 'cidade' => 'MARAVILHA' } },
+                         dispatcher: dispatcher, run: run, message_text: 'MARAVILHA', message: msg)
+
+      expect(facts).not_to have_key('escolha_caminho') # a cascata NÃO aconteceu (era o bug)
+      expect(step_index).to eq(0)                       # não avançou (slot corrente não foi preenchido)
+      expect(events('slot.model_key_mismatch').last.payload)
+        .to include('expected' => 'escolha_caminho', 'got' => ['cidade'])
+    end
+
+    it 'ALINHADO: modelo devolve a chave DO slot corrente — não grava cru (modelo é dono) e avança' do
+      msg = incoming('opcao A')
+      expect do
+        manager.track_step(cascade_department,
+                           { 'step_completed' => false, 'attributes' => { 'escolha_caminho' => 'opcao A' } },
+                           dispatcher: dispatcher, run: run, message_text: 'opcao A', message: msg)
+      end.to change { step_index }.from(nil).to(1)
+
+      expect(events('slot.captured')).to be_empty         # não houve captura de texto cru
+      expect(events('slot.model_key_mismatch')).to be_empty
+    end
+
+    it 'MUDO: modelo sem attributes — fallback grava o texto cru no slot corrente (safety net Parte 2)' do
+      msg = incoming('Jaqueline')
+      manager.track_step(cascade_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: 'Jaqueline', message: msg)
+
+      expect(facts['escolha_caminho']).to eq('Jaqueline')
+      expect(step_index).to eq(1)
+    end
+
+    it 'IDEMPOTÊNCIA: a MESMA mensagem não preenche um 2º slot nem re-avança (mesmo manager/run)' do
+      msg = incoming('Jaqueline')
+      2.times do
+        manager.track_step(cascade_department, { 'step_completed' => false },
+                           dispatcher: dispatcher, run: run, message_text: 'Jaqueline', message: msg)
+      end
+
+      expect(facts['escolha_caminho']).to eq('Jaqueline') # 1º run preencheu o slot 0
+      expect(facts).not_to have_key('cidade')             # 2º run (mesma msg) NÃO preencheu o slot 1
+      expect(step_index).to eq(1)                          # avançou UMA vez só
+    end
+
+    it 'IDEMPOTÊNCIA ATÔMICA: marca ai_last_captured_message_id e um 2º run/binding (outro manager) é no-op' do
+      msg = incoming('Jaqueline')
+      manager.track_step(cascade_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: 'Jaqueline', message: msg)
+
+      expect(conversation.reload.additional_attributes['ai_last_captured_message_id']).to eq(msg.id.to_s)
+
+      # binding/run concorrente: instância nova (guard em memória vazio) — só o UPDATE atômico segura.
+      other = described_class.new(conversation: conversation, agent: agent)
+      other.track_step(cascade_department, { 'step_completed' => false },
+                       dispatcher: dispatcher, run: run, message_text: 'Jaqueline', message: msg)
+
+      expect(facts).not_to have_key('cidade') # o 2º binding não capturou nada
+      expect(step_index).to eq(1)             # nem re-avançou
+    end
+
+    it 'mensagem sem id (follow-up/teste) processa normalmente (sem idempotência)' do
+      manager.track_step(cascade_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: 'Jaqueline')
+
+      expect(facts['escolha_caminho']).to eq('Jaqueline')
+      expect(step_index).to eq(1)
+    end
+  end
+
+  # BUG 3 (conv 359/360): anexos (localização, comprovante) chegavam mas NUNCA viravam dado — a IA
+  # reperguntava algo já recebido. Agora o anexo grava fatos determinísticos e preenche o slot da etapa.
+  describe '#track_step — BUG 3: anexo vira dado' do
+    let(:attach_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Anexos', status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Localização' }, # etapa informativa (sem slot)
+                              { 'name' => 'Comprovante',
+                                'collect' => { 'attribute' => 'comprovante', 'type' => 'text', 'required' => true } },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def facts
+      conversation.reload.additional_attributes['ai_collected_facts'] || {}
+    end
+
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    def incoming_with(attrs)
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: '')
+      msg.attachments.create!(attrs.merge(account_id: account.id))
+      msg
+    end
+
+    it 'LOCALIZAÇÃO (etapa sem slot): grava fatos determinísticos, sem preencher slot de texto' do
+      msg = incoming_with(file_type: :location, coordinates_lat: -26.77, coordinates_long: -53.05,
+                          external_url: 'https://maps.example/x')
+      att = msg.attachments.first
+      manager.track_step(attach_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: '', message: msg)
+
+      expect(facts['localizacao_recebida']).to be(true)
+      expect(facts['localizacao_coordenadas']).to eq("#{att.coordinates_lat},#{att.coordinates_long}")
+      expect(facts['localizacao_link']).to eq('https://maps.example/x')
+      expect(events('attachment.captured').last.payload).to include('kind' => 'location')
+    end
+
+    it 'COMPROVANTE (etapa com slot): grava fatos do documento, PREENCHE o slot e AVANÇA' do
+      set_index(1) # etapa Comprovante
+      msg = incoming_with(file_type: :file, fallback_title: 'comprovante.pdf')
+
+      manager.track_step(attach_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: '', message: msg)
+
+      expect(facts['documento_recebido']).to be(true)
+      expect(facts['documento_arquivo']).to eq('comprovante.pdf')
+      expect(facts['comprovante']).to eq('comprovante.pdf') # slot preenchido pelo anexo
+      expect(step_index).to eq(2)                            # avançou
+      expect(events('attachment.captured').last.payload).to include('kind' => 'file', 'attribute' => 'comprovante')
+    end
+
+    it 'reprodução: localização e DEPOIS comprovante — ambos viram fato (a IA para de reperguntar)' do
+      loc = incoming_with(file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0,
+                          external_url: 'https://maps.example/y')
+      manager.track_step(attach_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: '', message: loc)
+
+      set_index(1)
+      doc = incoming_with(file_type: :file, fallback_title: 'recibo.pdf')
+      manager.track_step(attach_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: '', message: doc)
+
+      expect(facts['localizacao_recebida']).to be(true)
+      expect(facts['documento_recebido']).to be(true)
+      expect(facts['documento_arquivo']).to eq('recibo.pdf')
+    end
+  end
+
   describe '#persist_attributes — validação de chave' do
     def define_attr(key, display = key.capitalize)
       CustomAttributeDefinition.create!(
