@@ -35,20 +35,35 @@ class Ai::TurnCapture
   # necessário para o espelhamento em custom_attributes.
   def capture(step, decision, message_text, message, department)
     slot = Ai::StepSlot.required_attribute(step)
-    # BUG 3 antes do guard de slot: o anexo vira FATO determinístico mesmo em etapa sem slot (localização
-    # numa etapa informativa). Se a etapa coleta E o anexo é a resposta, também preenche o slot.
-    return if capture_attachment(message, slot, department)
+    # BUG 3: o anexo SEMPRE grava os fatos determinísticos (mesmo em etapa sem slot). O preenchimento do
+    # slot é DETERMINÍSTICO pela chave (#attachment_slot_value). Retorna :filled (preencheu o slot -> é a
+    # captura desta mensagem, pula o texto), :facts_only (havia anexo mas NÃO preencheu -> segue para o
+    # texto/legenda) ou nil (sem anexo).
+    attachment = capture_attachment(message, slot, department)
+    return if attachment == :filled
     return unless slot
 
     attrs = decision['attributes'].is_a?(Hash) ? reject_blank(decision['attributes']) : {}
-    if attrs.empty?
-      return capture_from_text(step, slot, decision, message_text, department)
-    elsif !attrs.key?(slot)
-      emit('slot.model_key_mismatch', { expected: slot, got: attrs.keys })
-      # (E) modo 'always': o worker também julga o turno na divergência de chave (não-default). O evento
-      # de mismatch acima fica INALTERADO; isto só ADICIONA a passagem pelo juiz quando o modo é 'always'.
-      return capture_by_judge(step, slot, message_text, department) if judge_mode == 'always'
-    end
+    return capture_on_mismatch(step, slot, attrs, message_text, department) unless attrs.empty?
+
+    # Modelo MUDO. (b) anexo que NÃO preencheu o slot e SEM texto: o cliente mandou ALGO (não sumiu) — não
+    # conta o contador NORMAL (#259). Mas repetir anexo numa etapa com slot prenderia a conversa, então
+    # alimenta o contador de RECUSAS do #270 (ai_slot_refusals, teto 2×stuck_handoff_turns -> handoff), com
+    # motivo próprio. Com legenda, o texto é capturado logo abaixo (inalterado).
+    return { refusal: 'attachment_no_slot' } if attachment == :facts_only && message_text.to_s.strip.empty?
+
+    capture_from_text(step, slot, decision, message_text, department)
+  end
+
+  # Modelo devolveu attributes: se algum bate com o slot corrente, o Gateway#persist_attributes grava
+  # (Opção B) — nada aqui. Se NENHUM bate -> mismatch (evento inalterado); no modo 'always' o juiz ainda
+  # julga o turno.
+  def capture_on_mismatch(step, slot, attrs, message_text, department)
+    return nil if attrs.key?(slot)
+
+    emit('slot.model_key_mismatch', { expected: slot, got: attrs.keys })
+    return capture_by_judge(step, slot, message_text, department) if judge_mode == 'always'
+
     nil
   end
 
@@ -140,21 +155,27 @@ class Ai::TurnCapture
     true
   end
 
+  # Chaves cujo VALOR é o nome do arquivo enviado (o anexo É a resposta da etapa). type_for_key tem
+  # PRECEDÊNCIA: nome de arquivo nunca é cpf/e-mail/telefone -> se a chave é um desses, não preenche.
+  ATTACHMENT_KEY_RE = /documento|comprovante|foto|imagem|anexo|arquivo/i
+
   # BUG 3: grava fatos determinísticos do anexo (via persist_attributes -> espelhamento) e preenche o
-  # slot corrente se o anexo é a resposta da etapa. true quando havia anexo (é a captura desta mensagem).
+  # slot corrente SÓ quando a chave aceita anexo (#attachment_slot_value). Retorna :filled (preencheu o
+  # slot -> é a captura da mensagem), :facts_only (havia anexo, não preencheu) ou nil (sem anexo).
   def capture_attachment(message, slot, department)
-    facts, kind, slot_value = attachment_facts(message)
-    return false unless facts
+    facts, kind, slot_value = attachment_facts(message, slot)
+    return nil unless facts
 
     @persister.persist_attributes(facts, department)
-    @persister.persist_attributes({ slot => slot_value }, department) if slot && slot_value
-    emit('attachment.captured', { kind: kind, attribute: (slot && slot_value ? slot : nil) })
-    true
+    @persister.persist_attributes({ slot => slot_value }, department) if slot_value
+    emit('attachment.captured', { kind: kind, attribute: (slot_value ? slot : nil) })
+    slot_value ? :filled : :facts_only
   end
 
   # [facts, kind, slot_value] do anexo (metadados — sem depender do MediaProcessor), ou [nil, nil, nil].
-  # Localização só grava fatos; documento/imagem preenchem o slot corrente com o nome do arquivo.
-  def attachment_facts(message)
+  # Localização só grava fatos (nunca preenche slot). Documento/imagem preenchem o slot corrente com o
+  # nome do arquivo SÓ quando a chave aceita anexo (#attachment_slot_value); senão slot_value = nil.
+  def attachment_facts(message, slot)
     att = Array(message.try(:attachments)).find { |a| %w[location file image].include?(a.file_type.to_s) }
     return [nil, nil, nil] unless att
 
@@ -165,8 +186,20 @@ class Ai::TurnCapture
       [facts, 'location', nil]
     else
       name = attachment_name(att)
-      [{ 'documento_recebido' => true, 'documento_arquivo' => name }, att.file_type.to_s, name]
+      [{ 'documento_recebido' => true, 'documento_arquivo' => name }, att.file_type.to_s,
+       attachment_slot_value(slot, name)]
     end
+  end
+
+  # Valor com que o anexo preenche o slot, ou nil (não preenche) — determinístico pela CHAVE:
+  #  1. type_for_key(slot) validável (cpf/email/phone) -> nil (nome de arquivo nunca é esses).
+  #  2. chave indica anexo (ATTACHMENT_KEY_RE) -> o nome do arquivo.
+  #  3. qualquer outra chave (ou sem slot) -> nil.
+  def attachment_slot_value(slot, name)
+    return nil if slot.blank?
+    return nil if Ai::SlotExtractor.type_for_key(slot)
+
+    ATTACHMENT_KEY_RE.match?(slot) ? name : nil
   end
 
   def attachment_name(att)

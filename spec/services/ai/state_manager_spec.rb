@@ -875,6 +875,156 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  # Anexo preenche o slot corrente SÓ quando a chave aceita anexo (não às cegas com o nome do arquivo).
+  # conv 365: documento_cpf recebia "CNH-e.pdf.pdf" por cima do CPF do OCR. Regra determinística pela chave.
+  describe '#track_step — anexo preenche slot só quando a chave aceita' do
+    def facts
+      conversation.reload.additional_attributes['ai_collected_facts'] || {}
+    end
+
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    def stuck
+      conversation.reload.additional_attributes['ai_step_stuck_turns']
+    end
+
+    def refusals
+      conversation.reload.additional_attributes['ai_slot_refusals']
+    end
+
+    def infer_dept(name, instruction)
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Coleta', 'instructions' => instruction },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def run_attach(dept, file_type:, name: nil, content: '', **att)
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: content)
+      msg.attachments.create!({ account_id: account.id, file_type: file_type, fallback_title: name }.merge(att))
+      manager.track_step(dept, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: content, message: msg)
+    end
+
+    it 'documento_cpf + PDF: NÃO grava o nome no slot (chave é tipo cpf); grava os fatos; evento attribute nil' do
+      dept = infer_dept('A-cpf', 'Peça e grave documento_cpf conforme informado.')
+      run_attach(dept, file_type: :file, name: 'CNH-e.pdf.pdf')
+
+      expect(facts).not_to have_key('documento_cpf')
+      expect(facts['documento_recebido']).to be(true)
+      expect(facts['documento_arquivo']).to eq('CNH-e.pdf.pdf')
+      expect(events('attachment.captured').last.payload).to include('kind' => 'file', 'attribute' => nil)
+    end
+
+    it 'email_cliente + PDF: NÃO grava o nome no slot (chave é tipo email)' do
+      dept = infer_dept('A-email', 'Peça e grave o e-mail no atributo email_cliente.')
+      run_attach(dept, file_type: :file, name: 'doc.pdf')
+
+      expect(facts).not_to have_key('email_cliente')
+      expect(facts['documento_recebido']).to be(true)
+    end
+
+    it 'comprovante_residencia + PDF: grava o nome no slot (regra 2) e AVANÇA' do
+      dept = infer_dept('A-comp', 'Peça e grave comprovante_residencia conforme informado.')
+      run_attach(dept, file_type: :file, name: 'conta-luz.pdf')
+
+      expect(facts['comprovante_residencia']).to eq('conta-luz.pdf')
+      expect(events('attachment.captured').last.payload).to include('attribute' => 'comprovante_residencia')
+      expect(step_index).to eq(1)
+    end
+
+    it 'endereco_completo + imagem: NÃO grava no slot (regra 3, chave não aceita anexo)' do
+      dept = infer_dept('A-end', 'Peça e grave endereco_completo conforme informado.')
+      run_attach(dept, file_type: :image, name: 'foto.jpg')
+
+      expect(facts).not_to have_key('endereco_completo')
+      expect(events('attachment.captured').last.payload).to include('attribute' => nil)
+    end
+
+    it '(a) anexo COM legenda em slot que não aceita: a legenda é capturada pelo caminho de texto' do
+      dept = infer_dept('A-cap', 'Peça e grave endereco_completo conforme informado.')
+      run_attach(dept, file_type: :image, name: 'foto.jpg', content: 'Rua das Flores 123')
+
+      expect(facts['endereco_completo']).to eq('Rua das Flores 123')
+      expect(step_index).to eq(1)
+    end
+
+    it '(b) anexo SEM legenda em slot que não aceita: não sinaliza; contador NORMAL não sobe; conta RECUSA' do
+      dept = infer_dept('A-none', 'Peça e grave endereco_completo conforme informado.')
+      sig = run_attach(dept, file_type: :image, name: 'foto.jpg')
+
+      expect(sig).to be_nil            # abaixo do teto: não sinaliza handoff
+      expect(facts).not_to have_key('endereco_completo')
+      expect(stuck).to be_nil          # cliente mandou ALGO (não sumiu) -> não conta o contador normal
+      expect(refusals).to eq(1)        # mas conta no contador de recusas (#270), com teto próprio
+      expect(step_index).to eq(0)
+    end
+
+    it 'localização: comportamento INALTERADO (só fatos, nunca preenche o slot)' do
+      dept = infer_dept('A-loc', 'Peça e grave endereco_completo conforme informado.')
+      run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0)
+
+      expect(facts['localizacao_recebida']).to be(true)
+      expect(facts).not_to have_key('endereco_completo')
+      expect(events('attachment.captured').last.payload).to include('kind' => 'location', 'attribute' => nil)
+    end
+
+    # Teto do #270 fecha o buraco do só-anexo repetido: localização/foto sem texto numa etapa com slot
+    # não fica presa para sempre — ao atingir 2 × stuck_handoff_turns (default 3 -> 6) transfere.
+    it 'localização repetida (sem texto) ABAIXO do teto: não transfere, contador normal intacto' do
+      dept = infer_dept('A-rep', 'Peça e grave endereco_completo conforme informado.')
+
+      5.times do
+        sig = run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0)
+        expect(sig).to be_nil
+      end
+
+      expect(refusals).to eq(5)
+      expect(stuck).to be_nil
+      expect(step_index).to eq(0)
+    end
+
+    it 'localização repetida: ao ATINGIR o teto (6ª) sinaliza stuck_handoff com reason attachment_no_slot' do
+      dept = infer_dept('A-rep2', 'Peça e grave endereco_completo conforme informado.')
+
+      5.times { run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0) }
+      sig = run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0)
+
+      expect(sig).to eq(stuck_handoff: { attribute: 'endereco_completo', step_name: 'Coleta', turns: 6, reason: 'attachment_no_slot' })
+      expect(refusals).to eq(0) # zerado ao transferir
+    end
+
+    it 'captura bem-sucedida no meio ZERA o contador de recusas do só-anexo' do
+      dept = infer_dept('A-rep3', 'Peça e grave comprovante_residencia conforme informado.')
+
+      2.times { run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0) }
+      expect(refusals).to eq(2)
+
+      run_attach(dept, file_type: :file, name: 'conta-luz.pdf') # regra 2: preenche o slot -> avança
+
+      expect(facts['comprovante_residencia']).to eq('conta-luz.pdf')
+      expect(refusals).to eq(0)
+      expect(step_index).to eq(1)
+    end
+
+    it 'stuck_handoff_turns = 0: teto DESLIGADO, só-anexo repetido nunca transfere' do
+      dept = infer_dept('A-rep4', 'Peça e grave endereco_completo conforme informado.')
+      dept.update!(transfer_rules: { 'stuck_handoff_turns' => 0 })
+
+      10.times do
+        expect(run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0)).to be_nil
+      end
+
+      expect(step_index).to eq(0)
+    end
+  end
+
   describe '#persist_attributes — validação de chave' do
     def define_attr(key, display = key.capitalize)
       CustomAttributeDefinition.create!(
