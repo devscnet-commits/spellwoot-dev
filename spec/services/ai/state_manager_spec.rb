@@ -754,6 +754,73 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  # attempt? para slot 'choice' desacoplado do sucesso da extração. Antes, valor fora das options virava
+  # :no_attempt -> resolve_empty_slot NÃO contava travamento -> loop infinito numa etapa choice (contra
+  # a decisão "nunca travar", #259/decisão 3). Agora é tentativa: grava cru (source raw) e AVANÇA; a rede
+  # de sumiço (#259) segue protegendo a etapa quando o cliente some (msg vazia).
+  describe '#track_step — slot choice: tentativa independe do sucesso da extração' do
+    def facts
+      conversation.reload.additional_attributes['ai_collected_facts'] || {}
+    end
+
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    def choice_dept
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Choice-A', status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Período',
+                                'collect' => { 'attribute' => 'periodo', 'type' => 'choice',
+                                               'options' => %w[manhã tarde], 'required' => true } },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def run_turn(dept, text)
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: text)
+      manager.track_step(dept, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: text, message: msg)
+    end
+
+    def track_blank(dept)
+      manager.track_step(dept, { 'step_completed' => false }, dispatcher: dispatcher, run: run, message_text: '')
+    end
+
+    it 'valor que casa uma option: extrai a canônica (source extractor) e avança' do
+      dept = choice_dept
+      run_turn(dept, 'pode ser de manhã')
+
+      expect(facts['periodo']).to eq('manhã')
+      expect(events('slot.captured').last.payload).to include('attribute' => 'periodo', 'source' => 'extractor')
+      expect(step_index).to eq(1)
+    end
+
+    it 'valor FORA das options: grava como veio (source raw), SEM slot.no_attempt, e NÃO gira em falso (avança)' do
+      dept = choice_dept
+      run_turn(dept, 'de noite')
+
+      expect(facts['periodo']).to eq('de noite')
+      expect(events('slot.captured').last.payload).to include('attribute' => 'periodo', 'source' => 'raw')
+      expect(events('slot.no_attempt')).to be_empty # antes virava :no_attempt -> loop sem rede
+      expect(step_index).to eq(1)                    # não fica preso na etapa choice
+    end
+
+    it 'rede #259 viva para choice: cliente que SOME (msg vazia) conta trava e no limite dispara stuck_handoff' do
+      dept = choice_dept
+
+      expect(track_blank(dept)).to be_nil # turno 1
+      expect(track_blank(dept)).to be_nil # turno 2
+      sig = track_blank(dept)             # turno 3 -> handoff
+
+      expect(sig).to eq(stuck_handoff: { attribute: 'periodo', step_name: 'Período', turns: 3 })
+      expect(step_index).to eq(0)
+    end
+  end
+
   # Worker de julgamento de captura (Ai::Workers::CaptureJudge): opt-in, DESLIGADO por padrão. Cobre os
   # slots SEM formato validável (endereco_completo) e o caso "para o dia 10" (tem dígito, o #269 gravaria
   # cru). O worker é stubado aqui — o teste unitário do worker vive em workers/capture_judge_spec.rb.

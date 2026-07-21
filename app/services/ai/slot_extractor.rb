@@ -31,17 +31,23 @@ class Ai::SlotExtractor
   end
 
   # Houve TENTATIVA de responder o slot deste tipo? Determinístico, por formato conhecido:
-  #   cpf/phone/number -> o texto contém algum dígito; email -> contém "@"; choice -> casa uma option.
-  # Distingue "não tentou responder" (ex.: cliente fez uma pergunta) de "tentou mas malformado" — hoje os
-  # dois colapsam em extract=nil. Só faz sentido para KNOWN_FORMATS; 'text' não passa por aqui.
-  def self.attempt?(attribute_type:, text:, options: nil)
+  #   cpf/phone/number -> o texto contém algum dígito; email -> contém "@"; choice -> qualquer texto
+  #   não-vazio (INDEPENDENTE do sucesso da extração). Distingue "não tentou responder" (ex.: cliente fez
+  # uma pergunta) de "tentou mas malformado". Só faz sentido para KNOWN_FORMATS; 'text' não passa por aqui.
+  # `options` mantido na assinatura por simetria/compat com os callers (SlotCollector#no_attempt?), mesmo
+  # sem uso desde que 'choice' passou a não depender do casamento com as opções.
+  def self.attempt?(attribute_type:, text:, options: nil) # rubocop:disable Lint/UnusedMethodArgument
     txt = text.to_s
     return false if txt.strip.empty?
 
     case attribute_type.to_s
     when 'cpf', 'phone', 'number' then txt.match?(/\d/)
     when 'email' then txt.include?('@')
-    when 'choice' then extract_choice(txt, options).present?
+    # choice: qualquer texto não-vazio (já garantido acima) conta como tentativa, DESACOPLADO do sucesso
+    # de extract_choice. Casou -> grava a option canônica; não casou -> tentativa malformada, grava como
+    # veio e a confirmação-única + rede de travamento (#259) cuidam. Antes, valor fora das options virava
+    # :no_attempt -> não contava travamento -> loop infinito numa etapa choice, contra a decisão "nunca travar".
+    when 'choice' then true
     else false
     end
   end
