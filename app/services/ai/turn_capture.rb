@@ -33,11 +33,7 @@ class Ai::TurnCapture
 
   # Captura o dado desta mensagem para o slot corrente (anexo -> modelo -> texto cru). department é
   # necessário para o espelhamento em custom_attributes.
-  # rubocop:disable Metrics/ParameterLists -- seam de captura: o quê (step, decision) + input da vez
-  # (message_text agrupado, message p/ anexo/idempotência) + department (espelhamento) + judge_result
-  # (worker pré-rodado, camada 3). Mesmo motivo do track_step; agrupar rippla por specs + Gateway.
-  def capture(step, decision, message_text, message, department, judge_result: nil)
-    # rubocop:enable Metrics/ParameterLists
+  def capture(step, decision, message_text, message, department)
     slot = Ai::StepSlot.required_attribute(step)
     # BUG 3: o anexo SEMPRE grava os fatos determinísticos (mesmo em etapa sem slot). O preenchimento do
     # slot é DETERMINÍSTICO pela chave (#attachment_slot_value). Retorna :filled (preencheu o slot -> é a
@@ -48,7 +44,7 @@ class Ai::TurnCapture
     return unless slot
 
     attrs = decision['attributes'].is_a?(Hash) ? reject_blank(decision['attributes']) : {}
-    return capture_on_mismatch(step, slot, attrs, message_text, department, judge_result) unless attrs.empty?
+    return capture_on_mismatch(step, slot, attrs, message_text, department) unless attrs.empty?
 
     # Modelo MUDO. (b) anexo que NÃO preencheu o slot e SEM texto: o cliente mandou ALGO (não sumiu) — não
     # conta o contador NORMAL (#259). Mas repetir anexo numa etapa com slot prenderia a conversa, então
@@ -56,17 +52,17 @@ class Ai::TurnCapture
     # motivo próprio. Com legenda, o texto é capturado logo abaixo (inalterado).
     return { refusal: 'attachment_no_slot' } if attachment == :facts_only && message_text.to_s.strip.empty?
 
-    capture_from_text(step, slot, decision, message_text, department, judge_result)
+    capture_from_text(step, slot, decision, message_text, department)
   end
 
   # Modelo devolveu attributes: se algum bate com o slot corrente, o Gateway#persist_attributes grava
   # (Opção B) — nada aqui. Se NENHUM bate -> mismatch (evento inalterado); no modo 'always' o juiz ainda
   # julga o turno.
-  def capture_on_mismatch(step, slot, attrs, message_text, department, judge_result = nil) # rubocop:disable Metrics/ParameterLists
+  def capture_on_mismatch(step, slot, attrs, message_text, department)
     return nil if attrs.key?(slot)
 
     emit('slot.model_key_mismatch', { expected: slot, got: attrs.keys })
-    return capture_by_judge(step, slot, message_text, department, judge_result) if judge_mode == 'always'
+    return capture_by_judge(step, slot, message_text, department) if judge_mode == 'always'
 
     nil
   end
@@ -74,8 +70,8 @@ class Ai::TurnCapture
   # Modelo MUDO (sem attributes): worker de julgamento LIGADO decide (when_silent/always); DESLIGADO cai
   # no caminho determinístico do #269 (SlotCollector, extractor OU cru), BIT A BIT como antes. O worker
   # só entra com texto presente — mensagem vazia (cliente sumido) segue pela rede de segurança do #259.
-  def capture_from_text(step, slot, decision, message_text, department, judge_result = nil) # rubocop:disable Metrics/ParameterLists
-    return capture_by_judge(step, slot, message_text, department, judge_result) if judge_active? && message_text.present?
+  def capture_from_text(step, slot, decision, message_text, department)
+    return capture_by_judge(step, slot, message_text, department) if judge_active? && message_text.present?
 
     cap = Ai::SlotCollector.new(conversation: @conversation).capture_value(step, slot, decision, message_text)
     return unless cap
@@ -104,10 +100,8 @@ class Ai::TurnCapture
   # 'judge'); malformed -> grava como veio (source 'judge_raw', a confirmação-única cuida). Recusa
   # (not_an_answer / falha) -> não grava, não avança, NÃO conta o contador normal, e devolve
   # { refusal: ... } para o StateManager acumular no contador SEPARADO de recusas (teto -> handoff).
-  # judge_result: quando o Gateway já rodou o worker ANTES da decisão (camada 3), REUSA o resultado —
-  # roda o worker UMA vez por turno. nil (chamada direta em spec / worker não pré-rodado) => chama agora.
-  def capture_by_judge(step, slot, message_text, department, judge_result = nil)
-    result = judge_result || Ai::Workers::CaptureJudge.judge(
+  def capture_by_judge(step, slot, message_text, department)
+    result = Ai::Workers::CaptureJudge.judge(
       step: step, slot: slot, message_text: message_text,
       profile: @agent&.operation_profile, conversation: @conversation
     )
