@@ -1,8 +1,14 @@
 # Compiles the final system prompt from structured config (identity + playbook + knowledge +
 # tools + memory). The user never writes this — they fill structure, we generate the prompt.
 class Ai::PromptCompiler
+  # followup: true monta o prompt ENXUTO da 2ª chamada (Ai::Gateway#tool_followup) — a ferramenta já
+  # executou, então o modelo só REDIGE a resposta (pode pedir handoff/close) sem avançar etapa, gravar
+  # attributes ou chamar outra ferramenta. SAEM os blocos de coleta/etapa/ferramenta (playbook, âncora,
+  # estado da coleta, lead_variables, fillable_attributes, tools); FICAM persona, RAG (+anti-invenção),
+  # times de handoff, memória e o contrato. false (default) = prompt COMPLETO, IDÊNTICO ao de hoje
+  # (1ª decisão, gateway.rb:103): todos os guards passam direto.
   def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
-                   customer_memory: nil, step_index: nil)
+                   customer_memory: nil, step_index: nil, followup: false)
     parts = []
     parts.concat(identity_lines(agent))
     parts << agent.base_prompt if agent.base_prompt.present?
@@ -14,7 +20,7 @@ class Ai::PromptCompiler
     # NÃO injetar `department.instructions`: coluna legada, sem editor na UI (comportamento é montado
     # por objetivo + steps do playbook). Ficava como ruído órfão no prompt. Coluna mantida no schema
     # (aposentada só a leitura) — cleanup de schema é débito separado.
-    if (pb = department.playbook)
+    if !followup && (pb = department.playbook)
       step_lines = step_lines(pb.steps)
       if step_lines.present?
         block = "Etapas do atendimento (na ordem):\n#{step_lines.join("\n")}"
@@ -26,7 +32,7 @@ class Ai::PromptCompiler
       parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
     end
 
-    lead_vars = department.lead_variables.to_a
+    lead_vars = followup ? [] : department.lead_variables.to_a
     if lead_vars.present?
       lines = lead_vars.map { |v| "- #{v.name} (#{v.var_type})#{v.description.present? ? ": #{v.description}" : ''}" }
       parts << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}\n" \
@@ -36,7 +42,7 @@ class Ai::PromptCompiler
 
     # Atributos personalizados da conversa que a IA pode preencher (chave + rótulo). A IA deve
     # devolvê-los em "attributes" usando a CHAVE exata quando o cliente informar o dado.
-    if fillable_attributes.present?
+    if !followup && fillable_attributes.present?
       lines = fillable_attributes.map { |key, label| "- #{key}#{label.present? ? " (#{label})" : ''}" }
       parts << "Atributos da conversa para preencher quando o cliente informar (use a CHAVE exata em \"attributes\", ex.: {\"cidade\":\"Maravilha\"}):\n#{lines.join("\n")}"
     end
@@ -44,10 +50,10 @@ class Ai::PromptCompiler
     # Estado da coleta (reforço ATIVO por turno): o que já temos + o slot que a etapa ATUAL ainda
     # precisa. Montado pelo CÓDIGO (não pelo modelo) — mata a repergunta em etapa de vários turnos.
     already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
-    state_block = collection_state_block(department.playbook&.steps, step_index, already)
+    state_block = collection_state_block(department.playbook&.steps, step_index, already) unless followup
     parts << state_block if state_block
 
-    if tools.present?
+    if !followup && tools.present?
       lines = tools.map { |t| "- #{t.name}: #{t.description} (input: #{t.input_schema.to_json})" }
       parts << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
     end
