@@ -3,10 +3,12 @@
 class Ai::PromptCompiler
   # followup: true monta o prompt ENXUTO da 2ª chamada (Ai::Gateway#tool_followup) — a ferramenta já
   # executou, então o modelo só REDIGE a resposta (pode pedir handoff/close) sem avançar etapa, gravar
-  # attributes ou chamar outra ferramenta. SAEM os blocos de coleta/etapa/ferramenta (playbook, âncora,
-  # estado da coleta, lead_variables, fillable_attributes, tools); FICAM persona, RAG (+anti-invenção),
-  # times de handoff, memória e o contrato. false (default) = prompt COMPLETO, IDÊNTICO ao de hoje
-  # (1ª decisão, gateway.rb:103): todos os guards passam direto.
+  # attributes ou chamar outra ferramenta. SAEM a LISTA completa das etapas, lead_variables,
+  # fillable_attributes, definições de ferramentas e transfer_when/close_when. FICAM (além de persona,
+  # RAG +anti-invenção, times de handoff, memória e contrato) a ÂNCORA da etapa corrente e o ESTADO DA
+  # COLETA ("JÁ TENHO"/"FALTA agora"): sem eles o followup redige sem saber a etapa nem o que já foi
+  # coletado e repergunta/pede dado de outra etapa (conv 372). false (default) = prompt COMPLETO,
+  # IDÊNTICO ao de hoje (1ª decisão, gateway.rb:103): todos os guards passam direto.
   def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
                    customer_memory: nil, step_index: nil, followup: false)
     parts = []
@@ -20,16 +22,23 @@ class Ai::PromptCompiler
     # NÃO injetar `department.instructions`: coluna legada, sem editor na UI (comportamento é montado
     # por objetivo + steps do playbook). Ficava como ruído órfão no prompt. Coluna mantida no schema
     # (aposentada só a leitura) — cleanup de schema é débito separado.
-    if !followup && (pb = department.playbook)
-      step_lines = step_lines(pb.steps)
-      if step_lines.present?
-        block = "Etapas do atendimento (na ordem):\n#{step_lines.join("\n")}"
+    if (pb = department.playbook)
+      if followup
+        # No followup volta SÓ a âncora da etapa corrente (para não pedir dado de outra etapa). A LISTA
+        # completa das etapas, transfer_when e close_when continuam FORA (corte do #273 preservado).
         anchor = current_step_line(pb.steps, step_index)
-        block += "\n#{anchor}" if anchor
-        parts << block
+        parts << anchor if anchor
+      else
+        step_lines = step_lines(pb.steps)
+        if step_lines.present?
+          block = "Etapas do atendimento (na ordem):\n#{step_lines.join("\n")}"
+          anchor = current_step_line(pb.steps, step_index)
+          block += "\n#{anchor}" if anchor
+          parts << block
+        end
+        parts << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
+        parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
       end
-      parts << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
-      parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
     end
 
     lead_vars = followup ? [] : department.lead_variables.to_a
@@ -49,8 +58,10 @@ class Ai::PromptCompiler
 
     # Estado da coleta (reforço ATIVO por turno): o que já temos + o slot que a etapa ATUAL ainda
     # precisa. Montado pelo CÓDIGO (não pelo modelo) — mata a repergunta em etapa de vários turnos.
+    # Estado da coleta VOLTA ao followup (#273 tinha cortado): sem ele o followup repergunta o que já foi
+    # coletado. Continua sendo o único bloco de coleta no followup — lista de etapas/lead/fillable seguem fora.
     already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
-    state_block = collection_state_block(department.playbook&.steps, step_index, already) unless followup
+    state_block = collection_state_block(department.playbook&.steps, step_index, already)
     parts << state_block if state_block
 
     if !followup && tools.present?

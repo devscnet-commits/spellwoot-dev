@@ -185,7 +185,13 @@ class Ai::Gateway
       # carregados. Ver Ai::PromptCompiler.compile(followup: true).
       followup_prompt = Ai::PromptCompiler.compile(
         agent: @agent, department: department, knowledge: knowledge, memory: memory,
-        tools: [], customer_memory: customer_memory, followup: true
+        tools: [], customer_memory: customer_memory, followup: true,
+        # A âncora e o estado da coleta do followup precisam do MESMO estado da 1ª chamada: em que etapa
+        # estamos e o que já foi coletado (senão o followup repergunta / pede dado de outra etapa).
+        collected: (@conversation.contact&.custom_attributes || {})
+          .merge(@conversation.additional_attributes&.dig('ai_collected_facts') || {})
+          .merge(@conversation.custom_attributes || {}),
+        step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i
       )
       result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution)
     end
