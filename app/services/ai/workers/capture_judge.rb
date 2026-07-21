@@ -13,6 +13,9 @@
 class Ai::Workers::CaptureJudge
   REQUEST_TIMEOUT = 20
 
+  # Valores aceitos de asks_about (kind de conhecimento) + 'nada'. Qualquer outro vira 'nada' no parse.
+  VALID_ASKS = %w[produto faq procedimento documento nada].freeze
+
   SYSTEM_PROMPT = <<~PROMPT.freeze
     Você é um JUIZ DE CAPTURA em um atendimento automatizado. Sua ÚNICA função é decidir se a MENSAGEM
     DO CLIENTE responde ao DADO que a etapa atual está coletando. Você NÃO fala com o cliente, NÃO
@@ -38,6 +41,17 @@ class Ai::Workers::CaptureJudge
        o de outra etapa. Nunca copie um valor já coletado como resposta.
     6. Na dúvida entre "answered" e "not_an_answer", escolha "not_an_answer". Gravar um dado errado é
        pior do que pedir de novo.
+
+    ALÉM do status acima, inclua em TODA resposta DOIS campos sobre a INTENÇÃO do cliente NESTE turno —
+    eles são INDEPENDENTES do status (um turno "not_an_answer" para o dado pode ter asks_about="produto"):
+    - "asks_about": se o cliente está PERGUNTANDO algo que exige a base de conhecimento, o TIPO do que
+      ele quer — "produto" (planos, preços, catálogo, o que a empresa vende), "faq" (dúvida geral),
+      "procedimento" (como fazer/resolver algo) ou "documento". Se o turno NÃO é uma pergunta desse tipo
+      (é resposta a um dado, saudação, confirmação, etc.), use "nada".
+    - "query": em POUCAS palavras, o que o cliente quer saber (ex.: "planos e preços"); string vazia
+      quando asks_about é "nada".
+    Exemplo: cliente pergunta "quais os valores?" numa etapa que coleta o nome ->
+      {"status":"not_an_answer","asks_about":"produto","query":"valores dos planos"}
   PROMPT
 
   # Julga o turno. profile define provider/model (worker_overrides['capture_judge']) com fallback pro
@@ -89,7 +103,7 @@ class Ai::Workers::CaptureJudge
   end
 
   def self.user_message(step, slot, message_text, collected)
-    instruction = (step['instructions'] || step[:instructions]).to_s.strip
+    instruction = (step.is_a?(Hash) ? (step['instructions'] || step[:instructions]) : nil).to_s.strip
     facts = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
                              .map { |k, v| "#{k}=#{v}" }.join(', ').presence || 'nenhum'
     <<~MSG.strip
@@ -101,22 +115,32 @@ class Ai::Workers::CaptureJudge
   end
 
   # Parse tolerante: pega o objeto JSON e valida os 3 status. value obrigatório p/ answered/malformed.
+  # asks_about/query (intenção, camada 2) entram em TODO retorno de parse — validados por #intent.
   def self.parse(text)
     json = text.to_s[/\{.*\}/m]
     return { status: 'failed', reason: 'no_json' } if json.blank?
 
     data = JSON.parse(json)
+    intent = intent_fields(data)
     status = data['status'].to_s
     case status
     when 'answered', 'malformed'
       value = data['value'].to_s.strip
-      value.present? ? { status: status, value: value } : { status: 'failed', reason: 'blank_value' }
+      value.present? ? { status: status, value: value, **intent } : { status: 'failed', reason: 'blank_value', **intent }
     when 'not_an_answer'
-      { status: 'not_an_answer' }
+      { status: 'not_an_answer', **intent }
     else
-      { status: 'failed', reason: "unknown_status:#{status.first(40)}" }
+      { status: 'failed', reason: "unknown_status:#{status.first(40)}", **intent }
     end
   rescue JSON::ParserError
     { status: 'failed', reason: 'invalid_json' }
+  end
+
+  # Intenção do turno (camada 2): asks_about validado contra VALID_ASKS (desconhecido -> 'nada'); query
+  # limitada. Sempre devolve os dois — o caller decide se e como usa (a captura ignora estes campos).
+  def self.intent_fields(data)
+    ask = data['asks_about'].to_s.strip.downcase
+    ask = 'nada' unless VALID_ASKS.include?(ask)
+    { asks_about: ask, query: data['query'].to_s.strip.first(200) }
   end
 end
