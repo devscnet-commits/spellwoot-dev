@@ -132,6 +132,75 @@ RSpec.describe Ai::StateManager do
 
       track(step_completed: true, with_context: false)
     end
+
+    # conserto conv 369: mark_fired só depois de confirmar que HÁ automação — senão uma etapa sem
+    # automação grava last_fired e bloqueia para sempre uma automação adicionada depois (pior na última
+    # etapa, onde o clamp prende o índice).
+    def events(type)
+      Ai::Event.where(conversation_id: conversation.id, event_type: type)
+    end
+
+    def dept_with(name, steps)
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active', behavior: {})
+      dept.create_playbook!(active: true, steps: steps)
+      dept
+    end
+
+    def change_team_step(name, team)
+      { 'name' => name, 'automations' => [{ 'type' => 'change_team', 'params' => { 'team_id' => team.id } }] }
+    end
+
+    def conclude(dept)
+      manager.track_step(dept, { 'step_completed' => true }, dispatcher: dispatcher, run: run)
+    end
+
+    it 'etapa SEM automação concluída NÃO grava ai_step_last_fired_index' do
+      set_index(1) # Proposta (sem automação) na base department
+      expect(Ai::StepAutomationRunner).not_to receive(:new)
+
+      track(step_completed: true)
+
+      expect(conversation.reload.additional_attributes['ai_step_last_fired_index']).to be_nil
+    end
+
+    it 'etapa que GANHA automação depois: dispara (change_team) e só então marca' do
+      team = create(:team, account: account)
+      dept = dept_with('CT-later', [{ 'name' => 'A' }, { 'name' => 'Fim' }])
+
+      conclude(dept) # etapa 0 SEM automação -> não marca
+      expect(conversation.reload.additional_attributes['ai_step_last_fired_index']).to be_nil
+
+      dept.playbook.update!(steps: [change_team_step('A', team), { 'name' => 'Fim' }])
+      set_index(0)
+      conclude(dept)
+
+      expect(events('step_automation.change_team').last.payload).to include('team_id' => team.id)
+      expect(conversation.reload.additional_attributes['ai_step_last_fired_index']).to eq(0)
+      expect(conversation.reload.team_id).to eq(team.id)
+    end
+
+    it 'etapa COM automação concluída DUAS vezes: executa UMA vez (idempotência preservada)' do
+      team = create(:team, account: account)
+      dept = dept_with('CT-idem', [change_team_step('A', team), { 'name' => 'Fim' }])
+
+      conclude(dept)
+      set_index(0)
+      conclude(dept)
+
+      expect(events('step_automation.change_team').count).to eq(1)
+    end
+
+    it 'automação na ÚLTIMA etapa (índice preso pelo clamp): dispara 1x e não repete nos turnos seguintes' do
+      team = create(:team, account: account)
+      dept = dept_with('CT-last', [{ 'name' => 'A' }, change_team_step('Fim', team)])
+      set_index(1) # última etapa
+
+      conclude(dept) # conclui -> dispara
+      conclude(dept) # turno seguinte, índice ainda 1 (clamp) -> NÃO repete
+
+      expect(events('step_automation.change_team').count).to eq(1)
+      expect(step_index).to eq(1)
+    end
   end
 
   describe '#track_step — avanço DETERMINÍSTICO por slot (collect)' do

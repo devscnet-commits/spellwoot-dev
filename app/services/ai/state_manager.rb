@@ -242,16 +242,17 @@ class Ai::StateManager
 
   # Dispara as automações da etapa CONCLUÍDA na transição de índice. Só quando a etapa foi concluída
   # (mesma condição determinística do avanço — ver #step_completed?) E ainda não disparamos para este
-  # índice (idempotência via ai_step_last_fired_index). Marca ANTES de rodar (não reprocessa se algo
-  # demorar/falhar). Precisa do dispatcher + run (do Gateway) para as ações auditadas; sem eles, não roda.
+  # índice (idempotência via ai_step_last_fired_index). Só MARCA quando há automação a rodar — uma etapa
+  # SEM automação não grava last_fired (senão o already_fired? bloquearia para sempre uma automação
+  # adicionada depois, sobretudo na última etapa, onde o índice não avança pelo clamp). Marca ANTES de
+  # rodar (não reprocessa se algo demorar/falhar). Precisa do dispatcher + run (do Gateway); sem eles, não roda.
   def fire_step_automations(completed, step, index, dispatcher, run)
     return unless dispatcher && run
     return unless completed
     return if already_fired?(index)
-
-    mark_fired(index)
     return if step_automations(step).blank?
 
+    mark_fired(index)
     Ai::StepAutomationRunner.new(
       conversation: @conversation, account: @conversation.account, agent: @agent,
       dispatcher: dispatcher, run: run
