@@ -17,6 +17,11 @@ class Ai::GatewayRunJob < ApplicationJob
     # Debounce: if the customer kept typing, let the newer message's job handle the group.
     return if grouped && !Ai::MessageGrouping.latest_incoming?(message)
 
+    # Normaliza localização postada como TEXTO (uazapi nativo) num Attachment :location ANTES do Gateway,
+    # no MESMO job (sequencial) — o miolo (Ai::TurnCapture#capture_attachment) já consome esse anexo.
+    # Idempotente: só cria se a mensagem ainda não tem anexo. Ver Ai::LocationNormalizer.
+    Ai::LocationNormalizer.normalize(message)
+
     content_override = grouped ? Ai::MessageGrouping.grouped_content(message.conversation) : nil
     conversation_team_id = message.conversation&.team_id
     Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).includes(:agent).find_each do |binding|
