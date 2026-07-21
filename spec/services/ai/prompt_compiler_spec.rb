@@ -216,19 +216,46 @@ RSpec.describe Ai::PromptCompiler do
       )
     end
 
-    it 'followup NÃO contém: etapas, âncora, JÁ TENHO, lead_variables, fillable, tools' do
+    it 'followup NÃO contém: LISTA de etapas, lead_variables, fillable, tools, transfer_when' do
       prompt = compile(followup: true)
 
       aggregate_failures do
-        expect(prompt).not_to include('Etapas do atendimento')            # lista de etapas
-        expect(prompt).not_to include('ETAPA ATUAL (definida pelo sistema') # âncora (o contrato cita "ETAPA ATUAL")
-        expect(prompt).not_to include('✓ JÁ TENHO')                        # estado da coleta
-        expect(prompt).not_to include('documento=CNH-123')
+        expect(prompt).not_to include('Etapas do atendimento')            # LISTA completa de etapas
         expect(prompt).not_to include('Procure coletar naturalmente')      # lead_variables
         expect(prompt).not_to include('Atributos da conversa para preencher') # fillable_attributes
         expect(prompt).not_to include('Ferramentas disponíveis')           # tools
         expect(prompt).not_to include('consulta_cobertura')
         expect(prompt).not_to include('Transfira para humano quando')
+      end
+    end
+
+    # Ajuste do #273: a âncora da etapa corrente e o estado da coleta VOLTARAM ao followup (conv 372 — o
+    # followup redigia sem saber a etapa e repedia dado já coletado). O CORTE do #273 (lista de etapas,
+    # lead, fillable, tools) segue de pé — só estes dois blocos retornam.
+    it 'followup CONTÉM a âncora da etapa corrente e o ESTADO DA COLETA (JÁ TENHO com os fatos)' do
+      prompt = compile(followup: true)
+
+      aggregate_failures do
+        expect(prompt).to include('ETAPA ATUAL (definida pelo sistema, não por você): 1 de 2 — "CADASTRO"')
+        expect(prompt).to include('ESTADO DA COLETA (mantido pelo sistema')
+        expect(prompt).to include('✓ JÁ TENHO: documento=CNH-123') # facts populados aparecem no followup
+      end
+    end
+
+    it 'followup mostra "FALTA agora" com a CHAVE do slot da etapa quando ainda não coletado' do
+      real_dept.playbook.update!(steps: [
+                                   { 'name' => 'CADASTRO', 'collect' => { 'attribute' => 'documento_cpf' } },
+                                   { 'name' => 'Fim' }
+                                 ])
+      prompt = described_class.compile(
+        agent: real_agent, department: real_dept, knowledge: [], memory: nil, tools: [],
+        collected: {}, step_index: 0, followup: true
+      )
+
+      aggregate_failures do
+        expect(prompt).to include('◦ FALTA agora')
+        expect(prompt).to include('documento_cpf')
+        expect(prompt).not_to include('Etapas do atendimento') # a lista continua fora
       end
     end
 
