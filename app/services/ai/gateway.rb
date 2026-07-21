@@ -91,20 +91,8 @@ class Ai::Gateway
     end
 
     @stage = :knowledge
-    # (Camada 3) Conhecimento SOB DEMANDA: o worker (opt-in) roda UMA vez por turno e decide se busca e de
-    # qual kind. Só reivindica o turno cedo QUANDO vai rodar o worker (live + texto + worker on) — assim o
-    # worker fica DENTRO da idempotência do BUG 1 (claim perdido em re-exec/2º binding => worker NÃO roda),
-    # e o caminho worker-OFF (default) segue IDÊNTICO a hoje (claim continua dentro do track_step).
-    active_step = @acts_live ? state_manager.current_step(department) : nil
-    judge_result =
-      if @acts_live && effective_content.present? && state_manager.judge_enabled? && state_manager.claim_turn(@message)
-        state_manager.run_turn_judge(active_step, effective_content)
-      end
-
-    kn = resolve_knowledge(run_record, department, active_step, judge_result, effective_content)
-    knowledge = kn[:chunks]
-    emit(run_record, 'knowledge.retrieved',
-         { count: knowledge.size, preview: knowledge.first(2), kinds: kn[:kinds], source: kn[:source] })
+    knowledge = Ai::KnowledgeRetriever.retrieve(query: effective_content, account_id: @account.id, department_id: department.id)
+    emit(run_record, 'knowledge.retrieved', { count: knowledge.size, preview: knowledge.first(2) })
     run_record.update!(knowledge_count: knowledge.size)
 
     memory = Ai::AgentMemory.find_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
@@ -135,14 +123,13 @@ class Ai::Gateway
     result = maybe_byok_fallback(run_record, system_prompt, effective_content, result)
     run_record.update!(
       provider: result[:provider], model: result[:model],
-      tokens_in: result[:tokens_in], tokens_out: result[:tokens_out], cached_tokens: result[:cached_tokens],
+      tokens_in: result[:tokens_in], tokens_out: result[:tokens_out],
       cost: result[:cost], latency_ms: result[:latency_ms],
       decision: result[:decision] || {}, status: result[:status],
       error_type: (result[:status] == 'error' ? 'provider_error' : nil)
     )
     emit(run_record, 'decision.made',
-         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms],
-           temperature: result[:temperature], cached_tokens: result[:cached_tokens] },
+         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms], temperature: result[:temperature] },
          run_id: run_record.id)
 
     # Track which step the conversation is on so message grouping can use that step's delay; also
@@ -154,7 +141,7 @@ class Ai::Gateway
     if @acts_live
       step_signal = state_manager.track_step(department, result[:decision] || {}, dispatcher: action_dispatcher,
                                                                                   run: run_record, message_text: effective_content,
-                                                                                  message: @message, judge_result: judge_result)
+                                                                                  message: @message)
       # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
       # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
       # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.
@@ -292,47 +279,6 @@ class Ai::Gateway
   end
 
   private
-
-  # (Camadas 3/4) Decide a busca de conhecimento a partir da INTENÇÃO do worker. Devolve
-  # { chunks:, kinds:, source: } — source audita a origem:
-  #  - judge_result nil (worker OFF/default, shadow, ou claim perdido) -> RAG como hoje (full, sem filtro,
-  #    todo turno). source 'all' — REGRESSÃO TOTAL do comportamento atual.
-  #  - worker FALHOU -> fallback: full RAG + evento knowledge.fallback (auditável). source 'fallback'.
-  #  - asks_about != 'nada' -> busca kinds:[asks_about] com a QUERY do worker (não o texto cru, que deu o
-  #    resultado ruim). source 'worker'.
-  #  - etapa apresenta planos/catálogo (heurística por instrução) -> busca produtos. source 'step'.
-  #  - senão -> NÃO busca (economia) + evento knowledge.skipped. source 'none'.
-  def resolve_knowledge(run_record, department, step, judge_result, query_text)
-    return search_knowledge(department, nil, query_text, 'all') if judge_result.nil?
-
-    if judge_result[:status].to_s == 'failed'
-      emit(run_record, 'knowledge.fallback', { reason: judge_result[:reason].to_s.first(80) })
-      return search_knowledge(department, nil, query_text, 'fallback')
-    end
-
-    asks = judge_result[:asks_about].to_s
-    return search_knowledge(department, [asks], judge_result[:query].presence || query_text, 'worker') if asks.present? && asks != 'nada'
-    return search_knowledge(department, ['produto'], 'planos e preços', 'step') if step_wants_products?(step)
-
-    emit(run_record, 'knowledge.skipped', { reason: 'no_question_no_catalog_step' })
-    { chunks: [], kinds: nil, source: 'none' }
-  end
-
-  def search_knowledge(department, kinds, query, source)
-    chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: @account.id,
-                                             department_id: department.id, kinds: kinds)
-    { chunks: chunks, kinds: kinds, source: source }
-  end
-
-  # "Esta etapa apresenta planos/catálogo?" — derivado da INSTRUÇÃO da etapa (sem config nova, sem tocar
-  # no playbook): heurística por palavras que só aparecem quando a etapa é de apresentar produto/preço.
-  # Menos frágil que casar o nome da etapa; a instrução é o texto que o usuário já escreveu.
-  STEP_PRODUCTS_RE = /\b(planos?|produtos?|cat[áa]logo|pre[çc]os?|mensalidade)\b/i
-  def step_wants_products?(step)
-    return false unless step.is_a?(Hash)
-
-    STEP_PRODUCTS_RE.match?((step['instructions'] || step[:instructions]).to_s)
-  end
 
   # Montagem do contexto textual do modelo (histórico + citação + atributos preenchíveis), extraído
   # do Gateway (Passo 2 da quebra do God object). Memoizado — criado 1x por run, sob demanda.
