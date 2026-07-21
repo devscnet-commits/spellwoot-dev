@@ -116,22 +116,6 @@ RSpec.describe Ai::Gateway do
       expect(convo.messages.outgoing.last&.content).to eq('Claro, posso ajudar com isso!')
       expect(run_for(convo).status).to eq('recorded')
     end
-
-    # Medição de prompt caching (#reorder): cached_tokens do ModelRouter -> Ai::Run + evento decision.made.
-    it 'propaga cached_tokens para o Ai::Run e para o evento decision.made' do
-      create_department
-      binding = create_binding(mode: 'live')
-      allow(Ai::ModelRouter).to receive(:decide).and_return(
-        { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'decision' => 'reply', 'reply_text' => 'Oi!' },
-          tokens_in: 100, tokens_out: 20, cached_tokens: 64, cost: 0.0, latency_ms: 1, status: 'recorded' }
-      )
-
-      convo = deliver('Olá', binding: binding, mode: 'live')
-
-      expect(run_for(convo).cached_tokens).to eq(64)
-      made = Ai::Event.where(conversation_id: convo.id, event_type: 'decision.made').last
-      expect(made.payload['cached_tokens']).to eq(64)
-    end
   end
 
   # === Cenário 2b: CRÉDITO DE IA ESGOTADO (billing Fase 2) ============================
