@@ -99,4 +99,40 @@ RSpec.describe Ai::SlotExtractor do
       expect(described_class.extract(attribute_type: 'cpf', text: '   ')).to be_nil
     end
   end
+
+  describe '.attempt? — houve tentativa (independe do sucesso da extração)' do
+    let(:options) { %w[manhã tarde] }
+
+    it 'choice: valor que casa uma option é tentativa' do
+      expect(described_class.attempt?(attribute_type: 'choice', text: 'manhã', options: options)).to be(true)
+    end
+
+    it 'choice: valor FORA das options TAMBÉM é tentativa (mudança — desacopla do sucesso)' do
+      expect(described_class.attempt?(attribute_type: 'choice', text: 'de noite', options: options)).to be(true)
+    end
+
+    it 'choice: texto vazio NÃO é tentativa (preserva o handoff por sumiço)' do
+      expect(described_class.attempt?(attribute_type: 'choice', text: '   ', options: options)).to be(false)
+    end
+
+    it 'cpf/phone/number: tentativa = ter dígito (regressão INALTERADA)' do
+      aggregate_failures do
+        expect(described_class.attempt?(attribute_type: 'cpf', text: 'meu cpf é 123')).to be(true)
+        expect(described_class.attempt?(attribute_type: 'cpf', text: 'quais os valores?')).to be(false)
+        expect(described_class.attempt?(attribute_type: 'phone', text: 'dia 5')).to be(true)
+        expect(described_class.attempt?(attribute_type: 'number', text: 'nenhum')).to be(false)
+      end
+    end
+
+    it 'email: tentativa = conter "@" (regressão INALTERADA)' do
+      aggregate_failures do
+        expect(described_class.attempt?(attribute_type: 'email', text: 'joao@x.com')).to be(true)
+        expect(described_class.attempt?(attribute_type: 'email', text: 'não tem arroba')).to be(false)
+      end
+    end
+
+    it 'text/desconhecido: nunca é tentativa (não passa por aqui)' do
+      expect(described_class.attempt?(attribute_type: 'text', text: 'qualquer coisa')).to be(false)
+    end
+  end
 end
