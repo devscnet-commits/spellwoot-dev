@@ -93,11 +93,20 @@ class Ai::HandoffSummaryGenerator
     REASON_LABELS[@reason] || @reason
   end
 
+  # Três fontes, do menos para o mais confiável: ai_collected_facts (o que a IA capturou no turno,
+  # inclusive chaves sem CustomAttributeDefinition espelhada) como base, depois os custom_attributes
+  # do contato e da conversa por cima — se a mesma chave existir, vence o custom_attribute, que pode
+  # ter sido corrigido por um humano no painel.
   def collected_attributes
-    (@conversation.contact&.custom_attributes || {})
-      .merge(@conversation.custom_attributes || {})
+    attributes_by_precedence
       .reject { |_, v| v.blank? }
       .map { |k, v| "#{k}: #{v}" }.join(', ')
+  end
+
+  def attributes_by_precedence
+    facts = (@conversation.additional_attributes || {})['ai_collected_facts'] || {}
+    facts.merge(@conversation.contact&.custom_attributes || {})
+         .merge(@conversation.custom_attributes || {})
   end
 
   def agent_memory_summary(agent)
