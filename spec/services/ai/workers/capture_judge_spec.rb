@@ -28,7 +28,8 @@ RSpec.describe Ai::Workers::CaptureJudge do
   describe '.judge' do
     it 'answered: devolve status + value do parse' do
       stub_model(text: '{"status":"answered","value":"4998564780"}')
-      expect(judge('meu numero 4998564780')).to eq(status: 'answered', value: '4998564780')
+      # include (não eq): o retorno agora TAMBÉM traz asks_about/query (camada 2) — status/value idênticos.
+      expect(judge('meu numero 4998564780')).to include(status: 'answered', value: '4998564780')
     end
 
     it 'answered: debita UM Ai::Run capture_judge com provider/model/tokens/cost (item F)' do
@@ -47,12 +48,12 @@ RSpec.describe Ai::Workers::CaptureJudge do
 
     it 'malformed: devolve o value exatamente como veio' do
       stub_model(text: '{"status":"malformed","value":"para o dia 10"}')
-      expect(judge('para o dia 10')).to eq(status: 'malformed', value: 'para o dia 10')
+      expect(judge('para o dia 10')).to include(status: 'malformed', value: 'para o dia 10')
     end
 
     it 'not_an_answer' do
       stub_model(text: '{"status":"not_an_answer"}')
-      expect(judge('qual o plano?')).to eq(status: 'not_an_answer')
+      expect(judge('qual o plano?')).to include(status: 'not_an_answer')
     end
 
     it 'JSON inválido (texto livre) -> failed' do
@@ -79,6 +80,33 @@ RSpec.describe Ai::Workers::CaptureJudge do
     it 'mensagem vazia -> failed SEM chamar o modelo nem criar Ai::Run' do
       expect(Ai::ModelRouter).not_to receive(:call_model)
       expect { expect(judge('   ')[:status]).to eq('failed') }.not_to change(judge_runs, :count)
+    end
+  end
+
+  describe 'camada 2 — intenção (asks_about / query)' do
+    it 'aceita asks_about e query válidos junto do status' do
+      stub_model(text: '{"status":"not_an_answer","asks_about":"produto","query":"valores dos planos"}')
+      expect(judge('quais os valores?')).to include(status: 'not_an_answer', asks_about: 'produto',
+                                                     query: 'valores dos planos')
+    end
+
+    it 'asks_about desconhecido vira "nada"' do
+      stub_model(text: '{"status":"not_an_answer","asks_about":"foobar","query":"x"}')
+      expect(judge('oi')[:asks_about]).to eq('nada')
+    end
+
+    it 'sem asks_about no JSON -> "nada" e query vazia (default)' do
+      stub_model(text: '{"status":"answered","value":"4998564780"}')
+      r = judge('4998564780')
+      expect(r[:asks_about]).to eq('nada')
+      expect(r[:query]).to eq('')
+    end
+
+    it 'todos os kinds válidos passam (produto/faq/procedimento/documento/nada)' do
+      %w[produto faq procedimento documento nada].each do |k|
+        stub_model(text: %({"status":"not_an_answer","asks_about":"#{k}","query":"q"}))
+        expect(judge('x')[:asks_about]).to eq(k)
+      end
     end
   end
 
