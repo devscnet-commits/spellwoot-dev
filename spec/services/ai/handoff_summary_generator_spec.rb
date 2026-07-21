@@ -66,4 +66,68 @@ RSpec.describe Ai::HandoffSummaryGenerator do
 
     expect(described_class.new(conversation: conversation, reason: 'loop').generate).to be_nil
   end
+
+  describe 'linha "Dados já coletados" (collected_attributes)' do
+    def prompt_for(reason: 'loop')
+      captured = nil
+      allow(Ai::ModelRouter).to receive(:decide) do |kwargs|
+        captured = kwargs[:system_prompt]
+        { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'summary' => 'ok' },
+          tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
+      end
+      described_class.new(conversation: conversation, reason: reason).generate
+      captured
+    end
+
+    it 'inclui todas as chaves de ai_collected_facts quando custom_attributes está vazio' do
+      conversation.update!(custom_attributes: {},
+                           additional_attributes: { 'ai_collected_facts' => {
+                             'nome_cliente' => 'Fulano', 'telefone_secundario' => '49985671245'
+                           } })
+
+      prompt = prompt_for
+      expect(prompt).to include('Dados já coletados do cliente:')
+      expect(prompt).to include('nome_cliente: Fulano')
+      expect(prompt).to include('telefone_secundario: 49985671245')
+    end
+
+    it 'quando a mesma chave existe nos dois, vence o valor de custom_attributes' do
+      conversation.update!(custom_attributes: { 'cidade' => 'Maravilha' },
+                           additional_attributes: { 'ai_collected_facts' => {
+                             'cidade' => 'Chapecó', 'plano_escolhido' => 'Fibra 500'
+                           } })
+
+      prompt = prompt_for
+      expect(prompt).to include('cidade: Maravilha')
+      expect(prompt).not_to include('cidade: Chapecó')
+      expect(prompt).to include('plano_escolhido: Fibra 500')
+    end
+
+    it 'descarta valores em branco vindos dos facts' do
+      conversation.update!(custom_attributes: {},
+                           additional_attributes: { 'ai_collected_facts' => {
+                             'nome_cliente' => 'Fulano', 'email_cliente' => '', 'documento_cpf' => nil
+                           } })
+
+      prompt = prompt_for
+      expect(prompt).to include('nome_cliente: Fulano')
+      expect(prompt).not_to include('email_cliente:')
+      expect(prompt).not_to include('documento_cpf:')
+    end
+
+    it 'não quebra quando additional_attributes é nulo ou sem ai_collected_facts' do
+      conversation.update!(custom_attributes: { 'cidade' => 'Maravilha' }, additional_attributes: {})
+
+      prompt = prompt_for
+      expect(prompt).to include('cidade: Maravilha')
+    end
+
+    it 'omite a linha "Dados já coletados" quando não há nenhum dado' do
+      conversation.update!(custom_attributes: {}, additional_attributes: {})
+      allow(conversation.contact).to receive(:custom_attributes).and_return({}) if conversation.contact
+
+      prompt = prompt_for
+      expect(prompt).not_to include('Dados já coletados do cliente:')
+    end
+  end
 end
