@@ -179,7 +179,15 @@ class Ai::Gateway
     # stall. Take a SECOND turn feeding the tool result back so the AI answers the customer with it.
     # Single hop (we don't execute another tool) to avoid loops; `result` is replaced for dispatch.
     if intended_tool.present? && @acts_live && execution&.status == 'executed'
-      result = tool_followup(run_record, system_prompt, effective_content, intended_tool, execution)
+      # 2ª chamada só REDIGE a resposta pós-ferramenta (não avança etapa, não grava attributes, não roda
+      # outra ferramenta) -> usa um prompt ENXUTO (sem playbook/âncora/estado-da-coleta/lead_vars/tools)
+      # para cortar o custo do reenvio. Recompilado AQUI (só quando há followup), reusando RAG/memória já
+      # carregados. Ver Ai::PromptCompiler.compile(followup: true).
+      followup_prompt = Ai::PromptCompiler.compile(
+        agent: @agent, department: department, knowledge: knowledge, memory: memory,
+        tools: [], customer_memory: customer_memory, followup: true
+      )
+      result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution)
     end
 
     @stage = :dispatch
@@ -342,7 +350,8 @@ class Ai::Gateway
       user_message: followup_message, account_id: @account.id, json: true
     )
     emit(run_record, 'tool.followup',
-         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms] })
+         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms],
+           prompt_chars: system_prompt.length })
     result
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#tool_followup] #{e.class}: #{e.message}"

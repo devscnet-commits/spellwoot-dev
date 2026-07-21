@@ -178,4 +178,92 @@ RSpec.describe Ai::PromptCompiler do
       expect(prompt).not_to include('✓ JÁ TENHO')
     end
   end
+
+  # Prompt ENXUTO da 2ª chamada (Ai::Gateway#tool_followup): a ferramenta já rodou, o modelo só REDIGE
+  # a resposta (pode pedir handoff/close). Saem os blocos de coleta/etapa/ferramenta; ficam persona,
+  # RAG (+anti-invenção), times de handoff e o contrato. Objetos reais (o bloco de times precisa de Team).
+  describe 'compile(followup:) — enxuga a 2ª chamada' do
+    let(:account) { create(:account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:real_agent) do
+      Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id,
+                        guardrails: 'Nunca prometa desconto.')
+    end
+    let(:real_dept) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: real_agent.id, name: 'Comercial',
+                                    objetivo: 'Vender', status: 'active', behavior: {})
+      dept.create_playbook!(active: true, transfer_when: ['cliente irritado'], steps: [
+                              { 'name' => 'CADASTRO', 'instructions' => 'Peça e grave documento.' },
+                              { 'name' => 'Fim' }
+                            ])
+      dept.lead_variables.create!(name: 'cidade', account: account)
+      Ai::Tool.create!(account: account, ai_department_id: dept.id, name: 'consulta_cobertura',
+                       implementation_type: 'capability', capability_key: 'coverage.check', status: 'active',
+                       description: 'Checa cobertura')
+      dept
+    end
+
+    before { create(:team, account: account, name: 'Suporte N2') }
+
+    def compile(followup:, knowledge: ['Internet Fibra 300 Mega — Plano residencial R$ 89,90'])
+      described_class.compile(
+        agent: real_agent, department: real_dept, knowledge: knowledge, memory: nil,
+        tools: real_dept.tools.active.to_a, collected: { 'documento' => 'CNH-123' },
+        fillable_attributes: [%w[email E-mail]], step_index: 0, followup: followup
+      )
+    end
+
+    it 'followup NÃO contém: etapas, âncora, JÁ TENHO, lead_variables, fillable, tools' do
+      prompt = compile(followup: true)
+
+      aggregate_failures do
+        expect(prompt).not_to include('Etapas do atendimento')            # lista de etapas
+        expect(prompt).not_to include('ETAPA ATUAL (definida pelo sistema') # âncora (o contrato cita "ETAPA ATUAL")
+        expect(prompt).not_to include('✓ JÁ TENHO')                        # estado da coleta
+        expect(prompt).not_to include('documento=CNH-123')
+        expect(prompt).not_to include('Procure coletar naturalmente')      # lead_variables
+        expect(prompt).not_to include('Atributos da conversa para preencher') # fillable_attributes
+        expect(prompt).not_to include('Ferramentas disponíveis')           # tools
+        expect(prompt).not_to include('consulta_cobertura')
+        expect(prompt).not_to include('Transfira para humano quando')
+      end
+    end
+
+    it 'followup CONTÉM: persona, guardrails, RAG (+anti-invenção), times de handoff, response_contract' do
+      prompt = compile(followup: true)
+
+      aggregate_failures do
+        expect(prompt).to include('Bia')                                   # persona
+        expect(prompt).to include('Nunca prometa desconto.')               # guardrails
+        expect(prompt).to include('Base de conhecimento relevante')        # RAG
+        expect(prompt).to include('Internet Fibra 300 Mega')
+        expect(prompt).to include('NUNCA invente')                         # anti-invenção
+        expect(prompt).to include('Times disponíveis')                     # handoff humano
+        expect(prompt).to include('Suporte N2')
+        expect(prompt).to include('Retorne ESTRITAMENTE um JSON')          # response_contract
+      end
+    end
+
+    it 'PRIMEIRA chamada (followup: false, default) mantém o prompt COMPLETO e MAIOR (regressão)' do
+      full = compile(followup: false)
+
+      expect(full).to include('Etapas do atendimento')
+      expect(full).to include('ETAPA ATUAL')
+      expect(full).to include('✓ JÁ TENHO')
+      expect(full).to include('Ferramentas disponíveis')
+      expect(full).to include('consulta_cobertura')
+      expect(compile(followup: true).length).to be < full.length
+    end
+
+    it 'sem RAG e sem memória: o followup enxuto ainda compila (não quebra)' do
+      prompt = described_class.compile(agent: real_agent, department: real_dept, knowledge: [], memory: nil,
+                                       tools: [], customer_memory: nil, followup: true)
+
+      expect(prompt).to include('Retorne ESTRITAMENTE um JSON')
+      expect(prompt).not_to include('Base de conhecimento relevante')
+    end
+  end
 end

@@ -214,6 +214,73 @@ RSpec.describe Ai::Gateway do
       expect(convo.messages.outgoing.last&.content).to eq('Seu cadastro está em dia!')
       expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'contact.read')).to exist
     end
+
+    # Enxugamento da 2ª chamada: o prompt do tool.followup é MENOR que o da 1ª (context.assembled).
+    it 'a 2ª chamada usa um prompt ENXUTO (menor que o context.assembled do mesmo run)' do
+      department = create_department
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'contact.read',
+                       implementation_type: 'capability', capability_key: 'contact.read', status: 'active')
+      binding = create_binding(mode: 'live')
+      stub_decisions(
+        { 'decision' => 'invoke_tool', 'tool' => { 'name' => 'contact.read', 'input' => {} } },
+        { 'decision' => 'reply', 'reply_text' => 'ok' }
+      )
+
+      convo = deliver('Confere meu cadastro?', binding: binding, mode: 'live')
+
+      full = Ai::Event.where(conversation_id: convo.id, event_type: 'context.assembled').last.payload['prompt_chars']
+      slim = Ai::Event.where(conversation_id: convo.id, event_type: 'tool.followup').last.payload['prompt_chars']
+      expect(slim).to be_positive
+      expect(slim).to be < full
+    end
+
+    it 'followup com decision handoff: transfere (handoff.executed) — inalterado com o prompt enxuto' do
+      department = create_department
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'contact.read',
+                       implementation_type: 'capability', capability_key: 'contact.read', status: 'active')
+      binding = create_binding(mode: 'live')
+      stub_decisions(
+        { 'decision' => 'invoke_tool', 'tool' => { 'name' => 'contact.read', 'input' => {} } },
+        { 'decision' => 'handoff', 'reply_text' => 'Vou te transferir para um atendente.' }
+      )
+
+      convo = deliver('Confere meu cadastro?', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to include('tool.followup', 'handoff.executed')
+    end
+
+    it 'followup com decision close: encerra (close.executed + resolved)' do
+      department = create_department
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'contact.read',
+                       implementation_type: 'capability', capability_key: 'contact.read', status: 'active')
+      binding = create_binding(mode: 'live')
+      stub_decisions(
+        { 'decision' => 'invoke_tool', 'tool' => { 'name' => 'contact.read', 'input' => {} } },
+        { 'decision' => 'close', 'reply_text' => 'Pronto, resolvido! Até logo.' }
+      )
+
+      convo = deliver('Confere meu cadastro?', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to include('tool.followup', 'close.executed')
+      expect(convo.status).to eq('resolved')
+    end
+
+    it 'followup que devolve invoke_tool: cai no safety-net e SÓ responde (não executa 2ª ferramenta)' do
+      department = create_department
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'contact.read',
+                       implementation_type: 'capability', capability_key: 'contact.read', status: 'active')
+      binding = create_binding(mode: 'live')
+      stub_decisions(
+        { 'decision' => 'invoke_tool', 'tool' => { 'name' => 'contact.read', 'input' => {} } },
+        { 'decision' => 'invoke_tool', 'tool' => { 'name' => 'contact.read', 'input' => {} },
+          'reply_text' => 'texto de segurança' }
+      )
+
+      convo = deliver('Confere meu cadastro?', binding: binding, mode: 'live')
+
+      expect(Ai::CapabilityExecution.where(conversation_id: convo.id).count).to eq(1) # single hop: só a 1ª executa
+      expect(convo.messages.outgoing.last&.content).to eq('texto de segurança')
+    end
   end
 
   # === Cenário 5: CLOSE (ao vivo) — despedida + resolve ===============================
