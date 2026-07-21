@@ -1,4 +1,4 @@
-\restrict Y6c9cDLscoJKEndvCfTCraBrQBUGoy8xgqE3i8VBXcSVurayoQdZhcanfDgUfTf
+\restrict BBNfh3Tq2Wpbb5fJf5pB25RDOKvXHu3XfMx0kS5ISdmXqRYFaclJHDbwpU7oicl
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
 -- Dumped by pg_dump version 16.14
@@ -1266,7 +1266,8 @@ CREATE TABLE public.ai_runs (
     routing_band character varying,
     worker character varying,
     error_type character varying,
-    knowledge_count integer DEFAULT 0 NOT NULL
+    knowledge_count integer DEFAULT 0 NOT NULL,
+    cached_tokens integer
 );
 
 
@@ -9678,11 +9679,12 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Y6c9cDLscoJKEndvCfTCraBrQBUGoy8xgqE3i8VBXcSVurayoQdZhcanfDgUfTf
+\unrestrict BBNfh3Tq2Wpbb5fJf5pB25RDOKvXHu3XfMx0kS5ISdmXqRYFaclJHDbwpU7oicl
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260719120000'),
 ('20260718120000'),
 ('20260717120000'),
 ('20260716120000'),

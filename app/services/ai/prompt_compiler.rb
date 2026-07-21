@@ -7,44 +7,40 @@ class Ai::PromptCompiler
   # fillable_attributes, definições de ferramentas e transfer_when/close_when. FICAM (além de persona,
   # RAG +anti-invenção, times de handoff, memória e contrato) a ÂNCORA da etapa corrente e o ESTADO DA
   # COLETA ("JÁ TENHO"/"FALTA agora"): sem eles o followup redige sem saber a etapa nem o que já foi
-  # coletado e repergunta/pede dado de outra etapa (conv 372). false (default) = prompt COMPLETO,
-  # IDÊNTICO ao de hoje (1ª decisão, gateway.rb:103): todos os guards passam direto.
+  # coletado e repergunta/pede dado de outra etapa (conv 372). false (default) = prompt COMPLETO (todos os
+  # blocos). Em AMBOS os modos a ordem é FIXO-primeiro, VARIÁVEL-depois (prompt caching): o conjunto de
+  # blocos de cada modo é o mesmo de antes — só a ordem mudou.
   def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
                    customer_memory: nil, step_index: nil, followup: false)
-    parts = []
-    parts.concat(identity_lines(agent))
-    parts << agent.base_prompt if agent.base_prompt.present?
-    parts << "Personalidade: #{agent.assistant_personality}." if agent.assistant_personality.present?
-    parts << "Responda no idioma #{agent.assistant_language}." if agent.assistant_language.present?
-    parts << "Regras de segurança (nunca viole): #{agent.guardrails}." if agent.guardrails.present?
+    # PROMPT CACHING: prefixo FIXO (igual entre turnos) primeiro, blocos VARIÁVEIS (mudam por turno)
+    # depois. O cache de prefixo do provider exige que tudo que muda venha DEPOIS de tudo que é estável —
+    # por isso o response_contract (fixo) subiu para o fim da seção fixa, e âncora/estado/RAG/memória
+    # (variáveis) foram para o fim. Mesmo CONJUNTO de blocos de antes; só a ordem mudou.
+    fixed = []
+    fixed.concat(identity_lines(agent))
+    fixed << agent.base_prompt if agent.base_prompt.present?
+    fixed << "Personalidade: #{agent.assistant_personality}." if agent.assistant_personality.present?
+    fixed << "Responda no idioma #{agent.assistant_language}." if agent.assistant_language.present?
+    fixed << "Regras de segurança (nunca viole): #{agent.guardrails}." if agent.guardrails.present?
 
-    parts << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
+    fixed << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
     # NÃO injetar `department.instructions`: coluna legada, sem editor na UI (comportamento é montado
     # por objetivo + steps do playbook). Ficava como ruído órfão no prompt. Coluna mantida no schema
     # (aposentada só a leitura) — cleanup de schema é débito separado.
-    if (pb = department.playbook)
-      if followup
-        # No followup volta SÓ a âncora da etapa corrente (para não pedir dado de outra etapa). A LISTA
-        # completa das etapas, transfer_when e close_when continuam FORA (corte do #273 preservado).
-        anchor = current_step_line(pb.steps, step_index)
-        parts << anchor if anchor
-      else
-        step_lines = step_lines(pb.steps)
-        if step_lines.present?
-          block = "Etapas do atendimento (na ordem):\n#{step_lines.join("\n")}"
-          anchor = current_step_line(pb.steps, step_index)
-          block += "\n#{anchor}" if anchor
-          parts << block
-        end
-        parts << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
-        parts << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
-      end
+    #
+    # LISTA das etapas + transfer/close: FIXO, só no prompt completo (não no followup). A ÂNCORA da etapa
+    # NÃO entra aqui — muda por turno, então é VARIÁVEL e vai para a seção variável (senão quebra o prefixo).
+    if !followup && (pb = department.playbook)
+      step_lines = step_lines(pb.steps)
+      fixed << "Etapas do atendimento (na ordem):\n#{step_lines.join("\n")}" if step_lines.present?
+      fixed << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
+      fixed << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
     end
 
     lead_vars = followup ? [] : department.lead_variables.to_a
     if lead_vars.present?
       lines = lead_vars.map { |v| "- #{v.name} (#{v.var_type})#{v.description.present? ? ": #{v.description}" : ''}" }
-      parts << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}\n" \
+      fixed << "Procure coletar naturalmente estas informações do cliente:\n#{lines.join("\n")}\n" \
                "Sempre que o cliente informar um destes dados, inclua-o no campo \"attributes\" do JSON " \
                "usando a CHAVE exata do nome acima (ex.: {\"cidade\":\"Maravilha\"}). Não invente — só o que o cliente disse."
     end
@@ -53,47 +49,59 @@ class Ai::PromptCompiler
     # devolvê-los em "attributes" usando a CHAVE exata quando o cliente informar o dado.
     if !followup && fillable_attributes.present?
       lines = fillable_attributes.map { |key, label| "- #{key}#{label.present? ? " (#{label})" : ''}" }
-      parts << "Atributos da conversa para preencher quando o cliente informar (use a CHAVE exata em \"attributes\", ex.: {\"cidade\":\"Maravilha\"}):\n#{lines.join("\n")}"
+      fixed << "Atributos da conversa para preencher quando o cliente informar (use a CHAVE exata em \"attributes\", ex.: {\"cidade\":\"Maravilha\"}):\n#{lines.join("\n")}"
     end
-
-    # Estado da coleta (reforço ATIVO por turno): o que já temos + o slot que a etapa ATUAL ainda
-    # precisa. Montado pelo CÓDIGO (não pelo modelo) — mata a repergunta em etapa de vários turnos.
-    # Estado da coleta VOLTA ao followup (#273 tinha cortado): sem ele o followup repergunta o que já foi
-    # coletado. Continua sendo o único bloco de coleta no followup — lista de etapas/lead/fillable seguem fora.
-    already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
-    state_block = collection_state_block(department.playbook&.steps, step_index, already)
-    parts << state_block if state_block
 
     if !followup && tools.present?
       lines = tools.map { |t| "- #{t.name}: #{t.description} (input: #{t.input_schema.to_json})" }
-      parts << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
+      fixed << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
     end
 
     human_teams = ::Team.where(account_id: agent.account_id).order(:name).pluck(:name)
     if human_teams.present?
       lines = human_teams.map { |t| "- #{t}" }
-      parts << "Para transferir para um ATENDENTE HUMANO, NÃO apenas escreva no texto: retorne decision " \
+      fixed << "Para transferir para um ATENDENTE HUMANO, NÃO apenas escreva no texto: retorne decision " \
                "\"handoff\" e o nome EXATO do time em handoff_target. Times disponíveis:\n#{lines.join("\n")}"
     end
 
     targets = handoff_targets(agent)
     if targets.present?
       lines = targets.map { |tg| tg[:hint].present? ? "- #{tg[:name]}: #{tg[:hint]}" : "- #{tg[:name]}" }
-      parts << "Você pode transferir para outra IA quando o assunto for melhor atendido por ela. IAs de destino:\n" \
+      fixed << "Você pode transferir para outra IA quando o assunto for melhor atendido por ela. IAs de destino:\n" \
                "#{lines.join("\n")}\nPara transferir, retorne decision \"handoff\" e o nome EXATO da IA em handoff_target."
     end
 
-    if knowledge.present?
-      parts << "Base de conhecimento relevante:\n#{knowledge.join("\n---\n")}\n\n" \
-               "Use APENAS os produtos, planos, valores e informações citados acima. " \
-               "NUNCA invente nome de produto, valor, característica ou promoção que não esteja " \
-               "literalmente neste bloco. Se a informação pedida não estiver aqui, diga que vai " \
-               "verificar ou transfira para um humano — não improvise."
+    # response_contract é FIXO -> encerra o prefixo cacheável (era o ÚLTIMO de tudo). Tudo que muda por
+    # turno vem DEPOIS dele.
+    fixed << response_contract
+
+    # ===== Blocos VARIÁVEIS (mudam por turno) — depois do prefixo fixo, para habilitar prompt caching =====
+    variable = []
+    # Âncora da etapa corrente: SEPARADA do bloco de etapas (antes vinha concatenada dentro dele, o que
+    # injetava conteúdo variável num bloco fixo grande e quebrava o prefixo). Vale para completo e followup.
+    if (pb = department.playbook)
+      anchor = current_step_line(pb.steps, step_index)
+      variable << anchor if anchor
     end
-    parts << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
-    parts.concat(customer_memory_lines(customer_memory))
-    parts << response_contract
-    parts.join("\n\n")
+
+    # Estado da coleta (reforço ATIVO por turno): o que já temos + o slot que a etapa ATUAL ainda precisa.
+    # Montado pelo CÓDIGO (não pelo modelo) — mata a repergunta em etapa de vários turnos. Presente também
+    # no followup (#273/#278: sem ele o followup repergunta o já coletado).
+    already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
+    state_block = collection_state_block(department.playbook&.steps, step_index, already)
+    variable << state_block if state_block
+
+    if knowledge.present?
+      variable << "Base de conhecimento relevante:\n#{knowledge.join("\n---\n")}\n\n" \
+                  "Use APENAS os produtos, planos, valores e informações citados acima. " \
+                  "NUNCA invente nome de produto, valor, característica ou promoção que não esteja " \
+                  "literalmente neste bloco. Se a informação pedida não estiver aqui, diga que vai " \
+                  "verificar ou transfira para um humano — não improvise."
+    end
+    variable << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
+    variable.concat(customer_memory_lines(customer_memory))
+
+    (fixed + variable).join("\n\n")
   end
 
   # ESTADO DA COLETA — reforço ATIVO, remontado deterministicamente pelo código a cada turno (não pelo
