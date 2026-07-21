@@ -4,6 +4,7 @@
 # Table name: ai_runs
 #
 #  id               :bigint           not null, primary key
+#  cached_tokens    :integer
 #  cost             :decimal(12, 6)   default(0.0), not null
 #  decision         :jsonb            not null
 #  error_type       :string
