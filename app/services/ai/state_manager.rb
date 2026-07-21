@@ -37,6 +37,11 @@ class Ai::StateManager
     known = filter_known_attributes(cleaned, department)
     return if known.empty?
 
+    # 3. Normaliza valores de atributo tipo LIST para a opção CANÔNICA (só o ESPELHO; ai_collected_facts
+    #    fica com o valor cru). Sem isso, "maravilha" espelhado num campo list ["Chapecó","Maravilha"]
+    #    não casa no select do painel ("Selecione o valor") e um save humano pode zerar o campo (conv 367).
+    known = normalize_list_values(known)
+
     merged = (@conversation.custom_attributes || {}).merge(known)
     return if merged == @conversation.custom_attributes
 
@@ -91,6 +96,34 @@ class Ai::StateManager
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#fillable_attribute_keys] #{e.class}: #{e.message}"
     []
+  end
+
+  # Troca cada valor pela opção CANÔNICA quando a definição é do tipo list e o valor casa (ignorando
+  # caixa/acento/espaços) com alguma attribute_values. Não casou ou não é list -> valor como veio.
+  # NÃO descarta nada — só canonicaliza o espelho de custom_attributes.
+  def normalize_list_values(known)
+    definitions = ::CustomAttributeDefinition
+                  .where(account_id: @conversation.account_id, attribute_model: :conversation_attribute,
+                         attribute_key: known.keys.map(&:to_s))
+                  .index_by(&:attribute_key)
+    known.each_with_object({}) do |(key, value), out|
+      out[key] = canonical_list_value(definitions[key.to_s], value)
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#normalize_list_values] #{e.class}: #{e.message}"
+    known
+  end
+
+  # Casa por IGUALDADE normalizada (não substring): reusa Ai::SlotExtractor.normalize (mesma norma de
+  # caixa/acento/espaços dos slots de choice) nos DOIS lados e exige igualdade. Substring seria perigoso
+  # aqui — o valor vem de texto livre e "não é maravilha, é chapecó" casaria com "Maravilha" (cidade
+  # errada). Devolve a opção exatamente como está em attribute_values, ou o valor cru se nada casar.
+  def canonical_list_value(definition, value)
+    return value unless definition&.list?
+
+    target = Ai::SlotExtractor.normalize(value)
+    Array(definition.attribute_values).map(&:to_s)
+                                      .find { |opt| Ai::SlotExtractor.normalize(opt) == target } || value
   end
 
   # Progressão DETERMINÍSTICA de etapa. O índice (additional_attributes['ai_step_index'], inteiro,

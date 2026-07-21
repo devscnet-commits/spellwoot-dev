@@ -1145,6 +1145,94 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  describe '#persist_attributes — normalização de valor para atributo tipo LIST' do
+    def define_list(key, values)
+      CustomAttributeDefinition.create!(
+        account: account, attribute_key: key, attribute_display_name: key.capitalize,
+        attribute_model: 'conversation_attribute', attribute_display_type: 'list', attribute_values: values
+      )
+    end
+
+    def define_text(key)
+      CustomAttributeDefinition.create!(
+        account: account, attribute_key: key, attribute_display_name: key.capitalize,
+        attribute_model: 'conversation_attribute', attribute_display_type: 'text'
+      )
+    end
+
+    before { define_list('cidade', %w[Chapecó Maravilha]) }
+
+    it 'grava a opção CANÔNICA quando o valor casa ignorando caixa (maravilha -> Maravilha)' do
+      manager.persist_attributes({ 'cidade' => 'maravilha' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('Maravilha')
+    end
+
+    it 'NÃO normaliza ai_collected_facts — a memória mantém o valor cru do cliente' do
+      manager.persist_attributes({ 'cidade' => 'maravilha' }, department)
+
+      expect(conversation.reload.additional_attributes['ai_collected_facts']['cidade']).to eq('maravilha')
+    end
+
+    it 'casa ignorando acento (chapeco -> Chapecó)' do
+      manager.persist_attributes({ 'cidade' => 'chapeco' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('Chapecó')
+    end
+
+    it 'casa ignorando espaços nas pontas (trim antes de comparar)' do
+      manager.persist_attributes({ 'cidade' => ' Maravilha ' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('Maravilha')
+    end
+
+    it 'grava como veio quando não casa com nenhuma opção' do
+      manager.persist_attributes({ 'cidade' => 'São Miguel do Oeste' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('São Miguel do Oeste')
+    end
+
+    it 'MAIÚSCULAS casam por igualdade normalizada (MARAVILHA -> Maravilha)' do
+      manager.persist_attributes({ 'cidade' => 'MARAVILHA' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('Maravilha')
+    end
+
+    it 'frase que MENCIONA uma opção não casa por substring — grava como veio (nega chapecó falso)' do
+      manager.persist_attributes({ 'cidade' => 'não é maravilha, é chapecó' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('não é maravilha, é chapecó')
+    end
+
+    it 'frase contendo a opção não casa (moro em maravilha -> grava como veio)' do
+      manager.persist_attributes({ 'cidade' => 'moro em maravilha' }, department)
+
+      expect(conversation.reload.custom_attributes['cidade']).to eq('moro em maravilha')
+    end
+
+    it 'não normaliza definição de tipo text (grava exatamente como veio)' do
+      define_text('observacao')
+
+      manager.persist_attributes({ 'observacao' => 'maravilha' }, department)
+
+      expect(conversation.reload.custom_attributes['observacao']).to eq('maravilha')
+    end
+
+    it 'chave sem CustomAttributeDefinition continua não espelhando (#265 preservado)' do
+      manager.persist_attributes({ 'bairro' => 'centro' }, department)
+
+      expect(conversation.reload.custom_attributes).not_to have_key('bairro')
+      expect(conversation.reload.additional_attributes['ai_collected_facts']['bairro']).to eq('centro')
+    end
+
+    it 'continua emitindo attributes.updated com as chaves espelhadas' do
+      manager.persist_attributes({ 'cidade' => 'maravilha' }, department)
+
+      event = Ai::Event.where(conversation_id: conversation.id, event_type: 'attributes.updated').last
+      expect(event.payload['keys']).to eq(['cidade'])
+    end
+  end
+
   describe '#persist_attributes — memória de fatos ao vivo (ai_collected_facts)' do
     def define_attr(key)
       CustomAttributeDefinition.create!(account: account, attribute_key: key, attribute_display_name: key.capitalize,
