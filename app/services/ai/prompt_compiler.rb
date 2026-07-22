@@ -104,6 +104,102 @@ class Ai::PromptCompiler
     (fixed + variable).join("\n\n")
   end
 
+  # ============================ SPLIT decisão/resposta (Fix 3b) ============================
+  # Fase A — prompt de DECISÃO ENXUTO: regras/etapa/estado/contrato, SEM persona e SEM RAG (o modelo
+  # busca catálogo/conhecimento via TOOLS nativas). Reusa os mesmos builders do compile; o contrato NÃO
+  # tem reply_text (a Fase A não escreve texto ao cliente). Usado só no modo split ON.
+  def self.decision_prompt(agent:, department:, tools:, collected: {}, fillable_attributes: [], step_index: nil)
+    fixed = [decision_identity(agent)]
+    fixed << "Regras de segurança (nunca viole): #{agent.guardrails}." if agent.guardrails.present?
+    fixed << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
+    if (pb = department.playbook)
+      lines = step_lines(pb.steps)
+      fixed << "Etapas do atendimento (na ordem):\n#{lines.join("\n")}" if lines.present?
+      fixed << "Transfira para humano quando: #{Array(pb.transfer_when).join('; ')}." if pb.transfer_when.present?
+      fixed << "Encerre quando: #{Array(pb.close_when).join('; ')}." if pb.close_when.present?
+    end
+    lead_vars = department.lead_variables.to_a
+    if lead_vars.present?
+      lines = lead_vars.map { |v| "- #{v.name} (#{v.var_type})#{v.description.present? ? ": #{v.description}" : ''}" }
+      fixed << "Colete naturalmente e devolva em attributes_list (CHAVE exata; não invente):\n#{lines.join("\n")}"
+    end
+    if fillable_attributes.present?
+      lines = fillable_attributes.map { |key, label| "- #{key}#{label.present? ? " (#{label})" : ''}" }
+      fixed << "Atributos da conversa para preencher (CHAVE exata em attributes_list):\n#{lines.join("\n")}"
+    end
+    if tools.present?
+      lines = tools.map { |t| "- #{t.name}: #{t.description} (input: #{t.input_schema.to_json})" }
+      fixed << "Ferramentas de AÇÃO (retorne decision \"invoke_tool\" com tool_name/tool_input_json):\n#{lines.join("\n")}"
+    end
+    human_teams = ::Team.where(account_id: agent.account_id).order(:name).pluck(:name)
+    if human_teams.present?
+      fixed << "Para ATENDENTE HUMANO, retorne decision \"handoff\" e o nome EXATO do time em handoff_target:\n" \
+               "#{human_teams.map { |t| "- #{t}" }.join("\n")}"
+    end
+    targets = handoff_targets(agent)
+    if targets.present?
+      lines = targets.map { |tg| tg[:hint].present? ? "- #{tg[:name]}: #{tg[:hint]}" : "- #{tg[:name]}" }
+      fixed << "Pode transferir para outra IA (decision \"handoff\" + nome EXATO em handoff_target):\n#{lines.join("\n")}"
+    end
+    fixed << 'Para planos/preços/dúvidas, CHAME as ferramentas de LEITURA disponíveis (catálogo/conhecimento) — nunca invente.'
+    fixed << decision_contract
+
+    variable = []
+    if (pb = department.playbook)
+      anchor = current_step_line(pb.steps, step_index)
+      variable << anchor if anchor
+    end
+    already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
+    state_block = collection_state_block(department.playbook&.steps, step_index, already)
+    variable << state_block if state_block
+
+    (fixed + variable).join("\n\n")
+  end
+
+  # Fase B — prompt de RESPOSTA: persona completa + estado/âncora + o que a Fase A/tools apuraram (reads)
+  # + memórias. Saída é TEXTO puro (sem JSON). É aqui que a voz/temperatura do perfil (slider) valem.
+  def self.reply_prompt(agent:, department:, reads: [], collected: {}, memory: nil, customer_memory: nil, step_index: nil)
+    parts = identity_lines(agent)
+    parts << agent.base_prompt if agent.base_prompt.present?
+    parts << "Personalidade: #{agent.assistant_personality}." if agent.assistant_personality.present?
+    parts << "Responda no idioma #{agent.assistant_language}." if agent.assistant_language.present?
+    parts << "Regras de segurança (nunca viole): #{agent.guardrails}." if agent.guardrails.present?
+    parts << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
+    if (pb = department.playbook)
+      anchor = current_step_line(pb.steps, step_index)
+      parts << anchor if anchor
+    end
+    already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
+    state_block = collection_state_block(department.playbook&.steps, step_index, already)
+    parts << state_block if state_block
+    if reads.present?
+      parts << "Informações apuradas para responder (use APENAS estas; NUNCA invente produto/valor/promoção):\n" \
+               "#{reads.join("\n---\n")}"
+    end
+    parts << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
+    parts.concat(customer_memory_lines(customer_memory))
+    parts << 'Escreva AGORA a resposta ao cliente na voz acima, em TEXTO puro (sem JSON, sem marcações). Cordial e direto.'
+    parts.join("\n\n")
+  end
+
+  # Identidade mínima da Fase A (sem persona — ela não fala com o cliente).
+  def self.decision_identity(agent)
+    name = agent.assistant_name.presence || agent.name
+    company = "da empresa #{agent.company_name}" if agent.company_name.present?
+    "Você é o motor de DECISÃO de #{[name, company].compact.join(' ')}. Decida a próxima ação; " \
+      'você NÃO escreve a resposta ao cliente (isso é feito numa etapa seguinte).'.squeeze(' ')
+  end
+
+  # Contrato de DECISÃO (sem reply_text — a Fase A não produz texto). Mesmos campos do núcleo do schema.
+  def self.decision_contract
+    <<~TXT.strip
+      Retorne ESTRITAMENTE um JSON de DECISÃO (sem texto ao cliente), sem nada fora dele:
+      {"decision":"reply|invoke_tool|handoff|close|noop","tool_name":"","tool_input_json":"{}","handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"confidence":0.0,"attributes_list":[]}
+      "decision" aceita SOMENTE: reply, invoke_tool, handoff, close, noop. Use "reply" quando a próxima ação for responder ao cliente — o TEXTO será escrito depois; NÃO escreva o texto aqui.
+      Em "current_step" repita o nome da etapa atual (só registro). "step_completed" true SOMENTE ao concluir a etapa. Em "attributes_list", itens {"key":"chave","value":"valor"}; [] se nada novo.
+    TXT
+  end
+
   # ESTADO DA COLETA — reforço ATIVO, remontado deterministicamente pelo código a cada turno (não pelo
   # modelo). O modelo tende a ignorar contexto passivo após alguns turnos; precisa ser LEMBRADO
   # ativamente. "JÁ TENHO" = fatos já coletados (não reperguntar). "FALTA agora" = o slot da etapa

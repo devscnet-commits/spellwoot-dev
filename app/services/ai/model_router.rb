@@ -34,32 +34,26 @@ class Ai::ModelRouter
   # the department classifier) must leave it false so they aren't forced into JSON mode.
   # force_global_key: BYOK (billing Fase 3). Quando true, ignora a chave própria da conta e usa a chave
   # global da SCNET — o Gateway aciona isso no retry após a chave do cliente falhar por auth (401).
+  # schema: :auto (default) resolve o DecisionSchema padrão; passe uma classe de schema para forçar
+  # (ex.: Ai::DecisionSchema.without_reply_text na Fase A do split) ou nil para desligar. tools: array de
+  # RubyLLM::Tool (só no split ON, Fase A single-call) — anexadas via with_tools quando presentes.
   def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil,
-                  temperature: nil, json: false, force_global_key: false)
+                  temperature: nil, json: false, force_global_key: false, schema: :auto, tools: nil)
     # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
     model    = model.presence || profile&.supervisor_model.presence || DEFAULT_MODELS.fetch(provider, 'gpt-4.1-mini')
-    # Temperatura: um override cru explícito (ex.: confidence router) vence e passa direto; senão
-    # traduz a POSIÇÃO abstrata do perfil (0-100) para a temperatura real do provider via
-    # TemperatureMapper. Sem perfil, cai no default. `.nil?` (não ||) preserva um override 0.0.
-    temperature = if !temperature.nil?
-                    temperature
-                  elsif profile
-                    Ai::TemperatureMapper.resolve(provider, profile.temperature_position)
-                  else
-                    DEFAULT_TEMPERATURE
-                  end
+    temperature = resolve_temperature(temperature, profile, provider)
 
     # Structured Output (strict) na decisão do supervisor quando ligado + provider suportado; senão nil
     # (cai no response_format json_object de hoje). Só o caminho de DECISÃO passa schema — CaptureJudge/
-    # visão continuam com json_object/plain.
-    schema = decision_schema_for(provider, json)
+    # visão continuam com json_object/plain. schema != :auto = override explícito (split Fase A).
+    schema = decision_schema_for(provider, json) if schema == :auto
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
                      user_message: user_message, account_id: account_id, temperature: temperature, json: json,
-                     force_global_key: force_global_key, schema: schema)
+                     force_global_key: force_global_key, schema: schema, tools: tools)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     # Ponto ÚNICO de parse + normalização: com schema o ruby_llm já devolve Hash; sem schema, parse
@@ -86,8 +80,38 @@ class Ai::ModelRouter
   # NOTE: validate the exact RubyLLM call shape when running; isolated here on purpose.
   # image: anexo para modelos de VISÃO (aceita ActiveStorage::Attached/Blob, path ou URL — o ruby_llm
   # resolve o tipo). nil = chamada de texto normal (comportamento inalterado: `with: nil` == sem anexo).
+  # Temperatura: override cru explícito (ex.: Fase A do split = 0.2) vence e passa direto; senão traduz a
+  # POSIÇÃO abstrata do perfil (0-100) via TemperatureMapper (o slider). Sem perfil, default. `.nil?`
+  # (não ||) preserva um override 0.0.
+  def self.resolve_temperature(temperature, profile, provider)
+    return temperature unless temperature.nil?
+    return Ai::TemperatureMapper.resolve(provider, profile.temperature_position) if profile
+
+    DEFAULT_TEMPERATURE
+  end
+
+  # Geração de TEXTO puro (Fase B do split: resposta ao cliente com a voz do perfil). Sem schema/json —
+  # saída é string. Reusa call_model (json:false => nem json_object nem schema). Devolve texto + custo.
+  def self.generate_text(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil,
+                         temperature: nil, force_global_key: false, tools: nil)
+    provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
+    model    = model.presence || profile&.supervisor_model.presence || DEFAULT_MODELS.fetch(provider, 'gpt-4.1-mini')
+    temperature = resolve_temperature(temperature, profile, provider)
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    raw = call_model(provider: provider, model: model, system_prompt: system_prompt, user_message: user_message,
+                     account_id: account_id, temperature: temperature, json: false, force_global_key: force_global_key,
+                     tools: tools)
+    latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+
+    { provider: provider, model: model, temperature: temperature.to_f,
+      text: raw[:text].to_s, tokens_in: raw[:tokens_in], tokens_out: raw[:tokens_out],
+      cached_tokens: raw[:cached_tokens], cost: estimate_cost(model, raw[:tokens_in], raw[:tokens_out]),
+      latency_ms: latency_ms, status: raw[:status], error_type: raw[:error_type] }
+  end
+
   def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil,
-                      timeout: nil, json: false, image: nil, force_global_key: false, schema: nil)
+                      timeout: nil, json: false, image: nil, force_global_key: false, schema: nil, tools: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     context = provider_context(provider, account_id: account_id, timeout: timeout, force_global_key: force_global_key)
@@ -102,17 +126,22 @@ class Ai::ModelRouter
     # Builder do ruby_llm (o construtor Chat.new não aceita temperature). to_f: a coluna é BigDecimal.
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
+    # Tools NATIVAS de leitura (split Fase A single-call): o provider conduz o loop (pede tool -> a gem
+    # chama #execute -> realimenta). Só quando passadas (nunca em shadow — o caller não anexa).
+    chat.with_tools(*tools) if tools.present? && chat.respond_to?(:with_tools)
     chat = configure_output(chat, provider, json, schema)
     # Só passa `with:` no caminho de visão — o de texto fica idêntico ao anterior (sem mudança).
     response = image ? chat.ask(user_message, with: image) : chat.ask(user_message)
+    # COM tools: soma o usage de TODAS as rodadas do loop (cada chamada de API é cobrada). SEM tools:
+    # comportamento IDÊNTICO ao de hoje (usage da única resposta). Ver sum_tool_loop_usage.
+    usage = tools.present? ? sum_tool_loop_usage(chat, response) : single_usage(response)
     {
       text: response.respond_to?(:content) ? response.content : response.to_s,
-      tokens_in: response.try(:input_tokens).to_i,
-      tokens_out: response.try(:output_tokens).to_i,
-      # Prompt caching: tokens de ENTRADA servidos do cache do provider (subconjunto de input_tokens).
-      # RubyLLM 1.9 expõe cached_tokens; try mantém compat se um provider não reportar (=> 0). Só MEDIÇÃO
-      # por enquanto — estimate_cost ainda cobra input cheio (não sabemos o preço do token cacheado).
-      cached_tokens: response.try(:cached_tokens).to_i,
+      # Prompt caching: cached_tokens é subconjunto de input_tokens (só MEDIÇÃO — estimate_cost cobra input
+      # cheio, não sabemos o preço do token cacheado). Com tools, todos somados por rodada.
+      tokens_in: usage[:tokens_in],
+      tokens_out: usage[:tokens_out],
+      cached_tokens: usage[:cached_tokens],
       status: 'recorded'
     }
   rescue RubyLLM::UnauthorizedError => e
@@ -123,6 +152,27 @@ class Ai::ModelRouter
   rescue StandardError => e
     Rails.logger.error "[Ai::ModelRouter] #{e.class}: #{e.message}"
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
+  end
+
+  # Usage de UMA rodada (caminho SEM tools) — idêntico ao comportamento de sempre.
+  def self.single_usage(response)
+    { tokens_in: response.try(:input_tokens).to_i,
+      tokens_out: response.try(:output_tokens).to_i,
+      cached_tokens: response.try(:cached_tokens).to_i }
+  end
+
+  # Usage SOMADO de TODAS as rodadas do loop de tools. Cada Message assistente em chat.messages é UMA
+  # chamada de API cobrada separadamente (input = contexto inteiro daquela chamada), então SOMAR é o
+  # custo REAL do turno — a última resposta sozinha subestima. Fallback [response] preserva o
+  # comportamento antigo se a versão da gem não expuser chat.messages. Só tokens/cache — estimate_cost
+  # não muda (recebe os tokens somados e recalcula igual).
+  def self.sum_tool_loop_usage(chat, response)
+    msgs = chat.respond_to?(:messages) ? Array(chat.messages) : [response]
+    assistant = msgs.select { |m| m.respond_to?(:role) && m.role.to_s == 'assistant' }
+    assistant = [response] if assistant.empty?
+    { tokens_in: assistant.sum { |m| m.try(:input_tokens).to_i },
+      tokens_out: assistant.sum { |m| m.try(:output_tokens).to_i },
+      cached_tokens: assistant.sum { |m| m.try(:cached_tokens).to_i } }
   end
 
   # Providers that honor the OpenAI-style `response_format: { type: 'json_object' }`. Anthropic and

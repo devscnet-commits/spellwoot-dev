@@ -96,4 +96,34 @@ RSpec.describe Ai::ModelRouter do
       expect(out).not_to have_key('reply_text')
     end
   end
+
+  describe '.sum_tool_loop_usage (soma o usage de todas as rodadas do loop de tools)' do
+    it 'soma tokens_in/tokens_out/cached_tokens de TODAS as mensagens assistentes' do
+      m1 = instance_double('RubyLLM::Message', role: :assistant, input_tokens: 100, output_tokens: 10, cached_tokens: 20)
+      tool = instance_double('RubyLLM::Message', role: :tool, input_tokens: nil, output_tokens: nil, cached_tokens: nil)
+      m2 = instance_double('RubyLLM::Message', role: :assistant, input_tokens: 300, output_tokens: 40, cached_tokens: 50)
+      chat = instance_double('RubyLLM::Chat', messages: [m1, tool, m2])
+
+      out = described_class.sum_tool_loop_usage(chat, m2)
+
+      expect(out).to eq(tokens_in: 400, tokens_out: 50, cached_tokens: 70)
+    end
+
+    it 'fallback [response] quando a gem não expõe chat.messages (comportamento antigo)' do
+      response = instance_double('RubyLLM::Message', role: :assistant, input_tokens: 5, output_tokens: 2, cached_tokens: 1)
+      chat = double('chat_sem_messages')
+      allow(chat).to receive(:respond_to?).with(:messages).and_return(false)
+
+      out = described_class.sum_tool_loop_usage(chat, response)
+
+      expect(out).to eq(tokens_in: 5, tokens_out: 2, cached_tokens: 1)
+    end
+  end
+
+  describe '.single_usage (caminho SEM tools — idêntico a hoje)' do
+    it 'usa o usage da única resposta' do
+      response = instance_double('RubyLLM::Message', input_tokens: 7, output_tokens: 3, cached_tokens: 2)
+      expect(described_class.single_usage(response)).to eq(tokens_in: 7, tokens_out: 3, cached_tokens: 2)
+    end
+  end
 end
