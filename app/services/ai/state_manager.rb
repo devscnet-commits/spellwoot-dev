@@ -148,7 +148,7 @@ class Ai::StateManager
   # rubocop:disable Metrics/ParameterLists -- seam de orquestração: o quê (department, decision) +
   # contexto de automação do run (dispatcher, run) + input da vez (message_text agrupado, message p/
   # anexo/idempotência). Agrupar seria só cosmético e rippla por ~9 call sites de spec + o Gateway.
-  def track_step(department, decision, dispatcher: nil, run: nil, message_text: nil, message: nil)
+  def track_step(department, decision, dispatcher: nil, run: nil, message_text: nil, message: nil, judge_result: nil)
     # rubocop:enable Metrics/ParameterLists
     steps = Array(department.playbook&.steps)
     return if steps.empty? # playbook sem etapas = no-op
@@ -167,7 +167,9 @@ class Ai::StateManager
     # etapa sem slot; internamente é no-op se não há slot nem anexo. Devolve nil (capturou/nada),
     # :no_attempt (#269, slot de tipo conhecido sem tentativa) ou { refusal: 'not_an_answer'|'judge_failed' }
     # (worker de julgamento recusou o turno) — ver Ai::TurnCapture.
-    capture_signal = turn_capture.capture(step, decision, message_text, message, department)
+    # judge_result (camada 3): quando o Gateway já rodou o worker ANTES da decisão (p/ decidir a busca
+    # de conhecimento), passa o resultado aqui para a captura REUSAR — o worker roda UMA vez por turno.
+    capture_signal = turn_capture.capture(step, decision, message_text, message, department, judge_result: judge_result)
 
     # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259). Nem
     # :no_attempt nem a recusa do juiz contam o contador NORMAL (cliente engajado); a recusa do juiz tem
@@ -206,6 +208,44 @@ class Ai::StateManager
     emit('memory.updated', { chars: summary.length })
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#memory] #{e.class}: #{e.message}"
+  end
+
+  # (Camada 3) Reivindica o turno ANTES do track_step, reusando o MESMO turn_capture memoizado. Assim o
+  # worker que roda antes da decisão fica DENTRO da proteção de idempotência do BUG 1: se este run perder
+  # o claim (re-execução do job / 2º binding / concorrência), devolve false e o Gateway NÃO roda o worker.
+  # A chamada de claim dentro do track_step depois vira no-op-true (guard em memória @claimed) — sem 2º
+  # UPDATE atômico. Ver Ai::TurnCapture#claim.
+  def claim_turn(message)
+    turn_capture.claim(message)
+  end
+
+  # (Camada 3) Etapa corrente (hash do playbook) p/ o Gateway decidir a busca de conhecimento e rodar o
+  # worker. Mesmo índice que o track_step usará (nada avança entre aqui e lá). nil quando não há etapas.
+  def current_step(department)
+    steps = Array(department.playbook&.steps)
+    return nil if steps.empty?
+
+    steps[current_step_index(steps.size - 1)]
+  end
+
+  # (Camada 3) Roda o worker de julgamento UMA vez por turno — serve p/ (a) a intenção (asks_about/query,
+  # decide a busca) e (b) a captura (reusado no track_step via judge_result). nil quando o worker está
+  # DESLIGADO (default) ou sem texto -> Gateway mantém o RAG de hoje (comportamento inalterado).
+  def run_turn_judge(step, message_text)
+    return nil unless judge_enabled?
+    return nil if message_text.to_s.strip.empty?
+
+    # step pode ser nil (department sem playbook): o worker ainda classifica a INTENÇÃO (asks_about);
+    # a captura só usa o julgamento quando há slot. slot nil quando não há etapa.
+    slot = step ? Ai::StepSlot.required_attribute(step) : nil
+    Ai::Workers::CaptureJudge.judge(step: step, slot: slot, message_text: message_text,
+                                    profile: @agent&.operation_profile, conversation: @conversation)
+  end
+
+  # Worker de captura opt-in ligado? (when_silent/always). 'off' (default) => Gateway não roda o worker
+  # (RAG de hoje, todo turno) e NÃO reivindica o turno cedo (claim segue dentro do track_step).
+  def judge_enabled?
+    %w[when_silent always].include?(@agent&.operation_profile&.worker(:capture_judge)&.dig('mode').to_s)
   end
 
   private

@@ -637,4 +637,186 @@ RSpec.describe Ai::Gateway do
       expect(captured['cidade']).to eq('Maravilha')    # custom_attribute da conversa vence o fato ao vivo
     end
   end
+
+  # === Camadas 3/4: conhecimento SOB DEMANDA (worker decide se busca e de qual kind) ==========
+  context 'conhecimento sob demanda' do
+    def enable_worker!
+      profile.update!(worker_overrides: { 'capture_judge' => { 'mode' => 'when_silent' } })
+    end
+
+    def stub_judge(**result)
+      allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return(result)
+    end
+
+    def fresh_message(content)
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      [convo, create(:message, account: account, inbox: inbox, conversation: convo,
+                               message_type: 'incoming', content: content)]
+    end
+
+    it 'worker DESLIGADO (default): busca RAG todo turno, sem filtro de kind (regressão total)' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      convo = deliver('quero saber dos valores', binding: binding, mode: 'live')
+
+      expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: nil))
+      expect(Ai::Run.where(conversation_id: convo.id, run_type: 'capture_judge')).to be_empty # worker não rodou
+    end
+
+    it 'worker LIGADO + asks_about=produto: busca com kinds:[produto] e a query do worker' do
+      enable_worker!
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'produto', query: 'planos e preços')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      convo = deliver('quero saber dos valores', binding: binding, mode: 'live')
+
+      aggregate_failures do
+        expect(Ai::KnowledgeRetriever).to have_received(:retrieve)
+          .with(hash_including(kinds: ['produto'], query: 'planos e preços'))
+        ev = Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.retrieved').last
+        expect(ev.payload['source']).to eq('worker')
+        expect(ev.payload['kinds']).to eq(['produto'])
+      end
+    end
+
+    it 'worker LIGADO + sem pergunta (asks_about=nada) e etapa sem produtos: NÃO busca + knowledge.skipped' do
+      enable_worker!
+      create_department # sem playbook -> current_step nil -> não é etapa de produtos
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      convo = deliver('ok', binding: binding, mode: 'live')
+
+      aggregate_failures do
+        expect(Ai::KnowledgeRetriever).not_to have_received(:retrieve)
+        expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.skipped')).to exist
+        ev = Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.retrieved').last
+        expect(ev.payload['source']).to eq('none')
+      end
+    end
+
+    it 'etapa que apresenta planos: busca produtos MESMO sem pergunta (source step)' do
+      enable_worker!
+      dept = create_department
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Planos', 'instructions' => 'Apresente os planos disponíveis com o preço.' },
+                              { 'name' => 'Fim' }
+                            ])
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      convo = deliver('ok', binding: binding, mode: 'live')
+
+      expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: ['produto']))
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.retrieved').last.payload['source']).to eq('step')
+    end
+
+    it 'worker roda UMA vez por turno (o track_step REUSA o resultado, sem 2ª chamada)' do
+      enable_worker!
+      dept = create_department
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Nome', 'instructions' => 'Peça e grave o nome_cliente.' }, { 'name' => 'Fim' }
+                            ])
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'answered', value: 'João', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      deliver('meu nome é João', binding: binding, mode: 'live')
+
+      expect(Ai::Workers::CaptureJudge).to have_received(:judge).once
+    end
+
+    it 'shadow: o worker NÃO roda' do
+      enable_worker!
+      create_department
+      binding = create_binding(mode: 'shadow')
+      allow(Ai::Workers::CaptureJudge).to receive(:judge)
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      deliver('quero saber dos valores', binding: binding, mode: 'shadow')
+
+      expect(Ai::Workers::CaptureJudge).not_to have_received(:judge)
+    end
+
+    it 'dois bindings (agentes distintos) na MESMA mensagem: worker roda UMA vez (idempotência do claim)' do
+      enable_worker!
+      create_department # agente 1
+      b1 = create_binding(mode: 'live')
+      # 2º agente + department no MESMO inbox (o índice único proíbe 2 bindings do mesmo agente).
+      agent2 = Ai::Agent.create!(account: account, name: 'Bot2', status: 'active', ai_operation_profile_id: profile.id)
+      Ai::Department.create!(account: account, ai_agent_id: agent2.id, name: 'Atend2', status: 'active',
+                             behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
+      b2 = Ai::AgentInbox.create!(ai_agent_id: agent2.id, inbox_id: inbox.id, mode: 'live', active: true)
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      _convo, msg = fresh_message('quero saber dos valores')
+
+      described_class.new(message: msg, agent_inbox: b1, mode: 'live').run
+      described_class.new(message: msg, agent_inbox: b2, mode: 'live').run
+
+      expect(Ai::Workers::CaptureJudge).to have_received(:judge).once # o 2º perde o claim atômico
+    end
+
+    it 'reexecução do job (mesma mensagem, mesmo binding): worker não roda de novo' do
+      enable_worker!
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      _convo, msg = fresh_message('quero saber dos valores')
+
+      described_class.new(message: msg, agent_inbox: binding, mode: 'live').run
+      described_class.new(message: msg, agent_inbox: binding, mode: 'live').run
+
+      expect(Ai::Workers::CaptureJudge).to have_received(:judge).once
+    end
+
+    it 'worker FALHOU: busca como hoje (sem filtro) + evento knowledge.fallback' do
+      enable_worker!
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'failed', reason: 'invalid_json')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+
+      convo = deliver('quero saber dos valores', binding: binding, mode: 'live')
+
+      aggregate_failures do
+        expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: nil))
+        expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.fallback')).to exist
+        expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.retrieved').last.payload['source']).to eq('fallback')
+      end
+    end
+
+    it 'tool_followup recebe o MESMO conhecimento da 1ª chamada (não rebusca)' do
+      enable_worker!
+      department = create_department
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'contact.read',
+                       implementation_type: 'capability', capability_key: 'contact.read', status: 'active')
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'produto', query: 'planos')
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['CHUNK-PRODUTO'])
+      stub_decisions(
+        { 'decision' => 'invoke_tool', 'tool' => { 'name' => 'contact.read', 'input' => {} } },
+        { 'decision' => 'reply', 'reply_text' => 'pronto!' }
+      )
+
+      knowledges = []
+      allow(Ai::PromptCompiler).to receive(:compile) do |**kwargs|
+        knowledges << kwargs[:knowledge]
+        'prompt-stub'
+      end
+
+      deliver('quais os planos?', binding: binding, mode: 'live')
+
+      expect(knowledges.size).to eq(2)                       # 1ª chamada + followup
+      expect(knowledges.last).to eq(['CHUNK-PRODUTO'])       # followup reusa o mesmo bloco
+      expect(Ai::KnowledgeRetriever).to have_received(:retrieve).once # buscou uma vez só
+    end
+  end
 end
