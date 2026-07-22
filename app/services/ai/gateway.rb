@@ -671,8 +671,15 @@ class Ai::Gateway
     @sp_reads = []
 
     result = run_fase_a(run_record)
-    if result.nil?
-      emit(run_record, 'split.fallback', { reason: 'fase_a_failed' })
+    if result[:status] == 'error'
+      record_phase(run_record, result, 'decision')
+      # auth/credencial = falha PERSISTENTE: refazer a decisão só desperdiça uma 2ª chamada cara -> ABORTA.
+      if result[:error_type] == 'auth_error'
+        emit(run_record, 'split.fase_a_error', { error_type: 'auth_error' })
+        return finalize(run_record, 'error')
+      end
+      # transitório (provider_error/timeout/internal) -> fallback ao fluxo único (envelope + tool_followup).
+      emit(run_record, 'split.fallback', { reason: result[:error_type] || 'fase_a_failed' })
       return run_single_fallback(run_record, department, effective_content)
     end
 
@@ -727,7 +734,10 @@ class Ai::Gateway
     emit(run_record, 'context.assembled', { phase: 'A', prompt_chars: system_prompt.length, tools: @sp_action_tools.map(&:name) })
     native = native_read_tools(run_record)
     result = fase_a_mode == 'a1a2' ? run_fase_a1a2(run_record, system_prompt, native) : run_fase_a_single(system_prompt, native)
-    return nil if result.nil? || result[:status] == 'error'
+    # SINALIZA o tipo da falha ao run_split (auth_error aborta; transitório cai no fallback). Retorna o
+    # result do ModelRouter (que já traz :status/:error_type); exceção interna -> internal_error.
+    return fase_a_error('internal_error') if result.nil?
+    return result if result[:status] == 'error'
 
     record_phase(run_record, result, 'decision')
     emit(run_record, 'decision.made',
@@ -736,7 +746,13 @@ class Ai::Gateway
     result
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#run_fase_a] #{e.class}: #{e.message}"
-    nil
+    fase_a_error('internal_error')
+  end
+
+  # Result de FALHA da Fase A com o TIPO (para o run_split decidir abortar x fallback). Tokens 0 para não
+  # violar NOT NULL no record_phase.
+  def fase_a_error(type)
+    { status: 'error', error_type: type, tokens_in: 0, tokens_out: 0, cached_tokens: 0, cost: 0.0, latency_ms: 0, decision: {} }
   end
 
   # single: schema + tools na MESMA chamada (caminho OpenAI confirmado; o provider conduz o loop de tools).
