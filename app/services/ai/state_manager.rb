@@ -20,7 +20,10 @@ class Ai::StateManager
   # uma chave livre (ex.: "cidade_usuario" em vez de "cidade") gravava lixo solto no JSON e o campo real
   # ficava vazio (perda silenciosa de dado). Chave desconhecida NÃO persiste e emite attributes.unknown_key
   # (observabilidade, mesmo padrão do decision.unknown_kind). Merge, ignora vazios e no-ops.
-  def persist_attributes(attrs, department)
+  # source (default :trusted): origem da escrita. :trusted = gravadores já validados (SlotCollector,
+  # worker CaptureJudge incl. o 'malformed' deliberado, anexo) — grava tudo. :supervisor = campo
+  # `attributes` CRU do modelo, NÃO confiável — passa pelo gate anti-contaminação (ver gated_facts).
+  def persist_attributes(attrs, department, source: :trusted)
     return unless attrs.is_a?(Hash)
 
     cleaned = reject_blank_values(attrs)
@@ -29,7 +32,9 @@ class Ai::StateManager
     # 1. Memória de fatos AO VIVO (por conversa): grava TODO dado coletado não-vazio, SEM allowlist.
     #    É o que alimenta "Dados JÁ coletados" no prompt mesmo sem CustomAttributeDefinition —
     #    evita a IA reperguntar o que já foi dito (bug do loop, conversa 350/352).
-    persist_collected_facts(cleaned)
+    #    Fonte :supervisor passa pelo GATE antes daqui (chave esperada + valor válido p/ tipo conhecido)
+    #    para uma alucinação do modelo NÃO virar "fato" reinjetado no prompt (loop de auto-contaminação).
+    persist_collected_facts(gated_facts(cleaned, department, source))
 
     # 2. Espelha para custom_attributes SÓ as chaves com campo cadastrado (protege Bitrix/relatórios).
     #    Chave sem campo NÃO é mais descartada — já foi salva em ai_collected_facts acima; aqui só não
@@ -63,6 +68,8 @@ class Ai::StateManager
   # Sidekiq), o "último update! vence" vira race e pode perder ai_step_index ou ai_collected_facts —
   # aí migrar para update ATÔMICO de jsonb no Postgres (jsonb_set) em vez do read-modify-write do hash.
   def persist_collected_facts(cleaned)
+    return if cleaned.blank? # gate do supervisor pode zerar tudo — não grava ai_collected_facts vazio
+
     attrs = @conversation.additional_attributes || {}
     facts = (attrs['ai_collected_facts'] || {}).merge(cleaned)
     return if facts == attrs['ai_collected_facts']
@@ -319,6 +326,79 @@ class Ai::StateManager
     return 0 unless step.is_a?(Hash)
 
     (step['group_delay_seconds'] || step[:group_delay_seconds]).to_i
+  end
+
+  # GATE anti-contaminação da memória de fatos (fonte :supervisor). O campo `attributes` do modelo é
+  # NÃO confiável: sem filtro, uma alucinação (ex.: {"plano":"Premium"} que o cliente nunca disse)
+  # virava "fato" em ai_collected_facts e reentrava no prompt do turno seguinte como "Dados já
+  # coletados", envenenando toda a conversa. Mantém só chaves ESPERADAS (lead_variables ∪ atributos de
+  # conversa da conta ∪ slot da etapa atual) e, para tipos de formato conhecido, só valores que passam
+  # no Ai::SlotExtractor. Fonte :trusted devolve o hash inalterado (regressão zero). Só filtra o que
+  # entra em ai_collected_facts — o espelho em custom_attributes segue igual (filter_known_attributes).
+  def gated_facts(cleaned, department, source)
+    return cleaned unless source == :supervisor
+
+    slot, step = current_slot(department)
+    expected = supervisor_expected_keys(department, slot)
+    cleaned.each_with_object({}) do |(key, value), out|
+      reason = supervisor_fact_reason(key, value, expected, slot, step)
+      if reason
+        emit('facts.rejected', { attribute: key.to_s, reason: reason })
+      else
+        out[key] = value
+      end
+    end
+  end
+
+  # Conjunto de chaves que o supervisor PODE gravar como fato: atributos de conversa da conta (mesma
+  # resolução do filter_known_attributes) + lead_variables do department + o slot da etapa atual.
+  def supervisor_expected_keys(department, slot)
+    keys = fillable_attribute_keys(department) + lead_variable_keys(department)
+    keys << slot.to_s if slot.present?
+    keys
+  end
+
+  # Nomes das lead_variables do department (a CHAVE que o prompt pede no campo `attributes`). [] em erro.
+  def lead_variable_keys(department)
+    return [] unless department.respond_to?(:lead_variables)
+
+    department.lead_variables.to_a.map { |v| v.name.to_s }
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#lead_variable_keys] #{e.class}: #{e.message}"
+    []
+  end
+
+  # Slot + step da etapa ATUAL (índice = ai_step_index, mesma leitura de current_step_index/PromptCompiler).
+  # [nil, nil] quando o department não tem playbook com etapas.
+  def current_slot(department)
+    steps = Array(department&.playbook&.steps)
+    return [nil, nil] if steps.empty?
+
+    step = steps[(@conversation.additional_attributes || {})['ai_step_index'].to_i.clamp(0, steps.size - 1)]
+    [Ai::StepSlot.attribute(step), step]
+  end
+
+  # Motivo de rejeição de um fato do supervisor, ou nil (aceito). 'unexpected_key' = chave fora do
+  # conjunto esperado; 'invalid_value' = tipo de formato conhecido cujo valor não passa no extractor.
+  # Chave esperada de tipo livre (text/derivável nil) é aceita (não há formato para validar).
+  def supervisor_fact_reason(key, value, expected, slot, step)
+    return 'unexpected_key' unless expected.include?(key.to_s)
+
+    type = supervisor_fact_type(key, slot, step)
+    return nil unless Ai::SlotExtractor.known_format?(type)
+
+    options = key.to_s == slot.to_s ? Ai::StepSlot.options(step) : []
+    Ai::SlotExtractor.extract(attribute_type: type, text: value.to_s, options: options).blank? ? 'invalid_value' : nil
+  end
+
+  # Tipo do fato: o slot da etapa atual usa effective_type (collect.type ou derivado da chave); as demais
+  # chaves derivam só do NOME via type_for_key. nil/'text' => tipo livre (sem validação de formato).
+  def supervisor_fact_type(key, slot, step)
+    if step && key.to_s == slot.to_s
+      Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
+    else
+      Ai::SlotExtractor.type_for_key(key)
+    end
   end
 
   # Espelha o Ai::Gateway#emit: grava o ai_event na MESMA stream, com ai_run_id nil (attributes.updated

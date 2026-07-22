@@ -1356,4 +1356,96 @@ RSpec.describe Ai::StateManager do
       expect(attrs['ai_collected_facts']['tamanho_imovel']).to eq('70m2') # adicionado
     end
   end
+
+  describe '#persist_attributes — gate anti-contaminação (source: :supervisor)' do
+    def define_attr(key)
+      CustomAttributeDefinition.create!(account: account, attribute_key: key, attribute_display_name: key.capitalize,
+                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
+    end
+
+    def collected_facts
+      conversation.reload.additional_attributes.to_h['ai_collected_facts']
+    end
+
+    def rejected_events
+      Ai::Event.where(conversation_id: conversation.id, event_type: 'facts.rejected')
+    end
+
+    it 'descarta chave INESPERADA e emite facts.rejected(unexpected_key)' do
+      manager.persist_attributes({ 'plano' => 'Premium' }, department, source: :supervisor)
+
+      expect(collected_facts).to be_nil
+      event = rejected_events.last
+      expect(event.payload['attribute']).to eq('plano')
+      expect(event.payload['reason']).to eq('unexpected_key')
+    end
+
+    it 'descarta chave esperada com VALOR INVÁLIDO para tipo conhecido (telefone = "dia 10")' do
+      define_attr('telefone') # esperada (CustomAttributeDefinition); type_for_key -> phone
+
+      manager.persist_attributes({ 'telefone' => 'dia 10' }, department, source: :supervisor)
+
+      expect(collected_facts).to be_nil
+      event = rejected_events.last
+      expect(event.payload['attribute']).to eq('telefone')
+      expect(event.payload['reason']).to eq('invalid_value')
+    end
+
+    it 'GRAVA chave esperada com valor válido (proteção conv 350/352 preservada)' do
+      define_attr('cidade')
+
+      manager.persist_attributes({ 'cidade' => 'Maravilha' }, department, source: :supervisor)
+
+      expect(collected_facts['cidade']).to eq('Maravilha')
+      expect(rejected_events).to be_empty
+    end
+
+    it 'GRAVA chave esperada de tipo conhecido quando o valor passa no extractor (telefone válido)' do
+      define_attr('telefone')
+
+      manager.persist_attributes({ 'telefone' => '(49) 99856-4780' }, department, source: :supervisor)
+
+      expect(collected_facts['telefone']).to eq('(49) 99856-4780') # gate só valida, não transforma o fato
+      expect(rejected_events).to be_empty
+    end
+
+    it 'aceita chave vinda de lead_variable do department (sem CustomAttributeDefinition)' do
+      Ai::LeadVariable.create!(account: account, department: department, name: 'origem', var_type: 'texto', values: [])
+
+      manager.persist_attributes({ 'origem' => 'Instagram' }, department, source: :supervisor)
+
+      expect(collected_facts['origem']).to eq('Instagram')
+      expect(rejected_events).to be_empty
+    end
+
+    it 'aceita a chave do SLOT da etapa atual mesmo sem CustomAttributeDefinition/lead_variable' do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Slot', status: 'active',
+                                    behavior: {})
+      dept.create_playbook!(active: true, steps: [{ 'name' => 'Doc', 'collect' => { 'attribute' => 'documento_extra' } }])
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+
+      manager.persist_attributes({ 'documento_extra' => 'RG 123' }, dept, source: :supervisor)
+
+      expect(collected_facts['documento_extra']).to eq('RG 123')
+      expect(rejected_events).to be_empty
+    end
+
+    it 'na mistura, só a chave esperada entra em ai_collected_facts; a inesperada é rejeitada' do
+      define_attr('cidade')
+
+      manager.persist_attributes({ 'cidade' => 'Maravilha', 'plano' => 'Premium' }, department, source: :supervisor)
+
+      expect(collected_facts).to eq({ 'cidade' => 'Maravilha' })
+      expect(rejected_events.map { |e| e.payload['attribute'] }).to eq(['plano'])
+    end
+
+    it 'source default (:trusted) grava TUDO sem gate — caminho do juiz, inclusive malformed' do
+      # valores que FALHARIAM o gate do supervisor entram normalmente pela fonte confiável (regressão zero)
+      manager.persist_attributes({ 'telefone' => 'dia 10' }, department) # malformed do juiz
+      manager.persist_attributes({ 'plano' => 'Premium' }, department)   # chave "inesperada"
+
+      expect(collected_facts).to include('telefone' => 'dia 10', 'plano' => 'Premium')
+      expect(rejected_events).to be_empty
+    end
+  end
 end
