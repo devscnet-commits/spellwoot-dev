@@ -19,12 +19,18 @@ class Ai::TurnCapture
     @claimed = []
   end
 
-  # true = ESTE run ganhou a mensagem (deve capturar/avançar). false = já processada (no-op). Sem
-  # message_id (follow-up/teste) => true (sem idempotência). Fail-open em erro (melhor capturar que travar).
+  # true = ESTE run ganhou a mensagem (deve capturar/avançar). false = OUTRA instância/processo já venceu
+  # o mesmo id (no-op). Sem message_id (follow-up/teste) => true (sem idempotência). Fail-open em erro
+  # (melhor capturar que travar).
   def claim(message)
     id = message.respond_to?(:id) ? message.id : nil
     return true if id.blank?
-    return false if @claimed.include?(id)
+    # @claimed contém os ids que ESTA instância já venceu neste run; claim repetido do mesmo turno é
+    # no-op-win (design da PR #281: o early-claim do worker no Gateway e o claim do track_step
+    # compartilham o MESMO turn_capture memoizado). Retornar false aqui abortava o track_step ANTES de
+    # persistir o índice (bug do ai_step_index nil). A idempotência entre instâncias/processos (2º
+    # binding / re-run / concorrência) continua garantida pelo atomic_claim (IS DISTINCT FROM).
+    return true if @claimed.include?(id)
 
     won = atomic_claim(id)
     @claimed << id if won
