@@ -145,7 +145,7 @@ class Ai::Gateway
       # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
       # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
       # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.
-      state_manager.persist_attributes((result[:decision] || {})['attributes'], department)
+      state_manager.persist_attributes((result[:decision] || {})['attributes'], department, source: :supervisor)
     end
 
     # Camada B (rede de segurança do avanço-por-slot): a IA ficou presa numa etapa de COLETA por N
