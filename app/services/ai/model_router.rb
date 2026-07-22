@@ -51,13 +51,21 @@ class Ai::ModelRouter
                     DEFAULT_TEMPERATURE
                   end
 
+    # Structured Output (strict) na decisão do supervisor quando ligado + provider suportado; senão nil
+    # (cai no response_format json_object de hoje). Só o caminho de DECISÃO passa schema — CaptureJudge/
+    # visão continuam com json_object/plain.
+    schema = decision_schema_for(provider, json)
+
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
                      user_message: user_message, account_id: account_id, temperature: temperature, json: json,
-                     force_global_key: force_global_key)
+                     force_global_key: force_global_key, schema: schema)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
-    decision = raw[:status] == 'error' ? { 'error' => raw[:error] } : parse_decision(raw[:text])
+    # Ponto ÚNICO de parse + normalização: com schema o ruby_llm já devolve Hash; sem schema, parse
+    # tolerante da String (rede de segurança #unparsed intacta). normalize_decision remonta o formato
+    # interno (attributes Hash, tool{name,input}) que Gateway/StateManager/TurnCapture esperam.
+    decision = raw[:status] == 'error' ? { 'error' => raw[:error] } : normalize_decision(coerce_decision(raw[:text]))
 
     {
       provider: provider,
@@ -79,7 +87,7 @@ class Ai::ModelRouter
   # image: anexo para modelos de VISÃO (aceita ActiveStorage::Attached/Blob, path ou URL — o ruby_llm
   # resolve o tipo). nil = chamada de texto normal (comportamento inalterado: `with: nil` == sem anexo).
   def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil,
-                      timeout: nil, json: false, image: nil, force_global_key: false)
+                      timeout: nil, json: false, image: nil, force_global_key: false, schema: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     context = provider_context(provider, account_id: account_id, timeout: timeout, force_global_key: force_global_key)
@@ -94,7 +102,7 @@ class Ai::ModelRouter
     # Builder do ruby_llm (o construtor Chat.new não aceita temperature). to_f: a coluna é BigDecimal.
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
-    chat = apply_json_format(chat, provider) if json
+    chat = configure_output(chat, provider, json, schema)
     # Só passa `with:` no caminho de visão — o de texto fica idêntico ao anterior (sem mudança).
     response = image ? chat.ask(user_message, with: image) : chat.ask(user_message)
     {
@@ -132,6 +140,108 @@ class Ai::ModelRouter
   rescue StandardError => e
     Rails.logger.warn "[Ai::ModelRouter] response_format ignorado: #{e.class}: #{e.message}"
     chat
+  end
+
+  # InstallationConfig/ENV que DESLIGA o structured output (fallback pro json_object). Padrão do projeto.
+  DECISION_SCHEMA_CONFIG = 'AI_DECISION_SCHEMA'.freeze
+
+  # Aplica a saída: Structured Output (strict) quando há schema + provider suporta with_schema; senão o
+  # json_object de hoje. with_schema falhando degrada pro json_object (nunca quebra a chamada).
+  def self.configure_output(chat, provider, json, schema)
+    return chat unless json
+
+    if schema && JSON_FORMAT_PROVIDERS.include?(provider.to_s) && chat.respond_to?(:with_schema)
+      begin
+        return chat.with_schema(schema)
+      rescue StandardError => e
+        Rails.logger.warn "[Ai::ModelRouter] with_schema falhou, cai no json_object: #{e.class}: #{e.message}"
+      end
+    end
+    apply_json_format(chat, provider)
+  end
+
+  # Schema da decisão a usar (ou nil = json_object de hoje): só no caminho JSON, provider suportado e
+  # com a feature LIGADA (default). Flag OFF via ENV['AI_DECISION_SCHEMA']='off' ou InstallationConfig.
+  def self.decision_schema_for(provider, json)
+    return nil unless json
+    return nil unless JSON_FORMAT_PROVIDERS.include?(provider.to_s)
+    return nil unless defined?(Ai::DecisionSchema)
+    return nil unless decision_schema_enabled?
+
+    Ai::DecisionSchema
+  end
+
+  # Default LIGADO; só desliga com valor 'off' (ENV vence, senão InstallationConfig). Fail-open (ligado).
+  def self.decision_schema_enabled?
+    raw = ENV['AI_DECISION_SCHEMA'].presence ||
+          (InstallationConfig.find_by(name: DECISION_SCHEMA_CONFIG)&.value if defined?(InstallationConfig))
+    raw.to_s.strip.downcase != 'off'
+  rescue StandardError
+    true
+  end
+
+  # Content do provider -> Hash de decisão. Com schema o ruby_llm já entregou Hash (JSON.parse interno);
+  # sem schema é String -> parse tolerante (mantém a rede de segurança #unparsed). Único ponto de parse.
+  def self.coerce_decision(text)
+    return text if text.is_a?(Hash)
+
+    parse_decision(text)
+  end
+
+  # Normaliza o envelope do Structured Output (campos achatados p/ o strict) de volta ao formato INTERNO.
+  # Retrocompat: se vierem os campos ANTIGOS (attributes Hash, tool{name,input}), passam direto (flag OFF
+  # com output legado). reply_text passa SEMPRE direto — o núcleo NÃO depende dele (transitório do 3b).
+  def self.normalize_decision(data)
+    return data unless data.is_a?(Hash)
+
+    out = data.dup
+    if data.key?('attributes_list')
+      out['attributes'] = attributes_from_list(data['attributes_list'])
+      out.delete('attributes_list')
+    end
+    if data.key?('tool_name') || data.key?('tool_input_json')
+      tool = build_tool(data['tool_name'], data['tool_input_json'])
+      tool.nil? ? out.delete('tool') : (out['tool'] = tool)
+      out.delete('tool_name')
+      out.delete('tool_input_json')
+    end
+    out
+  end
+
+  # attributes_list [{key,value}, ...] -> Hash { key => value }. Ignora itens sem chave. [] => {}.
+  def self.attributes_from_list(list)
+    return {} unless list.is_a?(Array)
+
+    list.each_with_object({}) do |item, acc|
+      next unless item.is_a?(Hash)
+
+      key = item['key'].to_s.strip
+      acc[key] = item['value'] unless key.empty?
+    end
+  end
+
+  # tool_name + tool_input_json -> tool{ 'name', 'input' } (o formato que o Gateway espera), ou nil
+  # (sem tool). tool_name vazio -> nil. tool_input_json inválido -> nil (tool IGNORADA) + log, sem crash.
+  def self.build_tool(name, input_json)
+    name = name.to_s.strip
+    return nil if name.empty?
+
+    input = parse_tool_input(input_json)
+    return nil if input.nil? # JSON inválido -> ignora a ferramenta
+
+    { 'name' => name, 'input' => input }
+  end
+
+  # STRING JSON do input -> Hash. Vazio -> {}. Não-objeto -> {}. Inválido -> nil (caller ignora a tool).
+  def self.parse_tool_input(input_json)
+    str = input_json.to_s.strip
+    return {} if str.empty?
+
+    parsed = JSON.parse(str)
+    parsed.is_a?(Hash) ? parsed : {}
+  rescue JSON::ParserError => e
+    Rails.logger.warn "[Ai::ModelRouter] tool_input_json inválido, ferramenta ignorada: #{e.message}"
+    nil
   end
 
   # Builds an ISOLATED per-call RubyLLM context carrying the provider/account key. It NEVER mutates the
