@@ -66,6 +66,7 @@ class Ai::ModelRouter
       decision: decision,
       tokens_in: raw[:tokens_in],
       tokens_out: raw[:tokens_out],
+      cached_tokens: raw[:cached_tokens],
       cost: estimate_cost(model, raw[:tokens_in], raw[:tokens_out]),
       latency_ms: latency_ms,
       status: raw[:status],
@@ -100,6 +101,10 @@ class Ai::ModelRouter
       text: response.respond_to?(:content) ? response.content : response.to_s,
       tokens_in: response.try(:input_tokens).to_i,
       tokens_out: response.try(:output_tokens).to_i,
+      # Prompt caching: tokens de ENTRADA servidos do cache do provider (subconjunto de input_tokens).
+      # RubyLLM 1.9 expõe cached_tokens; try mantém compat se um provider não reportar (=> 0). Só MEDIÇÃO
+      # por enquanto — estimate_cost ainda cobra input cheio (não sabemos o preço do token cacheado).
+      cached_tokens: response.try(:cached_tokens).to_i,
       status: 'recorded'
     }
   rescue RubyLLM::UnauthorizedError => e
