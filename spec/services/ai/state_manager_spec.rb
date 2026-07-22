@@ -49,6 +49,35 @@ RSpec.describe Ai::StateManager do
     conversation.update!(additional_attributes: (conversation.additional_attributes || {}).merge('ai_step_index' => idx))
   end
 
+  # Regressão do bug do double-claim intra-run (PR #281/#282): com o worker ligado, o Gateway faz um
+  # EARLY-CLAIM (claim_turn) antes do track_step; o claim interno do track_step reencontrava o id em
+  # @claimed e retornava FALSE, abortando ANTES de persist_step_state -> ai_step_index ficava nil e a
+  # etapa travava na 0. Fix: claim já-vencido vira no-op-TRUE (Ai::TurnCapture#claim).
+  describe '#track_step — after claim_turn (regressão double-claim / PR #281)' do
+    let(:message) do
+      create(:message, conversation: conversation, account: account, inbox: inbox, message_type: :incoming, content: 'oi')
+    end
+
+    it 'claim_turn vencedor SEGUIDO de track_step PERSISTE ai_step_index (não aborta)' do
+      expect(manager.claim_turn(message)).to be(true) # early-claim do worker vence
+
+      manager.track_step(department, { 'step_completed' => true }, message: message)
+
+      expect(step_index).to eq(1) # avançou; NÃO ficou nil
+    end
+
+    it 'o claim reivindicado uma vez não impede o avanço quando a etapa conclui' do
+      manager.claim_turn(message)
+      manager.track_step(department, { 'step_completed' => true }, message: message)
+      expect(conversation.reload.additional_attributes['ai_step_index']).not_to be_nil
+    end
+
+    it 'worker OFF (sem early-claim): track_step persiste normalmente (comportamento intacto)' do
+      manager.track_step(department, { 'step_completed' => true }, message: message)
+      expect(step_index).to eq(1)
+    end
+  end
+
   describe '#track_step — progressão determinística por índice' do
     it 'avança o índice em +1 quando step_completed é true' do
       expect { track(step_completed: true) }.to change { step_index }.from(nil).to(1)

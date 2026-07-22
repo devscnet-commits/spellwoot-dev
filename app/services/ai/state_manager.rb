@@ -213,8 +213,8 @@ class Ai::StateManager
   # (Camada 3) Reivindica o turno ANTES do track_step, reusando o MESMO turn_capture memoizado. Assim o
   # worker que roda antes da decisão fica DENTRO da proteção de idempotência do BUG 1: se este run perder
   # o claim (re-execução do job / 2º binding / concorrência), devolve false e o Gateway NÃO roda o worker.
-  # A chamada de claim dentro do track_step depois vira no-op-true (guard em memória @claimed) — sem 2º
-  # UPDATE atômico. Ver Ai::TurnCapture#claim.
+  # Depois, o claim dentro do track_step reencontra o id em @claimed e devolve TRUE (already-won, no-op —
+  # sem 2º UPDATE atômico), então o track_step NÃO aborta e PERSISTE o índice. Ver Ai::TurnCapture#claim.
   def claim_turn(message)
     turn_capture.claim(message)
   end
