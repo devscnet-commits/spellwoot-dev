@@ -132,14 +132,16 @@ class Ai::ModelRouter
     chat = configure_output(chat, provider, json, schema)
     # Só passa `with:` no caminho de visão — o de texto fica idêntico ao anterior (sem mudança).
     response = image ? chat.ask(user_message, with: image) : chat.ask(user_message)
+    # COM tools: soma o usage de TODAS as rodadas do loop (cada chamada de API é cobrada). SEM tools:
+    # comportamento IDÊNTICO ao de hoje (usage da única resposta). Ver sum_tool_loop_usage.
+    usage = tools.present? ? sum_tool_loop_usage(chat, response) : single_usage(response)
     {
       text: response.respond_to?(:content) ? response.content : response.to_s,
-      tokens_in: response.try(:input_tokens).to_i,
-      tokens_out: response.try(:output_tokens).to_i,
-      # Prompt caching: tokens de ENTRADA servidos do cache do provider (subconjunto de input_tokens).
-      # RubyLLM 1.9 expõe cached_tokens; try mantém compat se um provider não reportar (=> 0). Só MEDIÇÃO
-      # por enquanto — estimate_cost ainda cobra input cheio (não sabemos o preço do token cacheado).
-      cached_tokens: response.try(:cached_tokens).to_i,
+      # Prompt caching: cached_tokens é subconjunto de input_tokens (só MEDIÇÃO — estimate_cost cobra input
+      # cheio, não sabemos o preço do token cacheado). Com tools, todos somados por rodada.
+      tokens_in: usage[:tokens_in],
+      tokens_out: usage[:tokens_out],
+      cached_tokens: usage[:cached_tokens],
       status: 'recorded'
     }
   rescue RubyLLM::UnauthorizedError => e
@@ -150,6 +152,27 @@ class Ai::ModelRouter
   rescue StandardError => e
     Rails.logger.error "[Ai::ModelRouter] #{e.class}: #{e.message}"
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
+  end
+
+  # Usage de UMA rodada (caminho SEM tools) — idêntico ao comportamento de sempre.
+  def self.single_usage(response)
+    { tokens_in: response.try(:input_tokens).to_i,
+      tokens_out: response.try(:output_tokens).to_i,
+      cached_tokens: response.try(:cached_tokens).to_i }
+  end
+
+  # Usage SOMADO de TODAS as rodadas do loop de tools. Cada Message assistente em chat.messages é UMA
+  # chamada de API cobrada separadamente (input = contexto inteiro daquela chamada), então SOMAR é o
+  # custo REAL do turno — a última resposta sozinha subestima. Fallback [response] preserva o
+  # comportamento antigo se a versão da gem não expuser chat.messages. Só tokens/cache — estimate_cost
+  # não muda (recebe os tokens somados e recalcula igual).
+  def self.sum_tool_loop_usage(chat, response)
+    msgs = chat.respond_to?(:messages) ? Array(chat.messages) : [response]
+    assistant = msgs.select { |m| m.respond_to?(:role) && m.role.to_s == 'assistant' }
+    assistant = [response] if assistant.empty?
+    { tokens_in: assistant.sum { |m| m.try(:input_tokens).to_i },
+      tokens_out: assistant.sum { |m| m.try(:output_tokens).to_i },
+      cached_tokens: assistant.sum { |m| m.try(:cached_tokens).to_i } }
   end
 
   # Providers that honor the OpenAI-style `response_format: { type: 'json_object' }`. Anthropic and
