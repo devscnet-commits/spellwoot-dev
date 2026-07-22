@@ -126,9 +126,6 @@ class Ai::ModelRouter
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
   end
 
-  # Providers that honor the OpenAI-style `response_format: { type: 'json_object' }`. Anthropic and
-  # Gemini use different mechanisms and OpenRouter only passes it through for some models, so we skip
-  # them and rely on the tolerant parse_decision instead — never risk a "param desconhecido" error.
   # Usage de UMA resposta (comportamento padrão). Extraído para reuso e para o par abaixo.
   def self.single_usage(response)
     { tokens_in: response.try(:input_tokens).to_i,
@@ -150,6 +147,9 @@ class Ai::ModelRouter
       cached_tokens: assistant.sum { |m| m.try(:cached_tokens).to_i } }
   end
 
+  # Providers that honor the OpenAI-style `response_format: { type: 'json_object' }`. Anthropic and
+  # Gemini use different mechanisms and OpenRouter only passes it through for some models, so we skip
+  # them and rely on the tolerant parse_decision instead — never risk a "param desconhecido" error.
   JSON_FORMAT_PROVIDERS = %w[openai].freeze
 
   # Best-effort: asks OpenAI to emit a strict JSON object. Guarded by provider AND by respond_to?
