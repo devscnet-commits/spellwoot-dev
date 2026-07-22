@@ -221,10 +221,11 @@ class Ai::PromptCompiler
   def self.response_contract
     <<~TXT.strip
       Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
-      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool":{"name":"NomeDaFerramenta","input":{}},"handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"confidence":0.0,"attributes":{}}
+      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool_name":"","tool_input_json":"{}","handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"confidence":0.0,"attributes_list":[]}
       O campo "decision" aceita SOMENTE um destes 5 valores: reply, invoke_tool, handoff, close, noop. NÃO invente outros (ex.: "text", "message", "resposta"). Para responder ao cliente use SEMPRE "reply".
       A etapa atual é DEFINIDA PELO SISTEMA (ver "ETAPA ATUAL" acima) — você NÃO escolhe nem muda de etapa. Em "current_step", apenas repita o nome dessa etapa atual como CONFIRMAÇÃO/registro (é só log; não decide o avanço). Em "step_completed", responda true SOMENTE no turno em que CONCLUIR essa etapa (já obteve tudo que ela exigia); nesse momento o SISTEMA avança sozinho para a próxima. Nos demais turnos, responda false. Nunca volte para uma etapa anterior por conta própria.
-      Em "attributes", coloque os dados coletados do cliente (chave: valor); deixe {} se não houver nada novo.
+      Para chamar uma ferramenta, preencha "tool_name" com o nome EXATO e "tool_input_json" com o input como STRING JSON (um objeto); sem ferramenta, "tool_name" vazio e "tool_input_json" igual a "{}".
+      Em "attributes_list", liste os dados coletados do cliente como itens {"key":"chave","value":"valor"}; use [] se não houver nada novo.
     TXT
   end
 end
