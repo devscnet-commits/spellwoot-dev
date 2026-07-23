@@ -96,6 +96,24 @@ class Ai::Gateway
     # worker fica DENTRO da idempotência do BUG 1 (claim perdido em re-exec/2º binding => worker NÃO roda),
     # e o caminho worker-OFF (default) segue IDÊNTICO a hoje (claim continua dentro do track_step).
     active_step = @acts_live ? state_manager.current_step(department) : nil
+
+    # Camada 0 — triagem de turno trivial (opt-in, default OFF). ANTES de qualquer chamada ao modelo:
+    # um turno trivial ("ok"/"obrigada"/emoji solto em reação à nossa última msg) NÃO acorda o supervisor.
+    # Gate determinístico (regex + estado local), custo ZERO. Silêncio é o comportamento v1 DECIDIDO
+    # (responder "de nada" convidaria outro "obrigada" — loop de cortesia). Vale live E shadow (em shadow
+    # também economiza a chamada; sem efeito colateral). OFF => byte-idêntico ao fluxo atual.
+    # active_step é nil em shadow por design, então resolvemos a etapa REAL aqui p/ a condição c valer nos
+    # dois modos (na dúvida, NÃO pula). Ver Ai::TrivialTurnGate.
+    if trivial_gate_on?
+      gate = Ai::TrivialTurnGate.skip?(text: effective_content, conversation: @conversation,
+                                       step: active_step || state_manager.current_step(department))
+      if gate[:skip]
+        run_record.update!(run_type: 'trivial_skip', tokens_in: 0, tokens_out: 0, cost: 0)
+        emit(run_record, 'turn.trivial_skipped', { reason: gate[:reason] })
+        return finalize(run_record, 'recorded')
+      end
+    end
+
     judge_result =
       if @acts_live && effective_content.present? && state_manager.judge_enabled? && state_manager.claim_turn(@message)
         state_manager.run_turn_judge(active_step, effective_content)
@@ -292,6 +310,13 @@ class Ai::Gateway
   end
 
   private
+
+  # Camada 0 ligada? Opt-in por perfil no MESMO padrão aninhado dos demais workers
+  # (worker_overrides['trivial_gate']['mode'] == 'on'). Ausente/qualquer outro valor => OFF (default),
+  # e o fluxo fica byte-idêntico ao atual.
+  def trivial_gate_on?
+    @agent.operation_profile&.worker('trivial_gate')&.dig('mode').to_s == 'on'
+  end
 
   # (Camadas 3/4) Decide a busca de conhecimento a partir da INTENÇÃO do worker. Devolve
   # { chunks:, kinds:, source: } — source audita a origem:
