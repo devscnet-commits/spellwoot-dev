@@ -570,16 +570,39 @@ RSpec.describe Ai::StateManager do
       expect(step_index).to eq(1)
     end
 
-    it 'IDEMPOTÊNCIA: a MESMA mensagem não preenche um 2º slot nem re-avança (mesmo manager/run)' do
+    # CONTRATO ATUAL — mudado DE PROPÓSITO no commit 89006af85 ("fix(ai): claim already-won evita abortar
+    # track_step (ai_step_index nil)"): a reivindicação REPETIDA da MESMA instância é um no-op-WIN, não um
+    # no-op-block. Um 2º track_step no MESMO manager PROSSEGUE (não aborta no claim). Isso é deliberado: o
+    # Gateway faz um early claim_turn e DEPOIS o claim interno do track_step no MESMO turn_capture
+    # memoizado — se o reclaim devolvesse false, o track_step abortaria ANTES de persistir o índice e o
+    # ai_step_index ficava nil (a etapa travava na 0). NÃO é bug. Ver Ai::TurnCapture#claim.
+    #
+    # ⚠️ Isto NÃO é a idempotência de produção: o Gateway chama track_step UMA vez por run (um claim_turn +
+    # um track_step). A idempotência que importa — re-run do Sidekiq / 2º binding = OUTRA instância — é
+    # atômica no Postgres e está travada no exemplo 'IDEMPOTÊNCIA ATÔMICA' logo abaixo.
+    #
+    # DÍVIDA CONHECIDA (opção B, NÃO descartada): com o no-op-WIN, o TurnCapture deixou de ser
+    # auto-idempotente contra um track_step repetido na MESMA instância — a invariante "≤1 captura por
+    # mensagem" passou a depender da disciplina do Gateway (um track_step por run), não do TurnCapture.
+    # Fechar exige marcar "capturado" separado de "reivindicado". Correlato: a chave
+    # ai_last_captured_message_id é setada no CLAIM, não na CAPTURA — o nome não descreve o comportamento;
+    # indo ao (B), as duas coisas se resolvem juntas. Quando isso acontecer, ESTE exemplo muda.
+    it 'CONTRATO: reclaim intra-instância é no-op-WIN — 2º track_step no mesmo manager PROSSEGUE (89006af85)' do
       msg = incoming('Jaqueline')
-      2.times do
-        manager.track_step(cascade_department, { 'step_completed' => false },
-                           dispatcher: dispatcher, run: run, message_text: 'Jaqueline', message: msg)
-      end
 
-      expect(facts['escolha_caminho']).to eq('Jaqueline') # 1º run preencheu o slot 0
-      expect(facts).not_to have_key('cidade')             # 2º run (mesma msg) NÃO preencheu o slot 1
-      expect(step_index).to eq(1)                          # avançou UMA vez só
+      # 1º track_step: vence o claim, captura o slot 0 (escolha_caminho) e avança.
+      manager.track_step(cascade_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: 'Jaqueline', message: msg)
+      expect(facts['escolha_caminho']).to eq('Jaqueline')
+      expect(step_index).to eq(1)
+
+      # 2º track_step, MESMA instância e MESMA msg: o reclaim é no-op-WIN (não aborta), então PROSSEGUE e
+      # captura o slot 1 (cidade), avançando de novo. No contrato ANTIGO (pré-89006af85) o reclaim devolvia
+      # false e este 2º track_step seria no-op — cidade ausente, índice preso em 1.
+      manager.track_step(cascade_department, { 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: 'Jaqueline', message: msg)
+      expect(facts['cidade']).to eq('Jaqueline')
+      expect(step_index).to eq(2)
     end
 
     it 'IDEMPOTÊNCIA ATÔMICA: marca ai_last_captured_message_id e um 2º run/binding (outro manager) é no-op' do
