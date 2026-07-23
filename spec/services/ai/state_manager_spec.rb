@@ -1500,4 +1500,99 @@ RSpec.describe Ai::StateManager do
       expect(rejected_events).to be_empty
     end
   end
+
+  # Correção da ordem (fix/supervisor-gate-preadvance-slot): o Gateway chama track_step (que AVANÇA o
+  # ai_step_index) ANTES do persist do supervisor. O gate do #284 lia current_slot DEPOIS do avanço, então
+  # validava o valor recém-coletado contra o slot da PRÓXIMA etapa -> unexpected_key -> descarte. Agora o
+  # Gateway passa expected_step (a etapa PRÉ-AVANÇO) e o gate valida contra ela.
+  describe '#persist_attributes — ordem: expected_step (etapa pré-avanço)' do
+    def collected_facts
+      conversation.reload.additional_attributes.to_h['ai_collected_facts']
+    end
+
+    def rejected_events
+      Ai::Event.where(conversation_id: conversation.id, event_type: 'facts.rejected')
+    end
+
+    def define_attr(key)
+      CustomAttributeDefinition.create!(account: account, attribute_key: key, attribute_display_name: key.capitalize,
+                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
+    end
+
+    # Funil de 3 etapas de coleta; nenhuma chave é CustomAttributeDefinition da conta (legítimas por
+    # construção via collect['attribute'] — é o caso da conv 387).
+    def funnel_department
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Funil', status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'text', 'required' => true } },
+                              { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'type' => 'text', 'required' => true } },
+                              { 'name' => 'Plano', 'collect' => { 'attribute' => 'plano_escolhido', 'type' => 'text', 'required' => true } }
+                            ])
+      dept
+    end
+
+    # INVARIANTE central (mais forte que testar o gate isolado): se a etapa AVANÇOU porque o slot foi
+    # preenchido, o valor TEM que estar em ai_collected_facts. Era isto que a regressão do #284 quebrava —
+    # o funil andava (ai_step_index=14 na conv 387) com a memória quase vazia: estado e memória divergindo
+    # em silêncio. Reproduz a ORDEM do Gateway: captura o slot pré-avanço, track_step avança, o persist do
+    # supervisor valida contra o pré-avanço.
+    it 'INVARIANTE: etapa avançou por slot preenchido => o valor está em ai_collected_facts' do
+      dept = funnel_department
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+      pre_step = dept.playbook.steps[0] # etapa ATIVA no início do turno (e-mail)
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: 'joao@exemplo.com')
+      decision = { 'attributes' => { 'email_cliente' => 'joao@exemplo.com' }, 'step_completed' => false }
+
+      manager.track_step(dept, decision, dispatcher: dispatcher, run: run, message_text: 'joao@exemplo.com', message: msg)
+      expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1) # o funil AVANÇOU
+      manager.persist_attributes(decision['attributes'], dept, source: :supervisor, expected_step: pre_step)
+
+      expect(collected_facts).to include('email_cliente' => 'joao@exemplo.com') # ...e a memória NÃO ficou vazia
+    end
+
+    it 'aceita o valor do slot PRÉ-AVANÇO mesmo com o índice já apontando para a próxima etapa' do
+      dept = funnel_department
+      conversation.update!(additional_attributes: { 'ai_step_index' => 1 }) # índice JÁ na etapa CPF
+      email_step = dept.playbook.steps[0]                                    # mas o turno coletou e-mail
+
+      manager.persist_attributes({ 'email_cliente' => 'a@b.com' }, dept, source: :supervisor, expected_step: email_step)
+
+      expect(collected_facts).to include('email_cliente' => 'a@b.com')
+      expect(rejected_events).to be_empty
+    end
+
+    it 'chave inventada FORA do playbook continua rejeitada (unexpected_key)' do
+      dept = funnel_department
+      email_step = dept.playbook.steps[0]
+
+      manager.persist_attributes({ 'xyz_inventado' => 'lixo' }, dept, source: :supervisor, expected_step: email_step)
+
+      expect(collected_facts).to be_nil
+      expect(rejected_events.last.payload).to include('attribute' => 'xyz_inventado', 'reason' => 'unexpected_key')
+    end
+
+    it '(ii) fechada: valor alucinado em slot de TEXTO NÃO-ativo é rejeitado (unexpected_key)' do
+      dept = funnel_department
+      email_step = dept.playbook.steps[0] # slot ATIVO = email_cliente
+
+      # o modelo devolve plano_escolhido (outro slot de texto do playbook, mas NÃO o ativo) -> alucinação
+      manager.persist_attributes({ 'plano_escolhido' => 'Premium' }, dept, source: :supervisor, expected_step: email_step)
+
+      expect(collected_facts).to be_nil
+      expect(rejected_events.last.payload).to include('attribute' => 'plano_escolhido', 'reason' => 'unexpected_key')
+    end
+
+    it 'preserva #284: tipo conhecido com valor inválido é rejeitado mesmo com expected_step (invalid_value)' do
+      dept = funnel_department
+      define_attr('telefone') # esperada; type_for_key -> phone
+      email_step = dept.playbook.steps[0]
+
+      manager.persist_attributes({ 'telefone' => 'dia 10' }, dept, source: :supervisor, expected_step: email_step)
+
+      expect(collected_facts).to be_nil
+      expect(rejected_events.last.payload).to include('attribute' => 'telefone', 'reason' => 'invalid_value')
+    end
+  end
 end

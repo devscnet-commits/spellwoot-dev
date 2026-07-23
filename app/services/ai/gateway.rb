@@ -176,7 +176,11 @@ class Ai::Gateway
       # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
       # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
       # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.
-      state_manager.persist_attributes((result[:decision] || {})['attributes'], department, source: :supervisor)
+      # active_step foi resolvido ANTES do track_step acima (pré-avanço). O gate anti-contaminação valida
+      # `attributes` contra o slot que estava ATIVO neste turno — não o da próxima etapa que track_step
+      # acabou de ativar. Sem isso, o valor recém-coletado cai como unexpected_key (regressão do #284).
+      state_manager.persist_attributes((result[:decision] || {})['attributes'], department,
+                                       source: :supervisor, expected_step: active_step)
     end
 
     # Camada B (rede de segurança do avanço-por-slot): a IA ficou presa numa etapa de COLETA por N

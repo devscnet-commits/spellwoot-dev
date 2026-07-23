@@ -23,7 +23,11 @@ class Ai::StateManager
   # source (default :trusted): origem da escrita. :trusted = gravadores já validados (SlotCollector,
   # worker CaptureJudge incl. o 'malformed' deliberado, anexo) — grava tudo. :supervisor = campo
   # `attributes` CRU do modelo, NÃO confiável — passa pelo gate anti-contaminação (ver gated_facts).
-  def persist_attributes(attrs, department, source: :trusted)
+  # expected_step: a etapa ativa NO INÍCIO do turno (pré-avanço). O Gateway chama track_step (que avança
+  # o ai_step_index) ANTES deste persist; sem o pré-avanço, o gate leria o slot da PRÓXIMA etapa e
+  # descartaria o valor recém-coletado como unexpected_key (funil avança, memória vazia — a regressão do
+  # #284). Só a fonte :supervisor usa; nil => fallback lê o índice (compat p/ chamadas fora do Gateway).
+  def persist_attributes(attrs, department, source: :trusted, expected_step: nil)
     return unless attrs.is_a?(Hash)
 
     cleaned = reject_blank_values(attrs)
@@ -34,7 +38,7 @@ class Ai::StateManager
     #    evita a IA reperguntar o que já foi dito (bug do loop, conversa 350/352).
     #    Fonte :supervisor passa pelo GATE antes daqui (chave esperada + valor válido p/ tipo conhecido)
     #    para uma alucinação do modelo NÃO virar "fato" reinjetado no prompt (loop de auto-contaminação).
-    persist_collected_facts(gated_facts(cleaned, department, source))
+    persist_collected_facts(gated_facts(cleaned, department, source, expected_step))
 
     # 2. Espelha para custom_attributes SÓ as chaves com campo cadastrado (protege Bitrix/relatórios).
     #    Chave sem campo NÃO é mais descartada — já foi salva em ai_collected_facts acima; aqui só não
@@ -375,10 +379,13 @@ class Ai::StateManager
   # conversa da conta ∪ slot da etapa atual) e, para tipos de formato conhecido, só valores que passam
   # no Ai::SlotExtractor. Fonte :trusted devolve o hash inalterado (regressão zero). Só filtra o que
   # entra em ai_collected_facts — o espelho em custom_attributes segue igual (filter_known_attributes).
-  def gated_facts(cleaned, department, source)
+  def gated_facts(cleaned, department, source, expected_step = nil)
     return cleaned unless source == :supervisor
 
-    slot, step = current_slot(department)
+    # A etapa avaliada é a PRÉ-AVANÇO (expected_step, passada pelo Gateway antes do track_step avançar o
+    # índice). Sem ela, current_slot leria o índice JÁ avançado e o slot recém-coletado cairia como
+    # unexpected_key. Fallback (expected_step nil) mantém a leitura por índice p/ chamadas sem o Gateway.
+    slot, step = expected_step.is_a?(Hash) ? [Ai::StepSlot.attribute(expected_step), expected_step] : current_slot(department)
     expected = supervisor_expected_keys(department, slot)
     cleaned.each_with_object({}) do |(key, value), out|
       reason = supervisor_fact_reason(key, value, expected, slot, step)
