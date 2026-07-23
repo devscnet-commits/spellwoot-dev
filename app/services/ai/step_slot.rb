@@ -5,6 +5,24 @@
 module Ai::StepSlot
   module_function
 
+  # Gap 1 (recusa de slot): valor SENTINELA de ausência gravado quando o cliente declina um dado de slot
+  # OPCIONAL. É um TOKEN (não uma string legível de propósito — ver Ai::SlotAbsence): fica só em
+  # ai_collected_facts (memória de trabalho da IA), NUNCA no espelho custom_attributes, e é mapeado para
+  # ABSENT_LABEL em TODO ponto de saída (prompt, resumo de handoff). Um token falha de forma VISÍVEL se
+  # vazar; uma string legível ("não informado") viraria dado indistinguível de valor real em relatório/
+  # Bitrix/Meta (corrupção silenciosa).
+  ABSENT = '__sem_valor__'
+  ABSENT_LABEL = 'não informado'
+
+  def absent?(value)
+    value.to_s.strip == ABSENT
+  end
+
+  # Valor para EXIBIÇÃO: mapeia o token de ausência para o rótulo legível; qualquer outro valor passa.
+  def display(value)
+    absent?(value) ? ABSENT_LABEL : value
+  end
+
   # PART 1 do conserto: infere o slot da INSTRUÇÃO que o usuário já escreveu, para etapas SEM collect
   # declarado (criadas antes do #259). NÃO exige criar atributo nem marcar collect na tela — deriva o
   # slot em runtime. Reconhece três formas (a cláusula de avanço tem PREFERÊNCIA, depois "atributo X",

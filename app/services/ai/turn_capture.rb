@@ -51,6 +51,13 @@ class Ai::TurnCapture
     # texto/legenda) ou nil (sem anexo).
     attachment = capture_attachment(message, slot, department)
     return if attachment == :filled
+
+    # Gap 1: recusa/ausência de slot. DEPOIS do anexo (anexo que preenche é dado real e vence — o cliente
+    # mandou o documento E escreveu "não tenho" na mesma msg). Usa StepSlot.attribute (slot de QUALQUER
+    # required-ness, opcional inclusive) para o StepResolver rotear opcional-satisfaz / obrigatório-recusa.
+    slot_any = Ai::StepSlot.attribute(step)
+    return { declined: true } if slot_any && declined_turn?(step, slot_any, decision, message_text)
+
     return unless slot
 
     attrs = decision['attributes'].is_a?(Hash) ? reject_blank(decision['attributes']) : {}
@@ -93,6 +100,14 @@ class Ai::TurnCapture
   end
 
   private
+
+  # Gap 1: o turno é uma recusa do dado deste slot? Passa o valor do modelo (attributes[slot]), o texto do
+  # turno e o tipo/opções efetivos do slot p/ o guard (d) do Ai::SlotAbsence (valor extraível vence).
+  def declined_turn?(step, slot, decision, message_text)
+    value = decision['attributes'].is_a?(Hash) ? decision['attributes'][slot] : nil
+    type = Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
+    Ai::SlotAbsence.declined?(value: value, text: message_text, type: type, options: Ai::StepSlot.options(step))
+  end
 
   # Modo de acionamento do worker (worker_overrides['capture_judge']['mode']): 'off' (PADRÃO — nasce
   # desligado), 'when_silent' (roda quando o modelo não devolveu attributes) ou 'always' (também na

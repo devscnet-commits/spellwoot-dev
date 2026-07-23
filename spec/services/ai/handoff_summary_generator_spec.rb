@@ -38,6 +38,19 @@ RSpec.describe Ai::HandoffSummaryGenerator do
     expect(balance.reload.total).to eq(5) # crédito NÃO foi consumido
   end
 
+  it 'mapeia o token de ausência para "não informado" — NUNCA vaza o token cru no resumo (humano lê)' do
+    conversation.update!(additional_attributes: {
+                           'ai_collected_facts' => { 'email_cliente' => Ai::StepSlot::ABSENT, 'cidade' => 'Chapecó' }
+                         })
+
+    described_class.new(conversation: conversation, reason: 'loop').generate
+
+    expect(Ai::ModelRouter).to have_received(:decide) do |kwargs|
+      expect(kwargs[:system_prompt]).to include('email_cliente: não informado')
+      expect(kwargs[:system_prompt]).not_to include(Ai::StepSlot::ABSENT)
+    end
+  end
+
   it 'inclui o motivo do handoff e o transcript no prompt' do
     described_class.new(conversation: conversation, reason: 'credit_exhausted').generate
 
