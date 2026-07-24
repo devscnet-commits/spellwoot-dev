@@ -248,8 +248,9 @@ class Ai::StateManager
     return nil if message_text.to_s.strip.empty?
 
     # step pode ser nil (department sem playbook): o worker ainda classifica a INTENÇÃO (asks_about);
-    # a captura só usa o julgamento quando há slot. slot nil quando não há etapa.
-    slot = step ? Ai::StepSlot.required_attribute(step) : nil
+    # a captura só usa o julgamento quando há slot. Gap 2: attribute (não required_attribute) para o juiz
+    # enxergar o slot também quando OPCIONAL. slot nil quando não há etapa/slot.
+    slot = step ? Ai::StepSlot.attribute(step) : nil
     Ai::Workers::CaptureJudge.judge(step: step, slot: slot, message_text: message_text,
                                     profile: @agent&.operation_profile, conversation: @conversation)
   end

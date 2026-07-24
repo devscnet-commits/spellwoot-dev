@@ -20,12 +20,12 @@ class Ai::StepResolver
     # Gap 1: recusa/ausência do dado (detectada no Ai::TurnCapture). Roteada ANTES do slot_filled? porque
     # o valor de recusa que o modelo devolve (ex.: "não informado") faria slot_filled? passar e cair na
     # confirmação-única. Ortogonal ao tipo do slot; o que muda é a resposta (ver resolve_declined).
-    declined = capture_signal.is_a?(Hash) && capture_signal[:declined]
-    slot_any = Ai::StepSlot.attribute(step)
-    return resolve_declined(step, slot_any, stuck_limit) if declined && slot_any
+    # Gap 2: attribute (declarado ∪ INFERIDO) governa "há slot?" E a captura; opcional×obrigatório difere
+    # SÓ no declínio (resolve_declined). Nada mais usa required_attribute (des-conflação).
+    slot = Ai::StepSlot.attribute(step)
+    return { completed: step_completed?(decision), stuck: 0, refusals: 0 } unless slot
 
-    slot = Ai::StepSlot.required_attribute(step)
-    return { completed: step_completed?(step, decision), stuck: 0, refusals: 0 } unless slot
+    return resolve_declined(step, slot, stuck_limit) if capture_signal.is_a?(Hash) && capture_signal[:declined]
     return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, decision)
 
     resolve_empty_slot(step, slot, stuck_limit, capture_signal)
@@ -43,14 +43,10 @@ class Ai::StepResolver
     resolve_judge_refusal(step, slot, stuck_limit, 'declined')
   end
 
-  # Conclusão determinística: 'always' e etapas sem slot seguem o step_completed do modelo; etapa com
-  # slot obrigatório conclui quando o slot está preenchido (valor do turno OU já gravado).
-  def step_completed?(step, decision)
-    return truthy?(decision['step_completed']) if Ai::StepSlot.criterion(step) == 'always'
-
-    slot = Ai::StepSlot.required_attribute(step)
-    return slot_filled?(slot, decision) if slot
-
+  # Só é alcançado para etapa SEM slot (attribute nil): segue o sinal do modelo. Com slot, a etapa é
+  # governada por #resolve_completion (preenchido/declinado/vazio) e nunca passa por aqui — por isso o
+  # 'always' e a leitura de slot saíram (eram inalcançáveis com slot; sem slot davam no mesmo resultado).
+  def step_completed?(decision)
     truthy?(decision['step_completed'])
   end
 

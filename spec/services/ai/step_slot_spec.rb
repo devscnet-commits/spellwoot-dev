@@ -1,12 +1,12 @@
 require 'rails_helper'
 
 RSpec.describe Ai::StepSlot do
-  describe '.infer / .required_attribute — inferência da instrução (conserto Parte 1)' do
+  describe '.infer / .attribute — inferência da instrução (conserto Parte 1)' do
     it 'infere o slot de "grave o e-mail no atributo email" (sem collect declarado)' do
       step = { 'name' => 'Email', 'instructions' => 'Peça e grave o e-mail do cliente no atributo email.' }
 
       expect(described_class.infer(step)).to eq('email')
-      expect(described_class.required_attribute(step)).to eq('email')
+      expect(described_class.attribute(step)).to eq('email')
     end
 
     it 'infere chave snake_case e normaliza a caixa' do
@@ -18,21 +18,42 @@ RSpec.describe Ai::StepSlot do
       step = { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente o cliente com simpatia.' }
 
       expect(described_class.infer(step)).to be_nil
-      expect(described_class.required_attribute(step)).to be_nil
+      expect(described_class.attribute(step)).to be_nil
     end
 
     it 'NÃO infere quando já há collect declarado (usa o declarado)' do
       step = { 'collect' => { 'attribute' => 'cidade' }, 'instructions' => 'grave no atributo outra_coisa' }
 
       expect(described_class.infer(step)).to be_nil
-      expect(described_class.required_attribute(step)).to eq('cidade')
+      expect(described_class.attribute(step)).to eq('cidade')
+    end
+  end
+
+  # Gap 2: optional? governa SÓ a regra de conclusão; a captura é sempre por #attribute. required só é
+  # obrigatório por default; opcional vem de collect['required']:false (compat) OU do step['slot_required'].
+  describe '.optional? (Gap 2 — precedência: collect explícito > slot_required da etapa > obrigatório)' do
+    it 'slot INFERIDO + slot_required:false -> opcional (attribute lê a chave; sem collect)' do
+      step = { 'instructions' => 'peça e grave o email_cliente conforme informado', 'slot_required' => false }
+
+      expect(described_class.attribute(step)).to eq('email_cliente')
+      expect(described_class.optional?(step)).to be(true)
     end
 
-    it 'collect declarado com required:false -> required_attribute nil (opcional), mas attribute lê a chave' do
-      step = { 'collect' => { 'attribute' => 'cidade', 'required' => false } }
+    it 'slot INFERIDO sem slot_required -> OBRIGATÓRIO (default, sem flag)' do
+      step = { 'instructions' => 'peça e grave o email_cliente conforme informado' }
 
-      expect(described_class.required_attribute(step)).to be_nil
-      expect(described_class.attribute(step)).to eq('cidade')
+      expect(described_class.attribute(step)).to eq('email_cliente')
+      expect(described_class.optional?(step)).to be(false)
+    end
+
+    it 'collect{required:false} -> opcional (compat)' do
+      expect(described_class.optional?({ 'collect' => { 'attribute' => 'cidade', 'required' => false } })).to be(true)
+    end
+
+    it 'collect{required:true} vence o slot_required:false (precedência do collect explícito)' do
+      step = { 'collect' => { 'attribute' => 'cidade', 'required' => true }, 'slot_required' => false }
+
+      expect(described_class.optional?(step)).to be(false)
     end
   end
 

@@ -137,23 +137,25 @@ module Ai::StepSlot
     declared_attribute(step) || infer(step)
   end
 
-  # Chave do slot OBRIGATÓRIO (required só DESLIGA se vier explicitamente falso; ausente => obrigatório).
-  # O slot INFERIDO é sempre coleta obrigatória. nil quando a etapa não coleta ou o slot declarado é
-  # opcional — o avanço determinístico só governa slot obrigatório.
-  def required_attribute(step)
-    declared = declared_attribute(step)
-    return infer(step) if declared.nil?
-
-    optional?(step) ? nil : declared
-  end
-
-  # collect declarado com required explicitamente falso.
+  # Opcional? (o slot EXISTE — ver #attribute — mas a AUSÊNCIA é aceitável). Governa SÓ a regra de
+  # conclusão (avança quando preenchido OU opcional-e-declinado); a CAPTURA é sempre por #attribute.
+  # Precedência (Gap 2):
+  #   1. collect['required'] EXPLÍCITO (não-nil) vence — compat com playbooks que declaram collect;
+  #   2. senão step['slot_required'] — campo NO NÍVEL DA ETAPA, lido MESMO em slot INFERIDO (desacoplado
+  #      do collect/override manual; no playbook real 0 etapas usam collect);
+  #   3. ausente => OBRIGATÓRIO (default, sem flag).
+  # Substitui o antigo #required_attribute, que conflava "há slot?" (agora #attribute) com "é obrigatório?".
   def optional?(step)
-    collect = collect_of(step)
-    return false unless collect
+    return false unless step.is_a?(Hash)
 
-    required = collect.key?('required') ? collect['required'] : collect[:required]
-    !required.nil? && !truthy(required)
+    collect = collect_of(step)
+    req = collect && (collect.key?('required') ? collect['required'] : collect[:required])
+    return !truthy(req) unless req.nil?
+
+    sr = step.key?('slot_required') ? step['slot_required'] : step[:slot_required]
+    return false if sr.nil?
+
+    !truthy(sr)
   end
 
   def type(step)
