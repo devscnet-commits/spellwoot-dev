@@ -22,6 +22,11 @@ class Ai::StepResolver
     # confirmação-única. Ortogonal ao tipo do slot; o que muda é a resposta (ver resolve_declined).
     # Gap 2: attribute (declarado ∪ INFERIDO) governa "há slot?" E a captura; opcional×obrigatório difere
     # SÓ no declínio (resolve_declined). Nada mais usa required_attribute (des-conflação).
+    # INVARIANTE (Gap 3) — ao SAIR de um slot obrigatório, ou ai_slot_refusals foi ZERADO (só no avanço
+    # genuíno: resolve_filled_slot completed:true), ou houve stuck_handoff (outcome[:signal]). NÃO existe
+    # caminho que avance um slot obrigatório com o contador cheio — por isso NÃO há reset por mudança de
+    # etapa (que reabriria a alternância ENTRE etapas). Se um caminho de saída novo violar isso, o teste
+    # da invariante (state_manager_spec) quebra em vez de o carry-over vazar para produção.
     slot = Ai::StepSlot.attribute(step)
     return { completed: step_completed?(decision), stuck: 0, refusals: 0 } unless slot
 
@@ -100,12 +105,16 @@ class Ai::StepResolver
 
   # Slot já preenchido: se o valor parece estranho e ainda não confirmamos, pede confirmação UMA vez
   # (hold); senão AVANÇA. O hold NÃO conta travamento — malformado É coleta (grava e avança pela
-  # confirmação-única, decisão #2); o contador de trava é só para etapa que NÃO coleta (decisão #3). Em
-  # ambos o slot foi capturado -> ZERA as recusas.
+  # confirmação-única, decisão #2); o contador de trava é só para etapa que NÃO coleta (decisão #3).
+  # Gap 3: SÓ o AVANÇO (captura genuína, valor validado, completed:true) zera ai_slot_refusals. A
+  # confirmação-única (completed:false, valor malformado) SEGURA o orçamento (refusals: current_refusals)
+  # — não zera nem incrementa. Antes zerava, e a alternância recusa/malformado nunca atingia o teto
+  # (buraco do Gap 1). Um malformado é erro de digitação, não recusa: não gasta orçamento, mas também não
+  # perdoa as recusas já acumuladas.
   def resolve_filled_slot(slot, decision, index)
     return { completed: true, stuck: 0, refusals: 0 } unless slot_collector.needs_confirmation?(slot, decision, index)
 
-    { completed: false, stuck: current_stuck, confirm: true, refusals: 0 }
+    { completed: false, stuck: current_stuck, confirm: true, refusals: current_refusals }
   end
 
   def current_stuck
