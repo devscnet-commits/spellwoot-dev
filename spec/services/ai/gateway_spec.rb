@@ -604,12 +604,36 @@ RSpec.describe Ai::Gateway do
         expect(convo.messages.outgoing.last.content).to include('encaminhar')
         # transferiu de verdade (ação nativa de transfer) e NÃO forçou avanço com dado faltando
         expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.transfer')).to exist
-        # motivo específico no Resumo da transferência (nome da etapa + nº de turnos)
-        expect(Ai::HandoffSummaryJob).to have_received(:perform_later)
-          .with(convo.id, a_string_matching(/coletar "Nome completo" por 3 mensagens/))
+        # Gap 4 v2: cliente sumido = teto ABSOLUTO (max_turns). O Resumo diz "não conseguiu avançar a etapa
+        # ... após N mensagens", NÃO "tentou coletar sem sucesso" (não presume tentativa falha).
+        summary_reason = nil
+        expect(Ai::HandoffSummaryJob).to have_received(:perform_later) { |_id, r| summary_reason = r }
+        expect(summary_reason).to match(/não conseguiu avançar a etapa "Nome completo" após 3 mensagens/)
+        expect(summary_reason).not_to include('sem sucesso') # não chama travamento de "tentativa falha"
         # telemetria
         ev = Ai::Event.where(conversation_id: convo.id, event_type: 'step.stuck_handoff').last
-        expect(ev.payload).to include('attribute' => 'nome', 'step_name' => 'Nome completo', 'turns' => 3)
+        expect(ev.payload).to include('attribute' => 'nome', 'step_name' => 'Nome completo', 'turns' => 3, 'reason' => 'max_turns')
+      end
+    end
+
+    # Gap 4 v2: recusa GENUÍNA (declínio) numa etapa obrigatória -> rede de recusa. O Resumo diz que o
+    # cliente NÃO FORNECEU o dado (recusou N vezes), NÃO "não avançou" — distingue recusa de travamento.
+    it 'recusa consecutiva (declínio) -> handoff com reason declined e texto de "não forneceu o dado"' do
+      slot_department(2) # required: true; teto de recusa = stuck_limit = 2
+      binding = create_binding(mode: 'live')
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      allow(Ai::HandoffSummaryJob).to receive(:perform_later)
+      stub_reply
+
+      run_turn(convo, binding, 'não tenho') # recusa 1
+      run_turn(convo, binding, 'não tenho') # recusa 2 -> teto -> declined
+
+      aggregate_failures do
+        ev = Ai::Event.where(conversation_id: convo.id, event_type: 'step.stuck_handoff').last
+        expect(ev.payload).to include('reason' => 'declined', 'step_name' => 'Nome completo')
+        summary_reason = nil
+        expect(Ai::HandoffSummaryJob).to have_received(:perform_later) { |_id, r| summary_reason = r }
+        expect(summary_reason).to match(/não forneceu o dado essencial "Nome completo".*recusou 2 vezes/)
       end
     end
 
