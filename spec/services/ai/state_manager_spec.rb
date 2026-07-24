@@ -1744,17 +1744,16 @@ RSpec.describe Ai::StateManager do
       expect(idx).to eq(1)
     end
 
-    # (b) Gap 3 NÃO está neste PR. FIXA o comportamento ATUAL (alternância zera ai_slot_refusals) para a
-    # mudança do Gap 3 aparecer no diff. Exposição estreita: obrigatório-declinado NÃO escreve no slot,
-    # então o reset só vem via slot_filled? de OUTRO caminho — aqui, o malformado da confirmação-única.
-    it 'GAP 3 (comportamento atual FIXADO): fill malformado ENTRE recusas zera ai_slot_refusals' do
+    # Gap 3 (buraco FECHADO — evidência no diff): o fill malformado da confirmação-única deixou de zerar
+    # ai_slot_refusals. Antes zerava (a alternância recusa/malformado nunca atingia o teto); agora SEGURA.
+    it 'Gap 3: fill malformado (confirmação-única) ENTRE recusas NÃO zera ai_slot_refusals (SEGURA)' do
       dept = gap1_dept(required: true)
       run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo')
       expect(refusals).to eq(1)
 
-      # valor não-ausência e não-válido -> slot_filled?(decision) passa -> confirmação-única -> reseta refusals
+      # valor não-ausência e não-válido -> slot_filled?(decision) passa -> confirmação-única
       run_turn(dept, attrs: { 'email_cliente' => 'joao arroba x' }, text: 'joao arroba x')
-      expect(refusals).to eq(0) # <- o Gap 3 vai mudar isto
+      expect(refusals).to eq(1) # Gap 3: malformado SEGURA o orçamento (antes zerava para 0)
     end
   end
 
@@ -1878,6 +1877,119 @@ RSpec.describe Ai::StateManager do
 
       expect(collected_facts['email_cliente']).to eq(Ai::StepSlot::ABSENT) # declínio -> fill_absent
       expect(idx).to eq(1)
+    end
+  end
+
+  # Gap 3 (reset do orçamento de recusas). Slot INFERIDO obrigatório (o caso que roda em produção — nada
+  # seta slot_required:false ainda). Só a captura genuína que AVANÇA zera ai_slot_refusals; malformado
+  # (confirmação-única) SEGURA; a alternância recusa/malformado passa a atingir o teto.
+  describe '#track_step — Gap 3: reset do orçamento de recusas (slot inferido obrigatório)' do
+    def idx
+      conversation.reload.additional_attributes.to_h['ai_step_index']
+    end
+
+    def refusals
+      conversation.reload.additional_attributes.to_h['ai_slot_refusals']
+    end
+
+    def collected_facts
+      conversation.reload.additional_attributes.to_h['ai_collected_facts']
+    end
+
+    def inferred_dept(optional: false, turns: 3)
+      step = { 'name' => 'Email', 'instructions' => 'Peça e grave o email_cliente conforme informado.' }
+      step['slot_required'] = false if optional
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "R#{SecureRandom.hex(3)}",
+                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => turns })
+      dept.create_playbook!(active: true, steps: [step, { 'name' => 'Fim' }])
+      dept
+    end
+
+    def set_refusals(n)
+      a = conversation.additional_attributes || {}
+      conversation.update!(additional_attributes: a.merge('ai_slot_refusals' => n))
+    end
+
+    # Devolve o SINAL do track_step (stuck_handoff quando atinge o teto).
+    def run_turn(dept, attrs:, text:)
+      pre = dept.playbook.steps[idx.to_i]
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: text)
+      decision = { 'attributes' => attrs, 'step_completed' => false }
+      sig = manager.track_step(dept, decision, dispatcher: dispatcher, run: run, message_text: text, message: msg)
+      manager.persist_attributes(decision['attributes'], dept, source: :supervisor, expected_step: pre)
+      sig
+    end
+
+    def refuse(dept)
+      run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo')
+    end
+
+    def malformed(dept)
+      run_turn(dept, attrs: { 'email_cliente' => 'joao arroba x' }, text: 'joao arroba x')
+    end
+
+    before { conversation.update!(additional_attributes: { 'ai_step_index' => 0 }) }
+
+    # Acréscimo 1: malformado SEGURA — não zera E não incrementa; sequência só de malformados não transfere.
+    it 'malformado (confirmação-única) SEGURA o orçamento: não zera nem incrementa, e não transfere' do
+      dept = inferred_dept
+      set_refusals(2)
+
+      sig = malformed(dept)
+
+      expect(refusals).to eq(2)     # segurou: nem 0 (não zerou) nem 3 (não incrementou)
+      expect(sig).to be_nil         # confirmação-única não sinaliza handoff
+      expect(idx).to eq(0)          # e não avançou (hold)
+    end
+
+    # A alternância recusa/malformado passa a ATINGIR o teto (antes o malformado zerava e nunca chegava lá).
+    it 'alternância recusa/malformado ATINGE o teto -> handoff com reason declined' do
+      dept = inferred_dept(turns: 3) # teto de recusas = 6
+      refuse(dept); refuse(dept); refuse(dept) # 1,2,3
+      malformed(dept)                          # SEGURA em 3 (hold), não avança
+      expect(refusals).to eq(3)
+      refuse(dept); refuse(dept)               # 4,5
+      sig = refuse(dept)                       # 6 -> teto
+
+      expect(sig).to be_a(Hash)
+      expect(sig[:stuck_handoff]).to include(reason: 'declined')
+    end
+
+    # Reset legítimo (Q2 caminho 1): captura genuína que avança zera o orçamento.
+    it 'valor VÁLIDO avança e ZERA o orçamento (o reset legítimo)' do
+      dept = inferred_dept
+      refuse(dept); refuse(dept)
+      expect(refusals).to eq(2)
+
+      run_turn(dept, attrs: { 'email_cliente' => 'joao@x.com' }, text: 'joao@x.com')
+
+      expect(collected_facts['email_cliente']).to eq('joao@x.com')
+      expect(idx).to eq(1)      # avançou
+      expect(refusals).to eq(0) # e zerou
+    end
+
+    # Acréscimo 2 — INVARIANTE: ao SAIR (avançar) de um slot obrigatório com o contador CHEIO, ele foi
+    # zerado. Se um caminho de saída novo avançar sem zerar, este teste quebra (em vez de carry-over em prod).
+    it 'INVARIANTE: avançar um slot obrigatório com o contador cheio => ai_slot_refusals foi zerado' do
+      dept = inferred_dept
+      set_refusals(3)
+
+      run_turn(dept, attrs: { 'email_cliente' => 'joao@x.com' }, text: 'joao@x.com')
+
+      expect(idx).to eq(1)      # saiu do slot (avançou)
+      expect(refusals).to eq(0) # ...e o contador foi zerado nesse avanço
+    end
+
+    # Acréscimo 3 (ponta solta do Gap 2 FECHADA): opcional não-declinado NÃO zera o orçamento.
+    it 'opcional inferido, turno não-declinado (:no_attempt) NÃO zera o orçamento' do
+      dept = inferred_dept(optional: true)
+      set_refusals(2)
+
+      run_turn(dept, attrs: {}, text: 'e qual o horário de instalação?') # digressão -> :no_attempt
+
+      expect(refusals).to eq(2) # segurou (não zerou sem avanço)
+      expect(idx).to eq(0)
     end
   end
 end
