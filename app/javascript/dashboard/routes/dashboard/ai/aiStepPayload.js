@@ -1,0 +1,97 @@
+// (De)serialização de uma ETAPA do playbook entre o backend (jsonb) e o form.
+//
+// A classe de bug que isto conserta: parseSteps/buildPayload RECONSTRUÍAM a etapa com 4 chaves fixas
+// (name/instructions/automations/group_delay_seconds), então qualquer campo que o backend lê — collect,
+// slot_required (Gap 2), e futuros — morria no primeiro save (e no load). Aqui usamos SPREAD-e-sobrescreve:
+// preserva tudo, normaliza só o que a tela edita. Campo novo do backend sobrevive sem tocar em nenhuma lista.
+
+let stepUid = 0;
+export const nextStepUid = () => {
+  stepUid += 1;
+  return stepUid;
+};
+
+// backend -> form: preserva todas as chaves; normaliza os campos editáveis; injeta o uid (client-only).
+export const parseStep = s => {
+  if (typeof s === 'string') {
+    return {
+      uid: nextStepUid(),
+      name: s,
+      instructions: '',
+      automations: [],
+      group_delay_seconds: '',
+    };
+  }
+  return {
+    ...s,
+    uid: nextStepUid(),
+    name: s.name || '',
+    instructions: s.instructions || s.objective || '',
+    automations: Array.isArray(s.automations) ? s.automations : [],
+    group_delay_seconds: s.group_delay_seconds ?? '',
+  };
+};
+
+// form -> backend: preserva todas as chaves; TIRA o uid (só cliente); normaliza os editáveis.
+export const stepToApi = s => {
+  const { uid, ...rest } = s;
+  return {
+    ...rest,
+    name: (s.name || '').trim(),
+    instructions: (s.instructions || '').trim(),
+    automations: Array.isArray(s.automations) ? s.automations : [],
+    group_delay_seconds:
+      s.group_delay_seconds === '' || s.group_delay_seconds == null
+        ? null
+        : Number(s.group_delay_seconds),
+  };
+};
+
+// Payload que o AiStepForm devolve no save. Regras (Gaps 1–3 no backend):
+//  - slot_required SEMPRE no nível da etapa, NUNCA collect.required (o Gap 2 desacoplou; não reacoplar);
+//  - chave manual -> collect = { attribute, type[, options] } SEM required;
+//  - SEM slot -> collect null e slot_required NULL, para LIMPAR um slot_required legado: se depois a
+//    inferência voltar a achar um slot, um `false` velho não pode ressuscitar (opcional silencioso é pior
+//    que obrigatório indevido — o funil avança sem o dado). null => backend trata como obrigatório (default);
+//  - NÃO escreve complete_when (morto no backend pós-Gap 2; legado sobrevive pelo spread, intocado).
+export const buildStepPayload = ({
+  name,
+  instructions,
+  groupDelaySeconds,
+  automations = [],
+  collectAttribute = '',
+  collectType = 'text',
+  collectOptions = '',
+  slotRequired = true,
+  hasSlot = false,
+}) => {
+  const attribute = (collectAttribute || '').trim();
+  const payload = {
+    name: (name || '').trim(),
+    instructions: (instructions || '').trim(),
+    group_delay_seconds: groupDelaySeconds,
+    automations: automations.map(a => ({ type: a.type, params: a.params })),
+    slot_required: hasSlot ? !!slotRequired : null,
+  };
+  if (attribute) {
+    payload.collect = { attribute, type: collectType || 'text' };
+    if (collectType === 'choice') {
+      payload.collect.options = (collectOptions || '')
+        .split('\n')
+        .map(o => o.trim())
+        .filter(Boolean);
+    }
+  } else {
+    payload.collect = null;
+  }
+  return payload;
+};
+
+// (a) Flush da inferência ao salvar: decide o slot a usar a partir do resultado da RE-inferência.
+// Falha/timeout (`failed`) MANTÉM o último slot conhecido — uma falha de rede não pode transformar uma
+// etapa de coleta em informativa em silêncio. Sucesso com attribute vazio LIMPA (é "sem slot" legítimo,
+// não falha). É a mesma falha invisível que o Estado B existe para eliminar.
+export const slotAfterFlush = (lastKnown, inferResult) => {
+  if (!inferResult || inferResult.failed) return lastKnown || '';
+  return inferResult.attribute || '';
+};

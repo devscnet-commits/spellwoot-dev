@@ -12,6 +12,8 @@ import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
 import AiStepForm from './AiStepForm.vue';
+// (De)serialização de etapa por SPREAD (preserva collect/slot_required/campos futuros) — ver aiStepPayload.
+import { parseStep, stepToApi, nextStepUid } from './aiStepPayload';
 
 // When embedded inside the agent (the agent's single default department), ids come by prop
 // and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
@@ -163,32 +165,10 @@ const linesToArray = value =>
     .filter(Boolean);
 const arrayToLines = value => (Array.isArray(value) ? value.join('\n') : '');
 
-// Etapas viram cards arrastáveis: cada etapa é um objeto {name, objective, automation_on_complete}.
-// _uid é uma chave transitória só para o draggable/keys (removida no buildPayload).
-let stepUid = 0;
-const nextStepUid = () => {
-  stepUid += 1;
-  return stepUid;
-};
-// Aceita o formato legado (array de strings) e o novo (array de objetos).
-const parseSteps = arr =>
-  (Array.isArray(arr) ? arr : []).map(s =>
-    typeof s === 'string'
-      ? {
-          uid: nextStepUid(),
-          name: s,
-          instructions: '',
-          automations: [],
-          group_delay_seconds: '',
-        }
-      : {
-          uid: nextStepUid(),
-          name: s.name || '',
-          instructions: s.instructions || s.objective || '',
-          automations: Array.isArray(s.automations) ? s.automations : [],
-          group_delay_seconds: s.group_delay_seconds ?? '',
-        }
-  );
+// Etapas viram cards arrastáveis. O uid é transitório (só draggable/keys; removido no stepToApi).
+// parseStep/stepToApi (aiStepPayload) usam SPREAD: preservam collect, slot_required e campos novos do
+// backend, em vez de reconstruir a etapa com chaves fixas (era a classe de bug que comia dado no save).
+const parseSteps = arr => (Array.isArray(arr) ? arr : []).map(parseStep);
 
 // --- Follow-up: tentativas como lista (valor + unidade) ---
 let fuUid = 0;
@@ -377,17 +357,7 @@ const buildPayload = () => ({
     },
     playbook: {
       objetivo: form.objetivo,
-      steps: form.steps
-        .filter(s => (s.name || '').trim())
-        .map(s => ({
-          name: s.name.trim(),
-          instructions: (s.instructions || '').trim(),
-          automations: Array.isArray(s.automations) ? s.automations : [],
-          group_delay_seconds:
-            s.group_delay_seconds === '' || s.group_delay_seconds == null
-              ? null
-              : Number(s.group_delay_seconds),
-        })),
+      steps: form.steps.filter(s => (s.name || '').trim()).map(stepToApi),
       transfer_when: linesToArray(form.transfer_when_steps),
       close_when: linesToArray(form.close_when_steps),
     },
