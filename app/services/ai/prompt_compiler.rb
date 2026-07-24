@@ -114,8 +114,15 @@ class Ai::PromptCompiler
     return nil if already.blank? && slot.nil?
 
     lines = ['ESTADO DA COLETA (mantido pelo sistema — NÃO repita o que já está aqui):']
-    lines << "✓ JÁ TENHO: #{already.map { |k, v| "#{k}=#{v}" }.join(', ')}" if already.present?
+    # Gap 1: mapeia o token de ausência p/ o rótulo legível — o modelo NUNCA vê o token cru (não pode
+    # ecoá-lo ao cliente); "não informado" comunica que o dado foi declinado, sem reperguntar.
+    lines << "✓ JÁ TENHO: #{already.map { |k, v| "#{k}=#{Ai::StepSlot.display(v)}" }.join(', ')}" if already.present?
     lines << "◦ FALTA agora (peça este dado e salve em \"attributes\" com a CHAVE exata): #{slot}" if slot
+    # Gap 1 (recomendação A): dá ao modelo a sentinela para quando o cliente declinar o dado do slot.
+    if slot
+      lines << "Se o cliente disser que NÃO TEM esse dado ou não quer informar, devolva em \"attributes\" " \
+               "a chave #{slot} com o valor EXATO #{Ai::StepSlot::ABSENT} (não invente um valor)."
+    end
     lines << 'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. Se o cliente ' \
              'já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.'
     lines << 'Se o valor que o cliente enviar parecer incompleto/estranho para o dado pedido, confirme ' \

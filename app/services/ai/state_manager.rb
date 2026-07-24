@@ -43,7 +43,11 @@ class Ai::StateManager
     # 2. Espelha para custom_attributes SÓ as chaves com campo cadastrado (protege Bitrix/relatórios).
     #    Chave sem campo NÃO é mais descartada — já foi salva em ai_collected_facts acima; aqui só não
     #    há campo estruturado para espelhar (o attributes.unknown_key vira telemetria disso).
-    known = filter_known_attributes(cleaned, department)
+    # Gap 1: o token/valor de ausência NUNCA espelha em custom_attributes (Bitrix/Meta/relatório) — ele
+    # vive SÓ em ai_collected_facts (gravado pelo fill_absent). O gate só cobre facts; aqui filtramos o
+    # ESPELHO, mesmo quando a chave tem CustomAttributeDefinition. Um token vazado corromperia silenciosa
+    # e indistinguivelmente o dado do operador.
+    known = filter_known_attributes(cleaned, department).reject { |_k, v| Ai::SlotAbsence.absence_value?(v) }
     return if known.empty?
 
     # 3. Normaliza valores de atributo tipo LIST para a opção CANÔNICA (só o ESPELHO; ai_collected_facts
@@ -184,6 +188,10 @@ class Ai::StateManager
     # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
     # de disparar em etapas com avanço por slot (step_completed pode ser false quando o código avança).
     fire_step_automations(outcome[:completed], step, index, dispatcher, run)
+    # Gap 1: slot OPCIONAL declinado -> grava a sentinela de ausência SÓ em ai_collected_facts (via
+    # persist_collected_facts, NÃO persist_attributes) para o token NUNCA espelhar em custom_attributes/
+    # Bitrix/Meta. Assim o slot conta como preenchido (não repergunta) e o avanço já veio no outcome.
+    persist_collected_facts({ outcome[:fill_absent].to_s => Ai::StepSlot::ABSENT }) if outcome[:fill_absent]
     persist_progress(steps, index, outcome, decision)
 
     # Camada B: NÃO força avanço (dado faltando). outcome[:signal] leva o pedido de handoff ao Gateway.
@@ -430,6 +438,10 @@ class Ai::StateManager
   # Chave esperada de tipo livre (text/derivável nil) é aceita (não há formato para validar).
   def supervisor_fact_reason(key, value, expected, slot, step)
     return 'unexpected_key' unless expected.include?(key.to_s)
+    # Gap 1: valor de recusa/ausência do modelo (token ou expressão) NÃO vira fato — antes da validação de
+    # formato, para pegar também slot de TEXTO (fecha o nome_cliente="não informado" aberto pelo gate fix).
+    # A sentinela em ai_collected_facts vem só do caminho fill_absent (slot opcional), com o token canônico.
+    return 'declined' if Ai::SlotAbsence.absence_value?(value)
 
     type = supervisor_fact_type(key, slot, step)
     return nil unless Ai::SlotExtractor.known_format?(type)

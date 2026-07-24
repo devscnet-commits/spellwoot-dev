@@ -98,9 +98,11 @@ class Ai::HandoffSummaryGenerator
   # do contato e da conversa por cima — se a mesma chave existir, vence o custom_attribute, que pode
   # ter sido corrigido por um humano no painel.
   def collected_attributes
+    # Gap 1: o token de ausência (só existe em ai_collected_facts) é mapeado p/ "não informado" — o
+    # resumo do handoff é lido por um humano e NUNCA deve mostrar o token cru.
     attributes_by_precedence
       .reject { |_, v| v.blank? }
-      .map { |k, v| "#{k}: #{v}" }.join(', ')
+      .map { |k, v| "#{k}: #{Ai::StepSlot.display(v)}" }.join(', ')
   end
 
   def attributes_by_precedence

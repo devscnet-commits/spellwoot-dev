@@ -1595,4 +1595,166 @@ RSpec.describe Ai::StateManager do
       expect(rejected_events.last.payload).to include('attribute' => 'telefone', 'reason' => 'invalid_value')
     end
   end
+
+  # Gap 1 (recusa/ausência de slot): detecção ortogonal ao tipo, ANTES do formato; opcional satisfaz com
+  # a sentinela e avança, obrigatório conta recusa e transfere no teto. Simula a ORDEM do Gateway.
+  describe '#track_step — Gap 1: recusa/ausência de slot' do
+    def collected_facts
+      conversation.reload.additional_attributes.to_h['ai_collected_facts']
+    end
+
+    def rejected_events
+      Ai::Event.where(conversation_id: conversation.id, event_type: 'facts.rejected')
+    end
+
+    def idx
+      conversation.reload.additional_attributes.to_h['ai_step_index']
+    end
+
+    def refusals
+      conversation.reload.additional_attributes.to_h['ai_slot_refusals']
+    end
+
+    def gap1_dept(required:, slot: 'email_cliente', type: 'text')
+      collect = { 'attribute' => slot, 'type' => type }
+      collect['required'] = false unless required
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "G#{SecureRandom.hex(3)}",
+                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [{ 'name' => 'Slot', 'collect' => collect }, { 'name' => 'Fim' }])
+      dept
+    end
+
+    # Ordem do Gateway: track_step (roteia/avança) + persist do supervisor (gated contra o slot pré-avanço).
+    def run_turn(dept, attrs:, text:, message: nil)
+      pre = dept.playbook.steps[idx.to_i]
+      msg = message || create(:message, conversation: conversation, account: account, inbox: inbox,
+                                        message_type: :incoming, content: text)
+      decision = { 'attributes' => attrs, 'step_completed' => false }
+      sig = manager.track_step(dept, decision, dispatcher: dispatcher, run: run, message_text: text, message: msg)
+      manager.persist_attributes(decision['attributes'], dept, source: :supervisor, expected_step: pre)
+      sig
+    end
+
+    before { conversation.update!(additional_attributes: { 'ai_step_index' => 0 }) }
+
+    it 'OPCIONAL/formato conhecido: recusa (sentinela A) -> ABSENT em facts, avança, custom vazio' do
+      dept = gap1_dept(required: false) # email_cliente text -> deriva email
+      run_turn(dept, attrs: { 'email_cliente' => Ai::StepSlot::ABSENT }, text: 'não tenho email')
+
+      expect(collected_facts['email_cliente']).to eq(Ai::StepSlot::ABSENT)
+      expect(conversation.reload.custom_attributes).to eq({}) # token NUNCA no espelho
+      expect(idx).to eq(1)
+    end
+
+    it 'OPCIONAL/texto: recusa por TEXTO (modelo mudo) -> ABSENT, avança' do
+      dept = gap1_dept(required: false, slot: 'observacao', type: 'text')
+      run_turn(dept, attrs: {}, text: 'não tenho')
+
+      expect(collected_facts['observacao']).to eq(Ai::StepSlot::ABSENT)
+      expect(idx).to eq(1)
+    end
+
+    it 'OBRIGATÓRIO/formato conhecido: recusa -> não preenche, conta recusa, não avança' do
+      dept = gap1_dept(required: true)
+      run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo')
+
+      expect(collected_facts).to be_nil
+      expect(refusals).to eq(1)
+      expect(idx).to eq(0)
+    end
+
+    # Prova que o efeito colateral do gate fix (nome="não informado" em texto obrigatório) está fechado.
+    # Alvo da prova de mutação: desligar o guard 'declined' do gated_facts faz este exemplo falhar.
+    it 'OBRIGATÓRIO/texto: recusa NÃO grava "não informado" no slot' do
+      dept = gap1_dept(required: true, slot: 'nome_cliente', type: 'text')
+      run_turn(dept, attrs: { 'nome_cliente' => 'não informado' }, text: 'não tenho')
+
+      expect(collected_facts).to be_nil
+      expect(refusals).to eq(1)
+      expect(idx).to eq(0)
+    end
+
+    it 'OBRIGATÓRIO: recusas consecutivas atingem o teto -> handoff com reason declined' do
+      dept = gap1_dept(required: true) # stuck_handoff_turns=3 -> teto de recusas = 6
+      sig = nil
+      6.times { sig = run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo') }
+
+      expect(sig).to be_a(Hash)
+      expect(sig[:stuck_handoff]).to include(reason: 'declined')
+    end
+
+    it 'OBRIGATÓRIO: valor válido DEPOIS de recusar preenche e reseta (recusa não bloqueia a correção)' do
+      dept = gap1_dept(required: true)
+      run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo')
+      expect(refusals).to eq(1)
+
+      run_turn(dept, attrs: { 'email_cliente' => 'joao@x.com' }, text: 'joao@x.com')
+      expect(collected_facts['email_cliente']).to eq('joao@x.com')
+      expect(idx).to eq(1)
+      expect(refusals).to eq(0)
+    end
+
+    it 'gate do supervisor rejeita a sentinela crua (declined) e aceita valor válido depois' do
+      dept = gap1_dept(required: true)
+      email_step = dept.playbook.steps[0]
+      manager.persist_attributes({ 'email_cliente' => 'não informado' }, dept, source: :supervisor, expected_step: email_step)
+      expect(collected_facts).to be_nil
+      expect(rejected_events.last.payload).to include('reason' => 'declined')
+
+      manager.persist_attributes({ 'email_cliente' => 'joao@x.com' }, dept, source: :supervisor, expected_step: email_step)
+      expect(collected_facts['email_cliente']).to eq('joao@x.com')
+    end
+
+    it 'digressão (pergunta) num slot obrigatório NÃO conta recusa (:no_attempt preservado)' do
+      dept = gap1_dept(required: true)
+      run_turn(dept, attrs: {}, text: 'e qual o horário de instalação?')
+
+      expect(refusals).to be_nil # não incrementou o contador de recusas
+      expect(idx).to eq(0)
+    end
+
+    it 'o token de ausência NUNCA vai para custom_attributes (mesmo com CustomAttributeDefinition)' do
+      CustomAttributeDefinition.create!(account: account, attribute_key: 'email_cliente', attribute_display_name: 'Email',
+                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
+      dept = gap1_dept(required: false)
+      run_turn(dept, attrs: { 'email_cliente' => Ai::StepSlot::ABSENT }, text: 'não tenho email')
+
+      expect(collected_facts['email_cliente']).to eq(Ai::StepSlot::ABSENT)
+      expect(conversation.reload.custom_attributes).not_to have_key('email_cliente')
+    end
+
+    it '(13) anexo que preenche o slot + texto de recusa na mesma msg -> ANEXO vence' do
+      dept = gap1_dept(required: true, slot: 'comprovante', type: 'text') # ATTACHMENT_KEY_RE casa "comprovante"
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: 'não tenho')
+      msg.attachments.create!(account_id: account.id, file_type: :file, fallback_title: 'comprovante.pdf')
+
+      run_turn(dept, attrs: {}, text: 'não tenho', message: msg)
+
+      expect(collected_facts['comprovante']).to be_present
+      expect(collected_facts['comprovante']).not_to eq(Ai::StepSlot::ABSENT)
+      expect(idx).to eq(1)
+    end
+
+    it '(14) texto de recusa contendo valor válido -> captura o VALOR, não a ausência (guard d)' do
+      dept = gap1_dept(required: true)
+      run_turn(dept, attrs: {}, text: 'não tenho email mas pode usar joao@x.com')
+
+      expect(collected_facts['email_cliente']).to eq('joao@x.com')
+      expect(idx).to eq(1)
+    end
+
+    # (b) Gap 3 NÃO está neste PR. FIXA o comportamento ATUAL (alternância zera ai_slot_refusals) para a
+    # mudança do Gap 3 aparecer no diff. Exposição estreita: obrigatório-declinado NÃO escreve no slot,
+    # então o reset só vem via slot_filled? de OUTRO caminho — aqui, o malformado da confirmação-única.
+    it 'GAP 3 (comportamento atual FIXADO): fill malformado ENTRE recusas zera ai_slot_refusals' do
+      dept = gap1_dept(required: true)
+      run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo')
+      expect(refusals).to eq(1)
+
+      # valor não-ausência e não-válido -> slot_filled?(decision) passa -> confirmação-única -> reseta refusals
+      run_turn(dept, attrs: { 'email_cliente' => 'joao arroba x' }, text: 'joao arroba x')
+      expect(refusals).to eq(0) # <- o Gap 3 vai mudar isto
+    end
+  end
 end

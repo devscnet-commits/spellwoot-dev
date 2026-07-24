@@ -17,6 +17,13 @@ class Ai::StepResolver
   #  - slot PREENCHIDO: confirmação-única (Parte 3) ou AVANÇA.
   #  - slot VAZIO: ver resolve_empty_slot.
   def resolve_completion(step, decision, stuck_limit, index, capture_signal)
+    # Gap 1: recusa/ausência do dado (detectada no Ai::TurnCapture). Roteada ANTES do slot_filled? porque
+    # o valor de recusa que o modelo devolve (ex.: "não informado") faria slot_filled? passar e cair na
+    # confirmação-única. Ortogonal ao tipo do slot; o que muda é a resposta (ver resolve_declined).
+    declined = capture_signal.is_a?(Hash) && capture_signal[:declined]
+    slot_any = Ai::StepSlot.attribute(step)
+    return resolve_declined(step, slot_any, stuck_limit) if declined && slot_any
+
     slot = Ai::StepSlot.required_attribute(step)
     return { completed: step_completed?(step, decision), stuck: 0, refusals: 0 } unless slot
     return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, decision)
@@ -25,6 +32,16 @@ class Ai::StepResolver
   end
 
   private
+
+  # Cliente declinou o dado. OPCIONAL -> satisfaz com a sentinela de ausência (fill_absent) e AVANÇA;
+  # zera o orçamento (foi resolvido). OBRIGATÓRIO -> NÃO preenche; conta como recusa (contador próprio,
+  # reason 'declined' distingue do travamento no resumo do handoff) e, no teto, TRANSFERE. Reusa o mesmo
+  # resolve_judge_refusal do #270 (teto = stuck_limit*2).
+  def resolve_declined(step, slot, stuck_limit)
+    return { completed: true, stuck: 0, refusals: 0, fill_absent: slot } if Ai::StepSlot.optional?(step)
+
+    resolve_judge_refusal(step, slot, stuck_limit, 'declined')
+  end
 
   # Conclusão determinística: 'always' e etapas sem slot seguem o step_completed do modelo; etapa com
   # slot obrigatório conclui quando o slot está preenchido (valor do turno OU já gravado).

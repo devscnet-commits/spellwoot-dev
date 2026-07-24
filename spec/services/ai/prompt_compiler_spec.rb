@@ -221,6 +221,21 @@ RSpec.describe Ai::PromptCompiler do
       expect(prompt).to include('NUNCA peça de novo um dado da lista "JÁ TENHO"')
     end
 
+    it 'no bloco "JÁ TENHO", o token de ausência é exibido como "não informado" (o modelo não vê o token cru como valor)' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => Ai::StepSlot::ABSENT })
+
+      expect(prompt).to include('✓ JÁ TENHO: nome=não informado')
+      # o token só pode aparecer na INSTRUÇÃO de recusa (input do modelo), NUNCA como valor já coletado
+      expect(prompt).not_to include("nome=#{Ai::StepSlot::ABSENT}")
+    end
+
+    it 'instrui o modelo a devolver a sentinela quando o cliente declinar o dado do slot' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).to include(Ai::StepSlot::ABSENT) # instrução A (input do modelo)
+      expect(prompt).to include('NÃO TEM')
+    end
+
     it 'mostra "FALTA agora" com a CHAVE do slot da etapa atual quando ainda não coletado' do
       prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque' })
 
