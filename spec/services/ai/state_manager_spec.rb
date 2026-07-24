@@ -419,7 +419,7 @@ RSpec.describe Ai::StateManager do
       end
 
       it 'infere o slot "email" da instrução (sem collect, sem atributo personalizado)' do
-        expect(Ai::StepSlot.required_attribute(infer_department.playbook.steps.first)).to eq('email')
+        expect(Ai::StepSlot.attribute(infer_department.playbook.steps.first)).to eq('email')
       end
 
       it 'e-mail MALFORMADO + cliente TEIMA: confirma 1x, depois grava como veio e AVANÇA (sem loop)' do
@@ -1755,6 +1755,129 @@ RSpec.describe Ai::StateManager do
       # valor não-ausência e não-válido -> slot_filled?(decision) passa -> confirmação-única -> reseta refusals
       run_turn(dept, attrs: { 'email_cliente' => 'joao arroba x' }, text: 'joao arroba x')
       expect(refusals).to eq(0) # <- o Gap 3 vai mudar isto
+    end
+  end
+
+  # Gap 2 (semântica de opcional em slot INFERIDO — o caso real: 0 playbooks usam collect). optional? lê
+  # step['slot_required']; a captura passa a ser por StepSlot.attribute, então slot opcional é capturado
+  # e avança determinísticamente, e o fill_absent (opcional-declinado) deixa de ser inalcançável.
+  describe '#track_step — Gap 2: opcional em slot INFERIDO (sem collect)' do
+    def collected_facts
+      conversation.reload.additional_attributes.to_h['ai_collected_facts']
+    end
+
+    def idx
+      conversation.reload.additional_attributes.to_h['ai_step_index']
+    end
+
+    def refusals
+      conversation.reload.additional_attributes.to_h['ai_slot_refusals']
+    end
+
+    # Etapa com slot INFERIDO da instrução (sem collect). optional -> acrescenta slot_required:false.
+    def inferred_dept(optional:)
+      step = { 'name' => 'Email', 'instructions' => 'Peça e grave o email_cliente conforme informado.' }
+      step['slot_required'] = false if optional
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "I#{SecureRandom.hex(3)}",
+                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept.create_playbook!(active: true, steps: [step, { 'name' => 'Fim' }])
+      dept
+    end
+
+    def run_turn(dept, attrs:, text:)
+      pre = dept.playbook.steps[idx.to_i]
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: text)
+      decision = { 'attributes' => attrs, 'step_completed' => false }
+      manager.track_step(dept, decision, dispatcher: dispatcher, run: run, message_text: text, message: msg)
+      manager.persist_attributes(decision['attributes'], dept, source: :supervisor, expected_step: pre)
+    end
+
+    before { conversation.update!(additional_attributes: { 'ai_step_index' => 0 }) }
+
+    # PROVA de que o fill_absent deixou de ser inalcançável — com slot INFERIDO (não sintético com collect).
+    it 'OPCIONAL inferido + recusa -> fill_absent (token) e AVANÇA' do
+      dept = inferred_dept(optional: true)
+      expect(Ai::StepSlot.attribute(dept.playbook.steps[0])).to eq('email_cliente') # veio da inferência
+      expect(Ai::StepSlot.optional?(dept.playbook.steps[0])).to be(true)
+
+      run_turn(dept, attrs: { 'email_cliente' => Ai::StepSlot::ABSENT }, text: 'não tenho email')
+
+      expect(collected_facts['email_cliente']).to eq(Ai::StepSlot::ABSENT)
+      expect(idx).to eq(1)
+    end
+
+    it 'OPCIONAL inferido + valor válido -> captura determinística e AVANÇA (captura destravada)' do
+      dept = inferred_dept(optional: true)
+      run_turn(dept, attrs: {}, text: 'meu email é joao@x.com') # modelo mudo -> captura determinística
+
+      expect(collected_facts['email_cliente']).to eq('joao@x.com')
+      expect(idx).to eq(1)
+    end
+
+    it 'OBRIGATÓRIO inferido + recusa -> conta recusa, NÃO avança' do
+      dept = inferred_dept(optional: false)
+      run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo')
+
+      expect(collected_facts).to be_nil
+      expect(refusals).to eq(1)
+      expect(idx).to eq(0)
+    end
+
+    it 'OBRIGATÓRIO inferido + valor válido -> captura e AVANÇA' do
+      dept = inferred_dept(optional: false)
+      run_turn(dept, attrs: {}, text: 'joao@x.com')
+
+      expect(collected_facts['email_cliente']).to eq('joao@x.com')
+      expect(idx).to eq(1)
+    end
+
+    it 'digressão num slot inferido NÃO conta recusa (:no_attempt preservado)' do
+      dept = inferred_dept(optional: false)
+      run_turn(dept, attrs: {}, text: 'e qual o horário de instalação?')
+
+      expect(refusals).to be_nil
+      expect(idx).to eq(0)
+    end
+
+    it 'o token de ausência (opcional inferido) NUNCA vai para custom_attributes' do
+      dept = inferred_dept(optional: true)
+      run_turn(dept, attrs: { 'email_cliente' => Ai::StepSlot::ABSENT }, text: 'não tenho email')
+
+      expect(collected_facts['email_cliente']).to eq(Ai::StepSlot::ABSENT)
+      expect(conversation.reload.custom_attributes).not_to have_key('email_cliente')
+    end
+
+    # Ajuste 3: o juiz está LIGADO em produção (perfil #4, mode 'always'). run_turn_judge passa a enxergar
+    # o slot OPCIONAL inferido (era required_attribute -> nil p/ opcional). Verifica os dois: o juiz recebe
+    # o slot E o fill_absent acontece no declínio.
+    it 'juiz LIGADO: enxerga o slot opcional inferido no run_turn_judge e o declínio faz fill_absent' do
+      judge_profile = Ai::OperationProfile.create!(account_id: account.id, name: 'juiz',
+                                                   supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini',
+                                                   worker_overrides: { 'capture_judge' => { 'mode' => 'always' } })
+      judge_agent = Ai::Agent.create!(account: account, name: 'BotJuiz', status: 'active',
+                                      ai_operation_profile_id: judge_profile.id)
+      judge_manager = described_class.new(conversation: conversation, agent: judge_agent)
+      dept = inferred_dept(optional: true)
+      step = dept.playbook.steps[0]
+
+      seen_slot = nil
+      allow(Ai::Workers::CaptureJudge).to receive(:judge) do |kwargs|
+        seen_slot = kwargs[:slot]
+        { status: 'not_an_answer' }
+      end
+
+      jr = judge_manager.run_turn_judge(step, 'não tenho email')
+      expect(seen_slot).to eq('email_cliente') # o juiz VÊ o slot opcional inferido (era nil antes do Gap 2)
+
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: 'não tenho email')
+      judge_manager.track_step(dept, { 'attributes' => {}, 'step_completed' => false },
+                               dispatcher: dispatcher, run: run, message_text: 'não tenho email',
+                               message: msg, judge_result: jr)
+
+      expect(collected_facts['email_cliente']).to eq(Ai::StepSlot::ABSENT) # declínio -> fill_absent
+      expect(idx).to eq(1)
     end
   end
 end

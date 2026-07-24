@@ -73,9 +73,11 @@ class Ai::TrivialTurnGate
     recent.size < 2 ? nil : recent.first
   end
 
-  # A etapa atual coleta um slot OBRIGATÓRIO? (declarado no collect OU inferido da instrução). Mesma
-  # fonte usada pela captura determinística (Ai::StepSlot.required_attribute). step nil/informativa → false.
+  # A etapa atual coleta um slot? (declarado no collect OU inferido da instrução), independente de
+  # obrigatoriedade. Gap 2: passou a usar StepSlot.attribute (era required_attribute) — MUDANÇA de
+  # comportamento do Fix 3d: turno trivial agora é barrado em QUALQUER slot, inclusive OPCIONAL (mais
+  # conservador; "na dúvida, NÃO pula"). step nil/informativa → false.
   def self.collecting_slot?(step)
-    Ai::StepSlot.required_attribute(step).present?
+    Ai::StepSlot.attribute(step).present?
   end
 end

@@ -44,7 +44,10 @@ class Ai::TurnCapture
   # (worker pré-rodado, camada 3). Mesmo motivo do track_step; agrupar rippla por specs + Gateway.
   def capture(step, decision, message_text, message, department, judge_result: nil)
     # rubocop:enable Metrics/ParameterLists
-    slot = Ai::StepSlot.required_attribute(step)
+    # Gap 2: a CAPTURA é governada por StepSlot.attribute (declarado ∪ INFERIDO), independente de
+    # obrigatoriedade — assim slot OPCIONAL também é capturado determinísticamente (antes usava
+    # required_attribute, que devolvia nil p/ opcional e pulava a captura).
+    slot = Ai::StepSlot.attribute(step)
     # BUG 3: o anexo SEMPRE grava os fatos determinísticos (mesmo em etapa sem slot). O preenchimento do
     # slot é DETERMINÍSTICO pela chave (#attachment_slot_value). Retorna :filled (preencheu o slot -> é a
     # captura desta mensagem, pula o texto), :facts_only (havia anexo mas NÃO preencheu -> segue para o
@@ -53,10 +56,9 @@ class Ai::TurnCapture
     return if attachment == :filled
 
     # Gap 1: recusa/ausência de slot. DEPOIS do anexo (anexo que preenche é dado real e vence — o cliente
-    # mandou o documento E escreveu "não tenho" na mesma msg). Usa StepSlot.attribute (slot de QUALQUER
-    # required-ness, opcional inclusive) para o StepResolver rotear opcional-satisfaz / obrigatório-recusa.
-    slot_any = Ai::StepSlot.attribute(step)
-    return { declined: true } if slot_any && declined_turn?(step, slot_any, decision, message_text)
+    # mandou o documento E escreveu "não tenho" na mesma msg). O StepResolver roteia opcional-satisfaz /
+    # obrigatório-recusa a partir deste sinal.
+    return { declined: true } if slot && declined_turn?(step, slot, decision, message_text)
 
     return unless slot
 
