@@ -56,4 +56,19 @@ module Ai::SlotAbsence
   def extractable?(type, text, options)
     Ai::SlotExtractor.extract(attribute_type: type, text: text.to_s, options: options).present?
   end
+
+  # Palavras de negação (normalizadas) — âncora da heurística de "parece declínio".
+  NEGATIONS = %w[nao sem nunca jamais nenhum nem].freeze
+
+  # OBSERVABILIDADE (Gap 4 v2, débito do fraseado novo) — NÃO roteia, só sinaliza. O texto PARECE um
+  # declínio que as listas fechadas (EXACT/ANCHORED) não reconheceram? Heurística barata: curto (poucas
+  # palavras) e com negação. Alimenta o crescimento das listas com dado real (o TurnCapture emite um evento
+  # quando isto é true e o dado caiu em :no_attempt). Só faz sentido chamar DEPOIS de declined? dar false.
+  def looks_like_decline?(text)
+    norm = Ai::SlotExtractor.normalize(text.to_s)
+    return false if norm.empty?
+
+    words = norm.split
+    words.size <= 6 && words.intersect?(NEGATIONS)
+  end
 end

@@ -47,4 +47,20 @@ RSpec.describe Ai::SlotAbsence do
       expect(described_class.absence_value?('')).to be(false)
     end
   end
+
+  # Gap 4 v2: heurística de OBSERVABILIDADE (não roteia) — o texto parece um declínio que as listas não
+  # casaram? Curto + negativo. Alimenta o crescimento das listas (o TurnCapture emite evento quando true).
+  describe '.looks_like_decline?' do
+    it 'true para negativo curto que a lista fechada NÃO reconhece (fraseado novo)' do
+      expect(described_class.looks_like_decline?('esse eu não passo')).to be(true)
+      expect(described_class.looks_like_decline?('não uso disso')).to be(true)
+      expect(described_class.looks_like_decline?('sem isso aqui')).to be(true)
+    end
+
+    it 'false para texto sem negação ou longo demais' do
+      expect(described_class.looks_like_decline?('meu email é joao@x.com')).to be(false)
+      expect(described_class.looks_like_decline?('')).to be(false)
+      expect(described_class.looks_like_decline?('gostaria de saber com detalhes todas as condições do plano premium')).to be(false)
+    end
+  end
 end

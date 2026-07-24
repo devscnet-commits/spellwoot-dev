@@ -727,8 +727,8 @@ RSpec.describe Ai::StateManager do
 
     # Etapa SEM collect: o slot é inferido da instrução ("grave <chave> conforme informado.").
     def infer_dept(name, instruction)
-      # Gap 4: teto absoluto 12 -> teto de recusa DERIVADO = 6 (floor(12/2)), preservando as asserções
-      # de "6ª recusa transfere". O absoluto (12) não é atingido nesses testes de recusa.
+      # Gap 4 v2: teto de recusa = stuck_limit (12) — MESMO limiar do absoluto. Depts de PERGUNTA não
+      # transferem cedo; o absoluto (12) só é atingido nos testes que iteram até lá.
       dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
                                     behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
       dept.create_playbook!(active: true, steps: [
@@ -897,8 +897,8 @@ RSpec.describe Ai::StateManager do
     end
 
     def infer_dept(name, instruction)
-      # Gap 4: teto absoluto 12 -> teto de recusa DERIVADO = 6 (floor(12/2)), preservando as asserções
-      # de "6ª recusa transfere". O absoluto (12) não é atingido nesses testes de recusa.
+      # Gap 4 v2: teto de recusa = stuck_limit (12) — MESMO limiar do absoluto. Depts de PERGUNTA não
+      # transferem cedo; o absoluto (12) só é atingido nos testes que iteram até lá.
       dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
                                     behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
       dept.create_playbook!(active: true, steps: [
@@ -937,7 +937,8 @@ RSpec.describe Ai::StateManager do
       expect(facts).not_to have_key('endereco_completo')
       expect(step_index).to eq(0)
       expect(stuck).to eq(1) # Gap 4: not_an_answer conta no teto absoluto (1 << teto)
-      expect(events('slot.no_attempt').last.payload).to include('attribute' => 'endereco_completo', 'status' => 'not_an_answer')
+      expect(refusals).to be_nil # Gap 4 v2: not_an_answer NÃO é recusa (nunca toca o contador)
+      expect(events('slot.no_attempt').last.payload).to include('attribute' => 'endereco_completo', 'type' => 'not_an_answer')
     end
 
     it 'LIGADO + not_an_answer (telefone_secundario, "para o dia 10" — TEM dígito): não grava (motivo do PR)' do
@@ -998,67 +999,71 @@ RSpec.describe Ai::StateManager do
       expect(step_index).to eq(1)
     end
 
-    # AJUSTE 1 — teto para recusas CONSECUTIVAS (não_travar de verdade). Teto = 2 × stuck_handoff_turns
-    # (default 3 -> 6). Contador SEPARADO (ai_slot_refusals), sem tocar o contador normal.
+    # Gap 4 v2 (conserto da conv 389): not_an_answer (pergunta/digressão) e judge_failed (erro de sistema)
+    # NÃO são recusa — viram :no_attempt (não tocam ai_slot_refusals). Quem transfere quem só pergunta é o
+    # teto ABSOLUTO (ai_step_turns) com reason 'max_turns'. A rede de RECUSA passa a ser alimentada só por
+    # declínio genuíno (Ai::SlotAbsence), testada nos blocos Gap 1/Gap 3.
     def refusals
       conversation.reload.additional_attributes['ai_slot_refusals']
     end
 
-    it 'not_an_answer consecutivo ABAIXO do teto (2×3=6): não transfere, contador normal intacto' do
+    it 'not_an_answer consecutivo NÃO alimenta a rede de recusa (vira :no_attempt); o absoluto conta' do
       enable_judge
       allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
-      dept = infer_dept('J-ceil-below', 'Peça e grave endereco_completo conforme informado.')
+      dept = infer_dept('J-na-below', 'Peça e grave endereco_completo conforme informado.')
 
       5.times { expect(run_turn(dept, 'qual plano?')).to be_nil }
 
-      expect(refusals).to eq(5)
-      expect(stuck).to eq(5)        # Gap 4: o teto ABSOLUTO conta todo turno (5 < teto 12, não transfere)
+      expect(refusals).to be_nil    # conserto do bug: pergunta nunca toca o contador de recusa
+      expect(stuck).to eq(5)        # o teto ABSOLUTO conta o turno (5 < 12, não transfere)
       expect(step_index).to eq(0)
     end
 
-    it 'not_an_answer: ao ATINGIR o teto (6ª recusa) sinaliza stuck_handoff com reason not_an_answer' do
+    it 'só perguntas (not_an_answer): transfere pelo ABSOLUTO (reason max_turns), nunca por recusa' do
       enable_judge
       allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
-      dept = infer_dept('J-ceil-na', 'Peça e grave endereco_completo conforme informado.')
+      dept = infer_dept('J-na-abs', 'Peça e grave endereco_completo conforme informado.')
 
-      5.times { run_turn(dept, 'qual plano?') }
-      sig = run_turn(dept, 'e o preço?')
+      11.times { expect(run_turn(dept, 'qual plano?')).to be_nil } # 11 < teto absoluto 12
+      sig = run_turn(dept, 'e o preço?')                            # 12 -> absoluto
 
-      expect(sig).to eq(stuck_handoff: { attribute: 'endereco_completo', step_name: 'Coleta', turns: 6, reason: 'not_an_answer' })
-      expect(refusals).to eq(0) # zerado ao transferir
+      expect(sig[:stuck_handoff]).to include(reason: 'max_turns', turns: 12)
+      expect(sig[:stuck_handoff]).not_to have_key(:refusals) # sem declínio no meio
+      expect(refusals).to be_nil
     end
 
-    it 'judge_failed consecutivo: ao atingir o teto sinaliza stuck_handoff com reason judge_failed' do
+    it 'judge_failed vira :no_attempt (erro de sistema ≠ recusa): não conta recusa, emite judge.failed' do
       enable_judge
       allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'failed', reason: 'invalid_json' })
-      dept = infer_dept('J-ceil-fail', 'Peça e grave endereco_completo conforme informado.')
+      dept = infer_dept('J-fail-na', 'Peça e grave endereco_completo conforme informado.')
 
-      5.times { run_turn(dept, 'rua x') }
-      sig = run_turn(dept, 'rua y')
+      3.times { expect(run_turn(dept, 'rua x')).to be_nil }
 
-      expect(sig).to eq(stuck_handoff: { attribute: 'endereco_completo', step_name: 'Coleta', turns: 6, reason: 'judge_failed' })
+      expect(refusals).to be_nil
+      expect(stuck).to eq(3) # conta no absoluto, não na recusa
+      expect(events('judge.failed')).not_to be_empty
     end
 
-    it 'captura bem-sucedida no meio da sequência ZERA o contador de recusas' do
+    it 'captura bem-sucedida no meio da sequência ZERA o teto absoluto (ai_step_turns)' do
       enable_judge
       dept = infer_dept('J-zero', 'Peça e grave o telefone_secundario conforme informado.')
 
       allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
       2.times { run_turn(dept, 'qual plano?') }
-      expect(refusals).to eq(2)
+      expect(stuck).to eq(2)
 
       allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'answered', value: '4998564780' })
       run_turn(dept, 'meu numero 4998564780')
 
       expect(facts['telefone_secundario']).to eq('4998564780')
-      expect(refusals).to eq(0)
+      expect(stuck).to eq(0) # o avanço zera o absoluto
       expect(step_index).to eq(1)
     end
 
-    it 'stuck_handoff_turns = 0: teto DESLIGADO, recusas nunca transferem (rede off)' do
+    it 'stuck_handoff_turns = 0: absoluto e recusa DESLIGADOS; perguntas nunca transferem' do
       enable_judge
       allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'not_an_answer' })
-      dept = infer_dept('J-ceil-off', 'Peça e grave endereco_completo conforme informado.')
+      dept = infer_dept('J-off', 'Peça e grave endereco_completo conforme informado.')
       dept.update!(transfer_rules: { 'stuck_handoff_turns' => 0 })
 
       10.times { expect(run_turn(dept, 'qual plano?')).to be_nil }
@@ -1087,8 +1092,8 @@ RSpec.describe Ai::StateManager do
     end
 
     def infer_dept(name, instruction)
-      # Gap 4: teto absoluto 12 -> teto de recusa DERIVADO = 6 (floor(12/2)), preservando as asserções
-      # de "6ª recusa transfere". O absoluto (12) não é atingido nesses testes de recusa.
+      # Gap 4 v2: teto de recusa = stuck_limit (12) — MESMO limiar do absoluto. Depts de PERGUNTA não
+      # transferem cedo; o absoluto (12) só é atingido nos testes que iteram até lá.
       dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
                                     behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
       dept.create_playbook!(active: true, steps: [
@@ -1149,14 +1154,14 @@ RSpec.describe Ai::StateManager do
       expect(step_index).to eq(1)
     end
 
-    it '(b) anexo SEM legenda em slot que não aceita: não sinaliza; contador NORMAL não sobe; conta RECUSA' do
+    it '(b) anexo SEM legenda em slot que não aceita: não sinaliza; vira :no_attempt (absoluto), NÃO recusa' do
       dept = infer_dept('A-none', 'Peça e grave endereco_completo conforme informado.')
       sig = run_attach(dept, file_type: :image, name: 'foto.jpg')
 
       expect(sig).to be_nil            # abaixo do teto: não sinaliza handoff
       expect(facts).not_to have_key('endereco_completo')
-      expect(stuck).to eq(1)           # Gap 4: conta no teto absoluto (1 << teto)
-      expect(refusals).to eq(1)        # e no contador de recusas (#270), com teto próprio (derivado)
+      expect(stuck).to eq(1)           # Gap 4 v2: anexo-sem-slot conta no teto ABSOLUTO (1 << teto)
+      expect(refusals).to be_nil       # não é declínio -> nunca toca o contador de recusa
       expect(step_index).to eq(0)
     end
 
@@ -1169,9 +1174,9 @@ RSpec.describe Ai::StateManager do
       expect(events('attachment.captured').last.payload).to include('kind' => 'location', 'attribute' => nil)
     end
 
-    # Teto do #270 fecha o buraco do só-anexo repetido: localização/foto sem texto numa etapa com slot
-    # não fica presa para sempre — ao atingir 2 × stuck_handoff_turns (default 3 -> 6) transfere.
-    it 'localização repetida (sem texto) ABAIXO do teto: não transfere, contador normal intacto' do
+    # Gap 4 v2: o só-anexo repetido não fica preso — mas agora é o teto ABSOLUTO (ai_step_turns) que conta e
+    # transfere, não a rede de recusa (anexo-sem-slot é não-resposta, não declínio).
+    it 'localização repetida (sem texto) ABAIXO do teto absoluto: não transfere' do
       dept = infer_dept('A-rep', 'Peça e grave endereco_completo conforme informado.')
 
       5.times do
@@ -1179,31 +1184,31 @@ RSpec.describe Ai::StateManager do
         expect(sig).to be_nil
       end
 
-      expect(refusals).to eq(5)
-      expect(stuck).to eq(5) # Gap 4: o teto absoluto conta (5 < teto 12)
+      expect(refusals).to be_nil
+      expect(stuck).to eq(5) # o teto absoluto conta (5 < 12)
       expect(step_index).to eq(0)
     end
 
-    it 'localização repetida: ao ATINGIR o teto (6ª) sinaliza stuck_handoff com reason attachment_no_slot' do
+    it 'localização repetida: ao ATINGIR o teto ABSOLUTO (12ª) sinaliza stuck_handoff com reason max_turns' do
       dept = infer_dept('A-rep2', 'Peça e grave endereco_completo conforme informado.')
 
-      5.times { run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0) }
+      11.times { run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0) }
       sig = run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0)
 
-      expect(sig).to eq(stuck_handoff: { attribute: 'endereco_completo', step_name: 'Coleta', turns: 6, reason: 'attachment_no_slot' })
-      expect(refusals).to eq(0) # zerado ao transferir
+      expect(sig[:stuck_handoff]).to include(reason: 'max_turns', turns: 12)
+      expect(sig[:stuck_handoff]).not_to have_key(:refusals) # anexo-sem-slot não é declínio
     end
 
-    it 'captura bem-sucedida no meio ZERA o contador de recusas do só-anexo' do
+    it 'captura bem-sucedida no meio ZERA o teto absoluto do só-anexo' do
       dept = infer_dept('A-rep3', 'Peça e grave comprovante_residencia conforme informado.')
 
       2.times { run_attach(dept, file_type: :location, coordinates_lat: -26.5, coordinates_long: -53.0) }
-      expect(refusals).to eq(2)
+      expect(stuck).to eq(2)
 
       run_attach(dept, file_type: :file, name: 'conta-luz.pdf') # regra 2: preenche o slot -> avança
 
       expect(facts['comprovante_residencia']).to eq('conta-luz.pdf')
-      expect(refusals).to eq(0)
+      expect(stuck).to eq(0) # o avanço zera o absoluto
       expect(step_index).to eq(1)
     end
 
@@ -1681,9 +1686,9 @@ RSpec.describe Ai::StateManager do
     end
 
     it 'OBRIGATÓRIO: recusas consecutivas atingem o teto -> handoff com reason declined' do
-      dept = gap1_dept(required: true) # stuck_handoff_turns=3 -> teto de recusas = 6
+      dept = gap1_dept(required: true) # Gap 4 v2: teto de recusa = stuck_limit (12); declínio vence o empate
       sig = nil
-      6.times { sig = run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo') }
+      12.times { sig = run_turn(dept, attrs: { 'email_cliente' => 'não informado' }, text: 'não possuo') }
 
       expect(sig).to be_a(Hash)
       expect(sig[:stuck_handoff]).to include(reason: 'declined')
@@ -1949,22 +1954,23 @@ RSpec.describe Ai::StateManager do
       expect(idx).to eq(0)          # e não avançou (hold)
     end
 
-    # A alternância recusa/malformado passa a ATINGIR o teto (antes o malformado zerava e nunca chegava lá).
-    it 'alternância recusa/malformado ATINGE o teto -> handoff com reason declined' do
-      dept = inferred_dept(turns: 12) # absoluto 12 -> teto de recusas derivado = 6
-      refuse(dept); refuse(dept); refuse(dept) # 1,2,3
-      malformed(dept)                          # SEGURA em 3 (hold), não avança
-      expect(refusals).to eq(3)
-      refuse(dept); refuse(dept)               # 4,5
-      sig = refuse(dept)                       # 6 -> teto
+    # Gap 4 v2: o malformado SEGURA a recusa (não zera nem incrementa) mas CONTA no absoluto. Como o teto de
+    # recusa agora == o absoluto, a alternância transfere pelo ABSOLUTO (max_turns): o malformado dilui a
+    # contagem de recusa mas não a de turnos. (Recusa consecutiva pura -> declined é o teste do bloco Gap 1.)
+    it 'alternância recusa/malformado transfere pelo ABSOLUTO (max_turns); o malformado segura a recusa' do
+      dept = inferred_dept(turns: 12) # absoluto 12 == teto de recusa 12
+      5.times { refuse(dept) }        # absoluto 1..5, refusals 1..5
+      malformed(dept)                 # absoluto 6, refusals SEGURA em 5 (hold)
+      expect(refusals).to eq(5)
+      sig = nil
+      6.times { sig = refuse(dept) }  # absoluto 7..12 -> 12 dispara; refusals 6..11 (< 12)
 
-      expect(sig).to be_a(Hash)
-      expect(sig[:stuck_handoff]).to include(reason: 'declined')
+      expect(sig[:stuck_handoff]).to include(reason: 'max_turns')
     end
 
     # Reset legítimo (Q2 caminho 1): captura genuína que avança zera o orçamento.
     it 'valor VÁLIDO avança e ZERA o orçamento (o reset legítimo)' do
-      dept = inferred_dept(turns: 12) # ceiling de recusa 6: 2 recusas não transferem antes do valor válido
+      dept = inferred_dept(turns: 12) # teto de recusa 12: 2 recusas não transferem antes do valor válido
       refuse(dept); refuse(dept)
       expect(refusals).to eq(2)
 
@@ -2063,26 +2069,27 @@ RSpec.describe Ai::StateManager do
       expect(sig[:stuck_handoff]).not_to have_key(:refusals) # sem recusas no meio -> não carrega refusals
     end
 
-    # Q5: recusa consecutiva dispara a rede de RECUSA (declined) ANTES do absoluto (ceiling 6 < absoluto 12).
-    it 'recusas consecutivas -> declined (rede de recusa) antes do teto absoluto' do
-      dept = abs_dept(12) # teto de recusa derivado = 6; absoluto = 12
-      5.times { decline(dept) }
-      sig = decline(dept) # 6ª recusa -> declined
+    # Gap 4 v2: recusa consecutiva (declínio genuíno via SlotAbsence) dispara a rede de RECUSA com reason
+    # 'declined' no limiar stuck_limit (== o absoluto), VENCENDO o empate (resolve_slot roda antes do absoluto).
+    it 'recusas consecutivas -> declined (a recusa vence o empate com o absoluto)' do
+      dept = abs_dept(12) # teto de recusa = 12 == absoluto = 12
+      11.times { decline(dept) }
+      sig = decline(dept) # 12ª recusa -> declined (não max_turns)
 
-      expect(sig[:stuck_handoff]).to include(reason: 'declined', turns: 6)
+      expect(sig[:stuck_handoff]).to include(reason: 'declined', turns: 12)
     end
 
     # O CASO MISTO (achado do usuário): mais perguntas que recusas. O absoluto sobe todo turno; as recusas
     # (< ceiling) não disparam a rede de recusa. Então quem dispara é o max_turns — mas carrega refusals: N
     # para a telemetria de "quais etapas travam mais" não sumir com as recusas do meio. Escolha DELIBERADA.
     it 'MISTO (mais perguntas que recusas): dispara max_turns com refusals: N junto (telemetria preservada)' do
-      dept = abs_dept(10) # teto de recusa = 5; absoluto = 10
-      7.times { question(dept) }   # turns 1..7, refusals 0
+      dept = abs_dept(10) # teto de recusa = 10 == absoluto = 10
+      7.times { question(dept) }   # turns 1..7, refusals 0 (pergunta = :no_attempt)
       decline(dept)                # refusals 1, turns 8
       decline(dept)                # refusals 2, turns 9
       expect(refusals).to eq(2)
 
-      sig = decline(dept)          # refusals 3 (< ceiling 5), turns 10 -> ABSOLUTO dispara
+      sig = decline(dept)          # refusals 3 (< teto 10), turns 10 -> ABSOLUTO dispara
       expect(sig[:stuck_handoff]).to include(reason: 'max_turns', turns: 10, refusals: 3)
     end
 

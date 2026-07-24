@@ -65,11 +65,11 @@ class Ai::TurnCapture
     attrs = decision['attributes'].is_a?(Hash) ? reject_blank(decision['attributes']) : {}
     return capture_on_mismatch(step, slot, attrs, message_text, department, judge_result) unless attrs.empty?
 
-    # Modelo MUDO. (b) anexo que NÃO preencheu o slot e SEM texto: o cliente mandou ALGO (não sumiu) — não
-    # conta o contador NORMAL (#259). Mas repetir anexo numa etapa com slot prenderia a conversa, então
-    # alimenta o contador de RECUSAS do #270 (ai_slot_refusals, teto 2×stuck_handoff_turns -> handoff), com
-    # motivo próprio. Com legenda, o texto é capturado logo abaixo (inalterado).
-    return { refusal: 'attachment_no_slot' } if attachment == :facts_only && message_text.to_s.strip.empty?
+    # Modelo MUDO. (b) anexo que NÃO preencheu o slot e SEM texto: o cliente mandou ALGO (não sumiu). Gap 4
+    # v2: anexo-que-não-preenche é NÃO-RESPOSTA, não declínio — vira :no_attempt (não conta contra o
+    # cliente, mesma classe da pergunta). Repetir anexo numa etapa com slot é pego pelo teto ABSOLUTO
+    # (ai_step_turns), não mais pela rede de recusa. Com legenda, o texto é capturado logo abaixo (inalterado).
+    return refuse_no_attempt(slot, 'attachment_no_slot') if attachment == :facts_only && message_text.to_s.strip.empty?
 
     capture_from_text(step, slot, decision, message_text, department, judge_result)
   end
@@ -124,9 +124,11 @@ class Ai::TurnCapture
   end
 
   # (B)+(C)+(D) Julga o turno pelo worker e age pelo status: answered -> grava normalizado (source
-  # 'judge'); malformed -> grava como veio (source 'judge_raw', a confirmação-única cuida). Recusa
-  # (not_an_answer / falha) -> não grava, não avança, NÃO conta o contador normal, e devolve
-  # { refusal: ... } para o StateManager acumular no contador SEPARADO de recusas (teto -> handoff).
+  # 'judge'); malformed -> grava como veio (source 'judge_raw', a confirmação-única cuida).
+  # Gap 4 v2 (conserto da conv 389): not_an_answer (pergunta/digressão) e failed (erro de sistema) NÃO são
+  # recusa — viram :no_attempt (não contam contra o cliente; a resposta do modelo segue; o teto ABSOLUTO
+  # pega quem só pergunta). O DECLÍNIO genuíno é detectado ANTES pelo Ai::SlotAbsence (fonte única). O juiz
+  # não alimenta mais a rede de recusa.
   # judge_result: quando o Gateway já rodou o worker ANTES da decisão (camada 3), REUSA o resultado —
   # roda o worker UMA vez por turno. nil (chamada direta em spec / worker não pré-rodado) => chama agora.
   def capture_by_judge(step, slot, message_text, department, judge_result = nil)
@@ -140,12 +142,27 @@ class Ai::TurnCapture
     when 'malformed'
       persist_judged(slot, result[:value], department, 'judge_raw', 'malformed')
     when 'not_an_answer'
-      emit('slot.no_attempt', { attribute: slot, status: 'not_an_answer' })
-      { refusal: 'not_an_answer' }
+      # Débito do fraseado novo (Design A, SlotAbsence como fonte única): um declínio que a lista fechada
+      # NÃO reconhece cai aqui como :no_attempt e, em slot opcional, faz a IA repetir o pedido até o
+      # absoluto (versão lenta do bug). Não muda o roteamento, mas quando o juiz diz que NÃO é pergunta
+      # (asks_about 'nada') e o texto PARECE declínio, emite p/ crescer a lista com dado real.
+      probe_unmatched_decline(slot, message_text) if result[:asks_about].to_s == 'nada'
+      refuse_no_attempt(slot, 'not_an_answer')
     else
       emit('judge.failed', { attribute: slot, status: result[:status], reason: result[:reason] })
-      { refusal: 'judge_failed' }
+      refuse_no_attempt(slot, 'judge_failed')
     end
+  end
+
+  # Observabilidade do débito do fraseado novo (item 2): o texto parece um declínio que o SlotAbsence não
+  # casou? Emite o texto normalizado (curto, baixa-PII) p/ alimentar o crescimento das listas EXACT/ANCHORED
+  # — sem isso a lista nunca melhora porque ninguém vê o que ela perde. NÃO altera o roteamento (já é
+  # :no_attempt); é só sinal.
+  def probe_unmatched_decline(slot, message_text)
+    return unless Ai::SlotAbsence.looks_like_decline?(message_text)
+
+    emit('slot.possible_decline_unmatched',
+         { attribute: slot, text: Ai::SlotExtractor.normalize(message_text.to_s).first(60) })
   end
 
   def persist_judged(slot, value, department, source, status)

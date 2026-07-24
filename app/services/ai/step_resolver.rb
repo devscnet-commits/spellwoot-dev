@@ -2,13 +2,16 @@
 # com o Ai::TurnCapture/#265. Decide, a partir do estado + do sinal da captura do turno, se a etapa
 # avança, segura para confirmação-única, ou aciona uma das DUAS redes de handoff.
 #
-# Duas redes (Gap 4):
-#  - RECUSA (mais cedo): declínio/juiz not_an_answer -> ai_slot_refusals, teto DERIVADO e MENOR que o
-#    absoluto, reason próprio ('declined'/'not_an_answer'/...). Transfere o recusador antes.
-#  - ABSOLUTO (última rede): TODO turno não-produtivo na etapa (recusa + :no_attempt + confirmação-única +
+# Duas redes (Gap 4 v2):
+#  - RECUSA: SÓ declínio genuíno (o cliente não vai fornecer o dado) -> ai_slot_refusals, reason 'declined'.
+#    Fonte ÚNICA do declínio = Ai::SlotAbsence (determinístico, vale mesmo com o juiz desligado). Teto =
+#    stuck_limit (== o absoluto): a recusa VENCE o empate porque resolve_slot roda antes do absoluto, então
+#    o recusador genuíno transfere com reason 'declined'. PERGUNTA/digressão NÃO é recusa (Gap 4 v2): o juiz
+#    devolve not_an_answer e o TurnCapture roteia p/ :no_attempt (não conta). O bug da conv 389 era juntar
+#    pergunta e declínio na mesma rede — comprador pedindo "ver os planos" contava como recusa.
+#  - ABSOLUTO (última rede): TODO turno não-produtivo na etapa (declínio + :no_attempt + confirmação-única +
 #    vazio) -> ai_step_turns, teto = stuck_handoff_turns (o campo da tela). reason 'max_turns'. É a rede
-#    que pega o cliente que só faz perguntas (:no_attempt não tinha contador). O antigo ai_step_stuck_turns
-#    (só-vazio) foi DOBRADO aqui.
+#    que pega o cliente que só faz perguntas indefinidamente. O antigo ai_step_stuck_turns foi DOBRADO aqui.
 #
 # Retorna sempre um Hash-outcome: { completed:, turns: (opcional/nil = não mexe), refusals: (idem),
 # confirm: (opcional), signal: (opcional stuck_handoff) }. Quem GRAVA os contadores/índice é o
@@ -84,9 +87,12 @@ class Ai::StepResolver
     slot_collector.filled?(slot, decision)
   end
 
-  # Slot VAZIO. Recusa do juiz -> rede de RECUSA (resolve_judge_refusal). :no_attempt e vazio -> sem
-  # contador PRÓPRIO: o teto ABSOLUTO (apply_absolute_ceiling, de fora) conta e transfere. (O antigo
-  # ai_step_stuck_turns, contador só-de-vazio, foi dobrado no absoluto — uma rede a menos.)
+  # Slot VAZIO. Gap 4 v2: a DECISÃO "isto é recusa?" mora só no TurnCapture — hoje ele roteia
+  # not_an_answer/judge_failed/anexo-sem-slot para :no_attempt (pergunta/digressão não conta) e só o
+  # declínio genuíno (Ai::SlotAbsence) chega como capture_signal[:declined], tratado ANTES em resolve_slot.
+  # O branch de :refusal fica como CONTRATO defensivo (ponto único de entrada da rede de recusa por sinal):
+  # se algum caminho voltar a emitir { refusal: ... }, ele conta; hoje nenhum emite. :no_attempt e vazio
+  # não têm contador próprio — o teto ABSOLUTO (apply_absolute_ceiling) conta e transfere quem só pergunta.
   def resolve_empty_slot(step, slot, stuck_limit, capture_signal)
     refusal = capture_signal.is_a?(Hash) ? capture_signal[:refusal] : nil
     return resolve_judge_refusal(step, slot, stuck_limit, refusal) if refusal
@@ -94,9 +100,10 @@ class Ai::StepResolver
     { completed: false }
   end
 
-  # Rede de RECUSA (declínio / juiz not_an_answer / judge_failed). Teto DERIVADO e MENOR que o absoluto,
-  # para o recusador transferir ANTES e com reason próprio (Q5). Gap 3: só o avanço zera; a confirmação-única
-  # SEGURA (não zera). Ao atingir o teto, sinaliza; senão acumula.
+  # Rede de RECUSA — só declínio genuíno (capture_signal declined, via Ai::SlotAbsence). Teto = stuck_limit
+  # (== o absoluto), mas a recusa VENCE o empate (resolve_slot roda antes do apply_absolute_ceiling), então
+  # o recusador transfere com reason 'declined' em vez de 'max_turns'. Gap 3: só o avanço zera; a
+  # confirmação-única SEGURA (não zera). Ao atingir o teto, sinaliza; senão acumula.
   def resolve_judge_refusal(step, slot, stuck_limit, refusal)
     refusals = current_refusals + 1
     ceiling = refusal_ceiling(stuck_limit)
@@ -107,13 +114,16 @@ class Ai::StepResolver
     { completed: false, refusals: refusals }
   end
 
-  # Teto de RECUSA: metade do absoluto (mínimo 2), clampado a <= absoluto — garante que a recusa nunca
-  # exija MAIS turnos que o absoluto (senão o absoluto pré-emptaria, matando a rede de recusa). 0 quando o
-  # absoluto está desligado (stuck_limit 0 = rede off).
+  # Teto de RECUSA = stuck_limit (o mesmo campo da tela, o absoluto). Gap 4 v2: NÃO deriva mais como
+  # metade (regressão da conv 389 — teto 2 transferia comprador em 2 turnos). Como agora SÓ o declínio
+  # genuíno alimenta esta rede (pergunta virou :no_attempt), a tolerância pode ser folgada: o recusador
+  # transfere no mesmo limiar do absoluto, mas com reason 'declined' (a recusa vence o empate). REGRA: o
+  # número vem do stuck_handoff_turns que já está na tela — nenhum campo novo (todo número que muda
+  # comportamento está na tela ou não existe). 0 quando o absoluto está desligado (stuck_limit 0 = rede off).
   def refusal_ceiling(stuck_limit)
     return 0 unless stuck_limit.positive?
 
-    [[stuck_limit / 2, 2].max, stuck_limit].min
+    stuck_limit
   end
 
   # Sinal de handoff (Camada B). reason distingue a rede: 'declined'/'not_an_answer'/'judge_failed'/
