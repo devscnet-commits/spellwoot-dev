@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
 import AiPromptAssistant from './AiPromptAssistant.vue';
+import { buildStepPayload, slotAfterFlush } from './aiStepPayload';
 
 // Formulário de uma etapa, usado tanto na edição inline (dentro do card) quanto ao adicionar.
 // Mantém um rascunho local e devolve o payload no save (o pai grava em form.steps). O PAYLOAD é
@@ -32,14 +33,16 @@ const draft = reactive({
   name: props.step?.name || '',
   instructions: props.step?.instructions || '',
   group_delay_seconds: props.step?.group_delay_seconds ?? '',
-  // Override MANUAL do slot (collect): quando vazio, o sistema INFERE o slot da instrução (faixa de
-  // feedback). Preenchido = declara a chave explicitamente.
+  // Chave do slot: vazia => o backend INFERE da instrução (tarja). Preenchida => declara a chave (collect).
+  // Editável na tarja verde (substitui o antigo "Forçar o dado manualmente" de Ajustes avançados).
   collectAttribute: props.step?.collect?.attribute || '',
   collectType: props.step?.collect?.type || 'text',
-  collectRequired: props.step?.collect?.required ?? true,
   collectOptions: Array.isArray(props.step?.collect?.options)
     ? props.step.collect.options.join('\n')
     : '',
+  // Obrigatório? SEMPRE no nível da etapa (slot_required), NUNCA collect.required (Gap 2 desacoplou).
+  // Default obrigatório; null/undefined legado => obrigatório.
+  slotRequired: props.step?.slot_required ?? true,
   // automation_on_complete (booleano) é legado/ignorado; agora usamos automations: [{type, params}].
   automations: (Array.isArray(props.step?.automations)
     ? props.step.automations
@@ -50,47 +53,73 @@ const draft = reactive({
   })),
 });
 
-// --- Faixa de feedback do slot: o que o backend (Ai::StepSlot.infer) detecta na instrução ---------
-// Não duplica a regex no front: chama o endpoint com debounce enquanto o usuário digita.
+// --- Tarja do slot: o backend (Ai::StepSlot.infer) detecta a chave na instrução (mesma regex do runtime,
+// via endpoint — sem segunda fonte de verdade). Debounce enquanto digita. -----------------------------
 const detectedSlot = ref('');
 const inferFailed = ref(false);
+const inferPending = ref(false);
 let inferTimer = null;
 
-const inferSlot = async instructions => {
+// Chama o endpoint; devolve { failed, attribute } SEM mutar estado — o caller decide (typing vs save).
+const inferRaw = async instructions => {
   const text = (instructions || '').trim();
-  if (!text) {
-    detectedSlot.value = '';
-    inferFailed.value = false;
-    return;
-  }
+  if (!text) return { failed: false, attribute: '' };
   try {
     const { data } = await axios.post(
       `/api/v1/accounts/${route.params.accountId}/ai_steps/infer_slot`,
-      { instructions: text }
+      { instructions: text },
+      { timeout: 4000 }
     );
-    detectedSlot.value = data?.attribute || '';
-    inferFailed.value = false;
+    return { failed: false, attribute: data?.attribute || '' };
   } catch (error) {
-    // Falha na detecção: esconder a faixa (não mostrar informação errada).
-    detectedSlot.value = '';
-    inferFailed.value = true;
+    return { failed: true, attribute: '' };
   }
 };
 
+// Enquanto digita: na falha esconde a tarja (não mostrar chave errada durante a edição).
 watch(
   () => draft.instructions,
   value => {
     clearTimeout(inferTimer);
-    inferTimer = setTimeout(() => inferSlot(value), 500);
+    inferPending.value = true;
+    inferTimer = setTimeout(async () => {
+      const r = await inferRaw(value);
+      detectedSlot.value = r.failed ? '' : r.attribute;
+      inferFailed.value = r.failed;
+      inferPending.value = false;
+    }, 500);
   },
   { immediate: true }
 );
 onBeforeUnmount(() => clearTimeout(inferTimer));
 
+// (a) No SAVE: se há inferência pendente (debounce), roda agora e AGUARDA. Falha/timeout MANTÉM o último
+// slot conhecido (slotAfterFlush) — uma falha de rede não pode virar "sem slot" em silêncio.
+const flushInference = async () => {
+  if (!inferPending.value) return;
+  clearTimeout(inferTimer);
+  const r = await inferRaw(draft.instructions);
+  detectedSlot.value = slotAfterFlush(detectedSlot.value, r);
+  inferFailed.value = r.failed;
+  inferPending.value = false;
+};
+
 const manualSlot = computed(() => (draft.collectAttribute || '').trim());
 const hasManualSlot = computed(() => !!manualSlot.value);
+// Chave efetiva (manual OU inferida) e se há slot. O toggle e o slot_required dependem disto.
+const activeSlot = computed(() => manualSlot.value || detectedSlot.value);
+const hasSlot = computed(() => !!activeSlot.value);
+
+// Edição da chave na tarja (substitui "Forçar o dado"). Ao abrir, semeia com a chave efetiva (inferida
+// se não houver manual); limpar => volta a inferir (collectAttribute vazio).
+const editingKey = ref(false);
+const startEditKey = () => {
+  if (!draft.collectAttribute) draft.collectAttribute = detectedSlot.value;
+  editingKey.value = true;
+};
 const resetToAuto = () => {
   draft.collectAttribute = '';
+  editingKey.value = false;
 };
 
 // Resumo do estado dos ajustes avançados (mostrado no cabeçalho da seção fechada).
@@ -164,40 +193,25 @@ const onTypeChange = i => {
   draft.automations[i].params = {};
 };
 
-// PAYLOAD INALTERADO: mesmo objeto step de antes (name/instructions/collect/complete_when/
-// group_delay_seconds/automations). Override manual -> collect declarado; sem override -> collect null
-// (o backend infere da instrução em runtime).
-const onSave = () => {
+// Payload montado em aiStepPayload.buildStepPayload: slot_required no nível da etapa (nunca
+// collect.required), collect só com a chave manual, sem complete_when. Flush da inferência antes (a).
+const onSave = async () => {
   if (!draft.name.trim()) return;
-  const attribute = (draft.collectAttribute || '').trim();
-  const hasSlot = !!attribute;
-  const payload = {
-    name: draft.name.trim(),
-    instructions: (draft.instructions || '').trim(),
-    group_delay_seconds: draft.group_delay_seconds,
-    automations: draft.automations.map(a => ({
-      type: a.type,
-      params: a.params,
-    })),
-  };
-  if (hasSlot) {
-    payload.collect = {
-      attribute,
-      type: draft.collectType || 'text',
-      required: draft.collectRequired,
-    };
-    if (draft.collectType === 'choice') {
-      payload.collect.options = (draft.collectOptions || '')
-        .split('\n')
-        .map(o => o.trim())
-        .filter(Boolean);
-    }
-    payload.complete_when = 'attribute_present';
-  } else {
-    payload.collect = null;
-    payload.complete_when = 'always';
-  }
-  emit('save', payload);
+  await flushInference();
+  emit(
+    'save',
+    buildStepPayload({
+      name: draft.name,
+      instructions: draft.instructions,
+      groupDelaySeconds: draft.group_delay_seconds,
+      automations: draft.automations,
+      collectAttribute: draft.collectAttribute,
+      collectType: draft.collectType,
+      collectOptions: draft.collectOptions,
+      slotRequired: draft.slotRequired,
+      hasSlot: hasSlot.value,
+    })
+  );
 };
 </script>
 
@@ -241,41 +255,122 @@ const onSave = () => {
       />
     </label>
 
-    <!-- c) Faixa de feedback do slot (o que o sistema detectou) -->
+    <!-- c) Tarja do slot: Estado A (há slot -> chave editável + obrigatório/opcional) ou Estado B (aviso) -->
     <div
-      v-if="hasManualSlot"
-      class="flex items-start gap-2 px-3 py-2 text-sm rounded-lg bg-n-blue-3 text-n-blue-11"
+      v-if="hasSlot"
+      class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-teal-3 text-n-teal-11"
     >
-      <span class="mt-0.5 shrink-0 size-4 i-lucide-lock" />
-      <span class="flex-1 min-w-0">
-        {{ $t('AI_DEPARTMENTS.FORM.SLOT_MANUAL', { slot: manualSlot }) }}
-        <button
-          type="button"
-          class="ml-1 underline hover:no-underline"
-          @click="resetToAuto"
+      <!-- chave (leitura) + editar, ou input de edição -->
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 size-4 i-lucide-check" />
+        <template v-if="!editingKey">
+          <span class="flex-1 min-w-0 text-sm">
+            {{ $t('AI_DEPARTMENTS.FORM.SLOT_DETECTED', { slot: activeSlot }) }}
+          </span>
+          <button
+            type="button"
+            class="shrink-0 inline-flex items-center gap-1 text-xs underline hover:no-underline"
+            @click="startEditKey"
+          >
+            <span class="i-lucide-pencil size-3.5" />
+            {{ $t('AI_DEPARTMENTS.FORM.SLOT_EDIT_KEY') }}
+          </button>
+        </template>
+        <template v-else>
+          <input
+            v-model="draft.collectAttribute"
+            type="text"
+            :placeholder="
+              $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE_PLACEHOLDER')
+            "
+            class="flex-1 min-w-0 px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+          />
+          <button
+            type="button"
+            class="shrink-0 text-xs underline hover:no-underline"
+            @click="resetToAuto"
+          >
+            {{ $t('AI_DEPARTMENTS.FORM.SLOT_MANUAL_RESET') }}
+          </button>
+        </template>
+      </div>
+
+      <!-- tipo + opções: só ao editar uma chave MANUAL -->
+      <template v-if="editingKey && hasManualSlot">
+        <label class="flex flex-col gap-1 text-xs">
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
+          <Select v-model="draft.collectType" :options="slotTypeOptions" />
+        </label>
+        <label
+          v-if="draft.collectType === 'choice'"
+          class="flex flex-col gap-1 text-xs"
         >
-          {{ $t('AI_DEPARTMENTS.FORM.SLOT_MANUAL_RESET') }}
-        </button>
-      </span>
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
+          <textarea
+            v-model="draft.collectOptions"
+            rows="2"
+            :placeholder="
+              $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
+            "
+            class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 resize-y"
+          />
+        </label>
+      </template>
+
+      <!-- obrigatório / opcional: descreve a CONSEQUÊNCIA, não o mecanismo -->
+      <div class="flex flex-col gap-1 pt-1.5 border-t border-n-teal-5">
+        <label class="flex items-start gap-2 text-sm cursor-pointer">
+          <input
+            v-model="draft.slotRequired"
+            type="radio"
+            :value="true"
+            class="mt-0.5"
+          />
+          <span>{{ $t('AI_DEPARTMENTS.FORM.SLOT_REQUIRED_YES') }}</span>
+        </label>
+        <label class="flex items-start gap-2 text-sm cursor-pointer">
+          <input
+            v-model="draft.slotRequired"
+            type="radio"
+            :value="false"
+            class="mt-0.5"
+          />
+          <span>{{ $t('AI_DEPARTMENTS.FORM.SLOT_REQUIRED_NO') }}</span>
+        </label>
+      </div>
     </div>
-    <div v-else-if="inferFailed" class="hidden" />
+
+    <!-- enquanto a inferência está em voo, não pisca o aviso de "sem slot" -->
     <div
-      v-else-if="detectedSlot"
-      class="flex items-start gap-2 px-3 py-2 text-sm rounded-lg bg-n-teal-3 text-n-teal-11"
+      v-else-if="inferPending"
+      class="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-n-alpha-2 text-n-slate-11"
     >
-      <span class="mt-0.5 shrink-0 size-4 i-lucide-check" />
-      <span class="flex-1 min-w-0">
-        {{ $t('AI_DEPARTMENTS.FORM.SLOT_DETECTED', { slot: detectedSlot }) }}
-      </span>
+      <span class="shrink-0 size-4 i-lucide-loader-2 animate-spin" />
+      {{ $t('AI_DEPARTMENTS.FORM.SLOT_DETECTING') }}
     </div>
+
+    <!-- Estado B: nenhum slot detectado — AVISO (não bloqueio) + campo para definir a chave -->
     <div
       v-else
-      class="flex items-start gap-2 px-3 py-2 text-sm rounded-lg bg-n-blue-3 text-n-blue-11"
+      class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-amber-3 text-n-amber-11"
     >
-      <span class="mt-0.5 shrink-0 size-4 i-lucide-info" />
-      <span class="flex-1 min-w-0">{{
-        $t('AI_DEPARTMENTS.FORM.SLOT_NONE')
-      }}</span>
+      <div class="flex items-start gap-2">
+        <span class="mt-0.5 shrink-0 size-4 i-lucide-alert-triangle" />
+        <span class="flex-1 min-w-0 text-sm">{{
+          $t('AI_DEPARTMENTS.FORM.SLOT_NONE_WARNING')
+        }}</span>
+      </div>
+      <label class="flex flex-col gap-1 text-xs">
+        {{ $t('AI_DEPARTMENTS.FORM.SLOT_NONE_DEFINE') }}
+        <input
+          v-model="draft.collectAttribute"
+          type="text"
+          :placeholder="
+            $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE_PLACEHOLDER')
+          "
+          class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+        />
+      </label>
     </div>
 
     <!-- d) Ajustes avançados (recolhidos por padrão) -->
@@ -319,53 +414,7 @@ const onSave = () => {
           />
         </label>
 
-        <!-- override manual do slot -->
-        <div class="flex flex-col gap-2">
-          <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-            <span class="flex items-center gap-1.5">
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_OVERRIDE_LABEL') }}
-              <span
-                class="i-lucide-help-circle size-3.5 text-n-slate-10"
-                :title="$t('AI_DEPARTMENTS.FORM.STEP_OVERRIDE_TOOLTIP')"
-              />
-            </span>
-            <input
-              v-model="draft.collectAttribute"
-              type="text"
-              :placeholder="
-                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE_PLACEHOLDER')
-              "
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2"
-            />
-          </label>
-
-          <template v-if="hasManualSlot">
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
-              <Select v-model="draft.collectType" :options="slotTypeOptions" />
-            </label>
-
-            <label
-              v-if="draft.collectType === 'choice'"
-              class="flex flex-col gap-1.5 text-sm text-n-slate-12"
-            >
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
-              <textarea
-                v-model="draft.collectOptions"
-                rows="2"
-                :placeholder="
-                  $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
-                "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-y"
-              />
-            </label>
-
-            <label class="flex items-center gap-2 text-sm text-n-slate-12">
-              <input v-model="draft.collectRequired" type="checkbox" />
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_REQUIRED') }}
-            </label>
-          </template>
-        </div>
+        <!-- (a chave do slot + obrigatório/opcional migraram para a tarja verde acima) -->
 
         <!-- automações ao concluir a etapa -->
         <div class="flex flex-col gap-2 border-t border-n-weak pt-3">
