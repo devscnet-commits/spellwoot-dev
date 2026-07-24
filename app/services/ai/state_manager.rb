@@ -4,10 +4,11 @@
 # `run_record` NÃO é necessário (só ia pro emit, que ignorava) — some das assinaturas. Emite os MESMOS
 # ai_events de antes (attributes.updated / memory.updated) via emit próprio.
 class Ai::StateManager
-  # Camada B: nº PADRÃO de turnos parado numa etapa de slot antes de TRANSFERIR para humano, quando o
-  # department não define transfer_rules['stuck_handoff_turns']. O valor real vem da tela (0 = desligado).
-  # Default aplicado também às etapas de departments antigos (rede de segurança ligada por padrão).
-  DEFAULT_STUCK_HANDOFF_TURNS = 3
+  # Gap 4: TETO ABSOLUTO de turnos por etapa antes de TRANSFERIR (o campo da tela "travar por X mensagens").
+  # Conta TODO turno não-produtivo (recusa/:no_attempt/confirmação/vazio), não só as tentativas frustradas.
+  # Como absoluto, 3 era agressivo (3 perguntas transferia) -> default 10. 0 = desligado. Valor real vem da
+  # tela. A rede de recusa (mais cedo) deriva daqui (metade). Migração sobe os 3 antigos -> 10.
+  DEFAULT_STUCK_HANDOFF_TURNS = 10
 
   def initialize(conversation:, agent:)
     @conversation = conversation
@@ -206,7 +207,7 @@ class Ai::StateManager
   def persist_progress(steps, index, outcome, decision)
     new_index = outcome[:completed] ? (index + 1).clamp(0, steps.size - 1) : index
     persist_step_state(steps[new_index], new_index, decision)
-    persist_stuck_turns(outcome[:stuck])
+    persist_step_turns(outcome[:turns])
     persist_slot_refusals(outcome[:refusals])
   end
 
@@ -309,14 +310,16 @@ class Ai::StateManager
     rules.key?('stuck_handoff_turns') ? rules['stuck_handoff_turns'].to_i : DEFAULT_STUCK_HANDOFF_TURNS
   end
 
-  # Read-modify-write só da chave do contador, lendo FRESCO (após persist_step_state gravar o índice)
-  # — preserva ai_step_index/ai_collected_facts, mesma disciplina de concorrência dos demais writes.
-  # Só grava quando muda (evita write à toa quando já está em 0 e permanece em 0).
-  def persist_stuck_turns(count)
-    attrs = @conversation.additional_attributes || {}
-    return if attrs['ai_step_stuck_turns'].to_i == count
+  # Gap 4: contador ABSOLUTO de turnos não-produtivos na etapa (ai_step_turns) — todo turno que não avança
+  # (recusa, :no_attempt, confirmação-única, vazio). Substitui o antigo ai_step_stuck_turns (só-vazio),
+  # dobrado no absoluto. nil no outcome => não mexe. Read-modify-write fresco, só grava quando muda.
+  def persist_step_turns(count)
+    return if count.nil?
 
-    attrs['ai_step_stuck_turns'] = count
+    attrs = @conversation.additional_attributes || {}
+    return if attrs['ai_step_turns'].to_i == count
+
+    attrs['ai_step_turns'] = count
     @conversation.update!(additional_attributes: attrs)
   end
 
