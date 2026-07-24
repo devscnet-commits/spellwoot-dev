@@ -555,12 +555,23 @@ class Ai::Gateway
       'Vou te encaminhar para um especialista do nosso time que vai te ajudar melhor com isso, tá? 😊'
   end
 
-  # Motivo específico e honesto — o HandoffSummaryGenerator usa este texto livre (reason desconhecido)
-  # no "Resumo da transferência". Usa o nome amigável da etapa quando houver, não só a chave técnica.
+  # Motivo específico e honesto — o HandoffSummaryGenerator usa este texto livre no "Resumo da transferência".
+  # Gap 4 v2: DISTINGUE as duas redes. O texto antigo chamava QUALQUER travamento de "tentou coletar sem
+  # sucesso", inclusive PERGUNTA legítima (conv 389: a compradora que pediu os planos era descrita como
+  # tentativa falha). Agora:
+  #  - 'declined' (rede de recusa): o cliente RECUSOU o dado — info[:turns] é a contagem de RECUSAS.
+  #  - 'max_turns'/fallback (teto absoluto): a etapa não AVANÇOU em N mensagens — info[:turns] é a contagem
+  #    de turnos (não implica que o cliente tentou e falhou; pode ser digressão/pergunta).
+  # Usa o nome amigável da etapa quando houver, não só a chave técnica.
   def stuck_handoff_reason(info)
     label = info[:step_name].presence || info[:attribute]
-    "Transferido automaticamente: a IA tentou coletar \"#{label}\" por #{info[:turns]} mensagens sem " \
-      'sucesso. Encaminhado para atendimento humano para não travar o cliente.'
+    if info[:reason].to_s == 'declined'
+      "Transferido automaticamente: o cliente não forneceu o dado essencial \"#{label}\" " \
+        "(recusou #{info[:turns]} vezes). Encaminhado para atendimento humano."
+    else
+      "Transferido automaticamente: a IA não conseguiu avançar a etapa \"#{label}\" após " \
+        "#{info[:turns]} mensagens do cliente. Encaminhado para atendimento humano para não travar o cliente."
+    end
   end
 
   # Saldo de créditos de IA relevante para enforcement (billing Fase 2). nil = NÃO enforça (fail-open):
