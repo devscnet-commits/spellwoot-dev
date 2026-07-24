@@ -1,8 +1,16 @@
 # Decisão de CONCLUSÃO da etapa (pura — não persiste). Extraída do Ai::StateManager (God object) junto
 # com o Ai::TurnCapture/#265. Decide, a partir do estado + do sinal da captura do turno, se a etapa
-# avança, segura para confirmação-única, conta travamento (#259) ou aciona a rede de recusas do juiz.
+# avança, segura para confirmação-única, ou aciona uma das DUAS redes de handoff.
 #
-# Retorna sempre um Hash-outcome: { completed:, stuck:, refusals: (opcional/nil = não mexe),
+# Duas redes (Gap 4):
+#  - RECUSA (mais cedo): declínio/juiz not_an_answer -> ai_slot_refusals, teto DERIVADO e MENOR que o
+#    absoluto, reason próprio ('declined'/'not_an_answer'/...). Transfere o recusador antes.
+#  - ABSOLUTO (última rede): TODO turno não-produtivo na etapa (recusa + :no_attempt + confirmação-única +
+#    vazio) -> ai_step_turns, teto = stuck_handoff_turns (o campo da tela). reason 'max_turns'. É a rede
+#    que pega o cliente que só faz perguntas (:no_attempt não tinha contador). O antigo ai_step_stuck_turns
+#    (só-vazio) foi DOBRADO aqui.
+#
+# Retorna sempre um Hash-outcome: { completed:, turns: (opcional/nil = não mexe), refusals: (idem),
 # confirm: (opcional), signal: (opcional stuck_handoff) }. Quem GRAVA os contadores/índice é o
 # StateManager (persist_progress). Opera sobre a MESMA conversa (o slot_collector.mark_confirmed e as
 # leituras dos contadores usam @conversation, sincronizado pelo StateManager).
@@ -11,46 +19,59 @@ class Ai::StepResolver
     @conversation = conversation
   end
 
-  # capture_signal: nil (capturou/nada ou cliente sumido), :no_attempt (#269, slot de tipo conhecido sem
-  # tentativa) ou { refusal: 'not_an_answer'|'judge_failed' } (worker de julgamento recusou o turno).
-  #  - etapa SEM slot (informativa/antiga): step_completed do modelo.
-  #  - slot PREENCHIDO: confirmação-única (Parte 3) ou AVANÇA.
-  #  - slot VAZIO: ver resolve_empty_slot.
+  # capture_signal: nil (capturou/nada), :no_attempt (#269, slot de tipo conhecido sem tentativa),
+  # { refusal: ... } (juiz recusou) ou { declined: true } (Gap 1, cliente declinou o dado).
   def resolve_completion(step, decision, stuck_limit, index, capture_signal)
-    # Gap 1: recusa/ausência do dado (detectada no Ai::TurnCapture). Roteada ANTES do slot_filled? porque
-    # o valor de recusa que o modelo devolve (ex.: "não informado") faria slot_filled? passar e cair na
-    # confirmação-única. Ortogonal ao tipo do slot; o que muda é a resposta (ver resolve_declined).
-    # Gap 2: attribute (declarado ∪ INFERIDO) governa "há slot?" E a captura; opcional×obrigatório difere
-    # SÓ no declínio (resolve_declined). Nada mais usa required_attribute (des-conflação).
-    # INVARIANTE (Gap 3) — ao SAIR de um slot obrigatório, ou ai_slot_refusals foi ZERADO (só no avanço
-    # genuíno: resolve_filled_slot completed:true), ou houve stuck_handoff (outcome[:signal]). NÃO existe
-    # caminho que avance um slot obrigatório com o contador cheio — por isso NÃO há reset por mudança de
-    # etapa (que reabriria a alternância ENTRE etapas). Se um caminho de saída novo violar isso, o teste
-    # da invariante (state_manager_spec) quebra em vez de o carry-over vazar para produção.
+    # Gap 2: attribute (declarado ∪ INFERIDO) governa "há slot?" E a captura.
     slot = Ai::StepSlot.attribute(step)
-    return { completed: step_completed?(decision), stuck: 0, refusals: 0 } unless slot
+    return { completed: step_completed?(decision), turns: 0, refusals: 0 } unless slot
 
+    # INVARIANTE (Gaps 3/4): ao SAIR de um slot obrigatório, ou os contadores foram ZERADOS (só no avanço
+    # genuíno: completed:true), ou houve stuck_handoff (outcome[:signal]). NÃO existe caminho que avance um
+    # slot obrigatório com contador cheio — por isso NÃO há reset por mudança de etapa (reabriria a
+    # alternância). A rede de RECUSA é avaliada em resolve_slot; o teto ABSOLUTO é a rede de FORA
+    # (apply_absolute_ceiling), que roda DEPOIS e NUNCA sobrescreve um handoff por recusa devido (Q5).
+    outcome = resolve_slot(step, slot, decision, index, stuck_limit, capture_signal)
+    apply_absolute_ceiling(step, slot, stuck_limit, outcome)
+  end
+
+  private
+
+  def resolve_slot(step, slot, decision, index, stuck_limit, capture_signal)
     return resolve_declined(step, slot, stuck_limit) if capture_signal.is_a?(Hash) && capture_signal[:declined]
     return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, decision)
 
     resolve_empty_slot(step, slot, stuck_limit, capture_signal)
   end
 
-  private
+  # TETO ABSOLUTO (Gap 4) — a ÚLTIMA rede. Conta TODO turno não-produtivo na etapa (recusa, :no_attempt,
+  # confirmação-única, vazio) em ai_step_turns; ao atingir stuck_limit, transfere (reason 'max_turns').
+  # Roda DEPOIS da rede de recusa: se ela já emitiu signal neste turno, RESPEITA (não pré-empta — Q5).
+  # Reset no AVANÇO. Carrega refusals junto quando dispara com recusas > 0 (telemetria da ALTERNÂNCIA:
+  # em recusa/pergunta/recusa o absoluto sobe todo turno e a recusa só nas recusas, então o max_turns pode
+  # disparar antes do teto de recusa — o campo refusals preserva quantas recusas houve).
+  def apply_absolute_ceiling(step, slot, stuck_limit, outcome)
+    return outcome.merge(turns: 0) if outcome[:completed] # avançou -> zera o absoluto
+    return outcome if outcome[:signal]                    # recusa JÁ transferiu neste turno -> respeita
+
+    turns = current_turns + 1
+    return outcome.merge(turns: turns) unless stuck_limit.positive? && turns >= stuck_limit
+
+    # refusals p/ a telemetria: o valor FRESCO deste turno (outcome[:refusals], ainda não persistido) quando
+    # a rede de recusa mexeu; senão o valor persistido. Sem isso, o max_turns registraria uma recusa a menos.
+    refusals = outcome.key?(:refusals) ? outcome[:refusals].to_i : current_refusals
+    outcome.merge(turns: 0, signal: stuck_handoff_signal(step, slot, turns, 'max_turns', refusals))
+  end
 
   # Cliente declinou o dado. OPCIONAL -> satisfaz com a sentinela de ausência (fill_absent) e AVANÇA;
-  # zera o orçamento (foi resolvido). OBRIGATÓRIO -> NÃO preenche; conta como recusa (contador próprio,
-  # reason 'declined' distingue do travamento no resumo do handoff) e, no teto, TRANSFERE. Reusa o mesmo
-  # resolve_judge_refusal do #270 (teto = stuck_limit*2).
+  # zera o orçamento (foi resolvido). OBRIGATÓRIO -> conta como recusa (rede de recusa, reason 'declined').
   def resolve_declined(step, slot, stuck_limit)
-    return { completed: true, stuck: 0, refusals: 0, fill_absent: slot } if Ai::StepSlot.optional?(step)
+    return { completed: true, refusals: 0, fill_absent: slot } if Ai::StepSlot.optional?(step)
 
     resolve_judge_refusal(step, slot, stuck_limit, 'declined')
   end
 
-  # Só é alcançado para etapa SEM slot (attribute nil): segue o sinal do modelo. Com slot, a etapa é
-  # governada por #resolve_completion (preenchido/declinado/vazio) e nunca passa por aqui — por isso o
-  # 'always' e a leitura de slot saíram (eram inalcançáveis com slot; sem slot davam no mesmo resultado).
+  # Só é alcançado para etapa SEM slot (attribute nil): segue o sinal do modelo.
   def step_completed?(decision)
     truthy?(decision['step_completed'])
   end
@@ -63,62 +84,59 @@ class Ai::StepResolver
     slot_collector.filled?(slot, decision)
   end
 
-  # Slot VAZIO. capture_signal decide:
-  #  - { refusal: ... } (juiz recusou) -> contador SEPARADO de recusas consecutivas (não o normal), teto
-  #    próprio -> resolve_judge_refusal.
-  #  - :no_attempt (#269, cliente engajado num slot de tipo conhecido) -> NÃO conta nada (mantém ambos).
-  #  - nil (cliente sumido, message_text vazio, #259) -> conta o contador NORMAL; ao atingir o limite
-  #    (>0), sinaliza HANDOFF.
+  # Slot VAZIO. Recusa do juiz -> rede de RECUSA (resolve_judge_refusal). :no_attempt e vazio -> sem
+  # contador PRÓPRIO: o teto ABSOLUTO (apply_absolute_ceiling, de fora) conta e transfere. (O antigo
+  # ai_step_stuck_turns, contador só-de-vazio, foi dobrado no absoluto — uma rede a menos.)
   def resolve_empty_slot(step, slot, stuck_limit, capture_signal)
     refusal = capture_signal.is_a?(Hash) ? capture_signal[:refusal] : nil
     return resolve_judge_refusal(step, slot, stuck_limit, refusal) if refusal
-    return { completed: false, stuck: current_stuck } if capture_signal == :no_attempt
 
-    stuck = current_stuck + 1
-    return { completed: false, stuck: stuck } unless stuck_limit.positive? && stuck >= stuck_limit
-
-    { completed: false, stuck: 0, signal: stuck_handoff_signal(step, slot, stuck) }
+    { completed: false }
   end
 
-  # AJUSTE 1 — teto para recusas CONSECUTIVAS do juiz (not_an_answer / judge_failed). Contador próprio
-  # (ai_slot_refusals), sem tocar o contador normal (o cliente que faz perguntas NÃO é punido). Teto =
-  # 2 × stuck_handoff_turns; 0 desliga a rede (teto também desligado). Ao atingir o teto, reusa o MESMO
-  # step.stuck_handoff (aviso + transferência + resumo) com o motivo no payload; senão só acumula.
+  # Rede de RECUSA (declínio / juiz not_an_answer / judge_failed). Teto DERIVADO e MENOR que o absoluto,
+  # para o recusador transferir ANTES e com reason próprio (Q5). Gap 3: só o avanço zera; a confirmação-única
+  # SEGURA (não zera). Ao atingir o teto, sinaliza; senão acumula.
   def resolve_judge_refusal(step, slot, stuck_limit, refusal)
     refusals = current_refusals + 1
-    ceiling = stuck_limit.positive? ? stuck_limit * 2 : 0
+    ceiling = refusal_ceiling(stuck_limit)
     if ceiling.positive? && refusals >= ceiling
-      return { completed: false, stuck: current_stuck, refusals: 0,
-               signal: stuck_handoff_signal(step, slot, refusals, refusal) }
+      return { completed: false, refusals: 0, signal: stuck_handoff_signal(step, slot, refusals, refusal) }
     end
 
-    { completed: false, stuck: current_stuck, refusals: refusals }
+    { completed: false, refusals: refusals }
   end
 
-  # Sinal de handoff por travamento (Camada B). reason presente só na recusa do juiz — o handoff do #259
-  # (cliente sumido) mantém a forma { attribute, step_name, turns } sem reason (compat).
-  def stuck_handoff_signal(step, slot, turns, reason = nil)
+  # Teto de RECUSA: metade do absoluto (mínimo 2), clampado a <= absoluto — garante que a recusa nunca
+  # exija MAIS turnos que o absoluto (senão o absoluto pré-emptaria, matando a rede de recusa). 0 quando o
+  # absoluto está desligado (stuck_limit 0 = rede off).
+  def refusal_ceiling(stuck_limit)
+    return 0 unless stuck_limit.positive?
+
+    [[stuck_limit / 2, 2].max, stuck_limit].min
+  end
+
+  # Sinal de handoff (Camada B). reason distingue a rede: 'declined'/'not_an_answer'/'judge_failed'/
+  # 'attachment_no_slot' (recusa) e 'max_turns' (absoluto). refusals: N acompanha SÓ o 'max_turns' quando
+  # houve recusas — preserva a telemetria de "quais etapas travam mais" na alternância (senão o max_turns
+  # esconderia que houve recusas no meio).
+  def stuck_handoff_signal(step, slot, turns, reason = nil, refusals = nil)
     payload = { attribute: slot, step_name: (step_name(step).presence || slot), turns: turns }
     payload[:reason] = reason if reason
+    payload[:refusals] = refusals.to_i if reason == 'max_turns' && refusals.to_i.positive?
     { stuck_handoff: payload }
   end
 
-  # Slot já preenchido: se o valor parece estranho e ainda não confirmamos, pede confirmação UMA vez
-  # (hold); senão AVANÇA. O hold NÃO conta travamento — malformado É coleta (grava e avança pela
-  # confirmação-única, decisão #2); o contador de trava é só para etapa que NÃO coleta (decisão #3).
-  # Gap 3: SÓ o AVANÇO (captura genuína, valor validado, completed:true) zera ai_slot_refusals. A
-  # confirmação-única (completed:false, valor malformado) SEGURA o orçamento (refusals: current_refusals)
-  # — não zera nem incrementa. Antes zerava, e a alternância recusa/malformado nunca atingia o teto
-  # (buraco do Gap 1). Um malformado é erro de digitação, não recusa: não gasta orçamento, mas também não
-  # perdoa as recusas já acumuladas.
+  # Slot já preenchido: confirmação-única (valor malformado) ou AVANÇA. Gap 3: SÓ o avanço zera as recusas;
+  # a confirmação-única SEGURA (o teto absoluto de fora conta este turno como não-produtivo).
   def resolve_filled_slot(slot, decision, index)
-    return { completed: true, stuck: 0, refusals: 0 } unless slot_collector.needs_confirmation?(slot, decision, index)
+    return { completed: true, refusals: 0 } unless slot_collector.needs_confirmation?(slot, decision, index)
 
-    { completed: false, stuck: current_stuck, confirm: true, refusals: current_refusals }
+    { completed: false, confirm: true, refusals: current_refusals }
   end
 
-  def current_stuck
-    (@conversation.additional_attributes || {})['ai_step_stuck_turns'].to_i
+  def current_turns
+    (@conversation.additional_attributes || {})['ai_step_turns'].to_i
   end
 
   def current_refusals

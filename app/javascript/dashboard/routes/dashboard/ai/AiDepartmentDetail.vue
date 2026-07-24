@@ -69,7 +69,7 @@ const form = reactive({
   transfer_min_confidence: 0,
   // Transferir para humano se a IA travar numa etapa de coleta por X mensagens
   // (department.transfer_rules.stuck_handoff_turns). Default 3; 0 = desligado (nunca transfere por trava).
-  stuck_handoff_turns: 3,
+  stuck_handoff_turns: 10,
   // Atendimento
   group_delay_seconds: '',
   max_replies: '',
@@ -257,7 +257,7 @@ const hydrate = dept => {
     close_when_steps: arrayToLines(playbook.close_when),
     transfer_min_confidence: Number(transferRules.min_confidence) || 0,
     // ?? 3: chave ausente (department antigo) => default 3; valor 0 explícito é preservado.
-    stuck_handoff_turns: Number(transferRules.stuck_handoff_turns ?? 3),
+    stuck_handoff_turns: Number(transferRules.stuck_handoff_turns ?? 10),
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',

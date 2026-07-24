@@ -538,8 +538,12 @@ class Ai::Gateway
     input['team_id'] = team_id if team_id
     action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: reason })
     handoff_coordinator.assign_human(team_id, reason: reason) # reason livre -> vira o Resumo da transferência
+    # Gap 4: reason distingue a rede (recusa vs 'max_turns' absoluto); refusals acompanha o max_turns
+    # quando houve recusas no meio (telemetria de "quais etapas travam mais" na alternância). .compact
+    # tira os nil (a rede de recusa não manda refusals; o vazio não manda reason).
     emit(run_record, 'step.stuck_handoff',
-         { attribute: info[:attribute], step_name: info[:step_name], turns: info[:turns] })
+         { attribute: info[:attribute], step_name: info[:step_name], turns: info[:turns],
+           reason: info[:reason], refusals: info[:refusals] }.compact)
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_stuck_handoff] #{e.class}: #{e.message}"
   end
