@@ -241,6 +241,18 @@ class Ai::StateManager
     steps[current_step_index(steps.size - 1)]
   end
 
+  # (Approach 1a) PRÓXIMA etapa (index+1) — usada SÓ pelo Gateway p/ o look-ahead de conhecimento: buscar o
+  # catálogo da etapa que ENTRA no turno da transição (o resolve_knowledge usava a etapa pré-avanço, então
+  # ao entrar em PLANOS o catálogo só vinha um turno depois — conv 393). nil na última etapa/sem etapas.
+  # Leitura pura, NÃO avança nada, e é SEPARADA do current_step de propósito: gate de atributos e juiz
+  # seguem no pré-avanço (ao contrário do Gap 2, aqui só o conhecimento olha a etapa de destino).
+  def next_step(department)
+    steps = Array(department.playbook&.steps)
+    return nil if steps.empty?
+
+    steps[current_step_index(steps.size - 1) + 1]
+  end
+
   # (Camada 3) Roda o worker de julgamento UMA vez por turno — serve p/ (a) a intenção (asks_about/query,
   # decide a busca) e (b) a captura (reusado no track_step via judge_result). nil quando o worker está
   # DESLIGADO (default) ou sem texto -> Gateway mantém o RAG de hoje (comportamento inalterado).

@@ -96,6 +96,11 @@ class Ai::Gateway
     # worker fica DENTRO da idempotência do BUG 1 (claim perdido em re-exec/2º binding => worker NÃO roda),
     # e o caminho worker-OFF (default) segue IDÊNTICO a hoje (claim continua dentro do track_step).
     active_step = @acts_live ? state_manager.current_step(department) : nil
+    # Approach 1a (conv 393): o conhecimento derivado da etapa precisa da etapa que ENTRA, não da que sai.
+    # next_step é um valor SEPARADO, usado SÓ pelo resolve_knowledge (look-ahead do catálogo no turno da
+    # transição). NÃO alimenta o juiz nem o gate de atributos — ao contrário do Gap 2, aqui só o conhecimento
+    # olha o destino. nil em shadow (como o active_step) e na última etapa.
+    next_step = @acts_live ? state_manager.next_step(department) : nil
 
     # Camada 0 — triagem de turno trivial (opt-in, default OFF). ANTES de qualquer chamada ao modelo:
     # um turno trivial ("ok"/"obrigada"/emoji solto em reação à nossa última msg) NÃO acorda o supervisor.
@@ -119,7 +124,7 @@ class Ai::Gateway
         state_manager.run_turn_judge(active_step, effective_content)
       end
 
-    kn = resolve_knowledge(run_record, department, active_step, judge_result, effective_content)
+    kn = resolve_knowledge(run_record, department, active_step, next_step, judge_result, effective_content)
     knowledge = kn[:chunks]
     emit(run_record, 'knowledge.retrieved',
          { count: knowledge.size, preview: knowledge.first(2), kinds: kn[:kinds], source: kn[:source] })
@@ -331,7 +336,7 @@ class Ai::Gateway
   #    resultado ruim). source 'worker'.
   #  - etapa apresenta planos/catálogo (heurística por instrução) -> busca produtos. source 'step'.
   #  - senão -> NÃO busca (economia) + evento knowledge.skipped. source 'none'.
-  def resolve_knowledge(run_record, department, step, judge_result, query_text)
+  def resolve_knowledge(run_record, department, step, next_step, judge_result, query_text)
     return search_knowledge(department, nil, query_text, 'all') if judge_result.nil?
 
     if judge_result[:status].to_s == 'failed'
@@ -341,10 +346,27 @@ class Ai::Gateway
 
     asks = judge_result[:asks_about].to_s
     return search_knowledge(department, [asks], judge_result[:query].presence || query_text, 'worker') if asks.present? && asks != 'nada'
-    return search_knowledge(department, ['produto'], 'planos e preços', 'step') if step_wants_products?(step)
+
+    # Approach 1a (conv 393): busca o catálogo da etapa ATUAL OU da que ENTRA (next_step) — assim, no turno
+    # em que o cliente preenche o último slot e transita para PLANOS, o catálogo já está no contexto (antes
+    # só vinha um turno depois, e a IA dizia "vou te mostrar" sem os planos).
+    catalog = step_catalog_request(step) || step_catalog_request(next_step)
+    return search_knowledge(department, catalog[:kinds], catalog[:query], 'step') if catalog
 
     emit(run_record, 'knowledge.skipped', { reason: 'no_question_no_catalog_step' })
     { chunks: [], kinds: nil, source: 'none' }
+  end
+
+  # PONTO ÚNICO de decisão "esta etapa apresenta catálogo?" (e de qual kind/query). Hoje: heurística por
+  # instrução (step_wants_products?), reusando os literais existentes — SEM constante/hardcode novo. Dívida
+  # prioritária: trocar por MARCAÇÃO na etapa (a etapa declara catálogo + kind, configurável no painel), o
+  # que remove o hardcode PT/produto e serve qualquer segmento (ex.: VIABILIDADE/cidades_atendidas, que a
+  # regex nunca casa). Quando isso vier, TROCAR só aqui — o look-ahead do resolve_knowledge não muda.
+  # Retorna { kinds:, query: } ou nil.
+  def step_catalog_request(step)
+    return nil unless step_wants_products?(step)
+
+    { kinds: ['produto'], query: 'planos e preços' }
   end
 
   def search_knowledge(department, kinds, query, source)
