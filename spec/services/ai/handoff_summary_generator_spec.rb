@@ -61,23 +61,60 @@ RSpec.describe Ai::HandoffSummaryGenerator do
     end
   end
 
-  it 'NÃO cria resumo quando a geração falha (status error)' do
+  # Contrato "nunca vazio": mesmo com status error do LLM (retorno, não exceção), o resumo determinístico
+  # ainda serve — facts+reason não dependem do LLM. Só uma exceção DURA (rescue) fica sem resumo.
+  it 'status error do LLM cai no fallback determinístico (nunca vazio)' do
     allow(Ai::ModelRouter).to receive(:decide).and_return(
       { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'error' => 'boom' },
         tokens_in: 0, tokens_out: 0, cost: 0.0, latency_ms: 1, status: 'error' }
     )
+    conversation.update!(additional_attributes: { 'ai_collected_facts' => { 'nome_cliente' => 'Fulano' } })
 
-    expect { described_class.new(conversation: conversation, reason: 'loop').generate }
+    summary = described_class.new(conversation: conversation, reason: 'loop').generate
+
+    expect(summary).to be_a(Ai::HandoffSummary)
+    expect(summary.content).to include('nome_cliente: Fulano', 'Transferido por:')
+  end
+
+  it 'NÃO cria resumo apenas quando a geração LEVANTA exceção (rescue -> nil)' do
+    allow(Ai::ModelRouter).to receive(:decide).and_raise(StandardError, 'boom')
+
+    expect { expect(described_class.new(conversation: conversation, reason: 'loop').generate).to be_nil }
       .not_to change(Ai::HandoffSummary, :count)
   end
 
-  it 'devolve nil e não levanta quando o summary vem vazio' do
+  # Item 3 (conv 394): o LLM devolveu summary vazio no meio do cadastro. O resumo NUNCA pode ser vazio —
+  # cai no fallback determinístico com os fatos coletados + o motivo. Alvo da prova de mutação por nome.
+  it 'FALLBACK determinístico quando o summary do LLM vem vazio: HandoffSummary não-vazio com fatos + motivo' do
     allow(Ai::ModelRouter).to receive(:decide).and_return(
       { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'summary' => '' },
         tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
     )
+    conversation.update!(additional_attributes: { 'ai_collected_facts' => {
+                           'nome_cliente' => 'Fulano', 'cidade' => 'Chapecó'
+                         } })
 
-    expect(described_class.new(conversation: conversation, reason: 'loop').generate).to be_nil
+    summary = described_class.new(conversation: conversation, reason: 'loop').generate
+
+    expect(summary).to be_a(Ai::HandoffSummary)
+    expect(summary.content).to be_present
+    expect(summary.content).to include('nome_cliente: Fulano', 'cidade: Chapecó')
+    expect(summary.content).to include('Transferido por:')
+  end
+
+  it 'FALLBACK piso mínimo: sem fatos, ainda NÃO-vazio (só o motivo) — nunca vazio' do
+    allow(Ai::ModelRouter).to receive(:decide).and_return(
+      { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'summary' => '' },
+        tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
+    )
+    conversation.update!(custom_attributes: {}, additional_attributes: {})
+    allow(conversation.contact).to receive(:custom_attributes).and_return({}) if conversation.contact
+
+    summary = described_class.new(conversation: conversation, reason: 'credit_exhausted').generate
+
+    expect(summary).to be_a(Ai::HandoffSummary)
+    expect(summary.content).to be_present
+    expect(summary.content).to include('créditos de IA da conta se esgotaram') # reason_label, sem fatos
   end
 
   describe 'linha "Dados já coletados" (collected_attributes)' do

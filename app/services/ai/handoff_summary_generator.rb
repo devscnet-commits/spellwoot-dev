@@ -39,8 +39,11 @@ class Ai::HandoffSummaryGenerator
       decision: result[:decision] || {}, status: result[:status]
     )
 
+    # NUNCA vazio: o LLM às vezes devolve summary em branco (conv 394 — transferência no meio do cadastro,
+    # fatos parciais). Quem assume no meio é quem MAIS precisa de contexto, então caímos num resumo
+    # determinístico montado em código com o que já existe. O resumo do LLM VENCE quando existe.
     content = extract_summary(result[:decision])
-    return nil if content.blank?
+    content = deterministic_fallback if content.blank?
 
     Ai::HandoffSummary.create!(
       account_id: @account.id, conversation_id: @conversation.id, ai_run_id: run.id,
@@ -61,6 +64,18 @@ class Ai::HandoffSummaryGenerator
 
   def extract_summary(decision)
     decision.is_a?(Hash) ? decision['summary'].to_s.strip : ''
+  end
+
+  # Resumo DETERMINÍSTICO (rede de segurança) — quando o LLM não produz summary. Monta a partir do que já
+  # existe: os fatos coletados (collected_attributes) + o motivo (reason_label). Vale p/ os 4 motivos (este
+  # generator é compartilhado por normal/loop/stuck/credit via assign_human). NUNCA vazio: o piso é só o
+  # motivo. NOTA: se cair no piso (sem fatos) numa conversa já avançada, o problema é a COLETA (fatos fora
+  # do ai_collected_facts), não o resumo — investigar à parte. O nome da etapa NÃO entra aqui: é frágil de
+  # resolver (o ai_step_index é relativo ao department, que não é persistido) e já vem no reason do stuck.
+  def deterministic_fallback
+    facts = collected_attributes
+    coletado = facts.present? ? "Coletado até aqui: #{facts}." : 'Nenhum dado coletado ainda.'
+    "#{coletado} Transferido por: #{reason_label}."
   end
 
   def transcript
