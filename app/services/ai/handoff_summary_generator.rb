@@ -29,21 +29,30 @@ class Ai::HandoffSummaryGenerator
       account_id: @account.id, conversation_id: @conversation.id, ai_agent_id: agent&.id,
       run_type: 'handoff_summary', mode: 'assistant', status: 'running'
     )
-    result = Ai::ModelRouter.decide(
-      profile: agent&.operation_profile, system_prompt: build_prompt(agent),
+    # BUG DA 394: usava ModelRouter.decide, que força o SCHEMA DE DECISÃO strict (reply/handoff/close/tool,
+    # SEM campo summary) -> o modelo devolvia uma DECISÃO (handoff), nunca um resumo, e o summary era
+    # IMPOSSÍVEL na saída. Agora usa call_model (entrada LIVRE, sem schema), como o CaptureJudge -> o
+    # {"summary"} do prompt volta a valer. call_model NÃO devolve cost/latency (o decide devolvia), então
+    # computamos aqui (senão o ai:cost_report subconta o resumo).
+    provider, model = summary_model(agent)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    raw = Ai::ModelRouter.call_model(
+      provider: provider, model: model, system_prompt: build_prompt(agent),
       user_message: transcript, account_id: @account.id, json: true
     )
+    tin = raw[:tokens_in].to_i
+    tout = raw[:tokens_out].to_i
+    llm_summary = extract_summary(raw[:text])
     run.update!(
-      provider: result[:provider], model: result[:model], tokens_in: result[:tokens_in],
-      tokens_out: result[:tokens_out], cost: result[:cost], latency_ms: result[:latency_ms],
-      decision: result[:decision] || {}, status: result[:status]
+      provider: provider, model: model, tokens_in: tin, tokens_out: tout,
+      cost: Ai::ModelRouter.estimate_cost(model, tin, tout),
+      latency_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round,
+      decision: { 'summary' => llm_summary }, status: raw[:status] == 'error' ? 'error' : 'recorded'
     )
 
-    # NUNCA vazio: o LLM às vezes devolve summary em branco (conv 394 — transferência no meio do cadastro,
-    # fatos parciais). Quem assume no meio é quem MAIS precisa de contexto, então caímos num resumo
-    # determinístico montado em código com o que já existe. O resumo do LLM VENCE quando existe.
-    content = extract_summary(result[:decision])
-    content = deterministic_fallback if content.blank?
+    # NUNCA vazio (rede de segurança): LLM em branco/JSON inválido/status error -> resumo determinístico.
+    # O resumo do LLM VENCE quando existe (conv 394: quem assume no meio é quem MAIS precisa de contexto).
+    content = llm_summary.presence || deterministic_fallback
 
     Ai::HandoffSummary.create!(
       account_id: @account.id, conversation_id: @conversation.id, ai_run_id: run.id,
@@ -62,8 +71,23 @@ class Ai::HandoffSummaryGenerator
     (bindings.find { |b| b.mode == 'live' } || bindings.first)&.agent
   end
 
-  def extract_summary(decision)
-    decision.is_a?(Hash) ? decision['summary'].to_s.strip : ''
+  # provider/model do perfil do agente (supervisor + defaults) — mesmo padrão do CaptureJudge.worker_config.
+  # Não há worker override próprio p/ o resumo; usa o supervisor do perfil.
+  def summary_model(agent)
+    profile = agent&.operation_profile
+    [profile&.supervisor_provider.presence || 'openai',
+     profile&.supervisor_model.presence || 'gpt-4.1-mini']
+  end
+
+  # Parser tolerante próprio (NÃO schema strict): extrai {"summary":...} do texto CRU do call_model, como
+  # CaptureJudge.parse. Vazio quando não há JSON / não há summary / JSON inválido -> o caller cai no fallback.
+  def extract_summary(text)
+    json = text.to_s[/\{.*\}/m]
+    return '' if json.blank?
+
+    JSON.parse(json)['summary'].to_s.strip
+  rescue JSON::ParserError
+    ''
   end
 
   # Resumo DETERMINÍSTICO (rede de segurança) — quando o LLM não produz summary. Monta a partir do que já
