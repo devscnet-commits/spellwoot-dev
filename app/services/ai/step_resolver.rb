@@ -24,10 +24,10 @@ class Ai::StepResolver
 
   # capture_signal: nil (capturou/nada), :no_attempt (#269, slot de tipo conhecido sem tentativa),
   # { refusal: ... } (juiz recusou) ou { declined: true } (Gap 1, cliente declinou o dado).
-  def resolve_completion(step, decision, stuck_limit, index, capture_signal)
+  def resolve_completion(step, decision, stuck_limit, index, capture_signal, productive = false)
     # Gap 2: attribute (declarado ∪ INFERIDO) governa "há slot?" E a captura.
     slot = Ai::StepSlot.attribute(step)
-    return { completed: step_completed?(decision), turns: 0, refusals: 0 } unless slot
+    return { completed: step_completed?(decision), turns: 0, questions: 0, refusals: 0 } unless slot
 
     # INVARIANTE (Gaps 3/4): ao SAIR de um slot obrigatório, ou os contadores foram ZERADOS (só no avanço
     # genuíno: completed:true), ou houve stuck_handoff (outcome[:signal]). NÃO existe caminho que avance um
@@ -35,7 +35,7 @@ class Ai::StepResolver
     # alternância). A rede de RECUSA é avaliada em resolve_slot; o teto ABSOLUTO é a rede de FORA
     # (apply_absolute_ceiling), que roda DEPOIS e NUNCA sobrescreve um handoff por recusa devido (Q5).
     outcome = resolve_slot(step, slot, decision, index, stuck_limit, capture_signal)
-    apply_absolute_ceiling(step, slot, stuck_limit, outcome)
+    apply_absolute_ceiling(step, slot, stuck_limit, outcome, productive)
   end
 
   private
@@ -53,10 +53,18 @@ class Ai::StepResolver
   # Reset no AVANÇO. Carrega refusals junto quando dispara com recusas > 0 (telemetria da ALTERNÂNCIA:
   # em recusa/pergunta/recusa o absoluto sobe todo turno e a recusa só nas recusas, então o max_turns pode
   # disparar antes do teto de recusa — o campo refusals preserva quantas recusas houve).
-  def apply_absolute_ceiling(step, slot, stuck_limit, outcome)
-    return outcome.merge(turns: 0) if outcome[:completed] # avançou -> zera o absoluto
-    return outcome if outcome[:signal]                    # recusa JÁ transferiu neste turno -> respeita
+  def apply_absolute_ceiling(step, slot, stuck_limit, outcome, productive)
+    return outcome.merge(turns: 0, questions: 0) if outcome[:completed] # avanço zera os DOIS contadores
+    return outcome if outcome[:signal]                                  # recusa JÁ transferiu -> respeita
 
+    # Gap 4 v2 (conserto conv 394): turno PRODUTIVO (pergunta legítima respondida) NÃO conta no teto
+    # improdutivo — vai p/ um teto de perguntas SEPARADO e maior. Cada turno mexe em EXATAMENTE um contador
+    # (o outro fica nil no outcome => persist não toca).
+    productive ? apply_question_ceiling(step, slot, stuck_limit, outcome) : apply_turn_ceiling(step, slot, stuck_limit, outcome)
+  end
+
+  # Turno IMPRODUTIVO (recusa/silêncio/ruído): ai_step_turns, teto = stuck_limit, reason 'max_turns'.
+  def apply_turn_ceiling(step, slot, stuck_limit, outcome)
     turns = current_turns + 1
     return outcome.merge(turns: turns) unless stuck_limit.positive? && turns >= stuck_limit
 
@@ -64,6 +72,27 @@ class Ai::StepResolver
     # a rede de recusa mexeu; senão o valor persistido. Sem isso, o max_turns registraria uma recusa a menos.
     refusals = outcome.key?(:refusals) ? outcome[:refusals].to_i : current_refusals
     outcome.merge(turns: 0, signal: stuck_handoff_signal(step, slot, turns, 'max_turns', refusals))
+  end
+
+  # Turno PRODUTIVO (o cliente perguntou e a IA respondeu): ai_step_questions, teto SEPARADO e maior
+  # (stuck_limit × Q). Fecha a brecha "perguntar infinito" sem transferir quem se informa antes de decidir.
+  # reason 'max_questions'. É TAMBÉM o backstop de misclassificação: um turno improdutivo marcado produtivo
+  # por engano cai aqui e ainda transfere (em Q×stuck_limit) — nunca "preso pra sempre".
+  def apply_question_ceiling(step, slot, stuck_limit, outcome)
+    questions = current_questions + 1
+    ceiling = question_ceiling(stuck_limit)
+    return outcome.merge(questions: questions) unless ceiling.positive? && questions >= ceiling
+
+    outcome.merge(questions: 0, signal: stuck_handoff_signal(step, slot, questions, 'max_questions'))
+  end
+
+  # Teto de PERGUNTAS = stuck_limit × Q (Q folgado). Derivado do MESMO campo da tela (stuck_handoff_turns);
+  # nenhum config novo. 0 quando o teto improdutivo está desligado (stuck_limit 0).
+  QUESTION_CEILING_FACTOR = 3
+  def question_ceiling(stuck_limit)
+    return 0 unless stuck_limit.positive?
+
+    stuck_limit * QUESTION_CEILING_FACTOR
   end
 
   # Cliente declinou o dado. OPCIONAL -> satisfaz com a sentinela de ausência (fill_absent) e AVANÇA;
@@ -147,6 +176,10 @@ class Ai::StepResolver
 
   def current_turns
     (@conversation.additional_attributes || {})['ai_step_turns'].to_i
+  end
+
+  def current_questions
+    (@conversation.additional_attributes || {})['ai_step_questions'].to_i
   end
 
   def current_refusals

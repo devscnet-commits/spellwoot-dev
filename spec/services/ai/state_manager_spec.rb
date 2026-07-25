@@ -2114,4 +2114,95 @@ RSpec.describe Ai::StateManager do
       expect(idx).to eq(0)
     end
   end
+
+  # Gap 4 v2 (conserto conv 394): turno PRODUTIVO (pergunta legítima respondida) NÃO conta no teto
+  # IMPRODUTIVO — vai p/ um teto de perguntas SEPARADO e maior (stuck_limit × 3). Silêncio/ruído conta.
+  # Passa judge_result explicitamente (como o Gateway faz na :175) — é ele que traz o asks_about.
+  describe '#track_step — Gap 4 v2: produtivo (pergunta) vs improdutivo no teto' do
+    def st_idx; conversation.reload.additional_attributes.to_h['ai_step_index']; end
+    def st_turns; conversation.reload.additional_attributes.to_h['ai_step_turns']; end
+    def st_questions; conversation.reload.additional_attributes.to_h['ai_step_questions']; end
+
+    def q_dept(stuck)
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "Q#{SecureRandom.hex(3)}",
+                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => stuck })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Endereco', 'instructions' => 'Peça e grave o endereco_completo.' },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def do_turn(dept, judge_result:, decision_kind: 'reply', text: 'msg')
+      msg = create(:message, conversation: conversation, account: account, inbox: inbox,
+                             message_type: :incoming, content: text)
+      manager.track_step(dept, { 'decision' => decision_kind, 'step_completed' => false },
+                         dispatcher: dispatcher, run: run, message_text: text, message: msg, judge_result: judge_result)
+    end
+
+    # Pergunta legítima respondida = juiz diz asks_about != 'nada' + decisão reply.
+    def ask(dept, asks: 'produto')
+      do_turn(dept, judge_result: { status: 'not_an_answer', asks_about: asks, query: 'x' }, text: 'qual o preço?')
+    end
+
+    # Improdutivo = silêncio/ruído (juiz asks_about 'nada').
+    def noise(dept)
+      do_turn(dept, judge_result: { status: 'not_an_answer', asks_about: 'nada', query: '' }, text: '???')
+    end
+
+    before do
+      profile.update!(worker_overrides: { 'capture_judge' => { 'mode' => 'when_silent' } }) # juiz ON: asks_about existe
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+    end
+
+    # O CONSERTO da 394: cliente que só se informa não é transferido. Alvo da prova de mutação por nome.
+    it '394: 3 perguntas respondidas na MESMA etapa NÃO transferem (produtivo não conta no teto improdutivo)' do
+      dept = q_dept(3)
+      3.times { expect(ask(dept)).to be_nil }
+
+      expect(st_turns).to be_nil       # teto IMPRODUTIVO intacto
+      expect(st_questions).to eq(3)    # contadas no teto de PERGUNTAS (folgado: 3×3=9)
+      expect(st_idx.to_i).to eq(0)     # não avançou, não transferiu
+    end
+
+    it 'oposto: 3 turnos improdutivos (silêncio) atingem o teto -> max_turns' do
+      dept = q_dept(3)
+      noise(dept); noise(dept)
+      sig = noise(dept) # 3 -> teto improdutivo
+
+      expect(sig[:stuck_handoff]).to include(reason: 'max_turns', turns: 3)
+      expect(st_questions).to be_nil # nada foi produtivo
+    end
+
+    it 'KB vazio / qualquer asks_about != nada é PRODUTIVO (não depende de achar conhecimento)' do
+      dept = q_dept(3)
+      ask(dept, asks: 'faq') # FAQ, mesmo que o KB não devolvesse nada -> ainda produtivo
+
+      expect(st_turns).to be_nil
+      expect(st_questions).to eq(1)
+    end
+
+    it 'brecha fechada: perguntas até o teto de PERGUNTAS (stuck_limit × 3) -> max_questions' do
+      dept = q_dept(2) # teto de perguntas = 2×3 = 6
+      5.times { expect(ask(dept)).to be_nil }
+      sig = ask(dept) # 6ª -> teto de perguntas
+
+      expect(sig[:stuck_handoff]).to include(reason: 'max_questions', turns: 6)
+      expect(st_turns).to be_nil # o teto improdutivo nunca subiu
+    end
+
+    it 'INVARIANTE: captura genuína (avanço) ZERA os dois contadores' do
+      dept = q_dept(3)
+      ask(dept); noise(dept)
+      expect(st_questions).to eq(1)
+      expect(st_turns).to eq(1)
+
+      do_turn(dept, judge_result: { status: 'answered', value: 'Rua X, 100', asks_about: 'nada', query: '' },
+                    text: 'Rua X, 100')
+
+      expect(st_idx.to_i).to eq(1)       # avançou
+      expect(st_turns.to_i).to eq(0)     # zerou
+      expect(st_questions.to_i).to eq(0)
+    end
+  end
 end

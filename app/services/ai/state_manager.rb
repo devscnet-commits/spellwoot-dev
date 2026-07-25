@@ -183,7 +183,11 @@ class Ai::StateManager
     # Conclusão + confirmação-única (Parte 3) + rede de segurança contra travamento (Camada B/#259). Nem
     # :no_attempt nem a recusa do juiz contam o contador NORMAL (cliente engajado); a recusa do juiz tem
     # um contador SEPARADO com teto próprio (ver resolve_empty_slot / resolve_judge_refusal).
-    outcome = step_resolver.resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal)
+    # Gap 4 v2 (conserto conv 394): o turno foi PRODUTIVO (o cliente perguntou algo legítimo e a IA
+    # respondeu)? Se sim, não conta no teto improdutivo. Bool derivado aqui e passado ao StepResolver —
+    # NÃO vaza judge_result para o resolver.
+    productive = productive_turn?(judge_result, decision)
+    outcome = step_resolver.resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal, productive)
 
     # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
     # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
@@ -208,6 +212,7 @@ class Ai::StateManager
     new_index = outcome[:completed] ? (index + 1).clamp(0, steps.size - 1) : index
     persist_step_state(steps[new_index], new_index, decision)
     persist_step_turns(outcome[:turns])
+    persist_step_questions(outcome[:questions])
     persist_slot_refusals(outcome[:refusals])
   end
 
@@ -322,6 +327,19 @@ class Ai::StateManager
     rules.key?('stuck_handoff_turns') ? rules['stuck_handoff_turns'].to_i : DEFAULT_STUCK_HANDOFF_TURNS
   end
 
+  # Gap 4 v2: turno PRODUTIVO = o cliente fez uma pergunta legítima (asks_about != 'nada', sinal do juiz) E
+  # a IA respondeu (decision 'reply'). asks_about SÓ existe com o juiz ON; OFF => sempre false (conta tudo,
+  # comportamento de hoje — sem regressão). Bordas aceitáveis: tool antes da resposta não é 'reply' -> conta
+  # (raro em coleta); handoff/close também não, mas aí a conversa já sai. NÃO gateia por knowledge.retrieved:
+  # pergunta com KB vazio emite retrieved(count 0), não skipped — o sinal certo é o asks_about, não os chunks.
+  def productive_turn?(judge_result, decision)
+    return false unless judge_result.is_a?(Hash)
+
+    asks = judge_result[:asks_about].to_s
+    reply = (decision.is_a?(Hash) ? decision['decision'] : nil).to_s == 'reply'
+    asks.present? && asks != 'nada' && reply
+  end
+
   # Gap 4: contador ABSOLUTO de turnos não-produtivos na etapa (ai_step_turns) — todo turno que não avança
   # (recusa, :no_attempt, confirmação-única, vazio). Substitui o antigo ai_step_stuck_turns (só-vazio),
   # dobrado no absoluto. nil no outcome => não mexe. Read-modify-write fresco, só grava quando muda.
@@ -332,6 +350,18 @@ class Ai::StateManager
     return if attrs['ai_step_turns'].to_i == count
 
     attrs['ai_step_turns'] = count
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  # Gap 4 v2: contador SEPARADO de turnos PRODUTIVOS (ai_step_questions) — pergunta legítima respondida.
+  # Teto próprio e maior (StepResolver.question_ceiling). nil => não mexe; mesmo RMW fresco do persist_step_turns.
+  def persist_step_questions(count)
+    return if count.nil?
+
+    attrs = @conversation.additional_attributes || {}
+    return if attrs['ai_step_questions'].to_i == count
+
+    attrs['ai_step_questions'] = count
     @conversation.update!(additional_attributes: attrs)
   end
 
