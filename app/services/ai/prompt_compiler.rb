@@ -57,9 +57,12 @@ class Ai::PromptCompiler
       fixed << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
     end
 
-    human_teams = ::Team.where(account_id: agent.account_id).order(:name).pluck(:name)
+    human_teams = human_handoff_teams(agent)
     if human_teams.present?
-      lines = human_teams.map { |t| "- #{t}" }
+      lines = human_teams.map do |t|
+        desc = t.description.to_s.strip
+        desc.present? ? "- #{t.name}: #{desc}" : "- #{t.name}"
+      end
       fixed << "Para transferir para um ATENDENTE HUMANO, NÃO apenas escreva no texto: retorne decision " \
                "\"handoff\" e o nome EXATO do time em handoff_target. Times disponíveis:\n#{lines.join("\n")}"
     end
@@ -166,6 +169,28 @@ class Ai::PromptCompiler
     lines << "Resumo: #{customer_memory.summary}" if customer_memory.summary.present?
     lines.concat(facts.map { |k, v| "- #{k}: #{v}" }) if facts.present?
     [lines.join("\n")]
+  end
+
+  # Times de destino do handoff HUMANO oferecidos ao modelo: a whitelist "Transferir para times
+  # (humanos)" (agent.handoff_team_ids) — a MESMA lista que Ai::HandoffCoordinator#match_team_by_name
+  # aceita. Antes listava TODOS os times da conta: o modelo nomeava um fora da whitelist, o match
+  # falhava e caía em fallback silencioso (destino errado, sem sinal). Na ORDEM dos checkboxes (a
+  # intenção do usuário), como configured_handoff_team_id. Whitelist VAZIA = configuração ausente:
+  # mantém o comportamento antigo (todos os times) mas LOGA um aviso — não deve ser silencioso.
+  def self.human_handoff_teams(agent)
+    ids = agent.respond_to?(:handoff_team_ids) ? Array(agent.handoff_team_ids) : []
+    if ids.empty?
+      Rails.logger.warn "[Ai::PromptCompiler] agente #{agent.try(:id)} sem handoff_team_ids: oferecendo " \
+                        'TODOS os times da conta ao modelo (fallback). Configure "Transferir para times ' \
+                        '(humanos)" para rotear por intenção.'
+      return ::Team.where(account_id: agent.account_id).order(:name).to_a
+    end
+
+    by_id = ::Team.where(account_id: agent.account_id, id: ids).index_by(&:id)
+    ids.filter_map { |id| by_id[id] }
+  rescue StandardError => e
+    Rails.logger.error "[Ai::PromptCompiler#human_handoff_teams] #{e.class}: #{e.message}"
+    ::Team.where(account_id: agent.account_id).order(:name).to_a
   end
 
   # AI agents this agent may hand the conversation to (allowlist by agent id).

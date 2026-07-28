@@ -418,4 +418,71 @@ RSpec.describe Ai::PromptCompiler do
       expect(prompt).not_to include('Base de conhecimento relevante')
     end
   end
+
+  # Ajuste (a) — roteamento por intenção: o bloco de times de handoff passa a listar SÓ a whitelist do
+  # agente (handoff_team_ids) com a description de cada time, para o modelo escolher por INTENÇÃO e não
+  # nomear um time que a resolução recusa. Objetos reais (o bloco precisa de Team.description).
+  describe 'bloco de times de handoff — fonte = whitelist (handoff_team_ids) + description' do
+    let(:account) { create(:account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:agent) do
+      Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id)
+    end
+    let(:dept) do
+      Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comercial',
+                             objetivo: 'Vender', status: 'active', behavior: {})
+    end
+    let!(:t_comercial) { create(:team, account: account, name: 'Comerciais', description: 'contratação de planos e vendas') }
+    let!(:t_suporte)   { create(:team, account: account, name: 'Suporte', description: 'problemas técnicos e reparos') }
+    let!(:t_fora)      { create(:team, account: account, name: 'Financeiro', description: 'cobrança') }
+
+    def prompt_for(agent_arg)
+      described_class.compile(agent: agent_arg, department: dept, knowledge: [], memory: nil, tools: [])
+    end
+
+    it 'lista SÓ os times da whitelist (handoff_team_ids), não todos os times da conta' do
+      agent.update!(handoff_team_ids: [t_comercial.id, t_suporte.id])
+      prompt = prompt_for(agent)
+
+      aggregate_failures do
+        expect(prompt).to include('- Comerciais: contratação de planos e vendas')
+        expect(prompt).to include('- Suporte: problemas técnicos e reparos')
+        expect(prompt).not_to include('Financeiro') # fora da whitelist -> não é oferecido ao modelo
+      end
+    end
+
+    it 'inclui a description ao lado do nome quando existe; nome sozinho quando vazia' do
+      t_suporte.update!(description: '')
+      agent.update!(handoff_team_ids: [t_comercial.id, t_suporte.id])
+      prompt = prompt_for(agent)
+
+      aggregate_failures do
+        expect(prompt).to include('- Comerciais: contratação de planos e vendas') # com description
+        expect(prompt).to include('- Suporte')                                    # aparece
+        expect(prompt).not_to include('- Suporte:')                               # mas SEM ": " (vazia)
+      end
+    end
+
+    it 'respeita a ORDEM dos checkboxes (array), não a ordem do banco' do
+      agent.update!(handoff_team_ids: [t_suporte.id, t_comercial.id]) # Suporte marcado 1º
+      prompt = prompt_for(agent)
+      expect(prompt.index('- Suporte')).to be < prompt.index('- Comerciais')
+    end
+
+    it 'whitelist VAZIA: fallback para todos os times da conta + loga aviso (não silencioso)' do
+      allow(Rails.logger).to receive(:warn)
+      agent.update!(handoff_team_ids: [])
+      prompt = prompt_for(agent)
+
+      aggregate_failures do
+        expect(Rails.logger).to have_received(:warn).with(/sem handoff_team_ids/)
+        expect(prompt).to include('Comerciais')
+        expect(prompt).to include('Suporte')
+        expect(prompt).to include('Financeiro') # fallback: TODOS os times aparecem
+      end
+    end
+  end
 end

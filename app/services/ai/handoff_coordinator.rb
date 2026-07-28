@@ -69,7 +69,15 @@ class Ai::HandoffCoordinator
     return @agent.team_id if @agent.team_id.present?
 
     Rails.logger.info "[Ai::HandoffCoordinator] agente sem team_id; match por nome: #{target.inspect}" if target.present?
-    match_team_by_name(target) || configured_handoff_team_id
+    matched = match_team_by_name(target)
+    return matched if matched
+
+    # Fallback silencioso agora MEDIDO: o modelo pediu um setor (target presente) que NÃO casou nenhum
+    # time da whitelist, e a conversa cai no 1º configurado. Sem este evento não dava para saber se a
+    # escolha por intenção estava funcionando (destino errado sem sinal). Só MEDE — não muda o fluxo.
+    chosen = configured_handoff_team_id
+    emit('handoff.target_unmatched', { handoff_target: target, chosen_team_id: chosen }) if target.present?
+    chosen
   end
 
   # Match tolerante do nome do time — restrito aos times ELEGÍVEIS: a allowlist handoff_team_ids quando
