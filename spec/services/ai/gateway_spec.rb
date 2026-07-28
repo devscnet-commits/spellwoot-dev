@@ -857,6 +857,42 @@ RSpec.describe Ai::Gateway do
       end
     end
 
+    it 'declarado com list_all:true propaga list_all ao retriever (trazer todos do tipo)' do
+      enable_worker!
+      dept = create_department
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Planos',
+                                'knowledge' => { 'query' => 'planos e preços', 'kinds' => ['produto'], 'list_all' => true } },
+                              { 'name' => 'Fim' }
+                            ])
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['CHUNK'])
+
+      deliver('ok', binding: binding, mode: 'live')
+
+      expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: ['produto'], list_all: true))
+    end
+
+    it 'declarado SEM list_all propaga list_all:false (default) — consulta dirigida vai por similaridade' do
+      enable_worker!
+      dept = create_department
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Viabilidade',
+                                'knowledge' => { 'query' => 'cidades atendidas', 'kinds' => ['documento'] } },
+                              { 'name' => 'Fim' }
+                            ])
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['CHUNK'])
+
+      deliver('ok', binding: binding, mode: 'live')
+
+      expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: ['documento'], list_all: false))
+    end
+
     it 'worker roda UMA vez por turno (o track_step REUSA o resultado, sem 2ª chamada)' do
       enable_worker!
       dept = create_department

@@ -35,7 +35,7 @@ RSpec.describe Ai::KnowledgeRetriever do
     end
   end
 
-  describe 'Camada 1 — catálogo pequeno (kinds:[produto] cabe no limite)' do
+  describe 'Camada 1 — list_all: fonte pequena do kind devolve tudo sem vetor' do
     before do
       # 5 produtos, 526 chars no total (como a conta 2 real).
       [['Internet Fibra 1 Giga', 'Internet Fibra 1 Giga — R$ 169,90/mês. Alta velocidade residencial.'],
@@ -48,32 +48,42 @@ RSpec.describe Ai::KnowledgeRetriever do
       chunk(source(kind: 'faq', title: 'F'), 'Como trocar de plano? Fale com o comercial.')
     end
 
-    it 'devolve TODOS os 5 produtos SEM busca vetorial (nem embed chamado)' do
+    it 'list_all:true devolve TODOS os 5 produtos SEM busca vetorial (nem embed chamado)' do
       expect(described_class).not_to receive(:embed)
 
-      chunks = described_class.retrieve(query: 'quero saber dos valores', account_id: account.id, kinds: ['produto'])
+      chunks = described_class.retrieve(query: 'quero saber dos valores', account_id: account.id,
+                                        kinds: ['produto'], list_all: true)
 
       expect(chunks.size).to eq(5)
       expect(chunks.join).to include('R$ 89,90').and include('R$ 249,90') # o mais barato E o empresarial
       expect(chunks.join).not_to include('Como trocar de plano') # nenhum FAQ
     end
 
-    it 'independe do texto da query (catálogo ignora similaridade)' do
-      chunks = described_class.retrieve(query: 'xyzzy nada a ver', account_id: account.id, kinds: ['produto'])
+    # NAMED: em list_all a query é DECORATIVA — devolve todos do kind mesmo sem match semântico.
+    it 'list_all:true devolve todos os chunks do kind mesmo com query que NÃO casa semanticamente' do
+      chunks = described_class.retrieve(query: 'xyzzy nada a ver com planos', account_id: account.id,
+                                        kinds: ['produto'], list_all: true)
 
-      expect(chunks.size).to eq(5) # todos, mesmo sem match textual
+      expect(chunks.size).to eq(5) # todos, apesar da query não casar
     end
 
-    # Generalização (remove o 'produto' literal): QUALQUER kind pequeno pedido devolve tudo sem vetor.
-    # Mutação: falha (embed seria chamado) se o small_catalog voltar a exigir kind == 'produto'.
-    it 'kind NÃO-produto (documento) também devolve TUDO sem busca vetorial' do
+    it 'list_all:true — kind NÃO-produto (documento) também devolve TUDO sem busca vetorial' do
       chunk(source(kind: 'documento', title: 'Cidades'), 'Cidades atendidas: Maravilha, Chapecó, São Miguel.')
       expect(described_class).not_to receive(:embed)
 
-      chunks = described_class.retrieve(query: 'atende minha cidade?', account_id: account.id, kinds: ['documento'])
+      chunks = described_class.retrieve(query: 'atende minha cidade?', account_id: account.id,
+                                        kinds: ['documento'], list_all: true)
 
       expect(chunks).to include('Cidades atendidas: Maravilha, Chapecó, São Miguel.')
       expect(chunks.join).not_to include('R$') # nenhum produto (kind filtrado)
+    end
+
+    # NAMED (o conserto deste PR): list_all:false com conjunto PEQUENO usa SIMILARIDADE — NÃO cai no
+    # small_catalog. Mutação: falha (embed NÃO seria chamado) se o atalho voltar a rodar sem o flag.
+    it 'list_all:false com conjunto pequeno usa similaridade (embed é chamado), não o small_catalog' do
+      expect(described_class).to receive(:embed).and_return(nil)
+
+      described_class.retrieve(query: 'quero saber dos valores', account_id: account.id, kinds: ['produto'])
     end
   end
 
@@ -86,8 +96,8 @@ RSpec.describe Ai::KnowledgeRetriever do
       chunk(source(kind: 'faq', title: 'F'), 'Plano: como faço para cancelar meu plano?')
     end
 
-    it 'não devolve o catálogo inteiro e NÃO traz chunk de outro kind (restrito a produto)' do
-      chunks = described_class.retrieve(query: 'plano', account_id: account.id, kinds: ['produto'])
+    it 'list_all:true acima do limite NÃO devolve tudo: cai no vetor restrito ao kind (o dump seria caro)' do
+      chunks = described_class.retrieve(query: 'plano', account_id: account.id, kinds: ['produto'], list_all: true)
 
       expect(chunks).not_to be_empty
       expect(chunks.join).not_to include('cancelar meu plano') # o FAQ (outro kind) fica de fora
