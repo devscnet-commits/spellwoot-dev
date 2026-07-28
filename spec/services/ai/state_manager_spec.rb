@@ -142,19 +142,19 @@ RSpec.describe Ai::StateManager do
     end
 
     it 'grava ai_last_asked_slot quando decision.asked_slot vem preenchido' do
-      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => 'telefone_secundario' },
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => 'campo_b' },
                          dispatcher: dispatcher, run: run)
 
-      expect(last_asked).to eq('telefone_secundario')
+      expect(last_asked).to eq('campo_b')
     end
 
     it 'NÃO sobrescreve ai_last_asked_slot quando decision.asked_slot vem vazio (preserva a pergunta anterior)' do
-      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'telefone_secundario' })
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b' })
 
       manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '' },
                          dispatcher: dispatcher, run: run)
 
-      expect(last_asked).to eq('telefone_secundario')
+      expect(last_asked).to eq('campo_b')
     end
   end
 
