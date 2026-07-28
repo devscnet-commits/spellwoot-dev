@@ -13,7 +13,12 @@ import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import AiTools from './AiTools.vue';
 import AiStepForm from './AiStepForm.vue';
 // (De)serialização de etapa por SPREAD (preserva collect/slot_required/campos futuros) — ver aiStepPayload.
-import { parseStep, stepToApi, nextStepUid } from './aiStepPayload';
+import {
+  parseStep,
+  stepToApi,
+  nextStepUid,
+  mergeStepEdit,
+} from './aiStepPayload';
 
 // When embedded inside the agent (the agent's single default department), ids come by prop
 // and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
@@ -441,7 +446,7 @@ const saveStep = payload => {
     form.steps.push({ uid: nextStepUid(), ...payload });
   } else if (typeof editingStepIndex.value === 'number') {
     const i = editingStepIndex.value;
-    form.steps.splice(i, 1, { ...form.steps[i], ...payload });
+    form.steps.splice(i, 1, mergeStepEdit(form.steps[i], payload));
   }
   editingStepIndex.value = null;
 };
