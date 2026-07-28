@@ -302,6 +302,33 @@ RSpec.describe Ai::PromptCompiler do
       expect(prompt).to include('nome')
       expect(prompt).not_to include('✓ JÁ TENHO')
     end
+
+    # conv 396 (runs 2039→2041): a confirmação isolada cria um turno SEM dado novo e é onde o motor se perde.
+    # O DEFAULT do bloco passa a ser acuse-inline; a confirmação isolada fica só como EXCEÇÃO p/ valor suspeito.
+    it 'DEFAULT: acusar o dado VÁLIDO INLINE (mesma msg do próximo pedido), NUNCA pergunta separada só p/ confirmar' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      aggregate_failures do
+        expect(prompt).to include('acuse-o na MESMA mensagem em que pede o próximo dado')
+        expect(prompt).to include('NUNCA faça uma pergunta separada só para confirmar')
+      end
+    end
+
+    it 'EXCEÇÃO preservada: valor incompleto/estranho/malformado ainda ganha a confirmação ISOLADA uma vez' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      aggregate_failures do
+        expect(prompt).to include('EXCEÇÃO')
+        expect(prompt).to include('incompleto/estranho/malformado')
+        expect(prompt).to include('confirme UMA única vez, isolada')
+      end
+    end
+
+    it 'o acuse-inline (default) vem ANTES da confirmação isolada (exceção) no bloco' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      expect(prompt.index('acuse-o na MESMA mensagem')).to be < prompt.index('EXCEÇÃO')
+    end
   end
 
   # Prompt ENXUTO da 2ª chamada (Ai::Gateway#tool_followup): a ferramenta já rodou, o modelo só REDIGE
