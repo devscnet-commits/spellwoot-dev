@@ -10,14 +10,19 @@ RSpec.describe Ai::HandoffSummaryGenerator do
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
   let(:conversation) { create(:conversation, account: account, inbox: inbox) }
 
+  # Stuba call_model (entrada LIVRE, TEXTO CRU) — NÃO decide. call_model devolve o texto do provider; o
+  # generator faz o próprio parse de {"summary"}. Regra: o teste tem que exercitar a chamada REAL, não
+  # stubar o método acima do bug (decide) com a resposta já pronta.
+  def stub_call_model(text:, status: 'recorded')
+    allow(Ai::ModelRouter).to receive(:call_model)
+      .and_return({ text: text, status: status, tokens_in: 10, tokens_out: 5 })
+  end
+
   before do
     Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
     create(:message, account: account, inbox: inbox, conversation: conversation,
                      message_type: 'incoming', content: 'quero cancelar meu plano agora')
-    allow(Ai::ModelRouter).to receive(:decide).and_return(
-      { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'summary' => 'Cliente quer cancelar o plano.' },
-        tokens_in: 10, tokens_out: 5, cost: 0.001, latency_ms: 20, status: 'recorded' }
-    )
+    stub_call_model(text: '{"summary":"Cliente quer cancelar o plano."}')
   end
 
   it 'gera o resumo e cria Ai::HandoffSummary + Ai::Run, SEM consumir crédito' do
@@ -33,97 +38,109 @@ RSpec.describe Ai::HandoffSummaryGenerator do
     run = Ai::Run.find_by(conversation_id: conversation.id, run_type: 'handoff_summary')
     expect(run).to be_present
     expect(run.mode).to eq('assistant')
-    expect(run.cost).to eq(0.001) # custo registrado para os relatórios
+    expect(run.cost).to be_a(Numeric) # custo COMPUTADO (call_model não devolve; estimate_cost + clock)
 
     expect(balance.reload.total).to eq(5) # crédito NÃO foi consumido
+  end
+
+  # A PROVA do conserto do fluxo (bug 394): o generator usa call_model (LIVRE, sem schema), NUNCA decide
+  # (schema de decisão strict -> summary IMPOSSÍVEL). FALHA com o código antigo (decide), PASSA com o conserto.
+  it 'usa call_model SEM schema de decisão e NUNCA decide (senão o summary é impossível)' do
+    expect(Ai::ModelRouter).not_to receive(:decide)
+    captured = nil
+    allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
+      captured = kwargs
+      { text: '{"summary":"Resumo real."}', status: 'recorded', tokens_in: 3, tokens_out: 7 }
+    end
+
+    summary = described_class.new(conversation: conversation, reason: 'loop').generate
+
+    expect(summary.content).to eq('Resumo real.')
+    expect(captured).not_to have_key(:schema) # reforço: entrada livre, sem contrato de decisão
+    expect(captured[:json]).to be(true)
   end
 
   it 'mapeia o token de ausência para "não informado" — NUNCA vaza o token cru no resumo (humano lê)' do
     conversation.update!(additional_attributes: {
                            'ai_collected_facts' => { 'email_cliente' => Ai::StepSlot::ABSENT, 'cidade' => 'Chapecó' }
                          })
+    captured = nil
+    allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
+      captured = kwargs[:system_prompt]
+      { text: '{"summary":"ok"}', status: 'recorded', tokens_in: 1, tokens_out: 1 }
+    end
 
     described_class.new(conversation: conversation, reason: 'loop').generate
 
-    expect(Ai::ModelRouter).to have_received(:decide) do |kwargs|
-      expect(kwargs[:system_prompt]).to include('email_cliente: não informado')
-      expect(kwargs[:system_prompt]).not_to include(Ai::StepSlot::ABSENT)
-    end
+    expect(captured).to include('email_cliente: não informado')
+    expect(captured).not_to include(Ai::StepSlot::ABSENT)
   end
 
-  it 'inclui o motivo do handoff e o transcript no prompt' do
+  it 'inclui o motivo do handoff e o transcript no prompt, e pede json' do
+    captured = nil
+    allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
+      captured = kwargs
+      { text: '{"summary":"ok"}', status: 'recorded', tokens_in: 1, tokens_out: 1 }
+    end
+
     described_class.new(conversation: conversation, reason: 'credit_exhausted').generate
 
-    expect(Ai::ModelRouter).to have_received(:decide) do |kwargs|
-      expect(kwargs[:system_prompt]).to include('créditos de IA da conta se esgotaram')
-      expect(kwargs[:user_message]).to include('quero cancelar meu plano')
-      expect(kwargs[:json]).to be(true)
+    expect(captured[:system_prompt]).to include('créditos de IA da conta se esgotaram')
+    expect(captured[:user_message]).to include('quero cancelar meu plano')
+    expect(captured[:json]).to be(true)
+  end
+
+  # COEXISTÊNCIA com o fallback (rede de segurança): LLM bom -> resumo rico; LLM falha -> determinístico.
+  describe 'fallback determinístico coexiste com o LLM' do
+    it 'LLM bom -> usa o resumo do LLM (não cai no fallback)' do
+      stub_call_model(text: '{"summary":"Resumo rico do LLM."}')
+      conversation.update!(additional_attributes: { 'ai_collected_facts' => { 'nome_cliente' => 'Fulano' } })
+
+      summary = described_class.new(conversation: conversation, reason: 'loop').generate
+
+      expect(summary.content).to eq('Resumo rico do LLM.') # não é o determinístico
     end
-  end
 
-  # Contrato "nunca vazio": mesmo com status error do LLM (retorno, não exceção), o resumo determinístico
-  # ainda serve — facts+reason não dependem do LLM. Só uma exceção DURA (rescue) fica sem resumo.
-  it 'status error do LLM cai no fallback determinístico (nunca vazio)' do
-    allow(Ai::ModelRouter).to receive(:decide).and_return(
-      { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'error' => 'boom' },
-        tokens_in: 0, tokens_out: 0, cost: 0.0, latency_ms: 1, status: 'error' }
-    )
-    conversation.update!(additional_attributes: { 'ai_collected_facts' => { 'nome_cliente' => 'Fulano' } })
+    it 'JSON inválido do LLM -> fallback determinístico com os fatos' do
+      stub_call_model(text: 'isso não é json {quebrado')
+      conversation.update!(additional_attributes: { 'ai_collected_facts' => { 'nome_cliente' => 'Fulano' } })
 
-    summary = described_class.new(conversation: conversation, reason: 'loop').generate
+      summary = described_class.new(conversation: conversation, reason: 'loop').generate
 
-    expect(summary).to be_a(Ai::HandoffSummary)
-    expect(summary.content).to include('nome_cliente: Fulano', 'Transferido por:')
-  end
+      expect(summary.content).to include('nome_cliente: Fulano', 'Transferido por:')
+    end
 
-  it 'NÃO cria resumo apenas quando a geração LEVANTA exceção (rescue -> nil)' do
-    allow(Ai::ModelRouter).to receive(:decide).and_raise(StandardError, 'boom')
+    it 'summary vazio do LLM -> fallback determinístico' do
+      stub_call_model(text: '{"summary":""}')
+      conversation.update!(additional_attributes: { 'ai_collected_facts' => { 'cidade' => 'Chapecó' } })
 
-    expect { expect(described_class.new(conversation: conversation, reason: 'loop').generate).to be_nil }
-      .not_to change(Ai::HandoffSummary, :count)
-  end
+      summary = described_class.new(conversation: conversation, reason: 'loop').generate
 
-  # Item 3 (conv 394): o LLM devolveu summary vazio no meio do cadastro. O resumo NUNCA pode ser vazio —
-  # cai no fallback determinístico com os fatos coletados + o motivo. Alvo da prova de mutação por nome.
-  it 'FALLBACK determinístico quando o summary do LLM vem vazio: HandoffSummary não-vazio com fatos + motivo' do
-    allow(Ai::ModelRouter).to receive(:decide).and_return(
-      { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'summary' => '' },
-        tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
-    )
-    conversation.update!(additional_attributes: { 'ai_collected_facts' => {
-                           'nome_cliente' => 'Fulano', 'cidade' => 'Chapecó'
-                         } })
+      expect(summary.content).to include('cidade: Chapecó', 'Transferido por:')
+    end
 
-    summary = described_class.new(conversation: conversation, reason: 'loop').generate
+    it 'status error do LLM -> fallback (nunca vazio)' do
+      stub_call_model(text: nil, status: 'error')
 
-    expect(summary).to be_a(Ai::HandoffSummary)
-    expect(summary.content).to be_present
-    expect(summary.content).to include('nome_cliente: Fulano', 'cidade: Chapecó')
-    expect(summary.content).to include('Transferido por:')
-  end
+      summary = described_class.new(conversation: conversation, reason: 'credit_exhausted').generate
 
-  it 'FALLBACK piso mínimo: sem fatos, ainda NÃO-vazio (só o motivo) — nunca vazio' do
-    allow(Ai::ModelRouter).to receive(:decide).and_return(
-      { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'summary' => '' },
-        tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
-    )
-    conversation.update!(custom_attributes: {}, additional_attributes: {})
-    allow(conversation.contact).to receive(:custom_attributes).and_return({}) if conversation.contact
+      expect(summary.content).to include('créditos de IA da conta se esgotaram')
+    end
 
-    summary = described_class.new(conversation: conversation, reason: 'credit_exhausted').generate
+    it 'NÃO cria resumo só quando a geração LEVANTA exceção (rescue -> nil)' do
+      allow(Ai::ModelRouter).to receive(:call_model).and_raise(StandardError, 'boom')
 
-    expect(summary).to be_a(Ai::HandoffSummary)
-    expect(summary.content).to be_present
-    expect(summary.content).to include('créditos de IA da conta se esgotaram') # reason_label, sem fatos
+      expect { expect(described_class.new(conversation: conversation, reason: 'loop').generate).to be_nil }
+        .not_to change(Ai::HandoffSummary, :count)
+    end
   end
 
   describe 'linha "Dados já coletados" (collected_attributes)' do
     def prompt_for(reason: 'loop')
       captured = nil
-      allow(Ai::ModelRouter).to receive(:decide) do |kwargs|
+      allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
         captured = kwargs[:system_prompt]
-        { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'summary' => 'ok' },
-          tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
+        { text: '{"summary":"ok"}', status: 'recorded', tokens_in: 1, tokens_out: 1 }
       end
       described_class.new(conversation: conversation, reason: reason).generate
       captured
