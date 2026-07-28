@@ -59,12 +59,13 @@ class Ai::TurnCapture
     asked = last_asked_slot
     slot = asked.presence || step_slot
 
-    # Confirmação de valor proposto (substitui a Peça 4 no caso comum — sem campo proposed_value): quando o
-    # slot PERGUNTADO no turno anterior JÁ tem valor em ai_collected_facts, este turno é uma CONFIRMAÇÃO —
-    # NUNCA sobrescreve. Resposta negativa LIMPA o valor (mantém a etapa, para recapturar no próximo turno);
-    # afirmativa (ou qualquer não-negativa) MANTÉM. Sempre emite evento. Precede a medição de dessincronia
-    # (um slot já cheio é confirmação, não misquestion) e a captura (não regrava por cima).
-    return confirm_filled_slot(asked, message_text) if asked.present? && fact_present?(asked)
+    # Turno de CONFIRMAÇÃO (versão mínima): quando o slot PERGUNTADO no turno anterior JÁ tem valor REAL em
+    # ai_collected_facts, este turno confirma o valor proposto — só SINALIZAMOS e SAÍMOS, sem escrever por
+    # cima. NÃO decidimos afirmativa/negativa aqui (a semântica confirmação/correção é PR próprio, com o
+    # JUIZ estruturado como detector — não a lista fechada de frases do SlotAbsence, que é AUSÊNCIA, não
+    # negação-de-confirmação) e NÃO limpamos nada (o espelho custom_attributes pode ter sido corrigido por
+    # um humano — ver handoff_summary_generator). O token de ausência não conta como preenchido (fact_present?).
+    return emit_confirmation_turn(asked) if asked.present? && fact_present?(asked)
 
     # Só MEDIÇÃO (não altera fluxo): a pergunta do turno anterior divergiu do slot da etapa corrente.
     emit_asked_desync(asked, step_slot) if asked.present? && asked != step_slot
@@ -148,33 +149,22 @@ class Ai::TurnCapture
     emit('slot.asked_desync', { asked_slot: asked, expected_slot: expected })
   end
 
-  # O slot já tem valor não-vazio em ai_collected_facts? (marca o turno de CONFIRMAÇÃO).
+  # O slot tem valor REAL em ai_collected_facts? (marca o turno de CONFIRMAÇÃO). O token de ausência
+  # (Ai::StepSlot::ABSENT '__sem_valor__') NÃO conta como preenchido: um slot com ausência já registrada
+  # não é confirmável, e entrar no caminho de confirmação deixaria o comportamento imprevisível.
   def fact_present?(slot)
     facts = (@conversation.additional_attributes || {})['ai_collected_facts']
-    facts.is_a?(Hash) && facts[slot].to_s.strip.present?
+    return false unless facts.is_a?(Hash)
+
+    value = facts[slot]
+    value.to_s.strip.present? && !Ai::StepSlot.absent?(value)
   end
 
-  # Turno de confirmação do valor já capturado no slot PERGUNTADO. Negativa (Ai::SlotAbsence detecta o
-  # padrão de negação) LIMPA o valor e emite slot.confirmation_rejected; qualquer outra resposta MANTÉM e
-  # emite slot.confirmed. Nunca sobrescreve nem avança (o avanço segue o slot da etapa, à parte). nil.
-  def confirm_filled_slot(slot, message_text)
-    if Ai::SlotAbsence.looks_like_decline?(message_text)
-      clear_fact(slot)
-      emit('slot.confirmation_rejected', { attribute: slot })
-    else
-      emit('slot.confirmed', { attribute: slot })
-    end
+  # Turno de confirmação (MÍNIMO): só sinaliza e sai. NÃO escreve, NÃO limpa, NÃO toca no espelho. A
+  # decisão afirmativa-mantém / negativa-corrige fica para PR próprio, com o juiz estruturado como detector.
+  def emit_confirmation_turn(slot)
+    emit('slot.asked_confirmation_turn', { attribute: slot })
     nil
-  end
-
-  # Remove o valor do slot da memória de trabalho (ai_collected_facts) E do espelho custom_attributes — o
-  # valor rejeitado não pode sobrar no painel/Bitrix. Num único update!.
-  def clear_fact(slot)
-    attrs = @conversation.additional_attributes || {}
-    facts = attrs['ai_collected_facts']
-    attrs['ai_collected_facts'] = facts.except(slot) if facts.is_a?(Hash)
-    custom = (@conversation.custom_attributes || {}).except(slot)
-    @conversation.update!(additional_attributes: attrs, custom_attributes: custom)
   end
 
   # Modo de acionamento do worker (worker_overrides['capture_judge']['mode']): 'off' (PADRÃO — nasce

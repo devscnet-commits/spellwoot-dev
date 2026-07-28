@@ -112,50 +112,53 @@ RSpec.describe Ai::TurnCapture do
     end
   end
 
-  # Adjustment #2 — slot já preenchido = turno de CONFIRMAÇÃO. Quando asked_slot aponta para um slot que já
-  # tem valor em ai_collected_facts, o turno confirma o valor proposto (substitui a Peça 4/proposed_value no
-  # caso comum): afirmativa MANTÉM, negativa LIMPA e mantém a etapa. Sempre emite evento. A etapa CORRENTE
-  # (Etapa B/campo_b) é diferente do slot perguntado (campo_a, de uma etapa anterior, já cheio) — como na
-  # sequência da conv 396 (endereço confirmado enquanto o motor já está na etapa do documento).
-  describe '#capture — confirmação de valor proposto (asked_slot já preenchido)' do
-    let(:step_b) { department.playbook.steps[1] } # etapa CORRENTE = Etapa B (campo_b)
+  # Adjustment #2 (versão MÍNIMA) — slot já preenchido = turno de CONFIRMAÇÃO. Quando asked_slot aponta para
+  # um slot que já tem valor REAL em ai_collected_facts, capture só SINALIZA (slot.asked_confirmation_turn) e
+  # SAI: NÃO escreve por cima, NÃO limpa, NÃO toca no espelho custom_attributes. A semântica afirmativa/
+  # negativa fica para PR próprio (detector = juiz estruturado). O token de ausência não é confirmável.
+  describe '#capture — turno de confirmação (asked_slot já preenchido)' do
+    let(:step_a) { department.playbook.steps.first } # campo_a
+    let(:step_b) { department.playbook.steps[1] }    # campo_b (etapa corrente no cenário de confirmação)
 
-    before do
+    it 'asked_slot já preenchido: emite slot.asked_confirmation_turn e NÃO escreve, NÃO captura' do
       conversation.update!(additional_attributes: {
                              'ai_step_index' => 1,
                              'ai_collected_facts' => { 'campo_a' => 'valor original' },
                              'ai_last_asked_slot' => 'campo_a'
                            })
-    end
 
-    it 'afirmativa: MANTÉM o valor (não sobrescreve) e emite slot.confirmed' do
-      capture.capture(step_b, { 'attributes' => {} }, 'sim', nil, department)
+      expect(capture.capture(step_b, { 'attributes' => {} }, 'sim, pode ser', nil, department)).to be_nil
 
-      expect(facts['campo_a']).to eq('valor original') # intacto
+      expect(facts['campo_a']).to eq('valor original') # intacto (não sobrescreveu)
       expect(facts).not_to have_key('campo_b')         # não escreveu no slot da etapa corrente
-      expect(events('slot.confirmed').last.payload).to include('attribute' => 'campo_a')
+      expect(events('slot.asked_confirmation_turn').last.payload).to include('attribute' => 'campo_a')
+      expect(events('slot.captured')).to be_empty
     end
 
-    it 'negativa: LIMPA o valor, mantém a etapa e emite slot.confirmation_rejected' do
-      capture.capture(step_b, { 'attributes' => {} }, 'não', nil, department)
+    it 'NÃO limpa a memória nem o espelho custom_attributes, mesmo com resposta negativa (preserva correção do atendente)' do
+      conversation.update!(additional_attributes: {
+                             'ai_step_index' => 1,
+                             'ai_collected_facts' => { 'campo_a' => 'valor original' },
+                             'ai_last_asked_slot' => 'campo_a'
+                           }, custom_attributes: { 'campo_a' => 'corrigido pelo humano' })
 
-      expect(facts).not_to have_key('campo_a')                                    # limpou
-      expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1) # etapa mantida
-      expect(events('slot.confirmation_rejected').last.payload).to include('attribute' => 'campo_a')
+      capture.capture(step_b, { 'attributes' => {} }, 'não, está errado', nil, department)
+
+      expect(facts['campo_a']).to eq('valor original')                                        # NÃO limpou a memória
+      expect(conversation.reload.custom_attributes['campo_a']).to eq('corrigido pelo humano') # NÃO tocou o espelho
+      expect(events('slot.asked_confirmation_turn').last.payload).to include('attribute' => 'campo_a')
     end
 
-    it 'negativa também limpa o espelho em custom_attributes (valor rejeitado não sobra no painel)' do
-      conversation.update!(custom_attributes: { 'campo_a' => 'valor original' })
+    it 'token de ausência (__sem_valor__) NÃO é confirmável: não emite slot.asked_confirmation_turn' do
+      conversation.update!(additional_attributes: {
+                             'ai_step_index' => 0,
+                             'ai_collected_facts' => { 'campo_a' => Ai::StepSlot::ABSENT },
+                             'ai_last_asked_slot' => 'campo_a'
+                           })
 
-      capture.capture(step_b, { 'attributes' => {} }, 'não', nil, department)
+      capture.capture(step_a, { 'attributes' => {} }, 'qualquer', nil, department)
 
-      expect(conversation.reload.custom_attributes).not_to have_key('campo_a')
-    end
-
-    it 'confirmação NÃO conta como dessincronia (slot cheio é confirmação, não misquestion)' do
-      capture.capture(step_b, { 'attributes' => {} }, 'sim', nil, department)
-
-      expect(events('slot.asked_desync')).to be_empty
+      expect(events('slot.asked_confirmation_turn')).to be_empty
     end
   end
 end
