@@ -279,6 +279,16 @@ class Ai::StateManager
     %w[when_silent always].include?(@agent&.operation_profile&.worker(:capture_judge)&.dig('mode').to_s)
   end
 
+  # (Contrato pergunta↔etapa) Conjunto de chaves que um asked_slot do modelo PODE nomear: os slots
+  # (declarados ∪ inferidos) de TODAS as etapas do playbook ∪ lead_variables ∪ atributos de conversa
+  # preenchíveis. Reusa os MESMOS coletores do gate anti-contaminação (lead_variable_keys /
+  # fillable_attribute_keys) em vez de duplicar. Um asked_slot fora daqui é chave fantasma — o
+  # Ai::TurnCapture o ignora (fallback pro slot da etapa) para não envenenar ai_collected_facts.
+  def known_slot_keys(department)
+    step_slots = Array(department&.playbook&.steps).filter_map { |s| Ai::StepSlot.attribute(s) }
+    (step_slots + lead_variable_keys(department) + fillable_attribute_keys(department)).map(&:to_s).uniq
+  end
+
   private
 
   # Índice atual da conversa (clampado no range válido do playbook). Default 0 (primeira etapa).
