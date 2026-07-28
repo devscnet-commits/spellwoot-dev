@@ -171,5 +171,20 @@ RSpec.describe Ai::TurnCapture do
 
       expect(events('slot.asked_confirmation_turn')).to be_empty
     end
+
+    # HOTFIX #304: a guarda de confirmação NÃO pode preceder a detecção de recusa. Um turno pode ser
+    # confirmação E recusa; o return cedo fazia o capture_signal perder o {declined: true}, e o resolve_slot
+    # lia o token cru e avançava. Agora: sinaliza a confirmação MAS a recusa VENCE (não curto-circuita).
+    it 'confirmação em slot já preenchido + recusa: emite slot.asked_confirmation_turn E devolve {declined: true}' do
+      conversation.update!(additional_attributes: {
+                             'ai_collected_facts' => { 'campo_a' => 'valor original' },
+                             'ai_last_asked_slot' => 'campo_a'
+                           })
+
+      result = capture.capture(step_a, { 'attributes' => { 'campo_a' => Ai::StepSlot::ABSENT } }, 'não tenho', nil, department)
+
+      expect(result).to eq({ declined: true })                       # a recusa NÃO foi curto-circuitada
+      expect(events('slot.asked_confirmation_turn')).not_to be_empty # a confirmação ainda é sinalizada
+    end
   end
 end

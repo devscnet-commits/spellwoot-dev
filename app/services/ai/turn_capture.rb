@@ -65,7 +65,17 @@ class Ai::TurnCapture
     # JUIZ estruturado como detector — não a lista fechada de frases do SlotAbsence, que é AUSÊNCIA, não
     # negação-de-confirmação) e NÃO limpamos nada (o espelho custom_attributes pode ter sido corrigido por
     # um humano — ver handoff_summary_generator). O token de ausência não conta como preenchido (fact_present?).
-    return emit_confirmation_turn(asked) if asked.present? && fact_present?(asked)
+    #
+    # HOTFIX (#304/conv 397): a detecção de RECUSA precede o return da guarda. Um turno pode ser confirmação
+    # E recusa; o return cedo fazia o capture_signal PERDER o {declined: true}, e o resolve_slot pulava o
+    # ramo de recusa e caía no de "slot preenchido", que lê o token cru e AVANÇA um slot obrigatório sem
+    # persistir. Sinalizamos a confirmação (observabilidade), mas a recusa VENCE — nunca curto-circuitamos.
+    if asked.present? && fact_present?(asked)
+      emit_confirmation_turn(asked)
+      return { declined: true } if slot && declined_turn?(step, slot, decision, message_text)
+
+      return
+    end
 
     # Só MEDIÇÃO (não altera fluxo): a pergunta do turno anterior divergiu do slot da etapa corrente.
     emit_asked_desync(asked, step_slot) if asked.present? && asked != step_slot
