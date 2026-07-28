@@ -303,6 +303,13 @@ class Ai::StateManager
       'grouping_delay_seconds' => (delay.positive? ? delay : nil),
       'reported_name' => decision['current_step'].to_s.strip.presence # só log; não é fonte de verdade
     }
+    # Contrato pergunta↔etapa: guarda o slot que a reply_text DESTE turno pediu, para o PRÓXIMO turno
+    # rotear a resposta do cliente ao slot certo. Ai::TurnCapture#capture LÊ este valor ANTES desta
+    # gravação (ordem no Gateway: track_step -> capture ... -> persist_progress -> persist_step_state),
+    # então a captura sempre enxerga o asked_slot do turno ANTERIOR — sem auto-referência. Só grava
+    # quando vier preenchido; turno que não pede dado ("") preserva a pergunta pendente anterior.
+    asked = decision['asked_slot'].to_s.strip
+    attrs['ai_last_asked_slot'] = asked if asked.present?
     @conversation.update!(additional_attributes: attrs)
   end
 

@@ -133,6 +133,31 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  # Contrato pergunta↔etapa (item 2): persist_step_state guarda o slot que a reply_text DESTE turno pediu,
+  # para o PRÓXIMO turno rotear a resposta do cliente ao slot certo (TurnCapture#capture lê ANTES deste
+  # write — ver a ordem no Gateway). Só grava quando vier preenchido; "" preserva a pergunta pendente.
+  describe '#track_step — ai_last_asked_slot (contrato pergunta↔etapa)' do
+    def last_asked
+      conversation.reload.additional_attributes['ai_last_asked_slot']
+    end
+
+    it 'grava ai_last_asked_slot quando decision.asked_slot vem preenchido' do
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => 'telefone_secundario' },
+                         dispatcher: dispatcher, run: run)
+
+      expect(last_asked).to eq('telefone_secundario')
+    end
+
+    it 'NÃO sobrescreve ai_last_asked_slot quando decision.asked_slot vem vazio (preserva a pergunta anterior)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'telefone_secundario' })
+
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '' },
+                         dispatcher: dispatcher, run: run)
+
+      expect(last_asked).to eq('telefone_secundario')
+    end
+  end
+
   describe '#track_step — automação de etapa por transição de índice' do
     it 'dispara a automação da etapa concluída UMA vez por índice (idempotente via last_fired)' do
       runner = instance_double(Ai::StepAutomationRunner, run: nil)
