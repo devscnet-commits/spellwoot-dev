@@ -110,6 +110,17 @@ RSpec.describe Ai::TurnCapture do
       expect(events('slot.asked_desync')).to be_empty
       expect(facts).to include('campo_a' => 'valor do campo a')
     end
+
+    it 'asked_slot desconhecido (chave fantasma) é IGNORADO: NÃO escreve a chave, cai no slot da etapa e emite slot.asked_slot_unknown' do
+      conversation.update!(additional_attributes: { 'ai_last_asked_slot' => 'chave_fantasma' })
+
+      capture.capture(step, { 'attributes' => {} }, 'valor qualquer', nil, department)
+
+      expect(facts).not_to have_key('chave_fantasma')           # NÃO envenena ai_collected_facts
+      expect(facts['campo_a']).to eq('valor qualquer')          # fallback: slot da etapa corrente
+      expect(events('slot.asked_slot_unknown').last.payload).to include('asked_slot' => 'chave_fantasma')
+      expect(events('slot.asked_desync')).to be_empty           # foi ignorado, não é dessincronia
+    end
   end
 
   # Adjustment #2 (versão MÍNIMA) — slot já preenchido = turno de CONFIRMAÇÃO. Quando asked_slot aponta para

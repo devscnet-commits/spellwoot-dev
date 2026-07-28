@@ -56,7 +56,7 @@ class Ai::TurnCapture
     # resolve_completion, intocados). Assim, se a cliente responde a pergunta do telefone enquanto o motor
     # está em vencimento, telefone_secundario recebe o valor, vencimento segue vazio e o ponteiro não avança.
     step_slot = Ai::StepSlot.attribute(step)
-    asked = last_asked_slot
+    asked = accepted_asked_slot(department)
     slot = asked.presence || step_slot
 
     # Turno de CONFIRMAÇÃO (versão mínima): quando o slot PERGUNTADO no turno anterior JÁ tem valor REAL em
@@ -138,6 +138,21 @@ class Ai::TurnCapture
   # o valor do turno anterior — nunca o deste turno.
   def last_asked_slot
     (@conversation.additional_attributes || {})['ai_last_asked_slot'].to_s.strip
+  end
+
+  # asked_slot VALIDADO: aceito só se for uma chave CONHECIDA (slots do playbook ∪ lead_variables ∪
+  # fillable — via @persister.known_slot_keys). O asked_slot vem do modelo como TEXTO LIVRE; uma chave
+  # fantasma/variante ("email" em vez de "email_cliente") seria gravada em ai_collected_facts pelo caminho
+  # persist_judged -> persist_attributes (source :trusted, que o gated_facts NÃO filtra) e reentraria no
+  # prompt como "Dados já coletados" — o envenenamento que o gate impede. Desconhecida: ignora ("" ->
+  # fallback pro slot da etapa) e emite slot.asked_slot_unknown com o valor recebido.
+  def accepted_asked_slot(department)
+    asked = last_asked_slot
+    return '' if asked.blank?
+    return asked if @persister.known_slot_keys(department).include?(asked)
+
+    emit('slot.asked_slot_unknown', { asked_slot: asked })
+    ''
   end
 
   # Só MEDIÇÃO (não altera fluxo): a pergunta do turno anterior (asked) divergiu do slot da etapa corrente
