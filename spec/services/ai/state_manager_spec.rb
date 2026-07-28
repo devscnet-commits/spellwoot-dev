@@ -133,12 +133,26 @@ RSpec.describe Ai::StateManager do
     end
   end
 
-  # Contrato pergunta↔etapa (item 2): persist_step_state guarda o slot que a reply_text DESTE turno pediu,
-  # para o PRÓXIMO turno rotear a resposta do cliente ao slot certo (TurnCapture#capture lê ANTES deste
-  # write — ver a ordem no Gateway). Só grava quando vier preenchido; "" preserva a pergunta pendente.
+  # Contrato pergunta↔etapa (item 2 do #304 + HOTFIX #304/conv 397): persist_step_state guarda o slot que a
+  # reply_text DESTE turno pediu. HOTFIX: asked_slot "" LIMPA o estado — ele não pode sobreviver ao turno que
+  # o produziu (asked_slot vem "" justamente nos turnos em que o modelo capturou algo).
   describe '#track_step — ai_last_asked_slot (contrato pergunta↔etapa)' do
     def last_asked
       conversation.reload.additional_attributes['ai_last_asked_slot']
+    end
+
+    def req_dept
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ReqSlots', status: 'active',
+                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 5 })
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'A', 'collect' => { 'attribute' => 'campo_a', 'type' => 'text', 'required' => true } },
+                              { 'name' => 'B', 'collect' => { 'attribute' => 'campo_b', 'type' => 'text', 'required' => true } }
+                            ])
+      dept
+    end
+
+    def incoming(text)
+      create(:message, conversation: conversation, account: account, inbox: inbox, message_type: :incoming, content: text)
     end
 
     it 'grava ai_last_asked_slot quando decision.asked_slot vem preenchido' do
@@ -148,13 +162,36 @@ RSpec.describe Ai::StateManager do
       expect(last_asked).to eq('campo_b')
     end
 
-    it 'NÃO sobrescreve ai_last_asked_slot quando decision.asked_slot vem vazio (preserva a pergunta anterior)' do
+    it 'asked_slot "" LIMPA ai_last_asked_slot (não preserva a pergunta anterior)' do
       conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b' })
 
       manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '' },
                          dispatcher: dispatcher, run: run)
 
-      expect(last_asked).to eq('campo_b')
+      expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
+    end
+
+    # Regressão #304/conv 397 ponta a ponta: sem a limpeza, o asked_slot VELHO (slot já preenchido) fazia a
+    # guarda de confirmação disparar, o capture_signal perder o {declined}, e o token "__sem_valor__" avançar
+    # um slot OBRIGATÓRIO. Com o item 1, o turno de captura LIMPA o velho e o turno do token vira RECUSA.
+    it 'asked_slot "" limpo faz o turno com {slot => ABSENT} em slot OBRIGATÓRIO recusar e NÃO avançar' do
+      dept = req_dept
+      conversation.update!(additional_attributes: { 'ai_step_index' => 1,
+                                                    'ai_collected_facts' => { 'campo_a' => 'valor' },
+                                                    'ai_last_asked_slot' => 'campo_a' })
+
+      # turno de captura (asked_slot "") -> item 1 LIMPA o asked_slot velho (falha aqui se voltar a preservar)
+      manager.track_step(dept, { 'step_completed' => false, 'asked_slot' => '' },
+                         dispatcher: dispatcher, run: run, message_text: 'ok', message: incoming('ok'))
+      expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
+
+      # turno do token no slot obrigatório corrente (campo_b), mensagem NÃO-recusa: sem asked_slot velho é RECUSA
+      manager.track_step(dept, { 'step_completed' => false, 'asked_slot' => '',
+                                 'attributes' => { 'campo_b' => Ai::StepSlot::ABSENT } },
+                         dispatcher: dispatcher, run: run, message_text: 'ok', message: incoming('ok'))
+
+      expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1)              # NÃO avançou
+      expect(conversation.reload.additional_attributes['ai_collected_facts']).not_to have_key('campo_b') # token não persistido
     end
   end
 

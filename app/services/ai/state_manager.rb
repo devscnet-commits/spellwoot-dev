@@ -316,10 +316,19 @@ class Ai::StateManager
     # Contrato pergunta↔etapa: guarda o slot que a reply_text DESTE turno pediu, para o PRÓXIMO turno
     # rotear a resposta do cliente ao slot certo. Ai::TurnCapture#capture LÊ este valor ANTES desta
     # gravação (ordem no Gateway: track_step -> capture ... -> persist_progress -> persist_step_state),
-    # então a captura sempre enxerga o asked_slot do turno ANTERIOR — sem auto-referência. Só grava
-    # quando vier preenchido; turno que não pede dado ("") preserva a pergunta pendente anterior.
+    # então a captura sempre enxerga o asked_slot do turno ANTERIOR — sem auto-referência.
+    #
+    # ATRIBUIÇÃO INCONDICIONAL (hotfix da regressão #304/conv 397): o estado NÃO pode sobreviver ao turno
+    # que o produziu. asked_slot vem "" JUSTAMENTE nos turnos em que o modelo capturou algo (ele não está
+    # perguntando um dado); preservar o valor anterior deixava o ai_last_asked_slot velho, nunca limpo,
+    # e a guarda de confirmação disparava falso-positivo em slot antigo já preenchido. Presente grava; ""
+    # ou ausente REMOVE a chave.
     asked = decision['asked_slot'].to_s.strip
-    attrs['ai_last_asked_slot'] = asked if asked.present?
+    if asked.present?
+      attrs['ai_last_asked_slot'] = asked
+    else
+      attrs.delete('ai_last_asked_slot')
+    end
     @conversation.update!(additional_attributes: attrs)
   end
 
