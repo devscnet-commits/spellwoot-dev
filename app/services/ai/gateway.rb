@@ -365,17 +365,17 @@ class Ai::Gateway
   # fonte e o retrieval voltou VAZIO, o modelo não tem base — marca declared_empty (o PromptCompiler
   # injeta "não afirme, verifique") e emite knowledge.declared_empty (auditável). source 'step' nos dois.
   def search_declared(run_record, department, req)
-    result = search_knowledge(department, req[:kinds], req[:query], 'step')
+    result = search_knowledge(department, req[:kinds], req[:query], 'step', list_all: req[:list_all])
     return result if result[:chunks].present?
 
     emit(run_record, 'knowledge.declared_empty', { kinds: req[:kinds], query: req[:query].to_s.first(120) })
     result.merge(declared_empty: true)
   end
 
-  # Conhecimento que a etapa DECLARA precisar: step['knowledge'] = { query, kinds }. query obrigatória;
-  # kinds OPCIONAL (array; vazio => todos os kinds). Substitui a antiga detecção de catálogo por instrução
-  # (step_wants_products? + kind fixo 'produto') — nenhum kind/vocabulário de tenant fica em código. nil
-  # quando a etapa não declara conhecimento (ou a query está vazia). Retorna { kinds:, query: } ou nil.
+  # Conhecimento que a etapa DECLARA precisar: step['knowledge'] = { query, kinds, list_all }. query
+  # obrigatória; kinds OPCIONAL (array; vazio => todos os kinds); list_all OPCIONAL (default false —
+  # "trazer todos os itens deste tipo", ex.: lista de planos/convênios; true bypassa a similaridade).
+  # nil quando a etapa não declara conhecimento (ou a query está vazia). Retorna { kinds:, query:, list_all: }.
   def step_knowledge_request(step)
     decl = step.is_a?(Hash) ? (step['knowledge'] || step[:knowledge]) : nil
     return nil unless decl.is_a?(Hash)
@@ -384,12 +384,13 @@ class Ai::Gateway
     return nil if query.blank?
 
     kinds = Array(decl['kinds'] || decl[:kinds]).map { |k| k.to_s.strip }.reject(&:blank?)
-    { kinds: kinds.presence, query: query }
+    list_all = (decl['list_all'] || decl[:list_all]).to_s.strip.downcase == 'true'
+    { kinds: kinds.presence, query: query, list_all: list_all }
   end
 
-  def search_knowledge(department, kinds, query, source)
+  def search_knowledge(department, kinds, query, source, list_all: false)
     chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: @account.id,
-                                             department_id: department.id, kinds: kinds)
+                                             department_id: department.id, kinds: kinds, list_all: list_all)
     { chunks: chunks, kinds: kinds, source: source }
   end
 

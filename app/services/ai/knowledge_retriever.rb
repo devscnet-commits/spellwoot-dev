@@ -14,21 +14,30 @@ class Ai::KnowledgeRetriever
 
   # kinds: array opcional de kind de KnowledgeSource (ex.: ['produto']). Sem ele, comportamento
   # INALTERADO (retrocompat p/ Copilot/Tester).
-  def self.retrieve(query:, account_id:, department_id: nil, kinds: nil)
-    retrieve_scored(query: query, account_id: account_id, department_id: department_id, kinds: kinds)[:chunks]
+  # list_all: intenção EXPLÍCITA de "trazer todos os itens deste tipo" (ex.: lista de planos/convênios).
+  # Só nesse modo o small_catalog roda (devolve tudo do kind, SEM similaridade); default false = busca
+  # SEMPRE por similaridade, mesmo em conjunto pequeno.
+  def self.retrieve(query:, account_id:, department_id: nil, kinds: nil, list_all: false)
+    retrieve_scored(query: query, account_id: account_id, department_id: department_id,
+                    kinds: kinds, list_all: list_all)[:chunks]
   end
 
   # Like retrieve, but also returns the top cosine similarity (1 - distance) of the best candidate
   # so the routing strategy can decide cache vs cheap vs premium. top_score is nil without vectors.
   # Scope: sources of the given department PLUS account-wide shared sources (ai_department_id NULL).
   # department_id nil = legacy behavior: the whole account library (every source), so no regression.
-  def self.retrieve_scored(query:, account_id:, department_id: nil, kinds: nil)
+  def self.retrieve_scored(query:, account_id:, department_id: nil, kinds: nil, list_all: false)
     source_ids = source_ids_for(account_id, department_id, kinds)
     return { chunks: [], top_score: nil } if source_ids.empty? || query.blank?
 
-    # Fonte pequena: os chunks do(s) kind(s) PEDIDO(s) cabem no limite -> devolve todos, sem vetor.
-    catalog = small_catalog_chunks(account_id, department_id, kinds)
-    return { chunks: catalog, top_score: nil } if catalog
+    # list_all (conserto conv 397): SÓ com a intenção explícita de "trazer todos" o small_catalog roda.
+    # Uma consulta DIRIGIDA (list_all false) NÃO pode virar "lista tudo" só porque o corpus é pequeno —
+    # antes o atalho disparava por TAMANHO, misturando fontes do kind e mudando de comportamento quando o
+    # conhecimento crescia. Sem list_all, sempre similaridade.
+    if list_all
+      catalog = small_catalog_chunks(account_id, department_id, kinds)
+      return { chunks: catalog, top_score: nil } if catalog
+    end
 
     search(Ai::KnowledgeChunk.where(ai_knowledge_source_id: source_ids), query)
   rescue StandardError => e
@@ -55,9 +64,9 @@ class Ai::KnowledgeRetriever
     { chunks: records.map(&:content), top_score: distance.nil? ? nil : (1.0 - distance).round(4) }
   end
 
-  # Chunks dos kinds PEDIDOS, se couberem no limite — senão nil (o caller cai na busca vetorial restrita
-  # aos kinds). Genérico p/ QUALQUER kind pedido (antes era fixo em 'produto' — nenhum kind fica em
-  # código). Sem kinds pedidos (busca em todos) -> nil: aí a similaridade é o filtro, não devolvemos tudo.
+  # Chunks dos kinds PEDIDOS, se couberem no limite — senão nil (o caller cai na busca vetorial). SÓ é
+  # chamado no modo list_all (intenção "trazer todos deste tipo"); NUNCA numa consulta dirigida. Genérico
+  # p/ QUALQUER kind (nenhum kind em código). Acima do limite -> nil (o dump viraria caro): cai no vetor.
   def self.small_catalog_chunks(account_id, department_id, kinds)
     ks = Array(kinds).map(&:to_s).reject(&:blank?)
     return nil if ks.empty?
