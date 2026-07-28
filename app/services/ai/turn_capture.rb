@@ -47,7 +47,27 @@ class Ai::TurnCapture
     # Gap 2: a CAPTURA é governada por StepSlot.attribute (declarado ∪ INFERIDO), independente de
     # obrigatoriedade — assim slot OPCIONAL também é capturado determinísticamente (antes usava
     # required_attribute, que devolvia nil p/ opcional e pulava a captura).
-    slot = Ai::StepSlot.attribute(step)
+    #
+    # Contrato pergunta↔etapa (decisão CONSCIENTE — muda a ORIGEM do `slot` que alimenta TODA a captura:
+    # capture_attachment, declined_turn?, capture_on_mismatch e capture_by_judge): a captura segue a
+    # PERGUNTA. Destino = o slot que a reply_text do turno ANTERIOR pediu (ai_last_asked_slot) quando
+    # presente; cai para o slot da etapa corrente quando ausente (turnos anteriores à feature / conversas
+    # em andamento sem asked_slot). O AVANÇO NÃO muda — segue o slot da etapa (persist_progress /
+    # resolve_completion, intocados). Assim, se a cliente responde a pergunta do telefone enquanto o motor
+    # está em vencimento, telefone_secundario recebe o valor, vencimento segue vazio e o ponteiro não avança.
+    step_slot = Ai::StepSlot.attribute(step)
+    asked = last_asked_slot
+    slot = asked.presence || step_slot
+
+    # Confirmação de valor proposto (substitui a Peça 4 no caso comum — sem campo proposed_value): quando o
+    # slot PERGUNTADO no turno anterior JÁ tem valor em ai_collected_facts, este turno é uma CONFIRMAÇÃO —
+    # NUNCA sobrescreve. Resposta negativa LIMPA o valor (mantém a etapa, para recapturar no próximo turno);
+    # afirmativa (ou qualquer não-negativa) MANTÉM. Sempre emite evento. Precede a medição de dessincronia
+    # (um slot já cheio é confirmação, não misquestion) e a captura (não regrava por cima).
+    return confirm_filled_slot(asked, message_text) if asked.present? && fact_present?(asked)
+
+    # Só MEDIÇÃO (não altera fluxo): a pergunta do turno anterior divergiu do slot da etapa corrente.
+    emit_asked_desync(asked, step_slot) if asked.present? && asked != step_slot
     # BUG 3: o anexo SEMPRE grava os fatos determinísticos (mesmo em etapa sem slot). O preenchimento do
     # slot é DETERMINÍSTICO pela chave (#attachment_slot_value). Retorna :filled (preencheu o slot -> é a
     # captura desta mensagem, pula o texto), :facts_only (havia anexo mas NÃO preencheu -> segue para o
@@ -109,6 +129,52 @@ class Ai::TurnCapture
     value = decision['attributes'].is_a?(Hash) ? decision['attributes'][slot] : nil
     type = Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
     Ai::SlotAbsence.declined?(value: value, text: message_text, type: type, options: Ai::StepSlot.options(step))
+  end
+
+  # Contrato pergunta↔etapa: o slot que a reply_text do turno ANTERIOR pediu (gravado por
+  # StateManager#persist_step_state). "" quando não há (turnos anteriores à feature / turno anterior sem
+  # pergunta de dado). Lido ANTES de qualquer gravação deste turno (ver ordem no Gateway), então é sempre
+  # o valor do turno anterior — nunca o deste turno.
+  def last_asked_slot
+    (@conversation.additional_attributes || {})['ai_last_asked_slot'].to_s.strip
+  end
+
+  # Só MEDIÇÃO (não altera fluxo): a pergunta do turno anterior (asked) divergiu do slot da etapa corrente
+  # (expected). slot.model_key_mismatch NÃO cobre este caso — lá as CHAVES de `attributes` é que divergem;
+  # aqui o que diverge é a PERGUNTA (conv 395/run 1977: attributes {email_cliente: __sem_valor__}, chave
+  # correta, nenhum mismatch emitido, mas a reply_text pedia o telefone). Prefixo slot.* (slot.captured/
+  # slot.no_attempt/slot.model_key_mismatch). Ambos os slots vão no payload.
+  def emit_asked_desync(asked, expected)
+    emit('slot.asked_desync', { asked_slot: asked, expected_slot: expected })
+  end
+
+  # O slot já tem valor não-vazio em ai_collected_facts? (marca o turno de CONFIRMAÇÃO).
+  def fact_present?(slot)
+    facts = (@conversation.additional_attributes || {})['ai_collected_facts']
+    facts.is_a?(Hash) && facts[slot].to_s.strip.present?
+  end
+
+  # Turno de confirmação do valor já capturado no slot PERGUNTADO. Negativa (Ai::SlotAbsence detecta o
+  # padrão de negação) LIMPA o valor e emite slot.confirmation_rejected; qualquer outra resposta MANTÉM e
+  # emite slot.confirmed. Nunca sobrescreve nem avança (o avanço segue o slot da etapa, à parte). nil.
+  def confirm_filled_slot(slot, message_text)
+    if Ai::SlotAbsence.looks_like_decline?(message_text)
+      clear_fact(slot)
+      emit('slot.confirmation_rejected', { attribute: slot })
+    else
+      emit('slot.confirmed', { attribute: slot })
+    end
+    nil
+  end
+
+  # Remove o valor do slot da memória de trabalho (ai_collected_facts) E do espelho custom_attributes — o
+  # valor rejeitado não pode sobrar no painel/Bitrix. Num único update!.
+  def clear_fact(slot)
+    attrs = @conversation.additional_attributes || {}
+    facts = attrs['ai_collected_facts']
+    attrs['ai_collected_facts'] = facts.except(slot) if facts.is_a?(Hash)
+    custom = (@conversation.custom_attributes || {}).except(slot)
+    @conversation.update!(additional_attributes: attrs, custom_attributes: custom)
   end
 
   # Modo de acionamento do worker (worker_overrides['capture_judge']['mode']): 'off' (PADRÃO — nasce

@@ -30,6 +30,13 @@ class Ai::DecisionSchema < RubyLLM::Schema
   boolean :step_completed, description: 'true SOMENTE no turno em que concluir a etapa atual; senão false.'
   number :confidence, description: 'Confiança de 0.0 a 1.0.'
 
+  # Contrato pergunta↔etapa: a CHAVE do slot que a sua reply_text está pedindo NESTE turno. required:true
+  # (0.2.5); "" = a resposta não pede dado (saudação/encerramento/confirmação), mesma convenção de
+  # tool_name/handoff_reason. O motor usa isto para (a) rotear a resposta do cliente ao slot certo — o
+  # destino da captura passa a seguir a PERGUNTA — e (b) medir dessincronia (slot.asked_desync) quando
+  # difere do slot da etapa corrente. NÃO decide o avanço (isso segue o slot da etapa).
+  string :asked_slot, description: 'O slot que a sua reply_text está pedindo neste turno; vazio se não pede dado.'
+
   # Atributos coletados como lista fechada {key,value} (o strict não aceita objeto de chaves dinâmicas).
   # Re-normalizado para o Hash `attributes` interno. [] quando não houver nada novo.
   array :attributes_list, description: 'Dados coletados do cliente; [] se nada novo.' do
