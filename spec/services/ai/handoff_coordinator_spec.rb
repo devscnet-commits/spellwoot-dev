@@ -128,6 +128,29 @@ RSpec.describe Ai::HandoffCoordinator do
       expect(result).not_to eq(t_outro.id)
     end
 
+    # Ajuste (a) — o fallback silencioso agora é MEDIDO. Prova de mutação: o evento carrega o
+    # handoff_target recebido ('Financeiro') e o time escolhido (um da whitelist). Some se a emissão sair.
+    it 'emite handoff.target_unmatched quando o target não casa e cai no configured' do
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
+      expect { coordinator.human_team_id({ 'handoff_target' => 'Financeiro' }) }
+        .to change { Ai::Event.where(event_type: 'handoff.target_unmatched').count }.by(1)
+      ev = Ai::Event.where(event_type: 'handoff.target_unmatched').last
+      expect(ev.payload['handoff_target']).to eq('Financeiro')
+      expect([t_comercial.id, t_midia.id]).to include(ev.payload['chosen_team_id'])
+    end
+
+    it 'NÃO emite handoff.target_unmatched quando o target CASA (comercial midia paga)' do
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
+      expect { coordinator.human_team_id({ 'handoff_target' => 'comercial midia paga' }) }
+        .not_to change { Ai::Event.where(event_type: 'handoff.target_unmatched').count }
+    end
+
+    it 'NÃO emite handoff.target_unmatched no loop (decision sem handoff_target)' do
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
+      expect { coordinator.human_team_id({}) }
+        .not_to change { Ai::Event.where(event_type: 'handoff.target_unmatched').count }
+    end
+
     it 'sem team_id, sem allowlist e sem match -> nil' do
       agent.update!(team_id: nil, handoff_team_ids: [])
       expect(coordinator.human_team_id({})).to be_nil
