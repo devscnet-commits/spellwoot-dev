@@ -69,6 +69,26 @@ RSpec.describe Ai::PromptCompiler do
       expect(prompt).not_to include('Base de conhecimento relevante')
       expect(prompt).not_to include('NUNCA invente')
     end
+
+    # Guarda determinística (conv 397): a etapa declarou fonte e o retrieval voltou vazio.
+    it 'knowledge_gap com conhecimento VAZIO injeta o aviso "não afirme sem fonte"' do
+      prompt = described_class.compile(agent: build_agent, department: build_dept(instructions: nil),
+                                       knowledge: [], memory: nil, tools: [], knowledge_gap: true)
+
+      expect(prompt).to include('A FONTE de conhecimento que esta etapa precisa consultar NÃO retornou dados')
+    end
+
+    it 'knowledge_gap é IGNORADO quando HÁ conhecimento (o bloco normal vence)' do
+      prompt = described_class.compile(agent: build_agent, department: build_dept(instructions: nil),
+                                       knowledge: ['algum chunk'], memory: nil, tools: [], knowledge_gap: true)
+
+      expect(prompt).to include('Base de conhecimento relevante')
+      expect(prompt).not_to include('NÃO retornou dados')
+    end
+
+    it 'sem conhecimento e sem knowledge_gap: nenhum aviso (comportamento inalterado)' do
+      expect(compile_with_knowledge([])).not_to include('NÃO retornou dados')
+    end
   end
 
   describe 'âncora determinística de etapa (step_index)' do

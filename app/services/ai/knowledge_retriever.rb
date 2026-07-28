@@ -7,9 +7,9 @@ class Ai::KnowledgeRetriever
   # único item de conhecimento ou no prompt — RAG por similaridade não garante trazer todos.
   TOP_K = 6
 
-  # CATÁLOGO PEQUENO: quando pedem 'produto' e o total de chars dos chunks de produto cabe aqui,
-  # devolvemos TODOS os produtos SEM busca vetorial (a similaridade não serve p/ catálogo — mede
-  # relacionamento semântico, não "é um plano"). Acima do limite, cai na busca vetorial restrita ao kind.
+  # FONTE PEQUENA: quando um ou mais kinds são PEDIDOS e o total de chars dos chunks desses kinds cabe
+  # aqui, devolvemos TODOS SEM busca vetorial (a similaridade não serve p/ listas — mede relacionamento
+  # semântico, não "pertence ao kind"). Acima do limite, cai na busca vetorial restrita ao(s) kind(s).
   SMALL_CATALOG_CHAR_LIMIT = 4000
 
   # kinds: array opcional de kind de KnowledgeSource (ex.: ['produto']). Sem ele, comportamento
@@ -26,7 +26,7 @@ class Ai::KnowledgeRetriever
     source_ids = source_ids_for(account_id, department_id, kinds)
     return { chunks: [], top_score: nil } if source_ids.empty? || query.blank?
 
-    # Catálogo pequeno: pediram 'produto' e todos os produtos cabem -> devolve todos, sem vetor.
+    # Fonte pequena: os chunks do(s) kind(s) PEDIDO(s) cabem no limite -> devolve todos, sem vetor.
     catalog = small_catalog_chunks(account_id, department_id, kinds)
     return { chunks: catalog, top_score: nil } if catalog
 
@@ -55,15 +55,16 @@ class Ai::KnowledgeRetriever
     { chunks: records.map(&:content), top_score: distance.nil? ? nil : (1.0 - distance).round(4) }
   end
 
-  # Chunks de PRODUTO (só quando 'produto' está entre os kinds pedidos), se couberem no limite —
-  # senão nil (o caller cai na busca vetorial restrita ao kind). Mede só os chunks de produto, não o
-  # scope inteiro: um kinds:['produto','faq'] ainda decide pelo tamanho do catálogo de produtos.
+  # Chunks dos kinds PEDIDOS, se couberem no limite — senão nil (o caller cai na busca vetorial restrita
+  # aos kinds). Genérico p/ QUALQUER kind pedido (antes era fixo em 'produto' — nenhum kind fica em
+  # código). Sem kinds pedidos (busca em todos) -> nil: aí a similaridade é o filtro, não devolvemos tudo.
   def self.small_catalog_chunks(account_id, department_id, kinds)
-    return nil unless Array(kinds).map(&:to_s).include?('produto')
+    ks = Array(kinds).map(&:to_s).reject(&:blank?)
+    return nil if ks.empty?
 
-    prod = Ai::KnowledgeSource.active.where(account_id: account_id, kind: 'produto')
-    prod = prod.where(ai_department_id: [department_id, nil]) if department_id
-    contents = Ai::KnowledgeChunk.where(ai_knowledge_source_id: prod.select(:id)).pluck(:content)
+    sources = Ai::KnowledgeSource.active.where(account_id: account_id, kind: ks)
+    sources = sources.where(ai_department_id: [department_id, nil]) if department_id
+    contents = Ai::KnowledgeChunk.where(ai_knowledge_source_id: sources.select(:id)).pluck(:content)
     return nil if contents.empty? || contents.sum { |c| c.to_s.length } > SMALL_CATALOG_CHAR_LIMIT
 
     contents

@@ -144,7 +144,10 @@ class Ai::Gateway
       customer_memory: customer_memory,
       # Índice determinístico da etapa (fonte de verdade no servidor). O PromptCompiler ancora o
       # modelo nesta etapa em vez de deixá-lo se autolocalizar. StateManager#track_step avança no fim.
-      step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i
+      step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i,
+      # Guarda (conv 397): a etapa declarou conhecimento e o retrieval voltou vazio -> o prompt avisa
+      # "não afirme, verifique" (o modelo não tem fonte).
+      knowledge_gap: kn[:declared_empty]
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
@@ -334,7 +337,7 @@ class Ai::Gateway
   #  - worker FALHOU -> fallback: full RAG + evento knowledge.fallback (auditável). source 'fallback'.
   #  - asks_about != 'nada' -> busca kinds:[asks_about] com a QUERY do worker (não o texto cru, que deu o
   #    resultado ruim). source 'worker'.
-  #  - etapa apresenta planos/catálogo (heurística por instrução) -> busca produtos. source 'step'.
+  #  - etapa DECLARA conhecimento (step['knowledge']) -> busca a query/kinds declarados. source 'step'.
   #  - senão -> NÃO busca (economia) + evento knowledge.skipped. source 'none'.
   def resolve_knowledge(run_record, department, step, next_step, judge_result, query_text)
     return search_knowledge(department, nil, query_text, 'all') if judge_result.nil?
@@ -347,42 +350,47 @@ class Ai::Gateway
     asks = judge_result[:asks_about].to_s
     return search_knowledge(department, [asks], judge_result[:query].presence || query_text, 'worker') if asks.present? && asks != 'nada'
 
-    # Approach 1a (conv 393): busca o catálogo da etapa ATUAL OU da que ENTRA (next_step) — assim, no turno
-    # em que o cliente preenche o último slot e transita para PLANOS, o catálogo já está no contexto (antes
-    # só vinha um turno depois, e a IA dizia "vou te mostrar" sem os planos).
-    catalog = step_catalog_request(step) || step_catalog_request(next_step)
-    return search_knowledge(department, catalog[:kinds], catalog[:query], 'step') if catalog
+    # Conhecimento DECLARADO pela etapa (step['knowledge']). A etapa ATUAL VENCE o look-ahead da próxima
+    # (`step` antes de `next_step`) — cravado: na conv 397 foi o look-ahead da etapa seguinte (PLANOS,
+    # kind produto) que roubou o turno da VIABILIDADE, que precisa de cidades_atendidas (kind documento).
+    # kinds e query vêm do DADO da etapa; nenhum kind/vocabulário de tenant fica em código.
+    req = step_knowledge_request(step) || step_knowledge_request(next_step)
+    return search_declared(run_record, department, req) if req
 
-    emit(run_record, 'knowledge.skipped', { reason: 'no_question_no_catalog_step' })
+    emit(run_record, 'knowledge.skipped', { reason: 'no_question_no_declared_step' })
     { chunks: [], kinds: nil, source: 'none' }
   end
 
-  # PONTO ÚNICO de decisão "esta etapa apresenta catálogo?" (e de qual kind/query). Hoje: heurística por
-  # instrução (step_wants_products?), reusando os literais existentes — SEM constante/hardcode novo. Dívida
-  # prioritária: trocar por MARCAÇÃO na etapa (a etapa declara catálogo + kind, configurável no painel), o
-  # que remove o hardcode PT/produto e serve qualquer segmento (ex.: VIABILIDADE/cidades_atendidas, que a
-  # regex nunca casa). Quando isso vier, TROCAR só aqui — o look-ahead do resolve_knowledge não muda.
-  # Retorna { kinds:, query: } ou nil.
-  def step_catalog_request(step)
-    return nil unless step_wants_products?(step)
+  # Busca o conhecimento DECLARADO pela etapa. GUARDA determinística (conv 397): se a etapa declarou uma
+  # fonte e o retrieval voltou VAZIO, o modelo não tem base — marca declared_empty (o PromptCompiler
+  # injeta "não afirme, verifique") e emite knowledge.declared_empty (auditável). source 'step' nos dois.
+  def search_declared(run_record, department, req)
+    result = search_knowledge(department, req[:kinds], req[:query], 'step')
+    return result if result[:chunks].present?
 
-    { kinds: ['produto'], query: 'planos e preços' }
+    emit(run_record, 'knowledge.declared_empty', { kinds: req[:kinds], query: req[:query].to_s.first(120) })
+    result.merge(declared_empty: true)
+  end
+
+  # Conhecimento que a etapa DECLARA precisar: step['knowledge'] = { query, kinds }. query obrigatória;
+  # kinds OPCIONAL (array; vazio => todos os kinds). Substitui a antiga detecção de catálogo por instrução
+  # (step_wants_products? + kind fixo 'produto') — nenhum kind/vocabulário de tenant fica em código. nil
+  # quando a etapa não declara conhecimento (ou a query está vazia). Retorna { kinds:, query: } ou nil.
+  def step_knowledge_request(step)
+    decl = step.is_a?(Hash) ? (step['knowledge'] || step[:knowledge]) : nil
+    return nil unless decl.is_a?(Hash)
+
+    query = (decl['query'] || decl[:query]).to_s.strip
+    return nil if query.blank?
+
+    kinds = Array(decl['kinds'] || decl[:kinds]).map { |k| k.to_s.strip }.reject(&:blank?)
+    { kinds: kinds.presence, query: query }
   end
 
   def search_knowledge(department, kinds, query, source)
     chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: @account.id,
                                              department_id: department.id, kinds: kinds)
     { chunks: chunks, kinds: kinds, source: source }
-  end
-
-  # "Esta etapa apresenta planos/catálogo?" — derivado da INSTRUÇÃO da etapa (sem config nova, sem tocar
-  # no playbook): heurística por palavras que só aparecem quando a etapa é de apresentar produto/preço.
-  # Menos frágil que casar o nome da etapa; a instrução é o texto que o usuário já escreveu.
-  STEP_PRODUCTS_RE = /\b(planos?|produtos?|cat[áa]logo|pre[çc]os?|mensalidade)\b/i
-  def step_wants_products?(step)
-    return false unless step.is_a?(Hash)
-
-    STEP_PRODUCTS_RE.match?((step['instructions'] || step[:instructions]).to_s)
   end
 
   # Montagem do contexto textual do modelo (histórico + citação + atributos preenchíveis), extraído
