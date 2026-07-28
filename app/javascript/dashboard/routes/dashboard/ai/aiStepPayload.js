@@ -57,7 +57,10 @@ export const stepToApi = s => {
 //    etapa SEM slot é inofensivo: o Ai::StepResolver retorna antes de consultar optional? quando
 //    Ai::StepSlot.attribute(step) é nil. (Custo: o antigo "limpar slot_required legado ao ficar sem slot"
 //    sai; resíduo de baixo risco — remover o slot com false e a inferência reachá-lo depois.)
-//  - NÃO escreve complete_when (morto no backend pós-Gap 2; legado sobrevive pelo spread, intocado).
+//  - NÃO escreve complete_when (morto no backend pós-Gap 2; legado sobrevive pelo spread, intocado);
+//  - knowledge: EMITIDO quando knowledgeQuery está preenchida -> { query, kinds: [...] } (kinds separado
+//    por vírgula; vazio = todos). query vazia => a chave knowledge SAI do payload (não vira {query:""}).
+//    Input DIRETO do usuário — NÃO depende de estado assíncrono (não repetir o acoplamento do hasSlot/#306).
 export const buildStepPayload = ({
   name,
   instructions,
@@ -67,6 +70,8 @@ export const buildStepPayload = ({
   collectType = 'text',
   collectOptions = '',
   slotRequired = true,
+  knowledgeQuery = '',
+  knowledgeKinds = '',
 }) => {
   const attribute = (collectAttribute || '').trim();
   const payload = {
@@ -87,8 +92,27 @@ export const buildStepPayload = ({
   } else {
     payload.collect = null;
   }
+  const query = (knowledgeQuery || '').trim();
+  if (query) {
+    payload.knowledge = {
+      query,
+      kinds: (knowledgeKinds || '')
+        .split(',')
+        .map(k => k.trim())
+        .filter(Boolean),
+    };
+  }
   return payload;
 };
+
+// Merge do saveStep (AiDepartmentDetail): a etapa editada = a existente sobrescrita SÓ pelas chaves que o
+// payload emite. Chaves que buildStepPayload NÃO emite (campos legados/futuros do backend) sobrevivem pelo
+// spread. Extraído para testar essa preservação sem montar o route-view inteiro (a cobertura do PR 1, que
+// ficou verificada só por leitura). Agora que knowledge É emitido, isto protege as OUTRAS chaves ausentes.
+export const mergeStepEdit = (existing, payload) => ({
+  ...existing,
+  ...payload,
+});
 
 // (a) Flush da inferência ao salvar: decide o slot a usar a partir do resultado da RE-inferência.
 // Falha/timeout (`failed`) MANTÉM o último slot conhecido — uma falha de rede não pode transformar uma

@@ -2,6 +2,7 @@ import {
   parseStep,
   stepToApi,
   buildStepPayload,
+  mergeStepEdit,
   slotAfterFlush,
 } from '../aiStepPayload';
 
@@ -69,12 +70,52 @@ describe('aiStepPayload', () => {
       });
     });
 
-    // buildStepPayload NÃO emite a chave knowledge -> o merge de saveStep ({...form.steps[i], ...payload})
-    // preserva o valor do banco ao editar a etapa. Falha (bomba do backfill) se ela passar a emitir knowledge.
-    it('buildStepPayload NÃO emite a chave knowledge (o merge de saveStep preserva o backfill)', () => {
+    // PR 2 INVERTE a precondição do PR 1: agora que a tela edita o campo, buildStepPayload EMITE knowledge.
+    // A preservação ao editar deixa de vir da AUSÊNCIA da chave e passa a depender do draft ser semeado de
+    // props.step.knowledge (testado no AiStepForm.spec). E o merge do saveStep passa a proteger as OUTRAS
+    // chaves não emitidas (mergeStepEdit, abaixo).
+    it('EMITE knowledge quando knowledgeQuery está preenchida (query trim + kinds por vírgula)', () => {
+      const p = buildStepPayload({
+        name: 'Viabilidade',
+        knowledgeQuery: '  cidades atendidas  ',
+        knowledgeKinds: 'documento, faq',
+      });
+      expect(p.knowledge).toEqual({
+        query: 'cidades atendidas',
+        kinds: ['documento', 'faq'],
+      });
+    });
+
+    it('knowledgeQuery vazia OMITE a chave knowledge (não vira {query:""})', () => {
       expect(
-        'knowledge' in buildStepPayload({ name: 'X', hasSlot: true })
+        'knowledge' in buildStepPayload({ name: 'X', knowledgeQuery: '' })
       ).toBe(false);
+      expect('knowledge' in buildStepPayload({ name: 'X' })).toBe(false);
+    });
+
+    it('kinds vazio -> knowledge com kinds: [] (o backend trata [] como todos)', () => {
+      expect(
+        buildStepPayload({
+          name: 'X',
+          knowledgeQuery: 'algo',
+          knowledgeKinds: '',
+        }).knowledge
+      ).toEqual({ query: 'algo', kinds: [] });
+    });
+
+    // Cobertura do PR 1 que ficou por leitura (saveStep, linha 444): o merge preserva chaves AUSENTES no
+    // payload. Extraído p/ testar sem montar o route-view. Agora protege legado/futuro (knowledge já é emitido).
+    it('mergeStepEdit preserva chaves do step existente que o payload NÃO emite', () => {
+      const existing = {
+        name: 'V',
+        legado: 'sobrevive',
+        collect: { attribute: 'a' },
+      };
+      const payload = { name: 'V', slot_required: true }; // sem legado/collect
+      const merged = mergeStepEdit(existing, payload);
+      expect(merged.legado).toBe('sobrevive'); // chave ausente no payload -> preservada
+      expect(merged.collect).toEqual({ attribute: 'a' }); // idem
+      expect(merged.slot_required).toBe(true); // o que o payload emite, sobrescreve
     });
 
     it('group_delay_seconds vazio vira null (não NaN)', () => {
