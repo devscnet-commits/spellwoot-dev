@@ -63,6 +63,18 @@ RSpec.describe Ai::KnowledgeRetriever do
 
       expect(chunks.size).to eq(5) # todos, mesmo sem match textual
     end
+
+    # Generalização (remove o 'produto' literal): QUALQUER kind pequeno pedido devolve tudo sem vetor.
+    # Mutação: falha (embed seria chamado) se o small_catalog voltar a exigir kind == 'produto'.
+    it 'kind NÃO-produto (documento) também devolve TUDO sem busca vetorial' do
+      chunk(source(kind: 'documento', title: 'Cidades'), 'Cidades atendidas: Maravilha, Chapecó, São Miguel.')
+      expect(described_class).not_to receive(:embed)
+
+      chunks = described_class.retrieve(query: 'atende minha cidade?', account_id: account.id, kinds: ['documento'])
+
+      expect(chunks).to include('Cidades atendidas: Maravilha, Chapecó, São Miguel.')
+      expect(chunks.join).not_to include('R$') # nenhum produto (kind filtrado)
+    end
   end
 
   describe 'Camada 1 — catálogo grande (acima do limite): busca restrita ao kind' do

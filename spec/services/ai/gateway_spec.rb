@@ -723,9 +723,9 @@ RSpec.describe Ai::Gateway do
       end
     end
 
-    it 'worker LIGADO + sem pergunta (asks_about=nada) e etapa sem produtos: NÃO busca + knowledge.skipped' do
+    it 'worker LIGADO + sem pergunta (asks_about=nada) e etapa sem conhecimento declarado: NÃO busca + knowledge.skipped' do
       enable_worker!
-      create_department # sem playbook -> current_step nil -> não é etapa de produtos
+      create_department # sem playbook -> current_step nil -> nenhuma etapa declara conhecimento
       binding = create_binding(mode: 'live')
       stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
       stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
@@ -740,37 +740,39 @@ RSpec.describe Ai::Gateway do
       end
     end
 
-    it 'etapa que apresenta planos: busca produtos MESMO sem pergunta (source step)' do
+    it 'etapa que DECLARA conhecimento: busca a query/kinds declarados MESMO sem pergunta (source step)' do
       enable_worker!
       dept = create_department
       dept.create_playbook!(active: true, steps: [
-                              { 'name' => 'Planos', 'instructions' => 'Apresente os planos disponíveis com o preço.' },
+                              { 'name' => 'Planos', 'knowledge' => { 'query' => 'planos e preços', 'kinds' => ['produto'] } },
                               { 'name' => 'Fim' }
                             ])
       binding = create_binding(mode: 'live')
       stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
       stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['CHUNK'])
 
       convo = deliver('ok', binding: binding, mode: 'live')
 
-      expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: ['produto']))
+      expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: ['produto'], query: 'planos e preços'))
       expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.retrieved').last.payload['source']).to eq('step')
     end
 
-    # Approach 1a (conv 393): ao TRANSITAR para uma etapa de catálogo, o catálogo é buscado no MESMO turno.
-    # A etapa ATUAL (Aparelhos) NÃO casa a heurística; só o look-ahead da etapa que ENTRA (Planos) dispara.
-    it 'invariante: transição para etapa de catálogo busca o catálogo no MESMO turno (look-ahead)' do
+    # ao TRANSITAR para uma etapa que DECLARA conhecimento, o retrieval acontece no MESMO turno (look-ahead).
+    # A etapa ATUAL (Aparelhos) NÃO declara; só o look-ahead da etapa que ENTRA (Planos) dispara.
+    it 'invariante: transição para etapa que declara conhecimento busca no MESMO turno (look-ahead)' do
       enable_worker!
       dept = create_department
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Aparelhos', 'instructions' => 'Pergunte quantos aparelhos o cliente tem.',
                                 'collect' => { 'attribute' => 'aparelhos', 'type' => 'number', 'required' => true } },
-                              { 'name' => 'Planos', 'instructions' => 'Apresente os planos com preço.' },
+                              { 'name' => 'Planos', 'knowledge' => { 'query' => 'planos e preços', 'kinds' => ['produto'] } },
                               { 'name' => 'Fim' }
                             ])
       binding = create_binding(mode: 'live')
       stub_judge(status: 'answered', value: '5', asks_about: 'nada', query: '')
       stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['CHUNK'])
 
       convo = deliver('5', binding: binding, mode: 'live')
 
@@ -781,20 +783,21 @@ RSpec.describe Ai::Gateway do
       end
     end
 
-    # Não-vazamento (o risco real do look-ahead): o catálogo entra no contexto DURANTE Aparelhos, mas a
+    # Não-vazamento (o risco real do look-ahead): o conhecimento entra no contexto DURANTE Aparelhos, mas a
     # coleta não é curto-circuitada — a etapa NÃO avança e o prompt segue ancorado em Aparelhos (step 0).
-    it 'não-vazamento: catálogo antecipado NÃO avança a etapa nem muda a âncora do prompt' do
+    it 'não-vazamento: conhecimento antecipado NÃO avança a etapa nem muda a âncora do prompt' do
       enable_worker!
       dept = create_department
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Aparelhos', 'instructions' => 'Pergunte quantos aparelhos o cliente tem.',
                                 'collect' => { 'attribute' => 'aparelhos', 'type' => 'number', 'required' => true } },
-                              { 'name' => 'Planos', 'instructions' => 'Apresente os planos com preço.' },
+                              { 'name' => 'Planos', 'knowledge' => { 'query' => 'planos e preços', 'kinds' => ['produto'] } },
                               { 'name' => 'Fim' }
                             ])
       binding = create_binding(mode: 'live')
       stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '') # NÃO preencheu o slot
       stub_decision({ 'decision' => 'reply', 'reply_text' => 'Quantos aparelhos você tem?' })
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['CHUNK'])
       anchored_step = nil
       allow(Ai::PromptCompiler).to receive(:compile) { |**kw| anchored_step = kw[:step_index]; 'prompt-stub' }
 
@@ -804,6 +807,53 @@ RSpec.describe Ai::Gateway do
         expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: ['produto'])) # buscou antecipado
         expect(anchored_step).to eq(0)                                     # prompt ancorado em Aparelhos, não Planos
         expect(convo.additional_attributes['ai_step_index'].to_i).to eq(0) # NÃO avançou: a coleta continua
+      end
+    end
+
+    # conv 397: a etapa ATUAL declara sua fonte e VENCE o look-ahead da próxima — foi o look-ahead da
+    # etapa seguinte (produto) que roubou o turno da VIABILIDADE (que precisa de documento).
+    it 'precedência: etapa ATUAL que declara conhecimento VENCE o look-ahead da próxima' do
+      enable_worker!
+      dept = create_department
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Viabilidade', 'knowledge' => { 'query' => 'cidades atendidas', 'kinds' => ['documento'] } },
+                              { 'name' => 'Planos', 'knowledge' => { 'query' => 'planos e preços', 'kinds' => ['produto'] } },
+                              { 'name' => 'Fim' }
+                            ])
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '') # etapa 0 sem slot -> não avança
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['CHUNK'])
+
+      convo = deliver('minha cidade é X', binding: binding, mode: 'live')
+
+      aggregate_failures do
+        expect(Ai::KnowledgeRetriever).to have_received(:retrieve).with(hash_including(kinds: ['documento'], query: 'cidades atendidas'))
+        expect(Ai::KnowledgeRetriever).not_to have_received(:retrieve).with(hash_including(kinds: ['produto']))
+      end
+    end
+
+    # Guarda determinística (conv 397): a etapa declarou fonte e o retrieval voltou VAZIO -> evento +
+    # knowledge_gap no prompt (o modelo não deve afirmar sem fonte).
+    it 'guarda: etapa declara conhecimento e o retrieval volta VAZIO -> knowledge.declared_empty + knowledge_gap no prompt' do
+      enable_worker!
+      dept = create_department
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Viabilidade', 'knowledge' => { 'query' => 'cidades atendidas', 'kinds' => ['documento'] } },
+                              { 'name' => 'Fim' }
+                            ])
+      binding = create_binding(mode: 'live')
+      stub_judge(status: 'not_an_answer', asks_about: 'nada', query: '')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'ok' })
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([]) # a fonte declarada não retornou nada
+      gap = nil
+      allow(Ai::PromptCompiler).to receive(:compile) { |**kw| gap = kw[:knowledge_gap]; 'prompt-stub' }
+
+      convo = deliver('minha cidade é X', binding: binding, mode: 'live')
+
+      aggregate_failures do
+        expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.declared_empty')).to exist
+        expect(gap).to be(true)
       end
     end
 

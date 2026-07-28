@@ -11,7 +11,7 @@ class Ai::PromptCompiler
   # blocos). Em AMBOS os modos a ordem é FIXO-primeiro, VARIÁVEL-depois (prompt caching): o conjunto de
   # blocos de cada modo é o mesmo de antes — só a ordem mudou.
   def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
-                   customer_memory: nil, step_index: nil, followup: false)
+                   customer_memory: nil, step_index: nil, followup: false, knowledge_gap: false)
     # PROMPT CACHING: prefixo FIXO (igual entre turnos) primeiro, blocos VARIÁVEIS (mudam por turno)
     # depois. O cache de prefixo do provider exige que tudo que muda venha DEPOIS de tudo que é estável —
     # por isso o response_contract (fixo) subiu para o fim da seção fixa, e âncora/estado/RAG/memória
@@ -97,6 +97,14 @@ class Ai::PromptCompiler
                   "NUNCA invente nome de produto, valor, característica ou promoção que não esteja " \
                   "literalmente neste bloco. Se a informação pedida não estiver aqui, diga que vai " \
                   "verificar ou transfira para um humano — não improvise."
+    elsif knowledge_gap
+      # Guarda determinística (conv 397): a etapa DECLAROU uma fonte de conhecimento e o retrieval voltou
+      # VAZIO. O modelo não tem base — não pode afirmar nada sobre o assunto (o pior caso é a falsa
+      # cobertura). Reduz, não elimina, a alucinação: impede afirmar SEM fonte; não impede contradizer
+      # uma fonte presente.
+      variable << 'A FONTE de conhecimento que esta etapa precisa consultar NÃO retornou dados. NÃO ' \
+                  'afirme nada sobre esse assunto (você não tem fonte para isso): diga que vai verificar ' \
+                  'ou transfira para um humano — nunca invente.'
     end
     variable << "Memória da conversa: #{memory.summary}" if memory&.summary.present?
     variable.concat(customer_memory_lines(customer_memory))

@@ -55,6 +55,28 @@ describe('aiStepPayload', () => {
       expect(roundTripped.uid).toBeUndefined();
     });
 
+    // step.knowledge (declaração de conhecimento da etapa, backfill do backend) sobrevive ao round-trip
+    // mesmo SEM UI que o edite — o backend lê step['knowledge'] mas o formulário ainda não o conhece (PR 2).
+    it('preserva step.knowledge no round-trip (backend -> form -> backend), sem UI que o edite', () => {
+      const fromBackend = {
+        name: 'Viabilidade',
+        knowledge: { query: 'cidades atendidas', kinds: ['documento'] },
+      };
+      const roundTripped = stepToApi(parseStep(fromBackend));
+      expect(roundTripped.knowledge).toEqual({
+        query: 'cidades atendidas',
+        kinds: ['documento'],
+      });
+    });
+
+    // buildStepPayload NÃO emite a chave knowledge -> o merge de saveStep ({...form.steps[i], ...payload})
+    // preserva o valor do banco ao editar a etapa. Falha (bomba do backfill) se ela passar a emitir knowledge.
+    it('buildStepPayload NÃO emite a chave knowledge (o merge de saveStep preserva o backfill)', () => {
+      expect(
+        'knowledge' in buildStepPayload({ name: 'X', hasSlot: true })
+      ).toBe(false);
+    });
+
     it('group_delay_seconds vazio vira null (não NaN)', () => {
       expect(
         stepToApi({ name: 'X', group_delay_seconds: '' }).group_delay_seconds
