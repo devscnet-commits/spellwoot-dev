@@ -133,10 +133,18 @@ class Ai::PromptCompiler
     end
     lines << 'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. Se o cliente ' \
              'já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.'
-    lines << 'Se o valor que o cliente enviar parecer incompleto/estranho para o dado pedido, confirme ' \
-             'UMA única vez mostrando o que recebeu ("Recebi \'X\', está correto assim?"). Se ele ' \
-             'corrigir, use o valor corrigido; se confirmar, repetir ou insistir, ACEITE como veio e ' \
-             'siga — NUNCA peça o mesmo dado uma terceira vez.'
+    # Default (conv 396): valor VÁLIDO -> acuse INLINE, junto do próximo pedido. NUNCA um turno só para
+    # confirmar — a confirmação isolada cria um turno sem dado novo, onde o motor se perde (runs 2039→2041:
+    # a reply pediu confirmação do endereço, o motor já estava na etapa 8, "esta certo" virou documento_cpf).
+    lines << 'Ao receber um dado VÁLIDO, acuse-o na MESMA mensagem em que pede o próximo dado — NUNCA ' \
+             'faça uma pergunta separada só para confirmar. Ex.: "Recebi o CPF 123.456.789-00. Agora, ' \
+             'qual o seu e-mail?". Se o cliente corrigir depois, atualize o valor e siga.'
+    # Exceção (sanity-check preservado): SÓ valor que não valida / truncado / malformado ganha a
+    # confirmação ISOLADA, uma única vez.
+    lines << 'EXCEÇÃO — apenas quando o valor parecer incompleto/estranho/malformado para o dado pedido: ' \
+             'confirme UMA única vez, isolada, mostrando o que recebeu ("Recebi \'X\', está correto ' \
+             'assim?"). Se ele corrigir, use o corrigido; se confirmar, repetir ou insistir, ACEITE como ' \
+             'veio e siga — NUNCA peça o mesmo dado uma terceira vez.'
     lines.join("\n")
   end
 
