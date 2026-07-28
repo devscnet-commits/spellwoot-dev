@@ -106,7 +106,21 @@ describe('aiStepPayload', () => {
       expect(p.slot_required).toBe(false);
     });
 
-    it('SEM slot -> collect null e slot_required NULL (limpa legado; não ressuscita false)', () => {
+    // HOTFIX persistência: slot_required DESACOPLADO do hasSlot. Com o slot inferido AINDA não detectado
+    // (hasSlot false — o radio fica escondido durante o POST infer_slot) e sem chave manual, o payload
+    // preserva a escolha do radio (semeada do banco) em vez de nulificar em silêncio.
+    it('detectedSlot ausente + manualSlot vazio preserva slot_required TRUE (falha se voltar a depender de hasSlot)', () => {
+      const p = buildStepPayload({
+        ...base,
+        hasSlot: false,
+        slotRequired: true,
+        collectAttribute: '',
+      });
+      expect(p.collect).toBe(null);
+      expect(p.slot_required).toBe(true);
+    });
+
+    it('detectedSlot ausente + manualSlot vazio preserva slot_required FALSE (falha se voltar a depender de hasSlot)', () => {
       const p = buildStepPayload({
         ...base,
         hasSlot: false,
@@ -114,7 +128,7 @@ describe('aiStepPayload', () => {
         collectAttribute: '',
       });
       expect(p.collect).toBe(null);
-      expect(p.slot_required).toBe(null);
+      expect(p.slot_required).toBe(false);
     });
 
     it('NÃO escreve complete_when', () => {

@@ -50,9 +50,13 @@ export const stepToApi = s => {
 // Payload que o AiStepForm devolve no save. Regras (Gaps 1–3 no backend):
 //  - slot_required SEMPRE no nível da etapa, NUNCA collect.required (o Gap 2 desacoplou; não reacoplar);
 //  - chave manual -> collect = { attribute, type[, options] } SEM required;
-//  - SEM slot -> collect null e slot_required NULL, para LIMPAR um slot_required legado: se depois a
-//    inferência voltar a achar um slot, um `false` velho não pode ressuscitar (opcional silencioso é pior
-//    que obrigatório indevido — o funil avança sem o dado). null => backend trata como obrigatório (default);
+//  - slot_required reflete SEMPRE a escolha do radio (draft.slotRequired, semeado do banco), DESACOPLADO
+//    do estado da inferência. Antes: `hasSlot ? !!slotRequired : null` — num slot INFERIDO (collect null)
+//    `hasSlot` dependia do POST infer_slot ter resolvido no save; se não resolvesse, a política do usuário
+//    virava null em silêncio (o radio nem chegava a ser renderizado — v-if="hasSlot"). slot_required numa
+//    etapa SEM slot é inofensivo: o Ai::StepResolver retorna antes de consultar optional? quando
+//    Ai::StepSlot.attribute(step) é nil. (Custo: o antigo "limpar slot_required legado ao ficar sem slot"
+//    sai; resíduo de baixo risco — remover o slot com false e a inferência reachá-lo depois.)
 //  - NÃO escreve complete_when (morto no backend pós-Gap 2; legado sobrevive pelo spread, intocado).
 export const buildStepPayload = ({
   name,
@@ -63,7 +67,6 @@ export const buildStepPayload = ({
   collectType = 'text',
   collectOptions = '',
   slotRequired = true,
-  hasSlot = false,
 }) => {
   const attribute = (collectAttribute || '').trim();
   const payload = {
@@ -71,7 +74,7 @@ export const buildStepPayload = ({
     instructions: (instructions || '').trim(),
     group_delay_seconds: groupDelaySeconds,
     automations: automations.map(a => ({ type: a.type, params: a.params })),
-    slot_required: hasSlot ? !!slotRequired : null,
+    slot_required: !!slotRequired,
   };
   if (attribute) {
     payload.collect = { attribute, type: collectType || 'text' };
