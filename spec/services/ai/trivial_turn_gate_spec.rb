@@ -78,11 +78,55 @@ RSpec.describe Ai::TrivialTurnGate do
       end
     end
 
-    context 'condição c (etapa ativa coletando slot)' do
-      it 'NÃO pula "ok" (item da lista) quando a etapa atual coleta um slot' do
+    context 'condição c (slot PENDENTE não preenchido)' do
+      # O gate lê o valor coletado em additional_attributes['ai_collected_facts'].
+      def set_facts(facts)
+        conversation.update!(additional_attributes:
+          (conversation.additional_attributes || {}).merge('ai_collected_facts' => facts))
+      end
+
+      it 'NÃO pula "ok" quando a etapa tem slot SEM valor (pendente) — reason pending_slot' do
         after_our_reply('ok')
         result = described_class.skip?(text: 'ok', conversation: conversation, step: slot_step)
-        expect(result).to eq(skip: false, reason: 'active_slot')
+        expect(result).to eq(skip: false, reason: 'pending_slot')
+      end
+
+      # Afrouxamento deliberado: slot já preenchido + sem pergunta pendente = fim de conversa -> pula.
+      it 'PULA "ok" quando o slot da etapa JÁ está preenchido (economia de fim de conversa)' do
+        after_our_reply('ok')
+        set_facts('dia_vencimento' => '10')
+        result = described_class.skip?(text: 'ok', conversation: conversation, step: slot_step)
+        expect(result).to eq(skip: true, reason: 'closed_list')
+      end
+
+      it 'PULA "ok" quando o slot está resolvido por ABSENT (ausência aceita, NÃO é pendente)' do
+        after_our_reply('ok')
+        set_facts('dia_vencimento' => Ai::StepSlot::ABSENT)
+        result = described_class.skip?(text: 'ok', conversation: conversation, step: slot_step)
+        expect(result).to eq(skip: true, reason: 'closed_list')
+      end
+    end
+
+    # Reprodução EXATA da conv 412: a IA perguntou "vou finalizar seu pré-cadastro, tudo bem?" numa etapa
+    # SEM collect -> StepSlot.attribute nil -> a condição (c) NÃO vê slot algum. Mas asked_slot foi gravado
+    # -> ai_last_asked_slot presente -> o "ok" é a RESPOSTA. Falha por mutação se só a (c) for implementada.
+    context 'condição e (turno anterior fez pergunta — ai_last_asked_slot) — conv 412' do
+      def set_asked_slot(slot)
+        conversation.update!(additional_attributes:
+          (conversation.additional_attributes || {}).merge('ai_last_asked_slot' => slot))
+      end
+
+      it 'NÃO pula "ok" em etapa SEM collect quando ai_last_asked_slot presente — reason awaiting_answer' do
+        after_our_reply('ok')
+        set_asked_slot('confirma_finalizacao')
+        result = described_class.skip?(text: 'ok', conversation: conversation, step: info_step)
+        expect(result).to eq(skip: false, reason: 'awaiting_answer')
+      end
+
+      it 'sem ai_last_asked_slot em etapa sem collect: "ok" volta a pular (fim de conversa)' do
+        after_our_reply('ok')
+        result = described_class.skip?(text: 'ok', conversation: conversation, step: info_step)
+        expect(result).to eq(skip: true, reason: 'closed_list')
       end
     end
 

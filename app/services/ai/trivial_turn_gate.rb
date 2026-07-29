@@ -4,10 +4,12 @@
 # O único modo de falha aceitável é deixar de filtrar (o turno segue o fluxo normal de hoje); nunca o
 # contrário (pular algo que precisava de resposta).
 #
-# Proteção em DUAS camadas contra engolir uma resposta legítima ao slot da etapa (o CaptureJudge trata
-# uma confirmação isolada como o dado quando a instrução pede sim/não):
+# Proteção em CAMADAS contra engolir uma resposta legítima (o CaptureJudge trata uma confirmação isolada
+# como o dado quando a instrução pede sim/não):
 #   1. "sim"/"não" NÃO entram na lista fechada v1 (podem ser o dado de um slot sim/não);
-#   2. mesmo itens da lista NUNCA pulam quando a etapa atual coleta um slot (condição c).
+#   2. NUNCA pula quando a etapa atual tem um slot PENDENTE não preenchido (condição c); e
+#   3. NUNCA pula quando o turno ANTERIOR fez uma pergunta (ai_last_asked_slot presente, condição e) —
+#      cobre pergunta por confirmação/lead_variable em etapa SEM collect, que a (c) não enxerga (conv 412).
 class Ai::TrivialTurnGate
   # Lista fechada v1 (comparada contra o texto NORMALIZADO). Deliberadamente SEM "sim"/"não" (camada 1
   # acima) e sem variações com acento/erro de digitação (fica para a v2, com dados de produção).
@@ -18,9 +20,9 @@ class Ai::TrivialTurnGate
   # grafema, tratar como não-emoji → não pula).
   EMOJI_CHARS = /[\u{1F1E6}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}]/
 
-  # → { skip: true|false, reason: String }. skip:true SÓ quando TODAS as condições a–d valem.
+  # → { skip: true|false, reason: String }. skip:true SÓ quando TODAS as condições a–e valem.
   # reason distingue 'closed_list'|'emoji_only' no skip; e a 1ª condição que falhou quando NÃO pula
-  # ('not_trivial'|'first_message'|'last_incoming'|'active_slot') — telemetria para calibrar a v2.
+  # ('not_trivial'|'first_message'|'last_incoming'|'pending_slot'|'awaiting_answer') — telemetria p/ a v2.
   def self.skip?(text:, conversation:, step:)
     # (a) o texto é trivial? (lista fechada OU composto só de emojis)
     trivial = trivial_reason(text)
@@ -32,8 +34,16 @@ class Ai::TrivialTurnGate
     return { skip: false, reason: 'first_message' } if previous.nil?
     return { skip: false, reason: 'last_incoming' } unless previous.outgoing?
 
-    # (c) a etapa atual coleta um slot obrigatório? então NUNCA pula (o "ok" pode ser o dado do slot).
-    return { skip: false, reason: 'active_slot' } if collecting_slot?(step)
+    # (c) a etapa atual tem um slot PENDENTE (declarado ∪ inferido, ainda SEM valor)? o "ok" pode ser o
+    # dado — NUNCA pula. Um token ABSENT gravado conta como RESOLVIDO (o motor já aceitou a ausência), NÃO
+    # pendente: slot já preenchido/resolvido, sem pergunta pendente, cai no skip (economia de fim de conversa).
+    return { skip: false, reason: 'pending_slot' } if pending_slot?(step, conversation)
+
+    # (e) o turno ANTERIOR fez uma pergunta (ai_last_asked_slot presente)? então "ok" é a resposta pendente,
+    # não ruído de fim — NUNCA pula. Cobre o que (c) NÃO pega: pergunta por confirmação/lead_variable numa
+    # etapa SEM collect (StepSlot.attribute nil), onde pending_slot não vê slot algum. (conv 412: "vou
+    # finalizar seu pré-cadastro, tudo bem?" -> cliente "ok" foi descartado, ninguém falou por 3 minutos.)
+    return { skip: false, reason: 'awaiting_answer' } if awaiting_answer?(conversation)
 
     { skip: true, reason: trivial }
   end
@@ -73,11 +83,21 @@ class Ai::TrivialTurnGate
     recent.size < 2 ? nil : recent.first
   end
 
-  # A etapa atual coleta um slot? (declarado no collect OU inferido da instrução), independente de
-  # obrigatoriedade. Gap 2: passou a usar StepSlot.attribute (era required_attribute) — MUDANÇA de
-  # comportamento do Fix 3d: turno trivial agora é barrado em QUALQUER slot, inclusive OPCIONAL (mais
-  # conservador; "na dúvida, NÃO pula"). step nil/informativa → false.
-  def self.collecting_slot?(step)
-    Ai::StepSlot.attribute(step).present?
+  # A etapa atual tem um slot PENDENTE — declarado (collect) ∪ inferido (instrução), AINDA sem valor em
+  # ai_collected_facts. "Sem valor" = em branco; um token ABSENT gravado conta como RESOLVIDO (o motor já
+  # aceitou a ausência), NÃO pendente. step nil/informativa (sem slot) → false. Gap 2: StepSlot.attribute.
+  def self.pending_slot?(step, conversation)
+    slot = Ai::StepSlot.attribute(step)
+    return false if slot.blank?
+
+    facts = conversation.additional_attributes.to_h['ai_collected_facts'] || {}
+    facts[slot.to_s].to_s.strip.empty? # em branco = pendente; qualquer valor (inclui ABSENT) = resolvido
+  end
+
+  # O turno ANTERIOR pediu um dado: ai_last_asked_slot presente (setado no persist_step_state do turno que
+  # perguntou; limpo quando o modelo captura algo). O gate roda ANTES do track_step, então lê o valor do
+  # turno anterior — "há uma pergunta aguardando resposta". Presente => "ok" não é ruído de fim.
+  def self.awaiting_answer?(conversation)
+    conversation.additional_attributes.to_h['ai_last_asked_slot'].to_s.strip.present?
   end
 end
