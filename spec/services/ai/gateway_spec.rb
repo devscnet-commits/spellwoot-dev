@@ -720,6 +720,48 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === Fase 1: erro de PROVEDOR (status error) -> handoff em vez de silêncio ==========
+  context 'provider indisponível (status error): transfere com nota privada, sem mensagem ao cliente' do
+    it 'erro de provedor -> nota privada + transferência (reason provider_unavailable), NÃO cai no silêncio' do
+      create_department
+      binding = create_binding(mode: 'live')
+      allow(Ai::HandoffSummaryJob).to receive(:perform_later)
+      stub_decision({}, status: 'error') # o provedor falhou (rate-limit/cota): decisão vazia + status error
+
+      convo = deliver('oi', binding: binding, mode: 'live')
+
+      aggregate_failures do
+        # não é mais silêncio: transferiu com motivo próprio
+        expect(event_types(convo)).to include('handoff.provider_unavailable')
+        expect(event_types(convo)).not_to include('decision.unknown_kind')
+        expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.transfer')).to exist
+        # NOTA PRIVADA ao atendente com o motivo técnico (o cliente nunca vê)
+        note = convo.messages.where(private: true).last
+        expect(note).to be_present
+        expect(note.content).to include('cota/billing')
+        # DECISÃO DE PRODUTO: NENHUMA mensagem automática ao cliente
+        expect(convo.messages.outgoing.where(private: false)).to be_empty
+        # resumo do handoff com o reason próprio (prova de mutação por nome)
+        reason = nil
+        expect(Ai::HandoffSummaryJob).to have_received(:perform_later) { |_id, r| reason = r }
+        expect(reason).to eq('provider_unavailable')
+      end
+    end
+
+    it 'em SHADOW: erro de provedor apenas registra (não transfere nem escreve nota)' do
+      create_department
+      binding = create_binding(mode: 'shadow')
+      stub_decision({}, status: 'error')
+
+      convo = deliver('oi', binding: binding, mode: 'shadow')
+
+      aggregate_failures do
+        expect(event_types(convo)).not_to include('handoff.provider_unavailable')
+        expect(convo.messages.where(private: true)).to be_empty
+      end
+    end
+  end
+
   # === collected — a memória de fatos ao vivo (ai_collected_facts) entra no prompt =====
   context 'collected inclui a memória de fatos ao vivo' do
     it 'passa ai_collected_facts em collected, com custom_attributes da conversa por cima' do

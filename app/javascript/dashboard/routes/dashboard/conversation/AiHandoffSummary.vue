@@ -25,12 +25,20 @@ const reasonLabel = computed(() => {
       return t('CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.LOOP');
     case 'credit_exhausted':
       return t('CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.CREDIT_EXHAUSTED');
+    case 'provider_unavailable':
+      return t(
+        'CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.PROVIDER_UNAVAILABLE'
+      );
     case 'modelo_pediu_transferencia':
       return t('CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.MODEL_REQUESTED');
     case 'palavra_chave':
       return t('CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.KEYWORD');
     default:
-      return '';
+      // reason PRESENTE mas não mapeado (ex.: max_turns/declined/max_questions) -> rótulo genérico, não
+      // some da sidebar (foi assim que os reasons de give-up ficaram invisíveis). Sem reason -> vazio.
+      return data.value?.reason
+        ? t('CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.GENERIC')
+        : '';
   }
 });
 const formattedDate = computed(() => {

@@ -385,8 +385,10 @@
       "REASONS": {
         "LOOP": "AI got stuck in a loop",
         "CREDIT_EXHAUSTED": "AI credits ran out",
+        "PROVIDER_UNAVAILABLE": "AI provider unavailable",
         "MODEL_REQUESTED": "AI chose to transfer",
-        "KEYWORD": "Customer requested a human"
+        "KEYWORD": "Customer requested a human",
+        "GENERIC": "Transferred to a human agent"
       }
     },
     "SHOPIFY": {
