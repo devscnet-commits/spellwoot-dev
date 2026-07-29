@@ -194,9 +194,9 @@ const labelOptions = computed(() =>
 const teamOptions = computed(() =>
   props.teams.map(tm => ({ value: tm.id, label: tm.name }))
 );
-// Desfecho: ação em linguagem de usuário (não chave técnica); '' = etapa não declara desfecho.
+// Destino do "Encerrar o atendimento" (o item existir na lista JÁ significa que há desfecho; sem opção
+// "Nenhum" — remover o item é que limpa). Linguagem de usuário, não chave técnica.
 const onCompleteActionOptions = computed(() => [
-  { value: '', label: t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_NONE') },
   {
     value: 'handoff_human',
     label: t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_HANDOFF_HUMAN'),
@@ -229,6 +229,18 @@ const removeAutomation = i => draft.automations.splice(i, 1);
 // Ao trocar o tipo, zera os parâmetros (evita arrastar params do tipo anterior).
 const onTypeChange = i => {
   draft.automations[i].params = {};
+};
+// "Encerrar o atendimento" (o desfecho, step['on_complete']): entra na lista de automações como um item
+// ÚNICO e TERMINAL. NÃO vai para draft.automations (o runner o trataria como "continua") — fica no estado
+// próprio, que o buildStepPayload emite em on_complete. Adicionar => default handoff_human; remover => limpa
+// (buildStepPayload emite on_complete: null). Só um por etapa (é um objeto, não uma lista).
+const addOnComplete = () => {
+  draft.onCompleteAction = 'handoff_human';
+};
+const removeOnComplete = () => {
+  draft.onCompleteAction = '';
+  draft.onCompleteTeamId = '';
+  draft.onCompleteTarget = '';
 };
 
 // Payload montado em aiStepPayload.buildStepPayload: slot_required no nível da etapa (nunca
@@ -499,7 +511,7 @@ const onSave = async () => {
           </span>
 
           <p
-            v-if="!draft.automations.length"
+            v-if="!draft.automations.length && !draft.onCompleteAction"
             class="text-xs text-n-slate-11 mb-0"
           >
             {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_EMPTY') }}
@@ -578,7 +590,7 @@ const onSave = async () => {
               </label>
             </template>
 
-            <!-- change_team -->
+            <!-- change_team: move a fila mas a IA CONTINUA (não é handoff). Distingue do "Encerrar". -->
             <label
               v-else-if="automation.type === 'change_team'"
               class="flex flex-col gap-1 text-xs text-n-slate-11"
@@ -591,6 +603,9 @@ const onSave = async () => {
                   $t('AI_DEPARTMENTS.FORM.AUTOMATION_TEAM_PLACEHOLDER')
                 "
               />
+              <span class="text-n-slate-10">{{
+                $t('AI_DEPARTMENTS.FORM.AUTOMATION_CHANGE_TEAM_HINT')
+              }}</span>
             </label>
 
             <!-- change_ai_department -->
@@ -634,67 +649,95 @@ const onSave = async () => {
             </template>
           </div>
 
-          <button
-            type="button"
-            class="self-start inline-flex items-center gap-1 text-sm text-n-brand hover:underline"
-            @click="addAutomation"
+          <!-- "Encerrar o atendimento" (desfecho, step['on_complete']): item ÚNICO e TERMINAL da lista.
+               NÃO entra em draft.automations — fica no estado próprio, emitido em on_complete pelo
+               buildStepPayload. -->
+          <div
+            v-if="draft.onCompleteAction"
+            class="flex flex-col gap-2 rounded-lg border border-n-amber-6 bg-n-amber-2 p-3"
           >
-            <span class="i-lucide-plus size-3.5" />
-            {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_ADD') }}
-          </button>
-        </div>
+            <div class="flex items-center justify-between gap-2">
+              <label
+                class="flex flex-col gap-1 text-xs text-n-slate-11 flex-1 min-w-0"
+              >
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TITLE') }}
+                <Select
+                  v-model="draft.onCompleteAction"
+                  :options="onCompleteActionOptions"
+                />
+              </label>
+              <button
+                type="button"
+                class="shrink-0 text-xs text-n-ruby-11 hover:underline"
+                @click="removeOnComplete"
+              >
+                {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_REMOVE') }}
+              </button>
+            </div>
 
-        <!-- Desfecho AO concluir o funil (step['on_complete'], (b)-core). Cronológico: depois das automações
-             da etapa. Vazio = a etapa não declara desfecho. -->
-        <div class="flex flex-col gap-2 border-t border-n-weak pt-3">
-          <span class="text-sm font-medium text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TITLE') }}
-          </span>
-          <span class="text-xs text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_HINT') }}
-          </span>
-          <Select
-            v-model="draft.onCompleteAction"
-            :options="onCompleteActionOptions"
-          />
+            <!-- handoff_human: time da WHITELIST do agente (não todos os times da conta) -->
+            <label
+              v-if="draft.onCompleteAction === 'handoff_human'"
+              class="flex flex-col gap-1 text-xs text-n-slate-11"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM') }}
+              <Select
+                v-if="handoffTeamOptions.length"
+                v-model="draft.onCompleteTeamId"
+                :options="handoffTeamOptions"
+                :placeholder="
+                  $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM_PLACEHOLDER')
+                "
+              />
+              <span v-else class="text-n-amber-11">
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM_EMPTY') }}
+              </span>
+            </label>
 
-          <!-- handoff_human: time da WHITELIST do agente (não todos os times da conta) -->
-          <label
-            v-if="draft.onCompleteAction === 'handoff_human'"
-            class="flex flex-col gap-1 text-xs text-n-slate-11"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM') }}
-            <Select
-              v-if="handoffTeamOptions.length"
-              v-model="draft.onCompleteTeamId"
-              :options="handoffTeamOptions"
-              :placeholder="
-                $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM_PLACEHOLDER')
-              "
-            />
-            <span v-else class="text-n-amber-11">
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM_EMPTY') }}
-            </span>
-          </label>
+            <!-- handoff_ai: IA de destino (handoff_agent_ids), por nome -->
+            <label
+              v-else-if="draft.onCompleteAction === 'handoff_ai'"
+              class="flex flex-col gap-1 text-xs text-n-slate-11"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET') }}
+              <Select
+                v-if="handoffAgentOptions.length"
+                v-model="draft.onCompleteTarget"
+                :options="handoffAgentOptions"
+                :placeholder="
+                  $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET_PLACEHOLDER')
+                "
+              />
+              <span v-else class="text-n-amber-11">
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET_EMPTY') }}
+              </span>
+            </label>
 
-          <!-- handoff_ai: IA de destino (handoff_agent_ids), por nome -->
-          <label
-            v-else-if="draft.onCompleteAction === 'handoff_ai'"
-            class="flex flex-col gap-1 text-xs text-n-slate-11"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET') }}
-            <Select
-              v-if="handoffAgentOptions.length"
-              v-model="draft.onCompleteTarget"
-              :options="handoffAgentOptions"
-              :placeholder="
-                $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET_PLACEHOLDER')
-              "
-            />
-            <span v-else class="text-n-amber-11">
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET_EMPTY') }}
-            </span>
-          </label>
+            <!-- aviso terminal (afirmativo: explica o porquê, não lista restrição) -->
+            <p class="text-xs text-n-amber-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TERMINAL_WARNING') }}
+            </p>
+          </div>
+
+          <div class="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 text-sm text-n-brand hover:underline"
+              @click="addAutomation"
+            >
+              <span class="i-lucide-plus size-3.5" />
+              {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_ADD') }}
+            </button>
+            <button
+              v-if="!draft.onCompleteAction"
+              type="button"
+              class="inline-flex items-center gap-1 text-sm text-n-brand hover:underline"
+              @click="addOnComplete"
+            >
+              <span class="i-lucide-flag size-3.5" />
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_ADD') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
