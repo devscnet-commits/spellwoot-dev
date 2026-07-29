@@ -18,7 +18,9 @@ class Ai::HandoffSummaryGenerator
     # Redes de "travou" (Ai::StepResolver): o atendente lia o token cru ("Transferido por: max_turns").
     'max_turns' => 'a conversa passou muitas mensagens sem avançar',
     'max_questions' => 'o cliente fez muitas perguntas seguidas sem fechar o atendimento',
-    'declined' => 'o cliente preferiu não informar um dado necessário para continuar'
+    'declined' => 'o cliente preferiu não informar um dado necessário para continuar',
+    # (b)-core: desfecho declarado pela etapa (step['on_complete']) — o funil chegou ao fim.
+    'conclusao' => 'o atendimento da IA foi concluído e encaminhado para seguimento humano'
   }.freeze
 
   def initialize(conversation:, reason:)

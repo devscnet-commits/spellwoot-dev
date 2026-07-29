@@ -194,6 +194,14 @@ class Ai::Gateway
     # Camada B (rede de segurança do avanço-por-slot): a IA ficou presa numa etapa de COLETA por N
     # mensagens sem obter o dado. NÃO forçamos avanço (cadastro incompleto): avisamos o cliente e
     # TRANSFERIMOS para humano, com motivo claro no resumo. Curto-circuita antes de qualquer dispatch.
+    # (b)-core: DESFECHO declarado pela etapa (on_complete) na conclusão determinística do funil. Mesmo canal
+    # do stuck_handoff (outcome[:signal]); o destino vem da ETAPA, não da intenção do modelo. Curto-circuita.
+    if step_signal.is_a?(Hash) && step_signal[:conclude]
+      force_conclusion(run_record, department, step_signal[:conclude], result[:decision] || {})
+      state_manager.update_memory
+      return finalize(run_record, 'recorded')
+    end
+
     if step_signal.is_a?(Hash) && step_signal[:stuck_handoff]
       force_stuck_handoff(run_record, department, step_signal[:stuck_handoff])
       state_manager.update_memory
@@ -577,6 +585,36 @@ class Ai::Gateway
            reason: info[:reason], refusals: info[:refusals] }.compact)
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_stuck_handoff] #{e.class}: #{e.message}"
+  end
+
+  # (b)-core — DESFECHO declarado pela etapa (step['on_complete']) na conclusão do funil. Reusa a MESMA
+  # maquinaria: handoff_human -> transfer + assign_human (com resumo, reason 'conclusao') abrindo a conversa
+  # com dono na fila do atendente; close -> conversation.resolve (despedida antes); handoff_ai -> route_to_ai.
+  # O destino do handoff_human vem da ETAPA (team_id validado contra a whitelist em conclusion_team_id), não
+  # da intenção do modelo. decision leva o reply_text que o modelo redigiu nesta etapa (a despedida).
+  def force_conclusion(run_record, department, info, decision)
+    case info['action'].to_s
+    when 'close'
+      farewell = close_farewell(department, decision)
+      action_dispatcher.reply(department, farewell) if farewell.present?
+      action_dispatcher.execute_action('conversation.resolve', {}, run_record, 'close')
+      emit(run_record, 'conclusion.executed', { action: 'close' })
+    when 'handoff_ai'
+      routed = handoff_coordinator.route_to_ai({ 'handoff_target' => info['target'].to_s })
+      emit(run_record, 'conclusion.executed', { action: 'handoff_ai', target: info['target'], routed: routed ? true : false })
+    else # handoff_human (default)
+      reason = info['reason'].presence || 'conclusao'
+      team_id = handoff_coordinator.conclusion_team_id(info)
+      action_dispatcher.reply(department, decision['reply_text']) if decision['reply_text'].present?
+      input = { 'unassign' => true }
+      input['team_id'] = team_id if team_id
+      action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff',
+                                       extra: { reason: reason, team_id: team_id })
+      handoff_coordinator.assign_human(team_id, reason: reason)
+      emit(run_record, 'conclusion.executed', { action: 'handoff_human', team_id: team_id })
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_conclusion] #{e.class}: #{e.message}"
   end
 
   # Mensagem de aviso ao cliente antes de transferir (configurável via transfer_rules['stuck_message'];

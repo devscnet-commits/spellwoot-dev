@@ -650,6 +650,76 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === (b)-core: DESFECHO declarado pela etapa (on_complete) -> conclusão DETERMINÍSTICA ==========
+  context 'conclusão declarada: etapa terminal com on_complete roteia pela whitelist' do
+    let!(:team) { create(:team, account: account, name: 'Comercial') }
+
+    def conclusion_department(final_step)
+      dept = create_department
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Cadastro',
+                                'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true } },
+                              final_step
+                            ])
+      dept
+    end
+
+    def run_turn(convo, binding, text)
+      message = create(:message, account: account, inbox: inbox, conversation: convo,
+                                 message_type: 'incoming', content: text)
+      described_class.new(message: message, agent_inbox: binding, mode: 'live').run
+      convo.reload
+    end
+
+    # A PROVA do (b)-core: o modelo NÃO emite step_completed no turno 2 e a conversa conclui mesmo assim.
+    it 'obrigatórios preenchidos -> conclui SEM step_completed: transfere pela whitelist, reason conclusao, status open' do
+      agent.update!(team_id: nil, handoff_team_ids: [team.id])
+      conclusion_department({ 'name' => 'Finalização',
+                              'on_complete' => { 'action' => 'handoff_human', 'team_id' => team.id, 'reason' => 'conclusao' } })
+      binding = create_binding(mode: 'live')
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      allow(Ai::HandoffSummaryJob).to receive(:perform_later)
+      stub_decisions(
+        { 'decision' => 'reply', 'reply_text' => 'Recebi seu nome!' },         # turno 1: captura nome, avança
+        { 'decision' => 'reply', 'reply_text' => 'Foi tudo certo, até logo!' }  # turno 2: SEM step_completed
+      )
+
+      run_turn(convo, binding, 'João Silva') # turno 1 -> nome
+      run_turn(convo, binding, 'obrigado')   # turno 2 -> conclusão determinística
+
+      aggregate_failures do
+        expect(convo.additional_attributes['ai_collected_facts']).to include('nome' => 'João Silva')
+        expect(event_types(convo)).to include('conclusion.executed')
+        expect(event_types(convo)).not_to include('step.stuck_handoff') # é conclusão, não give-up
+        expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.transfer')).to exist
+        expect(convo.team_id).to eq(team.id)     # roteou pelo team_id declarado (na whitelist)
+        expect(convo.status).to eq('open')       # open + assigned (mark_handed_off), NÃO resolved
+        reason = nil
+        expect(Ai::HandoffSummaryJob).to have_received(:perform_later) { |_id, r| reason = r }
+        expect(reason).to eq('conclusao')        # prova de mutação por nome
+      end
+    end
+
+    it 'action close -> resolve a conversa (não transfere)' do
+      conclusion_department({ 'name' => 'Finalização', 'on_complete' => { 'action' => 'close', 'reason' => 'conclusao' } })
+      binding = create_binding(mode: 'live')
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      stub_decisions(
+        { 'decision' => 'reply', 'reply_text' => 'Recebi!' },
+        { 'decision' => 'reply', 'reply_text' => 'Encerrando, até logo!' }
+      )
+
+      run_turn(convo, binding, 'João')
+      run_turn(convo, binding, 'tchau')
+
+      aggregate_failures do
+        expect(event_types(convo)).to include('conclusion.executed')
+        expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.resolve')).to exist
+        expect(convo.status).to eq('resolved')
+      end
+    end
+  end
+
   # === collected — a memória de fatos ao vivo (ai_collected_facts) entra no prompt =====
   context 'collected inclui a memória de fatos ao vivo' do
     it 'passa ai_collected_facts em collected, com custom_attributes da conversa por cima' do

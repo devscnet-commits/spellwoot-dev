@@ -2267,4 +2267,44 @@ RSpec.describe Ai::StateManager do
       expect(st_questions.to_i).to eq(0)
     end
   end
+
+  # (b)-core — conclude_ready?: os slots OBRIGATÓRIOS ATÉ o índice preenchidos (ABSENT-aware); opcional NÃO
+  # gateia; obrigatório DEPOIS do índice NÃO gateia (fronteira ≤ índice = conclusão de ramo). Private -> send.
+  describe '#conclude_ready? (fronteira ≤ índice, ABSENT-aware)' do
+    let(:manager) { described_class.new(conversation: conversation, agent: agent) }
+    let(:steps) do
+      [
+        { 'name' => 'A', 'collect' => { 'attribute' => 'nome', 'required' => true } },   # 0: obrigatório
+        { 'name' => 'B', 'collect' => { 'attribute' => 'email', 'required' => false } }, # 1: opcional
+        { 'name' => 'Fim', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => 1 } }, # 2: terminal
+        { 'name' => 'Depois', 'collect' => { 'attribute' => 'cpf', 'required' => true } }  # 3: obrigatório DEPOIS
+      ]
+    end
+
+    def ready?(facts)
+      conversation.update!(additional_attributes: { 'ai_collected_facts' => facts })
+      manager.send(:conclude_ready?, steps, 2, steps[2])
+    end
+
+    it 'obrigatórios ≤ índice preenchidos -> true (opcional e obrigatório-DEPOIS não gateiam)' do
+      expect(ready?({ 'nome' => 'João' })).to be(true)
+    end
+
+    it 'obrigatório ≤ índice vazio -> false' do
+      expect(ready?({})).to be(false)
+    end
+
+    it 'obrigatório ≤ índice com token ABSENT -> false (ABSENT bloqueia obrigatório)' do
+      expect(ready?({ 'nome' => Ai::StepSlot::ABSENT })).to be(false)
+    end
+
+    it 'opcional ABSENT não bloqueia -> true (conta como preenchido)' do
+      expect(ready?({ 'nome' => 'João', 'email' => Ai::StepSlot::ABSENT })).to be(true)
+    end
+
+    it 'etapa corrente SEM on_complete -> false (guarda: nunca conclui fora do contrato)' do
+      conversation.update!(additional_attributes: { 'ai_collected_facts' => { 'nome' => 'João' } })
+      expect(manager.send(:conclude_ready?, steps, 0, steps[0])).to be(false)
+    end
+  end
 end

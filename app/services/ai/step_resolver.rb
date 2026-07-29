@@ -24,9 +24,23 @@ class Ai::StepResolver
 
   # capture_signal: nil (capturou/nada), :no_attempt (#269, slot de tipo conhecido sem tentativa),
   # { refusal: ... } (juiz recusou) ou { declined: true } (Gap 1, cliente declinou o dado).
-  def resolve_completion(step, decision, stuck_limit, index, capture_signal, productive = false)
+  def resolve_completion(step, decision, stuck_limit, index, capture_signal, productive = false, conclude_ready: false)
     # Gap 2: attribute (declarado ∪ INFERIDO) governa "há slot?" E a captura.
     slot = Ai::StepSlot.attribute(step)
+
+    # (b)-core — QUARTO bucket (desfecho declarado): etapa SEM slot que declara on_complete é TERMINAL e
+    # conclui de forma DETERMINÍSTICA — NUNCA por decision['step_completed'] (a fragilidade da conv 408, onde
+    # o modelo não sinalizou nada e a conversa ficou órfã). conclude_ready (obrigatórios ≤ índice preenchidos)
+    # é calculado pelo StateManager, que tem o array de steps. Pronto -> emite o sinal { conclude: … } (MESMO
+    # canal do stuck_handoff); NÃO pronto -> não conclui e NÃO avança (conclude_blocked: o StateManager emite
+    # conclusion.not_ready). Só o galho SEM slot o consulta; um on_complete numa etapa COM slot é ignorado
+    # (o slot governa a coleta).
+    if slot.nil? && (on_complete = step_on_complete(step))
+      return { completed: false, signal: { conclude: on_complete } } if conclude_ready
+
+      return { completed: false, conclude_blocked: true }
+    end
+
     return { completed: step_completed?(decision), turns: 0, questions: 0, refusals: 0 } unless slot
 
     # INVARIANTE (Gaps 3/4): ao SAIR de um slot obrigatório, ou os contadores foram ZERADOS (só no avanço
@@ -103,9 +117,20 @@ class Ai::StepResolver
     resolve_judge_refusal(step, slot, stuck_limit, 'declined')
   end
 
-  # Só é alcançado para etapa SEM slot (attribute nil): segue o sinal do modelo.
+  # Só é alcançado para etapa SEM slot (attribute nil) e SEM on_complete: segue o sinal do modelo.
   def step_completed?(decision)
     truthy?(decision['step_completed'])
+  end
+
+  # (b)-core — desfecho DECLARADO da etapa: { action, team_id, target, reason } normalizado com string keys,
+  # ou nil. action fora do contrato (handoff_human|close|handoff_ai) => nil (trata como etapa comum, compat
+  # total com playbooks antigos). Só o galho SEM slot o consulta.
+  def step_on_complete(step)
+    raw = step.is_a?(Hash) ? (step['on_complete'] || step[:on_complete]) : nil
+    return nil unless raw.is_a?(Hash)
+
+    info = raw.transform_keys(&:to_s)
+    %w[handoff_human close handoff_ai].include?(info['action'].to_s) ? info : nil
   end
 
   def slot_collector
