@@ -155,6 +155,14 @@ RSpec.describe Ai::HandoffSummaryGenerator do
       expect(content).not_to include('Transferido por: conclusao.')
     end
 
+    # Fase 1: no apagão do provedor o resumo TAMBÉM chama o LLM e falha -> cai no fallback determinístico,
+    # então a label É o conteúdo do card (não é polish). Sem ela: "Transferido por: provider_unavailable".
+    it 'provider_unavailable -> label legível com o motivo técnico (verifique cota/billing)' do
+      content = described_class.new(conversation: conversation, reason: 'provider_unavailable').generate.content
+      expect(content).to include('o provedor de IA ficou indisponível (verifique cota/billing)')
+      expect(content).not_to include('Transferido por: provider_unavailable.')
+    end
+
     it 'max_questions -> "o cliente fez muitas perguntas seguidas sem fechar o atendimento"' do
       content = described_class.new(conversation: conversation, reason: 'max_questions').generate.content
       expect(content).to include('o cliente fez muitas perguntas seguidas sem fechar o atendimento')

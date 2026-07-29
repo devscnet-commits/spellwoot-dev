@@ -20,7 +20,10 @@ class Ai::HandoffSummaryGenerator
     'max_questions' => 'o cliente fez muitas perguntas seguidas sem fechar o atendimento',
     'declined' => 'o cliente preferiu não informar um dado necessário para continuar',
     # (b)-core: desfecho declarado pela etapa (step['on_complete']) — o funil chegou ao fim.
-    'conclusao' => 'o atendimento da IA foi concluído e encaminhado para seguimento humano'
+    'conclusao' => 'o atendimento da IA foi concluído e encaminhado para seguimento humano',
+    # Fase 1 erro de provedor: rate-limit/cota/billing (ou auth não recuperado). Rótulo do card (o atendente
+    # vê); o cliente nunca lê o motivo técnico.
+    'provider_unavailable' => 'o provedor de IA ficou indisponível (verifique cota/billing) e o atendimento foi encaminhado para um humano'
   }.freeze
 
   def initialize(conversation:, reason:)

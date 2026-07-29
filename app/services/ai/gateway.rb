@@ -171,6 +171,16 @@ class Ai::Gateway
            temperature: result[:temperature], cached_tokens: result[:cached_tokens] },
          run_id: run_record.id)
 
+    # Provider indisponível (rate-limit/cota/billing, ou auth que o BYOK não recuperou): a decisão veio com
+    # status 'error' e VAZIA. Sem esta guarda, o dispatch cai no unknown_kind {handled:'none'} = SILÊNCIO
+    # (conv 413: "oi"/"olá?" sem resposta, sem transferência, sem alerta). Espelha o force_credit_handoff,
+    # mas PÓS-chamada (o erro do provedor só se sabe depois de tentar). Só ao vivo; em shadow apenas registra
+    # o erro, como hoje. Curto-circuita antes do track_step/dispatch (a decisão vazia não avança etapa).
+    if @acts_live && result[:status] == 'error'
+      force_provider_handoff(run_record)
+      return finalize(run_record, 'error')
+    end
+
     # Track which step the conversation is on so message grouping can use that step's delay; also
     # fires the step's completion automations when the model signals step_completed (audited actions
     # reuse this run's dispatcher). message_text alimenta a extração determinística de slot (Camada A).
@@ -691,6 +701,25 @@ class Ai::Gateway
     emit(run_record, 'handoff.credit_exhausted', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_credit_handoff] #{e.class}: #{e.message}"
+  end
+
+  # Provider de IA indisponível (rate-limit/cota/billing, ou auth não recuperado pelo BYOK): a IA não
+  # conseguiu decidir. Espelha o force_credit_handoff: NOTA PRIVADA ao atendente com o motivo técnico (que o
+  # cliente nunca vê) + transferência + assign_human. reason 'provider_unavailable' -> resumo + card.
+  # DECISÃO DE PRODUTO: NÃO manda mensagem automática ao cliente — a conversa cai no time humano e o
+  # atendente responde ele mesmo (uma frase "já vou te atender" seria mais uma promessa que o sistema não
+  # cumpre, o padrão que estamos eliminando). Só ao vivo (o call-site já gateia @acts_live).
+  def force_provider_handoff(run_record)
+    action_dispatcher.internal_note('⚠️ Transferido automaticamente: a IA não conseguiu responder por ' \
+                                    'indisponibilidade do provedor de IA (verifique cota/billing).')
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'provider_unavailable' })
+    handoff_coordinator.assign_human(team_id, reason: 'provider_unavailable')
+    emit(run_record, 'handoff.provider_unavailable', { team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_provider_handoff] #{e.class}: #{e.message}"
   end
 
   # BYOK (billing Fase 3): a chave própria do cliente foi recusada por auth (401). Só age ao vivo e só

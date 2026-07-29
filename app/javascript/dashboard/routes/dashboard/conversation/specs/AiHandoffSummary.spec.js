@@ -67,4 +67,41 @@ describe('AiHandoffSummary.vue', () => {
 
     expect(get).toHaveBeenCalledWith(url(99));
   });
+
+  // Fase 1: o novo reason precisa do case, senão o card fica sem motivo.
+  it('mapeia provider_unavailable para a REASON própria', async () => {
+    const wrapper = mountWith({
+      get: vi.fn().mockResolvedValue({
+        data: {
+          summary: 'x',
+          reason: 'provider_unavailable',
+          created_at: '2026-07-13T10:00:00Z',
+        },
+      }),
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      'CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.PROVIDER_UNAVAILABLE'
+    );
+  });
+
+  // O DEFAULT: reason presente mas não mapeado (max_turns/declined/max_questions) usa o rótulo GENÉRICO em
+  // vez de sumir — foi assim que os reasons de give-up ficaram invisíveis. Falha se o default voltar a ''.
+  it('reason NÃO mapeado (max_turns) usa o rótulo GENÉRICO em vez de esconder a label', async () => {
+    const wrapper = mountWith({
+      get: vi.fn().mockResolvedValue({
+        data: {
+          summary: 'x',
+          reason: 'max_turns',
+          created_at: '2026-07-13T10:00:00Z',
+        },
+      }),
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      'CONVERSATION_SIDEBAR.HANDOFF_SUMMARY.REASONS.GENERIC'
+    );
+  });
 });
