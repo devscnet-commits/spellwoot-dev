@@ -93,6 +93,28 @@ RSpec.describe Ai::Gateway do
       expect(Ai::Run.find_by(conversation_id: convo.id).run_type).to eq('decision')
       expect(convo.messages.outgoing.last.content).to eq('Claro!')
     end
+
+    # CONV 412 end-to-end: com o gate LIGADO, "ok" logo após uma PERGUNTA da IA (ai_last_asked_slot
+    # presente) NÃO é descartado — o modelo é chamado e o cliente é respondido. É o argumento de que,
+    # depois deste conserto, LIGAR o gate deixa de travar conversa ativa.
+    it 'CONV 412: "ok" após pergunta pendente (ai_last_asked_slot) NÃO pula — chama o modelo' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'Perfeito, finalizando! 😊' })
+
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      convo.update!(additional_attributes: { 'ai_last_asked_slot' => 'confirma_finalizacao' })
+      create(:message, account: account, inbox: inbox, conversation: convo,
+                       message_type: 'outgoing', content: 'Vou finalizar seu pré-cadastro, tudo bem?')
+      message = create(:message, account: account, inbox: inbox, conversation: convo,
+                                 message_type: 'incoming', content: 'ok')
+      described_class.new(message: message, agent_inbox: binding, mode: binding.mode).run
+      convo.reload
+
+      expect(Ai::ModelRouter).to have_received(:decide)
+      expect(events(convo)).not_to include('turn.trivial_skipped')
+      expect(Ai::Run.find_by(conversation_id: convo.id).run_type).to eq('decision')
+    end
   end
 
   context 'gate DESLIGADO (default — sem worker_overrides)' do
