@@ -101,3 +101,49 @@ describe('AiStepForm.vue — preservação de step.on_complete (semeadura do dra
     wrapper.unmount();
   });
 });
+
+describe('AiStepForm.vue — foco do input de chave manual (input único, sempre montado)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  // Regressão: antes havia DOIS <input v-model="draft.collectAttribute"> em ramos v-if mutuamente exclusivos
+  // (âmbar "sem slot" vs verde "editando"); como hasSlot deriva de collectAttribute, a 1ª letra flipava o
+  // ramo e o Vue REMONTAVA o input, matando o foco (o usuário digitava "c" e tinha que clicar de novo).
+  // Agora é UM input sempre montado. Este teste digita caractere a caractere e exige que o MESMO input
+  // continue presente e acumule o valor completo. FALHA se o input voltar a ser condicional: no bug antigo,
+  // após a 1ª letra hasSlot vira true, o ramo verde mostra a LEITURA (span) e o input some -> a 2ª iteração
+  // não encontra mais o input.
+  it('digitar caractere a caractere mantém UM input montado e o valor completo', async () => {
+    const wrapper = mountForm({ name: 'Coleta' }); // sem collect, sem instrução -> estado "sem slot"
+    await flushPromises();
+
+    const keyInput = () => wrapper.find('[data-testid="slot-key-input"]');
+    expect(keyInput().exists()).toBe(true); // input presente já no estado "sem slot"
+
+    // Digita caractere a caractere (reduce em vez de for-of/await-in-loop — regras do lint do repo). A 1ª
+    // letra flipa hasSlot; o input NÃO pode remontar: reasserta a presença antes de cada tecla.
+    await ['c', 'ci', 'cid', 'cida', 'cidad', 'cidade'].reduce(
+      async (chain, value) => {
+        await chain;
+        expect(keyInput().exists()).toBe(true); // NUNCA some ao digitar
+        await keyInput().setValue(value);
+        await flushPromises();
+      },
+      Promise.resolve()
+    );
+
+    expect(keyInput().exists()).toBe(true);
+    expect(keyInput().element.value).toBe('cidade'); // valor completo preservado
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+    expect(wrapper.emitted('save')[0][0].collect).toEqual({
+      attribute: 'cidade',
+      type: 'text',
+    });
+
+    wrapper.unmount();
+  });
+});

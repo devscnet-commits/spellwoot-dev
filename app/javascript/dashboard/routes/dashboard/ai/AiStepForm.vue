@@ -310,15 +310,31 @@ const onSave = async () => {
       />
     </label>
 
-    <!-- c) Tarja do slot: Estado A (há slot -> chave editável + obrigatório/opcional) ou Estado B (aviso) -->
+    <!-- c) Tarja do slot: UM container e UM <input> SEMPRE montado. Só a APARÊNCIA muda com hasSlot (cor,
+         ícone, texto de ajuda). Antes eram 3 ramos v-if com DOIS <input v-model="draft.collectAttribute">
+         (âmbar "sem slot" vs verde "editando"); como hasSlot deriva de collectAttribute, a 1ª letra flipava
+         o ramo e o Vue remontava o input, matando o foco. O input agora vive num único v-else, e digitar
+         torna hasManualSlot true — continuamos NELE, sem remontar. NÃO toca inferência/slot_required. -->
     <div
-      v-if="hasSlot"
-      class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-teal-3 text-n-teal-11"
+      class="flex flex-col gap-2 px-3 py-2.5 rounded-lg"
+      :class="{
+        'bg-n-teal-3 text-n-teal-11': hasSlot,
+        'bg-n-alpha-2 text-n-slate-11': !hasSlot && inferPending,
+        'bg-n-amber-3 text-n-amber-11': !hasSlot && !inferPending,
+      }"
     >
-      <!-- chave (leitura) + editar, ou input de edição -->
+      <!-- linha da chave: ícone + (leitura da chave DETECTADA ou o input único) + reset -->
       <div class="flex items-center gap-2">
-        <span class="shrink-0 size-4 i-lucide-check" />
-        <template v-if="!editingKey">
+        <span
+          class="shrink-0 size-4"
+          :class="{
+            'i-lucide-check': hasSlot,
+            'i-lucide-loader-2 animate-spin': !hasSlot && inferPending,
+            'i-lucide-alert-triangle': !hasSlot && !inferPending,
+          }"
+        />
+        <!-- slot DETECTADO (inferido), sem override manual e sem editar: leitura + "editar" -->
+        <template v-if="hasSlot && !editingKey && !hasManualSlot">
           <span class="flex-1 min-w-0 text-sm">
             {{ $t('AI_DEPARTMENTS.FORM.SLOT_DETECTED', { slot: activeSlot }) }}
           </span>
@@ -331,26 +347,37 @@ const onSave = async () => {
             {{ $t('AI_DEPARTMENTS.FORM.SLOT_EDIT_KEY') }}
           </button>
         </template>
-        <template v-else>
-          <input
-            v-model="draft.collectAttribute"
-            type="text"
-            :placeholder="
-              $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE_PLACEHOLDER')
-            "
-            class="flex-1 min-w-0 px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-          />
-          <button
-            type="button"
-            class="shrink-0 text-xs underline hover:no-underline"
-            @click="resetToAuto"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.SLOT_MANUAL_RESET') }}
-          </button>
-        </template>
+        <!-- INPUT ÚNICO — TODOS os outros casos (sem slot / editando / manual já digitado). Digitar a 1ª
+             letra torna hasManualSlot true, então permanecemos NESTE mesmo v-else: o elemento não remonta. -->
+        <input
+          v-else
+          v-model="draft.collectAttribute"
+          type="text"
+          data-testid="slot-key-input"
+          :placeholder="
+            $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE_PLACEHOLDER')
+          "
+          class="flex-1 min-w-0 px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+        />
+        <button
+          v-if="hasManualSlot || editingKey"
+          type="button"
+          class="shrink-0 text-xs underline hover:no-underline"
+          @click="resetToAuto"
+        >
+          {{ $t('AI_DEPARTMENTS.FORM.SLOT_MANUAL_RESET') }}
+        </button>
       </div>
 
-      <!-- tipo + opções: só ao editar uma chave MANUAL -->
+      <!-- texto de ajuda: detectando / aviso de "sem slot". Só o texto muda; o input acima permanece. -->
+      <span v-if="!hasSlot && inferPending" class="text-xs">
+        {{ $t('AI_DEPARTMENTS.FORM.SLOT_DETECTING') }}
+      </span>
+      <span v-else-if="!hasSlot" class="text-xs">
+        {{ $t('AI_DEPARTMENTS.FORM.SLOT_NONE_WARNING') }}
+      </span>
+
+      <!-- tipo + opções: só ao editar uma chave MANUAL (comportamento inalterado) -->
       <template v-if="editingKey && hasManualSlot">
         <label class="flex flex-col gap-1 text-xs">
           {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
@@ -372,8 +399,12 @@ const onSave = async () => {
         </label>
       </template>
 
-      <!-- obrigatório / opcional: descreve a CONSEQUÊNCIA, não o mecanismo -->
-      <div class="flex flex-col gap-1 pt-1.5 border-t border-n-teal-5">
+      <!-- obrigatório / opcional: só quando HÁ slot. Aparece ao digitar a 1ª letra — é sibling ABAIXO do
+           input, não o remonta. -->
+      <div
+        v-if="hasSlot"
+        class="flex flex-col gap-1 pt-1.5 border-t border-n-teal-5"
+      >
         <label class="flex items-start gap-2 text-sm cursor-pointer">
           <input
             v-model="draft.slotRequired"
@@ -393,39 +424,6 @@ const onSave = async () => {
           <span>{{ $t('AI_DEPARTMENTS.FORM.SLOT_REQUIRED_NO') }}</span>
         </label>
       </div>
-    </div>
-
-    <!-- enquanto a inferência está em voo, não pisca o aviso de "sem slot" -->
-    <div
-      v-else-if="inferPending"
-      class="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-n-alpha-2 text-n-slate-11"
-    >
-      <span class="shrink-0 size-4 i-lucide-loader-2 animate-spin" />
-      {{ $t('AI_DEPARTMENTS.FORM.SLOT_DETECTING') }}
-    </div>
-
-    <!-- Estado B: nenhum slot detectado — AVISO (não bloqueio) + campo para definir a chave -->
-    <div
-      v-else
-      class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-amber-3 text-n-amber-11"
-    >
-      <div class="flex items-start gap-2">
-        <span class="mt-0.5 shrink-0 size-4 i-lucide-alert-triangle" />
-        <span class="flex-1 min-w-0 text-sm">{{
-          $t('AI_DEPARTMENTS.FORM.SLOT_NONE_WARNING')
-        }}</span>
-      </div>
-      <label class="flex flex-col gap-1 text-xs">
-        {{ $t('AI_DEPARTMENTS.FORM.SLOT_NONE_DEFINE') }}
-        <input
-          v-model="draft.collectAttribute"
-          type="text"
-          :placeholder="
-            $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_ATTRIBUTE_PLACEHOLDER')
-          "
-          class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-        />
-      </label>
     </div>
 
     <!-- d) Ajustes avançados (recolhidos por padrão) -->
