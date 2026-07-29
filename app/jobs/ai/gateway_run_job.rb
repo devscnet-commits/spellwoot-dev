@@ -24,7 +24,20 @@ class Ai::GatewayRunJob < ApplicationJob
 
     content_override = grouped ? Ai::MessageGrouping.grouped_content(message.conversation) : nil
     conversation_team_id = message.conversation&.team_id
-    Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).includes(:agent).find_each do |binding|
+    bindings = Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).includes(:agent).to_a
+
+    # DESEMPATE (frente a — conserto do duplo-envio): entre os bindings LIVE ELEGÍVEIS (mode 'live' +
+    # posse-de-time), elege UM por [priority ASC, id ASC] — priority deixa de ser campo morto, id vira
+    # desempate documentado (não acidente do find_each). Só o eleito roda; os OUTROS live elegíveis são
+    # PULADOS INTEIROS (sem chamada ao modelo — rebaixá-los a shadow DOBRARIA o custo por conversa). Shadow
+    # EXPLÍCITO e live-de-outro-time seguem rodando como shadow (observam), como hoje.
+    eligible = bindings.select { |b| b.mode == 'live' && eligible_live?(b, conversation_team_id) }
+    winner = eligible.min_by { |b| [b.priority.to_i, b.id] }
+    emit_priority_tie(message, eligible, winner) if winner
+
+    bindings.each do |binding|
+      next if eligible.include?(binding) && winner && binding.id != winner.id # perdedor da eleição: pula
+
       mode = effective_mode(binding, conversation_team_id)
       Ai::Gateway.new(message: message, agent_inbox: binding, mode: mode, content_override: content_override).run
     end
@@ -35,10 +48,36 @@ class Ai::GatewayRunJob < ApplicationJob
   def effective_mode(binding, conversation_team_id)
     return binding.mode unless binding.mode == 'live'
 
-    agent_team_id = binding.agent.team_id
-    return 'live' if agent_team_id.nil?
-    return 'live' if conversation_team_id.present? && conversation_team_id == agent_team_id
+    eligible_live?(binding, conversation_team_id) ? 'live' : 'shadow'
+  end
 
-    'shadow'
+  # Um binding LIVE atende ESTA conversa? Agente sem time atende tudo; senão o time da conversa tem de bater.
+  # Mesmo critério da posse-de-time do effective_mode (aqui o mode já é 'live').
+  def eligible_live?(binding, conversation_team_id)
+    agent_team_id = binding.agent.team_id
+    agent_team_id.nil? || (conversation_team_id.present? && conversation_team_id == agent_team_id)
+  end
+
+  # Mede o empate de CONFIG: >=2 bindings live elegíveis com o MENOR priority disputando a mesma caixa sem
+  # priority distinto. NÃO muda o fluxo (o winner já foi eleito por [priority, id]) — só torna visível ao dono.
+  # Idempotente por conversa (o empate é estático) para não floodar o stream a cada turno.
+  def emit_priority_tie(message, eligible, winner)
+    return if eligible.size < 2
+
+    min_priority = winner.priority.to_i
+    tied = eligible.select { |b| b.priority.to_i == min_priority }
+    return if tied.size < 2
+
+    conversation = message.conversation
+    return if conversation.nil?
+    return if Ai::Event.exists?(conversation_id: conversation.id, event_type: 'agent.priority_tie')
+
+    Ai::Event.create!(
+      account_id: message.account_id, conversation_id: conversation.id, ai_run_id: nil,
+      event_type: 'agent.priority_tie', status: 'ok',
+      payload: { agent_ids: tied.map(&:ai_agent_id), priority: min_priority, chosen_agent_id: winner.ai_agent_id }
+    )
+  rescue StandardError => e
+    Rails.logger.error "[Ai::GatewayRunJob#emit_priority_tie] #{e.class}: #{e.message}"
   end
 end
