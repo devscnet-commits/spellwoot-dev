@@ -201,6 +201,66 @@ describe('aiStepPayload', () => {
     });
   });
 
+  describe('buildStepPayload — on_complete (desfecho declarado, (b)-core)', () => {
+    const base = { name: 'Finalização' };
+
+    it('handoff_human com team_id -> { action, team_id } (reason fica com o default do backend)', () => {
+      const p = buildStepPayload({
+        ...base,
+        onCompleteAction: 'handoff_human',
+        onCompleteTeamId: 5,
+      });
+      expect(p.on_complete).toEqual({ action: 'handoff_human', team_id: 5 });
+    });
+
+    it('close -> { action: "close" } (sem team_id/target)', () => {
+      expect(
+        buildStepPayload({ ...base, onCompleteAction: 'close' }).on_complete
+      ).toEqual({ action: 'close' });
+    });
+
+    it('handoff_ai -> { action, target } (target por nome)', () => {
+      const p = buildStepPayload({
+        ...base,
+        onCompleteAction: 'handoff_ai',
+        onCompleteTarget: 'Nova',
+      });
+      expect(p.on_complete).toEqual({ action: 'handoff_ai', target: 'Nova' });
+    });
+
+    it('team_id só entra em handoff_human; target só em handoff_ai (não vazam entre ações)', () => {
+      expect(
+        buildStepPayload({
+          ...base,
+          onCompleteAction: 'close',
+          onCompleteTeamId: 5,
+          onCompleteTarget: 'Nova',
+        }).on_complete
+      ).toEqual({ action: 'close' });
+    });
+
+    // Ação vazia LIMPA (on_complete: null), NÃO omite — senão o mergeStepEdit preservaria um backfill que o
+    // usuário acabou de apagar. Mesmo contrato do collect. Falha por mutação se voltar a omitir a chave.
+    it('ação vazia -> on_complete: null (LIMPA; não omite)', () => {
+      const p = buildStepPayload({ ...base, onCompleteAction: '' });
+      expect('on_complete' in p).toBe(true);
+      expect(p.on_complete).toBe(null);
+    });
+
+    // A armadilha de #306/knowledge: com o draft SEMEADO de props.step.on_complete, salvar SEM tocar no
+    // campo reemite o MESMO valor. (No AiStepForm o seeding é testado; aqui provamos que os params semeados
+    // produzem o mesmo on_complete — o merge do saveStep então preserva o backfill.)
+    it('draft semeado (salvar sem tocar) reemite o mesmo on_complete -> backfill preservado', () => {
+      const seeded = { action: 'handoff_human', team_id: 7 };
+      const p = buildStepPayload({
+        ...base,
+        onCompleteAction: seeded.action,
+        onCompleteTeamId: seeded.team_id,
+      });
+      expect(p.on_complete).toEqual(seeded);
+    });
+  });
+
   describe('slotAfterFlush — (a) falha preserva o último slot conhecido', () => {
     it('falha/timeout mantém o último detectado (não vira "sem slot")', () => {
       expect(slotAfterFlush('email_cliente', { failed: true })).toBe(

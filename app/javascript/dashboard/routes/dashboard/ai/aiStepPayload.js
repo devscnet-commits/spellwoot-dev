@@ -61,6 +61,11 @@ export const stepToApi = s => {
 //  - knowledge: EMITIDO quando knowledgeQuery está preenchida -> { query, kinds: [...] } (kinds separado
 //    por vírgula; vazio = todos). query vazia => a chave knowledge SAI do payload (não vira {query:""}).
 //    Input DIRETO do usuário — NÃO depende de estado assíncrono (não repetir o acoplamento do hasSlot/#306).
+//  - on_complete (desfecho declarado, (b)-core): action vazia => on_complete = null (LIMPA — como collect;
+//    NÃO omitir, senão o mergeStepEdit preservaria um backfill que o usuário acabou de apagar). action
+//    presente => { action[, team_id em handoff_human][, target em handoff_ai] } (reason fica com o default
+//    'conclusao' do backend). SEMEADO de props.step.on_complete no form — editar sem tocar preserva o valor
+//    (a mesma armadilha de #306/knowledge: emitir sem semear apagaria o backfill em silêncio).
 export const buildStepPayload = ({
   name,
   instructions,
@@ -72,6 +77,9 @@ export const buildStepPayload = ({
   slotRequired = true,
   knowledgeQuery = '',
   knowledgeKinds = '',
+  onCompleteAction = '',
+  onCompleteTeamId = '',
+  onCompleteTarget = '',
 }) => {
   const attribute = (collectAttribute || '').trim();
   const payload = {
@@ -101,6 +109,17 @@ export const buildStepPayload = ({
         .map(k => k.trim())
         .filter(Boolean),
     };
+  }
+  const action = (onCompleteAction || '').trim();
+  if (action) {
+    const onComplete = { action };
+    if (action === 'handoff_human' && onCompleteTeamId)
+      onComplete.team_id = onCompleteTeamId;
+    if (action === 'handoff_ai' && onCompleteTarget)
+      onComplete.target = onCompleteTarget;
+    payload.on_complete = onComplete;
+  } else {
+    payload.on_complete = null; // LIMPA (mergeStepEdit sobrescreve o backfill anterior); não omitir
   }
   return payload;
 };

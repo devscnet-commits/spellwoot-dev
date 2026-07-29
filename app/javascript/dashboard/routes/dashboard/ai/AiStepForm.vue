@@ -20,6 +20,11 @@ const props = defineProps({
   teams: { type: Array, default: () => [] },
   customAttributes: { type: Array, default: () => [] },
   departments: { type: Array, default: () => [] },
+  // Desfecho (b)-core: times da WHITELIST do agente (handoff_team_ids) e IAs de handoff (handoff_agent_ids),
+  // já resolvidos pelo pai. NÃO são todos os times da conta (props.teams) — é a lista que a resolução do
+  // backend aceita (é aqui que entra a validação de escrita: fora da whitelist não é selecionável).
+  handoffTeams: { type: Array, default: () => [] },
+  handoffAgents: { type: Array, default: () => [] },
 });
 const emit = defineEmits(['save', 'cancel']);
 const { t } = useI18n();
@@ -50,6 +55,12 @@ const draft = reactive({
   knowledgeKinds: Array.isArray(props.step?.knowledge?.kinds)
     ? props.step.knowledge.kinds.join(', ')
     : '',
+  // Desfecho declarado AO concluir a etapa (step['on_complete'], (b)-core). SEMEADO do banco — editar sem
+  // tocar preserva o valor (a armadilha de #306/knowledge: emitir sem semear apagaria o backfill). action
+  // vazia => a etapa não declara desfecho (buildStepPayload emite on_complete: null).
+  onCompleteAction: props.step?.on_complete?.action || '',
+  onCompleteTeamId: props.step?.on_complete?.team_id ?? '',
+  onCompleteTarget: props.step?.on_complete?.target || '',
   // automation_on_complete (booleano) é legado/ignorado; agora usamos automations: [{type, params}].
   automations: (Array.isArray(props.step?.automations)
     ? props.step.automations
@@ -183,6 +194,26 @@ const labelOptions = computed(() =>
 const teamOptions = computed(() =>
   props.teams.map(tm => ({ value: tm.id, label: tm.name }))
 );
+// Desfecho: ação em linguagem de usuário (não chave técnica); '' = etapa não declara desfecho.
+const onCompleteActionOptions = computed(() => [
+  { value: '', label: t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_NONE') },
+  {
+    value: 'handoff_human',
+    label: t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_HANDOFF_HUMAN'),
+  },
+  { value: 'close', label: t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_CLOSE') },
+  {
+    value: 'handoff_ai',
+    label: t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_HANDOFF_AI'),
+  },
+]);
+// Time: SÓ a whitelist do agente (não props.teams). target de IA: por NOME (o backend casa por nome).
+const handoffTeamOptions = computed(() =>
+  props.handoffTeams.map(tm => ({ value: tm.id, label: tm.name }))
+);
+const handoffAgentOptions = computed(() =>
+  props.handoffAgents.map(a => ({ value: a.name, label: a.name }))
+);
 const departmentOptions = computed(() =>
   props.departments.map(d => ({ value: d.id, label: d.name }))
 );
@@ -219,6 +250,9 @@ const onSave = async () => {
       hasSlot: hasSlot.value,
       knowledgeQuery: draft.knowledgeQuery,
       knowledgeKinds: draft.knowledgeKinds,
+      onCompleteAction: draft.onCompleteAction,
+      onCompleteTeamId: draft.onCompleteTeamId,
+      onCompleteTarget: draft.onCompleteTarget,
     })
   );
 };
@@ -608,6 +642,59 @@ const onSave = async () => {
             <span class="i-lucide-plus size-3.5" />
             {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_ADD') }}
           </button>
+        </div>
+
+        <!-- Desfecho AO concluir o funil (step['on_complete'], (b)-core). Cronológico: depois das automações
+             da etapa. Vazio = a etapa não declara desfecho. -->
+        <div class="flex flex-col gap-2 border-t border-n-weak pt-3">
+          <span class="text-sm font-medium text-n-slate-12">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TITLE') }}
+          </span>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_HINT') }}
+          </span>
+          <Select
+            v-model="draft.onCompleteAction"
+            :options="onCompleteActionOptions"
+          />
+
+          <!-- handoff_human: time da WHITELIST do agente (não todos os times da conta) -->
+          <label
+            v-if="draft.onCompleteAction === 'handoff_human'"
+            class="flex flex-col gap-1 text-xs text-n-slate-11"
+          >
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM') }}
+            <Select
+              v-if="handoffTeamOptions.length"
+              v-model="draft.onCompleteTeamId"
+              :options="handoffTeamOptions"
+              :placeholder="
+                $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM_PLACEHOLDER')
+              "
+            />
+            <span v-else class="text-n-amber-11">
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TEAM_EMPTY') }}
+            </span>
+          </label>
+
+          <!-- handoff_ai: IA de destino (handoff_agent_ids), por nome -->
+          <label
+            v-else-if="draft.onCompleteAction === 'handoff_ai'"
+            class="flex flex-col gap-1 text-xs text-n-slate-11"
+          >
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET') }}
+            <Select
+              v-if="handoffAgentOptions.length"
+              v-model="draft.onCompleteTarget"
+              :options="handoffAgentOptions"
+              :placeholder="
+                $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET_PLACEHOLDER')
+              "
+            />
+            <span v-else class="text-n-amber-11">
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_ON_COMPLETE_TARGET_EMPTY') }}
+            </span>
+          </label>
         </div>
       </div>
     </div>

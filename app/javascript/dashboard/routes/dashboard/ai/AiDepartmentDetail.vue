@@ -157,6 +157,48 @@ const fetchDepartmentsList = async () => {
     departmentsList.value = [];
   }
 };
+// Agente dono, para a WHITELIST do desfecho (on_complete): handoff_team_ids / handoff_agent_ids.
+const agent = ref(null);
+const fetchAgent = async () => {
+  try {
+    const { data } = await axios.get(agentUrl());
+    agent.value = data || null;
+  } catch (error) {
+    agent.value = null;
+  }
+};
+// IAs da conta, para resolver o NOME do alvo de handoff_ai (o backend casa por assistant_name || name).
+const agentsList = ref([]);
+const fetchAgents = async () => {
+  try {
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/ai_agents`
+    );
+    agentsList.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    agentsList.value = [];
+  }
+};
+// Times da WHITELIST do agente (handoff_team_ids), na ordem marcada — a lista que a resolução do (b)-core
+// aceita, NÃO todos os times da conta. Vazia => o select do desfecho fica vazio (com aviso na tela).
+const handoffTeams = computed(() => {
+  const ids = Array.isArray(agent.value?.handoff_team_ids)
+    ? agent.value.handoff_team_ids
+    : [];
+  const byId = new Map(teams.value.map(tm => [tm.id, tm]));
+  return ids.map(id => byId.get(id)).filter(Boolean);
+});
+// IAs de destino (handoff_agent_ids) com o NOME que o backend casa (assistant_name || name).
+const handoffAgents = computed(() => {
+  const ids = Array.isArray(agent.value?.handoff_agent_ids)
+    ? agent.value.handoff_agent_ids
+    : [];
+  const byId = new Map(agentsList.value.map(a => [a.id, a]));
+  return ids
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .map(a => ({ id: a.id, name: a.assistant_name || a.name }));
+});
 const toggleAttr = key => {
   const i = form.disabled_custom_attributes.indexOf(key);
   if (i >= 0) form.disabled_custom_attributes.splice(i, 1);
@@ -575,6 +617,8 @@ onMounted(async () => {
     fetchLabels(),
     fetchTeams(),
     fetchDepartmentsList(),
+    fetchAgent(),
+    fetchAgents(),
   ]);
 });
 </script>
@@ -1247,6 +1291,8 @@ onMounted(async () => {
                     :teams="teams"
                     :custom-attributes="customAttributes"
                     :departments="departmentsList"
+                    :handoff-teams="handoffTeams"
+                    :handoff-agents="handoffAgents"
                     class="p-4"
                     @save="saveStep"
                     @cancel="cancelStep"
@@ -1314,6 +1360,8 @@ onMounted(async () => {
                 :teams="teams"
                 :custom-attributes="customAttributes"
                 :departments="departmentsList"
+                :handoff-teams="handoffTeams"
+                :handoff-agents="handoffAgents"
                 @save="saveStep"
                 @cancel="cancelStep"
               />

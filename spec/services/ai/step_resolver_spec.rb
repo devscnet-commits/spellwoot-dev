@@ -56,5 +56,29 @@ RSpec.describe Ai::StepResolver do
         expect(out[:signal]).to eq(conclude: on_complete)
       end
     end
+
+    # on_complete: null (o que a UI emite ao LIMPAR o campo) e {} (action vazia) NÃO tornam a etapa terminal:
+    # step_on_complete exige um Hash com action VÁLIDA (não step.key?('on_complete')). Sem esta guarda, uma
+    # etapa sem slot com on_complete vazio entraria no quarto bucket e travaria a conclusão. Falha por mutação
+    # se step_on_complete passar a testar a presença da chave em vez do valor.
+    it 'on_complete: null -> NÃO terminal: cai no bucket comum (segue step_completed), sem signal nem block' do
+      step_null = { 'name' => 'Finalização', 'on_complete' => nil }
+      out = resolver.resolve_completion(step_null, { 'step_completed' => true }, 10, 5, nil, false,
+                                        conclude_ready: true)
+
+      expect(out[:signal]).to be_nil
+      expect(out[:conclude_blocked]).to be_nil
+      expect(out[:completed]).to be(true) # bucket comum: seguiu o step_completed do modelo
+    end
+
+    it 'on_complete: {} (action vazia) -> NÃO terminal: bucket comum, NÃO bloqueia a conclusão' do
+      step_empty = { 'name' => 'Finalização', 'on_complete' => {} }
+      out = resolver.resolve_completion(step_empty, { 'step_completed' => false }, 10, 5, nil, false,
+                                        conclude_ready: false)
+
+      expect(out[:signal]).to be_nil
+      expect(out[:conclude_blocked]).to be_nil # não é o terminal-bloqueado; é etapa comum não-concluída
+      expect(out[:completed]).to be(false)
+    end
   end
 end
