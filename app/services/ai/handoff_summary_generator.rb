@@ -14,7 +14,11 @@ class Ai::HandoffSummaryGenerator
     'loop' => 'a IA entrou em repetição/loop e não conseguiu avançar',
     'credit_exhausted' => 'os créditos de IA da conta se esgotaram',
     'modelo_pediu_transferencia' => 'a própria IA decidiu transferir (baixa confiança ou pedido explícito)',
-    'palavra_chave' => 'o cliente usou uma palavra-chave que aciona atendimento humano'
+    'palavra_chave' => 'o cliente usou uma palavra-chave que aciona atendimento humano',
+    # Redes de "travou" (Ai::StepResolver): o atendente lia o token cru ("Transferido por: max_turns").
+    'max_turns' => 'a conversa passou muitas mensagens sem avançar',
+    'max_questions' => 'o cliente fez muitas perguntas seguidas sem fechar o atendimento',
+    'declined' => 'o cliente preferiu não informar um dado necessário para continuar'
   }.freeze
 
   def initialize(conversation:, reason:)

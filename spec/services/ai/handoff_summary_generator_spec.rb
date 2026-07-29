@@ -135,6 +135,31 @@ RSpec.describe Ai::HandoffSummaryGenerator do
     end
   end
 
+  # O atendente humano lê "Transferido por: <label>" no card. Antes destes 3, as redes de "travou"
+  # (Ai::StepResolver) caíam cruas: "Transferido por: max_turns". Prova de mutação por nome: cada reason
+  # renderiza o texto legível E não vaza o token técnico. Some (volta ao cru) se a chave sair de REASON_LABELS.
+  describe 'REASON_LABELS — motivos de give-up legíveis no card' do
+    before { stub_call_model(text: 'json quebrado {') } # força o fallback determinístico (onde o label aparece)
+
+    it 'max_turns -> "a conversa passou muitas mensagens sem avançar" (não o token cru)' do
+      content = described_class.new(conversation: conversation, reason: 'max_turns').generate.content
+      expect(content).to include('a conversa passou muitas mensagens sem avançar')
+      expect(content).not_to include('max_turns')
+    end
+
+    it 'max_questions -> "o cliente fez muitas perguntas seguidas sem fechar o atendimento"' do
+      content = described_class.new(conversation: conversation, reason: 'max_questions').generate.content
+      expect(content).to include('o cliente fez muitas perguntas seguidas sem fechar o atendimento')
+      expect(content).not_to include('max_questions')
+    end
+
+    it 'declined -> "o cliente preferiu não informar um dado necessário para continuar"' do
+      content = described_class.new(conversation: conversation, reason: 'declined').generate.content
+      expect(content).to include('o cliente preferiu não informar um dado necessário para continuar')
+      expect(content).not_to include('declined')
+    end
+  end
+
   describe 'linha "Dados já coletados" (collected_attributes)' do
     def prompt_for(reason: 'loop')
       captured = nil
