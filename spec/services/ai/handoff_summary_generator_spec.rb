@@ -147,6 +147,14 @@ RSpec.describe Ai::HandoffSummaryGenerator do
       expect(content).not_to include('max_turns')
     end
 
+    # (b)-core: o desfecho declarado pela etapa transfere com reason 'conclusao' — sem esta label, o card
+    # mostraria "Transferido por: conclusao".
+    it 'conclusao -> "o atendimento da IA foi concluído e encaminhado para seguimento humano"' do
+      content = described_class.new(conversation: conversation, reason: 'conclusao').generate.content
+      expect(content).to include('o atendimento da IA foi concluído e encaminhado para seguimento humano')
+      expect(content).not_to include('Transferido por: conclusao.')
+    end
+
     it 'max_questions -> "o cliente fez muitas perguntas seguidas sem fechar o atendimento"' do
       content = described_class.new(conversation: conversation, reason: 'max_questions').generate.content
       expect(content).to include('o cliente fez muitas perguntas seguidas sem fechar o atendimento')

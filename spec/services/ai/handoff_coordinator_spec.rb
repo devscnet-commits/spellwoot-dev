@@ -157,6 +157,44 @@ RSpec.describe Ai::HandoffCoordinator do
     end
   end
 
+  # (b)-core — destino do desfecho DECLARADO pela etapa (step['on_complete']): team_id direto, validado
+  # contra a whitelist na LEITURA (defesa em profundidade); nome como fallback de config antiga.
+  describe '#conclusion_team_id — team_id direto validado na whitelist' do
+    let(:t_comercial) { create(:team, account: account, name: 'Comerciais') }
+    let(:t_suporte) { create(:team, account: account, name: 'Suporte') }
+    let(:t_fora) { create(:team, account: account, name: 'Financeiro') } # NÃO marcado na whitelist
+
+    before { agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_suporte.id]) }
+
+    it 'team_id DENTRO da whitelist -> devolve ele, sem evento' do
+      result = coordinator.conclusion_team_id({ 'team_id' => t_suporte.id })
+
+      expect(result).to eq(t_suporte.id)
+      expect(Ai::Event.where(event_type: 'conclusion.team_unlisted')).not_to exist
+    end
+
+    it 'team_id FORA da whitelist -> emite conclusion.team_unlisted e cai no configured (não no id pedido)' do
+      result = nil
+      expect { result = coordinator.conclusion_team_id({ 'team_id' => t_fora.id }) }
+        .to change { Ai::Event.where(event_type: 'conclusion.team_unlisted').count }.by(1)
+
+      expect([t_comercial.id, t_suporte.id]).to include(result)
+      expect(result).not_to eq(t_fora.id)
+      expect(Ai::Event.where(event_type: 'conclusion.team_unlisted').last.payload['team_id']).to eq(t_fora.id)
+    end
+
+    it 'sem team_id, com NOME (config antiga) -> match_team_by_name restrito à whitelist' do
+      expect(coordinator.conclusion_team_id({ 'team' => 'suporte' })).to eq(t_suporte.id)
+    end
+
+    it 'sem team_id e nome FORA da whitelist -> não casa; cai no configured' do
+      result = coordinator.conclusion_team_id({ 'team' => 'Financeiro' })
+
+      expect([t_comercial.id, t_suporte.id]).to include(result)
+      expect(result).not_to eq(t_fora.id)
+    end
+  end
+
   describe '#configured_handoff_team_id — respeita a ORDEM marcada (array), não o id (Ajuste 1)' do
     let(:t1) { create(:team, account: account, name: 'T1') } # criado 1º => id MENOR
     let(:t2) { create(:team, account: account, name: 'T2') } # id MAIOR

@@ -80,6 +80,28 @@ class Ai::HandoffCoordinator
     chosen
   end
 
+  # (b)-core — TIME do desfecho DECLARADO pela etapa (step['on_complete']). Fonte primária: team_id DIRETO
+  # (a UI é select), VALIDADO contra a whitelist (handoff_team_ids) — defesa em profundidade na LEITURA: um
+  # id fora da whitelist (time removido da lista depois de configurado) NÃO roteia para o não-listado; emite
+  # conclusion.team_unlisted e cai no configured_handoff_team_id. Fallback de LEITURA p/ config ANTIGA por
+  # nome (info['team']) via match_team_by_name (já restrito à whitelist). Whitelist vazia => aceita o id
+  # declarado (o autor escolheu; assign_human degrada seguro se o id for inválido). nil => alerta "sem time".
+  def conclusion_team_id(info)
+    ids = Array(@agent.handoff_team_ids).map(&:to_i)
+    team_id = info['team_id']
+    if team_id.present?
+      return team_id.to_i if ids.blank? || ids.include?(team_id.to_i)
+
+      emit('conclusion.team_unlisted', { team_id: team_id, whitelist: ids })
+      return configured_handoff_team_id
+    end
+
+    match_team_by_name(info['team'].to_s) || configured_handoff_team_id
+  rescue StandardError => e
+    Rails.logger.error "[Ai::HandoffCoordinator#conclusion_team_id] #{e.class}: #{e.message}"
+    configured_handoff_team_id
+  end
+
   # Match tolerante do nome do time — restrito aos times ELEGÍVEIS: a allowlist handoff_team_ids quando
   # configurada; senão todos os da conta. Assim "a IA só transfere para os times marcados": um setor
   # pedido fora da allowlist não casa e segue para o configured_handoff_team_id.

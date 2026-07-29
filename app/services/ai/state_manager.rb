@@ -187,7 +187,12 @@ class Ai::StateManager
     # respondeu)? Se sim, não conta no teto improdutivo. Bool derivado aqui e passado ao StepResolver —
     # NÃO vaza judge_result para o resolver.
     productive = productive_turn?(judge_result, decision)
-    outcome = step_resolver.resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal, productive)
+    # (b)-core: se a etapa corrente é terminal com desfecho declarado (on_complete, sem slot), calcula AQUI
+    # — o StateManager tem o array de steps — se os obrigatórios ATÉ o índice estão preenchidos (a fronteira
+    # ≤ índice permite conclusão de RAMO no meio do playbook). O resolver decide o quarto bucket com isso.
+    conclude_ready = conclude_ready?(steps, index, step)
+    outcome = step_resolver.resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal, productive, conclude_ready: conclude_ready)
+    emit('conclusion.not_ready', { step_index: index }) if outcome[:conclude_blocked]
 
     # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
     # por índice). Antes era gated no step_completed cru do modelo — o que faria as automações PARAREM
@@ -294,6 +299,28 @@ class Ai::StateManager
   # Índice atual da conversa (clampado no range válido do playbook). Default 0 (primeira etapa).
   def current_step_index(max_index)
     (@conversation.additional_attributes || {})['ai_step_index'].to_i.clamp(0, max_index)
+  end
+
+  # (b)-core: a etapa terminal com on_complete pode concluir? TODOS os slots OBRIGATÓRIOS das etapas ATÉ o
+  # índice (inclusive) preenchidos em ai_collected_facts, ABSENT-aware — obrigatório vazio/ABSENT BLOQUEIA;
+  # opcional NÃO gateia (ABSENT conta como preenchido, coerente com o resolve_declined). Só avalia quando a
+  # etapa corrente declara on_complete e não tem slot (barato e escopado ao índice atual — nunca conclui cedo,
+  # o gatilho é a etapa ter sido ALCANÇADA). Fronteira ≤ índice: conclusão de RAMO no meio do playbook.
+  def conclude_ready?(steps, index, step)
+    return false unless step.is_a?(Hash) && (step['on_complete'] || step[:on_complete])
+    return false unless Ai::StepSlot.attribute(step).nil?
+
+    facts = (@conversation.additional_attributes || {})['ai_collected_facts'] || {}
+    Array(steps)[0..index].all? do |s|
+      slot = Ai::StepSlot.attribute(s)
+      next true unless slot && !Ai::StepSlot.optional?(s) # só obrigatórios gateiam a conclusão
+
+      value = facts[slot.to_s]
+      value.present? && !Ai::SlotAbsence.absence_value?(value)
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#conclude_ready?] #{e.class}: #{e.message}"
+    false
   end
 
   # Colaborador da captura do turno (BUG 1 idempotência atômica + BUG 3 anexo + Opção B). Memoizado
