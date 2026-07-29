@@ -63,3 +63,41 @@ describe('AiStepForm.vue — preservação de step.knowledge (semeadura do draft
     wrapper.unmount();
   });
 });
+
+describe('AiStepForm.vue — preservação de step.on_complete (semeadura do draft, (b)-core)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  // A MESMA armadilha do #306/knowledge aplicada ao on_complete: buildStepPayload agora EMITE on_complete,
+  // então sem semear o draft de props.step.on_complete, editar a etapa apagaria o backfill. Trava a semeadura.
+  it('carregar etapa com on_complete e salvar SEM tocar emite o MESMO on_complete (não clobba o backfill)', async () => {
+    const step = {
+      name: 'Finalização',
+      on_complete: { action: 'handoff_human', team_id: 7 },
+    };
+    const wrapper = mountForm(step);
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.emitted('save')[0][0].on_complete).toEqual({
+      action: 'handoff_human',
+      team_id: 7,
+    });
+
+    wrapper.unmount();
+  });
+
+  it('etapa SEM on_complete: o payload emite on_complete: null (não declara desfecho, e limpa)', async () => {
+    const wrapper = mountForm({ name: 'Coleta' });
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.emitted('save')[0][0].on_complete).toBe(null);
+
+    wrapper.unmount();
+  });
+});
