@@ -28,28 +28,31 @@ class Ai::StateManager
   # o ai_step_index) ANTES deste persist; sem o pré-avanço, o gate leria o slot da PRÓXIMA etapa e
   # descartaria o valor recém-coletado como unexpected_key (funil avança, memória vazia — a regressão do
   # #284). Só a fonte :supervisor usa; nil => fallback lê o índice (compat p/ chamadas fora do Gateway).
+  # Devolve o subconjunto que SOBREVIVEU ao gate (o que de fato entrou em ai_collected_facts). O chamador
+  # usa isso para saber o que persistiu — o Ai::TurnCapture#persist_judged só emite slot.captured para a
+  # chave sobrevivente (senão registraria "captured" sem gravar). Para :trusted, gated == cleaned (o gate
+  # é no-op), então nada muda para os chamadores antigos. {} quando não há nada a gravar / em erro.
   def persist_attributes(attrs, department, source: :trusted, expected_step: nil)
-    return unless attrs.is_a?(Hash)
+    return {} unless attrs.is_a?(Hash)
 
     cleaned = reject_blank_values(attrs)
-    return if cleaned.empty?
+    return {} if cleaned.empty?
 
     # 1. Memória de fatos AO VIVO (por conversa): grava TODO dado coletado não-vazio, SEM allowlist.
     #    É o que alimenta "Dados JÁ coletados" no prompt mesmo sem CustomAttributeDefinition —
     #    evita a IA reperguntar o que já foi dito (bug do loop, conversa 350/352).
-    #    Fonte :supervisor passa pelo GATE antes daqui (chave esperada + valor válido p/ tipo conhecido)
-    #    para uma alucinação do modelo NÃO virar "fato" reinjetado no prompt (loop de auto-contaminação).
-    persist_collected_facts(gated_facts(cleaned, department, source, expected_step))
+    #    Fonte :supervisor passa pelo GATE (chave esperada + valor válido p/ tipo conhecido) para uma
+    #    alucinação do modelo — ou um "answered" do juiz de tipo errado — NÃO virar fato/espelho.
+    gated = gated_facts(cleaned, department, source, expected_step)
+    persist_collected_facts(gated)
 
     # 2. Espelha para custom_attributes SÓ as chaves com campo cadastrado (protege Bitrix/relatórios).
-    #    Chave sem campo NÃO é mais descartada — já foi salva em ai_collected_facts acima; aqui só não
-    #    há campo estruturado para espelhar (o attributes.unknown_key vira telemetria disso).
-    # Gap 1: o token/valor de ausência NUNCA espelha em custom_attributes (Bitrix/Meta/relatório) — ele
-    # vive SÓ em ai_collected_facts (gravado pelo fill_absent). O gate só cobre facts; aqui filtramos o
-    # ESPELHO, mesmo quando a chave tem CustomAttributeDefinition. Um token vazado corromperia silenciosa
-    # e indistinguivelmente o dado do operador.
-    known = filter_known_attributes(cleaned, department).reject { |_k, v| Ai::SlotAbsence.absence_value?(v) }
-    return if known.empty?
+    #    Espelha a partir do conjunto GATEADO (não do cru): o que o gate rejeitou não vai para facts NEM
+    #    para o painel — uma porta, um cadeado (p/ :trusted, gated == cleaned, comportamento inalterado).
+    # Gap 1: o token/valor de ausência NUNCA espelha em custom_attributes (ele vive só em ai_collected_facts,
+    # gravado pelo fill_absent). Um token vazado corromperia silenciosa e indistinguivelmente o dado do operador.
+    known = filter_known_attributes(gated, department).reject { |_k, v| Ai::SlotAbsence.absence_value?(v) }
+    return gated if known.empty?
 
     # 3. Normaliza valores de atributo tipo LIST para a opção CANÔNICA (só o ESPELHO; ai_collected_facts
     #    fica com o valor cru). Sem isso, "maravilha" espelhado num campo list ["Chapecó","Maravilha"]
@@ -57,12 +60,14 @@ class Ai::StateManager
     known = normalize_list_values(known)
 
     merged = (@conversation.custom_attributes || {}).merge(known)
-    return if merged == @conversation.custom_attributes
+    return gated if merged == @conversation.custom_attributes
 
     @conversation.update!(custom_attributes: merged)
     emit('attributes.updated', { keys: known.keys })
+    gated
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#persist_attributes] #{e.class}: #{e.message}"
+    {}
   end
 
   # Memória de fatos coletados ao vivo (additional_attributes['ai_collected_facts']), sem allowlist.
@@ -355,13 +360,25 @@ class Ai::StateManager
     # perguntando um dado); preservar o valor anterior deixava o ai_last_asked_slot velho, nunca limpo,
     # e a guarda de confirmação disparava falso-positivo em slot antigo já preenchido. Presente grava; ""
     # ou ausente REMOVE a chave.
+    # Limpa também quando o slot perguntado JÁ RESOLVEU como AUSÊNCIA (declínio/rejeição-para-token) neste
+    # turno — o fill_absent rodou antes (persist_progress), então attrs['ai_collected_facts'] já tem o token.
+    # Sem isto, o ponteiro fica apontando um slot FECHADO e o próximo turno roteia resposta de OUTRO assunto
+    # para ele (conv da evidência: email_cliente declinado + "10" de vencimento -> email="10"). NÃO limpa no
+    # preenchido com valor REAL: a guarda de confirmação-única (TurnCapture, fact_present?) PRECISA do ponteiro
+    # para reconhecer o turno de confirmação ("confirme UMA vez") — e ausência já não dispara essa guarda.
     asked = decision['asked_slot'].to_s.strip
-    if asked.present?
+    if asked.present? && !asked_slot_absent?(attrs, asked)
       attrs['ai_last_asked_slot'] = asked
     else
       attrs.delete('ai_last_asked_slot')
     end
     @conversation.update!(additional_attributes: attrs)
+  end
+
+  # O slot perguntado resolveu como AUSÊNCIA (token __sem_valor__ em ai_collected_facts)? Só a ausência
+  # limpa o ponteiro; valor real fica (a confirmação-única depende dele).
+  def asked_slot_absent?(attrs, key)
+    Ai::StepSlot.absent?((attrs['ai_collected_facts'] || {})[key])
   end
 
   # Conclusão DETERMINÍSTICA da etapa atual (código decide o avanço, não o modelo):

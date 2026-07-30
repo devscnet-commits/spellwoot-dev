@@ -1087,16 +1087,21 @@ RSpec.describe Ai::StateManager do
       expect(step_index).to eq(1)
     end
 
-    it 'LIGADO + malformed (documento_cpf, "meu cpf é 123"): grava como veio (judge_raw), confirmação-única segura' do
+    it 'LIGADO + malformed (documento_cpf, "meu cpf é 123"): tipo errado -> gate REJEITA, não grava (MUDANÇA)' do
+      # MUDANÇA DE COMPORTAMENTO: antes gravava cru (judge_raw) e a confirmação-única segurava; agora o juiz
+      # persiste pelo MESMO gate (:supervisor) e valor de tipo errado vira invalid_value -> não grava, repergunta.
       enable_judge
       allow(Ai::Workers::CaptureJudge).to receive(:judge).and_return({ status: 'malformed', value: 'meu cpf é 123' })
       dept = infer_dept('J-mal', 'Peça e grave documento_cpf conforme informado.')
 
       run_turn(dept, 'meu cpf é 123')
 
-      expect(facts['documento_cpf']).to eq('meu cpf é 123')
-      expect(events('slot.captured').last.payload).to include('source' => 'judge_raw', 'status' => 'malformed')
-      expect(step_index).to eq(0) # confirmação-única segura este turno (não é 3ª pergunta)
+      aggregate_failures do
+        expect(facts).not_to have_key('documento_cpf')     # gate barrou; nada gravado cru
+        expect(events('slot.captured')).to be_empty        # não emite "captured" sem gravar
+        expect(events('facts.rejected').last.payload).to include('attribute' => 'documento_cpf', 'reason' => 'invalid_value')
+        expect(step_index).to eq(0)
+      end
     end
 
     it 'LIGADO + failed (worker falhou): judge.failed, não grava, não avança' do
