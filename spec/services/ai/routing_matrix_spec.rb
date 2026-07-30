@@ -113,10 +113,20 @@ RSpec.describe 'Roteamento de handoff — matriz (bateria)' do # rubocop:disable
         .not_to(change { ev('conclusion.team_unlisted').count })
       expect(result).to eq(t_comercial.id)
     end
-    # ESCRITA: NÃO há validação backend do on_complete.team_id contra a whitelist (só a UI gateia pelo select).
-    # O ai_departments_controller valida automations[], não on_complete -> um save por console/API com time
-    # fora da whitelist é ARMAZENADO e só é pego na LEITURA acima. (H6 "bloqueado na escrita" = parcialmente
-    # falso: bloqueio é só de UI, não de backend.) Ver tabela.
+
+    it 'LEITURA whitelist VAZIA: NÃO honra o id declarado -> team_unlisted, cai no configured (nil na vazia)' do
+      # H6-leitura CONSERTADO junto: vazia = config ausente, não permissão (alinha com H4/H2/#331). Antes a
+      # leitura HONRAVA o id na vazia (ids.blank? ||). PROVA DE MUTAÇÃO: falha se o `ids.blank? ||` voltar.
+      agent.update!(handoff_team_ids: [])
+      result = nil
+      expect { result = coordinator.conclusion_team_id({ 'team_id' => t_comercial.id }) }
+        .to change { ev('conclusion.team_unlisted').count }.by(1)
+      expect(result).to be_nil # configured_handoff_team_id devolve nil na whitelist vazia
+    end
+
+    # ESCRITA (H6 CONSERTADO): Ai::Playbook#on_complete_teams_in_whitelist rejeita no save o on_complete com
+    # time fora da whitelist (ou whitelist vazia). Não é mais só a UI — console/API/import também são barrados.
+    # Testado em spec/models/ai/playbook_spec.rb. Restore é isento (rollback). Ver tabela.
   end
 
   # ---------------------------------------------------------------------------------------------------
