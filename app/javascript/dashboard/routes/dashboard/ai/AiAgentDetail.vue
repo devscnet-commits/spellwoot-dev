@@ -79,6 +79,9 @@ const agentForm = reactive({
   team_id: '',
   handoff_team_ids: [],
   handoff_agent_ids: [],
+  // (3) Destino padrão quando a IA DESISTE sem destino declarado (give-up). '' = comportamento atual
+  // (1º da whitelist). Deve pertencer a handoff_team_ids (validado no backend; o select só oferece os marcados).
+  fallback_handoff_team_id: '',
   assistant_personality: '',
   assistant_language: 'pt-BR',
   base_prompt: '',
@@ -121,9 +124,24 @@ const fetchTeams = async () => {
 };
 const toggleHandoffTeam = id => {
   const i = agentForm.handoff_team_ids.indexOf(id);
-  if (i >= 0) agentForm.handoff_team_ids.splice(i, 1);
-  else agentForm.handoff_team_ids.push(id);
+  if (i >= 0) {
+    agentForm.handoff_team_ids.splice(i, 1);
+    // não deixar o fallback órfão: se o time desmarcado era o destino padrão, limpa (o backend rejeitaria).
+    if (agentForm.fallback_handoff_team_id === id)
+      agentForm.fallback_handoff_team_id = '';
+  } else agentForm.handoff_team_ids.push(id);
 };
+// (3) Opções do destino padrão de give-up: só os times MARCADOS na whitelist (não pode acionar quem não
+// declarou). '' = padrão (1º da lista). Whitelist vazia -> só a opção padrão (a UI mostra o aviso).
+const fallbackTeamOptions = computed(() => {
+  const inList = new Set(agentForm.handoff_team_ids || []);
+  return [
+    { value: '', label: t('AI_AGENTS.HANDOFF.FALLBACK_DEFAULT') },
+    ...teams.value
+      .filter(tm => inList.has(tm.id))
+      .map(tm => ({ value: tm.id, label: tm.name })),
+  ];
+});
 
 // Outras IAs da conta como destino de transferência (allowlist por agente específico —
 // handoff_agent_ids). Lista as IAs ativas; o motor rotear por agente entra na etapa 2.
@@ -693,6 +711,27 @@ onMounted(async () => {
               </div>
               <span class="text-xs text-n-slate-11">
                 {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST_HINT') }}
+              </span>
+            </div>
+
+            <!-- (3) Destino PADRÃO quando a IA desiste (give-up sem destino declarado): um dos times marcados -->
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.FALLBACK_LABEL') }}
+              </span>
+              <p
+                v-if="!agentForm.handoff_team_ids.length"
+                class="text-sm text-n-slate-11 mb-0"
+              >
+                {{ $t('AI_AGENTS.HANDOFF.FALLBACK_EMPTY') }}
+              </p>
+              <Select
+                v-else
+                v-model="agentForm.fallback_handoff_team_id"
+                :options="fallbackTeamOptions"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.HANDOFF.FALLBACK_HINT') }}
               </span>
             </div>
 

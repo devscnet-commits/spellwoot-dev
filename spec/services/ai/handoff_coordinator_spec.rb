@@ -326,4 +326,64 @@ RSpec.describe Ai::HandoffCoordinator do
       expect(Ai::Event.where(conversation_id: conversation.id, event_type: 'handoff.no_team_configured')).to be_empty
     end
   end
+
+  # (3) Motivo 3 do handoff: a IA DESISTIU sem destino declarado (give-up: loop/stuck/credit/provider/
+  # confiança baixa; o breaker herda pelo force_provider_handoff). Roteia pelo default DECLARADO no agente
+  # (fallback_handoff_team_id) em vez do 1º da whitelist por acidente de ordenação. Prova de mutação por nome.
+  describe '#human_team_id — (3) fallback_handoff_team_id (give-up sem destino declarado)' do
+    let(:t_first) { create(:team, account: account, name: 'Comercial') }
+    let(:t_fallback) { create(:team, account: account, name: 'Retenção') }
+    let(:t_outside) { create(:team, account: account, name: 'Financeiro') }
+
+    before { agent.update!(team_id: nil, handoff_team_ids: [t_first.id, t_fallback.id]) }
+
+    it 'give-up (decision {}) com fallback declarado roteia para o FALLBACK, não o 1º da whitelist' do
+      agent.update!(fallback_handoff_team_id: t_fallback.id)
+      # sem o fallback cairia em t_first (1º marcado); com ele vai para t_fallback (2º) -> prova o roteamento
+      expect(coordinator.human_team_id({})).to eq(t_fallback.id)
+    end
+
+    it 'SEM fallback declarado mantém o comportamento atual (um time da whitelist, 1º com capacidade)' do
+      expect([t_first.id, t_fallback.id]).to include(coordinator.human_team_id({}))
+    end
+
+    it 'fallback fora da whitelist é REJEITADO na ESCRITA (validação do Ai::Agent)' do
+      agent.fallback_handoff_team_id = t_outside.id
+      aggregate_failures do
+        expect(agent.valid?).to be(false)
+        expect(agent.errors[:fallback_handoff_team_id]).to be_present
+      end
+    end
+
+    it 'fallback que caiu fora da whitelist (esvaziada depois) NÃO é honrado: emite handoff.fallback_unlisted e cai no configured' do
+      # simula "whitelist mudou depois": grava o id sem passar pela validação
+      agent.update_column(:fallback_handoff_team_id, t_outside.id)
+      result = nil
+      expect { result = coordinator.human_team_id({}) }
+        .to change { Ai::Event.where(event_type: 'handoff.fallback_unlisted').count }.by(1)
+      aggregate_failures do
+        expect(result).not_to eq(t_outside.id)          # NÃO roteia para o não-listado
+        expect([t_first.id, t_fallback.id]).to include(result) # cai no configured (whitelist)
+        expect(Ai::Event.where(event_type: 'handoff.fallback_unlisted').last.payload['team_id']).to eq(t_outside.id)
+      end
+    end
+
+    it 'fallback declarado + whitelist VAZIA: NÃO usa o fallback (config ausente ≠ autorização), cai no comportamento atual' do
+      agent.update_columns(handoff_team_ids: [], fallback_handoff_team_id: t_fallback.id)
+      result = nil
+      expect { result = coordinator.human_team_id({}) }
+        .not_to change { Ai::Event.where(event_type: 'handoff.fallback_unlisted').count } # não é "unlisted", é config ausente
+      aggregate_failures do
+        expect(result).to be_nil                 # configured_handoff_team_id com whitelist vazia = nil (comportamento atual)
+        expect(result).not_to eq(t_fallback.id)  # o fallback NÃO foi honrado
+      end
+    end
+
+    it 'um setor PEDIDO mas fora da whitelist (target presente) NÃO usa o fallback: segue medido por target_unmatched' do
+      agent.update!(fallback_handoff_team_id: t_fallback.id)
+      # target presente (cliente pediu) e não casa -> é INTENÇÃO, não give-up: mantém target_unmatched, não fallback
+      expect { coordinator.human_team_id({ 'handoff_target' => 'Jurídico' }) }
+        .to change { Ai::Event.where(event_type: 'handoff.target_unmatched').count }.by(1)
+    end
+  end
 end
