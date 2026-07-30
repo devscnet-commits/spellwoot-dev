@@ -7,6 +7,10 @@ class Ai::Gateway
   # Valores VÁLIDOS do campo `decision` no contrato do LLM (ver Ai::PromptCompiler#response_contract).
   # Qualquer outro valor é "fora do contrato" e cai na rede de segurança do dispatch (decision.unknown_kind).
   KNOWN_DECISION_KINDS = %w[reply invoke_tool handoff close noop].freeze
+  # Fase 2: janela do e-mail ao admin quando um erro de provedor vira handoff. 1h por (conta, provedor) —
+  # maior que os 15 min do handoff-sem-agente de propósito: cota estourada é condição sustentada, o admin
+  # quer UM aviso e não dezenas. Ver #notify_admin_provider_error.
+  PROVIDER_ERROR_NOTIFY_TTL = 1.hour
 
   def initialize(message:, agent_inbox:, mode: nil, content_override: nil)
     @message = message
@@ -718,8 +722,41 @@ class Ai::Gateway
     action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'provider_unavailable' })
     handoff_coordinator.assign_human(team_id, reason: 'provider_unavailable')
     emit(run_record, 'handoff.provider_unavailable', { team_id: team_id })
+    # Fase 2: avisa os ADMINS da conta (cota/billing é de quem paga, não do atendente). DEPOIS do handoff
+    # e best-effort — nunca derruba a transferência (ver #notify_admin_provider_error). NOTA PARA A FASE 3
+    # (breaker, ainda não implementada): quando o breaker abrir, o motor vai PULAR a chamada ao provedor e
+    # transferir direto, SEM gerar um provider_error novo — logo este caminho (e este e-mail) NÃO dispara.
+    # Se a Fase 3 quiser manter o aviso ao admin com o breaker aberto, terá de chamá-lo explicitamente lá.
+    notify_admin_provider_error(run_record.provider)
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_provider_handoff] #{e.class}: #{e.message}"
+  end
+
+  # E-mail aos admins da conta quando um provider_error resulta em handoff. Reusa o padrão do
+  # notify_admin_no_agent (AccountNotificationMailer.with(account:) + throttle por cache). Throttle de
+  # 1 HORA por (conta, provedor): cota estourada é condição SUSTENTADA — o admin quer UM aviso, não
+  # dezenas (por isso a janela é maior que os 15 min do notify_admin_no_agent). Best-effort: qualquer
+  # falha aqui (mailer, cache) só loga; o handoff já ocorreu e não pode ser afetado.
+  def notify_admin_provider_error(provider)
+    return unless provider_error_notify_allows?(provider)
+
+    AdministratorNotifications::AccountNotificationMailer
+      .with(account: @account)
+      .provider_error_handoff(@account, provider.to_s)
+      .deliver_later
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#notify_admin_provider_error] #{e.class}: #{e.message}"
+  end
+
+  # 1 e-mail por (conta, provedor) a cada PROVIDER_ERROR_NOTIFY_TTL. Mesmo padrão cache-based do
+  # notify_throttle_allows? do HandoffCoordinator (perder o estado = no máximo 1 e-mail extra), mas
+  # chave e janela PRÓPRIAS — não altera o comportamento daquele. Escreve a marca ao permitir.
+  def provider_error_notify_allows?(provider)
+    key = "ai:provider_error_notify:#{@account.id}:#{provider}"
+    return false if Rails.cache.read(key)
+
+    Rails.cache.write(key, true, expires_in: PROVIDER_ERROR_NOTIFY_TTL)
+    true
   end
 
   # BYOK (billing Fase 3): a chave própria do cliente foi recusada por auth (401). Só age ao vivo e só
