@@ -88,5 +88,19 @@ RSpec.describe Ai::ProviderBreaker do
         expect(breaker.state).to eq(:closed)     # ...segue fechado
       end
     end
+
+    # O caminho que DESARMA SEM DEPLOY: uma linha de InstallationConfig, flipável em runtime (super
+    # admin/console), lida FRESCA a cada turno (find_by, sem cache). Prova de mutação: falha se o breaker
+    # deixar de consultar o InstallationConfig.
+    it 'InstallationConfig AI_PROVIDER_BREAKER=off força SEMPRE FECHADO (desarme em RUNTIME, sem deploy)' do
+      create(:installation_config, name: 'AI_PROVIDER_BREAKER', value: 'off')
+
+      aggregate_failures do
+        expect(breaker.record_failure).to be_nil
+        expect(breaker.record_failure).to be_nil
+        expect(breaker.record_failure).to be_nil # 3 falhas...
+        expect(breaker.state).to eq(:closed)     # ...segue fechado
+      end
+    end
   end
 end
