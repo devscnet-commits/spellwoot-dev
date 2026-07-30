@@ -49,14 +49,10 @@ export const stepToApi = s => {
 
 // Payload que o AiStepForm devolve no save. Regras (Gaps 1–3 no backend):
 //  - slot_required SEMPRE no nível da etapa, NUNCA collect.required (o Gap 2 desacoplou; não reacoplar);
-//  - chave manual -> collect = { attribute, type[, options] } SEM required;
-//  - slot_required reflete SEMPRE a escolha do radio (draft.slotRequired, semeado do banco), DESACOPLADO
-//    do estado da inferência. Antes: `hasSlot ? !!slotRequired : null` — num slot INFERIDO (collect null)
-//    `hasSlot` dependia do POST infer_slot ter resolvido no save; se não resolvesse, a política do usuário
-//    virava null em silêncio (o radio nem chegava a ser renderizado — v-if="hasSlot"). slot_required numa
-//    etapa SEM slot é inofensivo: o Ai::StepResolver retorna antes de consultar optional? quando
-//    Ai::StepSlot.attribute(step) é nil. (Custo: o antigo "limpar slot_required legado ao ficar sem slot"
-//    sai; resíduo de baixo risco — remover o slot com false e a inferência reachá-lo depois.)
+//  - chave escolhida no Select -> collect = { attribute, type[, options] } SEM required; vazia => collect null;
+//  - slot_required reflete SEMPRE a escolha do radio (draft.slotRequired, semeado do banco), DESACOPLADO de
+//    hasSlot (buildStepPayload nem lê hasSlot). slot_required numa etapa SEM slot é inofensivo: o
+//    Ai::StepResolver retorna antes de consultar optional? quando Ai::StepSlot.attribute(step) é nil.
 //  - NÃO escreve complete_when (morto no backend pós-Gap 2; legado sobrevive pelo spread, intocado);
 //  - knowledge: EMITIDO quando knowledgeQuery está preenchida -> { query, kinds: [...] } (kinds separado
 //    por vírgula; vazio = todos). query vazia => a chave knowledge SAI do payload (não vira {query:""}).
@@ -170,13 +166,4 @@ export const reconcileSteps = (fresh, current, original) => {
     userChanged(i) ? current[i] : freshStep
   );
   return { status: 'merged', steps };
-};
-
-// (a) Flush da inferência ao salvar: decide o slot a usar a partir do resultado da RE-inferência.
-// Falha/timeout (`failed`) MANTÉM o último slot conhecido — uma falha de rede não pode transformar uma
-// etapa de coleta em informativa em silêncio. Sucesso com attribute vazio LIMPA (é "sem slot" legítimo,
-// não falha). É a mesma falha invisível que o Estado B existe para eliminar.
-export const slotAfterFlush = (lastKnown, inferResult) => {
-  if (!inferResult || inferResult.failed) return lastKnown || '';
-  return inferResult.attribute || '';
 };
