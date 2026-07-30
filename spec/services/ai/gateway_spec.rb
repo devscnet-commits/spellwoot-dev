@@ -762,6 +762,66 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === Fase 2: e-mail aos admins da conta quando o erro de provedor vira handoff ========
+  # Cota/billing é problema de quem paga, não do atendente. throttle 1h por (conta, provedor).
+  context 'provider indisponível: avisa os admins da conta (throttled)' do
+    it 'envia o e-mail no PRIMEIRO provider_error (linguagem de dono, para os admins da conta)' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({}, status: 'error')
+
+      expect { deliver('oi', binding: binding, mode: 'live') }
+        .to have_enqueued_mail(AdministratorNotifications::AccountNotificationMailer, :provider_error_handoff)
+    end
+
+    it 'NÃO envia um SEGUNDO e-mail dentro da janela (mesma conta+provedor)' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({}, status: 'error')
+      # null_store (teste) não persiste; um MemoryStore real exercita o throttle
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+
+      expect do
+        deliver('oi', binding: binding, mode: 'live')
+        deliver('olá?', binding: binding, mode: 'live')
+      end.to have_enqueued_mail(AdministratorNotifications::AccountNotificationMailer, :provider_error_handoff).once
+    end
+
+    it 'envia DE NOVO depois que a janela do throttle expira' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_decision({}, status: 'error')
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+
+      deliver('oi', binding: binding, mode: 'live')
+
+      expect do
+        travel(Ai::Gateway::PROVIDER_ERROR_NOTIFY_TTL + 1.minute) do
+          deliver('e agora?', binding: binding, mode: 'live')
+        end
+      end.to have_enqueued_mail(AdministratorNotifications::AccountNotificationMailer, :provider_error_handoff).once
+    end
+
+    it 'falha no envio do e-mail NÃO impede o handoff' do
+      create_department
+      binding = create_binding(mode: 'live')
+      allow(Ai::HandoffSummaryJob).to receive(:perform_later)
+      stub_decision({}, status: 'error')
+      # o mailer explode; o handoff (já concluído antes do aviso) tem de sobreviver
+      allow(AdministratorNotifications::AccountNotificationMailer)
+        .to receive(:with).and_raise(StandardError, 'smtp down')
+
+      convo = deliver('oi', binding: binding, mode: 'live')
+
+      aggregate_failures do
+        expect(event_types(convo)).to include('handoff.provider_unavailable')
+        expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.transfer')).to exist
+        note = convo.messages.where(private: true).last
+        expect(note&.content).to include('cota/billing')
+      end
+    end
+  end
+
   # === collected — a memória de fatos ao vivo (ai_collected_facts) entra no prompt =====
   context 'collected inclui a memória de fatos ao vivo' do
     it 'passa ai_collected_facts em collected, com custom_attributes da conversa por cima' do

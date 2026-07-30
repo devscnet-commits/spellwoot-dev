@@ -73,6 +73,23 @@ class AdministratorNotifications::AccountNotificationMailer < AdministratorNotif
     send_notification(subject, action_url: action_url, meta: meta)
   end
 
+  # Fase 2: provedor de IA indisponível (cota/billing/rate-limit) resultou em handoff automático. Erro de
+  # cota é problema de quem PAGA, não do atendente — avisa os admins da conta (destinatário padrão) para
+  # que verifiquem o provedor antes que mais conversas caiam no humano. Disparado (throttled, 1x/hora por
+  # provedor) por Ai::Gateway#notify_admin_provider_error. Linguagem de dono, não de log.
+  # SEGURANÇA: recebe SÓ o nome do provedor — nunca a chave de API nem a mensagem crua do provedor (que
+  # pode conter credencial). A "sanitização" aqui é por OMISSÃO: o motivo técnico não entra no e-mail.
+  def provider_error_handoff(account, provider)
+    subject = "IA indisponível: o provedor \"#{provider}\" falhou e as conversas estão indo para atendimento humano"
+    action_url = settings_url('billing')
+    meta = {
+      'provider' => provider,
+      'account_name' => account.name
+    }
+
+    send_notification(subject, action_url: action_url, meta: meta)
+  end
+
   private
 
   def format_deletion_date(deletion_date_str)
