@@ -19,6 +19,8 @@ import {
   defaultAgentForm,
   buildAgentPayload,
   buildInboxBindings,
+  nextLivePriority,
+  resequenceLivePriorities,
 } from './aiRoutingPayload';
 
 const route = useRoute();
@@ -343,6 +345,16 @@ const fetchInboxes = async () => {
   const { data } = await axios.get(inboxesUrl());
   inboxes.value = Array.isArray(data) ? data : [];
   captureInboxes();
+};
+// Troca de modo da caixa com prioridade AUTOMÁTICA: marcar "Atende" atribui o próximo número da sequência;
+// desmarcar renumera as demais 1..N (fecha o buraco). O input da 2ª linha continua editável (reordenar na
+// mão). A prioridade só é enviada ao backend na linha que atende (buildInboxBindings).
+const setMode = (inbox, mode) => {
+  if (inbox.mode === mode) return;
+  const wasLive = inbox.mode === 'live';
+  inbox.mode = mode;
+  if (mode === 'live') inbox.priority = nextLivePriority(inboxes.value, inbox);
+  else if (wasLive) resequenceLivePriorities(inboxes.value);
 };
 const inboxSearch = ref('');
 const filteredInboxes = computed(() => {
@@ -674,24 +686,29 @@ onMounted(async () => {
                 class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
               />
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Card em DUAS linhas: linha 1 (nome + toggle) é IDÊNTICA em toda caixa -> nome com a
+                     largura inteira, colunas do grid alinham. Linha 2 (prioridade) só existe em "Atende",
+                     abaixo, sem disputar espaço horizontal com o nome. -->
                 <div
                   v-for="inbox in filteredInboxes"
                   :key="inbox.inbox_id"
-                  class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex items-center justify-between gap-3"
+                  class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex flex-col gap-2"
                 >
-                  <div class="flex items-center gap-2 min-w-0">
-                    <span
-                      class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
-                    >
-                      <span class="i-lucide-inbox size-4 text-n-slate-11" />
-                    </span>
-                    <span class="text-sm font-medium text-n-slate-12 truncate">
-                      {{ inbox.name }}
-                    </span>
-                  </div>
-                  <div class="shrink-0 flex items-center gap-2">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span
+                        class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
+                      >
+                        <span class="i-lucide-inbox size-4 text-n-slate-11" />
+                      </span>
+                      <span
+                        class="text-sm font-medium text-n-slate-12 truncate"
+                      >
+                        {{ inbox.name }}
+                      </span>
+                    </div>
                     <div
-                      class="grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
+                      class="shrink-0 grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
                     >
                       <button
                         v-for="m in INBOX_MODES"
@@ -703,28 +720,31 @@ onMounted(async () => {
                             ? m.active
                             : 'text-n-slate-11 hover:text-n-slate-12'
                         "
-                        @click="inbox.mode = m.value"
+                        @click="setMode(inbox, m.value)"
                       >
                         {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
                       </button>
                     </div>
-                    <!-- Prioridade: só quando a linha está em "Atende" (live). Menor número responde;
-                         as demais IAs da caixa ficam disponíveis para receber transferências. -->
-                    <label
-                      v-if="inbox.mode === 'live'"
-                      class="flex items-center gap-1 text-xs text-n-slate-11"
-                      :title="$t('AI_AGENTS.INBOXES.PRIORITY_TOOLTIP')"
-                    >
-                      {{ $t('AI_AGENTS.INBOXES.PRIORITY_LABEL') }}
-                      <input
-                        v-model.number="inbox.priority"
-                        type="number"
-                        min="1"
-                        data-testid="inbox-priority"
-                        class="w-14 px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-                      />
-                    </label>
                   </div>
+                  <!-- Prioridade (2ª linha, só em "Atende"): valor inicial vem da ordem de marcação; editável.
+                       Menor número responde; as demais IAs ficam disponíveis para receber transferências. -->
+                  <label
+                    v-if="inbox.mode === 'live'"
+                    class="flex items-center gap-1.5 text-xs text-n-slate-11 pt-1.5 border-t border-n-weak"
+                    :title="$t('AI_AGENTS.INBOXES.PRIORITY_TOOLTIP')"
+                  >
+                    {{ $t('AI_AGENTS.INBOXES.PRIORITY_LABEL') }}
+                    <input
+                      v-model.number="inbox.priority"
+                      type="number"
+                      min="1"
+                      data-testid="inbox-priority"
+                      class="w-14 px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+                    />
+                    <span
+                      class="i-lucide-help-circle size-3.5 text-n-slate-10 shrink-0"
+                    />
+                  </label>
                 </div>
               </div>
               <div class="flex justify-end">

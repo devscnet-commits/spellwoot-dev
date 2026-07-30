@@ -2,6 +2,8 @@ import {
   defaultAgentForm,
   buildAgentPayload,
   buildInboxBindings,
+  nextLivePriority,
+  resequenceLivePriorities,
 } from '../aiRoutingPayload';
 
 // (1) O "Time deste agente" (team_id) NÃO é mais emitido. O spec prova que a CHAVE está AUSENTE — não que
@@ -53,5 +55,47 @@ describe('buildInboxBindings — priority por linha', () => {
     ];
     const [b] = buildInboxBindings(fromServer);
     expect(b.priority).toBe(2);
+  });
+});
+
+// (3) Prioridade AUTOMÁTICA por ordem de marcação: marcar => próximo da sequência; desmarcar => renumera.
+describe('nextLivePriority — próximo número ao marcar "Atende"', () => {
+  it('primeira caixa marcada recebe 1 (nenhuma outra em Atende)', () => {
+    const inboxes = [{ inbox_id: 1, mode: 'live', priority: 0 }];
+    expect(nextLivePriority(inboxes, inboxes[0])).toBe(1);
+  });
+
+  it('a segunda recebe 2 (max das outras em Atende + 1)', () => {
+    const a = { inbox_id: 1, mode: 'live', priority: 1 };
+    const b = { inbox_id: 2, mode: 'live', priority: 0 };
+    expect(nextLivePriority([a, b], b)).toBe(2);
+  });
+
+  it('ignora as caixas que NÃO atendem e a própria caixa', () => {
+    const a = { inbox_id: 1, mode: 'live', priority: 3 };
+    const off = { inbox_id: 2, mode: 'none', priority: 9 };
+    const target = { inbox_id: 3, mode: 'live', priority: 0 };
+    expect(nextLivePriority([a, off, target], target)).toBe(4); // max(3) + 1; o 9 de "none" é ignorado
+  });
+});
+
+describe('resequenceLivePriorities — renumera ao desmarcar (fecha o buraco, preserva a ordem)', () => {
+  it('compacta 1..N e ignora as que não atendem', () => {
+    const a = { inbox_id: 1, mode: 'live', priority: 1 };
+    const gone = { inbox_id: 2, mode: 'none', priority: 2 }; // acabou de sair
+    const c = { inbox_id: 3, mode: 'live', priority: 3 };
+    resequenceLivePriorities([a, gone, c]);
+    expect(a.priority).toBe(1);
+    expect(c.priority).toBe(2); // era 3 -> compacta para 2 (buraco fechado)
+    expect(gone.priority).toBe(2); // "none" não é tocada
+  });
+
+  it('preserva a ordem relativa da edição manual (não a magnitude)', () => {
+    // usuário empurrou B para o fim (priority 10); ao renumerar, a ordem A < C < B é preservada
+    const a = { inbox_id: 1, mode: 'live', priority: 1 };
+    const b = { inbox_id: 2, mode: 'live', priority: 10 };
+    const c = { inbox_id: 3, mode: 'live', priority: 3 };
+    resequenceLivePriorities([a, b, c]);
+    expect([a.priority, c.priority, b.priority]).toEqual([1, 2, 3]);
   });
 });
