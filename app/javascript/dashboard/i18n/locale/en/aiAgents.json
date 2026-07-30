@@ -128,7 +128,11 @@
       "NO_TEAMS": "Nenhum outro time disponível nesta conta.",
       "IA_ALLOWLIST": "Transferir para outras IAs",
       "IA_ALLOWLIST_HINT": "Marque as IAs ativas para as quais esta IA pode transferir a conversa.",
-      "NO_IA": "Nenhuma outra IA ativa nesta conta."
+      "NO_IA": "Nenhuma outra IA ativa nesta conta.",
+      "FALLBACK_LABEL": "Quando a IA não conseguir atender, enviar para",
+      "FALLBACK_DEFAULT": "Padrão (primeiro time da lista acima)",
+      "FALLBACK_HINT": "Destino quando a IA desiste (travou, esgotou tentativas, confiança baixa ou o provedor falhou) e não há setor pedido pelo cliente. Só times marcados acima.",
+      "FALLBACK_EMPTY": "Marque ao menos um time acima para escolher o destino padrão."
     },
     "VERSIONS": {
       "TITLE": "Histórico de versões",

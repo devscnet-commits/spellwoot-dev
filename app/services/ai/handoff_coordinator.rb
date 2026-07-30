@@ -72,12 +72,43 @@ class Ai::HandoffCoordinator
     matched = match_team_by_name(target)
     return matched if matched
 
+    # (3) A IA DESISTIU sem destino declarado (target VAZIO = give-up: loop/stuck/credit/provider/confiança
+    # baixa; o breaker herda pelo force_provider_handoff). Antes caía no 1º da whitelist por acidente de
+    # ordenação. Agora usa o default DECLARADO no agente (fallback_handoff_team_id, validado). Só quando o
+    # target é vazio: um setor pedido-mas-não-casado (target presente) segue MEDIDO por target_unmatched,
+    # que é roteamento por INTENÇÃO, não give-up.
+    if target.blank?
+      fb = fallback_team_id
+      return fb if fb
+    end
+
     # Fallback silencioso agora MEDIDO: o modelo pediu um setor (target presente) que NÃO casou nenhum
     # time da whitelist, e a conversa cai no 1º configurado. Sem este evento não dava para saber se a
     # escolha por intenção estava funcionando (destino errado sem sinal). Só MEDE — não muda o fluxo.
     chosen = configured_handoff_team_id
     emit('handoff.target_unmatched', { handoff_target: target, chosen_team_id: chosen }) if target.present?
     chosen
+  end
+
+  # Default de give-up declarado no AGENTE, VALIDADO na leitura (defesa em profundidade — a escrita já valida
+  # via Ai::Agent). id fora da whitelist NÃO-vazia => handoff.fallback_unlisted + cai no configured. Whitelist
+  # VAZIA = configuração AUSENTE, NÃO permissão ampla: NÃO honra o fallback (loga aviso, mesmo espírito do
+  # PromptCompiler#human_handoff_teams) e cai no comportamento atual — config incompleta não vira autorização.
+  # nil quando não há fallback declarado (ou ele não pode ser honrado).
+  def fallback_team_id
+    fb = @agent.respond_to?(:fallback_handoff_team_id) ? @agent.fallback_handoff_team_id : nil
+    return nil if fb.blank?
+
+    ids = Array(@agent.handoff_team_ids).map(&:to_i)
+    if ids.blank?
+      Rails.logger.warn "[Ai::HandoffCoordinator] fallback_handoff_team_id=#{fb} declarado mas handoff_team_ids " \
+                        'VAZIO — não honrado (configuração ausente não é autorização); cai no comportamento atual.'
+      return nil
+    end
+    return fb.to_i if ids.include?(fb.to_i)
+
+    emit('handoff.fallback_unlisted', { team_id: fb, whitelist: ids })
+    nil
   end
 
   # (b)-core — TIME do desfecho DECLARADO pela etapa (step['on_complete']). Fonte primária: team_id DIRETO

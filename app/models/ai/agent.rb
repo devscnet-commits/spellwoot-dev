@@ -62,6 +62,18 @@ class Ai::Agent < ApplicationRecord
   # Avatar is an inline base64 data URL (downscaled on the client). This explicit limit overrides the
   # generic 20k text cap (ApplicationRecord) while still bounding the payload (~225 KB of base64).
   validates :assistant_avatar, length: { maximum: 300_000 }
+  # (3) Default de give-up: o time de fallback só pode ser um dos que o agente DECLAROU poder acionar
+  # (handoff_team_ids). Whitelist VAZIA = configuração ausente, NÃO permissão ampla — então qualquer
+  # fallback com whitelist vazia é rejeitado (não incluído em []). Espelha o conclusion.team_unlisted, mas
+  # aqui na ESCRITA (a UI já impede pelo select vazio; isto fecha o console/API).
+  validate :fallback_handoff_team_in_whitelist
 
   scope :active, -> { where(status: 'active') }
+
+  def fallback_handoff_team_in_whitelist
+    return if fallback_handoff_team_id.blank?
+    return if Array(handoff_team_ids).map(&:to_i).include?(fallback_handoff_team_id.to_i)
+
+    errors.add(:fallback_handoff_team_id, 'deve ser um time da lista "Transferir para times" (handoff_team_ids)')
+  end
 end

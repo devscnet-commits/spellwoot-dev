@@ -656,7 +656,8 @@ CREATE TABLE public.ai_agents (
     category character varying,
     team_id bigint,
     handoff_team_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
-    handoff_agent_ids jsonb DEFAULT '[]'::jsonb NOT NULL
+    handoff_agent_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    fallback_handoff_team_id bigint
 );
 
 
@@ -9685,6 +9686,7 @@ ALTER TABLE ONLY public.subscriptions
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260730130000'),
 ('20260730120000'),
 ('20260724120000'),
 ('20260719120000'),
