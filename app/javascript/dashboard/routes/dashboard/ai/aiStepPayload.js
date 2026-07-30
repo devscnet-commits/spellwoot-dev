@@ -113,8 +113,16 @@ export const buildStepPayload = ({
   const action = (onCompleteAction || '').trim();
   if (action) {
     const onComplete = { action };
-    if (action === 'handoff_human' && onCompleteTeamId)
-      onComplete.team_id = onCompleteTeamId;
+    if (action === 'handoff_human') {
+      // reason é CONSTANTE do contrato (NÃO campo de usuário): alimenta REASON_LABELS['conclusao'] no card
+      // do atendente (Ai::HandoffSummaryGenerator). Só handoff_human gera card humano com motivo — close
+      // resolve e handoff_ai roteia p/ outra IA, nenhum consome reason. O backend já faz default 'conclusao'
+      // (force_conclusion: info['reason'].presence || 'conclusao'), então isto NÃO conserta um card quebrado;
+      // completa o contrato GRAVADO (todo desfecho salvo pela tela passa a ter reason, como os do console) e
+      // não depende do default silencioso — se o backend mudar o default, o valor gravado continua correto.
+      onComplete.reason = 'conclusao';
+      if (onCompleteTeamId) onComplete.team_id = onCompleteTeamId;
+    }
     if (action === 'handoff_ai' && onCompleteTarget)
       onComplete.target = onCompleteTarget;
     payload.on_complete = onComplete;
