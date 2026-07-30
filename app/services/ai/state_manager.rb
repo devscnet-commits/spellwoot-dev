@@ -483,19 +483,31 @@ class Ai::StateManager
   # NÃO confiável: sem filtro, uma alucinação (ex.: {"plano":"Premium"} que o cliente nunca disse)
   # virava "fato" em ai_collected_facts e reentrava no prompt do turno seguinte como "Dados já
   # coletados", envenenando toda a conversa. Mantém só chaves ESPERADAS (lead_variables ∪ atributos de
-  # conversa da conta ∪ slot da etapa atual) e, para tipos de formato conhecido, só valores que passam
-  # no Ai::SlotExtractor. Fonte :trusted devolve o hash inalterado (regressão zero). Só filtra o que
-  # entra em ai_collected_facts — o espelho em custom_attributes segue igual (filter_known_attributes).
+  # conversa da conta ∪ TODOS os slots DECLARADOS no playbook) e, para tipos de formato conhecido, só
+  # valores que passam no Ai::SlotExtractor. Fonte :trusted devolve o hash inalterado (regressão zero).
+  # Só filtra o que entra em ai_collected_facts — o espelho em custom_attributes segue igual.
+  #
+  # (5) allowlist ÍNDICE-INDEPENDENTE + validação ACOPLADA: o allowlist inclui todo slot declarado (não
+  # só o da etapa corrente), então CORRIGIR um dado de etapa passada e ADIANTAR um de etapa futura passam
+  # a ser aceitos. Mas a chave é validada pelo tipo/options do STEP QUE A DECLARA (não do slot corrente):
+  # um valor fora das options de um slot choice é rejeitado mesmo com a etapa dele inativa — é o
+  # acoplamento que impede a misattribution que "abrir todos os slots" abriria. LIMITE CONHECIDO E ACEITO:
+  # eco DIVERGENTE de formato válido (ex.: telefone com um dígito trocado) sobrescreve o valor bom — os
+  # dois são válidos, não há como distinguir; o prompt entrega o valor exato no "JÁ TENHO", então o eco
+  # tende a ser idêntico e no-op. O custo do contrário é contrato errado, que é pior.
   def gated_facts(cleaned, department, source, expected_step = nil)
     return cleaned unless source == :supervisor
 
-    # A etapa avaliada é a PRÉ-AVANÇO (expected_step, passada pelo Gateway antes do track_step avançar o
-    # índice). Sem ela, current_slot leria o índice JÁ avançado e o slot recém-coletado cairia como
-    # unexpected_key. Fallback (expected_step nil) mantém a leitura por índice p/ chamadas sem o Gateway.
-    slot, step = expected_step.is_a?(Hash) ? [Ai::StepSlot.attribute(expected_step), expected_step] : current_slot(department)
-    expected = supervisor_expected_keys(department, slot)
+    # Mapa chave -> step DECLARANTE (passo único sobre o playbook; ver #declared_slot_steps). A etapa ATIVA
+    # no turno (expected_step, pré-avanço passado pelo Gateway) é a verdade mais fresca para o SEU próprio
+    # slot; as demais chaves resolvem tipo/options pelo step que as declara. Chave sem step (lead/fillable)
+    # segue a derivação por NOME (comportamento inalterado — ver #supervisor_fact_type).
+    slot_steps = declared_slot_steps(department)
+    active_key = expected_step.is_a?(Hash) ? Ai::StepSlot.attribute(expected_step).to_s : nil
+    expected = supervisor_expected_keys(department, slot_steps)
     cleaned.each_with_object({}) do |(key, value), out|
-      reason = supervisor_fact_reason(key, value, expected, slot, step)
+      step = key.to_s == active_key ? expected_step : slot_steps[key.to_s]
+      reason = supervisor_fact_reason(key, value, expected, step)
       if reason
         emit('facts.rejected', { attribute: key.to_s, reason: reason })
       else
@@ -504,12 +516,35 @@ class Ai::StateManager
     end
   end
 
+  # Mapa {chave_declarada => step} de TODOS os slots do playbook (declarado ∪ inferido, via
+  # StepSlot.attribute). Passo ÚNICO sobre steps — a mesma varredura que alimenta o allowlist
+  # (supervisor_expected_keys lê slot_steps.keys). COLISÃO (duas etapas declarando a MESMA chave):
+  # "primeira que declara vence" + emite slot.duplicate_declaration e loga — é erro de CONFIGURAÇÃO do
+  # playbook (a 2ª etapa nunca gravaria seu slot); o dono precisa ver, não descobrir por comportamento
+  # estranho. Chave nil (etapa informativa) não entra.
+  def declared_slot_steps(department)
+    Array(department&.playbook&.steps).each_with_object({}) do |step, map|
+      key = Ai::StepSlot.attribute(step).to_s
+      next if key.blank?
+
+      if map.key?(key)
+        emit('slot.duplicate_declaration',
+             { attribute: key, kept_step: step_name(map[key]), ignored_step: step_name(step) })
+        Rails.logger.warn "[Ai::StateManager] slot #{key.inspect} declarado em duas etapas " \
+                          "(#{step_name(map[key]).inspect} e #{step_name(step).inspect}); a 1ª vence"
+        next
+      end
+      map[key] = step
+    end
+  end
+
   # Conjunto de chaves que o supervisor PODE gravar como fato: atributos de conversa da conta (mesma
-  # resolução do filter_known_attributes) + lead_variables do department + o slot da etapa atual.
-  def supervisor_expected_keys(department, slot)
-    keys = fillable_attribute_keys(department) + lead_variable_keys(department)
-    keys << slot.to_s if slot.present?
-    keys
+  # resolução do filter_known_attributes) + lead_variables do department + TODOS os slots declarados no
+  # playbook (slot_steps.keys). ÍNDICE-INDEPENDENTE de propósito (ver gated_facts): passou a etapa, o slot
+  # continua gravável — é o que destrava a correção retroativa e o dado adiantado. Chave fora dos três
+  # conjuntos continua unexpected_key (proteção anti-alucinação intacta).
+  def supervisor_expected_keys(department, slot_steps)
+    fillable_attribute_keys(department) + lead_variable_keys(department) + slot_steps.keys
   end
 
   # Nomes das lead_variables do department (a CHAVE que o prompt pede no campo `attributes`). [] em erro.
@@ -522,38 +557,33 @@ class Ai::StateManager
     []
   end
 
-  # Slot + step da etapa ATUAL (índice = ai_step_index, mesma leitura de current_step_index/PromptCompiler).
-  # [nil, nil] quando o department não tem playbook com etapas.
-  def current_slot(department)
-    steps = Array(department&.playbook&.steps)
-    return [nil, nil] if steps.empty?
-
-    step = steps[(@conversation.additional_attributes || {})['ai_step_index'].to_i.clamp(0, steps.size - 1)]
-    [Ai::StepSlot.attribute(step), step]
-  end
-
   # Motivo de rejeição de um fato do supervisor, ou nil (aceito). 'unexpected_key' = chave fora do
   # conjunto esperado; 'invalid_value' = tipo de formato conhecido cujo valor não passa no extractor.
-  # Chave esperada de tipo livre (text/derivável nil) é aceita (não há formato para validar).
-  def supervisor_fact_reason(key, value, expected, slot, step)
+  # `step` = a etapa que DECLARA esta chave (nil p/ lead_variable/fillable, que não têm step). Chave
+  # esperada de tipo livre (text/derivável nil) é aceita (não há formato para validar).
+  def supervisor_fact_reason(key, value, expected, step)
     return 'unexpected_key' unless expected.include?(key.to_s)
     # Gap 1: valor de recusa/ausência do modelo (token ou expressão) NÃO vira fato — antes da validação de
     # formato, para pegar também slot de TEXTO (fecha o nome_cliente="não informado" aberto pelo gate fix).
     # A sentinela em ai_collected_facts vem só do caminho fill_absent (slot opcional), com o token canônico.
     return 'declined' if Ai::SlotAbsence.absence_value?(value)
 
-    type = supervisor_fact_type(key, slot, step)
+    type = supervisor_fact_type(key, step)
     return nil unless Ai::SlotExtractor.known_format?(type)
 
-    options = key.to_s == slot.to_s ? Ai::StepSlot.options(step) : []
+    # ACOPLAMENTO (5): tipo E options vêm do STEP DECLARANTE, não do slot corrente — um valor fora das
+    # options de um slot choice é rejeitado mesmo com a etapa dele inativa (prova do acoplamento). Sem step
+    # (lead/fillable) não há options declaradas.
+    options = step ? Ai::StepSlot.options(step) : []
     Ai::SlotExtractor.extract(attribute_type: type, text: value.to_s, options: options).blank? ? 'invalid_value' : nil
   end
 
-  # Tipo do fato: o slot da etapa atual usa effective_type (collect.type ou derivado da chave); as demais
-  # chaves derivam só do NOME via type_for_key. nil/'text' => tipo livre (sem validação de formato).
-  def supervisor_fact_type(key, slot, step)
-    if step && key.to_s == slot.to_s
-      Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
+  # Tipo do fato: se a chave é slot de um step, usa o effective_type DAQUELE step (collect.type ou derivado
+  # da chave); lead_variable/fillable (step nil) derivam só do NOME via type_for_key. nil/'text' => tipo
+  # livre (sem validação de formato).
+  def supervisor_fact_type(key, step)
+    if step
+      Ai::SlotCollector.new(conversation: @conversation).effective_type(step, key)
     else
       Ai::SlotExtractor.type_for_key(key)
     end

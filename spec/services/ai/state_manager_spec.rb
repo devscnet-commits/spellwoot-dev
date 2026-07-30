@@ -1646,15 +1646,18 @@ RSpec.describe Ai::StateManager do
       expect(rejected_events.last.payload).to include('attribute' => 'xyz_inventado', 'reason' => 'unexpected_key')
     end
 
-    it '(ii) fechada: valor alucinado em slot de TEXTO NÃO-ativo é rejeitado (unexpected_key)' do
+    # (5) INVERTE o (ii): um slot DECLARADO no playbook, mesmo NÃO-ativo, agora está no allowlist. Um slot
+    # de TEXTO (sem formato/options) é aceito — é o que destrava a correção de etapa passada / dado
+    # adiantado. A proteção anti-alucinação segue no acoplamento (tipo/options do step declarante) e na
+    # rejeição de chave FORA do playbook (teste abaixo). Ver describe "gate (5)".
+    it '(5): slot DECLARADO de TEXTO NÃO-ativo agora é ACEITO (allowlist índice-independente)' do
       dept = funnel_department
-      email_step = dept.playbook.steps[0] # slot ATIVO = email_cliente
+      email_step = dept.playbook.steps[0] # slot ATIVO = email_cliente; plano_escolhido é etapa futura
 
-      # o modelo devolve plano_escolhido (outro slot de texto do playbook, mas NÃO o ativo) -> alucinação
-      manager.persist_attributes({ 'plano_escolhido' => 'Premium' }, dept, source: :supervisor, expected_step: email_step)
+      manager.persist_attributes({ 'plano_escolhido' => 'Combo' }, dept, source: :supervisor, expected_step: email_step)
 
-      expect(collected_facts).to be_nil
-      expect(rejected_events.last.payload).to include('attribute' => 'plano_escolhido', 'reason' => 'unexpected_key')
+      expect(collected_facts).to include('plano_escolhido' => 'Combo')
+      expect(rejected_events).to be_empty
     end
 
     it 'preserva #284: tipo conhecido com valor inválido é rejeitado mesmo com expected_step (invalid_value)' do
@@ -1666,6 +1669,99 @@ RSpec.describe Ai::StateManager do
 
       expect(collected_facts).to be_nil
       expect(rejected_events.last.payload).to include('attribute' => 'telefone', 'reason' => 'invalid_value')
+    end
+  end
+
+  # (5) known_slot_keys no allowlist + validação ACOPLADA ao step declarante. Contrato: corrigir dado de
+  # etapa PASSADA e adiantar dado de etapa FUTURA passam; chave fora do playbook/conta/lead continua
+  # barrada; o valor ainda é validado pelo tipo/options do step QUE DECLARA a chave (não do slot corrente),
+  # então valor fora das options de um slot choice cai mesmo com a etapa dele inativa. Prova de mutação
+  # por nome: cada teste morre se o acoplamento (5) for revertido ou desacoplado.
+  describe '#persist_attributes — gate (5): allowlist de slots declarados + validação acoplada' do
+    def collected_facts
+      conversation.reload.additional_attributes.to_h['ai_collected_facts']
+    end
+
+    def rejected_events
+      Ai::Event.where(conversation_id: conversation.id, event_type: 'facts.rejected')
+    end
+
+    # Funil com um slot CHOICE (plano) no MEIO — nenhuma chave é CustomAttributeDefinition da conta: todas
+    # legítimas só por serem declaradas no collect (é o caso da conv da evidência).
+    def funnel_with_choice
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Funil5', status: 'active',
+                                    behavior: {})
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'text' } },
+                              { 'name' => 'Plano', 'collect' => { 'attribute' => 'plano_escolhido', 'type' => 'choice',
+                                                                  'options' => ['Internet Fibra 600 Mega', 'Combo Fibra + Wi-Fi Mesh'] } },
+                              { 'name' => 'Telefone', 'collect' => { 'attribute' => 'telefone_secundario', 'type' => 'text' } }
+                            ])
+      dept
+    end
+
+    it 'correção de slot de etapa ANTERIOR é aceita (etapa ativa já é posterior ao slot)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: { 'ai_step_index' => 2 }) # ativo = telefone; plano ficou pra trás
+      active = dept.playbook.steps[2]
+
+      manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
+                                 source: :supervisor, expected_step: active)
+
+      expect(collected_facts).to include('plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh')
+      expect(rejected_events).to be_empty
+    end
+
+    it 'dado ADIANTADO de etapa FUTURA é aceito (cliente responde antes de o funil chegar lá)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 }) # ativo = email; plano é etapa futura
+      active = dept.playbook.steps[0]
+
+      manager.persist_attributes({ 'plano_escolhido' => 'Internet Fibra 600 Mega' }, dept,
+                                 source: :supervisor, expected_step: active)
+
+      expect(collected_facts).to include('plano_escolhido' => 'Internet Fibra 600 Mega')
+      expect(rejected_events).to be_empty
+    end
+
+    it 'chave FORA do playbook/conta/lead continua rejeitada (unexpected_key)' do
+      dept = funnel_with_choice
+      active = dept.playbook.steps[0]
+
+      manager.persist_attributes({ 'campo_inventado' => 'lixo' }, dept, source: :supervisor, expected_step: active)
+
+      expect(collected_facts).to be_nil
+      expect(rejected_events.last.payload).to include('attribute' => 'campo_inventado', 'reason' => 'unexpected_key')
+    end
+
+    # PROVA DO ACOPLAMENTO: plano está no allowlist (não é unexpected_key), mas 'Premium' não é uma das
+    # options declaradas no step do plano -> invalid_value, MESMO com a etapa ativa sendo o e-mail. Se o
+    # (5) for desacoplado (options do slot corrente, ou []), este valor passaria e o teste morre.
+    it 'valor fora das options é rejeitado mesmo quando a etapa NÃO é a corrente (invalid_value)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 }) # ativo = email, NÃO o plano
+      active = dept.playbook.steps[0]
+
+      manager.persist_attributes({ 'plano_escolhido' => 'Premium' }, dept, source: :supervisor, expected_step: active)
+
+      expect(collected_facts).to be_nil
+      expect(rejected_events.last.payload).to include('attribute' => 'plano_escolhido', 'reason' => 'invalid_value')
+    end
+
+    it 'eco IDÊNTICO de um fato já coletado é no-op (não reescreve, não rejeita)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: {
+                             'ai_step_index' => 0,
+                             'ai_collected_facts' => { 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }
+                           })
+      active = dept.playbook.steps[0]
+      # mutação: se o guard de idempotência (persist_collected_facts) sumir, haverá update! e o teste morre.
+      expect(conversation).not_to receive(:update!)
+
+      manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
+                                 source: :supervisor, expected_step: active)
+
+      expect(rejected_events).to be_empty
     end
   end
 
