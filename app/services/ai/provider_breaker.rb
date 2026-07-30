@@ -91,8 +91,12 @@ class Ai::ProviderBreaker
     via
   end
 
-  # Kill-switch: 'off' (ENV vence, senão InstallationConfig) força SEMPRE FECHADO. Default LIGADO. Fail-open
-  # (ligado) em erro — o breaker é uma proteção; se não der para ler a flag, mantém a proteção ativa.
+  # Kill-switch: valor 'off' força SEMPRE FECHADO. Default LIGADO. Dois caminhos, e o 2º DESARMA SEM DEPLOY:
+  # (1) ENV['AI_PROVIDER_BREAKER'] — nível de deploy (mudar env = restart); VENCE se presente.
+  # (2) InstallationConfig 'AI_PROVIDER_BREAKER' — linha no banco, flipável em RUNTIME (super admin/console);
+  # lido FRESCO a cada turno aqui (find_by direto, SEM cache), então mudar para 'off' vale no PRÓXIMO turno,
+  # sem deploy nem restart. É a saída de emergência para um breaker mal calibrado (kill-switch acidental).
+  # Fail-open (ligado) em erro de leitura — o breaker é uma proteção; se não der para ler a flag, mantém-na.
   def self.enabled?
     raw = ENV['AI_PROVIDER_BREAKER'].presence ||
           (InstallationConfig.find_by(name: CONFIG_NAME)&.value if defined?(InstallationConfig))
