@@ -141,6 +141,37 @@ export const mergeStepEdit = (existing, payload) => ({
   ...payload,
 });
 
+// (1) Reconciliação de steps no 409 (save defasado): junta a versão do usuário (`current`) com a do
+// servidor (`fresh`), preservando AS DUAS. Só as etapas que o usuário REALMENTE mudou (diferem de
+// `original`, o estado carregado) sobrescrevem a etapa correspondente do servidor; as demais posições ficam
+// com a versão FRESCA (a mudança out-of-band — ex.: on_complete escrito por console em OUTRA etapa).
+// AMBÍGUO quando o array mudou de TAMANHO (servidor OU usuário adicionou/removeu/reordenou): sem identidade
+// estável de etapa, casar por índice deixa de ser seguro — é exatamente o que a Frente C resolve. Retorna
+// { status: 'merged', steps } ou { status: 'ambiguous' }.
+export const reconcileSteps = (fresh, current, original) => {
+  if (
+    !Array.isArray(fresh) ||
+    !Array.isArray(current) ||
+    !Array.isArray(original)
+  )
+    return { status: 'ambiguous' };
+  // tamanho diferente em QUALQUER lado (servidor mexeu na estrutura, ou o usuário mexeu localmente) =>
+  // reaplicar por índice misatribuiria. Ambíguo.
+  if (fresh.length !== original.length || current.length !== original.length)
+    return { status: 'ambiguous' };
+
+  const strip = s => {
+    const { uid, ...rest } = s || {};
+    return rest;
+  };
+  const userChanged = i =>
+    JSON.stringify(strip(current[i])) !== JSON.stringify(strip(original[i]));
+  const steps = fresh.map((freshStep, i) =>
+    userChanged(i) ? current[i] : freshStep
+  );
+  return { status: 'merged', steps };
+};
+
 // (a) Flush da inferência ao salvar: decide o slot a usar a partir do resultado da RE-inferência.
 // Falha/timeout (`failed`) MANTÉM o último slot conhecido — uma falha de rede não pode transformar uma
 // etapa de coleta em informativa em silêncio. Sucesso com attribute vazio LIMPA (é "sem slot" legítimo,
