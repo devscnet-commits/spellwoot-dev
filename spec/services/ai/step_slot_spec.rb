@@ -1,46 +1,47 @@
 require 'rails_helper'
 
 RSpec.describe Ai::StepSlot do
-  describe '.infer / .attribute — inferência da instrução (conserto Parte 1)' do
-    it 'infere o slot de "grave o e-mail no atributo email" (sem collect declarado)' do
+  # A inferência da instrução (infer + ~80 linhas de regex/BLACKLIST/STOPWORDS) foi REMOVIDA: a etapa
+  # DECLARA a variável (Select do form grava collect['attribute']). #attribute agora é declared_attribute puro.
+  describe '.attribute — só a chave DECLARADA no collect (infer removido)' do
+    it 'retorna a chave declarada em collect' do
+      step = { 'name' => 'Cidade', 'collect' => { 'attribute' => 'cidade' } }
+
+      expect(described_class.attribute(step)).to eq('cidade')
+    end
+
+    it 'aceita chaves em símbolo' do
+      expect(described_class.attribute({ collect: { attribute: 'cpf_cliente' } })).to eq('cpf_cliente')
+    end
+
+    it 'etapa SEM collect -> nil (informativa), MESMO com instrução que antes seria inferida' do
+      # "grave ... no atributo email" era inferido para 'email'; sem infer, é nil (a etapa não declara nada).
       step = { 'name' => 'Email', 'instructions' => 'Peça e grave o e-mail do cliente no atributo email.' }
 
-      expect(described_class.infer(step)).to eq('email')
-      expect(described_class.attribute(step)).to eq('email')
-    end
-
-    it 'infere chave snake_case e normaliza a caixa' do
-      expect(described_class.infer({ 'instructions' => 'Salve no atributo Tipo_Cliente = residencial' }))
-        .to eq('tipo_cliente')
-    end
-
-    it 'etapa SEM padrão de atributo -> nil (segue informativa)' do
-      step = { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente o cliente com simpatia.' }
-
-      expect(described_class.infer(step)).to be_nil
       expect(described_class.attribute(step)).to be_nil
     end
 
-    it 'NÃO infere quando já há collect declarado (usa o declarado)' do
-      step = { 'collect' => { 'attribute' => 'cidade' }, 'instructions' => 'grave no atributo outra_coisa' }
+    it 'collect com attribute em branco -> nil' do
+      expect(described_class.attribute({ 'collect' => { 'attribute' => '  ' } })).to be_nil
+    end
 
-      expect(described_class.infer(step)).to be_nil
-      expect(described_class.attribute(step)).to eq('cidade')
+    it 'não expõe mais .infer (a heurística de tenant PT-BR foi apagada)' do
+      expect(described_class).not_to respond_to(:infer)
     end
   end
 
-  # Gap 2: optional? governa SÓ a regra de conclusão; a captura é sempre por #attribute. required só é
-  # obrigatório por default; opcional vem de collect['required']:false (compat) OU do step['slot_required'].
-  describe '.optional? (Gap 2 — precedência: collect explícito > slot_required da etapa > obrigatório)' do
-    it 'slot INFERIDO + slot_required:false -> opcional (attribute lê a chave; sem collect)' do
-      step = { 'instructions' => 'peça e grave o email_cliente conforme informado', 'slot_required' => false }
+  # optional? governa SÓ a regra de conclusão; a captura é sempre por #attribute. required é obrigatório por
+  # default; opcional vem de collect['required']:false (compat) OU do step['slot_required'] (nível da etapa).
+  describe '.optional? (precedência: collect explícito > slot_required da etapa > obrigatório)' do
+    it 'collect sem required + slot_required:false -> opcional' do
+      step = { 'collect' => { 'attribute' => 'email_cliente' }, 'slot_required' => false }
 
       expect(described_class.attribute(step)).to eq('email_cliente')
       expect(described_class.optional?(step)).to be(true)
     end
 
-    it 'slot INFERIDO sem slot_required -> OBRIGATÓRIO (default, sem flag)' do
-      step = { 'instructions' => 'peça e grave o email_cliente conforme informado' }
+    it 'collect sem required e sem slot_required -> OBRIGATÓRIO (default, sem flag)' do
+      step = { 'collect' => { 'attribute' => 'email_cliente' } }
 
       expect(described_class.attribute(step)).to eq('email_cliente')
       expect(described_class.optional?(step)).to be(false)
@@ -57,65 +58,16 @@ RSpec.describe Ai::StepSlot do
     end
   end
 
-  describe '.infer — forma direta "grave <chave>", blacklist e cláusula de avanço (bug conv 358)' do
-    def infer(instructions)
-      described_class.infer({ 'instructions' => instructions })
+  describe '.type / .options / .criterion — leitura do collect' do
+    it 'type default text quando não declarado' do
+      expect(described_class.type({ 'collect' => { 'attribute' => 'cidade' } })).to eq('text')
     end
 
-    # Casos REAIS das etapas (o texto que quebrava antes):
-    it '"Grave aparelhos_conectados conforme a resposta." -> aparelhos_conectados' do
-      expect(infer('Grave aparelhos_conectados conforme a resposta.')).to eq('aparelhos_conectados')
-    end
+    it 'type e options declarados' do
+      step = { 'collect' => { 'attribute' => 'plano', 'type' => 'choice', 'options' => ['A', 'B'] } }
 
-    it '"Grave endereco_completo com o texto fornecido." -> endereco_completo' do
-      expect(infer('Grave endereco_completo com o texto fornecido.')).to eq('endereco_completo')
-    end
-
-    it '"Grave o e-mail no atributo email." -> email (forma explícita ainda funciona)' do
-      expect(infer('Grave o e-mail no atributo email.')).to eq('email')
-    end
-
-    it 'reforço "assim que <chave> estiver preenchido" reconhece a chave' do
-      expect(infer('Peça o endereço. Avance assim que endereco_completo estiver preenchido.'))
-        .to eq('endereco_completo')
-    end
-
-    it 'preferência: a chave da cláusula de avanço vence quando há mais de um candidato' do
-      texto = 'Grave endereco_parcial com o que vier. Avance assim que endereco_completo estiver capturado.'
-      expect(infer(texto)).to eq('endereco_completo')
-    end
-
-    # BLACKLIST — o falso positivo do bug:
-    it 'instrução com "atributo personalizado" -> nil (não vira slot "personalizado")' do
-      expect(infer('Grave no atributo personalizado a resposta do cliente.')).to be_nil
-    end
-
-    it 'palavra única sem "_" e sem conector -> nil (conservador)' do
-      expect(infer('Grave email.')).to be_nil # sem "_" e sem conector; a forma explícita/atributo é que pega
-    end
-
-    # Etapa informativa (PLANOS): sem verbo de gravação/atributo -> nil
-    it 'instrução de PLANOS (só apresenta) -> nil (etapa informativa)' do
-      expect(infer('Apresente os planos disponíveis e seus preços ao cliente.')).to be_nil
-    end
-
-    # === Bugs do dump real (com #263 deployado) — pular genéricos e seguir para a chave real ===
-    it '[2] advérbio após "grave" + "atributo <chave>": pega escolha_caminho, não "imediatamente"' do
-      expect(infer('Pergunte e grave IMEDIATAMENTE no mesmo turno o atributo escolha_caminho da opção.'))
-        .to eq('escolha_caminho')
-    end
-
-    it '[11] "atributo customizado <chave>": pula "customizado", pega periodo_reservado' do
-      expect(infer('Grave o atributo customizado periodo_reservado com o valor informado.'))
-        .to eq('periodo_reservado')
-    end
-
-    it '[1] "atributo personalizado <chave>": pula "personalizado", pega cidade' do
-      expect(infer('Grave o nome da cidade no atributo personalizado cidade.')).to eq('cidade')
-    end
-
-    it 'preferência por "_": token com underscore vence o sem underscore na mesma frase' do
-      expect(infer('Grave no atributo cidade endereco_completo do cliente.')).to eq('endereco_completo')
+      expect(described_class.type(step)).to eq('choice')
+      expect(described_class.options(step)).to eq(%w[A B])
     end
   end
 end

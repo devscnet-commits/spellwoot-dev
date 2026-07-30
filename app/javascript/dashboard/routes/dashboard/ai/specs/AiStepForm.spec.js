@@ -1,16 +1,19 @@
 import { shallowMount, flushPromises } from '@vue/test-utils';
 import AiStepForm from '../AiStepForm.vue';
 
-// O componente usa useRoute (accountId p/ o endpoint de inferência) e o axios GLOBAL (window.axios).
+// O componente usa useRoute (accountId p/ o POST do inline-create) e o axios GLOBAL (window.axios).
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { accountId: '7' } }),
 }));
 
-const mountForm = step => {
-  // Instruções vazias -> inferRaw sai cedo (sem POST); o axios stub é só rede de segurança.
+// axios.post só é chamado no inline-create de LeadVariable; devolve a variável criada.
+const stubAxios = createdName =>
   vi.stubGlobal('axios', {
-    post: vi.fn().mockResolvedValue({ data: { attribute: '' } }),
+    post: vi.fn().mockResolvedValue({ data: { id: 99, name: createdName } }),
   });
+
+const mountForm = (step, extraProps = {}) => {
+  stubAxios('cidade');
   return shallowMount(AiStepForm, {
     props: {
       step,
@@ -19,7 +22,11 @@ const mountForm = step => {
       labels: [],
       teams: [],
       customAttributes: [],
+      leadVariables: [],
+      agentId: '3',
+      departmentId: '5',
       departments: [],
+      ...extraProps,
     },
   });
 };
@@ -105,45 +112,114 @@ describe('AiStepForm.vue — preservação de step.on_complete (semeadura do dra
   });
 });
 
-describe('AiStepForm.vue — foco do input de chave manual (input único, sempre montado)', () => {
+describe('AiStepForm.vue — Select da chave (união LeadVariable ∪ CustomAttributeDefinition, origem marcada)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
-  // Regressão: antes havia DOIS <input v-model="draft.collectAttribute"> em ramos v-if mutuamente exclusivos
-  // (âmbar "sem slot" vs verde "editando"); como hasSlot deriva de collectAttribute, a 1ª letra flipava o
-  // ramo e o Vue REMONTAVA o input, matando o foco (o usuário digitava "c" e tinha que clicar de novo).
-  // Agora é UM input sempre montado. Este teste digita caractere a caractere e exige que o MESMO input
-  // continue presente e acumule o valor completo. FALHA se o input voltar a ser condicional: no bug antigo,
-  // após a 1ª letra hasSlot vira true, o ramo verde mostra a LEITURA (span) e o input some -> a 2ª iteração
-  // não encontra mais o input.
-  it('digitar caractere a caractere mantém UM input montado e o valor completo', async () => {
-    const wrapper = mountForm({ name: 'Coleta' }); // sem collect, sem instrução -> estado "sem slot"
-    await flushPromises();
+  // findComponent: o <Select> é um stub (shallowMount) — precisamos do wrapper de COMPONENTE (props/$emit),
+  // não do DOMWrapper que find() devolve.
+  const keySelect = wrapper =>
+    wrapper.findComponent('[data-testid="slot-key-select"]');
 
-    const keyInput = () => wrapper.find('[data-testid="slot-key-input"]');
-    expect(keyInput().exists()).toBe(true); // input presente já no estado "sem slot"
-
-    // Digita caractere a caractere (reduce em vez de for-of/await-in-loop — regras do lint do repo). A 1ª
-    // letra flipa hasSlot; o input NÃO pode remontar: reasserta a presença antes de cada tecla.
-    await ['c', 'ci', 'cid', 'cida', 'cidad', 'cidade'].reduce(
-      async (chain, value) => {
-        await chain;
-        expect(keyInput().exists()).toBe(true); // NUNCA some ao digitar
-        await keyInput().setValue(value);
-        await flushPromises();
-      },
-      Promise.resolve()
+  it('popula o Select da UNIÃO com a origem marcada (interna vs painel) + opção vazia', () => {
+    const wrapper = mountForm(
+      { name: 'Coleta' },
+      {
+        leadVariables: [{ name: 'periodo_reservado' }],
+        customAttributes: [
+          {
+            attribute_model: 'conversation_attribute',
+            attribute_key: 'cidade',
+          },
+          { attribute_model: 'contact_attribute', attribute_key: 'ignorado' },
+        ],
+      }
     );
 
-    expect(keyInput().exists()).toBe(true);
-    expect(keyInput().element.value).toBe('cidade'); // valor completo preservado
+    const options = keySelect(wrapper).props('options');
+    // opção vazia (etapa informativa) primeiro
+    expect(options[0].value).toBe('');
+    const byValue = Object.fromEntries(options.map(o => [o.value, o.label]));
+    // LeadVariable => interna; CAD conversation_attribute => painel; contact_attribute NÃO entra
+    expect(byValue.periodo_reservado).toContain('interna');
+    expect(byValue.cidade).toContain('painel');
+    expect('ignorado' in byValue).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('opção vazia salva collect: null (etapa informativa é escolha explícita)', async () => {
+    // etapa com collect declarado -> seleciona a opção vazia -> collect null no save
+    const wrapper = mountForm({
+      name: 'Coleta',
+      collect: { attribute: 'cidade' },
+    });
+    await keySelect(wrapper).vm.$emit('update:modelValue', '');
+    await flushPromises();
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+    expect(wrapper.emitted('save')[0][0].collect).toBe(null);
+
+    wrapper.unmount();
+  });
+
+  it('chave declarada salva collect com a chave e o tipo', async () => {
+    const wrapper = mountForm({
+      name: 'Coleta',
+      collect: { attribute: 'cidade', type: 'text' },
+    });
 
     await wrapper.get('button.bg-n-brand').trigger('click');
     await flushPromises();
     expect(wrapper.emitted('save')[0][0].collect).toEqual({
       attribute: 'cidade',
+      type: 'text',
+    });
+
+    wrapper.unmount();
+  });
+});
+
+describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO CustomAttributeDefinition', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('cria a variável via endpoint ai_lead_variables, seleciona a chave e emite variable-created', async () => {
+    const wrapper = mountForm({ name: 'Coleta' });
+    stubAxios('bairro'); // o POST devolve { name: 'bairro' }
+
+    // abre o inline-create, digita e confirma
+    await wrapper.get('button.underline').trigger('click'); // "criar variável interna"
+    const nameInput = wrapper.get('[data-testid="new-variable-name"]');
+    await nameInput.setValue('bairro');
+    // botão "Criar" (bg-n-brand dentro do inline-create)
+    const createBtn = wrapper
+      .findAll('button')
+      .find(b => b.classes().includes('bg-n-brand'));
+    await createBtn.trigger('click');
+    await flushPromises();
+
+    // POST no endpoint de LEAD VARIABLE, não em custom_attribute_definitions
+    const [url, body] = window.axios.post.mock.calls[0];
+    expect(url).toContain('/ai_agents/3/ai_departments/5/ai_lead_variables');
+    expect(url).not.toContain('custom_attribute_definitions');
+    expect(body).toEqual({ ai_lead_variable: { name: 'bairro' } });
+
+    // pai é avisado para empilhar na lista; a chave criada fica selecionada
+    expect(wrapper.emitted('variableCreated')[0][0]).toEqual({
+      id: 99,
+      name: 'bairro',
+    });
+
+    await wrapper.get('button.bg-n-brand').trigger('click'); // salvar a etapa
+    await flushPromises();
+    expect(wrapper.emitted('save').at(-1)[0].collect).toEqual({
+      attribute: 'bairro',
       type: 'text',
     });
 

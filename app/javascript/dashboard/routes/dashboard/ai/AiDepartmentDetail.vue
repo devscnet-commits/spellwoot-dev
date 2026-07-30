@@ -135,6 +135,26 @@ const fetchCustomAttributes = async () => {
 };
 const attrEnabled = key => !form.disabled_custom_attributes.includes(key);
 
+// Variáveis INTERNAS do department (Ai::LeadVariable): fonte do Select da chave de slot no AiStepForm
+// (junto com customAttributes). O endpoint index já existia; ninguém o consumia. departmentId pode ser
+// nulo em "novo" -> mantém [] (o inline-create depende do department já salvo).
+const leadVariables = ref([]);
+const fetchLeadVariables = async () => {
+  if (!departmentId.value) return;
+  try {
+    const { data } = await axios.get(
+      `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`
+    );
+    leadVariables.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    leadVariables.value = [];
+  }
+};
+// AiStepForm criou uma LeadVariable inline: empilha para a opção aparecer no Select (evita refetch).
+const onVariableCreated = variable => {
+  if (variable?.name) leadVariables.value.push(variable);
+};
+
 // Fontes para os seletores das automações de etapa (tag/time). Falha → lista vazia (não quebra a tela).
 const labels = ref([]);
 const fetchLabels = async () => {
@@ -686,6 +706,7 @@ onMounted(async () => {
   captureDept();
   await Promise.all([
     fetchCustomAttributes(),
+    fetchLeadVariables(),
     fetchLabels(),
     fetchTeams(),
     fetchDepartmentsList(),
@@ -1362,12 +1383,16 @@ onMounted(async () => {
                     :labels="labels"
                     :teams="teams"
                     :custom-attributes="customAttributes"
+                    :lead-variables="leadVariables"
+                    :agent-id="route.params.agentId"
+                    :department-id="departmentId"
                     :departments="departmentsList"
                     :handoff-teams="handoffTeams"
                     :handoff-agents="handoffAgents"
                     class="p-4"
                     @save="saveStep"
                     @cancel="cancelStep"
+                    @variable-created="onVariableCreated"
                   />
                   <!-- Linha colapsada -->
                   <div v-else class="flex items-center gap-3 px-3 py-2.5">
@@ -1431,11 +1456,15 @@ onMounted(async () => {
                 :labels="labels"
                 :teams="teams"
                 :custom-attributes="customAttributes"
+                :lead-variables="leadVariables"
+                :agent-id="route.params.agentId"
+                :department-id="departmentId"
                 :departments="departmentsList"
                 :handoff-teams="handoffTeams"
                 :handoff-agents="handoffAgents"
                 @save="saveStep"
                 @cancel="cancelStep"
+                @variable-created="onVariableCreated"
               />
             </div>
 

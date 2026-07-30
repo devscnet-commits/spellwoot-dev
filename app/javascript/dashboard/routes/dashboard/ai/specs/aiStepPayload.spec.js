@@ -3,7 +3,6 @@ import {
   stepToApi,
   buildStepPayload,
   mergeStepEdit,
-  slotAfterFlush,
   reconcileSteps,
 } from '../aiStepPayload';
 
@@ -221,9 +220,9 @@ describe('aiStepPayload', () => {
       expect(p.slot_required).toBe(false);
     });
 
-    // HOTFIX persistência: slot_required DESACOPLADO do hasSlot. Com o slot inferido AINDA não detectado
-    // (hasSlot false — o radio fica escondido durante o POST infer_slot) e sem chave manual, o payload
-    // preserva a escolha do radio (semeada do banco) em vez de nulificar em silêncio.
+    // slot_required DESACOPLADO do hasSlot: buildStepPayload emite slot_required SEMPRE (não lê hasSlot),
+    // então sem chave escolhida (collectAttribute vazio => collect null) a escolha do radio (semeada do
+    // banco) é preservada em vez de nulificar em silêncio. Guarda de regressão do desacoplamento.
     it('detectedSlot ausente + manualSlot vazio preserva slot_required TRUE (falha se voltar a depender de hasSlot)', () => {
       const p = buildStepPayload({
         ...base,
@@ -336,24 +335,6 @@ describe('aiStepPayload', () => {
         reason: 'conclusao',
         team_id: 7,
       });
-    });
-  });
-
-  describe('slotAfterFlush — (a) falha preserva o último slot conhecido', () => {
-    it('falha/timeout mantém o último detectado (não vira "sem slot")', () => {
-      expect(slotAfterFlush('email_cliente', { failed: true })).toBe(
-        'email_cliente'
-      );
-    });
-
-    it('sucesso usa o novo attribute', () => {
-      expect(
-        slotAfterFlush('email_cliente', { attribute: 'cpf_cliente' })
-      ).toBe('cpf_cliente');
-    });
-
-    it('sucesso com attribute vazio LIMPA (é "sem slot" legítimo, não falha)', () => {
-      expect(slotAfterFlush('email_cliente', { attribute: '' })).toBe('');
     });
   });
 });
