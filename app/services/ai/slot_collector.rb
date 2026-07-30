@@ -15,6 +15,14 @@ class Ai::SlotCollector
     pending = decision['attributes']
     return true if pending.is_a?(Hash) && pending[slot].to_s.strip.present?
 
+    persisted?(slot)
+  end
+
+  # Metade PERSISTIDA do filled? (item 5): valor JÁ gravado em ai_collected_facts — captura determinística
+  # DESTA rodada (turn_capture roda ANTES do resolve), turno anterior ou confirmação. Extraída para o
+  # StepResolver decidir o AVANÇO pelo estado + veredito do gate, sem contar o cru do modelo pré-gate.
+  # present? (inclui a sentinela) — semântica idêntica à metade persistida do filled? de antes.
+  def persisted?(slot)
     facts = collected_facts
     facts.is_a?(Hash) && facts[slot].to_s.strip.present?
   end

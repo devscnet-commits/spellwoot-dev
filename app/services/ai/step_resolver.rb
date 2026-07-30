@@ -24,7 +24,7 @@ class Ai::StepResolver
 
   # capture_signal: nil (capturou/nada), :no_attempt (#269, slot de tipo conhecido sem tentativa),
   # { refusal: ... } (juiz recusou) ou { declined: true } (Gap 1, cliente declinou o dado).
-  def resolve_completion(step, decision, stuck_limit, index, capture_signal, productive = false, conclude_ready: false)
+  def resolve_completion(step, decision, stuck_limit, index, capture_signal, productive = false, conclude_ready: false, slot_valid: false)
     # Gap 2: attribute (declarado ∪ INFERIDO) governa "há slot?" E a captura.
     slot = Ai::StepSlot.attribute(step)
 
@@ -48,15 +48,18 @@ class Ai::StepResolver
     # slot obrigatório com contador cheio — por isso NÃO há reset por mudança de etapa (reabriria a
     # alternância). A rede de RECUSA é avaliada em resolve_slot; o teto ABSOLUTO é a rede de FORA
     # (apply_absolute_ceiling), que roda DEPOIS e NUNCA sobrescreve um handoff por recusa devido (Q5).
-    outcome = resolve_slot(step, slot, decision, index, stuck_limit, capture_signal)
+    outcome = resolve_slot(step, slot, decision, index, stuck_limit, capture_signal, slot_valid)
     apply_absolute_ceiling(step, slot, stuck_limit, outcome, productive)
   end
 
   private
 
-  def resolve_slot(step, slot, decision, index, stuck_limit, capture_signal)
+  # rubocop:disable Metrics/ParameterLists -- seam de resolução do slot: (step, slot) + input do turno
+  # (decision, capture_signal, slot_valid) + índice/limite. slot_valid é o veredito do gate (item 5).
+  def resolve_slot(step, slot, decision, index, stuck_limit, capture_signal, slot_valid)
+    # rubocop:enable Metrics/ParameterLists
     return resolve_declined(step, slot, stuck_limit) if capture_signal.is_a?(Hash) && capture_signal[:declined]
-    return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, decision)
+    return resolve_filled_slot(slot, decision, index) if slot_filled?(slot, slot_valid)
 
     resolve_empty_slot(step, slot, stuck_limit, capture_signal)
   end
@@ -137,8 +140,15 @@ class Ai::StepResolver
     @slot_collector ||= Ai::SlotCollector.new(conversation: @conversation)
   end
 
-  def slot_filled?(slot, decision)
-    slot_collector.filled?(slot, decision)
+  # (item 5) O avanço lê o VEREDITO do gate (slot_valid), não o cru do modelo. Antes: filled?(slot, decision)
+  # contava o valor CRU só por estar PRESENTE — mesmo o token __sem_valor__ ou um valor que o gate rejeitaria
+  # (invalid_value/declined) — e a etapa avançava sobre algo que não seria gravado (conv 397: comprovante
+  # obrigatório rejeitado como 'declined', mas a etapa concluiu sem ele). Agora: valor cru que PASSA no gate
+  # (slot_valid, calculado no StateManager com os MESMOS métodos do gate) OU já há valor PERSISTIDO em
+  # ai_collected_facts (captura determinística desta rodada / turno anterior / confirmação — metade
+  # inalterada). Assim avanço e persistência decidem pelo mesmo julgamento, sem reordenar o gate.
+  def slot_filled?(slot, slot_valid)
+    slot_valid || slot_collector.persisted?(slot)
   end
 
   # Slot VAZIO. Gap 4 v2: a DECISÃO "isto é recusa?" mora só no TurnCapture — hoje ele roteia

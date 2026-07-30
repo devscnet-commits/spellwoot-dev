@@ -191,7 +191,12 @@ class Ai::StateManager
     # — o StateManager tem o array de steps — se os obrigatórios ATÉ o índice estão preenchidos (a fronteira
     # ≤ índice permite conclusão de RAMO no meio do playbook). O resolver decide o quarto bucket com isso.
     conclude_ready = conclude_ready?(steps, index, step)
-    outcome = step_resolver.resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal, productive, conclude_ready: conclude_ready)
+    # (item 5) O avanço passa a ler o VEREDITO do gate para o valor cru do slot, não o cru presente. Calculado
+    # AQUI (antes do gate rodar de fato no Gateway, gateway.rb:204, DEPOIS do track_step) com os MESMOS
+    # métodos do gate — mesmo julgamento, sem reordenar. Passado ao resolver como slot_valid.
+    slot_valid = supervisor_slot_valid?(department, step, decision)
+    outcome = step_resolver.resolve_completion(step, decision, stuck_handoff_limit(department), index, capture_signal, productive,
+                                               conclude_ready: conclude_ready, slot_valid: slot_valid)
     emit('conclusion.not_ready', { step_index: index }) if outcome[:conclude_blocked]
 
     # Dispara as automações da etapa ATUAL na MESMA condição de conclusão determinística (idempotente
@@ -514,6 +519,27 @@ class Ai::StateManager
         out[key] = value
       end
     end
+  end
+
+  # (item 5) O valor CRU do slot da etapa CORRENTE passaria no gate? MESMO veredito do gated_facts
+  # (supervisor_fact_reason), calculado ANTES do gate rodar de fato — o Gateway persiste :supervisor DEPOIS
+  # do track_step (gateway.rb:204), então o avanço não pode reler "o persistido" para o valor NOVO. Para o
+  # slot corrente, o step DECLARANTE é a própria etapa corrente (o `active_key` do gated_facts), então
+  # passamos `step` direto — mesmas resoluções (declared_slot_steps/supervisor_expected_keys), mesmo
+  # julgamento. false quando não há valor cru OU ele seria rejeitado (unexpected/declined/invalid): aí o slot
+  # só conta como preenchido se JÁ persistido (ver Ai::StepResolver#slot_filled?). Consumido pelo resolver.
+  def supervisor_slot_valid?(department, step, decision)
+    slot = Ai::StepSlot.attribute(step)
+    return false if slot.blank?
+
+    value = decision['attributes'].is_a?(Hash) ? decision['attributes'][slot] : nil
+    return false if value.to_s.strip.blank?
+
+    expected = supervisor_expected_keys(department, declared_slot_steps(department))
+    supervisor_fact_reason(slot, value, expected, step).nil?
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#supervisor_slot_valid?] #{e.class}: #{e.message}"
+    false
   end
 
   # Mapa {chave_declarada => step} de TODOS os slots do playbook (declarado ∪ inferido, via

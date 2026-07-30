@@ -294,6 +294,57 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  # (item 5) O avanço lê o VEREDITO do gate, não o cru do modelo. Antes, valor cru PRESENTE contava como
+  # preenchido mesmo se o gate o rejeitasse (conv 397: comprovante obrigatório rejeitado como 'declined', a
+  # etapa concluiu sem ele). Agora avanço e persistência decidem pelo mesmo julgamento. Prova de mutação por
+  # nome — cada teste morre se o resolver voltar a contar o cru pré-gate. (Slot phone: o gate valida formato.)
+  describe '#track_step — avanço lê o gate, não o cru (item 5)' do
+    let(:phone_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ColetaFone',
+                                    status: 'active', behavior: {})
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Telefone',
+                                'collect' => { 'attribute' => 'telefone', 'type' => 'phone', 'required' => true } },
+                              { 'name' => 'Fim' }
+                            ])
+      dept
+    end
+
+    def track_phone(decision)
+      manager.track_step(phone_department, decision, dispatcher: dispatcher, run: run)
+    end
+
+    def facts
+      conversation.reload.additional_attributes.to_h['ai_collected_facts'].to_h
+    end
+
+    it 'slot obrigatório com valor REJEITADO pelo gate (invalid_value) NÃO avança' do
+      # 'dia 10' não é telefone -> o gate daria invalid_value; antes o cru PRESENTE avançava (bug).
+      track_phone('step_completed' => false, 'attributes' => { 'telefone' => 'dia 10' })
+      aggregate_failures do
+        expect(step_index).to eq(0) # NÃO avançou
+        expect(facts).not_to include('telefone') # e não persistiu (avanço e persistência concordam)
+      end
+    end
+
+    it 'token __sem_valor__ em slot OBRIGATÓRIO NÃO avança (a forma exata da conv 397)' do
+      track_phone('step_completed' => false, 'attributes' => { 'telefone' => Ai::StepSlot::ABSENT })
+      expect(step_index).to eq(0)
+    end
+
+    it 'slot obrigatório com valor VÁLIDO avança (o gate aceita)' do
+      expect { track_phone('step_completed' => false, 'attributes' => { 'telefone' => '(49) 99856-4780' }) }
+        .to change { step_index }.from(nil).to(1)
+    end
+
+    it 'slot JÁ PERSISTIDO avança mesmo sem attributes (turno anterior / anexo / confirmação — metade preservada)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0,
+                                                     'ai_collected_facts' => { 'telefone' => '(49) 99856-4780' } })
+      track_phone('step_completed' => false, 'attributes' => {})
+      expect(step_index).to eq(1)
+    end
+  end
+
   describe '#track_step — avanço DETERMINÍSTICO por slot (collect)' do
     let(:slot_department) do
       dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ColetaSlot',
