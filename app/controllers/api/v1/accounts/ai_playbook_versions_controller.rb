@@ -13,6 +13,12 @@ class Api::V1::Accounts::AiPlaybookVersionsController < Api::V1::Accounts::BaseC
     version = playbook && ::Ai::Version.for_record(playbook).find_by(id: params[:id])
     return render(json: { error: 'versão não encontrada' }, status: :not_found) if version.nil?
 
+    # PRÉ-SNAPSHOT: captura o estado ATUAL antes de sobrescrever. snapshot! só roda no update do controller,
+    # então mudanças por CONSOLE (foi assim que on_complete/knowledge/list_all entraram) NÃO geram versão —
+    # sem isto, restaurar qualquer versão anterior as apagaria SEM histórico para recuperar. Com a nota,
+    # sempre grava (não deduplica): torna o restore REVERSÍVEL.
+    ::Ai::Version.snapshot!(playbook, snapshot_fields: ::Ai::Playbook::SNAPSHOT_FIELDS,
+                                      note: 'Estado antes da restauração')
     version.restore!(::Ai::Playbook::SNAPSHOT_FIELDS)
     ::Ai::Version.snapshot!(playbook, snapshot_fields: ::Ai::Playbook::SNAPSHOT_FIELDS,
                                       note: "Restaurado da v#{version.version_number}")

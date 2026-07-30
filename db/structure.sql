@@ -1217,7 +1217,8 @@ CREATE TABLE public.ai_playbooks (
     version integer DEFAULT 1 NOT NULL,
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    lock_version integer DEFAULT 0 NOT NULL
 );
 
 
@@ -9684,6 +9685,7 @@ ALTER TABLE ONLY public.subscriptions
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260730120000'),
 ('20260724120000'),
 ('20260719120000'),
 ('20260718120000'),

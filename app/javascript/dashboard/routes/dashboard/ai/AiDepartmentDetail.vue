@@ -18,6 +18,7 @@ import {
   stepToApi,
   nextStepUid,
   mergeStepEdit,
+  reconcileSteps,
 } from './aiStepPayload';
 
 // When embedded inside the agent (the agent's single default department), ids come by prop
@@ -57,6 +58,16 @@ const showSave = computed(() =>
   )
 );
 const isSaving = ref(false);
+// (1) Guardrail contra sobrescrita cega do array de steps. lock_version do playbook no load; o save o
+// reenvia e o backend responde 409 se estiver defasado (mudança out-of-band: console/outra aba/admin).
+// `loadedSteps` guarda o estado carregado (clone) para o reconcileSteps saber o que o usuário REALMENTE
+// mudou. `conflict.phase`: null | 'detected' (409, alterações preservadas) | 'reapplied' (juntou) |
+// 'ambiguous' (array mudou de tamanho — não dá para reaplicar por índice; Frente C resolve).
+const playbookLockVersion = ref(null);
+const loadedSteps = ref([]);
+const conflict = ref({ phase: null });
+const cloneSteps = arr =>
+  JSON.parse(JSON.stringify(Array.isArray(arr) ? arr : []));
 // Operational summary counts (read-only) served by the departments index serializer.
 const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 
@@ -291,6 +302,11 @@ const parseNoFollowupAction = list =>
 
 const hydrate = dept => {
   const playbook = dept.playbook || {};
+  // (1) token de concorrência + snapshot do estado carregado (para o reconcileSteps diferenciar o que o
+  // usuário mudou). lock_version pode não existir em playbook novo/legado -> 0.
+  playbookLockVersion.value = playbook.lock_version ?? 0;
+  loadedSteps.value = cloneSteps(parseSteps(playbook.steps));
+  conflict.value = { phase: null };
   const behavior = dept.behavior || {};
   const followUp = dept.follow_up || {};
   const close = dept.close_rules || {};
@@ -404,6 +420,8 @@ const buildPayload = () => ({
     },
     playbook: {
       objetivo: form.objetivo,
+      // (1) token de concorrência: o backend rejeita com 409 se o playbook mudou desde o load.
+      lock_version: playbookLockVersion.value,
       steps: form.steps.filter(s => (s.name || '').trim()).map(stepToApi),
       transfer_when: linesToArray(form.transfer_when_steps),
       close_when: linesToArray(form.close_when_steps),
@@ -437,12 +455,66 @@ const save = async () => {
       );
       useAlert(t('AI_DEPARTMENTS.SAVED'));
     }
+    conflict.value = { phase: null };
     resetDept();
+  } catch (error) {
+    // (1) 409 = o playbook mudou no servidor desde o load. NÃO sobrescreve nem descarta: mostra a tarja de
+    // conflito com as alterações do usuário PRESERVADAS na tela; ele clica em "Recarregar e reaplicar".
+    if (error?.response?.status === 409) {
+      conflict.value = { phase: 'detected' };
+    } else {
+      useAlert(t('AI_DEPARTMENTS.ERROR'));
+    }
+  } finally {
+    isSaving.value = false;
+  }
+};
+
+// (1) "Recarregar e reaplicar": rebusca o playbook fresco (com a mudança out-of-band) e junta com as
+// alterações do usuário via reconcileSteps. 'merged' -> aplica e o usuário revisa/salva; 'ambiguous' (array
+// mudou de tamanho) -> mantém tudo na tela e oferece copiar/recarregar. NUNCA descarta o trabalho do usuário.
+const reapplyConflict = async () => {
+  isSaving.value = true;
+  try {
+    const { data } = await axios.get(deptCollectionUrl());
+    const dept = (Array.isArray(data) ? data : []).find(
+      d => String(d.id) === String(departmentId.value)
+    );
+    const freshPlaybook = dept?.playbook || {};
+    const freshSteps = parseSteps(freshPlaybook.steps);
+    const result = reconcileSteps(freshSteps, form.steps, loadedSteps.value);
+    if (result.status === 'merged') {
+      form.steps = result.steps;
+      loadedSteps.value = cloneSteps(result.steps);
+      playbookLockVersion.value = freshPlaybook.lock_version ?? 0;
+      conflict.value = { phase: 'reapplied' };
+    } else {
+      conflict.value = { phase: 'ambiguous' };
+    }
   } catch (error) {
     useAlert(t('AI_DEPARTMENTS.ERROR'));
   } finally {
     isSaving.value = false;
   }
+};
+
+// Fallback do caso ambíguo: copia as etapas do usuário (para reaplicar à mão depois de recarregar). Nunca
+// perde o trabalho digitado.
+const copyPendingSteps = async () => {
+  try {
+    await navigator.clipboard.writeText(
+      JSON.stringify(form.steps.map(stepToApi), null, 2)
+    );
+    useAlert(t('AI_DEPARTMENTS.CONFLICT.COPIED'));
+  } catch (error) {
+    useAlert(t('AI_DEPARTMENTS.ERROR'));
+  }
+};
+
+// Recarregar descartando (só no caso ambíguo, escolha EXPLÍCITA do usuário após copiar).
+const discardAndReload = async () => {
+  conflict.value = { phase: null };
+  await fetchDepartment();
 };
 
 const goBack = () =>
@@ -1432,6 +1504,55 @@ onMounted(async () => {
           :agent-id="route.params.agentId"
           :department-id="departmentId"
         />
+
+        <!-- (1) Tarja de conflito (save defasado / 409). Diz o que FAZER, não só o que houve. As alterações
+             do usuário ficam PRESERVADAS na tela em todos os estados. -->
+        <div
+          v-if="conflict.phase"
+          class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-amber-3 text-n-amber-11"
+        >
+          <div class="flex items-start gap-2">
+            <span class="mt-0.5 shrink-0 size-4 i-lucide-alert-triangle" />
+            <span class="flex-1 min-w-0 text-sm">
+              <template v-if="conflict.phase === 'detected'">
+                {{ $t('AI_DEPARTMENTS.CONFLICT.DETECTED') }}
+              </template>
+              <template v-else-if="conflict.phase === 'reapplied'">
+                {{ $t('AI_DEPARTMENTS.CONFLICT.REAPPLIED') }}
+              </template>
+              <template v-else>
+                {{ $t('AI_DEPARTMENTS.CONFLICT.AMBIGUOUS') }}
+              </template>
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-2 pl-6">
+            <button
+              v-if="conflict.phase === 'detected'"
+              type="button"
+              class="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-n-amber-9 text-white disabled:opacity-50"
+              :disabled="isSaving"
+              @click="reapplyConflict"
+            >
+              {{ $t('AI_DEPARTMENTS.CONFLICT.REAPPLY_ACTION') }}
+            </button>
+            <template v-if="conflict.phase === 'ambiguous'">
+              <button
+                type="button"
+                class="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-n-amber-9 text-white"
+                @click="copyPendingSteps"
+              >
+                {{ $t('AI_DEPARTMENTS.CONFLICT.COPY_ACTION') }}
+              </button>
+              <button
+                type="button"
+                class="text-xs px-2.5 py-1.5 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                @click="discardAndReload"
+              >
+                {{ $t('AI_DEPARTMENTS.CONFLICT.RELOAD_ACTION') }}
+              </button>
+            </template>
+          </div>
+        </div>
 
         <!-- Save bar (config tabs only) -->
         <div

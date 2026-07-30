@@ -11,6 +11,9 @@ class Api::V1::Accounts::AiAgentVersionsController < Api::V1::Accounts::BaseCont
     version = ::Ai::Version.for_record(@agent).find_by(id: params[:id])
     return render(json: { error: 'versão não encontrada' }, status: :not_found) if version.nil?
 
+    # PRÉ-SNAPSHOT: captura o estado ATUAL antes de sobrescrever (mudanças por console não geram versão) —
+    # torna o restore REVERSÍVEL. Ver ai_playbook_versions_controller.
+    ::Ai::Version.snapshot!(@agent, snapshot_fields: ::Ai::Agent::SNAPSHOT_FIELDS, note: 'Estado antes da restauração')
     version.restore!(::Ai::Agent::SNAPSHOT_FIELDS)
     ::Ai::Version.snapshot!(@agent, snapshot_fields: ::Ai::Agent::SNAPSHOT_FIELDS,
                                     note: "Restaurado da v#{version.version_number}")

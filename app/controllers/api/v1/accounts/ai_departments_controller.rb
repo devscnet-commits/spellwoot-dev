@@ -43,6 +43,13 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     errors = step_automation_errors
     return render(json: { errors: errors }, status: :unprocessable_entity) if errors.present?
 
+    # (1) Concorrência otimista do PLAYBOOK: o save manda o array de steps INTEIRO. Se o cliente carregou
+    # ANTES de uma escrita out-of-band (console/outra aba/admin), sobrescrever cego apagaria o campo em
+    # silêncio (on_complete/knowledge/list_all/collect/...). lock_version incrementa em TODO update do
+    # playbook (inclusive por console). Cliente defasado => 409 (o front recarrega e reaplica), NUNCA
+    # sobrescreve. Só barra quando o cliente MANDA um lock_version (edições que tocam o playbook).
+    return render(json: { error: 'stale_playbook' }, status: :conflict) if playbook_conflict?
+
     @department.assign_attributes(scalar_params.merge(jsonb_params))
     return render(json: { errors: @department.errors.full_messages }, status: :unprocessable_entity) unless @department.save
 
@@ -95,6 +102,18 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     return nil if value.nil?
 
     value.respond_to?(:permit!) ? value.permit!.to_h : value
+  end
+
+  # true quando o cliente mandou um lock_version defasado em relação ao playbook ATUAL. Sem playbook ainda,
+  # ou sem lock_version no payload (save que não toca o playbook), não barra. Ver #update.
+  def playbook_conflict?
+    current = @department.playbook
+    return false if current.nil?
+
+    base = params.dig(:ai_department, :playbook, :lock_version)
+    return false if base.blank?
+
+    base.to_i != current.lock_version
   end
 
   def upsert_playbook(department)

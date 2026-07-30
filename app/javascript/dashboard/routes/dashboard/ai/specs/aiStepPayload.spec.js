@@ -4,7 +4,59 @@ import {
   buildStepPayload,
   mergeStepEdit,
   slotAfterFlush,
+  reconcileSteps,
 } from '../aiStepPayload';
+
+// (1) reconciliação no 409: junta a edição do usuário com a mudança out-of-band do servidor, preservando
+// as duas; ambíguo quando o array mudou de tamanho (Frente C). Prova de mutação por nome.
+describe('reconcileSteps — merge no save defasado (409)', () => {
+  const withUid = (arr, base) => arr.map((s, i) => ({ ...s, uid: base + i }));
+
+  it('mescla: só a etapa que o usuário mudou sobrescreve; o resto fica com a versão FRESCA do servidor', () => {
+    const original = withUid([{ name: 'A' }, { name: 'B' }, { name: 'C' }], 10);
+    // usuário editou a etapa 0 (renomeou); o servidor ganhou on_complete na etapa 2 (console)
+    const current = withUid([{ name: 'A2' }, { name: 'B' }, { name: 'C' }], 10);
+    const fresh = withUid(
+      [
+        { name: 'A' },
+        { name: 'B' },
+        { name: 'C', on_complete: { action: 'handoff_human' } },
+      ],
+      99
+    );
+
+    const r = reconcileSteps(fresh, current, original);
+    expect(r.status).toBe('merged');
+    expect(r.steps[0].name).toBe('A2'); // edição do usuário preservada
+    expect(r.steps[2].on_complete).toEqual({ action: 'handoff_human' }); // mudança do servidor preservada
+  });
+
+  it('uid não conta como diferença (o usuário não mudou nada -> tudo vem do servidor fresco)', () => {
+    const original = withUid([{ name: 'A' }, { name: 'B' }], 1);
+    const current = withUid([{ name: 'A' }, { name: 'B' }], 500); // uids diferentes, conteúdo igual
+    const fresh = withUid(
+      [{ name: 'A', on_complete: { action: 'close' } }, { name: 'B' }],
+      900
+    );
+    const r = reconcileSteps(fresh, current, original);
+    expect(r.status).toBe('merged');
+    expect(r.steps[0].on_complete).toEqual({ action: 'close' }); // nada do usuário sobrescreve
+  });
+
+  it('AMBÍGUO quando o SERVIDOR mudou o tamanho do array (add/remove/reorder)', () => {
+    const original = withUid([{ name: 'A' }, { name: 'B' }], 1);
+    const current = withUid([{ name: 'A2' }, { name: 'B' }], 1);
+    const fresh = withUid([{ name: 'A' }, { name: 'B' }, { name: 'C' }], 9); // servidor adicionou
+    expect(reconcileSteps(fresh, current, original).status).toBe('ambiguous');
+  });
+
+  it('AMBÍGUO quando o USUÁRIO mudou o tamanho do array localmente', () => {
+    const original = withUid([{ name: 'A' }, { name: 'B' }], 1);
+    const current = withUid([{ name: 'A' }], 1); // usuário removeu
+    const fresh = withUid([{ name: 'A' }, { name: 'B' }], 9);
+    expect(reconcileSteps(fresh, current, original).status).toBe('ambiguous');
+  });
+});
 
 describe('aiStepPayload', () => {
   describe('preservação de chaves (spread) — a classe de bug que fechou', () => {
