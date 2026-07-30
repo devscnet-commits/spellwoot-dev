@@ -512,4 +512,29 @@ RSpec.describe Ai::PromptCompiler do
       end
     end
   end
+
+  # collection_state_block: a REGRA passa a AUTORIZAR a correção de um valor já em JÁ TENHO (separando
+  # repergunta de atualização), e a frase de correção duplicada no fluxo do slot atual foi REMOVIDA — uma
+  # instrução, no lugar certo. LIMITE HONESTO: isto prova que o TEXTO está lá, não que o modelo obedece; o
+  # aceite é AO VIVO (reproduzir a conv da evidência; ver descrição do PR).
+  describe '.collection_state_block — autoriza correção de JÁ TENHO' do
+    let(:block) do
+      described_class.collection_state_block([], 0, { 'plano_escolhido' => 'Internet Fibra 600 Mega' })
+    end
+
+    it 'quando há JÁ TENHO, emite a cláusula de CORREÇÃO na REGRA (chave nova em attributes, atualização)' do
+      aggregate_failures do
+        expect(block).to include('JÁ TENHO')
+        expect(block).to include('CORRIGIR por conta própria')
+        expect(block).to include('a MESMA chave com o novo')
+        expect(block).to include('ATUALIZAÇÃO, não repergunta')
+      end
+    end
+
+    it 'NÃO emite mais a frase de correção duplicada no fluxo do dado VÁLIDO (uma instrução só)' do
+      # prova de mutação: falha se a linha 144 antiga ("Se o cliente corrigir depois, atualize o valor e siga")
+      # voltar — foram DUAS instruções de correção em lugares diferentes que criaram a confusão.
+      expect(block).not_to include('Se o cliente corrigir depois')
+    end
+  end
 end
