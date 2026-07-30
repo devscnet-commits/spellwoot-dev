@@ -219,9 +219,11 @@ class Ai::TurnCapture
     )
     case result[:status]
     when 'answered'
-      persist_judged(slot, normalize_judged(result[:value], step, slot), department, 'judge', 'answered')
+      persist_judged(step, slot, normalize_judged(result[:value], step, slot), department, 'judge', 'answered')
     when 'malformed'
-      persist_judged(slot, result[:value], department, 'judge_raw', 'malformed')
+      # MUDANÇA DE COMPORTAMENTO (ver PR): malformado agora passa pelo gate como qualquer valor — tipo
+      # errado é REJEITADO (não mais gravado cru + confirmação-única). Uma porta, um cadeado.
+      persist_judged(step, slot, result[:value], department, 'judge_raw', 'malformed')
     when 'not_an_answer'
       # Débito do fraseado novo (Design A, SlotAbsence como fonte única): um declínio que a lista fechada
       # NÃO reconhece cai aqui como :no_attempt e, em slot opcional, faz a IA repetir o pedido até o
@@ -246,8 +248,17 @@ class Ai::TurnCapture
          { attribute: slot, text: Ai::SlotExtractor.normalize(message_text.to_s).first(60) })
   end
 
-  def persist_judged(slot, value, department, source, status)
-    @persister.persist_attributes({ slot => value }, department)
+  # Grava o valor julgado pelo MESMO gate do supervisor (uma porta, um cadeado): source :supervisor +
+  # expected_step (a etapa corrente). O gate resolve o tipo de CADA chave pela sua etapa DECLARANTE, então
+  # um asked_slot de outra etapa é validado pelo tipo DELE (o "10" para email_cliente vira invalid_value).
+  # Só emite slot.captured quando a chave SOBREVIVEU ao gate; se barrou (unexpected/declined/invalid_value),
+  # o gated_facts já emitiu facts.rejected — não registramos "captured" sem gravar. persist_attributes
+  # devolve o conjunto persistido (gateado).
+  def persist_judged(step, slot, value, department, source, status) # rubocop:disable Metrics/ParameterLists
+    persisted = @persister.persist_attributes({ slot => value }, department,
+                                              source: :supervisor, expected_step: step)
+    return nil unless persisted.is_a?(Hash) && persisted.key?(slot)
+
     emit('slot.captured', { attribute: slot, source: source, status: status })
     nil
   end
