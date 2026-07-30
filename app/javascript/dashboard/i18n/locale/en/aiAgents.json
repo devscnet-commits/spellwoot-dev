@@ -119,19 +119,17 @@
       "MANAGE": "Configurar em Agentes IA"
     },
     "HANDOFF": {
-      "TITLE": "Roteamento e transferência entre IAs",
-      "DESCRIPTION": "Defina o time deste agente e para quais setores ele pode transferir uma conversa antes de passar a um humano.",
-      "TEAM": "Time deste agente",
-      "TEAM_HINT": "Quando várias IAs atendem a mesma caixa, esta assume as conversas atribuídas a este time. Deixe em \"Qualquer conversa\" para atender sem distinção de time.",
+      "TITLE": "Para onde o agente transfere",
+      "DESCRIPTION": "Para quais setores humanos e outras IAs este agente pode transferir uma conversa.",
       "ALLOWLIST": "Transferir para times (humanos)",
-      "ALLOWLIST_HINT": "Se o cliente pedir outro setor, a IA só transfere para os times marcados. Sem marcações, a conversa vai para um humano.",
+      "ALLOWLIST_HINT": "A IA só transfere para os marcados. Sem marcação, vai para um humano.",
       "NO_TEAMS": "Nenhum outro time disponível nesta conta.",
       "IA_ALLOWLIST": "Transferir para outras IAs",
-      "IA_ALLOWLIST_HINT": "Marque as IAs ativas para as quais esta IA pode transferir a conversa.",
+      "IA_ALLOWLIST_HINT": "Só as IAs ativas marcadas recebem transferência.",
       "NO_IA": "Nenhuma outra IA ativa nesta conta.",
       "FALLBACK_LABEL": "Quando a IA não conseguir atender, enviar para",
       "FALLBACK_DEFAULT": "Padrão (primeiro time da lista acima)",
-      "FALLBACK_HINT": "Destino quando a IA desiste (travou, esgotou tentativas, confiança baixa ou o provedor falhou) e não há setor pedido pelo cliente. Só times marcados acima.",
+      "FALLBACK_HINT": "Quando ela desiste (travou, sem tentativas, confiança baixa ou provedor fora) e o cliente não pediu setor. Só times marcados acima.",
       "FALLBACK_EMPTY": "Marque ao menos um time acima para escolher o destino padrão."
     },
     "VERSIONS": {
@@ -159,7 +157,7 @@
       "CLOSE": "Fechar"
     },
     "INBOXES": {
-      "TITLE": "Onde este agente atende",
+      "TITLE": "Quando este agente atende",
       "DESCRIPTION": "Marque as caixas que este agente atende. Quando atende, ele responde ao cliente.",
       "NONE": "Não atende",
       "SHADOW": "Análise (observa)",
@@ -167,6 +165,8 @@
       "NONE_SHORT": "Não atende",
       "SHADOW_SHORT": "Análise",
       "LIVE_SHORT": "Atende",
+      "PRIORITY_LABEL": "Prioridade",
+      "PRIORITY_TOOLTIP": "Quando mais de uma IA atende esta caixa, a de menor número responde. As outras ficam disponíveis para receber transferências.",
       "EMPTY": "Nenhuma caixa nesta conta.",
       "SEARCH": "Buscar caixa...",
       "SAVE": "Salvar caixas",

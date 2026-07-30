@@ -15,6 +15,11 @@ import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
 import Logo from 'next/icon/Logo.vue';
 import AiDepartmentDetail from './AiDepartmentDetail.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
+import {
+  defaultAgentForm,
+  buildAgentPayload,
+  buildInboxBindings,
+} from './aiRoutingPayload';
 
 const route = useRoute();
 const router = useRouter();
@@ -68,27 +73,9 @@ const STAGE_BADGE = {
 const accountUrl = () => `/api/v1/accounts/${route.params.accountId}`;
 const agentUrl = () => `${accountUrl()}/ai_agents`;
 
-const agentForm = reactive({
-  name: '',
-  assistant_name: '',
-  company_name: '',
-  site: '',
-  identify_as: 'human',
-  assistant_avatar: '',
-  ai_operation_profile_id: '',
-  team_id: '',
-  handoff_team_ids: [],
-  handoff_agent_ids: [],
-  // (3) Destino padrão quando a IA DESISTE sem destino declarado (give-up). '' = comportamento atual
-  // (1º da whitelist). Deve pertencer a handoff_team_ids (validado no backend; o select só oferece os marcados).
-  fallback_handoff_team_id: '',
-  assistant_personality: '',
-  assistant_language: 'pt-BR',
-  base_prompt: '',
-  guardrails: '',
-  stage: 'experimental',
-  status: 'active',
-});
+// Default em aiRoutingPayload.defaultAgentForm() — SEM team_id de propósito (issue H1: o override some da
+// UI; ausente do payload = não zera a coluna no PATCH). Ver a nota no módulo.
+const agentForm = reactive(defaultAgentForm());
 const {
   isDirty: agentDirty,
   capture: captureAgent,
@@ -107,13 +94,9 @@ const profileOptions = computed(() => [
 // Teams power AI->AI routing: this agent serves its own team, and may hand off only to the
 // teams in its allowlist (handoff_team_ids).
 const teams = ref([]);
-const teamOptions = computed(() => [
-  { value: '', label: t('AI_AGENTS.SOBRE.TEAM_ANY') },
-  ...teams.value.map(tm => ({ value: tm.id, label: tm.name })),
-]);
-const handoffTeamOptions = computed(() =>
-  teams.value.filter(tm => tm.id !== agentForm.team_id)
-);
+// Whitelist de times humanos = todos os times da conta. (Antes excluía agentForm.team_id; o "time deste
+// agente" saiu da UI — issue H1 —, então não há mais o que excluir.)
+const handoffTeamOptions = computed(() => teams.value);
 const fetchTeams = async () => {
   try {
     const { data } = await axios.get(`${accountUrl()}/teams`);
@@ -288,10 +271,8 @@ const onFilePick = e => {
 };
 const saveAgent = async () => {
   isSaving.value = true;
-  const payload = {
-    ...agentForm,
-    name: agentForm.name || agentForm.assistant_name,
-  };
+  // buildAgentPayload: spread-e-normaliza. Não emite team_id (o form não o tem) — não zera a coluna.
+  const payload = buildAgentPayload(agentForm);
   try {
     if (isNew.value) {
       const { data } = await axios.post(agentUrl(), { ai_agent: payload });
@@ -351,7 +332,11 @@ const {
   capture: captureInboxes,
   reset: resetInboxes,
 } = useFormDirty(() =>
-  inboxes.value.map(i => ({ inbox_id: i.inbox_id, mode: i.mode }))
+  inboxes.value.map(i => ({
+    inbox_id: i.inbox_id,
+    mode: i.mode,
+    priority: i.priority,
+  }))
 );
 const fetchInboxes = async () => {
   if (isNew.value) return;
@@ -367,11 +352,9 @@ const filteredInboxes = computed(() => {
 });
 const saveInboxes = async () => {
   try {
+    // buildInboxBindings: priority só na linha que atende; "Não atende" destrói o binding no backend.
     await axios.put(inboxesUrl(), {
-      bindings: inboxes.value.map(i => ({
-        inbox_id: i.inbox_id,
-        mode: i.mode,
-      })),
+      bindings: buildInboxBindings(inboxes.value),
     });
     useAlert(t('AI_AGENTS.SAVED'));
     resetInboxes();
@@ -660,29 +643,113 @@ onMounted(async () => {
           />
         </div>
 
-        <!-- CAIXAS -->
+        <!-- ATENDIMENTOS E TRANSFERÊNCIAS: dois cards por pergunta, na ordem entrada -> saída.
+             CARD 1 "Quando este agente atende" (caixas + prioridade) e CARD 2 "Para onde o agente
+             transfere" (times humanos, fallback, outras IAs). Hierarquia replicada da aba Finalização:
+             h2 de seção + subtítulo, rótulos text-sm font-medium, ajuda text-xs. -->
         <div v-else-if="activeKey === 'inboxes'" class="flex flex-col gap-4">
-          <!-- Roteamento e transferência entre agentes de IA -->
+          <!-- CARD 1 — Quando este agente atende (entrada) -->
+          <section
+            class="border border-n-weak rounded-xl p-5 flex flex-col gap-4 bg-n-solid-2"
+          >
+            <div class="flex flex-col gap-0.5">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                {{ $t('AI_AGENTS.INBOXES.TITLE') }}
+              </h2>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
+              </p>
+            </div>
+            <p v-if="isNew" class="text-sm text-n-slate-11">
+              {{ $t('AI_AGENTS.SAVE_FIRST') }}
+            </p>
+            <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
+              {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
+            </p>
+            <template v-else>
+              <input
+                v-model="inboxSearch"
+                type="search"
+                :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
+                class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              />
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div
+                  v-for="inbox in filteredInboxes"
+                  :key="inbox.inbox_id"
+                  class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex items-center justify-between gap-3"
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span
+                      class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
+                    >
+                      <span class="i-lucide-inbox size-4 text-n-slate-11" />
+                    </span>
+                    <span class="text-sm font-medium text-n-slate-12 truncate">
+                      {{ inbox.name }}
+                    </span>
+                  </div>
+                  <div class="shrink-0 flex items-center gap-2">
+                    <div
+                      class="grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
+                    >
+                      <button
+                        v-for="m in INBOX_MODES"
+                        :key="m.value"
+                        type="button"
+                        class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+                        :class="
+                          inbox.mode === m.value
+                            ? m.active
+                            : 'text-n-slate-11 hover:text-n-slate-12'
+                        "
+                        @click="inbox.mode = m.value"
+                      >
+                        {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
+                      </button>
+                    </div>
+                    <!-- Prioridade: só quando a linha está em "Atende" (live). Menor número responde;
+                         as demais IAs da caixa ficam disponíveis para receber transferências. -->
+                    <label
+                      v-if="inbox.mode === 'live'"
+                      class="flex items-center gap-1 text-xs text-n-slate-11"
+                      :title="$t('AI_AGENTS.INBOXES.PRIORITY_TOOLTIP')"
+                    >
+                      {{ $t('AI_AGENTS.INBOXES.PRIORITY_LABEL') }}
+                      <input
+                        v-model.number="inbox.priority"
+                        type="number"
+                        min="1"
+                        data-testid="inbox-priority"
+                        class="w-14 px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="flex justify-end">
+                <Button
+                  :label="$t('AI_AGENTS.INBOXES.SAVE')"
+                  :disabled="!inboxesDirty"
+                  @click="saveInboxes"
+                />
+              </div>
+            </template>
+          </section>
+
+          <!-- CARD 2 — Para onde o agente transfere (saída). NB: este "Salvar" persiste o agentForm
+               INTEIRO (nome, instruções, perfil...), não só os campos de transferência — é o saveAgent
+               global, distinto do "Salvar caixas" do CARD 1, que é escopado às caixas. Não é regressão. -->
           <div
             class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
           >
             <div class="flex flex-col gap-0.5">
-              <h3 class="text-sm font-semibold text-n-slate-12">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_AGENTS.HANDOFF.TITLE') }}
-              </h3>
+              </h2>
               <p class="text-xs text-n-slate-11 mb-0">
                 {{ $t('AI_AGENTS.HANDOFF.DESCRIPTION') }}
               </p>
-            </div>
-
-            <div class="flex flex-col gap-1.5 max-w-sm">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.HANDOFF.TEAM') }}
-              </span>
-              <Select v-model="agentForm.team_id" :options="teamOptions" />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_AGENTS.HANDOFF.TEAM_HINT') }}
-              </span>
             </div>
 
             <div class="flex flex-col gap-1.5">
@@ -779,77 +846,6 @@ onMounted(async () => {
               />
             </div>
           </div>
-
-          <!-- Caixas de entrada: embrulhada em card p/ padronizar com o card de handoff acima -->
-          <section
-            class="border border-n-weak rounded-xl p-5 flex flex-col gap-4 bg-n-solid-2"
-          >
-            <div class="flex flex-col gap-1">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.INBOXES.TITLE') }}
-              </span>
-              <p class="text-sm text-n-slate-11 mb-0">
-                {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
-              </p>
-            </div>
-            <p v-if="isNew" class="text-sm text-n-slate-11">
-              {{ $t('AI_AGENTS.SAVE_FIRST') }}
-            </p>
-            <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
-              {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
-            </p>
-            <template v-else>
-              <input
-                v-model="inboxSearch"
-                type="search"
-                :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
-                class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-              />
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div
-                  v-for="inbox in filteredInboxes"
-                  :key="inbox.inbox_id"
-                  class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex items-center justify-between gap-3"
-                >
-                  <div class="flex items-center gap-2 min-w-0">
-                    <span
-                      class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
-                    >
-                      <span class="i-lucide-inbox size-4 text-n-slate-11" />
-                    </span>
-                    <span class="text-sm font-medium text-n-slate-12 truncate">
-                      {{ inbox.name }}
-                    </span>
-                  </div>
-                  <div
-                    class="shrink-0 grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
-                  >
-                    <button
-                      v-for="m in INBOX_MODES"
-                      :key="m.value"
-                      type="button"
-                      class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-                      :class="
-                        inbox.mode === m.value
-                          ? m.active
-                          : 'text-n-slate-11 hover:text-n-slate-12'
-                      "
-                      @click="inbox.mode = m.value"
-                    >
-                      {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="flex justify-end">
-                <Button
-                  :label="$t('AI_AGENTS.INBOXES.SAVE')"
-                  :disabled="!inboxesDirty"
-                  @click="saveInboxes"
-                />
-              </div>
-            </template>
-          </section>
         </div>
 
         <!-- COMPORTAMENTO / CONHECIMENTO / ETAPAS / FERRAMENTAS (departamento padrão) -->
