@@ -84,6 +84,24 @@ class Ai::Gateway
       return finalize(run_record, 'credit_exhausted')
     end
 
+    # Fase 3 — circuit breaker por (conta, provider). Com o breaker ABERTO, PULA todo o caminho condenado
+    # (RAG + montagem de contexto + chamada ao modelo) e vai direto ao handoff da Fase 1 — MESMO padrão
+    # pré-chamada do credit_exhausted? acima, custo e latência ZERO. Só ao vivo (shadow nunca transfere nem
+    # mexe no breaker). :half_open = passe de teste concedido a ESTE run (segue o fluxo normal; a chamada lá
+    # embaixo fecha/reabre via record_success/record_failure). notify:false no skip — o e-mail já saiu na
+    # ABERTURA (a 3ª falha, throttle de 1h); com o breaker já aberto NÃO reenvia. Ver Ai::ProviderBreaker.
+    if @acts_live
+      case provider_breaker.state
+      when :open
+        run_record.update!(provider: supervisor_provider, status: 'error', error_type: 'provider_error')
+        emit(run_record, 'provider.breaker_skipped', { provider: supervisor_provider, open_until: provider_breaker.open_until })
+        force_provider_handoff(run_record, notify: false)
+        return finalize(run_record, 'error')
+      when :half_open
+        emit(run_record, 'provider.breaker_half_open', { provider: supervisor_provider })
+      end
+    end
+
     # Mensagem acima do limite + ação "pedir resumo": avisa o cliente e encerra a execução
     # (não roda o modelo no texto gigante). 'truncate' segue normal (já cortado acima).
     if input_exceeded && input_action == 'ask_resume'
@@ -174,6 +192,18 @@ class Ai::Gateway
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms],
            temperature: result[:temperature], cached_tokens: result[:cached_tokens] },
          run_id: run_record.id)
+
+    # Fase 3 — alimenta o breaker com o RESULTADO desta chamada (só ao vivo): erro incrementa as falhas
+    # consecutivas (abre na 3ª ou reabre um half-open); sucesso zera e fecha. O e-mail da abertura sai pelo
+    # force_provider_handoff (caminho de erro logo abaixo), NÃO aqui. record_* são no-op com o kill-switch OFF.
+    if @acts_live
+      if result[:status] == 'error'
+        opened = provider_breaker.record_failure
+        emit(run_record, 'provider.breaker_opened', { provider: result[:provider] }.merge(opened)) if opened
+      elsif (closed_via = provider_breaker.record_success)
+        emit(run_record, 'provider.breaker_closed', { provider: result[:provider], via: closed_via })
+      end
+    end
 
     # Provider indisponível (rate-limit/cota/billing, ou auth que o BYOK não recuperou): a decisão veio com
     # status 'error' e VAZIA. Sem esta guarda, o dispatch cai no unknown_kind {handled:'none'} = SILÊNCIO
@@ -713,7 +743,24 @@ class Ai::Gateway
   # DECISÃO DE PRODUTO: NÃO manda mensagem automática ao cliente — a conversa cai no time humano e o
   # atendente responde ele mesmo (uma frase "já vou te atender" seria mais uma promessa que o sistema não
   # cumpre, o padrão que estamos eliminando). Só ao vivo (o call-site já gateia @acts_live).
-  def force_provider_handoff(run_record)
+  # notify: (Fase 3) — o e-mail da Fase 2 sai só na ABERTURA do breaker (a chamada que REALMENTE falhou),
+  # NÃO a cada transferência com o breaker JÁ aberto. O caminho normal (Fase 1/2) chama sem argumento =>
+  # notify:true, comportamento IDÊNTICO ao de antes. Só o skip do breaker aberto passa notify:false (ali não
+  # houve chamada nem provider_error novo — e run_record.provider nem está setado).
+  # Provider resolvido do perfil ANTES da chamada (mesma resolução do Ai::ModelRouter.decide: perfil ->
+  # 'openai'). Serve ao breaker pré-chamada (o result[:provider] pós-chamada é idêntico — sem provider
+  # explícito no call-site e o BYOK não troca de provider).
+  def supervisor_provider
+    @agent.operation_profile&.supervisor_provider.presence || 'openai'
+  end
+
+  # Breaker por (conta, provider) memoizado no run — o mesmo objeto para o gate pré-chamada e o record
+  # pós-chamada (estado real vive no cache, não no objeto).
+  def provider_breaker
+    @provider_breaker ||= Ai::ProviderBreaker.new(account: @account, provider: supervisor_provider)
+  end
+
+  def force_provider_handoff(run_record, notify: true)
     action_dispatcher.internal_note('⚠️ Transferido automaticamente: a IA não conseguiu responder por ' \
                                     'indisponibilidade do provedor de IA (verifique cota/billing).')
     team_id = handoff_coordinator.human_team_id({})
@@ -723,11 +770,10 @@ class Ai::Gateway
     handoff_coordinator.assign_human(team_id, reason: 'provider_unavailable')
     emit(run_record, 'handoff.provider_unavailable', { team_id: team_id })
     # Fase 2: avisa os ADMINS da conta (cota/billing é de quem paga, não do atendente). DEPOIS do handoff
-    # e best-effort — nunca derruba a transferência (ver #notify_admin_provider_error). NOTA PARA A FASE 3
-    # (breaker, ainda não implementada): quando o breaker abrir, o motor vai PULAR a chamada ao provedor e
-    # transferir direto, SEM gerar um provider_error novo — logo este caminho (e este e-mail) NÃO dispara.
-    # Se a Fase 3 quiser manter o aviso ao admin com o breaker aberto, terá de chamá-lo explicitamente lá.
-    notify_admin_provider_error(run_record.provider)
+    # e best-effort — nunca derruba a transferência (ver #notify_admin_provider_error). Fase 3: com o breaker
+    # ABERTO o Gateway pula a chamada e transfere sem provider_error novo — passa notify:false para NÃO
+    # reenviar; o aviso já saiu na abertura (a 3ª falha, throttle de 1h). Ver #run e Ai::ProviderBreaker.
+    notify_admin_provider_error(run_record.provider) if notify
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_provider_handoff] #{e.class}: #{e.message}"
   end
