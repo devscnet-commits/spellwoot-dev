@@ -101,5 +101,31 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
 
       expect(response).to have_http_status(:not_found)
     end
+
+    # (1) PRÉ-SNAPSHOT: snapshot! só roda no update do controller, então mudanças por CONSOLE não geram
+    # versão — restaurar as apagaria SEM histórico. O restore passa a snapshotar o estado ATUAL antes de
+    # sobrescrever, tornando-se REVERSÍVEL. Prova de mutação por nome.
+    it 'captura o estado ATUAL (mudança por console) antes de restaurar -> recuperável' do
+      upsert_playbook(steps: [{ 'name' => 'a' }])
+      playbook = department.reload.playbook
+      v1 = Ai::Version.for_record(playbook).recent.first
+      # mudança OUT-OF-BAND (console): NÃO gera versão
+      playbook.update!(steps: [{ 'name' => 'a', 'on_complete' => { 'action' => 'handoff_human' } }])
+
+      expect do
+        post "#{dept_path}/ai_playbook_versions/#{v1.id}/restore",
+             headers: admin.create_new_auth_token, as: :json
+      end.to change {
+        Ai::Version.for_record(playbook).where(note: 'Estado antes da restauração').count
+      }.by(1)
+
+      aggregate_failures do
+        # o estado do console ficou capturado numa versão -> recuperável (não se perdeu no restore)
+        pre = Ai::Version.for_record(playbook).find_by(note: 'Estado antes da restauração')
+        expect(pre.snapshot['steps']).to eq([{ 'name' => 'a', 'on_complete' => { 'action' => 'handoff_human' } }])
+        # e o restore de fato aplicou a v1 (sem on_complete)
+        expect(playbook.reload.steps).to eq([{ 'name' => 'a' }])
+      end
+    end
   end
 end

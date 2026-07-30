@@ -822,6 +822,32 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === Fase 3: circuit breaker — com o breaker ABERTO o Gateway pula a chamada e transfere ========
+  context 'Fase 3: breaker aberto pula a chamada ao modelo' do
+    it 'breaker aberto: NÃO chama o modelo, transfere e emite breaker_skipped, SEM novo e-mail' do
+      create_department
+      binding = create_binding(mode: 'live')
+      allow(Ai::HandoffSummaryJob).to receive(:perform_later)
+      allow(Ai::ModelRouter).to receive(:decide) # espião — NÃO deve ser chamado com o breaker aberto
+      # MemoryStore real + breaker JÁ aberto para (conta, 'openai') — 3 falhas consecutivas
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+      3.times { Ai::ProviderBreaker.new(account: account, provider: 'openai').record_failure }
+
+      convo = nil
+      # e-mail SÓ na abertura: com o breaker já aberto, o skip passa notify:false -> nenhum e-mail novo
+      expect { convo = deliver('oi', binding: binding, mode: 'live') }
+        .not_to have_enqueued_mail(AdministratorNotifications::AccountNotificationMailer, :provider_error_handoff)
+
+      aggregate_failures do
+        expect(Ai::ModelRouter).not_to have_received(:decide)       # PULOU a chamada condenada
+        expect(event_types(convo)).to include('provider.breaker_skipped')
+        expect(event_types(convo)).to include('handoff.provider_unavailable')
+        expect(event_types(convo)).not_to include('decision.made')  # nem chegou a decidir
+        expect(Ai::CapabilityExecution.where(conversation_id: convo.id, capability_key: 'conversation.transfer')).to exist
+      end
+    end
+  end
+
   # === collected — a memória de fatos ao vivo (ai_collected_facts) entra no prompt =====
   context 'collected inclui a memória de fatos ao vivo' do
     it 'passa ai_collected_facts em collected, com custom_attributes da conversa por cima' do

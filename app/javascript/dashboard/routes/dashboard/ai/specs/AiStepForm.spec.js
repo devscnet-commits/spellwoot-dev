@@ -82,8 +82,11 @@ describe('AiStepForm.vue — preservação de step.on_complete (semeadura do dra
     await wrapper.get('button.bg-n-brand').trigger('click');
     await flushPromises();
 
+    // reason: 'conclusao' é a constante do contrato preenchida por buildStepPayload em handoff_human — o
+    // seeding continua preservando action/team_id (não clobba o backfill) e ainda cura o reason ausente.
     expect(wrapper.emitted('save')[0][0].on_complete).toEqual({
       action: 'handoff_human',
+      reason: 'conclusao',
       team_id: 7,
     });
 

@@ -134,14 +134,20 @@ class Ai::PromptCompiler
       lines << "Se o cliente disser que NÃO TEM esse dado ou não quer informar, devolva em \"attributes\" " \
                "a chave #{slot} com o valor EXATO #{Ai::StepSlot::ABSENT} (não invente um valor)."
     end
-    lines << 'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. Se o cliente ' \
-             'já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.'
+    # REGRA: separa REPERGUNTA (proativa, proibida) de CORREÇÃO (o cliente inicia, permitida). Sem a 2ª
+    # frase, "não repita / use o valor e siga" fazia o modelo tratar um valor de JÁ TENHO como fechado e
+    # ignorar a correção de um dado de etapa PASSADA (conv da evidência: attrs={}, zero tentativa). A escrita
+    # da correção é aceita pelo gate do StateManager (todo slot declarado é gravável — ver supervisor_expected_keys).
+    lines << 'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. MAS se o cliente CORRIGIR por conta ' \
+             'própria um desses valores, devolva em "attributes" a MESMA chave com o novo valor: isso é ATUALIZAÇÃO, não ' \
+             'repergunta. Se o cliente já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.'
     # Default (conv 396): valor VÁLIDO -> acuse INLINE, junto do próximo pedido. NUNCA um turno só para
     # confirmar — a confirmação isolada cria um turno sem dado novo, onde o motor se perde (runs 2039→2041:
     # a reply pediu confirmação do endereço, o motor já estava na etapa 8, "esta certo" virou documento_cpf).
-    lines << 'Ao receber um dado VÁLIDO, acuse-o na MESMA mensagem em que pede o próximo dado — NUNCA ' \
-             'faça uma pergunta separada só para confirmar. Ex.: "Recebi o CPF 123.456.789-00. Agora, ' \
-             'qual o seu e-mail?". Se o cliente corrigir depois, atualize o valor e siga.'
+    # A regra de CORREÇÃO fica SÓ na REGRA acima (uma instrução, no lugar certo). Duas — uma aqui, grudada no
+    # fluxo do slot atual, outra na REGRA — foi o que confundiu o modelo; por isso a frase de correção saiu daqui.
+    lines << 'Ao receber um dado VÁLIDO, acuse-o na MESMA mensagem em que pede o próximo dado — NUNCA faça uma pergunta ' \
+             'separada só para confirmar. Ex.: "Recebi o CPF 123.456.789-00. Agora, qual o seu e-mail?".'
     # Exceção (sanity-check preservado): SÓ valor que não valida / truncado / malformado ganha a
     # confirmação ISOLADA, uma única vez.
     lines << 'EXCEÇÃO — apenas quando o valor parecer incompleto/estranho/malformado para o dado pedido: ' \

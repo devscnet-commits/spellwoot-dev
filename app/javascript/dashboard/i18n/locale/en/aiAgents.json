@@ -419,6 +419,15 @@
     "SAVED": "Salvo.",
     "DELETED": "Departamento excluído.",
     "ERROR": "Algo deu errado ao salvar.",
+    "CONFLICT": {
+      "DETECTED": "As etapas mudaram no servidor desde que você abriu esta tela. Suas alterações estão preservadas — clique em Recarregar e reaplicar para juntar as duas versões.",
+      "REAPPLIED": "Juntamos sua versão com a do servidor. Revise as etapas e salve.",
+      "AMBIGUOUS": "As etapas foram reordenadas ou alguma foi adicionada/removida no servidor — não é seguro reaplicar automaticamente. Copie suas alterações, recarregue e reaplique à mão.",
+      "REAPPLY_ACTION": "Recarregar e reaplicar",
+      "COPY_ACTION": "Copiar minhas alterações",
+      "RELOAD_ACTION": "Recarregar (descartar minhas alterações)",
+      "COPIED": "Alterações copiadas para a área de transferência."
+    },
     "TOOLS_LINK": "Ferramentas",
     "KNOWLEDGE_LINK": "Conhecimento",
     "DETAIL_TABS": {
