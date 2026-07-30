@@ -44,15 +44,14 @@ RSpec.describe 'Roteamento de handoff — matriz (bateria)' do # rubocop:disable
   end
 
   # ---------------------------------------------------------------------------------------------------
-  describe 'H2 — whitelist VAZIA abre para qualquer time da conta (contradiz a regra do fallback)' do
-    it 'whitelist vazia + target "Pos Venda" (existe na conta, NÃO na whitelist) -> CASA e roteia para ele' do
+  describe 'H2 — whitelist VAZIA NÃO abre para qualquer time da conta (CONSERTADO)' do
+    it 'whitelist vazia + target "Pos Venda" (existe na conta, fora da whitelist) -> NÃO casa; cai no configured (nil)' do
       agent.update!(team_id: nil, handoff_team_ids: [])
-      t_posvenda # garante o time na conta
+      t_posvenda # existe na conta, mas NÃO marcado
       result = coordinator.human_team_id({ 'handoff_target' => 'Pos Venda' })
-      # REAL: casa um time NÃO declarado (match_team_by_name varre TODOS quando ids vazio).
-      expect(result).to eq(t_posvenda.id)
-      # INCONSISTENTE: a regra do fallback diz "whitelist vazia = config ausente, NÃO permissão ampla".
-      # Aqui o MESMO estado (whitelist vazia) vira permissão ampla. Duas regras opostas para o mesmo estado.
+      # H2 CONSERTADO: whitelist vazia = configuração ausente, não casa nada (alinha com a regra do fallback).
+      # PROVA DE MUTAÇÃO: FALHA se a whitelist vazia voltar a varrer a conta e casar um time NÃO declarado.
+      expect(result).to be_nil
     end
   end
 
@@ -160,13 +159,22 @@ RSpec.describe 'Roteamento de handoff — matriz (bateria)' do # rubocop:disable
       expect(coordinator.human_team_id({ 'handoff_target' => 'Suporte' })).to eq(t_suporte.id)
     end
 
-    it 'cliente pediu (target NÃO casado, whitelist não-vazia) -> configured + target_unmatched, NÃO usa o fallback (H8)' do
+    it 'cliente pediu (target NÃO casado) + fallback declarado -> usa o FALLBACK (H8), mantendo target_unmatched' do
       agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_suporte.id], fallback_handoff_team_id: t_suporte.id)
       result = nil
       expect { result = coordinator.human_team_id({ 'handoff_target' => 'Jurídico' }) }
+        .to change { ev('handoff.target_unmatched').count }.by(1) # telemetria PRESERVADA
+      # H8: intenção-falha (setor inexistente) vai para o FALLBACK (suporte), NÃO o 1º da lista (comercial).
+      # PROVA DE MUTAÇÃO: falha se voltar a cair no configured (o acidente de ordenação).
+      expect(result).to eq(t_suporte.id)
+    end
+
+    it 'cliente pediu (target NÃO casado) SEM fallback -> configured (1º) + target_unmatched (H8 "senão configured")' do
+      agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_suporte.id])
+      result = nil
+      expect { result = coordinator.human_team_id({ 'handoff_target' => 'Jurídico' }) }
         .to change { ev('handoff.target_unmatched').count }.by(1)
-      # REAL: cai no configured (comercial, 1º), NÃO no fallback (suporte). H8: está certo? (ver argumento)
-      expect(result).to eq(t_comercial.id)
+      expect(result).to eq(t_comercial.id) # sem fallback declarado: cai no 1º da whitelist
     end
 
     it 'funil concluiu (on_complete team_id na whitelist) -> aquele time' do
