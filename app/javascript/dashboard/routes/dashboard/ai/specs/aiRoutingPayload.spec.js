@@ -29,37 +29,21 @@ describe('agentForm — team_id ausente do form e do payload', () => {
   });
 });
 
-// (2) priority da caixa: presente quando ATENDE, AUSENTE quando "Não atende".
-describe('buildInboxBindings — priority por linha', () => {
-  it('inclui priority na linha que atende (mode live)', () => {
+// (2) buildInboxBindings manda SÓ mode. priority saiu da tela do agente (é decisão da caixa) — NÃO vai no
+// payload por-agente, e o backend PRESERVA a priority no sync (não zera). Prova de mutação por nome.
+describe('buildInboxBindings — só mode (priority não é da tela do agente)', () => {
+  it('emite só { inbox_id, mode } — sem priority, mesmo em linha que atende', () => {
     const [b] = buildInboxBindings([
       { inbox_id: 1, mode: 'live', priority: 3 },
     ]);
-    expect(b).toEqual({ inbox_id: 1, mode: 'live', priority: 3 });
+    expect(b).toEqual({ inbox_id: 1, mode: 'live' });
+    expect('priority' in b).toBe(false);
   });
 
-  it('OMITE a chave priority quando a linha está em "Não atende" (mode none)', () => {
+  it('não emite priority nem em "Não atende"', () => {
     const [b] = buildInboxBindings([
       { inbox_id: 2, mode: 'none', priority: 9 },
     ]);
-    expect('priority' in b).toBe(false);
     expect(b).toEqual({ inbox_id: 2, mode: 'none' });
-  });
-
-  it('round-trip: o priority devolvido pelo show sobrevive de volta ao payload', () => {
-    // shape do show: { inbox_id, name, mode, priority }
-    const fromServer = [
-      { inbox_id: 5, name: 'Suporte', mode: 'live', priority: 2 },
-    ];
-    const [b] = buildInboxBindings(fromServer);
-    expect(b.priority).toBe(2);
-  });
-
-  it('priority é o valor EDITADO (campo simples, sem auto-sequência): o que está no objeto vai no payload', () => {
-    // guarda de regressão da reversão: buildInboxBindings NÃO deriva/sequencia priority — só reflete o campo.
-    const [b] = buildInboxBindings([
-      { inbox_id: 7, mode: 'live', priority: 4 },
-    ]);
-    expect(b.priority).toBe(4);
   });
 });

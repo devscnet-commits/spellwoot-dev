@@ -9,17 +9,17 @@ class Api::V1::Accounts::AiAgentInboxesController < Api::V1::Accounts::BaseContr
     render json: inboxes.map { |inbox|
       binding = bindings[inbox.id]
       { 'inbox_id' => inbox.id, 'name' => inbox.name, 'channel_type' => inbox.channel_type,
-        'mode' => binding&.active ? binding.mode : 'none',
-        # priority sempre presente (default 1 quando não há binding): a eleição usa [priority ASC, id ASC];
-        # sem devolver o valor ele nunca é editável e a eleição cai no desempate por id.
-        'priority' => binding&.priority || 1 }
+        'mode' => binding&.active ? binding.mode : 'none' }
     }
   end
 
-  # Body: { bindings: [{ inbox_id:, mode: 'live'|'shadow'|'none', priority: 1 }, ...] } — replaces the set.
+  # Body: { bindings: [{ inbox_id:, mode: 'live'|'shadow'|'none' }, ...] } — replaces the set.
+  # priority NÃO é responsabilidade desta tela (é decisão POR CAIXA entre agentes — ver
+  # AiInboxAgentPrioritiesController). sync_binding PRESERVA a priority existente para não zerar o que a
+  # tela da caixa gravou.
   def update
     Array(params[:bindings]).each do |raw|
-      sync_binding(raw[:inbox_id].to_i, raw[:mode].to_s, raw[:priority])
+      sync_binding(raw[:inbox_id].to_i, raw[:mode].to_s)
     end
     head :ok
   end
@@ -31,19 +31,18 @@ class Api::V1::Accounts::AiAgentInboxesController < Api::V1::Accounts::BaseContr
     render(json: { error: 'agente não encontrado' }, status: :not_found) if @agent.nil?
   end
 
-  def sync_binding(inbox_id, mode, priority = nil)
+  def sync_binding(inbox_id, mode)
     return unless Current.account.inboxes.exists?(id: inbox_id)
 
     binding = @agent.agent_inboxes.find_or_initialize_by(inbox_id: inbox_id)
     if ::Ai::AgentInbox::MODES.include?(mode)
-      binding.update!(mode: mode, active: true, priority: sanitize_priority(priority))
+      # NÃO toca priority: binding existente mantém o valor gravado pela tela da caixa; binding novo herda
+      # o default 1 da coluna (NOT NULL default 1).
+      binding.mode = mode
+      binding.active = true
+      binding.save!
     else
       binding.destroy! if binding.persisted?
     end
-  end
-
-  # priority é inteiro >= 1 (default 1). Blank/lixo/menor que 1 cai no default — a coluna é NOT NULL default 1.
-  def sanitize_priority(priority)
-    [priority.to_i, 1].max
   end
 end

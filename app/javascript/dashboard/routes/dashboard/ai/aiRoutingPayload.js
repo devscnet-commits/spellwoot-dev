@@ -36,10 +36,7 @@ export const buildAgentPayload = form => ({
   name: form.name || form.assistant_name,
 });
 
-// caixas -> bindings do PUT: a chave priority só existe quando a linha atende (mode != none).
+// caixas -> bindings do PUT (só mode). priority NÃO vai por aqui: é decisão POR CAIXA entre agentes,
+// editada na tela da caixa (BotConfiguration). O backend PRESERVA a priority no sync (não zera).
 export const buildInboxBindings = inboxes =>
-  inboxes.map(i => {
-    const binding = { inbox_id: i.inbox_id, mode: i.mode };
-    if (i.mode !== 'none') binding.priority = i.priority;
-    return binding;
-  });
+  inboxes.map(i => ({ inbox_id: i.inbox_id, mode: i.mode }));
