@@ -109,13 +109,16 @@ class Ai::HandoffCoordinator
   # (a UI é select), VALIDADO contra a whitelist (handoff_team_ids) — defesa em profundidade na LEITURA: um
   # id fora da whitelist (time removido da lista depois de configurado) NÃO roteia para o não-listado; emite
   # conclusion.team_unlisted e cai no configured_handoff_team_id. Fallback de LEITURA p/ config ANTIGA por
-  # nome (info['team']) via match_team_by_name (já restrito à whitelist). Whitelist vazia => aceita o id
-  # declarado (o autor escolheu; assign_human degrada seguro se o id for inválido). nil => alerta "sem time".
+  # nome (info['team']) via match_team_by_name (já restrito à whitelist). Whitelist VAZIA = configuração
+  # ausente, NÃO permissão ampla: NÃO honra o id declarado (alinha com o fallback H4 e o match_team_by_name
+  # H2/#331 — uma regra só para o mesmo estado). Cai em team_unlisted -> configured (nil na vazia). A escrita
+  # já rejeita o on_complete fora da whitelist (Ai::Playbook#on_complete_teams_in_whitelist); isto é a rede
+  # de LEITURA para config antiga/out-of-band. nil => alerta "sem time".
   def conclusion_team_id(info)
     ids = Array(@agent.handoff_team_ids).map(&:to_i)
     team_id = info['team_id']
     if team_id.present?
-      return team_id.to_i if ids.blank? || ids.include?(team_id.to_i)
+      return team_id.to_i if ids.include?(team_id.to_i)
 
       emit('conclusion.team_unlisted', { team_id: team_id, whitelist: ids })
       return configured_handoff_team_id

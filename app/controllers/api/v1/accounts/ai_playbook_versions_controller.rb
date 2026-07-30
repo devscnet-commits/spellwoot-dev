@@ -19,6 +19,10 @@ class Api::V1::Accounts::AiPlaybookVersionsController < Api::V1::Accounts::BaseC
     # sempre grava (não deduplica): torna o restore REVERSÍVEL.
     ::Ai::Version.snapshot!(playbook, snapshot_fields: ::Ai::Playbook::SNAPSHOT_FIELDS,
                                       note: 'Estado antes da restauração')
+    # Restore é ROLLBACK, não escrita nova: isenta a validação H6 (on_complete na whitelist). Um estado JÁ
+    # persistido não deve ser barrado pela whitelist de HOJE — senão o usuário não volta atrás porque a
+    # config mudou depois. O flag vai no objeto que o restore! atualiza (version.versionable).
+    version.versionable.restoring = true if version.versionable.respond_to?(:restoring=)
     version.restore!(::Ai::Playbook::SNAPSHOT_FIELDS)
     ::Ai::Version.snapshot!(playbook, snapshot_fields: ::Ai::Playbook::SNAPSHOT_FIELDS,
                                       note: "Restaurado da v#{version.version_number}")
