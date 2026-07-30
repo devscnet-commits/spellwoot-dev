@@ -332,11 +332,7 @@ const {
   capture: captureInboxes,
   reset: resetInboxes,
 } = useFormDirty(() =>
-  inboxes.value.map(i => ({
-    inbox_id: i.inbox_id,
-    mode: i.mode,
-    priority: i.priority,
-  }))
+  inboxes.value.map(i => ({ inbox_id: i.inbox_id, mode: i.mode }))
 );
 const fetchInboxes = async () => {
   if (isNew.value) return;
@@ -674,66 +670,42 @@ onMounted(async () => {
                 class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
               />
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <!-- Card em DUAS linhas: linha 1 (nome + toggle) é IDÊNTICA em toda caixa -> nome com a
-                     largura inteira, colunas do grid alinham. Linha 2 (prioridade) só existe em "Atende",
-                     abaixo, sem disputar espaço horizontal com o nome. -->
+                <!-- Linha única: nome + toggle. A PRIORIDADE (qual IA responde quando mais de uma atende a
+                     MESMA caixa) NÃO vive aqui — é decisão da caixa, editada em Configurações → Caixa →
+                     Atendimento por IA, onde os agentes concorrentes aparecem lado a lado. -->
                 <div
                   v-for="inbox in filteredInboxes"
                   :key="inbox.inbox_id"
-                  class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex flex-col gap-2"
+                  class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex items-center justify-between gap-3"
                 >
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span
-                        class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
-                      >
-                        <span class="i-lucide-inbox size-4 text-n-slate-11" />
-                      </span>
-                      <span
-                        class="text-sm font-medium text-n-slate-12 truncate"
-                      >
-                        {{ inbox.name }}
-                      </span>
-                    </div>
-                    <div
-                      class="shrink-0 grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
-                    >
-                      <button
-                        v-for="m in INBOX_MODES"
-                        :key="m.value"
-                        type="button"
-                        class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-                        :class="
-                          inbox.mode === m.value
-                            ? m.active
-                            : 'text-n-slate-11 hover:text-n-slate-12'
-                        "
-                        @click="inbox.mode = m.value"
-                      >
-                        {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
-                      </button>
-                    </div>
-                  </div>
-                  <!-- Prioridade (2ª linha, só em "Atende"): campo simples, default 1, editável. Menor número
-                       responde quando MAIS DE UMA IA atende a MESMA caixa (comparação por-caixa entre agentes;
-                       ver BotConfiguration na tela da caixa). Não sequencia entre as caixas de um agente. -->
-                  <label
-                    v-if="inbox.mode === 'live'"
-                    class="flex items-center gap-1.5 text-xs text-n-slate-11 pt-1.5 border-t border-n-weak"
-                    :title="$t('AI_AGENTS.INBOXES.PRIORITY_TOOLTIP')"
-                  >
-                    {{ $t('AI_AGENTS.INBOXES.PRIORITY_LABEL') }}
-                    <input
-                      v-model.number="inbox.priority"
-                      type="number"
-                      min="1"
-                      data-testid="inbox-priority"
-                      class="w-14 px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-                    />
+                  <div class="flex items-center gap-2 min-w-0">
                     <span
-                      class="i-lucide-help-circle size-3.5 text-n-slate-10 shrink-0"
-                    />
-                  </label>
+                      class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
+                    >
+                      <span class="i-lucide-inbox size-4 text-n-slate-11" />
+                    </span>
+                    <span class="text-sm font-medium text-n-slate-12 truncate">
+                      {{ inbox.name }}
+                    </span>
+                  </div>
+                  <div
+                    class="shrink-0 grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
+                  >
+                    <button
+                      v-for="m in INBOX_MODES"
+                      :key="m.value"
+                      type="button"
+                      class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+                      :class="
+                        inbox.mode === m.value
+                          ? m.active
+                          : 'text-n-slate-11 hover:text-n-slate-12'
+                      "
+                      @click="inbox.mode = m.value"
+                    >
+                      {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="flex justify-end">

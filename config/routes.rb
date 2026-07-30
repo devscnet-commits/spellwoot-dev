@@ -277,6 +277,10 @@ Rails.application.routes.draw do
           end
           resources :provider_instances, only: [:index]
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do
+            # Prioridade das IAs NESTA caixa (por-caixa, entre agentes): a decisão de qual IA responde é
+            # da caixa. show lista os agentes atendentes + priority; update grava o priority de cada um.
+            resource :ai_agent_priorities, only: %i[show update],
+                                           controller: 'ai_inbox_agent_priorities'
             get :assignable_agents, on: :member
             get :campaigns, on: :member
             get :agent_bot, on: :member

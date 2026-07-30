@@ -1,9 +1,9 @@
 require 'rails_helper'
 
-# Contrato do priority na aba "Atendimentos e transferências": a eleição de IA por caixa usa
-# [priority ASC, id ASC] (fix/ai-agent-election). Antes deste PR o sync gravava só mode+active e o show
-# devolvia só mode, então o priority ficava preso no default 1 para sempre. Aqui provamos o round-trip
-# (grava e devolve), o default quando ausente, e que "Não atende" destrói o binding. Mutação por nome.
+# A aba "Atendimentos e transferências" (tela do AGENTE) cuida SÓ do mode (atende/não atende). A priority
+# de eleição é decisão POR CAIXA entre agentes -> vive na tela da caixa (AiInboxAgentPriorities). Aqui o
+# contrato é: o sync grava mode e PRESERVA a priority existente (não zera o que a tela da caixa gravou);
+# binding novo herda o default 1 da coluna; "não atende" destrói o binding. Mutação por nome.
 RSpec.describe 'AI Agent Inboxes API', type: :request do
   let(:account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
@@ -28,45 +28,48 @@ RSpec.describe 'AI Agent Inboxes API', type: :request do
     response.parsed_body.find { |r| r['inbox_id'] == inbox_id }
   end
 
-  describe 'PUT round-trip do priority' do
-    it 'grava o priority no binding e o show o devolve' do
-      sync([{ inbox_id: inbox.id, mode: 'live', priority: 3 }])
+  describe 'sync do mode' do
+    it 'grava o mode e o show o devolve (sem a chave priority nesta tela)' do
+      sync([{ inbox_id: inbox.id, mode: 'live' }])
       expect(response).to have_http_status(:ok)
-      expect(agent.agent_inboxes.find_by(inbox_id: inbox.id).priority).to eq(3)
+      expect(agent.agent_inboxes.find_by(inbox_id: inbox.id).mode).to eq('live')
 
       show
-      expect(row_for(inbox.id)['priority']).to eq(3)
+      aggregate_failures do
+        expect(row_for(inbox.id)['mode']).to eq('live')
+        expect(row_for(inbox.id)).not_to have_key('priority')
+      end
     end
 
-    it 'atualiza o priority de um binding já existente' do
-      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true, priority: 1)
-      sync([{ inbox_id: inbox.id, mode: 'live', priority: 5 }])
-      expect(agent.agent_inboxes.find_by(inbox_id: inbox.id).reload.priority).to eq(5)
-    end
-  end
-
-  describe 'default do priority' do
-    it 'grava 1 quando o priority vem ausente' do
+    it 'binding NOVO herda o default 1 da coluna (sem priority no payload)' do
       sync([{ inbox_id: inbox.id, mode: 'live' }])
       expect(agent.agent_inboxes.find_by(inbox_id: inbox.id).priority).to eq(1)
     end
+  end
 
-    it 'cai no default 1 quando o priority é lixo ou menor que 1' do
-      sync([{ inbox_id: inbox.id, mode: 'live', priority: 0 }])
-      expect(agent.agent_inboxes.find_by(inbox_id: inbox.id).priority).to eq(1)
+  describe 'PRESERVA a priority (gravada pela tela da caixa)' do
+    it 'trocar o mode NÃO zera a priority existente' do
+      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true, priority: 5)
+      # a tela do agente re-sincroniza o mesmo mode; a priority 5 (da tela da caixa) tem de sobreviver
+      sync([{ inbox_id: inbox.id, mode: 'live' }])
+      expect(agent.agent_inboxes.find_by(inbox_id: inbox.id).reload.priority).to eq(5)
     end
 
-    it 'show devolve priority 1 para caixa sem binding (Não atende)' do
-      inbox # cria a caixa antes do show (let lazy); sem binding => mode none, priority default
-      show
-      expect(row_for(inbox.id)).to include('mode' => 'none', 'priority' => 1)
+    it 'mudar live -> shadow preserva a priority' do
+      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true, priority: 4)
+      sync([{ inbox_id: inbox.id, mode: 'shadow' }])
+      binding = agent.agent_inboxes.find_by(inbox_id: inbox.id).reload
+      aggregate_failures do
+        expect(binding.mode).to eq('shadow')
+        expect(binding.priority).to eq(4)
+      end
     end
   end
 
   describe 'mode none' do
-    it 'destrói o binding (o priority some junto)' do
+    it 'destrói o binding' do
       Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true, priority: 4)
-      sync([{ inbox_id: inbox.id, mode: 'none', priority: 4 }])
+      sync([{ inbox_id: inbox.id, mode: 'none' }])
       expect(agent.agent_inboxes.find_by(inbox_id: inbox.id)).to be_nil
     end
   end
