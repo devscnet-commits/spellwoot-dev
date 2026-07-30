@@ -43,26 +43,3 @@ export const buildInboxBindings = inboxes =>
     if (i.mode !== 'none') binding.priority = i.priority;
     return binding;
   });
-
-// Prioridade AUTOMÁTICA por ordem de marcação. Ao marcar uma caixa como "Atende", ela recebe o próximo
-// número da sequência: max das JÁ em Atende + 1 (a 1ª vira 1, a 2ª 2...). Puro: exclui a própria caixa.
-export const nextLivePriority = (inboxes, target) =>
-  Math.max(
-    0,
-    ...inboxes
-      .filter(i => i !== target && i.mode === 'live')
-      .map(i => Number(i.priority) || 0)
-  ) + 1;
-
-// Ao DESMARCAR, renumera as caixas em "Atende" 1..N pela ordem de prioridade atual — fecha o buraco e
-// preserva a ordem relativa (buraco não significa nada; a eleição usa a ordem). Sort estável => o desempate
-// entre prioridades iguais segue a ordem na lista. Muta os objetos in-place (mesmas refs do inboxes.value).
-export const resequenceLivePriorities = inboxes => {
-  inboxes
-    .filter(i => i.mode === 'live')
-    .sort((a, b) => (Number(a.priority) || 0) - (Number(b.priority) || 0))
-    .forEach((inbox, i) => {
-      inbox.priority = i + 1;
-    });
-  return inboxes;
-};

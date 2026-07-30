@@ -19,8 +19,6 @@ import {
   defaultAgentForm,
   buildAgentPayload,
   buildInboxBindings,
-  nextLivePriority,
-  resequenceLivePriorities,
 } from './aiRoutingPayload';
 
 const route = useRoute();
@@ -345,16 +343,6 @@ const fetchInboxes = async () => {
   const { data } = await axios.get(inboxesUrl());
   inboxes.value = Array.isArray(data) ? data : [];
   captureInboxes();
-};
-// Troca de modo da caixa com prioridade AUTOMÁTICA: marcar "Atende" atribui o próximo número da sequência;
-// desmarcar renumera as demais 1..N (fecha o buraco). O input da 2ª linha continua editável (reordenar na
-// mão). A prioridade só é enviada ao backend na linha que atende (buildInboxBindings).
-const setMode = (inbox, mode) => {
-  if (inbox.mode === mode) return;
-  const wasLive = inbox.mode === 'live';
-  inbox.mode = mode;
-  if (mode === 'live') inbox.priority = nextLivePriority(inboxes.value, inbox);
-  else if (wasLive) resequenceLivePriorities(inboxes.value);
 };
 const inboxSearch = ref('');
 const filteredInboxes = computed(() => {
@@ -720,14 +708,15 @@ onMounted(async () => {
                             ? m.active
                             : 'text-n-slate-11 hover:text-n-slate-12'
                         "
-                        @click="setMode(inbox, m.value)"
+                        @click="inbox.mode = m.value"
                       >
                         {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
                       </button>
                     </div>
                   </div>
-                  <!-- Prioridade (2ª linha, só em "Atende"): valor inicial vem da ordem de marcação; editável.
-                       Menor número responde; as demais IAs ficam disponíveis para receber transferências. -->
+                  <!-- Prioridade (2ª linha, só em "Atende"): campo simples, default 1, editável. Menor número
+                       responde quando MAIS DE UMA IA atende a MESMA caixa (comparação por-caixa entre agentes;
+                       ver BotConfiguration na tela da caixa). Não sequencia entre as caixas de um agente. -->
                   <label
                     v-if="inbox.mode === 'live'"
                     class="flex items-center gap-1.5 text-xs text-n-slate-11 pt-1.5 border-t border-n-weak"
