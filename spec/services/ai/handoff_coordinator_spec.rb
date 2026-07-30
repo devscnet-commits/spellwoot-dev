@@ -142,13 +142,13 @@ RSpec.describe Ai::HandoffCoordinator do
     it 'NÃO emite handoff.target_unmatched quando o target CASA (comercial midia paga)' do
       agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
       expect { coordinator.human_team_id({ 'handoff_target' => 'comercial midia paga' }) }
-        .not_to change { Ai::Event.where(event_type: 'handoff.target_unmatched').count }
+        .not_to(change { Ai::Event.where(event_type: 'handoff.target_unmatched').count })
     end
 
     it 'NÃO emite handoff.target_unmatched no loop (decision sem handoff_target)' do
       agent.update!(team_id: nil, handoff_team_ids: [t_comercial.id, t_midia.id])
       expect { coordinator.human_team_id({}) }
-        .not_to change { Ai::Event.where(event_type: 'handoff.target_unmatched').count }
+        .not_to(change { Ai::Event.where(event_type: 'handoff.target_unmatched').count })
     end
 
     it 'sem team_id, sem allowlist e sem match -> nil' do
@@ -357,7 +357,7 @@ RSpec.describe Ai::HandoffCoordinator do
 
     it 'fallback que caiu fora da whitelist (esvaziada depois) NÃO é honrado: emite handoff.fallback_unlisted e cai no configured' do
       # simula "whitelist mudou depois": grava o id sem passar pela validação
-      agent.update_column(:fallback_handoff_team_id, t_outside.id)
+      agent.update_column(:fallback_handoff_team_id, t_outside.id) # rubocop:disable Rails/SkipsModelValidations
       result = nil
       expect { result = coordinator.human_team_id({}) }
         .to change { Ai::Event.where(event_type: 'handoff.fallback_unlisted').count }.by(1)
@@ -369,21 +369,24 @@ RSpec.describe Ai::HandoffCoordinator do
     end
 
     it 'fallback declarado + whitelist VAZIA: NÃO usa o fallback (config ausente ≠ autorização), cai no comportamento atual' do
-      agent.update_columns(handoff_team_ids: [], fallback_handoff_team_id: t_fallback.id)
+      agent.update_columns(handoff_team_ids: [], fallback_handoff_team_id: t_fallback.id) # rubocop:disable Rails/SkipsModelValidations
       result = nil
       expect { result = coordinator.human_team_id({}) }
-        .not_to change { Ai::Event.where(event_type: 'handoff.fallback_unlisted').count } # não é "unlisted", é config ausente
+        .not_to(change { Ai::Event.where(event_type: 'handoff.fallback_unlisted').count }) # não é "unlisted", é config ausente
       aggregate_failures do
         expect(result).to be_nil                 # configured_handoff_team_id com whitelist vazia = nil (comportamento atual)
         expect(result).not_to eq(t_fallback.id)  # o fallback NÃO foi honrado
       end
     end
 
-    it 'um setor PEDIDO mas fora da whitelist (target presente) NÃO usa o fallback: segue medido por target_unmatched' do
+    it 'um setor PEDIDO mas fora da whitelist (intenção-falha) USA o fallback (H8), mantendo target_unmatched' do
       agent.update!(fallback_handoff_team_id: t_fallback.id)
-      # target presente (cliente pediu) e não casa -> é INTENÇÃO, não give-up: mantém target_unmatched, não fallback
-      expect { coordinator.human_team_id({ 'handoff_target' => 'Jurídico' }) }
+      # H8 (matriz): o modelo nomeou um setor inexistente = falha de roteamento, não destino válido. Vai para
+      # o fallback (não o 1º da whitelist, o acidente de ordenação), e a telemetria target_unmatched é mantida.
+      result = nil
+      expect { result = coordinator.human_team_id({ 'handoff_target' => 'Jurídico' }) }
         .to change { Ai::Event.where(event_type: 'handoff.target_unmatched').count }.by(1)
+      expect(result).to eq(t_fallback.id)
     end
   end
 end

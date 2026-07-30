@@ -72,20 +72,14 @@ class Ai::HandoffCoordinator
     matched = match_team_by_name(target)
     return matched if matched
 
-    # (3) A IA DESISTIU sem destino declarado (target VAZIO = give-up: loop/stuck/credit/provider/confiança
-    # baixa; o breaker herda pelo force_provider_handoff). Antes caía no 1º da whitelist por acidente de
-    # ordenação. Agora usa o default DECLARADO no agente (fallback_handoff_team_id, validado). Só quando o
-    # target é vazio: um setor pedido-mas-não-casado (target presente) segue MEDIDO por target_unmatched,
-    # que é roteamento por INTENÇÃO, não give-up.
-    if target.blank?
-      fb = fallback_team_id
-      return fb if fb
-    end
-
-    # Fallback silencioso agora MEDIDO: o modelo pediu um setor (target presente) que NÃO casou nenhum
-    # time da whitelist, e a conversa cai no 1º configurado. Sem este evento não dava para saber se a
-    # escolha por intenção estava funcionando (destino errado sem sinal). Só MEDE — não muda o fluxo.
-    chosen = configured_handoff_team_id
+    # (3)+(H8) Nenhum destino DECLARADO resolveu: give-up (target VAZIO — loop/stuck/credit/provider/confiança
+    # baixa; o breaker herda por force_provider_handoff) OU intenção-FALHA (o modelo nomeou um setor que NÃO
+    # existe na whitelist). Os dois são "a IA não conseguiu rotear" — usa o default DECLARADO no agente
+    # (fallback_handoff_team_id, validado); senão o configured (1º da whitelist). Antes só o give-up usava o
+    # fallback e a intenção-falha caía no 1º por acidente de ordenação — o mesmo acidente que o fallback mata
+    # (matriz H8). A telemetria target_unmatched é PRESERVADA (agora com o destino escolhido, seja fallback
+    # ou configured).
+    chosen = fallback_team_id || configured_handoff_team_id
     emit('handoff.target_unmatched', { handoff_target: target, chosen_team_id: chosen }) if target.present?
     chosen
   end
@@ -141,9 +135,16 @@ class Ai::HandoffCoordinator
     return nil if key.blank?
 
     ids = Array(@agent.handoff_team_ids)
-    scope = ::Team.where(account_id: @account.id)
-    scope = scope.where(id: ids) if ids.present?
-    scope.find { |team| normalize(team.name) == key }&.id
+    # (H2) Whitelist VAZIA = configuração AUSENTE, NÃO permissão ampla. Antes, ids vazio PULAVA o filtro e
+    # varria a conta INTEIRA — um cliente que não marcou nenhum time via a IA transferir para financeiro/
+    # jurídico (regra OPOSTA à do fallback para o MESMO estado). Agora alinha com o fallback: vazia => não
+    # casa nada (cai no configured, que também é nil), com aviso.
+    if ids.blank?
+      Rails.logger.warn "[Ai::HandoffCoordinator] match por nome #{name.inspect} com handoff_team_ids VAZIO — " \
+                        'whitelist ausente NÃO casa nenhum time (configuração ausente não é permissão ampla).'
+      return nil
+    end
+    ::Team.where(account_id: @account.id, id: ids).find { |team| normalize(team.name) == key }&.id
   rescue StandardError => e
     Rails.logger.error "[Ai::HandoffCoordinator#match_team_by_name] #{e.class}: #{e.message}"
     nil
