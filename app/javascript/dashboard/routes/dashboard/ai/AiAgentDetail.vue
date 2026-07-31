@@ -846,7 +846,7 @@ onMounted(async () => {
                 <div class="flex justify-end -mb-1">
                   <button
                     type="button"
-                    class="i-lucide-help-circle size-4 text-n-slate-10 hover:text-n-brand"
+                    class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
                     :title="$t('AI_AGENTS.PROMPT_ASSISTANT.OPEN')"
                     @click="promptAssistantOpen = true"
                   />
