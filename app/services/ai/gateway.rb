@@ -133,7 +133,8 @@ class Ai::Gateway
     # dois modos (na dúvida, NÃO pula). Ver Ai::TrivialTurnGate.
     if trivial_gate_on?
       gate = Ai::TrivialTurnGate.skip?(text: effective_content, conversation: @conversation,
-                                       step: active_step || state_manager.current_step(department))
+                                       step: active_step || state_manager.current_step(department),
+                                       conclude_ready: state_manager.conclude_ready_for_current?(department))
       if gate[:skip]
         run_record.update!(run_type: 'trivial_skip', tokens_in: 0, tokens_out: 0, cost: 0)
         emit(run_record, 'turn.trivial_skipped', { reason: gate[:reason] })

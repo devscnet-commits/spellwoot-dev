@@ -2477,4 +2477,36 @@ RSpec.describe Ai::StateManager do
       expect(manager.send(:conclude_ready?, steps, 0, steps[0])).to be(false)
     end
   end
+
+  # Wrapper público usado pela 3ª guarda do TrivialTurnGate: resolve a etapa corrente (ai_step_index) e
+  # delega ao conclude_ready?. on_complete 'close' (sem team_id) p/ não acionar a validação H6 no save.
+  describe '#conclude_ready_for_current? (wrapper do TrivialTurnGate)' do
+    let(:dept) do
+      d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'W', status: 'active', behavior: {})
+      d.create_playbook!(active: true, steps: [
+                           { 'name' => 'Nome', 'collect' => { 'attribute' => 'nome', 'required' => true } }, # 0
+                           { 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }                     # 1 terminal
+                         ])
+      d
+    end
+
+    def at_index(index, facts)
+      conversation.update!(additional_attributes: { 'ai_step_index' => index, 'ai_collected_facts' => facts })
+    end
+
+    it 'na etapa terminal (índice 1) + obrigatório preenchido -> true' do
+      at_index(1, { 'nome' => 'João' })
+      expect(manager.conclude_ready_for_current?(dept)).to be(true)
+    end
+
+    it 'na etapa terminal mas obrigatório anterior VAZIO -> false' do
+      at_index(1, {})
+      expect(manager.conclude_ready_for_current?(dept)).to be(false)
+    end
+
+    it 'fora da etapa terminal (índice 0, ainda tem slot) -> false' do
+      at_index(0, { 'nome' => 'João' })
+      expect(manager.conclude_ready_for_current?(dept)).to be(false)
+    end
+  end
 end

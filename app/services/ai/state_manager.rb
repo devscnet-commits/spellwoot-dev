@@ -273,6 +273,18 @@ class Ai::StateManager
     steps[current_step_index(steps.size - 1) + 1]
   end
 
+  # 3ª guarda do TrivialTurnGate: a etapa CORRENTE está pronta para CONCLUIR (terminal com on_complete +
+  # obrigatórios preenchidos)? Em etapa terminal pronta, um "ok" é o ACEITE da transição — o turno que
+  # DISPARA a conclusão determinística — não ruído; o gate não pode engoli-lo (senão a conversa fica parada
+  # sem transferir). Reusa conclude_ready? (a MESMA verdade que o resolve_completion usa para o (b)-core).
+  def conclude_ready_for_current?(department)
+    steps = Array(department&.playbook&.steps)
+    return false if steps.empty?
+
+    index = current_step_index(steps.size - 1)
+    conclude_ready?(steps, index, steps[index])
+  end
+
   # (Camada 3) Roda o worker de julgamento UMA vez por turno — serve p/ (a) a intenção (asks_about/query,
   # decide a busca) e (b) a captura (reusado no track_step via judge_result). nil quando o worker está
   # DESLIGADO (default) ou sem texto -> Gateway mantém o RAG de hoje (comportamento inalterado).

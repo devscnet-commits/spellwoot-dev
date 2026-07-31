@@ -20,10 +20,12 @@ class Ai::TrivialTurnGate
   # grafema, tratar como não-emoji → não pula).
   EMOJI_CHARS = /[\u{1F1E6}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}]/
 
-  # → { skip: true|false, reason: String }. skip:true SÓ quando TODAS as condições a–e valem.
+  # → { skip: true|false, reason: String }. skip:true SÓ quando TODAS as condições a–f valem.
   # reason distingue 'closed_list'|'emoji_only' no skip; e a 1ª condição que falhou quando NÃO pula
-  # ('not_trivial'|'first_message'|'last_incoming'|'pending_slot'|'awaiting_answer') — telemetria p/ a v2.
-  def self.skip?(text:, conversation:, step:)
+  # ('not_trivial'|'first_message'|'last_incoming'|'pending_slot'|'awaiting_answer'|'terminal_ready') — v2.
+  # conclude_ready: a etapa corrente é terminal (on_complete) e PRONTA para concluir (computado pelo
+  # StateManager#conclude_ready_for_current?). Default false — chamadas sem o kwarg preservam o comportamento.
+  def self.skip?(text:, conversation:, step:, conclude_ready: false)
     # (a) o texto é trivial? (lista fechada OU composto só de emojis)
     trivial = trivial_reason(text)
     return { skip: false, reason: 'not_trivial' } unless trivial
@@ -44,6 +46,13 @@ class Ai::TrivialTurnGate
     # etapa SEM collect (StepSlot.attribute nil), onde pending_slot não vê slot algum. (conv 412: "vou
     # finalizar seu pré-cadastro, tudo bem?" -> cliente "ok" foi descartado, ninguém falou por 3 minutos.)
     return { skip: false, reason: 'awaiting_answer' } if awaiting_answer?(conversation)
+
+    # (f) a etapa corrente é TERMINAL (on_complete) e PRONTA para concluir (obrigatórios preenchidos)? Aí
+    # "ok" é o ACEITE da transição — o turno que dispara a conclusão determinística — NUNCA pula. Sem esta
+    # guarda, (c)/(e) leem "nada esperando" (slot resolvido, last_asked nil) e engolem o aceite: a conversa
+    # fica parada sem transferir. É computado no Gateway (conclude_ready_for_current?), não aqui (o gate não
+    # tem o array de steps p/ ver os obrigatórios ATÉ o índice).
+    return { skip: false, reason: 'terminal_ready' } if conclude_ready
 
     { skip: true, reason: trivial }
   end
