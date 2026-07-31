@@ -187,4 +187,97 @@ RSpec.describe Ai::TurnCapture do
       expect(events('slot.asked_confirmation_turn')).not_to be_empty # a confirmação ainda é sinalizada
     end
   end
+
+  # Frente B — CONFIRMAÇÃO DE VALOR PROPOSTO (slot VAZIO). O turno anterior propôs um valor (ai_last_proposed_value)
+  # e pediu sim/não; o slot AINDA está vazio. Quem detecta o aceite é o JUIZ (status 'confirmed'), não uma lista
+  # de frases — na confirmação grava-se o VALOR PROPOSTO, nunca o texto "sim". Coexiste com a confirmação de
+  # slot JÁ preenchido (asked_confirmation_turn), que continua vencendo por ordem (fact_present? primeiro).
+  # Bateria no padrão da matriz — o judge_result é injetado (o Gateway o pré-roda 1x/turno e repassa ao capture).
+  describe '#capture — Frente B: confirmação de valor proposto (slot vazio)' do
+    let(:judge_profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'pj',
+                                   supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini',
+                                   worker_overrides: { 'capture_judge' => { 'mode' => 'when_silent' } })
+    end
+    let(:judge_agent) do
+      Ai::Agent.create!(account: account, name: 'BotJ', status: 'active', ai_operation_profile_id: judge_profile.id)
+    end
+    let(:period_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: judge_agent.id, name: 'Reserva', status: 'active',
+                                    behavior: {})
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Período',
+                                'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'text', 'required' => true } }
+                            ])
+      dept
+    end
+    let(:period_step) { period_department.playbook.steps.first }
+    let(:period_capture) do
+      described_class.new(conversation: conversation,
+                          persister: Ai::StateManager.new(conversation: conversation, agent: judge_agent),
+                          agent: judge_agent)
+    end
+
+    # Estado deixado pelo turno anterior: perguntou periodo_reservado E propôs `value` (par asked+proposto).
+    def propose(value)
+      conversation.update!(additional_attributes: { 'ai_last_asked_slot' => 'periodo_reservado',
+                                                    'ai_last_proposed_value' => value })
+    end
+
+    it 'proposta + confirmação (juiz confirmed) grava o VALOR PROPOSTO, não o texto "sim"' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => {} }, 'sim pode ser', nil, period_department,
+                             judge_result: { status: 'confirmed' })
+
+      expect(facts['periodo_reservado']).to eq('tarde') # o proposto — não "sim pode ser"
+      expect(events('slot.captured').last.payload).to include('attribute' => 'periodo_reservado', 'status' => 'confirmed')
+    end
+
+    it 'proposta + negativa (juiz not_an_answer) DESCARTA a proposta: slot vazio, nada gravado (repergunta)' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => {} }, 'acho que não', nil, period_department,
+                             judge_result: { status: 'not_an_answer', asks_about: 'nada' })
+
+      expect(facts).not_to have_key('periodo_reservado') # não gravou o proposto
+      expect(events('slot.captured')).to be_empty
+    end
+
+    it 'proposta + valor REAL ("prefiro manhã", juiz answered) grava o valor real, NÃO o proposto' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => {} }, 'prefiro manhã', nil, period_department,
+                             judge_result: { status: 'answered', value: 'manhã' })
+
+      expect(facts['periodo_reservado']).to eq('manhã') # o valor real vence a proposta
+      expect(facts['periodo_reservado']).not_to eq('tarde')
+    end
+
+    it 'slot JÁ preenchido + confirmação: cai em slot.asked_confirmation_turn — NÃO regride, proposta não vence o valor real' do
+      conversation.update!(additional_attributes: {
+                             'ai_collected_facts' => { 'periodo_reservado' => 'tarde' },
+                             'ai_last_asked_slot' => 'periodo_reservado',
+                             'ai_last_proposed_value' => 'manhã' # proposta presente NÃO pode sobrescrever o real
+                           })
+
+      result = period_capture.capture(period_step, { 'attributes' => {} }, 'sim', nil, period_department,
+                                      judge_result: { status: 'confirmed' })
+
+      expect(result).to be_nil
+      expect(facts['periodo_reservado']).to eq('tarde') # intacto — o ramo de confirmação de slot vazio nem roda
+      expect(events('slot.asked_confirmation_turn').last.payload).to include('attribute' => 'periodo_reservado')
+      expect(events('slot.captured')).to be_empty
+    end
+
+    it 'EVIDÊNCIA: período único proposto "tarde" + "sim pode ser" -> periodo_reservado = "tarde" (não "sim")' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => {} }, 'sim pode ser', nil, period_department,
+                             judge_result: { status: 'confirmed' })
+
+      expect(facts['periodo_reservado']).to eq('tarde')
+      expect(facts['periodo_reservado']).not_to eq('sim pode ser')
+    end
+  end
 end

@@ -24,7 +24,7 @@ RSpec.describe Ai::DecisionSchema do
     it 'todos os campos do núcleo são required' do
       expect(inner[:required]).to include(:decision, :tool_name, :tool_input_json, :handoff_reason,
                                           :handoff_target, :current_step, :step_completed, :asked_slot,
-                                          :confidence, :attributes_list)
+                                          :proposed_value, :confidence, :attributes_list)
     end
   end
 
@@ -32,6 +32,13 @@ RSpec.describe Ai::DecisionSchema do
     it 'é um campo string REQUIRED (não nullable; "" representa ausência, como tool_name/handoff_reason)' do
       expect(props[:asked_slot][:type]).to eq('string')
       expect(inner[:required]).to include(:asked_slot)
+    end
+  end
+
+  describe 'proposed_value (Frente B — confirmação de valor proposto)' do
+    it 'é um campo string REQUIRED ("" = não propõe, mesma convenção do asked_slot)' do
+      expect(props[:proposed_value][:type]).to eq('string')
+      expect(inner[:required]).to include(:proposed_value)
     end
   end
 

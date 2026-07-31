@@ -56,6 +56,39 @@ RSpec.describe Ai::Workers::CaptureJudge do
       expect(judge('qual o plano?')).to include(status: 'not_an_answer')
     end
 
+    # Frente B: 'confirmed' — aceite de valor proposto. NÃO carrega value (quem grava é o motor, lendo o
+    # ai_last_proposed_value); só sinaliza a intenção. Passa a intenção (asks_about/query) como os demais.
+    it 'confirmed: devolve o status SEM value (não exige value como answered/malformed)' do
+      stub_model(text: '{"status":"confirmed"}')
+      result = described_class.judge(step: step, slot: 'periodo_reservado', message_text: 'sim pode ser',
+                                     profile: profile, conversation: conversation, proposed_value: 'tarde')
+      expect(result).to include(status: 'confirmed')
+      expect(result).not_to have_key(:value)
+    end
+
+    it 'passa o VALOR PROPOSTO na mensagem ao modelo só quando presente' do
+      captured = nil
+      allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
+        captured = kwargs[:user_message]
+        { text: '{"status":"confirmed"}', tokens_in: 1, tokens_out: 1, status: 'recorded' }
+      end
+
+      described_class.judge(step: step, slot: 'periodo_reservado', message_text: 'sim',
+                            profile: profile, conversation: conversation, proposed_value: 'tarde')
+      expect(captured).to include('VALOR PROPOSTO PELO ATENDENTE: tarde')
+    end
+
+    it 'sem valor proposto, a mensagem ao modelo NÃO traz a linha do proposto (comportamento inalterado)' do
+      captured = nil
+      allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
+        captured = kwargs[:user_message]
+        { text: '{"status":"not_an_answer"}', tokens_in: 1, tokens_out: 1, status: 'recorded' }
+      end
+
+      judge('qual o plano?')
+      expect(captured).not_to include('VALOR PROPOSTO')
+    end
+
     it 'JSON inválido (texto livre) -> failed' do
       stub_model(text: 'desculpe, não entendi')
       expect(judge('x')[:status]).to eq('failed')

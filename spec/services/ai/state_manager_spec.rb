@@ -171,6 +171,40 @@ RSpec.describe Ai::StateManager do
       expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
     end
 
+    # Frente B: o valor PROPOSTO vive AO LADO do asked_slot, com o MESMO ciclo incondicional.
+    def proposed
+      conversation.reload.additional_attributes['ai_last_proposed_value']
+    end
+
+    it 'grava ai_last_proposed_value quando asked_slot E proposed_value vêm preenchidos' do
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => 'campo_b', 'proposed_value' => 'tarde' },
+                         dispatcher: dispatcher, run: run)
+
+      expect(last_asked).to eq('campo_b')
+      expect(proposed).to eq('tarde')
+    end
+
+    it 'proposed_value "" LIMPA ai_last_proposed_value mesmo com asked_slot presente (não sobrevive ao turno)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_proposed_value' => 'tarde' })
+
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => 'campo_b', 'proposed_value' => '' },
+                         dispatcher: dispatcher, run: run)
+
+      expect(last_asked).to eq('campo_b')
+      expect(conversation.reload.additional_attributes).not_to have_key('ai_last_proposed_value')
+    end
+
+    it 'asked_slot "" LIMPA também ai_last_proposed_value (sem pergunta não há proposta pendente)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b',
+                                                    'ai_last_proposed_value' => 'tarde' })
+
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '', 'proposed_value' => 'tarde' },
+                         dispatcher: dispatcher, run: run)
+
+      expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
+      expect(conversation.reload.additional_attributes).not_to have_key('ai_last_proposed_value')
+    end
+
     # Regressão #304/conv 397 ponta a ponta: sem a limpeza, o asked_slot VELHO (slot já preenchido) fazia a
     # guarda de confirmação disparar, o capture_signal perder o {declined}, e o token "__sem_valor__" avançar
     # um slot OBRIGATÓRIO. Com o item 1, o turno de captura LIMPA o velho e o turno do token vira RECUSA.
