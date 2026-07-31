@@ -15,6 +15,9 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   // 'base_prompt' | 'step_instructions'
   kind: { type: String, default: 'base_prompt' },
+  // Department em edição: ancora as CAPACIDADES REAIS (tools/knowledge/variáveis) no backend, para o
+  // assistente não sugerir consulta sem fonte nem variável inventada. Ausente => o backend degrada.
+  departmentId: { type: [String, Number], default: null },
 });
 const emit = defineEmits(['update:open']);
 
@@ -40,7 +43,11 @@ const generate = async () => {
   try {
     const { data } = await axios.post(
       `/api/v1/accounts/${route.params.accountId}/ai_prompt_assistant`,
-      { kind: props.kind, brief: brief.value.trim() }
+      {
+        kind: props.kind,
+        brief: brief.value.trim(),
+        department_id: props.departmentId || undefined,
+      }
     );
     if (data && data.suggestion) {
       suggestion.value = data.suggestion;

@@ -11,11 +11,21 @@ class Api::V1::Accounts::AiPromptAssistantController < Api::V1::Accounts::BaseCo
     end
 
     render json: ::Ai::PromptAssistant.new(
-      account: Current.account, kind: params[:kind], brief: params[:brief], requested_by: Current.user&.id
+      account: Current.account, kind: params[:kind], brief: params[:brief],
+      department: scoped_department, requested_by: Current.user&.id
     ).suggest
   end
 
   private
+
+  # O department ancora as CAPACIDADES REAIS (tools/knowledge/variáveis) que o assistente usa para não
+  # inventar consulta sem fonte. Escopado à conta (nunca confia no id cru); ausente => o service degrada.
+  def scoped_department
+    id = params[:department_id]
+    return if id.blank?
+
+    ::Ai::Department.find_by(id: id, account_id: Current.account.id)
+  end
 
   # Rate limit de janela fixa por conta (Redis). Best-effort: se o Redis falhar, NÃO bloqueia.
   def throttled?
