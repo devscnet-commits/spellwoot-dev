@@ -101,14 +101,18 @@ RSpec.describe Ai::HandoffCoordinator do
   end
 
   # === Mudanças 1 + 2: o roteamento passa a LER a lista handoff_team_ids ==========================
-  describe '#human_team_id — ordem de resolução (team_id -> nome[allowlist] -> lista -> nil)' do
+  describe '#human_team_id — ordem de resolução (nome[allowlist] -> lista -> nil; team_id é FILTRO)' do
     let(:t_comercial) { create(:team, account: account, name: 'Comerciais') }
     let(:t_midia) { create(:team, account: account, name: 'Comercial Mídia Paga') }
     let(:t_outro) { create(:team, account: account, name: 'Financeiro') }
 
-    it 'usa @agent.team_id quando presente (primário, mantido)' do
-      agent.update!(team_id: t_outro.id)
-      expect(coordinator.human_team_id({ 'handoff_target' => 'Comerciais' })).to eq(t_outro.id)
+    it 'IGNORA @agent.team_id (é filtro de entrada, não destino de handoff): a intenção/whitelist vence' do
+      # H1 CONSERTADO: o `return @agent.team_id` (322d8f051) foi removido. team_id só filtra quais conversas
+      # o agente atende (eligible_live?); o destino segue whitelist+intenção+fallback.
+      agent.update!(team_id: t_outro.id, handoff_team_ids: [t_comercial.id, t_midia.id])
+      result = coordinator.human_team_id({ 'handoff_target' => 'Comerciais' })
+      expect(result).to eq(t_comercial.id) # a intenção na whitelist vence
+      expect(result).not_to eq(t_outro.id) # o team_id (Financeiro) NÃO é o destino
     end
 
     it 'sem team_id e com handoff_team_ids: resolve pela lista mesmo SEM handoff_target (caso do loop)' do

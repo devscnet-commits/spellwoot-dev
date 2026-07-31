@@ -32,14 +32,16 @@ RSpec.describe 'Roteamento de handoff — matriz (bateria)' do # rubocop:disable
   end
 
   # ---------------------------------------------------------------------------------------------------
-  describe 'H1 — agent.team_id curto-circuita TUDO (issue registrada, nunca provada)' do
-    it 'team_id setado + cliente pede "Suporte" (na whitelist) -> vai para o team_id, IGNORA a intenção' do
+  describe 'H1 — agent.team_id é FILTRO, NÃO override de handoff (CONSERTADO)' do
+    it 'team_id setado + cliente pede "Suporte" (na whitelist) -> a INTENÇÃO vence; team_id é ignorado no destino' do
       agent.update!(team_id: t_posvenda.id, handoff_team_ids: [t_comercial.id, t_suporte.id],
                     fallback_handoff_team_id: nil)
       result = coordinator.human_team_id({ 'handoff_target' => 'Suporte' })
-      # REAL: team_id vence a intenção do cliente, a whitelist e o fallback.
-      expect(result).to eq(t_posvenda.id)
-      # DEVERIA: a intenção "Suporte" deveria vencer. team_id sobrepõe whitelist+intenção+fallback (issue).
+      # H1 CONSERTADO: o override foi removido do human_team_id (322d8f051). team_id não é destino — é filtro
+      # de entrada (eligible_live?). A intenção casada por nome vence.
+      # PROVA DE MUTAÇÃO: FALHA se o `return @agent.team_id` voltar como primeira linha.
+      expect(result).to eq(t_suporte.id)
+      expect(result).not_to eq(t_posvenda.id)
     end
   end
 
@@ -137,13 +139,16 @@ RSpec.describe 'Roteamento de handoff — matriz (bateria)' do # rubocop:disable
       expect(coordinator.human_team_id({})).to eq(coordinator.conclusion_team_id({}))
     end
 
-    it 'com team_id override: human_team_id retorna o override; conclusion_team_id NÃO o consulta -> DISCORDAM' do
+    it 'com team_id setado: NENHUM dos dois o consulta -> ambos caem no configured (CONCORDAM)' do
+      # H7 CONSERTADO junto com H1: removido o override do human_team_id, os dois caminhos ignoram o team_id
+      # e caem no configured. Antes discordavam (human respeitava o override, conclusion não).
       agent.update!(team_id: t_posvenda.id)
       aggregate_failures do
-        expect(coordinator.human_team_id({})).to eq(t_posvenda.id)       # respeita o override
-        expect(coordinator.conclusion_team_id({})).to eq(t_comercial.id) # IGNORA o override -> configured
+        expect(coordinator.human_team_id({})).to eq(t_comercial.id)      # IGNORA o team_id -> configured
+        expect(coordinator.conclusion_team_id({})).to eq(t_comercial.id) # idem
+        expect(coordinator.human_team_id({})).to eq(coordinator.conclusion_team_id({}))
       end
-      # INCONSISTENTE: os dois caminhos DISCORDAM com team_id setado — a conclusão não respeita o override.
+      # PROVA DE MUTAÇÃO: FALHA se o override voltar (human_team_id devolveria t_posvenda e discordaria).
     end
   end
 
