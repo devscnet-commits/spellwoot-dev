@@ -757,6 +757,10 @@ const onSave = () => {
       </div>
     </div>
 
-    <AiPromptAssistant v-model:open="assistantOpen" kind="step_instructions" />
+    <AiPromptAssistant
+      v-model:open="assistantOpen"
+      kind="step_instructions"
+      :department-id="departmentId"
+    />
   </div>
 </template>

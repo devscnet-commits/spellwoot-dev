@@ -112,4 +112,101 @@ RSpec.describe Ai::PromptAssistant do
       expect(Ai::Run.count).to eq(0)
     end
   end
+
+  # PR4 — o assistente deixa de ser cego: quando recebe o department, ancora as CAPACIDADES REAIS
+  # (tools/knowledge/variáveis) no system_prompt para NÃO sugerir consulta sem fonte (item 1) nem
+  # variável inventada (item 3). Capturamos o system_prompt entregue ao call_model.
+  describe '#suggest — capacidades reais do department' do
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
+    let(:department) do
+      Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Financeiro', status: 'active', behavior: {})
+    end
+
+    def capture_system_prompt(kind:, dept:)
+      captured = {}
+      allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
+        captured = kwargs
+        call_model_result
+      end
+      described_class.new(account: account, kind: kind, brief: 'x', department: dept).suggest
+      captured[:system_prompt]
+    end
+
+    it 'injeta as FERRAMENTAS e FONTES reais do department (ancora o item 1)' do
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'consulta_fatura',
+                       implementation_type: 'capability', capability_key: 'billing.read', status: 'active',
+                       description: 'Consulta faturas em aberto')
+      Ai::KnowledgeSource.create!(account: account, ai_department_id: department.id, kind: 'produto',
+                                  title: 'Planos residenciais', status: 'active')
+
+      prompt = capture_system_prompt(kind: 'step_instructions', dept: department)
+
+      expect(prompt).to include('CAPACIDADES REAIS DESTE AGENTE')
+      expect(prompt).to include('consulta_fatura: Consulta faturas em aberto')
+      expect(prompt).to include('produto: Planos residenciais')
+    end
+
+    it 'department SEM tools nem knowledge: diz NENHUMA (o modelo tem de AVISAR, não inventar)' do
+      prompt = capture_system_prompt(kind: 'step_instructions', dept: department)
+
+      expect(prompt).to include('Ferramentas cadastradas: NENHUMA')
+      expect(prompt).to include('Fontes de conhecimento cadastradas: NENHUMA')
+    end
+
+    it 'step_instructions injeta as VARIÁVEIS existentes; base_prompt NÃO (variável é de etapa)' do
+      Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'tipo_consulta',
+                               var_type: 'lista', values: %w[fatura contrato])
+
+      step_prompt = capture_system_prompt(kind: 'step_instructions', dept: department)
+      base_prompt = capture_system_prompt(kind: 'base_prompt', dept: department)
+
+      expect(step_prompt).to include('Variáveis já cadastradas')
+      expect(step_prompt).to include('tipo_consulta')
+      expect(base_prompt).not_to include('Variáveis já cadastradas')
+    end
+
+    it 'variável: CAD de conversation_attribute sobrepõe como painel; LeadVariable-only = memória interna' do
+      Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'interesse',
+                               var_type: 'texto', values: [])
+      Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'cpf_cnpj',
+                               var_type: 'texto', values: [])
+      create(:custom_attribute_definition, account: account, attribute_key: 'cpf_cnpj',
+                                           attribute_model: 'conversation_attribute')
+
+      prompt = capture_system_prompt(kind: 'step_instructions', dept: department)
+
+      expect(prompt).to include('- interesse (texto, memória interna)')
+      expect(prompt).to include('- cpf_cnpj (aparece no painel)')
+    end
+
+    it 'SEM department: degrada com CONTEXTO INDISPONÍVEL (não recusa)' do
+      prompt = capture_system_prompt(kind: 'step_instructions', dept: nil)
+
+      expect(prompt).to include('CONTEXTO INDISPONÍVEL')
+      expect(prompt).to include('AVISO: verifique se existe ferramenta cadastrada')
+    end
+
+    it 'lê as tools DAQUELE department (não vaza de outro department da mesma conta)' do
+      other = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Outro', status: 'active',
+                                     behavior: {})
+      Ai::Tool.create!(account: account, ai_department_id: other.id, name: 'so_do_outro',
+                       implementation_type: 'capability', capability_key: 'x.y', status: 'active', description: 'x')
+
+      prompt = capture_system_prompt(kind: 'step_instructions', dept: department)
+
+      expect(prompt).not_to include('so_do_outro')
+    end
+
+    it 'item 4 (identidade) é regra dura nos DOIS kinds — guarda contra remoção' do
+      identity = 'NUNCA gere texto sobre como o agente deve se identificar'
+      expect(Ai::PromptAssistant::Prompts::BASE_PROMPT_SYSTEM).to match(/IDENTIDADE/)
+      expect(Ai::PromptAssistant::Prompts::BASE_PROMPT_SYSTEM).to include(identity)
+      expect(Ai::PromptAssistant::Prompts::STEP_INSTRUCTIONS_SYSTEM).to match(/IDENTIDADE/)
+      expect(Ai::PromptAssistant::Prompts::STEP_INSTRUCTIONS_SYSTEM).to include(identity)
+    end
+  end
 end

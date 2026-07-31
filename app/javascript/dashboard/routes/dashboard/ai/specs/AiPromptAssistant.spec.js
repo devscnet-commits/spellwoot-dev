@@ -9,11 +9,11 @@ vi.mock('vue-router', () => ({
 }));
 vi.mock('dashboard/composables', () => ({ useAlert: vi.fn() }));
 
-const mountPanel = axiosStub => {
+const mountPanel = (axiosStub, extraProps = {}) => {
   // Usa o axios GLOBAL (window.axios), não um import cru — mesma regressão do bug do AiVersionHistory.
   vi.stubGlobal('axios', axiosStub);
   return shallowMount(AiPromptAssistant, {
-    props: { open: true, kind: 'base_prompt' },
+    props: { open: true, kind: 'base_prompt', ...extraProps },
     global: {
       stubs: {
         TeleportWithDirection: { template: '<div><slot /></div>' },
@@ -67,5 +67,31 @@ describe('AiPromptAssistant.vue', () => {
 
     expect(wrapper.text()).toContain('texto gerado');
     expect(wrapper.findComponent(Button).props('isLoading')).toBe(false);
+  });
+
+  // PR4 — quando a tela sabe o department (etapas/Comportamento), envia department_id para o backend
+  // ancorar as capacidades reais (não sugerir consulta sem fonte nem variável inventada).
+  it('envia department_id no corpo quando a prop está preenchida', async () => {
+    const post = vi.fn(() => Promise.resolve({ data: { suggestion: 'ok' } }));
+    const wrapper = mountPanel(
+      { post },
+      { kind: 'step_instructions', departmentId: 42 }
+    );
+
+    wrapper
+      .findComponent(TextArea)
+      .vm.$emit('update:modelValue', 'consulta de fatura');
+    await nextTick();
+    wrapper.findComponent(Button).vm.$emit('click');
+    await flushPromises();
+
+    expect(post).toHaveBeenCalledWith(
+      '/api/v1/accounts/7/ai_prompt_assistant',
+      {
+        kind: 'step_instructions',
+        brief: 'consulta de fatura',
+        department_id: 42,
+      }
+    );
   });
 });

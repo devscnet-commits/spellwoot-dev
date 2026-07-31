@@ -865,6 +865,7 @@ onMounted(async () => {
               <AiPromptAssistant
                 v-model:open="promptAssistantOpen"
                 kind="base_prompt"
+                :department-id="defaultDeptId"
               />
               <div class="flex flex-col gap-1">
                 <TextArea
