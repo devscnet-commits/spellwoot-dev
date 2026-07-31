@@ -25,6 +25,29 @@ RSpec.describe Ai::Gateway do
                            behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
   end
 
+  # Dept cuja etapa 1 é TERMINAL (on_complete 'close' — sem team_id, não aciona a validação H6), precedida
+  # por um slot OBRIGATÓRIO (etapa 0). O conclude_ready depende de documento_cpf estar preenchido.
+  def create_terminal_department
+    dept = create_department
+    dept.create_playbook!(active: true, steps: [
+                            { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'required' => true } },
+                            { 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }
+                          ])
+    dept
+  end
+
+  # Entrega "ok" logo após NOSSA fala, com a conversa na etapa TERMINAL (índice 1) e os facts informados.
+  def deliver_ok_on_terminal(binding:, facts:)
+    convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+    convo.update!(additional_attributes: { 'ai_step_index' => 1, 'ai_collected_facts' => facts })
+    create(:message, account: account, inbox: inbox, conversation: convo,
+                     message_type: 'outgoing', content: 'Recebi seu comprovante. Vou finalizar seu pedido, tudo bem?')
+    message = create(:message, account: account, inbox: inbox, conversation: convo,
+                               message_type: 'incoming', content: 'ok')
+    described_class.new(message: message, agent_inbox: binding, mode: binding.mode).run
+    convo.reload
+  end
+
   def create_binding(mode:)
     Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: mode, active: true)
   end
@@ -114,6 +137,37 @@ RSpec.describe Ai::Gateway do
       expect(Ai::ModelRouter).to have_received(:decide)
       expect(events(convo)).not_to include('turn.trivial_skipped')
       expect(Ai::Run.find_by(conversation_id: convo.id).run_type).to eq('decision')
+    end
+
+    # 3ª guarda (conclude_ready) — end-to-end. O conclude_ready é computado no Camada 0 (Gateway) via
+    # conclude_ready_for_current?, o MESMO conclude_ready? que o resolver usa no (b)-core (mesmo método,
+    # mesmos inputs — o turno "ok" trivial não captura nada nem avança o índice, então gate e resolver leem
+    # o mesmo estado; sem divergência, como no item 5 do slot_filled?).
+    it 'etapa terminal PRONTA (obrigatório preenchido) + "ok" NÃO pula — chama o modelo (aceite da transição)' do
+      create_terminal_department
+      binding = create_binding(mode: 'live')
+      stub_decision({ 'decision' => 'reply', 'reply_text' => 'Perfeito, finalizando! 😊' })
+
+      convo = deliver_ok_on_terminal(binding: binding, facts: { 'documento_cpf' => '529.982.247-25' })
+
+      expect(Ai::ModelRouter).to have_received(:decide)
+      expect(events(convo)).not_to include('turn.trivial_skipped')
+    end
+
+    # O CUIDADO EXPLÍCITO: a guarda nova NÃO pode disparar em terminal com OBRIGATÓRIO faltando — ali "ok" é
+    # ruído, não aceite. PROVA DE MUTAÇÃO: FALHA se a guarda for só "declara on_complete" (que deixaria de
+    # pular aqui). O que muda entre este teste e o de cima é SÓ o documento_cpf preenchido.
+    it 'etapa terminal com OBRIGATÓRIO vazio + "ok" PULA (é ruído, conclude_ready falso)' do
+      create_terminal_department
+      binding = create_binding(mode: 'live')
+      allow(Ai::ModelRouter).to receive(:decide) # espião: não deve ser chamado
+
+      convo = deliver_ok_on_terminal(binding: binding, facts: {}) # documento_cpf VAZIO
+
+      expect(Ai::ModelRouter).not_to have_received(:decide)
+      expect(events(convo)).to include('turn.trivial_skipped')
+      skipped = Ai::Event.find_by(conversation_id: convo.id, event_type: 'turn.trivial_skipped')
+      expect(skipped.payload['reason']).to eq('closed_list') # não 'terminal_ready' — a guarda NÃO disparou
     end
   end
 
