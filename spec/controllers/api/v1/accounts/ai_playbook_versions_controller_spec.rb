@@ -66,7 +66,9 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
            headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:success)
-      expect(playbook.reload.steps).to eq([{ 'name' => 'a' }, { 'name' => 'b' }]) # exatamente a v1
+      # SUBSTITUIÇÃO: volta a lista da v1 (a,b), não a nova (x,y,z). Compara por nome — os steps agora
+      # carregam id estável (Frente C/PR1), que não é o ponto deste teste.
+      expect(playbook.reload.steps.map { |s| s['name'] }).to eq(%w[a b])
     end
 
     it 'substitui default_messages inteiro (chaves que só existem no estado novo não sobrevivem)' do
@@ -123,8 +125,10 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
         # o estado do console ficou capturado numa versão -> recuperável (não se perdeu no restore)
         pre = Ai::Version.for_record(playbook).find_by(note: 'Estado antes da restauração')
         expect(pre.snapshot['steps']).to eq([{ 'name' => 'a', 'on_complete' => { 'action' => 'handoff_human' } }])
-        # e o restore de fato aplicou a v1 (sem on_complete)
-        expect(playbook.reload.steps).to eq([{ 'name' => 'a' }])
+        # e o restore de fato aplicou a v1 (sem on_complete). Compara por nome — a v1 carrega id (Frente C).
+        restored = playbook.reload.steps
+        expect(restored.map { |s| s['name'] }).to eq(%w[a])
+        expect(restored.first).not_to have_key('on_complete') # o on_complete do console NÃO voltou
       end
     end
   end

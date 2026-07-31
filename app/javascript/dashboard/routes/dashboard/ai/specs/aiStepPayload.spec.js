@@ -121,6 +121,24 @@ describe('aiStepPayload', () => {
       });
     });
 
+    // (Frente C / PR1) IDENTIDADE ESTÁVEL: o `id` do step (uuid do backend) sobrevive ao round-trip pelo
+    // MESMO spread que preserva knowledge/collect — sem mudança no front. Prova de mutação: FALHA se alguém
+    // passar o id a strip no parseStep/stepToApi e o backend reatribuir uuid a cada save (PR vira no-op).
+    it('preserva o id do step no round-trip parseStep -> stepToApi (Frente C)', () => {
+      const roundTripped = stepToApi(
+        parseStep({ id: 'uuid-abc', name: 'Coleta' })
+      );
+      expect(roundTripped.id).toBe('uuid-abc');
+    });
+
+    it('mergeStepEdit preserva o id do step existente (buildStepPayload não emite id)', () => {
+      const merged = mergeStepEdit(
+        { id: 'uuid-9', name: 'X', collect: { attribute: 'a' } },
+        { name: 'X editado', slot_required: true }
+      );
+      expect(merged.id).toBe('uuid-9');
+    });
+
     // PR 2 INVERTE a precondição do PR 1: agora que a tela edita o campo, buildStepPayload EMITE knowledge.
     // A preservação ao editar deixa de vir da AUSÊNCIA da chave e passa a depender do draft ser semeado de
     // props.step.knowledge (testado no AiStepForm.spec). E o merge do saveStep passa a proteger as OUTRAS

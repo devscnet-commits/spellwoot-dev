@@ -117,4 +117,59 @@ RSpec.describe 'AI Departments API — step automations validation', type: :requ
       expect(response).to have_http_status(:success)
     end
   end
+
+  # (Frente C / PR1) identidade estável de etapa: merge por id no upsert. O array do CLIENTE é autoritário no
+  # conjunto e na ordem (o 409 já cobre concorrência); o merge só carrega o id e preserva campos backend-only.
+  describe 'merge por id do playbook (Frente C)' do
+    def ids
+      department.reload.playbook.steps.map { |s| s['id'] }
+    end
+
+    it 'etapa NOVA (sem id) ganha um uuid; re-salvar COM o id mantém o MESMO id (estável)' do
+      patch_steps([{ name: 'Coleta' }])
+      id = department.reload.playbook.steps.first['id']
+      expect(id).to be_present
+
+      patch_steps([{ id: id, name: 'Coleta' }]) # round-trip do id (como o front faz)
+      expect(department.reload.playbook.steps.first['id']).to eq(id) # NÃO regenera
+    end
+
+    it 'preserva CAMPO backend-only de um step CASADO por id (o cliente reenvia sem conhecê-lo)' do
+      patch_steps([{ name: 'Fim' }])
+      id = department.reload.playbook.steps.first['id']
+      # console adiciona on_complete (campo que o front pode não reenviar); action close não exige whitelist
+      department.playbook.update_column(:steps, [{ 'id' => id, 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }]) # rubocop:disable Rails/SkipsModelValidations
+
+      patch_steps([{ id: id, name: 'Fim editado' }]) # cliente reenvia por id, SEM on_complete
+      step = department.reload.playbook.steps.first
+      aggregate_failures do
+        expect(step['id']).to eq(id)
+        expect(step['name']).to eq('Fim editado')          # edição do cliente vence
+        expect(step['on_complete']).to eq('action' => 'close') # backend-only PRESERVADO
+      end
+    end
+
+    it 'step AUSENTE do array = DELETADO (NÃO ressuscita órfão do banco)' do
+      patch_steps([{ name: 'A' }, { name: 'B' }])
+      id_a = department.reload.playbook.steps.first['id']
+
+      patch_steps([{ id: id_a, name: 'A' }]) # cliente removeu B
+      result = department.reload.playbook.steps
+      aggregate_failures do
+        expect(result.map { |s| s['name'] }).to eq(['A']) # B não voltou
+        expect(result.size).to eq(1)
+      end
+    end
+
+    it 'REORDENAR: a ORDEM segue o array do cliente (ids preservados)' do
+      patch_steps([{ name: 'A' }, { name: 'B' }])
+      before_ids = ids
+
+      patch_steps([{ id: before_ids[1], name: 'B' }, { id: before_ids[0], name: 'A' }]) # inverte
+      aggregate_failures do
+        expect(department.reload.playbook.steps.map { |s| s['name'] }).to eq(%w[B A])
+        expect(ids).to eq([before_ids[1], before_ids[0]])
+      end
+    end
+  end
 end
