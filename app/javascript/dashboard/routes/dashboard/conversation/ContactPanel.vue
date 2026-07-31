@@ -309,7 +309,12 @@ onMounted(() => {
                   toggleSidebarUIState('is_contact_ai_memory_open', value)
               "
             >
-              <ContactAiMemory :contact-id="contactId" />
+              <ContactAiMemory
+                :contact-id="contactId"
+                :collected-facts="
+                  conversationAdditionalAttributes.ai_collected_facts || {}
+                "
+              />
             </AccordionItem>
           </div>
           <div v-else-if="element.name === 'conversation_handoff_summary'">
