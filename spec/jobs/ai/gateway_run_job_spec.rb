@@ -101,4 +101,53 @@ RSpec.describe Ai::GatewayRunJob do
       expect(tie_event).to be_nil
     end
   end
+
+  # Vencedor FORÇADO (handoff IA→IA): a IA de destino (ai_routed_agent_id) ganha ACIMA da eleição por
+  # [priority, id]. É o que faz o transfer GRUDAR — sem isso, a de priority 1 reassumiria no turno seguinte.
+  describe '#perform — vencedor forçado (ai_routed_agent_id)' do
+    it 'força o destino ACIMA da eleição: a de priority 1 é PULADA, o destino roda live' do
+      maya = agent('Maya')      # priority 1 — ganharia a eleição normal
+      dest = agent('Comercial') # priority 2 — o alvo do handoff IA→IA
+      binding_for(maya, mode: 'live', priority: 1)
+      binding_for(dest, mode: 'live', priority: 2)
+      conversation.update!(additional_attributes: { 'ai_routed_agent_id' => dest.id })
+
+      ran = spy_gateway
+      described_class.new.perform(message.id)
+
+      expect(ran).to eq([{ agent_id: dest.id, mode: 'live' }]) # o destino em live; a Maya (pri 1) pulada
+    end
+
+    it 'MULTI-TURNO: a marca persiste — no turno seguinte o destino ganha de novo (não a Maya)' do
+      maya = agent('Maya')
+      dest = agent('Comercial')
+      binding_for(maya, mode: 'live', priority: 1)
+      binding_for(dest, mode: 'live', priority: 2)
+      conversation.update!(additional_attributes: { 'ai_routed_agent_id' => dest.id })
+
+      msg2 = create(:message, account: account, inbox: inbox, conversation: conversation,
+                              message_type: 'incoming', content: 'e agora?')
+      ran = spy_gateway
+      described_class.new.perform(msg2.id)
+
+      expect(ran.map { |r| r[:agent_id] }).to eq([dest.id]) # ainda o destino — o transfer grudou
+    end
+
+    it 'item 5: marca aponta agente FORA da inbox -> LIMPA + emite handoff.routed_agent_missing + eleição normal' do
+      maya = agent('Maya')
+      binding_for(maya, mode: 'live', priority: 1)
+      gone = agent('Sumida') # NÃO vinculada a esta inbox
+      conversation.update!(additional_attributes: { 'ai_routed_agent_id' => gone.id })
+
+      ran = spy_gateway
+      described_class.new.perform(message.id)
+
+      aggregate_failures do
+        expect(ran).to eq([{ agent_id: maya.id, mode: 'live' }]) # cai na eleição normal, não fica sem resposta
+        expect(conversation.reload.additional_attributes).not_to have_key('ai_routed_agent_id') # marca limpa
+        expect(Ai::Event.find_by(conversation_id: conversation.id,
+                                 event_type: 'handoff.routed_agent_missing')).to be_present
+      end
+    end
+  end
 end

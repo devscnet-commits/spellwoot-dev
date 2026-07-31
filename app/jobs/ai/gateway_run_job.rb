@@ -32,18 +32,64 @@ class Ai::GatewayRunJob < ApplicationJob
     # PULADOS INTEIROS (sem chamada ao modelo — rebaixá-los a shadow DOBRARIA o custo por conversa). Shadow
     # EXPLÍCITO e live-de-outro-time seguem rodando como shadow (observam), como hoje.
     eligible = bindings.select { |b| b.mode == 'live' && eligible_live?(b, conversation_team_id) }
-    winner = eligible.min_by { |b| [b.priority.to_i, b.id] }
-    emit_priority_tie(message, eligible, winner) if winner
+
+    # Vencedor FORÇADO (handoff IA→IA, ai_routed_agent_id): a IA de destino ganha ACIMA da eleição por
+    # [priority, id] — senão a de priority 1 reassumiria no turno seguinte e o transfer não grudaria. Persiste
+    # entre turnos (limpo em mark_handed_off / resolvida / novo IA→IA). Marca órfã (agente saiu da inbox):
+    # forced_winner LIMPA + emite evento e devolve nil -> cai na eleição normal (nunca sem resposta).
+    winner, forced = select_winner(message.conversation, bindings, eligible)
+    emit_priority_tie(message, eligible, winner) if winner && !forced
 
     bindings.each do |binding|
-      next if eligible.include?(binding) && winner && binding.id != winner.id # perdedor da eleição: pula
+      next if winner && binding.id != winner.id && eligible.include?(binding) # não-vencedor elegível: pula
 
-      mode = effective_mode(binding, conversation_team_id)
+      mode = run_mode(binding, winner, forced, conversation_team_id)
       Ai::Gateway.new(message: message, agent_inbox: binding, mode: mode, content_override: content_override).run
     end
   end
 
   private
+
+  # [vencedor, forced?]. Forçado (ai_routed_agent_id) vence a eleição por [priority, id]; senão, o menor
+  # [priority, id] entre os live elegíveis.
+  def select_winner(conversation, bindings, eligible)
+    forced = forced_winner(conversation, bindings)
+    [forced || eligible.min_by { |b| [b.priority.to_i, b.id] }, forced]
+  end
+
+  # Vencedor forçado roda LIVE mesmo se eligible_live? for false (time não bate); os demais, como hoje.
+  def run_mode(binding, winner, forced, conversation_team_id)
+    return 'live' if forced && winner && binding.id == winner.id
+
+    effective_mode(binding, conversation_team_id)
+  end
+
+  # A conversa foi roteada para uma IA específica (ai_routed_agent_id)? Devolve o binding LIVE dessa IA na
+  # inbox — o vencedor forçado. Se a marca aponta um agente que SUMIU da inbox (desvinculado/inativo depois
+  # da marca), LIMPA a marca + emite handoff.routed_agent_missing e devolve nil (cai na eleição normal, nunca
+  # deixa sem resposta). nil quando não há marca.
+  def forced_winner(conversation, bindings)
+    routed_id = conversation&.additional_attributes&.dig('ai_routed_agent_id')
+    return nil if routed_id.blank?
+
+    forced = bindings.find { |b| b.ai_agent_id == routed_id.to_i && b.mode == 'live' }
+    return forced if forced
+
+    attrs = conversation.additional_attributes
+    attrs.delete('ai_routed_agent_id')
+    conversation.update!(additional_attributes: attrs)
+    emit_routed_agent_missing(conversation, routed_id)
+    nil
+  end
+
+  def emit_routed_agent_missing(conversation, routed_id)
+    Ai::Event.create!(
+      account_id: conversation.account_id, conversation_id: conversation.id, ai_run_id: nil,
+      event_type: 'handoff.routed_agent_missing', status: 'ok', payload: { routed_agent_id: routed_id }
+    )
+  rescue StandardError => e
+    Rails.logger.error "[Ai::GatewayRunJob#emit_routed_agent_missing] #{e.class}: #{e.message}"
+  end
 
   def effective_mode(binding, conversation_team_id)
     return binding.mode unless binding.mode == 'live'

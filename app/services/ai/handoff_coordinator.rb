@@ -29,8 +29,13 @@ class Ai::HandoffCoordinator
     @message = message
   end
 
-  # Routes the conversation to another AI agent the model chose (handoff_target), if it is in this
-  # agent's allowlist and passes the anti-loop guard. Returns true when routed.
+  # Roteia a conversa para outra IA que o modelo escolheu (handoff_target), se estiver na whitelist deste
+  # agente e passar o anti-loop. Retorna true quando roteou.
+  # VENCEDOR FORÇADO, não team_id: grava ai_routed_agent_id (o GatewayRunJob elege ESSA IA, ignorando a
+  # eleição por priority) e NÃO toca conversation.team_id — porque team_id é a POSSE HUMANA da conversa, e
+  # handoff IA→IA não muda posse humana (quem decide o time humano é a IA de destino, se e quando ELA
+  # transferir). A posse persiste até limpar: mark_handed_off (foi p/ humano), resolvida, novo IA→IA
+  # (sobrescreve aqui), e o rescue (uma falha não pode prender a conversa numa IA).
   def route_to_ai(decision)
     target_name = decision['handoff_target'].to_s.strip
     return false if target_name.blank?
@@ -38,37 +43,71 @@ class Ai::HandoffCoordinator
     allowed_ids = @agent.respond_to?(:handoff_agent_ids) ? Array(@agent.handoff_agent_ids) : []
     return false if allowed_ids.empty?
 
-    target = ::Ai::Agent.where(account_id: @account.id, id: allowed_ids)
-                        .find { |a| (a.assistant_name.presence || a.name).to_s.casecmp?(target_name) }
-    # Observabilidade: o único evento (target_unmatched, caminho de TIME) não distinguia "nome de IA inventado"
-    # de "nome de time inexistente". reason separa: 'no_match' (não casa a whitelist — o modelo inventou) e
-    # 'matched_no_team' (casou MAS sem team_id — CONFIG faltando; como todo agente tem team_id nil hoje, é o
-    # caso que aparece assim que a instrução nomeia a IA certa — sem o evento, dava pra achar "nome errado").
-    if target.nil?
-      emit('handoff.ai_target_unmatched', { handoff_target: target_name, allowed_agent_ids: allowed_ids, reason: 'no_match' })
-      return false
-    end
-    if target.team_id.blank?
-      emit('handoff.ai_target_unmatched',
-           { handoff_target: target_name, allowed_agent_ids: allowed_ids, matched_agent_id: target.id, reason: 'matched_no_team' })
-      return false
-    end
+    target = resolve_ai_target(target_name, allowed_ids) # emite no_match/not_in_inbox e devolve nil quando falha
+    return false if target.nil?
 
-    chain = Array(@conversation.additional_attributes&.dig('ai_handoff_chain'))
-    return false if chain.size >= MAX_AI_HOPS # anti-loop: cap on IA->IA hops
-    return false if chain.include?(target.id)  # never revisit an agent in this chain
+    # Anti-loop SEMEADO com o dono atual (@agent): sem isso a origem nunca entrava na cadeia e um A→B→A
+    # imediato escapava (ela só guardava os alvos). Revisita de qualquer id barra; MAX_AI_HOPS limita o total.
+    chain = Array(@conversation.additional_attributes&.dig('ai_handoff_chain')) | [@agent.id]
+    return false if chain.size > MAX_AI_HOPS
+    return false if chain.include?(target.id)
 
-    @conversation.update!(team_id: target.team_id)
-    attrs = @conversation.additional_attributes || {}
-    attrs['ai_handoff_chain'] = chain + [target.id]
-    @conversation.update!(additional_attributes: attrs)
-
+    persist_routed_agent(target.id, chain)
     Ai::GatewayRunJob.perform_later(@message.id)
-    emit('handoff.routed', { to_agent_id: target.id, to_team_id: target.team_id, hop: chain.size + 1 })
+    emit('handoff.routed', { to_agent_id: target.id, hop: chain.size })
     true
   rescue StandardError => e
     Rails.logger.error "[Ai::HandoffCoordinator#route_to_ai] #{e.class}: #{e.message}"
+    clear_routed_agent # uma falha não pode prender a conversa numa IA
     false
+  end
+
+  # O alvo está vinculado (ativo) à inbox DESTA conversa? O GatewayRunJob só elege entre bindings da inbox
+  # (gateway_run_job:27), então um alvo fora dela é inalcançável -> 'not_in_inbox' + handoff humano.
+  # A IA-alvo (casa a whitelist por NOME e está na inbox desta conversa), ou nil. Emite o reason da falha:
+  # 'no_match' (nome não casa — o modelo inventou) ou 'not_in_inbox' (casou mas fora da inbox — inalcançável).
+  # team_id NÃO é mais exigido (o antigo 'matched_no_team' morre com o vencedor forçado).
+  def resolve_ai_target(target_name, allowed_ids)
+    target = ::Ai::Agent.where(account_id: @account.id, id: allowed_ids)
+                        .find { |a| (a.assistant_name.presence || a.name).to_s.casecmp?(target_name) }
+    if target.nil?
+      emit_ai_target_unmatched(target_name, allowed_ids, 'no_match')
+      return nil
+    end
+    unless target_on_inbox?(target)
+      emit_ai_target_unmatched(target_name, allowed_ids, 'not_in_inbox', matched: target.id)
+      return nil
+    end
+    target
+  end
+
+  def target_on_inbox?(target)
+    ::Ai::AgentInbox.exists?(inbox_id: @message&.inbox_id, ai_agent_id: target.id, active: true)
+  end
+
+  def emit_ai_target_unmatched(target_name, allowed_ids, reason, matched: nil)
+    payload = { handoff_target: target_name, allowed_agent_ids: allowed_ids, reason: reason }
+    payload[:matched_agent_id] = matched if matched
+    emit('handoff.ai_target_unmatched', payload)
+  end
+
+  def persist_routed_agent(agent_id, chain)
+    attrs = @conversation.additional_attributes || {}
+    attrs['ai_routed_agent_id'] = agent_id # posse persistente (SEM tocar team_id / posse humana)
+    attrs['ai_handoff_chain'] = chain + [agent_id]
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  # Limpa a posse forçada (no rescue do route_to_ai). Também é o ponto que o GatewayRunJob usa quando a marca
+  # aponta um agente que sumiu da inbox (limpar + eleição normal, não deixar sem resposta).
+  def clear_routed_agent
+    attrs = @conversation.additional_attributes || {}
+    return unless attrs.key?('ai_routed_agent_id')
+
+    attrs.delete('ai_routed_agent_id')
+    @conversation.update!(additional_attributes: attrs)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::HandoffCoordinator#clear_routed_agent] #{e.class}: #{e.message}"
   end
 
   # TIME de destino do handoff HUMANO, na ordem: 1) setor pedido pelo modelo (handoff_target) casado por
@@ -352,6 +391,7 @@ class Ai::HandoffCoordinator
   def mark_handed_off
     attrs = @conversation.additional_attributes || {}
     attrs['ai_handoff'] = true
+    attrs.delete('ai_routed_agent_id') # foi para HUMANO: a posse forçada IA→IA acabou (ponto de limpeza)
     @conversation.update!(additional_attributes: attrs, status: :open)
   end
 
