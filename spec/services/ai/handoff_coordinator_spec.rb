@@ -397,57 +397,74 @@ RSpec.describe Ai::HandoffCoordinator do
   # Observabilidade IA→IA: o route_to_ai falhava em SILÊNCIO. handoff.ai_target_unmatched separa "nome
   # inventado" (no_match) de "casou mas sem team_id" (matched_no_team) — antes os dois eram invisíveis e
   # confundidos com o target_unmatched de TIME.
-  describe '#route_to_ai — handoff.ai_target_unmatched (observabilidade do alvo)' do
-    let(:team) { create(:team, account: account) }
+  describe '#route_to_ai — vencedor forçado + observabilidade' do
     let(:target_ia) do
-      Ai::Agent.create!(account: account, name: 'Cris', assistant_name: 'Cris (SDR/Secretária)',
-                        status: 'active', ai_operation_profile_id: profile.id, team_id: team.id)
+      Ai::Agent.create!(account: account, name: 'Comercial', assistant_name: 'Assistente',
+                        status: 'active', ai_operation_profile_id: profile.id)
     end
 
     def unmatched_events
       Ai::Event.where(conversation_id: conversation.id, event_type: 'handoff.ai_target_unmatched')
     end
 
-    it "reason 'no_match': nome que NÃO casa a whitelist (o modelo inventou) — payload com handoff_target + allowed_agent_ids" do
-      agent.update!(handoff_agent_ids: [target_ia.id])
+    def bind_to_inbox(some_agent)
+      Ai::AgentInbox.create!(ai_agent_id: some_agent.id, inbox_id: inbox.id, active: true, mode: 'live')
+    end
+
+    it "reason 'no_match': o nome NÃO casa a whitelist (o modelo inventou)" do
+      agent.update!(handoff_agent_ids: [target_ia.id]) # o alvo é "Assistente"
+
+      result = coordinator.route_to_ai({ 'handoff_target' => 'Fantasma' })
+
+      expect(result).to be(false)
+      expect(unmatched_events.last.payload).to include('handoff_target' => 'Fantasma', 'reason' => 'no_match',
+                                                       'allowed_agent_ids' => [target_ia.id])
+    end
+
+    it "reason 'not_in_inbox': casa a whitelist mas o alvo NÃO está na inbox desta conversa" do
+      agent.update!(handoff_agent_ids: [target_ia.id]) # NÃO vinculado à inbox da conversa
 
       result = coordinator.route_to_ai({ 'handoff_target' => 'Assistente' })
 
       expect(result).to be(false)
-      ev = unmatched_events.last
-      expect(ev.payload).to include('handoff_target' => 'Assistente', 'reason' => 'no_match',
-                                    'allowed_agent_ids' => [target_ia.id])
+      expect(unmatched_events.last.payload).to include('reason' => 'not_in_inbox', 'matched_agent_id' => target_ia.id)
     end
 
-    it "reason 'matched_no_team': casa a whitelist MAS o alvo não tem team_id (config faltando, não nome errado)" do
-      ia_sem_time = Ai::Agent.create!(account: account, name: 'Suporte', assistant_name: 'Suporte IA',
-                                      status: 'active', ai_operation_profile_id: profile.id, team_id: nil)
-      agent.update!(handoff_agent_ids: [ia_sem_time.id])
-
-      result = coordinator.route_to_ai({ 'handoff_target' => 'Suporte IA' })
-
-      expect(result).to be(false)
-      expect(unmatched_events.last.payload).to include('reason' => 'matched_no_team', 'handoff_target' => 'Suporte IA',
-                                                       'matched_agent_id' => ia_sem_time.id)
-    end
-
-    it 'casa a whitelist E tem team_id: roteia (true) e NÃO emite ai_target_unmatched' do
+    it 'casa + na inbox: grava ai_routed_agent_id, NÃO toca team_id (posse humana), re-enfileira o GatewayRunJob' do
       agent.update!(handoff_agent_ids: [target_ia.id])
+      bind_to_inbox(target_ia)
 
-      routed = coordinator.route_to_ai({ 'handoff_target' => 'Cris (SDR/Secretária)' })
+      routed = nil
+      expect { routed = coordinator.route_to_ai({ 'handoff_target' => 'Assistente' }) }
+        .to have_enqueued_job(Ai::GatewayRunJob).with(message.id)
 
       expect(routed).to be(true)
-      expect(conversation.reload.team_id).to eq(team.id)
+      expect(conversation.reload.additional_attributes['ai_routed_agent_id']).to eq(target_ia.id)
+      expect(conversation.team_id).to be_nil # posse humana intocada
       expect(unmatched_events).to be_empty
     end
 
-    it 'whitelist VAZIA: bail antes do match, NÃO emite ai_target_unmatched (é config ausente, não falha de resolução)' do
+    it 'whitelist VAZIA: bail antes do match, sem evento' do
       agent.update!(handoff_agent_ids: [])
 
-      result = coordinator.route_to_ai({ 'handoff_target' => 'Assistente' })
-
-      expect(result).to be(false)
+      expect(coordinator.route_to_ai({ 'handoff_target' => 'Assistente' })).to be(false)
       expect(unmatched_events).to be_empty
+    end
+
+    it 'anti-loop A→B→A: o dono atual é SEMEADO na chain, bloqueando a devolução imediata' do
+      bind_to_inbox(target_ia)
+      bind_to_inbox(agent)
+      agent.update!(handoff_agent_ids: [target_ia.id])   # A pode ir p/ B
+      target_ia.update!(handoff_agent_ids: [agent.id])   # B pode ir p/ A
+      a_name = agent.assistant_name.presence || agent.name
+
+      # A(=agent) -> B: roteia, e a chain passa a incluir A (semeado) + B
+      coordinator.route_to_ai({ 'handoff_target' => 'Assistente' })
+      expect(conversation.reload.additional_attributes['ai_handoff_chain']).to eq([agent.id, target_ia.id])
+
+      # B -> A: A já está na chain -> BLOQUEADO (sem o seed, A nunca entraria e a devolução passaria)
+      coord_b = described_class.new(conversation: conversation, account: account, agent: target_ia, message: message)
+      expect(coord_b.route_to_ai({ 'handoff_target' => a_name })).to be(false)
     end
   end
 end

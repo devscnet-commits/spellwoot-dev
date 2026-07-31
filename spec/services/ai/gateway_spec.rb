@@ -397,15 +397,15 @@ RSpec.describe Ai::Gateway do
     end
   end
 
-  # === Cenário 6: HANDOFF → IA (roteia para outro agente e re-enfileira) ==============
-  context 'handoff para outra IA (agente de destino na allowlist)' do
-    it 'routes to the target team and re-enqueues the Gateway' do
+  # === Cenário 6: HANDOFF → IA (roteia por vencedor forçado e re-enfileira) ============
+  context 'handoff para outra IA (agente de destino na allowlist + na inbox)' do
+    it 'grava ai_routed_agent_id (vencedor forçado), NÃO move o time humano, e re-enfileira o Gateway' do
       create_department
-      team = create(:team, account: account)
       target = Ai::Agent.create!(account: account, name: 'Financeiro', status: 'active',
-                                 ai_operation_profile_id: profile.id, team_id: team.id)
+                                 ai_operation_profile_id: profile.id)
       agent.update!(handoff_agent_ids: [target.id])
       binding = create_binding(mode: 'live')
+      Ai::AgentInbox.create!(ai_agent_id: target.id, inbox_id: inbox.id, mode: 'live', active: true) # alvo NA inbox
       stub_decision({ 'decision' => 'handoff', 'handoff_target' => 'Financeiro' })
 
       convo = deliver('Quero falar sobre a fatura', binding: binding, mode: 'live')
@@ -415,8 +415,9 @@ RSpec.describe Ai::Gateway do
                                          context.assembled decision.made handoff.routed
                                        ])
 
-      # Roteou: conversa passa para o time do agente de destino; nada é enviado ao cliente ainda.
-      expect(convo.team_id).to eq(team.id)
+      # Roteou por vencedor forçado: grava a posse da IA de destino, NÃO move o team humano, nada enviado ainda.
+      expect(convo.additional_attributes['ai_routed_agent_id']).to eq(target.id)
+      expect(convo.team_id).to be_nil
       expect(convo.messages.outgoing.count).to eq(0)
     end
   end
