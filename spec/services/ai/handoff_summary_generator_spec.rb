@@ -60,7 +60,10 @@ RSpec.describe Ai::HandoffSummaryGenerator do
     expect(captured[:json]).to be(true)
   end
 
-  it 'mapeia o token de ausência para "não informado" — NUNCA vaza o token cru no resumo (humano lê)' do
+  # Frente D: o token de ausência vira um rótulo INEQUÍVOCO de "declarado inexistente" — NÃO o "não informado"
+  # global (que o modelo lia como pendência e passava a cobrar do cliente: "e-mail segue pendente, próximo
+  # passo: coletar"). NUNCA vaza o token cru. E o prompt ganha o reforço explícito (resolvido, não pendência).
+  it 'renderiza a ausência como "não possui (informado pelo cliente)" — não "não informado", nunca o token cru' do
     conversation.update!(additional_attributes: {
                            'ai_collected_facts' => { 'email_cliente' => Ai::StepSlot::ABSENT, 'cidade' => 'Chapecó' }
                          })
@@ -72,8 +75,42 @@ RSpec.describe Ai::HandoffSummaryGenerator do
 
     described_class.new(conversation: conversation, reason: 'loop').generate
 
-    expect(captured).to include('email_cliente: não informado')
+    expect(captured).to include('email_cliente: não possui (informado pelo cliente)')
     expect(captured).not_to include(Ai::StepSlot::ABSENT)
+    expect(captured).not_to include('email_cliente: não informado') # o rótulo global NÃO entra no resumo
+    expect(captured).to include('está RESOLVIDO, NÃO é pendência')  # reforço explícito no prompt
+  end
+
+  it 'NÃO injeta o reforço de ausência quando nenhum dado é ausência declarada' do
+    conversation.update!(additional_attributes: {
+                           'ai_collected_facts' => { 'email_cliente' => 'joao@x.com', 'cidade' => 'Chapecó' }
+                         })
+    captured = nil
+    allow(Ai::ModelRouter).to receive(:call_model) do |**kwargs|
+      captured = kwargs[:system_prompt]
+      { text: '{"summary":"ok"}', status: 'recorded', tokens_in: 1, tokens_out: 1 }
+    end
+
+    described_class.new(conversation: conversation, reason: 'loop').generate
+
+    expect(captured).to include('Dados já coletados do cliente:')
+    expect(captured).not_to include('está RESOLVIDO, NÃO é pendência') # sem ruído no caso comum
+  end
+
+  # O fallback determinístico usa a MESMA collected_attributes — então herda o rótulo novo (uma mudança, dois
+  # caminhos). Aqui não há reforço (é lista estática, não prosa gerada), mas também não pode mostrar "não
+  # informado" nem o token cru.
+  it 'fallback determinístico também renderiza a ausência com o rótulo novo (não "não informado")' do
+    stub_call_model(text: 'json quebrado {') # força o fallback
+    conversation.update!(additional_attributes: {
+                           'ai_collected_facts' => { 'email_cliente' => Ai::StepSlot::ABSENT, 'cidade' => 'Chapecó' }
+                         })
+
+    content = described_class.new(conversation: conversation, reason: 'loop').generate.content
+
+    expect(content).to include('email_cliente: não possui (informado pelo cliente)')
+    expect(content).not_to include('email_cliente: não informado')
+    expect(content).not_to include(Ai::StepSlot::ABSENT)
   end
 
   it 'inclui o motivo do handoff e o transcript no prompt, e pede json' do
