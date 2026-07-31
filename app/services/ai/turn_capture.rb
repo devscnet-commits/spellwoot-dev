@@ -77,8 +77,9 @@ class Ai::TurnCapture # rubocop:disable Metrics/ClassLength -- orquestrador de c
       return
     end
 
-    # Frente B: proposta pendente p/ slot VAZIO — o juiz decide o aceite e gravamos o valor PROPOSTO (ver helper).
-    return if confirm_proposed_value(step, asked, department, judge_result)
+    # Frente B: proposta pendente p/ slot VAZIO restrito — se o valor do cliente NÃO valida p/ o slot (e não é
+    # negativa), grava o VALOR PROPOSTO. Determinístico pelo gate, sem juiz (ver helper).
+    return if substitute_proposed_value(step, asked, department, decision, message_text)
 
     # Só MEDIÇÃO (não altera fluxo): a pergunta do turno anterior divergiu do slot da etapa corrente.
     emit_asked_desync(asked, step_slot) if asked.present? && asked != step_slot
@@ -153,17 +154,24 @@ class Ai::TurnCapture # rubocop:disable Metrics/ClassLength -- orquestrador de c
     (@conversation.additional_attributes || {})['ai_last_asked_slot'].to_s.strip
   end
 
-  # Frente B — CONFIRMAÇÃO DE VALOR PROPOSTO (slot vazio). O turno anterior propôs um valor (ai_last_proposed_value)
-  # e pediu sim/não; o slot segue vazio (senão teria caído na guarda de confirmação de slot preenchido). O JUIZ
-  # (status 'confirmed', não uma lista de frases em PT) decide o aceite -> grava o VALOR PROPOSTO no slot
-  # perguntado, nunca o "sim", pelo MESMO gate do supervisor (valida o valor contra o tipo do slot declarante).
-  # Negativa/valor-real/pergunta NÃO são 'confirmed' e seguem o fluxo normal (not_an_answer nada grava =>
-  # repergunta; um valor REAL vem 'answered' e o caminho normal grava o real). true = confirmou e gravou.
-  def confirm_proposed_value(step, asked, department, judge_result)
-    return false unless asked.present? && judge_confirmed?(judge_result)
-
+  # Frente B — SUBSTITUIÇÃO POR VALOR PROPOSTO (slot vazio, VALIDAÇÃO-FIRST, juiz intocado). O turno anterior
+  # propôs um valor (ai_last_proposed_value) p/ um slot de domínio RESTRITO e pediu confirmação; o slot segue
+  # vazio (senão teria caído na guarda de confirmação de slot preenchido). O motor NÃO detecta "confirmação" —
+  # lê a VALIDADE do que o cliente mandou p/ aquele slot (mesmo critério do gate) e decide em 3 vias:
+  #   - valor VÁLIDO ("manhã" ∈ options)              -> NÃO substitui: o fluxo normal grava o valor REAL
+  #   - NEGATIVA (SlotAbsence.declined?/looks_like_decline?) -> NÃO substitui: descarta, o fluxo normal repergunta
+  #   - valor INVÁLIDO e não-negativa ("sim" ∉ options) -> grava o VALOR PROPOSTO (pelo mesmo gate do supervisor)
+  # Só morde em slot RESTRITO: em texto livre "sim" valida -> não substitui (degrada ao comportamento antigo).
+  # Modelo mudo (sem valor p/ o slot) -> sem sinal -> não substitui (attributes vazio NUNCA vira proposta).
+  # true = substituiu e gravou. O valor entra é sempre o PROPOSTO guardado, nunca o texto do cliente.
+  def substitute_proposed_value(step, asked, department, decision, message_text)
     proposed = pending_proposed_value
-    return false if proposed.blank?
+    return false if asked.blank? || proposed.blank?
+
+    value = decision['attributes'].is_a?(Hash) ? decision['attributes'][asked] : nil
+    return false if value.to_s.strip.blank?                       # mudo -> sem sinal (não substitui)
+    return false if proposal_negation?(step, asked, value, message_text) # negativa -> descarta (fluxo normal repergunta)
+    return false if slot_value_valid?(step, asked, value)         # valor real válido -> fluxo normal grava o real
 
     persist_judged(step, asked, proposed, department, 'proposal_confirmed', 'confirmed')
     true
@@ -174,9 +182,28 @@ class Ai::TurnCapture # rubocop:disable Metrics/ClassLength -- orquestrador de c
     (@conversation.additional_attributes || {})['ai_last_proposed_value'].to_s.strip
   end
 
-  # O juiz (1x/turno, camada 3) disse que este turno CONFIRMA o proposto? nil (juiz OFF/claim perdido) => false.
-  def judge_confirmed?(judge_result)
-    judge_result.is_a?(Hash) && judge_result[:status].to_s == 'confirmed'
+  # O valor valida como valor REAL do slot? Mesmo critério do gate: só tipos de FORMATO conhecido validam;
+  # texto livre não tem formato -> tudo "válido" -> NÃO substitui (B só morde em slot restrito). Usa o tipo/
+  # options efetivos da etapa corrente (na confirmação de proposta o asked == slot da etapa).
+  def slot_value_valid?(step, slot, value)
+    type = Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
+    return true unless Ai::SlotExtractor.known_format?(type)
+
+    Ai::SlotExtractor.extract(attribute_type: type, text: value.to_s, options: Ai::StepSlot.options(step)).present?
+  end
+
+  # A resposta é uma NEGATIVA da proposta? Recusa/ausência declarada (SlotAbsence.declined?, fonte única) OU a
+  # heurística barata de negação (looks_like_decline?: curto + palavra de negação) — promovida aqui de
+  # observabilidade a guarda de roteamento SÓ neste caminho. Sem ela, "não" (inválido p/ o slot) cairia como
+  # "inválido -> substitui" e gravaria o proposto numa recusa.
+  def proposal_negation?(step, slot, value, message_text)
+    type = Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
+    return true if Ai::SlotAbsence.declined?(value: value, text: message_text, type: type,
+                                             options: Ai::StepSlot.options(step))
+
+    # looks_like_decline? quebra em palavras; pontuação COLADA ("não," -> "nao,") escaparia da lista NEGATIONS.
+    # Limpo a pontuação antes de alimentar o heurístico — sem tocar o helper (usado como observabilidade alhures).
+    Ai::SlotAbsence.looks_like_decline?(message_text.to_s.gsub(/[[:punct:]]/, ' '))
   end
 
   # asked_slot VALIDADO: aceito só se for uma chave CONHECIDA (slots do playbook ∪ lead_variables ∪
