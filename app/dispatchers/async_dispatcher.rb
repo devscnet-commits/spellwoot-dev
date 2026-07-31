@@ -21,7 +21,8 @@ class AsyncDispatcher < BaseDispatcher
       WebhookListener.instance,
       Ai::GatewayListener.instance,
       Ai::ShadowListener.instance,
-      Ai::CustomerMemoryListener.instance
+      Ai::CustomerMemoryListener.instance,
+      Ai::RoutedAgentCleanupListener.instance
     ]
   end
 end

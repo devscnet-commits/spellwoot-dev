@@ -149,5 +149,25 @@ RSpec.describe Ai::GatewayRunJob do
                                  event_type: 'handoff.routed_agent_missing')).to be_present
       end
     end
+
+    # Conversa REABERTA depois de resolvida: o RoutedAgentCleanupListener já limpou a marca no resolved, então
+    # o estado que chega aqui é "sem marca". Prova o desfecho pedido: cai na eleição normal, sem posse forçada
+    # pendente e SEM handoff.routed_agent_missing (não é órfã — é uma conversa nova para o motor).
+    it 'conversa reaberta (marca já limpa no resolved): eleição normal, nada de posse órfã' do
+      maya = agent('Maya')
+      dest = agent('Comercial')
+      binding_for(maya, mode: 'live', priority: 1)
+      binding_for(dest, mode: 'live', priority: 2)
+      conversation.update!(additional_attributes: {}) # sem ai_routed_agent_id
+
+      ran = spy_gateway
+      described_class.new.perform(message.id)
+
+      aggregate_failures do
+        expect(ran).to eq([{ agent_id: maya.id, mode: 'live' }]) # priority 1 vence a eleição normal
+        expect(Ai::Event.where(conversation_id: conversation.id,
+                               event_type: 'handoff.routed_agent_missing')).to be_empty
+      end
+    end
   end
 end

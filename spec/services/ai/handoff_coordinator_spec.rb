@@ -466,5 +466,29 @@ RSpec.describe Ai::HandoffCoordinator do
       coord_b = described_class.new(conversation: conversation, account: account, agent: target_ia, message: message)
       expect(coord_b.route_to_ai({ 'handoff_target' => a_name })).to be(false)
     end
+
+    # Bateria dos DEMAIS pontos de limpeza da posse forçada (a peça 2 fecha o resolved num listener à parte;
+    # aqui ficam os pontos que vivem no coordinator: foi-para-humano e rescue).
+    it 'ponto de limpeza — mark_handed_off (foi para HUMANO) apaga ai_routed_agent_id e liga ai_handoff' do
+      conversation.update!(additional_attributes: { 'ai_routed_agent_id' => target_ia.id })
+
+      coordinator.send(:mark_handed_off)
+
+      attrs = conversation.reload.additional_attributes
+      expect(attrs).not_to have_key('ai_routed_agent_id') # posse IA→IA acabou
+      expect(attrs['ai_handoff']).to be(true)             # IA parada, humano assume
+    end
+
+    it 'ponto de limpeza — rescue: uma falha depois de gravar a marca a LIMPA (não prende a conversa numa IA)' do
+      agent.update!(handoff_agent_ids: [target_ia.id])
+      bind_to_inbox(target_ia)
+      # a marca é gravada (persist_routed_agent) ANTES do enqueue; forço o enqueue a estourar depois disso
+      allow(Ai::GatewayRunJob).to receive(:perform_later).and_raise(StandardError, 'boom')
+
+      result = coordinator.route_to_ai({ 'handoff_target' => 'Assistente' })
+
+      expect(result).to be(false)
+      expect(conversation.reload.additional_attributes).not_to have_key('ai_routed_agent_id') # limpo pelo rescue
+    end
   end
 end
