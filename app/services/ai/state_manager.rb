@@ -46,6 +46,13 @@ class Ai::StateManager
     gated = gated_facts(cleaned, department, source, expected_step)
     persist_collected_facts(gated)
 
+    # Frente C: espelha os MESMOS fatos gateados na memória do CONTATO (Ai::CustomerMemory.key_facts) —
+    # cross-conversa, cross-agente. SEM allowlist (ao contrário do espelho de custom_attributes abaixo): nome/
+    # CPF vivem na memória mesmo sem CustomAttributeDefinition (a conta não tem). Determinístico, SEM LLM, na
+    # CAPTURA (mesmo-turno: uma correção atualiza a memória no ato, não espera o resolve). Ausência
+    # (__sem_valor__) NUNCA sobe — é da conversa, não do cliente. Fica ANTES do early-return do bloco 2.
+    mirror_contact_facts(gated)
+
     # 2. Espelha para custom_attributes SÓ as chaves com campo cadastrado (protege Bitrix/relatórios).
     #    Espelha a partir do conjunto GATEADO (não do cru): o que o gate rejeitou não vai para facts NEM
     #    para o painel — uma porta, um cadeado (p/ :trusted, gated == cleaned, comportamento inalterado).
@@ -90,6 +97,31 @@ class Ai::StateManager
 
     attrs['ai_collected_facts'] = facts
     @conversation.update!(additional_attributes: attrs)
+  end
+
+  # Frente C: memória por CONTATO (Ai::CustomerMemory.key_facts), cross-conversa e cross-agente. Espelha os
+  # fatos GATEADOS não-ausência, ÚLTIMA-VENCE por chave (merge; chave não tocada é preservada). SEM allowlist
+  # de CustomAttributeDefinition — o contato guarda tudo o que o motor capturou. NÃO gera summary (isso é o
+  # customer_memory_updater no resolve, via LLM); aqui é só o DADO. No-op sem contato, sem fato real, ou quando
+  # nada muda. O summary/conversations_count ficam com o updater — este método só toca key_facts.
+  # Read-modify-write da linha do contato: duas conversas SIMULTÂNEAS do MESMO contato podem competir (último
+  # save vence) — raro (mesmo contato, dois atendimentos ao vivo) e aditivo (mesmas chaves, mesma pessoa).
+  def mirror_contact_facts(gated)
+    return unless @conversation.contact_id
+
+    facts = gated.reject { |_k, v| Ai::SlotAbsence.absence_value?(v) }
+    return if facts.empty?
+
+    memory = Ai::CustomerMemory.find_or_initialize_by(contact_id: @conversation.contact_id,
+                                                      account_id: @conversation.account_id)
+    merged = memory.key_facts.to_h.merge(facts)
+    return if merged == memory.key_facts
+
+    memory.key_facts = merged
+    memory.last_updated_at = Time.current
+    memory.save!
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#mirror_contact_facts] #{e.class}: #{e.message}"
   end
 
   def reject_blank_values(attrs)

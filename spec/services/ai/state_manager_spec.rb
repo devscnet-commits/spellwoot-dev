@@ -2543,4 +2543,56 @@ RSpec.describe Ai::StateManager do
       expect(manager.conclude_ready_for_current?(dept)).to be(false)
     end
   end
+
+  # Frente C — espelho determinístico dos fatos gateados na memória do CONTATO (Ai::CustomerMemory.key_facts),
+  # na CAPTURA (persist_attributes), sem LLM. Bateria no padrão da matriz.
+  describe '#persist_attributes — memória do contato (Frente C)' do
+    let(:contact) { create(:contact, account: account) }
+    let(:convo) { create(:conversation, account: account, inbox: inbox, contact: contact) }
+    let(:mgr) { described_class.new(conversation: convo, agent: agent) }
+    let(:dept) do
+      Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'C', status: 'active', behavior: {})
+    end
+
+    def contact_facts
+      Ai::CustomerMemory.find_by(contact_id: contact.id, account_id: account.id)&.key_facts.to_h
+    end
+
+    it 'conv 1 coleta nome e CPF -> CustomerMemory.key_facts tem os dois (determinístico, sem LLM)' do
+      mgr.persist_attributes({ 'nome_cliente' => 'Jaqueline', 'documento_cpf' => '110.336.369-75' }, dept)
+
+      expect(contact_facts).to include('nome_cliente' => 'Jaqueline', 'documento_cpf' => '110.336.369-75')
+    end
+
+    it 'correção no MESMO turno: o novo CPF sobrescreve na hora (não espera o resolve)' do
+      mgr.persist_attributes({ 'documento_cpf' => '111.111.111-11' }, dept)
+      mgr.persist_attributes({ 'documento_cpf' => '222.222.222-22' }, dept)
+
+      expect(contact_facts['documento_cpf']).to eq('222.222.222-22')
+    end
+
+    it 'ausência (__sem_valor__) NÃO sobe para o contato, mas fica no ai_collected_facts da conversa' do
+      mgr.persist_attributes({ 'email_cliente' => Ai::StepSlot::ABSENT }, dept)
+
+      expect(contact_facts).not_to have_key('email_cliente') # não subiu ao contato
+      expect(convo.reload.additional_attributes['ai_collected_facts'])
+        .to include('email_cliente' => Ai::StepSlot::ABSENT) # segue na conversa (fill_absent intocado)
+    end
+
+    it 'duas CONVERSAS do mesmo contato com valores diferentes: última vence' do
+      mgr.persist_attributes({ 'cidade' => 'Chapecó' }, dept)
+      convo2 = create(:conversation, account: account, inbox: inbox, contact: contact)
+      described_class.new(conversation: convo2, agent: agent).persist_attributes({ 'cidade' => 'Maravilha' }, dept)
+
+      expect(contact_facts['cidade']).to eq('Maravilha')
+    end
+
+    it 'preserva chave não tocada na conversa seguinte (never-drop por chave)' do
+      mgr.persist_attributes({ 'nome_cliente' => 'Jaqueline' }, dept)
+      convo2 = create(:conversation, account: account, inbox: inbox, contact: contact)
+      described_class.new(conversation: convo2, agent: agent).persist_attributes({ 'documento_cpf' => '110.336.369-75' }, dept)
+
+      expect(contact_facts).to include('nome_cliente' => 'Jaqueline', 'documento_cpf' => '110.336.369-75')
+    end
+  end
 end

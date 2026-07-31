@@ -537,4 +537,36 @@ RSpec.describe Ai::PromptCompiler do
       expect(block).not_to include('Se o cliente corrigir depois')
     end
   end
+
+  # Frente C — bloco da memória do CONTATO. Apresenta o dado como de atendimentos ANTERIORES (não desta
+  # conversa) e NÃO diz mais "use e não pergunte de novo" (o que fazer é da instrução da etapa).
+  describe 'bloco Memória do cliente (Frente C)' do
+    def compile_with_memory(customer_memory)
+      described_class.compile(agent: build_agent, department: build_dept(instructions: 'x'),
+                              knowledge: [], memory: nil, tools: [], customer_memory: customer_memory)
+    end
+
+    it 'conv seguinte do mesmo contato: o bloco aparece com os dados, marcado como de atendimentos anteriores' do
+      mem = Ai::CustomerMemory.new(summary: nil,
+                                   key_facts: { 'nome_cliente' => 'Jaqueline', 'documento_cpf' => '110.336.369-75' })
+
+      prompt = compile_with_memory(mem)
+
+      expect(prompt).to include('de atendimentos ANTERIORES')
+      expect(prompt).to include('Dados deste cliente (de atendimentos anteriores):')
+      expect(prompt).to include('nome_cliente: Jaqueline')
+      expect(prompt).to include('documento_cpf: 110.336.369-75')
+      expect(prompt).not_to include('não pergunte de novo') # a diretiva de uso saiu (decisão 2)
+    end
+
+    it 'contato SEM memória anterior (nil): bloco ausente, sem regressão' do
+      expect(compile_with_memory(nil)).not_to include('Memória deste cliente')
+    end
+
+    it 'memória vazia (sem summary nem facts): bloco ausente' do
+      empty = Ai::CustomerMemory.new(summary: nil, key_facts: {})
+
+      expect(compile_with_memory(empty)).not_to include('Memória deste cliente')
+    end
+  end
 end
