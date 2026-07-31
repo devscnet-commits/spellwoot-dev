@@ -170,18 +170,23 @@ class Ai::PromptCompiler
     key
   end
 
-  # Persistent memory of THIS contact, built from past conversations (Ai::CustomerMemory). Reuse it
-  # and do NOT re-ask what is already known — same intent as the "Dados JÁ coletados" block, but
-  # spanning conversations. Returns [] when there is no memory yet.
+  # Memória PERSISTENTE deste contato, de atendimentos ANTERIORES (Ai::CustomerMemory). Frente C: o bloco só
+  # APRESENTA o dado, deixando claro que é de conversas passadas (não desta) — o QUE FAZER com cada dado (usar
+  # direto vs propor e confirmar) fica na INSTRUÇÃO da etapa, não aqui. Por isso NÃO diz mais "use e não
+  # pergunte de novo": essa diretiva fazia o modelo tratar o dado como já coletado NESTA conversa e pular a
+  # confirmação que a instrução pede. Duas partes rotuladas: Resumo (prosa) e Dados (estruturados). [] sem memória.
   def self.customer_memory_lines(customer_memory)
     return [] if customer_memory.nil?
 
     facts = customer_memory.key_facts.to_h
     return [] if customer_memory.summary.blank? && facts.blank?
 
-    lines = ['Memória do cliente (de conversas anteriores — use e NÃO pergunte de novo o que já souber):']
+    lines = ['Memória deste cliente (de atendimentos ANTERIORES, não desta conversa):']
     lines << "Resumo: #{customer_memory.summary}" if customer_memory.summary.present?
-    lines.concat(facts.map { |k, v| "- #{k}: #{v}" }) if facts.present?
+    if facts.present?
+      lines << 'Dados deste cliente (de atendimentos anteriores):'
+      lines.concat(facts.map { |k, v| "- #{k}: #{v}" })
+    end
     [lines.join("\n")]
   end
 
