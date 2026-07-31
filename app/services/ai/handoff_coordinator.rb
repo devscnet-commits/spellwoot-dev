@@ -40,7 +40,19 @@ class Ai::HandoffCoordinator
 
     target = ::Ai::Agent.where(account_id: @account.id, id: allowed_ids)
                         .find { |a| (a.assistant_name.presence || a.name).to_s.casecmp?(target_name) }
-    return false if target.nil? || target.team_id.blank?
+    # Observabilidade: o único evento (target_unmatched, caminho de TIME) não distinguia "nome de IA inventado"
+    # de "nome de time inexistente". reason separa: 'no_match' (não casa a whitelist — o modelo inventou) e
+    # 'matched_no_team' (casou MAS sem team_id — CONFIG faltando; como todo agente tem team_id nil hoje, é o
+    # caso que aparece assim que a instrução nomeia a IA certa — sem o evento, dava pra achar "nome errado").
+    if target.nil?
+      emit('handoff.ai_target_unmatched', { handoff_target: target_name, allowed_agent_ids: allowed_ids, reason: 'no_match' })
+      return false
+    end
+    if target.team_id.blank?
+      emit('handoff.ai_target_unmatched',
+           { handoff_target: target_name, allowed_agent_ids: allowed_ids, matched_agent_id: target.id, reason: 'matched_no_team' })
+      return false
+    end
 
     chain = Array(@conversation.additional_attributes&.dig('ai_handoff_chain'))
     return false if chain.size >= MAX_AI_HOPS # anti-loop: cap on IA->IA hops
