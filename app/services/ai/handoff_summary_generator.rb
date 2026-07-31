@@ -9,6 +9,14 @@ class Ai::HandoffSummaryGenerator
   # Mais mensagens que o gateway normal (12): o resumo precisa de contexto amplo da conversa toda.
   TRANSCRIPT_LIMIT = 40
 
+  # Rótulo de ausência ESPECÍFICO do resumo — diferente do StepSlot::ABSENT_LABEL global ("não informado").
+  # "não informado" é lido pelo MODELO como PENDÊNCIA ("segue pendente, próximo passo: coletar o e-mail") e
+  # ele editorializa a prosa em cima disso. Aqui o resumo é texto GERADO pelo LLM e LIDO por um humano — o
+  # rótulo precisa ser inequívoco de RESOLVIDO (o cliente declarou não ter), nunca uma lacuna a preencher.
+  # Neutro p/ qualquer slot (e-mail, telefone, comprovante, plano). Escopo: só este generator; o rótulo
+  # global "não informado" (usado no prompt do supervisor e na memória) fica intocado.
+  ABSENCE_LABEL = 'não possui (informado pelo cliente)'.freeze
+
   # Rótulos legíveis do motivo, para o atendente entender POR QUE caiu para humano.
   REASON_LABELS = {
     'loop' => 'a IA entrou em repetição/loop e não conseguiu avançar',
@@ -127,6 +135,14 @@ class Ai::HandoffSummaryGenerator
     parts << "Motivo da transferência para humano: #{reason_label}."
     if (attrs = collected_attributes).present?
       parts << "Dados já coletados do cliente: #{attrs}."
+      # Reforço explícito (formatação é o conserto primário, mas o modelo JÁ mostrou que editorializa em cima
+      # do rótulo): um dado de ausência declarada é RESOLVIDO, não pendência. Só entra quando há de fato uma
+      # ausência entre os dados — sem ruído no caso comum.
+      if declared_absences?
+        parts << 'IMPORTANTE: um dado marcado como "não possui (informado pelo cliente)" foi declarado pelo ' \
+                 'próprio cliente como inexistente — está RESOLVIDO, NÃO é pendência. Não o trate como algo a ' \
+                 'coletar nem sugira cobrá-lo do cliente.'
+      end
     end
     if (mem = agent_memory_summary(agent)).present?
       parts << "Contexto acumulado (memória do agente, apenas apoio — NÃO copie): #{mem}"
@@ -146,11 +162,24 @@ class Ai::HandoffSummaryGenerator
   # do contato e da conversa por cima — se a mesma chave existir, vence o custom_attribute, que pode
   # ter sido corrigido por um humano no painel.
   def collected_attributes
-    # Gap 1: o token de ausência (só existe em ai_collected_facts) é mapeado p/ "não informado" — o
-    # resumo do handoff é lido por um humano e NUNCA deve mostrar o token cru.
+    # Gap 1 + Frente D: o token de ausência (só existe em ai_collected_facts) NUNCA aparece cru. Mapeado por
+    # display_for_summary p/ um rótulo INEQUÍVOCO de "declarado inexistente" — e não p/ o "não informado"
+    # global, que o modelo lê como pendência e passa a cobrar do cliente. Vale p/ o prompt do LLM E o fallback.
     attributes_by_precedence
       .reject { |_, v| v.blank? }
-      .map { |k, v| "#{k}: #{Ai::StepSlot.display(v)}" }.join(', ')
+      .map { |k, v| "#{k}: #{display_for_summary(v)}" }.join(', ')
+  end
+
+  # Como StepSlot.display, mas com o rótulo de ausência ESPECÍFICO do resumo (ABSENCE_LABEL) no lugar do
+  # ABSENT_LABEL global. Qualquer outro valor passa direto.
+  def display_for_summary(value)
+    Ai::StepSlot.absent?(value) ? ABSENCE_LABEL : value
+  end
+
+  # Há ao menos um dado de AUSÊNCIA declarada entre os coletados? Decide o reforço no prompt (só quando faz
+  # diferença). Lê a mesma fonte de precedência que collected_attributes.
+  def declared_absences?
+    attributes_by_precedence.reject { |_, v| v.blank? }.any? { |_k, v| Ai::StepSlot.absent?(v) }
   end
 
   def attributes_by_precedence

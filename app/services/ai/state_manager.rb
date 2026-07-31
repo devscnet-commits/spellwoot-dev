@@ -276,7 +276,15 @@ class Ai::StateManager
   # 3ª guarda do TrivialTurnGate: a etapa CORRENTE está pronta para CONCLUIR (terminal com on_complete +
   # obrigatórios preenchidos)? Em etapa terminal pronta, um "ok" é o ACEITE da transição — o turno que
   # DISPARA a conclusão determinística — não ruído; o gate não pode engoli-lo (senão a conversa fica parada
-  # sem transferir). Reusa conclude_ready? (a MESMA verdade que o resolve_completion usa para o (b)-core).
+  # sem transferir). NÃO dispara em terminal com obrigatório faltando (conclude_ready? = false) — ali "ok" é
+  # ruído e PULA; por isso a guarda é conclude_ready?, não "declara on_complete".
+  #
+  # MESMO ESTADO Camada 0 (gate, ANTES do track_step) × Camada 1 (resolver, no track_step): reusa o MESMO
+  # conclude_ready? do (b)-core, com os MESMOS inputs (steps, index=ai_step_index pré-avanço, ai_collected_facts).
+  # O turno que aciona esta guarda é TRIVIAL ("ok"): não captura nada (a guarda (c) pending_slot já barrou
+  # qualquer slot pendente antes de chegar aqui) e não avança o índice — então os facts e o índice lidos aqui
+  # são idênticos aos que o resolver leria. Mesmo método + mesmos inputs => mesmo veredito (sem gate/resolver
+  # discordando), o mesmo cuidado do item 5 (slot_filled? reusa supervisor_slot_valid?).
   def conclude_ready_for_current?(department)
     steps = Array(department&.playbook&.steps)
     return false if steps.empty?
@@ -296,7 +304,11 @@ class Ai::StateManager
     # a captura só usa o julgamento quando há slot. Gap 2: attribute (não required_attribute) para o juiz
     # enxergar o slot também quando OPCIONAL. slot nil quando não há etapa/slot.
     slot = step ? Ai::StepSlot.attribute(step) : nil
-    Ai::Workers::CaptureJudge.judge(step: step, slot: slot, message_text: message_text,
+    # Frente B: passa o valor PROPOSTO no turno anterior (ai_last_proposed_value) p/ o juiz decidir se ESTE
+    # turno o CONFIRMA (status 'confirmed'). "" quando não há proposta pendente — o juiz ignora e se comporta
+    # como antes. Roda UMA vez por turno (o resultado é reusado no TurnCapture), então não há custo extra.
+    proposed = (@conversation.additional_attributes || {})['ai_last_proposed_value'].to_s.strip
+    Ai::Workers::CaptureJudge.judge(step: step, slot: slot, message_text: message_text, proposed_value: proposed,
                                     profile: @agent&.operation_profile, conversation: @conversation)
   end
 

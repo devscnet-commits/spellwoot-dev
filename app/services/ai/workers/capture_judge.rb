@@ -21,17 +21,25 @@ class Ai::Workers::CaptureJudge
     DO CLIENTE responde ao DADO que a etapa atual está coletando. Você NÃO fala com o cliente, NÃO
     responde perguntas, NÃO usa catálogo/base de conhecimento e NÃO inventa dados.
 
-    Responda ESTRITAMENTE um JSON válido, sem nenhum texto fora dele, em UM destes três formatos:
+    Responda ESTRITAMENTE um JSON válido, sem nenhum texto fora dele, em UM destes QUATRO formatos:
     - A mensagem CONTÉM o dado pedido (formato plausível para a chave):
       {"status":"answered","value":"<somente o dado, limpo, sem o texto ao redor>"}
     - A mensagem TENTA responder o dado pedido, mas veio incompleta/estranha para o que foi pedido:
       {"status":"malformed","value":"<o que o cliente enviou, exatamente como veio>"}
+    - Há um VALOR PROPOSTO (o atendente propôs esse valor e pediu confirmação) e a mensagem do cliente o
+      ACEITA/confirma sem dar outro valor ("sim", "pode ser", "isso mesmo", "perfeito", "pode ser sim"):
+      {"status":"confirmed"}
     - A mensagem NÃO é uma resposta ao dado pedido:
       {"status":"not_an_answer"}
 
     Regras (determinam o que entra na memória do cliente — seja rigoroso):
     1. Uma confirmação isolada ("sim", "ok", "pode ser", "isso", "está correto", "correto") NUNCA é o
-       dado — é "not_an_answer", A MENOS que a INSTRUÇÃO peça explicitamente um sim/não.
+       dado — é "not_an_answer", A MENOS que a INSTRUÇÃO peça explicitamente um sim/não. EXCEÇÃO: se houver
+       um VALOR PROPOSTO e a mensagem o aceita, use "confirmed" (regra 7).
+    7. "confirmed" SÓ existe quando há um VALOR PROPOSTO no contexto. Se o cliente, em vez de aceitar,
+       fornece um valor DIFERENTE ("prefiro manhã") -> "answered" com esse valor (o valor real vence a
+       proposta). Se RECUSA/nega ("não", "não pode", "outro dia") -> "not_an_answer" (sem valor proposto
+       gravado). Sem VALOR PROPOSTO no contexto, "confirmed" NUNCA se aplica.
     2. Uma pergunta do cliente ("qual plano?", "quanto custa?") é sempre "not_an_answer".
     3. Saudação, agradecimento ou assunto diferente do dado pedido é "not_an_answer".
     4. Em "answered", extraia SOMENTE o dado. Ex.: de "meu telefone é 4998564780" devolva "4998564780".
@@ -57,11 +65,11 @@ class Ai::Workers::CaptureJudge
   # Julga o turno. profile define provider/model (worker_overrides['capture_judge']) com fallback pro
   # supervisor. conversation dá account_id/conversation_id p/ o Ai::Run e os fatos já coletados. Retorna
   # sempre um Hash com :status (answered|malformed|not_an_answer|failed).
-  def self.judge(step:, slot:, message_text:, profile:, conversation:)
+  def self.judge(step:, slot:, message_text:, profile:, conversation:, proposed_value: nil) # rubocop:disable Metrics/ParameterLists
     return { status: 'failed', reason: 'blank_message' } if message_text.to_s.strip.empty?
 
     provider, model = worker_config(profile)
-    user_msg = user_message(step, slot, message_text, collected_facts(conversation))
+    user_msg = user_message(step, slot, message_text, collected_facts(conversation), proposed_value)
     raw = call_with_run(provider, model, user_msg, conversation)
     return { status: 'failed', reason: raw[:error].to_s.first(200) } if raw[:status] == 'error'
 
@@ -102,16 +110,23 @@ class Ai::Workers::CaptureJudge
      cfg['model'].presence || profile&.supervisor_model.presence || 'gpt-4.1-mini']
   end
 
-  def self.user_message(step, slot, message_text, collected)
+  def self.user_message(step, slot, message_text, collected, proposed_value = nil)
     instruction = (step.is_a?(Hash) ? (step['instructions'] || step[:instructions]) : nil).to_s.strip
     facts = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
                              .map { |k, v| "#{k}=#{v}" }.join(', ').presence || 'nenhum'
     <<~MSG.strip
       INSTRUÇÃO DA ETAPA: #{instruction}
       DADO A COLETAR (chave): #{slot}
-      DADOS JÁ COLETADOS: #{facts}
+      DADOS JÁ COLETADOS: #{facts}#{proposed_block(proposed_value)}
       MENSAGEM DO CLIENTE: #{message_text.to_s.strip}
     MSG
+  end
+
+  # Frente B: a linha do VALOR PROPOSTO só entra quando há proposta pendente — sem ela, o juiz nunca vê
+  # "confirmed" como opção viável (regra 7) e se comporta byte-a-byte como antes.
+  def self.proposed_block(proposed_value)
+    v = proposed_value.to_s.strip
+    v.present? ? "\nVALOR PROPOSTO PELO ATENDENTE: #{v}" : ''
   end
 
   # Parse tolerante: pega o objeto JSON e valida os 3 status. value obrigatório p/ answered/malformed.
@@ -127,6 +142,10 @@ class Ai::Workers::CaptureJudge
     when 'answered', 'malformed'
       value = data['value'].to_s.strip
       value.present? ? { status: status, value: value, **intent } : { status: 'failed', reason: 'blank_value', **intent }
+    when 'confirmed'
+      # Frente B: aceite de valor proposto. NÃO carrega value — quem grava é o motor (TurnCapture), lendo o
+      # ai_last_proposed_value guardado. O juiz só sinaliza a intenção "confirmou".
+      { status: 'confirmed', **intent }
     when 'not_an_answer'
       { status: 'not_an_answer', **intent }
     else
