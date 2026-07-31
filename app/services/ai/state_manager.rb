@@ -304,11 +304,7 @@ class Ai::StateManager
     # a captura só usa o julgamento quando há slot. Gap 2: attribute (não required_attribute) para o juiz
     # enxergar o slot também quando OPCIONAL. slot nil quando não há etapa/slot.
     slot = step ? Ai::StepSlot.attribute(step) : nil
-    # Frente B: passa o valor PROPOSTO no turno anterior (ai_last_proposed_value) p/ o juiz decidir se ESTE
-    # turno o CONFIRMA (status 'confirmed'). "" quando não há proposta pendente — o juiz ignora e se comporta
-    # como antes. Roda UMA vez por turno (o resultado é reusado no TurnCapture), então não há custo extra.
-    proposed = (@conversation.additional_attributes || {})['ai_last_proposed_value'].to_s.strip
-    Ai::Workers::CaptureJudge.judge(step: step, slot: slot, message_text: message_text, proposed_value: proposed,
+    Ai::Workers::CaptureJudge.judge(step: step, slot: slot, message_text: message_text,
                                     profile: @agent&.operation_profile, conversation: @conversation)
   end
 
