@@ -4,7 +4,7 @@
 # account-scoped. Reuses Ai::ModelRouter (cheap fixed model) and records an Ai::Run for audit/cost —
 # consuming the account's AI credits like every other AI call.
 class Ai::PromptAssistant
-  MODEL = 'gpt-4.1-mini'
+  MODEL = 'gpt-4.1-mini'.freeze
   KINDS = %w[base_prompt step_instructions].freeze
 
   # System prompt para gerar o base_prompt de um agente. As regras obrigatórias derivam do bug real
@@ -110,13 +110,18 @@ class Ai::PromptAssistant
     return { 'error' => 'descreva o que você quer no campo de texto' } if @brief.strip.blank?
 
     run = Ai::Run.create!(account_id: @account.id, run_type: 'prompt_assistant', mode: 'assistant', status: 'running')
-    result = Ai::ModelRouter.decide(
-      profile: nil, provider: 'openai', model: MODEL,
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    # call_model (entrada LIVRE, SEM schema) — como o handoff_summary/CaptureJudge. O `decide` imporia o
+    # DecisionSchema strict e a saída viraria o ENVELOPE de decisão (decision/asked_slot/proposed_value/...),
+    # NUNCA o {"suggestion"} que o prompt pede (bug #302: o formato dependia de qual método chamava o modelo).
+    raw = Ai::ModelRouter.call_model(
+      provider: 'openai', model: MODEL,
       system_prompt: system_prompt(@kind), user_message: @brief, account_id: @account.id, json: true
     )
-    record_run(run, result)
+    suggestion = extract_suggestion(raw[:text])
+    record_run(run, raw, suggestion, started)
 
-    { 'suggestion' => extract_suggestion(result), 'run_id' => run.id, 'status' => result[:status] }
+    { 'suggestion' => suggestion, 'run_id' => run.id, 'status' => raw[:status] == 'error' ? 'error' : 'recorded' }
   rescue StandardError => e
     Rails.logger.error "[Ai::PromptAssistant] account=#{@account&.id} kind=#{@kind} #{e.class}: #{e.message}"
     { 'error' => "#{e.class}: #{e.message}" }
@@ -124,19 +129,31 @@ class Ai::PromptAssistant
 
   private
 
-  # The model returns { "suggestion": "<texto>" } (json: true). Degrade gracefully to raw text.
-  def extract_suggestion(result)
-    decision = result[:decision]
-    return decision['suggestion'].to_s if decision.is_a?(Hash) && decision['suggestion'].present?
-
-    decision.is_a?(Hash) ? decision.to_json : decision.to_s
+  # call_model devolve TEXTO CRU (sem schema): extraímos o {"suggestion":...} nós mesmos (parser tolerante,
+  # como o handoff_summary#extract_summary). Degrada para o texto cru quando não vier JSON.
+  def extract_suggestion(text)
+    str = text.to_s
+    if (json = str[/\{.*\}/m])
+      value = begin
+        JSON.parse(json)['suggestion']
+      rescue JSON::ParserError
+        nil
+      end
+      return value.to_s if value.present?
+    end
+    str.strip
   end
 
-  def record_run(run, result)
+  # call_model NÃO devolve cost/latency (o decide devolvia) — computamos aqui, como o handoff_summary, senão
+  # o ai:cost_report subconta o assistente.
+  def record_run(run, raw, suggestion, started)
+    tin = raw[:tokens_in].to_i
+    tout = raw[:tokens_out].to_i
     run.update!(
-      provider: result[:provider], model: result[:model], tokens_in: result[:tokens_in],
-      tokens_out: result[:tokens_out], cost: result[:cost], latency_ms: result[:latency_ms],
-      decision: result[:decision] || {}, status: result[:status]
+      provider: raw[:provider] || 'openai', model: raw[:model] || MODEL, tokens_in: tin, tokens_out: tout,
+      cost: Ai::ModelRouter.estimate_cost(MODEL, tin, tout),
+      latency_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round,
+      decision: { 'suggestion' => suggestion }, status: raw[:status] == 'error' ? 'error' : 'recorded'
     )
   end
 

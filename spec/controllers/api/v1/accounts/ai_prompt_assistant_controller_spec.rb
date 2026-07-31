@@ -5,13 +5,14 @@ RSpec.describe 'AI Prompt Assistant API', type: :request do
   let(:admin) { create(:user, account: account, role: :administrator) }
 
   before do
-    allow(Ai::ModelRouter).to receive(:decide).and_return(
-      { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'suggestion' => 'ok' },
-        tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
+    # O serviço usa call_model (texto livre), NÃO decide (schema) — ver Ai::PromptAssistant / regressão #302.
+    allow(Ai::ModelRouter).to receive(:call_model).and_return(
+      { provider: 'openai', model: 'gpt-4.1-mini', text: '{"suggestion":"ok"}',
+        tokens_in: 1, tokens_out: 1, status: 'recorded' }
     )
   end
 
-  def post_assistant(kind: 'base_prompt', brief: 'agente comercial de internet')
+  def post_assistant(kind: 'base_prompt', brief: 'agente de atendimento')
     post "/api/v1/accounts/#{account.id}/ai_prompt_assistant",
          params: { kind: kind, brief: brief }, headers: admin.create_new_auth_token, as: :json
   end
