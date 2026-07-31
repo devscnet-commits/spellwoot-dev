@@ -11,7 +11,7 @@
 # Persiste pelo `persister` (o Ai::StateManager) -> reaproveita persist_attributes e herda o espelhamento
 # para custom_attributes (#265). Opera sobre a MESMA conversa do StateManager (a sincronização em memória
 # do claim preserva os RMW seguintes de persist_step_state).
-class Ai::TurnCapture
+class Ai::TurnCapture # rubocop:disable Metrics/ClassLength -- orquestrador de captura em decomposição; cruzou 175 com a Frente B
   def initialize(conversation:, persister:, agent: nil)
     @conversation = conversation
     @persister = persister
@@ -76,6 +76,9 @@ class Ai::TurnCapture
 
       return
     end
+
+    # Frente B: proposta pendente p/ slot VAZIO — o juiz decide o aceite e gravamos o valor PROPOSTO (ver helper).
+    return if confirm_proposed_value(step, asked, department, judge_result)
 
     # Só MEDIÇÃO (não altera fluxo): a pergunta do turno anterior divergiu do slot da etapa corrente.
     emit_asked_desync(asked, step_slot) if asked.present? && asked != step_slot
@@ -148,6 +151,32 @@ class Ai::TurnCapture
   # o valor do turno anterior — nunca o deste turno.
   def last_asked_slot
     (@conversation.additional_attributes || {})['ai_last_asked_slot'].to_s.strip
+  end
+
+  # Frente B — CONFIRMAÇÃO DE VALOR PROPOSTO (slot vazio). O turno anterior propôs um valor (ai_last_proposed_value)
+  # e pediu sim/não; o slot segue vazio (senão teria caído na guarda de confirmação de slot preenchido). O JUIZ
+  # (status 'confirmed', não uma lista de frases em PT) decide o aceite -> grava o VALOR PROPOSTO no slot
+  # perguntado, nunca o "sim", pelo MESMO gate do supervisor (valida o valor contra o tipo do slot declarante).
+  # Negativa/valor-real/pergunta NÃO são 'confirmed' e seguem o fluxo normal (not_an_answer nada grava =>
+  # repergunta; um valor REAL vem 'answered' e o caminho normal grava o real). true = confirmou e gravou.
+  def confirm_proposed_value(step, asked, department, judge_result)
+    return false unless asked.present? && judge_confirmed?(judge_result)
+
+    proposed = pending_proposed_value
+    return false if proposed.blank?
+
+    persist_judged(step, asked, proposed, department, 'proposal_confirmed', 'confirmed')
+    true
+  end
+
+  # O valor PROPOSTO no turno anterior (persist_step_state grava ao lado do asked_slot, mesmo ciclo incondicional).
+  def pending_proposed_value
+    (@conversation.additional_attributes || {})['ai_last_proposed_value'].to_s.strip
+  end
+
+  # O juiz (1x/turno, camada 3) disse que este turno CONFIRMA o proposto? nil (juiz OFF/claim perdido) => false.
+  def judge_confirmed?(judge_result)
+    judge_result.is_a?(Hash) && judge_result[:status].to_s == 'confirmed'
   end
 
   # asked_slot VALIDADO: aceito só se for uma chave CONHECIDA (slots do playbook ∪ lead_variables ∪
