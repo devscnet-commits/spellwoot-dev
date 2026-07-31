@@ -1,13 +1,14 @@
 <script setup>
 /* global axios */
 // Sem agent_bots: o atendimento desta caixa é definido pelos Agentes de IA. Esta tela mostra quais IAs
-// atendem a caixa E — quando mais de uma RESPONDE — em que ORDEM (priority), editável aqui: a decisão de
-// "qual IA responde nesta caixa" é DA CAIXA, entre agentes (marcar/desmarcar segue na aba Caixas do agente).
+// atendem a caixa E — quando mais de uma RESPONDE — QUAL é a principal (rádio). A decisão de "qual IA
+// responde nesta caixa" é DA CAIXA (marcar/desmarcar segue na aba Caixas do agente). O rádio elimina o
+// empate por construção: uma principal (priority 1), as demais em 2 (a eleição só usa o menor).
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
-import { priorityTie, buildPriorityPayload } from './aiInboxPriority';
+import { principalAgentId, buildPriorityPayload } from './aiInboxPriority';
 
 const props = defineProps({
   inbox: {
@@ -27,22 +28,27 @@ const prioritiesUrl = () =>
 
 // [{ agent_id, agent_name, mode, priority }] — os agentes que atendem esta caixa, ordenados como a eleição.
 const attendingAgents = ref([]);
+// agent_id da IA PRINCIPAL (o rádio marcado). Derivado do estado atual no fetch (sem mutar); normaliza no save.
+const principalId = ref(null);
 const isLoading = ref(false);
 const isSaving = ref(false);
 
 const liveAgents = computed(() =>
   attendingAgents.value.filter(a => a.mode === 'live')
 );
-// Empate real (>=2 live no menor priority) — o agent.priority_tie que o backend emite.
-const tie = computed(() => priorityTie(attendingAgents.value));
+// Uma IA live só: não há eleição; o rádio fica marcado e TRAVADO (comunica o estado, não some).
+const singleLive = computed(() => liveAgents.value.length === 1);
 
 const fetchAttending = async () => {
   isLoading.value = true;
   try {
     const { data } = await axios.get(prioritiesUrl());
     attendingAgents.value = Array.isArray(data) ? data : [];
+    // deriva a principal do estado atual (min [priority, id]) — sem mutar o que está salvo
+    principalId.value = principalAgentId(attendingAgents.value);
   } catch (error) {
     attendingAgents.value = [];
+    principalId.value = null;
   } finally {
     isLoading.value = false;
   }
@@ -52,7 +58,10 @@ const savePriorities = async () => {
   isSaving.value = true;
   try {
     await axios.patch(prioritiesUrl(), {
-      priorities: buildPriorityPayload(attendingAgents.value),
+      priorities: buildPriorityPayload(
+        attendingAgents.value,
+        principalId.value
+      ),
     });
     useAlert(t('AI_AGENTS.INBOX_BOT.PRIORITY_SAVED'));
     await fetchAttending(); // recarrega na ordem da eleição
@@ -92,49 +101,39 @@ onMounted(fetchAttending);
         {{ $t('AI_AGENTS.INBOX_BOT.ATTENDED_BY') }}
       </span>
 
-      <!-- Aviso de empate REAL (agent.priority_tie): >=2 IAs No ar dividindo o menor número -->
-      <div
-        v-if="tie"
-        class="flex items-start gap-2 rounded-lg border border-n-amber-6 bg-n-amber-2 px-3 py-2 text-xs text-n-amber-11"
-      >
-        <span class="i-lucide-alert-triangle size-4 shrink-0 mt-0.5" />
-        <span>
-          {{
-            $t('AI_AGENTS.INBOX_BOT.TIE_WARNING', {
-              names: tie.names.join(', '),
-              priority: tie.priority,
-            })
-          }}
-        </span>
-      </div>
-
       <div class="flex flex-col gap-2">
         <div
           v-for="agent in attendingAgents"
           :key="agent.agent_id"
           class="flex items-center justify-between gap-3 rounded-xl border border-n-weak bg-n-solid-1 px-4 py-3"
         >
-          <div class="flex items-center gap-2 min-w-0">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <!-- rádio "IA principal": só para quem RESPONDE (live). Marcar uma desmarca as outras. -->
+            <input
+              v-if="agent.mode === 'live'"
+              v-model="principalId"
+              type="radio"
+              name="ai-inbox-principal"
+              :value="agent.agent_id"
+              :disabled="singleLive"
+              data-testid="agent-principal"
+              class="shrink-0"
+            />
+            <!-- sombra observa e não compete: sem rádio, mas com espaçador para alinhar com as live -->
+            <span v-else class="size-4 shrink-0" />
             <span class="i-lucide-bot size-4 text-n-brand shrink-0" />
             <span class="text-sm font-medium text-n-slate-12 truncate">
               {{ agent.agent_name }}
             </span>
           </div>
           <div class="shrink-0 flex items-center gap-3">
-            <!-- priority só para quem RESPONDE (live); sombra observa e não compete -->
-            <label
-              v-if="agent.mode === 'live'"
-              class="flex items-center gap-1.5 text-xs text-n-slate-11"
+            <!-- IA live única: o rádio fica marcado+travado; este texto explica o porquê -->
+            <span
+              v-if="agent.mode === 'live' && singleLive"
+              class="text-xs text-n-slate-11"
             >
-              {{ $t('AI_AGENTS.INBOX_BOT.PRIORITY_LABEL') }}
-              <input
-                v-model.number="agent.priority"
-                type="number"
-                min="1"
-                data-testid="agent-priority"
-                class="w-14 px-2 py-1 rounded border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
-              />
-            </label>
+              {{ $t('AI_AGENTS.INBOX_BOT.SINGLE_LIVE') }}
+            </span>
             <span
               class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
               :class="
@@ -154,10 +153,11 @@ onMounted(fetchAttending);
       </div>
 
       <p class="text-xs text-n-slate-11 mb-0">
-        {{ $t('AI_AGENTS.INBOX_BOT.PRIORITY_HINT') }}
+        {{ $t('AI_AGENTS.INBOX_BOT.PRINCIPAL_HINT') }}
       </p>
 
-      <div v-if="liveAgents.length" class="flex justify-end">
+      <!-- Salvar só quando há ELEIÇÃO (>=2 live). Com 1 ou 0 não há o que escolher. -->
+      <div v-if="liveAgents.length >= 2" class="flex justify-end">
         <button
           type="button"
           :disabled="isSaving"

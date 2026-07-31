@@ -1,66 +1,73 @@
-import { priorityTie, buildPriorityPayload } from '../aiInboxPriority';
+import { principalAgentId, buildPriorityPayload } from '../aiInboxPriority';
 
-// Empate = >=2 IAs No ar (live) dividindo o MENOR priority na caixa — o agent.priority_tie que o backend
-// emite. Só o menor importa (é o que a eleição usa). Prova de mutação por nome.
-describe('priorityTie — empate real na caixa', () => {
-  it('null quando há menos de 2 IAs No ar', () => {
-    expect(priorityTie([{ agent_name: 'A', mode: 'live', priority: 1 }])).toBe(
-      null
-    );
+// Rádio "IA principal": a principal deriva do menor [priority, id] entre as live (igual à eleição do
+// backend). buildPriorityPayload grava 1 na principal e 2 nas demais live. Prova de mutação por nome.
+describe('principalAgentId — deriva a IA principal do estado atual (sem mutar)', () => {
+  it('menor priority entre as live vence', () => {
+    const agents = [
+      { agent_id: 1, mode: 'live', priority: 2 },
+      { agent_id: 2, mode: 'live', priority: 1 },
+    ];
+    expect(principalAgentId(agents)).toBe(2);
   });
 
-  it('avisa quando 2+ live dividem o MENOR priority, com os nomes', () => {
-    const tie = priorityTie([
-      { agent_name: 'Maya', mode: 'live', priority: 1 },
-      { agent_name: 'Cris', mode: 'live', priority: 1 },
-      { agent_name: 'Bot3', mode: 'live', priority: 2 },
-    ]);
-    expect(tie).toEqual({ priority: 1, names: ['Maya', 'Cris'] });
+  it('empate no priority -> desempate pelo MENOR agent_id (igual ao min_by [priority, id])', () => {
+    const agents = [
+      { agent_id: 5, mode: 'live', priority: 1 },
+      { agent_id: 3, mode: 'live', priority: 1 }, // mesmo priority, id menor
+    ];
+    expect(principalAgentId(agents)).toBe(3);
   });
 
-  it('null quando os menores são distintos (sem empate no menor)', () => {
+  it('ignora as IAs em sombra (não competem)', () => {
+    const agents = [
+      { agent_id: 1, mode: 'shadow', priority: 1 },
+      { agent_id: 2, mode: 'live', priority: 5 },
+    ];
+    expect(principalAgentId(agents)).toBe(2);
+  });
+
+  it('sem nenhuma live -> null', () => {
     expect(
-      priorityTie([
-        { agent_name: 'A', mode: 'live', priority: 1 },
-        { agent_name: 'B', mode: 'live', priority: 2 },
-      ])
+      principalAgentId([{ agent_id: 1, mode: 'shadow', priority: 1 }])
     ).toBe(null);
-  });
-
-  it('ignora as IAs em SOMBRA (não competem na eleição)', () => {
-    // duas em priority 1, mas uma é shadow -> só 1 live no menor -> sem empate
-    expect(
-      priorityTie([
-        { agent_name: 'A', mode: 'live', priority: 1 },
-        { agent_name: 'B', mode: 'shadow', priority: 1 },
-      ])
-    ).toBe(null);
-  });
-
-  it('empate no menor mesmo com outra dupla empatada acima (só o menor conta)', () => {
-    const tie = priorityTie([
-      { agent_name: 'A', mode: 'live', priority: 2 },
-      { agent_name: 'B', mode: 'live', priority: 2 },
-      { agent_name: 'C', mode: 'live', priority: 5 },
-      { agent_name: 'D', mode: 'live', priority: 5 },
-    ]);
-    expect(tie).toEqual({ priority: 2, names: ['A', 'B'] });
+    expect(principalAgentId([])).toBe(null);
   });
 });
 
-describe('buildPriorityPayload — só os agentes que respondem (live)', () => {
-  it('manda { agent_id, priority } só dos live; ignora sombra', () => {
-    const payload = buildPriorityPayload([
-      { agent_id: 1, mode: 'live', priority: 2 },
-      { agent_id: 2, mode: 'shadow', priority: 9 },
+describe('buildPriorityPayload — principal 1, demais live 2 (sombra fora)', () => {
+  it('grava 1 na principal e 2 nas outras live', () => {
+    const agents = [
+      { agent_id: 1, mode: 'live', priority: 9 },
+      { agent_id: 2, mode: 'live', priority: 9 },
+      { agent_id: 3, mode: 'live', priority: 9 },
+    ];
+    expect(buildPriorityPayload(agents, 2)).toEqual([
+      { agent_id: 1, priority: 2 },
+      { agent_id: 2, priority: 1 },
+      { agent_id: 3, priority: 2 },
     ]);
-    expect(payload).toEqual([{ agent_id: 1, priority: 2 }]);
   });
 
-  it('prioridade inválida/vazia cai no default 1', () => {
-    const payload = buildPriorityPayload([
-      { agent_id: 3, mode: 'live', priority: null },
+  it('cura o legado empatado ([1,1] -> [1,2]) quando a principal é a de menor id', () => {
+    const agents = [
+      { agent_id: 3, mode: 'live', priority: 1 },
+      { agent_id: 7, mode: 'live', priority: 1 },
+    ];
+    const principal = principalAgentId(agents); // 3 (menor id no empate)
+    expect(buildPriorityPayload(agents, principal)).toEqual([
+      { agent_id: 3, priority: 1 },
+      { agent_id: 7, priority: 2 },
     ]);
-    expect(payload).toEqual([{ agent_id: 3, priority: 1 }]);
+  });
+
+  it('sombra NÃO entra no payload (priority irrelevante)', () => {
+    const agents = [
+      { agent_id: 1, mode: 'live', priority: 1 },
+      { agent_id: 2, mode: 'shadow', priority: 1 },
+    ];
+    expect(buildPriorityPayload(agents, 1)).toEqual([
+      { agent_id: 1, priority: 1 },
+    ]);
   });
 });

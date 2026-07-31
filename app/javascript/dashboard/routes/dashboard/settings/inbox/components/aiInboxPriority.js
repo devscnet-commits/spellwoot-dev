@@ -1,19 +1,29 @@
-// Empate de prioridade na caixa — espelha o Ai::GatewayRunJob#emit_priority_tie (nível config): entre as
-// IAs que RESPONDEM (mode 'live') na MESMA caixa, >=2 dividindo o MENOR priority. Só o menor importa: é ele
-// que a eleição ([priority ASC, id ASC]) usa; empate ali cai no desempate por id. Devolve { priority, names }
-// ou null. (Sombra não compete -> não entra.)
-export const priorityTie = agents => {
+// Prioridade de eleição da caixa via rádio "IA principal" — empate deixa de existir por construção: uma IA
+// é principal (priority 1), as demais que respondem ficam em 2 (a eleição `min_by [priority, id]` só usa o
+// menor; a ordem dos não-principais nunca é lida). Sombra não compete -> fora do grupo.
+
+// Deriva a IA principal do estado ATUAL (para o render inicial, SEM mutar): a live de menor [priority, id]
+// — o MESMO que a eleição escolhe. Legado empatado ([1,1]) pré-seleciona a de menor id; a normalização para
+// [1,2] só acontece no SAVE (ação explícita), nunca no load.
+export const principalAgentId = agents => {
   const live = (agents || []).filter(a => a && a.mode === 'live');
-  if (live.length < 2) return null;
-  const min = Math.min(...live.map(a => Number(a.priority) || 0));
-  const tied = live.filter(a => (Number(a.priority) || 0) === min);
-  return tied.length >= 2
-    ? { priority: min, names: tied.map(a => a.agent_name) }
-    : null;
+  if (!live.length) return null;
+
+  return live
+    .slice()
+    .sort(
+      (a, b) =>
+        (Number(a.priority) || 0) - (Number(b.priority) || 0) ||
+        a.agent_id - b.agent_id
+    )[0].agent_id;
 };
 
-// Payload do PATCH: só os agentes que respondem (live) — priority de sombra é irrelevante para a eleição.
-export const buildPriorityPayload = agents =>
+// Payload do PATCH: só as IAs que respondem (live). A principal recebe 1, as demais 2 (sombra não vai —
+// priority de sombra é irrelevante). O backend não muda.
+export const buildPriorityPayload = (agents, principalId) =>
   (agents || [])
     .filter(a => a && a.mode === 'live')
-    .map(a => ({ agent_id: a.agent_id, priority: Number(a.priority) || 1 }));
+    .map(a => ({
+      agent_id: a.agent_id,
+      priority: a.agent_id === principalId ? 1 : 2,
+    }));

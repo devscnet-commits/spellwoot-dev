@@ -117,12 +117,11 @@
       "MODE_SHADOW": "Sombra (observando)",
       "NONE": "Nenhum agente de IA atende esta caixa ainda.",
       "MANAGE": "Configurar em Agentes IA",
-      "PRIORITY_LABEL": "Prioridade",
-      "PRIORITY_HINT": "Quando mais de uma IA responde (No ar) nesta caixa, a de MENOR número atende. As demais ficam disponíveis para receber transferências. Empate no menor número cai no desempate interno — dê números distintos.",
-      "PRIORITY_SAVE": "Salvar prioridades",
-      "PRIORITY_SAVED": "Prioridades salvas.",
-      "PRIORITY_ERROR": "Não consegui salvar as prioridades. Tente novamente.",
-      "TIE_WARNING": "Empate de prioridade: {names} dividem o número {priority} nesta caixa. O desempate cai no interno (id); dê números distintos para decidir qual responde."
+      "PRINCIPAL_HINT": "A IA principal (marcada) responde primeiro quando mais de uma atende esta caixa. As demais ficam disponíveis para receber transferências.",
+      "SINGLE_LIVE": "única IA nesta caixa",
+      "PRIORITY_SAVE": "Salvar",
+      "PRIORITY_SAVED": "IA principal salva.",
+      "PRIORITY_ERROR": "Não consegui salvar. Tente novamente."
     },
     "HANDOFF": {
       "TITLE": "Para onde o agente transfere",
