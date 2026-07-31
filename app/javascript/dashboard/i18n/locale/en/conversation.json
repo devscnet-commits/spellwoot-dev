@@ -377,7 +377,9 @@
     },
     "AI_MEMORY": {
       "EMPTY": "No memory yet — it's built automatically when conversations with this contact are resolved.",
-      "META": "Updated {date} · {count} conversations"
+      "META": "Updated {date} · {count} conversations",
+      "LABEL_CUSTOMER": "Memória do cliente",
+      "LABEL_COLLECTED": "Coletado nesta conversa"
     },
     "HANDOFF_SUMMARY": {
       "EMPTY": "No AI handoff yet — a summary appears here when the AI transfers this conversation to a human.",
