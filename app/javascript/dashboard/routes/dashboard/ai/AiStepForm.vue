@@ -728,26 +728,33 @@ const onSave = () => {
     </div>
 
     <!-- e) Rodapé -->
-    <div class="flex items-center justify-end gap-2 flex-wrap">
-      <button
-        type="button"
-        class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-        @click="emit('cancel')"
-      >
-        {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
-      </button>
-      <button
-        type="button"
-        :disabled="!draft.name.trim()"
-        class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-        @click="onSave"
-      >
-        {{
-          isNew
-            ? $t('AI_DEPARTMENTS.FORM.STEP_CREATE')
-            : $t('AI_DEPARTMENTS.FORM.SAVE')
-        }}
-      </button>
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <!-- Microcopy honesta: o Salvar grava a PÁGINA inteira no servidor na hora (não só esta etapa) — o
+           rótulo não deve deixar ninguém deduzir um escopo que não existe (a PATCH é do departamento todo). -->
+      <span class="text-xs text-n-slate-11">
+        {{ $t('AI_DEPARTMENTS.FORM.STEP_SAVE_HINT') }}
+      </span>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+          @click="emit('cancel')"
+        >
+          {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
+        </button>
+        <button
+          type="button"
+          :disabled="!draft.name.trim()"
+          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          @click="onSave"
+        >
+          {{
+            isNew
+              ? $t('AI_DEPARTMENTS.FORM.STEP_CREATE')
+              : $t('AI_DEPARTMENTS.FORM.SAVE')
+          }}
+        </button>
+      </div>
     </div>
 
     <AiPromptAssistant v-model:open="assistantOpen" kind="step_instructions" />

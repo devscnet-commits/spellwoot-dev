@@ -10,6 +10,7 @@ import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
+import { useUnsavedChangesGuard } from 'dashboard/composables/useUnsavedChangesGuard';
 import AiTools from './AiTools.vue';
 import AiStepForm from './AiStepForm.vue';
 // (De)serialização de etapa por SPREAD (preserva collect/slot_required/campos futuros) — ver aiStepPayload.
@@ -463,16 +464,24 @@ const save = async () => {
     if (isNew.value) {
       const { data } = await axios.post(deptCollectionUrl(), buildPayload());
       departmentId.value = data.id;
+      // (Q6) Também no create: o router.replace REUSA o componente (não recarrega), então sem re-hidratar,
+      // um save-de-etapa seguinte (agora PATCH) mandaria a versão velha -> 409. Fresca da resposta do POST.
+      playbookLockVersion.value = data?.playbook?.lock_version ?? 0;
       useAlert(t('AI_DEPARTMENTS.SAVED'));
       router.replace({
         name: 'ai_department_detail',
         params: { agentId: route.params.agentId, departmentId: data.id },
       });
     } else {
-      await axios.patch(
+      const { data } = await axios.patch(
         `${deptCollectionUrl()}/${departmentId.value}`,
         buildPayload()
       );
+      // (Q6) Re-hidrata o lock_version com a versão FRESCA da resposta. Com (B) o save dispara por etapa; sem
+      // isto, o 2º save da sequência mandaria a versão velha e levaria 409 SEMPRE. O serialize devolve
+      // playbook.as_json (inclui lock_version), a mesma forma que o load lê. Fallback: preserva o atual.
+      playbookLockVersion.value =
+        data?.playbook?.lock_version ?? playbookLockVersion.value;
       useAlert(t('AI_DEPARTMENTS.SAVED'));
     }
     conflict.value = { phase: null };
@@ -569,13 +578,21 @@ const versionsBaseUrl = computed(
 // Em edição: número (editar aquele card), 'new' (adicionar) ou null (nada).
 const editingStepIndex = ref(null);
 
+// (A) Aviso ao sair com pendência. Rede de segurança MESMO com (B): o form sujo (deptDirty) OU um editor
+// de etapa ABERTO (editingStepIndex != null) — o rascunho digitado sem clicar em Salvar é o caso que se
+// perdia. Reusa o composable existente (onBeforeRouteLeave + confirm).
+useUnsavedChangesGuard(
+  () => deptDirty.value || editingStepIndex.value !== null,
+  'AI_DEPARTMENTS.FORM.UNSAVED_LEAVE_CONFIRM'
+);
+
 const openNewStep = () => {
   editingStepIndex.value = 'new';
 };
 const openEditStep = index => {
   editingStepIndex.value = index;
 };
-const saveStep = payload => {
+const saveStep = async payload => {
   if (editingStepIndex.value === 'new') {
     form.steps.push({ uid: nextStepUid(), ...payload });
   } else if (typeof editingStepIndex.value === 'number') {
@@ -583,6 +600,10 @@ const saveStep = payload => {
     form.steps.splice(i, 1, mergeStepEdit(form.steps[i], payload));
   }
   editingStepIndex.value = null;
+  // (B) O Salvar da etapa PERSISTE na hora — não só fecha o editor. Reusa o save() do rodapé (mesma PATCH do
+  // departamento inteiro; não há rota por etapa). O lock_version #324 é re-hidratado no save() (ver Q6), então
+  // salvar várias etapas em sequência não dá 409. Fecha a armadilha do "Salvar que só fechava o editor".
+  await save();
 };
 const cancelStep = () => {
   editingStepIndex.value = null;
