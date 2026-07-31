@@ -59,20 +59,25 @@ class Ai::HandoffCoordinator
     false
   end
 
-  # TIME de destino do handoff, na ordem: 1) time único do agente (Ai::Agent.team_id, determinístico);
-  # 2) setor pedido pelo modelo (handoff_target) casado por NOME — restrito à allowlist do agente quando
-  # houver; 3) a lista "Transferir para times (humanos)" (handoff_team_ids), escolhendo UM time dela
-  # (é o que resolve o handoff por LOOP, que chega sem handoff_target); 4) nil. Antes parava em (1)/(2)
-  # e a lista era órfã (nenhum roteamento a lia) — por isso caía no fallback de membro aleatório da caixa.
+  # TIME de destino do handoff HUMANO, na ordem: 1) setor pedido pelo modelo (handoff_target) casado por
+  # NOME — restrito à allowlist do agente quando houver; 2) o default DECLARADO (fallback_handoff_team_id),
+  # senão o configured (1º da whitelist "Transferir para times") — resolve o give-up/loop, que chega sem
+  # handoff_target; 3) nil.
+  #
+  # agent.team_id NÃO é destino de handoff — é FILTRO DE ENTRADA (quais conversas o agente atende, via
+  # eligible_live? no GatewayRunJob), nascido como "Time (roteamento)"/"Qualquer conversa" na Fase B.2
+  # (commit 15833ee04). O `return @agent.team_id` que existia aqui como PRIMEIRA linha (322d8f051, paliativo
+  # de "atribuição confiável") ATROPELAVA whitelist + intenção + fallback (matriz H1) e discordava do
+  # conclusion_team_id (H7). REMOVIDO: o handoff determinístico agora vem do fallback_handoff_team_id +
+  # configured (a máquina de whitelist), fonte ÚNICA de destino — e give-up e conclusão passam a CONCORDAR.
+  # team_id segue só como filtro (e como endereço IA->IA em route_to_ai, que usa o team_id do agente-ALVO).
   def human_team_id(decision)
     target = decision['handoff_target'].to_s.strip
-    return @agent.team_id if @agent.team_id.present?
-
-    Rails.logger.info "[Ai::HandoffCoordinator] agente sem team_id; match por nome: #{target.inspect}" if target.present?
+    Rails.logger.info "[Ai::HandoffCoordinator] handoff por nome: #{target.inspect}" if target.present?
     matched = match_team_by_name(target)
     return matched if matched
 
-    # (3)+(H8) Nenhum destino DECLARADO resolveu: give-up (target VAZIO — loop/stuck/credit/provider/confiança
+    # (2)+(H8) Nenhum destino DECLARADO resolveu: give-up (target VAZIO — loop/stuck/credit/provider/confiança
     # baixa; o breaker herda por force_provider_handoff) OU intenção-FALHA (o modelo nomeou um setor que NÃO
     # existe na whitelist). Os dois são "a IA não conseguiu rotear" — usa o default DECLARADO no agente
     # (fallback_handoff_team_id, validado); senão o configured (1º da whitelist). Antes só o give-up usava o
