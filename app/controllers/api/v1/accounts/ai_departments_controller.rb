@@ -124,7 +124,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     playbook = department.playbook || department.build_playbook
     playbook.assign_attributes(
       objetivo: data['objetivo'] || department.objetivo,
-      steps: data['steps'] || [],
+      steps: merge_step_ids(playbook.steps, data['steps'] || []),
       transfer_when: data['transfer_when'] || [],
       close_when: data['close_when'] || [],
       default_messages: data['default_messages'] || {},
@@ -132,6 +132,30 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     )
     playbook.save!
     ::Ai::Version.snapshot!(playbook, snapshot_fields: ::Ai::Playbook::SNAPSHOT_FIELDS)
+  end
+
+  # Frente C / PR1 — merge por id. O array do CLIENTE é autoritário no CONJUNTO e na ORDEM (o lock_version/409
+  # garante que ele está atual; step ausente do array = DELETADO, NÃO ressuscitamos órfão do banco). O merge
+  # por id serve só para: (a) preservar CAMPOS backend-only dentro de um step CASADO (on_complete/knowledge
+  # que o cliente não reenviou — campo com null explícito o cliente APAGA, campo ausente sobrevive); (b) manter
+  # o id no round-trip. Step sem id (etapa NOVA) ganha um uuid. Não converte ai_step_index (PR2).
+  def merge_step_ids(existing, incoming)
+    by_id = index_steps_by_id(existing)
+    Array(incoming).map { |raw_step| merge_one_step(raw_step, by_id) }
+  end
+
+  def index_steps_by_id(steps)
+    Array(steps).each_with_object({}) do |step, acc|
+      acc[step['id']] = step if step.is_a?(Hash) && step['id'].present?
+    end
+  end
+
+  # Um step do cliente: casa por id (preserva campos backend-only do prev), senão é novo; garante um id.
+  def merge_one_step(raw_step, by_id)
+    step = raw_step.is_a?(Hash) ? raw_step : {}
+    prev = step['id'].present? ? by_id[step['id']] : nil
+    merged = prev ? prev.merge(step) : step
+    merged.merge('id' => merged['id'].presence || SecureRandom.uuid)
   end
 
   # Valida os automations[] de cada etapa do playbook recebido: rejeita tipo desconhecido ou
