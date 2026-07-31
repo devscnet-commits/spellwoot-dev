@@ -1607,24 +1607,34 @@ onMounted(async () => {
         <!-- Save bar (config tabs only) -->
         <div
           v-if="showSave"
-          class="flex justify-end gap-2 border-t border-n-weak pt-4"
+          class="flex items-center justify-between gap-2 border-t border-n-weak pt-4 flex-wrap"
         >
-          <button
-            v-if="!embedded"
-            type="button"
-            class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-            @click="goBack"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
-          </button>
-          <button
-            type="button"
-            class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="isSaving || !deptDirty"
-            @click="save"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
-          </button>
+          <!-- (C) Com (B), salvar a etapa já persistiu tudo — o rodapé fica sem pendência. O botão já
+               desabilita (:disabled=!deptDirty), e este rótulo torna explícito o "nada a salvar", para o
+               usuário não clicar por precaução. Some assim que houver qualquer edição (deptDirty). -->
+          <span class="text-xs text-n-slate-11">
+            <template v-if="!deptDirty && !isSaving">
+              {{ $t('AI_DEPARTMENTS.FORM.ALL_SAVED') }}
+            </template>
+          </span>
+          <div class="flex gap-2">
+            <button
+              v-if="!embedded"
+              type="button"
+              class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+              @click="goBack"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
+            </button>
+            <button
+              type="button"
+              class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isSaving || !deptDirty"
+              @click="save"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
