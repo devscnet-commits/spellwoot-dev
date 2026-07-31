@@ -26,6 +26,12 @@ RSpec.describe Ai::TrivialTurnGate do
     { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente o cliente.' }
   end
 
+  # Etapa TERMINAL (on_complete, sem slot) — a condição f. O conclude_ready é passado ao gate (computado
+  # pelo StateManager); aqui exercitamos o kwarg direto.
+  def terminal_step
+    { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_human', 'reason' => 'conclusao' } }
+  end
+
   # Reproduz o estado REAL no momento do gate: a mensagem atual (incoming) JÁ está persistida como a
   # última da conversa — é assim que o Ai::Gateway chama skip? (a mensagem recebida é gravada antes de
   # o gate rodar; previous_message pega a PENÚLTIMA). Aqui: nós respondemos (outgoing = penúltima) e o
@@ -75,6 +81,25 @@ RSpec.describe Ai::TrivialTurnGate do
         add_message('incoming', 'ok')            # mensagem atual (persistida)
         result = described_class.skip?(text: 'ok', conversation: conversation, step: info_step)
         expect(result).to eq(skip: false, reason: 'last_incoming')
+      end
+    end
+
+    context 'condição f (etapa TERMINAL pronta para concluir)' do # rubocop:disable RSpec/ContextWording
+      # BUG: em etapa terminal (on_complete, sem slot) com o funil completo, "ok" é o ACEITE que dispara a
+      # conclusão determinística. As guardas c/e leem "nada esperando" (sem slot, last_asked nil) e engoliam
+      # -> a conversa ficava parada sem transferir. A 3ª guarda (conclude_ready) não deixa pular.
+      it 'NÃO pula "ok" quando conclude_ready (aceite da transição) — reason terminal_ready' do
+        after_our_reply('ok')
+        result = described_class.skip?(text: 'ok', conversation: conversation, step: terminal_step, conclude_ready: true)
+        expect(result).to eq(skip: false, reason: 'terminal_ready')
+      end
+
+      # PROVA DE MUTAÇÃO: a MESMA etapa terminal + "ok", mas sem conclude_ready, ainda pula (era o bug). Se a
+      # guarda (f) sumir, o teste de cima passa a pular também.
+      it 'sem conclude_ready, a mesma etapa terminal + "ok" ainda pula (closed_list)' do
+        after_our_reply('ok')
+        result = described_class.skip?(text: 'ok', conversation: conversation, step: terminal_step, conclude_ready: false)
+        expect(result).to eq(skip: true, reason: 'closed_list')
       end
     end
 
