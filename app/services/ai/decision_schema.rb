@@ -37,6 +37,13 @@ class Ai::DecisionSchema < RubyLLM::Schema
   # difere do slot da etapa corrente. NÃO decide o avanço (isso segue o slot da etapa).
   string :asked_slot, description: 'O slot que a sua reply_text está pedindo neste turno; vazio se não pede dado.'
 
+  # Proposta de valor para confirmação (Frente B). Quando a sua reply_text PROPÕE um valor concreto ao
+  # cliente e pede um sim/não (ex.: só há um horário disponível -> "posso reservar para a TARDE?"), preencha
+  # com esse valor ("tarde"). required:true (0.2.5); "" = a resposta NÃO propõe valor (pergunta aberta,
+  # saudação, confirmação de dado já dito). O motor guarda o proposto junto do asked_slot; se o próximo turno
+  # do cliente CONFIRMAR (juiz -> 'confirmed'), grava-se o VALOR PROPOSTO no slot — nunca o texto "sim".
+  string :proposed_value, description: 'Valor que a sua reply_text propõe ao cliente p/ confirmação neste turno; vazio se não propõe.'
+
   # Atributos coletados como lista fechada {key,value} (o strict não aceita objeto de chaves dinâmicas).
   # Re-normalizado para o Hash `attributes` interno. [] quando não houver nada novo.
   array :attributes_list, description: 'Dados coletados do cliente; [] se nada novo.' do

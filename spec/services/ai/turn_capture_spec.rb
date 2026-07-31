@@ -187,4 +187,102 @@ RSpec.describe Ai::TurnCapture do
       expect(events('slot.asked_confirmation_turn')).not_to be_empty # a confirmação ainda é sinalizada
     end
   end
+
+  # Frente B — SUBSTITUIÇÃO POR VALOR PROPOSTO (slot VAZIO, VALIDAÇÃO-FIRST, juiz intocado). O turno anterior
+  # propôs um valor (ai_last_proposed_value) p/ um slot de domínio RESTRITO (choice) e pediu confirmação; o slot
+  # segue vazio. O motor NÃO detecta "confirmação": lê a VALIDADE do valor que o modelo devolveu p/ aquele slot.
+  #   valor VÁLIDO -> fluxo normal grava o real | NEGATIVA -> descarta | INVÁLIDO+não-negativa -> grava o PROPOSTO
+  # Coexiste com a confirmação de slot JÁ preenchido (asked_confirmation_turn), que vence por ordem (fact_present?).
+  # Slot choice options=[manhã,tarde,noite]: é aí que "sim" reprova no gate (em texto livre "sim" validaria).
+  describe '#capture — Frente B: substituição por valor proposto (slot vazio, validação-first)' do
+    let(:period_department) do
+      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Reserva', status: 'active',
+                                    behavior: {})
+      dept.create_playbook!(active: true, steps: [
+                              { 'name' => 'Período',
+                                'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice',
+                                               'options' => %w[manhã tarde noite], 'required' => true } }
+                            ])
+      dept
+    end
+    let(:period_step) { period_department.playbook.steps.first }
+    let(:period_capture) do
+      described_class.new(conversation: conversation,
+                          persister: Ai::StateManager.new(conversation: conversation, agent: agent), agent: agent)
+    end
+
+    # Estado deixado pelo turno anterior: perguntou periodo_reservado E propôs `value` (par asked+proposto).
+    def propose(value)
+      conversation.update!(additional_attributes: { 'ai_last_asked_slot' => 'periodo_reservado',
+                                                    'ai_last_proposed_value' => value })
+    end
+
+    it 'valor INVÁLIDO ("sim" ∉ options) + proposta pendente -> grava o VALOR PROPOSTO, não o texto' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'sim' } },
+                             'sim pode ser', nil, period_department)
+
+      expect(facts['periodo_reservado']).to eq('tarde') # o proposto — não "sim"
+      expect(events('slot.captured').last.payload).to include('attribute' => 'periodo_reservado', 'status' => 'confirmed')
+    end
+
+    it 'NEGATIVA ("não, prefiro outro") -> NÃO substitui: descarta a proposta, slot vazio (repergunta)' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'não' } },
+                             'não, prefiro outro', nil, period_department)
+
+      expect(facts).not_to have_key('periodo_reservado') # a proposta NÃO foi gravada numa recusa
+      expect(events('slot.captured')).to be_empty
+    end
+
+    it 'valor REAL VÁLIDO ("manhã" ∈ options) -> NÃO substitui: a proposta "tarde" não vence o valor real' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'manhã' } },
+                             'prefiro manhã', nil, period_department)
+
+      # capture NÃO grava o attribute válido (Opção B: quem persiste é o Gateway) — o que importa aqui é que a
+      # substituição pela proposta NÃO disparou: nada de "tarde", nenhum slot.captured.
+      expect(facts).not_to include('periodo_reservado' => 'tarde')
+      expect(events('slot.captured')).to be_empty
+    end
+
+    it 'attributes VAZIO (modelo mudo) -> B NÃO substitui: sem valor no attributes, sem sinal (não vira "tarde")' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => {} }, 'sim pode ser', nil, period_department)
+
+      # Contrato de B: attributes vazio NUNCA vira a proposta. (O texto cai na captura determinística
+      # pré-existente do choice, fora do escopo de B — o que importa aqui é que "tarde" não foi substituído.)
+      expect(facts['periodo_reservado']).not_to eq('tarde')
+    end
+
+    it 'slot JÁ preenchido + confirmação: cai em slot.asked_confirmation_turn — NÃO regride, proposta não vence o real' do
+      conversation.update!(additional_attributes: {
+                             'ai_collected_facts' => { 'periodo_reservado' => 'tarde' },
+                             'ai_last_asked_slot' => 'periodo_reservado',
+                             'ai_last_proposed_value' => 'manhã' # proposta presente NÃO pode sobrescrever o real
+                           })
+
+      result = period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'sim' } },
+                                      'sim', nil, period_department)
+
+      expect(result).to be_nil
+      expect(facts['periodo_reservado']).to eq('tarde') # intacto — o ramo de substituição nem roda
+      expect(events('slot.asked_confirmation_turn').last.payload).to include('attribute' => 'periodo_reservado')
+      expect(events('slot.captured')).to be_empty
+    end
+
+    it 'EVIDÊNCIA: período único proposto "tarde", slot já choice, cliente "sim pode ser" -> periodo_reservado = "tarde"' do
+      propose('tarde')
+
+      period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'sim' } },
+                             'sim pode ser', nil, period_department)
+
+      expect(facts['periodo_reservado']).to eq('tarde')
+      expect(facts['periodo_reservado']).not_to eq('sim')
+    end
+  end
 end

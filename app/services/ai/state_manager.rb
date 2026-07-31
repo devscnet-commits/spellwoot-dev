@@ -378,13 +378,26 @@ class Ai::StateManager
     # para ele (conv da evidência: email_cliente declinado + "10" de vencimento -> email="10"). NÃO limpa no
     # preenchido com valor REAL: a guarda de confirmação-única (TurnCapture, fact_present?) PRECISA do ponteiro
     # para reconhecer o turno de confirmação ("confirme UMA vez") — e ausência já não dispara essa guarda.
+    remember_asked_slot(attrs, decision)
+    @conversation.update!(additional_attributes: attrs)
+  end
+
+  # Guarda o par (slot perguntado + valor proposto) deste turno, para o PRÓXIMO turno rotear/confirmar.
+  # ATRIBUIÇÃO INCONDICIONAL (hotfix #304/conv 397): o estado NÃO sobrevive ao turno que o produziu — asked_slot
+  # vem "" justamente nos turnos em que o modelo capturou algo; preservar o valor velho fazia a guarda de
+  # confirmação disparar em slot já preenchido. Presente grava; "" ou ausência-resolvida REMOVE.
+  # Frente B: o valor PROPOSTO vive SÓ ao lado de um asked_slot, mesma disciplina incondicional — senão um
+  # "sim" de outro assunto confirmaria uma proposta velha.
+  def remember_asked_slot(attrs, decision)
     asked = decision['asked_slot'].to_s.strip
     if asked.present? && !asked_slot_absent?(attrs, asked)
       attrs['ai_last_asked_slot'] = asked
+      proposed = decision['proposed_value'].to_s.strip
+      proposed.present? ? (attrs['ai_last_proposed_value'] = proposed) : attrs.delete('ai_last_proposed_value')
     else
       attrs.delete('ai_last_asked_slot')
+      attrs.delete('ai_last_proposed_value')
     end
-    @conversation.update!(additional_attributes: attrs)
   end
 
   # O slot perguntado resolveu como AUSÊNCIA (token __sem_valor__ em ai_collected_facts)? Só a ausência
