@@ -169,12 +169,22 @@ class Ai::TurnCapture # rubocop:disable Metrics/ClassLength -- orquestrador de c
     return false if asked.blank? || proposed.blank?
 
     value = decision['attributes'].is_a?(Hash) ? decision['attributes'][asked] : nil
-    return false if value.to_s.strip.blank?                       # mudo -> sem sinal (não substitui)
+    return emit_echo_missing(asked, message_text) if value.to_s.strip.blank?  # mudo -> mede e não substitui
     return false if proposal_negation?(step, asked, value, message_text) # negativa -> descarta (fluxo normal repergunta)
     return false if slot_value_valid?(step, asked, value)         # valor real válido -> fluxo normal grava o real
 
     persist_judged(step, asked, proposed, department, 'proposal_confirmed', 'confirmed')
     true
+  end
+
+  # Item 3 MEDIDO (PR3): há proposta pendente e o cliente respondeu, mas o modelo NÃO populou attributes[asked].
+  # Sem valor não há como promover -> a IA repergunta (o teto stuck_handoff_turns corta o loop). O evento mede a
+  # FREQUÊNCIA real em produção: é um superset honesto (inclui também não-resposta/off-topic), então leia-o junto
+  # de "o slot encheu depois?". Se for FREQUENTE, justifica o PR do JUIZ (status próprio) para promover texto
+  # livre — NUNCA a lista de frases em PT. Só conta turno com mensagem real do cliente. Sempre devolve false.
+  def emit_echo_missing(asked, message_text)
+    emit('proposal.echo_missing', { attribute: asked }) if message_text.to_s.strip.present?
+    false
   end
 
   # O valor PROPOSTO no turno anterior (persist_step_state grava ao lado do asked_slot, mesmo ciclo incondicional).

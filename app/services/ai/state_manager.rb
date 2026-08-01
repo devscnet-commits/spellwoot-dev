@@ -418,7 +418,7 @@ class Ai::StateManager
     # para ele (conv da evidência: email_cliente declinado + "10" de vencimento -> email="10"). NÃO limpa no
     # preenchido com valor REAL: a guarda de confirmação-única (TurnCapture, fact_present?) PRECISA do ponteiro
     # para reconhecer o turno de confirmação ("confirme UMA vez") — e ausência já não dispara essa guarda.
-    remember_asked_slot(attrs, decision)
+    remember_asked_slot(attrs, decision, current)
     @conversation.update!(additional_attributes: attrs)
   end
 
@@ -428,16 +428,45 @@ class Ai::StateManager
   # confirmação disparar em slot já preenchido. Presente grava; "" ou ausência-resolvida REMOVE.
   # Frente B: o valor PROPOSTO vive SÓ ao lado de um asked_slot, mesma disciplina incondicional — senão um
   # "sim" de outro assunto confirmaria uma proposta velha.
-  def remember_asked_slot(attrs, decision)
+  def remember_asked_slot(attrs, decision, step)
     asked = decision['asked_slot'].to_s.strip
     if asked.present? && !asked_slot_absent?(attrs, asked)
       attrs['ai_last_asked_slot'] = asked
       proposed = decision['proposed_value'].to_s.strip
+      proposed = seed_proposed_from_memory(attrs, step, asked) if proposed.blank? # PR3 (Frente C)
       proposed.present? ? (attrs['ai_last_proposed_value'] = proposed) : attrs.delete('ai_last_proposed_value')
     else
       attrs.delete('ai_last_asked_slot')
       attrs.delete('ai_last_proposed_value')
     end
+  end
+
+  # PR3 (Frente C) — PRÉ-PREENCHIMENTO DA MEMÓRIA, SÓ SLOT DE FORMATO. Semeia como "proposto" o valor LEMBRADO
+  # deste contato (Ai::CustomerMemory.key_facts) quando o modelo NÃO propôs, o slot perguntado é de FORMATO
+  # conhecido (cpf/email/phone/number/choice) e ainda está VAZIO. Assim Ai::TurnCapture#substitute_proposed_value
+  # promove na confirmação MESMO se o modelo esquecer de emitir proposed_value — a promoção é do motor, validada
+  # pelo gate; não depende do modelo. O slot segue VAZIO até promover, então o caminho de AVANÇO fica intocado.
+  #
+  # ►► SÓ FORMATO — TEXTO LIVRE É DEFERIDO DE PROPÓSITO. ◄◄ Em texto livre um "sim" VALIDA como valor e o motor
+  # gravaria "sim" no lugar do dado (família text-slot-refusal-becomes-value). A promoção de texto livre volta
+  # como um JUIZ com STATUS PRÓPRIO (confirmação vs dado novo vs off-topic) — NUNCA uma lista de frases em PT,
+  # que vaza e é o padrão que este projeto já aposentou uma vez.
+  def seed_proposed_from_memory(attrs, step, slot)
+    return '' if (attrs['ai_collected_facts'] || {})[slot].to_s.strip.present? # já preenchido: nada a propor
+    return '' unless known_format_slot?(step, slot)
+
+    remembered_fact(slot)
+  end
+
+  def known_format_slot?(step, slot)
+    type = Ai::SlotCollector.new(conversation: @conversation).effective_type(step, slot)
+    Ai::SlotExtractor.known_format?(type)
+  end
+
+  def remembered_fact(slot)
+    return '' if @conversation.contact_id.blank?
+
+    Ai::CustomerMemory.find_by(contact_id: @conversation.contact_id)&.key_facts.to_h[slot].to_s.strip
   end
 
   # O slot perguntado resolveu como AUSÊNCIA (token __sem_valor__ em ai_collected_facts)? Só a ausência

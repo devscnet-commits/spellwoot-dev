@@ -91,7 +91,7 @@ class Ai::PromptCompiler
     # Montado pelo CÓDIGO (não pelo modelo) — mata a repergunta em etapa de vários turnos. Presente também
     # no followup (#273/#278: sem ele o followup repergunta o já coletado).
     already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
-    state_block = collection_state_block(department.playbook&.steps, step_index, already)
+    state_block = collection_state_block(department.playbook&.steps, step_index, already, customer_memory)
     variable << state_block if state_block
 
     if knowledge.present?
@@ -120,7 +120,7 @@ class Ai::PromptCompiler
   # ativamente. "JÁ TENHO" = fatos já coletados (não reperguntar). "FALTA agora" = o slot da etapa
   # ATUAL, se ainda não preenchido — diz exatamente qual dado pedir e com QUE chave salvar (a mesma que
   # o Ai::StateManager usa para destravar a etapa). Substitui o antigo bloco "Dados JÁ coletados".
-  def self.collection_state_block(steps, step_index, already)
+  def self.collection_state_block(steps, step_index, already, customer_memory = nil)
     slot = pending_slot(steps, step_index, already)
     return nil if already.blank? && slot.nil?
 
@@ -134,27 +134,34 @@ class Ai::PromptCompiler
       lines << "Se o cliente disser que NÃO TEM esse dado ou não quer informar, devolva em \"attributes\" " \
                "a chave #{slot} com o valor EXATO #{Ai::StepSlot::ABSENT} (não invente um valor)."
     end
-    # REGRA: separa REPERGUNTA (proativa, proibida) de CORREÇÃO (o cliente inicia, permitida). Sem a 2ª
-    # frase, "não repita / use o valor e siga" fazia o modelo tratar um valor de JÁ TENHO como fechado e
-    # ignorar a correção de um dado de etapa PASSADA (conv da evidência: attrs={}, zero tentativa). A escrita
-    # da correção é aceita pelo gate do StateManager (todo slot declarado é gravável — ver supervisor_expected_keys).
-    lines << 'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. MAS se o cliente CORRIGIR por conta ' \
-             'própria um desses valores, devolva em "attributes" a MESMA chave com o novo valor: isso é ATUALIZAÇÃO, não ' \
-             'repergunta. Se o cliente já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.'
-    # Default (conv 396): valor VÁLIDO -> acuse INLINE, junto do próximo pedido. NUNCA um turno só para
-    # confirmar — a confirmação isolada cria um turno sem dado novo, onde o motor se perde (runs 2039→2041:
-    # a reply pediu confirmação do endereço, o motor já estava na etapa 8, "esta certo" virou documento_cpf).
-    # A regra de CORREÇÃO fica SÓ na REGRA acima (uma instrução, no lugar certo). Duas — uma aqui, grudada no
-    # fluxo do slot atual, outra na REGRA — foi o que confundiu o modelo; por isso a frase de correção saiu daqui.
-    lines << 'Ao receber um dado VÁLIDO, acuse-o na MESMA mensagem em que pede o próximo dado — NUNCA faça uma pergunta ' \
-             'separada só para confirmar. Ex.: "Recebi o CPF 123.456.789-00. Agora, qual o seu e-mail?".'
-    # Exceção (sanity-check preservado): SÓ valor que não valida / truncado / malformado ganha a
-    # confirmação ISOLADA, uma única vez.
-    lines << 'EXCEÇÃO — apenas quando o valor parecer incompleto/estranho/malformado para o dado pedido: ' \
-             'confirme UMA única vez, isolada, mostrando o que recebeu ("Recebi \'X\', está correto ' \
-             'assim?"). Se ele corrigir, use o corrigido; se confirmar, repetir ou insistir, ACEITE como ' \
-             'veio e siga — NUNCA peça o mesmo dado uma terceira vez.'
+    # PR3 (Frente C): pré-preenchimento da memória, SÓ slot de FORMATO (ver memory_prefill_line). Array(nil)=[].
+    lines.concat(Array(memory_prefill_line(steps, step_index, slot, customer_memory)))
+    lines.concat(confirmation_guidance_lines)
     lines.join("\n")
+  end
+
+  # Orientação FIXA de confirmação/correção, extraída do collection_state_block (mantém o método enxuto).
+  def self.confirmation_guidance_lines
+    [
+      # REGRA: separa REPERGUNTA (proativa, proibida) de CORREÇÃO (o cliente inicia, permitida). Sem a 2ª
+      # frase, "não repita / use o valor e siga" fazia o modelo tratar um valor de JÁ TENHO como fechado e
+      # ignorar a correção de um dado de etapa PASSADA (conv da evidência: attrs={}, zero tentativa). A escrita
+      # da correção é aceita pelo gate do StateManager (todo slot declarado é gravável — ver supervisor_expected_keys).
+      'REGRA: NUNCA peça de novo um dado da lista "JÁ TENHO" — use o valor e siga. MAS se o cliente CORRIGIR por conta ' \
+      'própria um desses valores, devolva em "attributes" a MESMA chave com o novo valor: isso é ATUALIZAÇÃO, não ' \
+      'repergunta. Se o cliente já respondeu o que esta etapa pede, registre em "attributes" e não repita a mesma pergunta.',
+      # Default (conv 396): valor VÁLIDO -> acuse INLINE, junto do próximo pedido. NUNCA um turno só para
+      # confirmar — a confirmação isolada cria um turno sem dado novo, onde o motor se perde (runs 2039→2041:
+      # a reply pediu confirmação do endereço, o motor já estava na etapa 8, "esta certo" virou documento_cpf).
+      'Ao receber um dado VÁLIDO, acuse-o na MESMA mensagem em que pede o próximo dado — NUNCA faça uma pergunta ' \
+      'separada só para confirmar. Ex.: "Recebi o CPF 123.456.789-00. Agora, qual o seu e-mail?".',
+      # Exceção (sanity-check preservado): SÓ valor que não valida / truncado / malformado ganha a
+      # confirmação ISOLADA, uma única vez.
+      'EXCEÇÃO — apenas quando o valor parecer incompleto/estranho/malformado para o dado pedido: ' \
+      'confirme UMA única vez, isolada, mostrando o que recebeu ("Recebi \'X\', está correto ' \
+      'assim?"). Se ele corrigir, use o corrigido; se confirmar, repetir ou insistir, ACEITE como ' \
+      'veio e siga — NUNCA peça o mesmo dado uma terceira vez.'
+    ]
   end
 
   # Chave do slot que a etapa ATUAL coleta e que AINDA não temos. nil quando a etapa não declara slot
@@ -168,6 +175,45 @@ class Ai::PromptCompiler
     return nil if key.nil? || (already || {}).key?(key)
 
     key
+  end
+
+  # PR3 (Frente C) — PRÉ-PREENCHIMENTO DA MEMÓRIA, SÓ SLOT DE FORMATO. Quando o dado que FALTA é de formato
+  # conhecido (cpf/email/phone/number/choice — o gate valida a promoção) e há um valor LEMBRADO deste contato
+  # (Ai::CustomerMemory, de atendimentos anteriores), dirige o modelo a PROPOR esse valor e pedir confirmação em
+  # vez de perguntar do zero. A PROMOÇÃO em si é do MOTOR (Ai::TurnCapture#substitute_proposed_value + gate),
+  # determinística; aqui só se pede a proposta e se instrui a SEMPRE devolver a resposta em "attributes".
+  #
+  # ►► TEXTO LIVRE É DEFERIDO DE PROPÓSITO — NÃO "esquecido". Leia antes de "consertar" o endereço. ◄◄
+  # Endereço e afins (slot 'text' sem formato) NÃO são pré-preenchidos aqui. Motivo: em texto livre um "sim"
+  # VALIDA como valor, e o motor gravaria "sim" no lugar do dado (a família text-slot-refusal-becomes-value).
+  # Quando esta frente voltar, a promoção de texto livre entra como um JUIZ com STATUS PRÓPRIO (confirmação vs
+  # dado novo vs off-topic) — **NUNCA** uma lista de frases em PT ("sim/ok/isso/correto..."). Lista de frases
+  # vaza ("claro que não", "sim porque...") e é exatamente o padrão que este projeto já aposentou uma vez (o
+  # juiz estruturado substituiu a lista no SlotAbsence). O valor lembrado de texto livre SEGUE visível no bloco
+  # customer_memory_lines: o modelo pode mencioná-lo, mas o motor não pré-preenche nem promove.
+  def self.memory_prefill_line(steps, step_index, slot, customer_memory)
+    return nil if slot.nil? || customer_memory.nil?
+
+    list = Array(steps)
+    return nil if list.empty?
+    return nil unless format_slot?(list[step_index.to_i.clamp(0, list.size - 1)], slot)
+
+    value = customer_memory.key_facts.to_h[slot].to_s.strip
+    return nil if value.blank?
+
+    "DADO LEMBRADO DE ATENDIMENTO ANTERIOR — o dado \"#{slot}\" deste cliente provavelmente é \"#{value}\". " \
+      "NÃO pergunte do zero: PROPONHA esse valor e peça UMA confirmação objetiva (ex.: \"Ainda é #{value}?\"). " \
+      "Quando o cliente responder, SEMPRE devolva em \"attributes\" a chave #{slot} (o valor que ele disser, ou " \
+      'a própria confirmação). Se confirmar, esse valor é aceito; se corrigir, use o novo.'
+  end
+
+  # Slot de FORMATO conhecido? Mesma derivação do Ai::SlotCollector#effective_type, sem instância (o compiler
+  # é class-level, sem conversa): tipo DECLARADO da etapa; 'text' cai na inferência pela chave. Governa o
+  # escopo do pré-preenchimento (decisão (D): só formato, onde o gate valida).
+  def self.format_slot?(step, slot)
+    declared = Ai::StepSlot.type(step)
+    type = declared == 'text' ? (Ai::SlotExtractor.type_for_key(slot) || 'text') : declared
+    Ai::SlotExtractor.known_format?(type)
   end
 
   # Memória PERSISTENTE deste contato, de atendimentos ANTERIORES (Ai::CustomerMemory). Frente C: o bloco só
