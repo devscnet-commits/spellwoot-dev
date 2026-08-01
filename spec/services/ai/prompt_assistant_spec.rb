@@ -208,5 +208,32 @@ RSpec.describe Ai::PromptAssistant do
       expect(Ai::PromptAssistant::Prompts::STEP_INSTRUCTIONS_SYSTEM).to match(/IDENTIDADE/)
       expect(Ai::PromptAssistant::Prompts::STEP_INSTRUCTIONS_SYSTEM).to include(identity)
     end
+
+    # O assistente NÃO pode gerar instrução que o motor já faz (validar formato, confirmar, estimar,
+    # prometer avanço) — guardas contra a remoção das regras que consertam a saída conflitante.
+    describe 'STEP não duplica/contradiz o motor (guardas)' do
+      # normaliza o whitespace: o heredoc quebra as frases em várias linhas físicas (\n no meio das frases).
+      let(:step) { Ai::PromptAssistant::Prompts::STEP_INSTRUCTIONS_SYSTEM.gsub(/\s+/, ' ') }
+
+      it 'item 1 — PROÍBE estimar/registrar o melhor valor (em qualquer tipo, não condicionado)' do
+        expect(step).to include('estimar dado do cliente é ensinar a IA a inventar')
+        expect(step).to match(/PROIBIDO gerar "estime o valor"/)
+        expect(step).to include('NUNCA prometa "seguir sem" um dado obrigatório') # item 4 (não trava o estrangeiro)
+      end
+
+      it 'item 2 — PROÍBE instrução de validação de formato (quem valida é o gate pelo tipo)' do
+        expect(step).to include('NÃO gere instrução de VALIDAÇÃO de formato')
+        expect(step).to include('Quem valida o formato é o MOTOR, pelo TIPO do slot')
+      end
+
+      it 'item 3 — PROÍBE turno só para confirmar (o motor já faz o aviso inline, #310)' do
+        expect(step).to include('NÃO gere turno só para CONFIRMAR um valor')
+        expect(step).to include('está certinho?') # cita o próprio anti-padrão como proibido
+      end
+
+      it 'princípio — declara que o MOTOR já valida/acusa/avança/trata ausência' do
+        expect(step).to include('O MOTOR já cuida de')
+      end
+    end
   end
 end
