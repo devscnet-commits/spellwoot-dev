@@ -11,7 +11,7 @@ class Ai::PromptCompiler
   # blocos). Em AMBOS os modos a ordem é FIXO-primeiro, VARIÁVEL-depois (prompt caching): o conjunto de
   # blocos de cada modo é o mesmo de antes — só a ordem mudou.
   def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
-                   customer_memory: nil, step_index: nil, followup: false, knowledge_gap: false)
+                   customer_memory: nil, step_index: nil, followup: false, knowledge_gap: false, slot_feedback: {})
     # PROMPT CACHING: prefixo FIXO (igual entre turnos) primeiro, blocos VARIÁVEIS (mudam por turno)
     # depois. O cache de prefixo do provider exige que tudo que muda venha DEPOIS de tudo que é estável —
     # por isso o response_contract (fixo) subiu para o fim da seção fixa, e âncora/estado/RAG/memória
@@ -91,7 +91,7 @@ class Ai::PromptCompiler
     # Montado pelo CÓDIGO (não pelo modelo) — mata a repergunta em etapa de vários turnos. Presente também
     # no followup (#273/#278: sem ele o followup repergunta o já coletado).
     already = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
-    state_block = collection_state_block(department.playbook&.steps, step_index, already, customer_memory)
+    state_block = collection_state_block(department.playbook&.steps, step_index, already, customer_memory, slot_feedback)
     variable << state_block if state_block
 
     if knowledge.present?
@@ -120,7 +120,7 @@ class Ai::PromptCompiler
   # ativamente. "JÁ TENHO" = fatos já coletados (não reperguntar). "FALTA agora" = o slot da etapa
   # ATUAL, se ainda não preenchido — diz exatamente qual dado pedir e com QUE chave salvar (a mesma que
   # o Ai::StateManager usa para destravar a etapa). Substitui o antigo bloco "Dados JÁ coletados".
-  def self.collection_state_block(steps, step_index, already, customer_memory = nil)
+  def self.collection_state_block(steps, step_index, already, customer_memory = nil, slot_feedback = {})
     slot = pending_slot(steps, step_index, already)
     return nil if already.blank? && slot.nil?
 
@@ -134,6 +134,8 @@ class Ai::PromptCompiler
       lines << "Se o cliente disser que NÃO TEM esse dado ou não quer informar, devolva em \"attributes\" " \
                "a chave #{slot} com o valor EXATO #{Ai::StepSlot::ABSENT} (não invente um valor)."
     end
+    # (4): feedback de rejeição por formato — explica POR QUE o último valor foi barrado (ver método).
+    lines.concat(Array(rejection_feedback_line(steps, step_index, slot, slot_feedback)))
     # PR3 (Frente C): pré-preenchimento da memória, SÓ slot de FORMATO (ver memory_prefill_line). Array(nil)=[].
     lines.concat(Array(memory_prefill_line(steps, step_index, slot, customer_memory)))
     lines.concat(confirmation_guidance_lines)
@@ -207,13 +209,39 @@ class Ai::PromptCompiler
       'a própria confirmação). Se confirmar, esse valor é aceito; se corrigir, use o novo.'
   end
 
-  # Slot de FORMATO conhecido? Mesma derivação do Ai::SlotCollector#effective_type, sem instância (o compiler
-  # é class-level, sem conversa): tipo DECLARADO da etapa; 'text' cai na inferência pela chave. Governa o
-  # escopo do pré-preenchimento (decisão (D): só formato, onde o gate valida).
+  # Slot de FORMATO conhecido? Governa o escopo do pré-preenchimento (decisão (D): só formato, onde o gate valida).
   def self.format_slot?(step, slot)
+    Ai::SlotExtractor.known_format?(slot_effective_type(step, slot))
+  end
+
+  # Tipo efetivo do slot, sem instância (o compiler é class-level, sem conversa): tipo DECLARADO da etapa;
+  # 'text' cai na inferência pela chave. Mesma derivação do Ai::SlotCollector#effective_type.
+  def self.slot_effective_type(step, slot)
     declared = Ai::StepSlot.type(step)
-    type = declared == 'text' ? (Ai::SlotExtractor.type_for_key(slot) || 'text') : declared
-    Ai::SlotExtractor.known_format?(type)
+    declared == 'text' ? (Ai::SlotExtractor.type_for_key(slot) || 'text') : declared
+  end
+
+  # (4) FEEDBACK DE REJEIÇÃO POR FORMATO. Quando o último valor do slot CORRENTE foi barrado por formato
+  # (ai_last_invalid, gravado por Ai::StateManager#persist_slot_feedback — o motor de validação NÃO é tocado),
+  # diz à IA o valor e o tipo esperado para ela EXPLICAR ao cliente em vez de repetir a mesma pergunta — e
+  # roteia o "não tenho" para a ausência determinística. É GENÉRICO (qualquer tipo de formato), o texto não
+  # cita CPF. Escalada SOFT reusando ai_step_turns (sem contador novo): passado ESCALATE_AFTER, a IA oferece o
+  # atendente humano — e é instruída a FAZER o handoff (ação real, gateway.rb:311-331), nunca só prometer.
+  ESCALATE_AFTER = 2
+  def self.rejection_feedback_line(steps, step_index, slot, slot_feedback)
+    invalid = slot_feedback.is_a?(Hash) ? slot_feedback['invalid'] : nil
+    return nil unless slot && invalid.is_a?(Hash) && invalid['slot'].to_s == slot.to_s
+
+    list = Array(steps)
+    step = list[step_index.to_i.clamp(0, [list.size - 1, 0].max)]
+    type = slot_effective_type(step, slot)
+    base = "⚠ O último valor informado (\"#{invalid['value']}\") NÃO tem o formato esperado (#{type}). " \
+           'Explique isso ao cliente com suas palavras e peça de novo — se ele disser que NÃO TEM esse dado ' \
+           '(ex.: estrangeiro sem CPF), registre a ausência; não repita a mesma pergunta.'
+    return base if slot_feedback['step_turns'].to_i < ESCALATE_AFTER
+
+    "#{base} Como ele já tentou algumas vezes, OFEREÇA encaminhar para um atendente humano; se ele aceitar, " \
+      'FAÇA a transferência (decisão de handoff) — não apenas diga que vai transferir.'
   end
 
   # Memória PERSISTENTE deste contato, de atendimentos ANTERIORES (Ai::CustomerMemory). Frente C: o bloco só

@@ -170,7 +170,13 @@ class Ai::Gateway
       step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i,
       # Guarda (conv 397): a etapa declarou conhecimento e o retrieval voltou vazio -> o prompt avisa
       # "não afirme, verifique" (o modelo não tem fonte).
-      knowledge_gap: kn[:declared_empty]
+      knowledge_gap: kn[:declared_empty],
+      # (4) Feedback de rejeição por formato: o último valor barrado (ai_last_invalid) + os turnos gastos na
+      # etapa (ai_step_turns, reusado p/ a escalada soft ao humano). O prompt explica em vez de reperguntar.
+      slot_feedback: {
+        'invalid' => (@conversation.additional_attributes || {})['ai_last_invalid'],
+        'step_turns' => (@conversation.additional_attributes || {})['ai_step_turns'].to_i
+      }
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
