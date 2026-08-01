@@ -45,6 +45,7 @@ class Ai::StateManager
     #    alucinação do modelo — ou um "answered" do juiz de tipo errado — NÃO virar fato/espelho.
     gated = gated_facts(cleaned, department, source, expected_step)
     persist_collected_facts(gated)
+    persist_slot_feedback(gated) # (4) registra/limpa o "último valor rejeitado por formato" p/ o prompt explicar
 
     # Frente C: espelha os MESMOS fatos gateados na memória do CONTATO (Ai::CustomerMemory.key_facts) —
     # cross-conversa, cross-agente. SEM allowlist (ao contrário do espelho de custom_attributes abaixo): nome/
@@ -97,6 +98,29 @@ class Ai::StateManager
 
     attrs['ai_collected_facts'] = facts
     @conversation.update!(additional_attributes: attrs)
+  end
+
+  # (4) FEEDBACK DE REJEIÇÃO POR FORMATO — só OBSERVA (o motor de validação, supervisor_fact_reason, é intocado).
+  # Guarda o último {slot, value} barrado por invalid_value neste turno em ai_last_invalid, para o PromptCompiler
+  # dizer à IA POR QUE rejeitou (em vez de repetir a mesma pergunta). Limpa quando o slot outrora inválido é
+  # finalmente ACEITO (entra em `gated`). Genérico: vale para todo tipo de formato (cpf/email/phone/number/choice).
+  def persist_slot_feedback(gated)
+    attrs = @conversation.additional_attributes || {}
+    before = attrs['ai_last_invalid']
+    changed = false
+    if before.is_a?(Hash) && gated.key?(before['slot'].to_s) # slot outrora inválido finalmente aceito -> limpa
+      attrs.delete('ai_last_invalid')
+      changed = true
+    end
+    if @rejected_invalid.present?
+      slot, value = @rejected_invalid.first # um slot por turno na prática; a última rejeição vence
+      new_val = { 'slot' => slot.to_s, 'value' => value.to_s }
+      if attrs['ai_last_invalid'] != new_val
+        attrs['ai_last_invalid'] = new_val
+        changed = true
+      end
+    end
+    @conversation.update!(additional_attributes: attrs) if changed
   end
 
   # Frente C: memória por CONTATO (Ai::CustomerMemory.key_facts), cross-conversa e cross-agente. Espelha os
@@ -612,6 +636,7 @@ class Ai::StateManager
   # dois são válidos, não há como distinguir; o prompt entrega o valor exato no "JÁ TENHO", então o eco
   # tende a ser idêntico e no-op. O custo do contrário é contrato errado, que é pior.
   def gated_facts(cleaned, department, source, expected_step = nil)
+    @rejected_invalid = {} # (4) feedback de rejeição: chaves barradas por FORMATO neste turno (reset sempre)
     return cleaned unless source == :supervisor
 
     # Mapa chave -> step DECLARANTE (passo único sobre o playbook; ver #declared_slot_steps). A etapa ATIVA
@@ -626,6 +651,7 @@ class Ai::StateManager
       reason = supervisor_fact_reason(key, value, expected, step)
       if reason
         emit('facts.rejected', { attribute: key.to_s, reason: reason })
+        @rejected_invalid[key.to_s] = value if reason == 'invalid_value' # (4) só formato errado (não recusa/chave inválida)
       else
         out[key] = value
       end
