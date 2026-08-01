@@ -240,7 +240,9 @@ class Ai::PromptCompiler
            '(ex.: estrangeiro sem CPF), registre a ausência; não repita a mesma pergunta.'
     return base if slot_feedback['step_turns'].to_i < ESCALATE_AFTER
 
-    "#{base} Como ele já tentou algumas vezes, OFEREÇA encaminhar para um atendente humano; se ele aceitar, " \
+    # "falar com um atendente" ESPELHA o gatilho do transfer_when ("cliente pede para falar com atendente"):
+    # quanto mais a oferta se parece com o gatilho, maior a chance de a resposta do cliente disparar o handoff.
+    "#{base} Como ele já tentou algumas vezes, OFEREÇA falar com um atendente; se ele aceitar, " \
       'FAÇA a transferência (decisão de handoff) — não apenas diga que vai transferir.'
   end
 

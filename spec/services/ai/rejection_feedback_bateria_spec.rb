@@ -43,13 +43,13 @@ RSpec.describe 'Ai rejection feedback (4)' do # rubocop:disable RSpec/DescribeCl
 
       expect(out).to include('AB123456', '(cpf)', 'NÃO tem o formato esperado')
       expect(out).to include('registre a ausência') # roteia o "não tenho" p/ o caminho determinístico
-      expect(out).not_to include('atendente humano') # ainda não escalou
+      expect(out).not_to include('falar com um atendente') # ainda não escalou
     end
 
-    it 'no limiar (ai_step_turns >= 2) -> OFERECE humano e manda FAZER o handoff (ação real, não promessa vazia)' do
+    it 'no limiar (ai_step_turns >= 2) -> OFERECE falar com atendente (espelha o transfer_when) e manda FAZER o handoff' do
       out = line(slot: 'documento_cpf', invalid_slot: 'documento_cpf', value: 'AB123456', turns: 2)
 
-      expect(out).to include('atendente humano')
+      expect(out).to include('OFEREÇA falar com um atendente') # texto espelha o gatilho "cliente pede para falar com atendente"
       expect(out).to include('FAÇA a transferência', 'não apenas diga que vai') # guarda contra promessa vazia
     end
 
@@ -99,6 +99,35 @@ RSpec.describe 'Ai rejection feedback (4)' do # rubocop:disable RSpec/DescribeCl
       manager.persist_attributes({ 'chave_fantasma' => 'AB123456' }, dept, source: :supervisor, expected_step: cpf_step)
 
       expect(attrs).not_to have_key('ai_last_invalid')
+    end
+  end
+
+  # ===== O caso das 3 INSISTÊNCIAS — não desaparece nem duplica; oferta a partir da 2ª ================
+  describe 'cliente insiste com valor inválido três vezes' do
+    def block_for(turns)
+      Ai::PromptCompiler.collection_state_block(
+        dept.playbook.steps, 0, {}, nil,
+        { 'invalid' => attrs['ai_last_invalid'], 'step_turns' => turns }
+      )
+    end
+
+    it 'o bloco aparece nas 3, UMA vez cada (não duplica), e a oferta entra a partir da 2ª (não some)' do
+      blocks = []
+      # 3 rejeições do MESMO valor inválido; ai_step_turns cresce 1,2,3 (o resolver conta o turno inválido —
+      # coberto pelo teto absoluto em state_manager_spec; aqui simulamos o contador para focar o RENDER).
+      3.times do |i|
+        manager.persist_attributes({ 'documento_cpf' => 'AB123456' }, dept, source: :supervisor, expected_step: cpf_step)
+        # não desaparece nem vira lista: segue um único {slot,value} após cada rejeição
+        expect(attrs['ai_last_invalid']).to eq({ 'slot' => 'documento_cpf', 'value' => 'AB123456' })
+        blocks << block_for(i + 1)
+      end
+
+      aggregate_failures do
+        blocks.each { |b| expect(b.scan('NÃO tem o formato esperado').size).to eq(1) } # aparece 1x por turno (não duplica)
+        expect(blocks[0]).not_to include('falar com um atendente') # turno 1: sem oferta
+        expect(blocks[1]).to include('falar com um atendente')     # turno 2: oferta
+        expect(blocks[2]).to include('falar com um atendente')     # turno 3: oferta (não some)
+      end
     end
   end
 end
