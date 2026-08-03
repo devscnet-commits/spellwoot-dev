@@ -238,13 +238,55 @@ RSpec.describe Ai::StateManager do
       expect(attrs).not_to have_key('ai_last_proposed_value')
     end
 
-    it 'asked_slot "" LIMPA o par quando NÃO há proposta pendente (asked_slot puro segue a disciplina do #304)' do
-      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b' })
+    # (o caso "asked_slot vazio SEM proposta pendente limpa o ponteiro" já é o teste da linha ~165 acima —
+    # aqui não se repete; a limpeza do PAR quando havia proposta está em "APAGA o par quando JÁ ENCHEU".)
 
-      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '' },
+    # PREENCHIMENTO PÓS-AVANÇO do asked_slot omitido (29–35% dos turnos). Quando a reply PERGUNTA e o modelo
+    # deixou asked_slot="", o motor preenche o ponteiro com o slot da etapa corrente PÓS-avanço — o MESMO que a
+    # captura do próximo turno usaria como fallback (fallback-exato). Não muda roteamento; torna explícito +
+    # mede. NÃO conserta os ~14% look-ahead — o evento os sinaliza (attributes_match_slot=false).
+    def omitted_event
+      Ai::Event.where(conversation_id: conversation.id, event_type: 'asked_slot.omitted').last
+    end
+
+    it 'reply PERGUNTA + asked_slot "" -> PREENCHE com o slot da etapa corrente + evento filled:true' do
+      dept = req_dept
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+
+      manager.track_step(dept, { 'step_completed' => false, 'asked_slot' => '', 'reply_text' => 'Qual a sua cidade?' },
+                         dispatcher: dispatcher, run: run)
+
+      expect(last_asked).to eq('campo_a')
+      expect(omitted_event.payload).to include('filled' => true, 'reply_ends_question' => true,
+                                               'attributes_match_slot' => true) # attributes vazio => concorda
+    end
+
+    it 'reply NÃO termina em "?" + asked_slot "" -> NÃO preenche (como hoje); evento filled:false' do
+      dept = req_dept
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'velho' })
+
+      manager.track_step(dept, { 'step_completed' => false, 'asked_slot' => '', 'reply_text' => 'Obrigado, registrado.' },
                          dispatcher: dispatcher, run: run)
 
       expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
+      expect(omitted_event.payload).to include('filled' => false, 'reply_ends_question' => false)
+    end
+
+    # O CASO 2959 em unidade: o modelo preenche a etapa A (campo_a) e, per instrução 158, já pergunta a B —
+    # omitindo asked_slot. O motor avança A->B; o ponteiro é preenchido com o slot PÓS-avanço (campo_b), NÃO o
+    # pré (campo_a) — a condição que separa no-op seguro de erro invisível. O evento sinaliza o look-ahead
+    # (attributes_match_slot=false: o modelo capturou campo_a mas o ponteiro aponta campo_b).
+    it 'turno de AVANÇO: preenche com o slot PÓS-avanço (campo_b), nunca o pré (campo_a); evento sinaliza o look-ahead' do
+      dept = req_dept
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+
+      manager.track_step(dept, { 'step_completed' => false, 'asked_slot' => '',
+                                 'reply_text' => 'Anotado! E qual o campo B?', 'attributes' => { 'campo_a' => 'valor' } },
+                         dispatcher: dispatcher, run: run, message_text: 'valor', message: incoming('valor'))
+
+      expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1) # avançou A->B
+      expect(last_asked).to eq('campo_b')                                          # PÓS-avanço, não campo_a
+      expect(omitted_event.payload).to include('filled' => true, 'attributes_match_slot' => false)
     end
 
     # Regressão #304/conv 397 ponta a ponta: sem a limpeza, o asked_slot VELHO (slot já preenchido) fazia a
