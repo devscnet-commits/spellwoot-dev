@@ -452,32 +452,71 @@ class Ai::StateManager
   # confirmação disparar em slot já preenchido. Presente grava; "" ou ausência-resolvida REMOVE.
   # Frente B: o valor PROPOSTO vive SÓ ao lado de um asked_slot, mesma disciplina incondicional — senão um
   # "sim" de outro assunto confirmaria uma proposta velha.
+  # Guarda o par (slot perguntado + valor proposto) para o PRÓXIMO turno rotear/confirmar. Os dois ponteiros
+  # têm ciclos de vida DIFERENTES na hora de APAGAR (ver os helpers):
+  #   ai_last_asked_slot     = "o que ACABEI DE PERGUNTAR"        -> morre quando paro de perguntar (#304).
+  #   ai_last_proposed_value = "o que OFERECI e AGUARDA RESOLUÇÃO" -> vive até resolver. Estender a disciplina
+  #     do primeiro ao segundo foi o bug do wipe no turno de confirmação (CONV 431/run 2944).
   def remember_asked_slot(attrs, decision, step)
     asked = decision['asked_slot'].to_s.strip
-    if asked.present? && !asked_slot_absent?(attrs, asked)
-      attrs['ai_last_asked_slot'] = asked
-      proposed = decision['proposed_value'].to_s.strip
-      proposed = seed_proposed_from_memory(attrs, step, asked) if proposed.blank? # PR3 (Frente C)
-      proposed.present? ? (attrs['ai_last_proposed_value'] = proposed) : attrs.delete('ai_last_proposed_value')
-    elsif asked.blank? && pending_proposal_unresolved?(attrs)
-      # CICLO DE VIDA (conserto do proposed_value apagado na confirmação): os dois ponteiros têm SIGNIFICADOS
-      # DIFERENTES e não podem compartilhar a mesma disciplina —
-      #   ai_last_asked_slot   = "o que ACABEI DE PERGUNTAR" -> morre quando paro de perguntar (é o que a
-      #                          atribuição incondicional acima garante: asked "" apaga; disciplina do #304).
-      #   ai_last_proposed_value = "o que OFERECI e AGUARDA RESOLUÇÃO" -> vive até resolver (confirmado /
-      #                          recusado / preenchido com valor real / substituído por nova proposta).
-      # Estender a disciplina do primeiro ao segundo foi o bug: no TURNO DE CONFIRMAÇÃO o modelo para de
-      # perguntar (asked_slot="") justamente quando a proposta seria consumida, e o wipe a apagava — a
-      # captura do próximo turno ficava sem o que substituir (loop na etapa de venda, CONV 431/run 2944).
-      # Aqui o PAR sobrevive ENQUANTO o slot-alvo segue VAZIO; assim que ele enche (valor real ou token de
-      # ausência) ou o modelo pergunta outro slot (ramo `if` regrava), a resolução apaga normalmente. O
-      # consumidor (Ai::TurnCapture#substitute_proposed_value) exige o PAR — por isso preservamos os dois,
-      # não só o proposed_value.
-      nil
+    return remember_declared_asked_slot(attrs, decision, step, asked) if asked.present? && !asked_slot_absent?(attrs, asked)
+
+    remember_blank_or_declined_asked_slot(attrs, decision, step, asked)
+  end
+
+  # asked_slot DECLARADO pelo modelo (caminho feliz): grava o ponteiro + o valor proposto ao lado (semeando
+  # da memória quando o modelo não propõe — PR3/Frente C).
+  def remember_declared_asked_slot(attrs, decision, step, asked)
+    attrs['ai_last_asked_slot'] = asked
+    proposed = decision['proposed_value'].to_s.strip
+    proposed = seed_proposed_from_memory(attrs, step, asked) if proposed.blank?
+    proposed.present? ? (attrs['ai_last_proposed_value'] = proposed) : attrs.delete('ai_last_proposed_value')
+  end
+
+  # asked_slot vazio OU presente-mas-resolvido-como-AUSÊNCIA (declínio). Desfechos, nesta ordem:
+  # (1) proposta pendente p/ slot ainda VAZIO -> PRESERVA o par. No turno de confirmação o modelo para de
+  #     perguntar (asked_slot=""); apagar aqui era o wipe que matava a proposta JUSTO quando ela seria
+  #     consumida (CONV 431/run 2944). Ai::TurnCapture#substitute_proposed_value exige o PAR — por isso os dois.
+  # (2) asked "" e a reply PERGUNTA -> preenche o ponteiro com o slot corrente PÓS-avanço + mede (helper).
+  # (3) resto (declínio, ou reply sem pergunta) -> apaga o ponteiro. proposed_value só sobrevive no caso (1).
+  def remember_blank_or_declined_asked_slot(attrs, decision, step, asked)
+    return if asked.blank? && pending_proposal_unresolved?(attrs)
+
+    asked.blank? ? fill_omitted_asked_slot(attrs, decision, step) : attrs.delete('ai_last_asked_slot')
+    attrs.delete('ai_last_proposed_value')
+  end
+
+  # (Preenchimento pós-avanço do asked_slot omitido) O modelo deixou asked_slot="" mas a reply PERGUNTA algo.
+  # `step` aqui JÁ é a etapa corrente PÓS-avanço — persist_progress chama persist_step_state(steps[new_index], …) —
+  # logo Ai::StepSlot.attribute(step) é EXATAMENTE o slot que a captura do próximo turno usaria como fallback
+  # (Ai::TurnCapture: `asked.presence || step_slot`). Preencher com ele é FALLBACK-EXATO: NÃO muda o alvo do
+  # roteamento, só torna o ponteiro explícito — e o substitute_proposed_value / a guarda de confirmação passam a
+  # enxergá-lo nos ~86% em que o modelo está na etapa certa e só omitiu o campo. NÃO conserta os ~14% look-ahead
+  # (a reply pediu OUTRA etapa): esses já mis-roteiam para o slot corrente hoje e seguem assim — o evento os mede
+  # (attributes_match_slot=false os sinaliza). Preencher com a etapa PRÉ-avanço apontaria um slot já cheio no turno
+  # de avanço (o erro invisível que a moldura evita); aqui `step` é pós-avanço, então isso não acontece.
+  def fill_omitted_asked_slot(attrs, decision, step)
+    slot = Ai::StepSlot.attribute(step)
+    reply_q = decision['reply_text'].to_s.strip.end_with?('?')
+    emit_asked_slot_omitted(step, slot, decision, reply_q)
+    if reply_q && slot.present?
+      attrs['ai_last_asked_slot'] = slot
     else
-      attrs.delete('ai_last_asked_slot')
-      attrs.delete('ai_last_proposed_value')
+      attrs.delete('ai_last_asked_slot') # não é pergunta OU etapa sem slot -> como hoje (o fallback cobre)
     end
+  end
+
+  # Telemetria da omissão do asked_slot. Emite na omissão INTEIRA (não só quando preenche) para que a TAXA seja
+  # auto-contida (denominador = eventos; numerador do preenchimento = filled:true; questões = reply_ends_question).
+  # attributes_match_slot é o proxy DETERMINÍSTICO do "modelo na etapa certa": o slot pós-avanço aparece nos
+  # attributes que o modelo devolveu (ou attributes vazio); false = o modelo capturou OUTRO slot (look-ahead, os
+  # ~14% — ex.: pós-avanço=escolha_caminho mas attributes={cidade}). É o sinal para dimensionar se um conserto
+  # próprio dos 14% (sinal de alvo-da-reply) se justifica depois.
+  def emit_asked_slot_omitted(step, slot, decision, reply_q)
+    keys = decision['attributes'].is_a?(Hash) ? decision['attributes'].keys.map(&:to_s) : []
+    emit('asked_slot.omitted', { step: step_name(step), slot: slot, reply_ends_question: reply_q,
+                                 attributes_match_slot: keys.empty? || (slot.present? && keys.include?(slot.to_s)),
+                                 filled: reply_q && slot.present? })
   end
 
   # Há proposta pendente (proposed_value ao lado de um asked_slot) cujo slot-alvo ainda está VAZIO em
