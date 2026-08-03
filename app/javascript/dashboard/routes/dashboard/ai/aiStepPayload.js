@@ -70,6 +70,10 @@ export const buildStepPayload = ({
   collectAttribute = '',
   collectType = 'text',
   collectOptions = '',
+  // (B2) De onde vem o conjunto de valores de um slot choice: 'fixed' (lista digitada em collectOptions) ou
+  // 'tool' (o RESULTADO da ferramenta collectDomainTool é o domínio dinâmico). Ver Ai::StepSlot.domain_from_tool.
+  collectSource = 'fixed',
+  collectDomainTool = '',
   slotRequired = true,
   knowledgeQuery = '',
   knowledgeKinds = '',
@@ -88,10 +92,19 @@ export const buildStepPayload = ({
   if (attribute) {
     payload.collect = { attribute, type: collectType || 'text' };
     if (collectType === 'choice') {
-      payload.collect.options = (collectOptions || '')
-        .split('\n')
-        .map(o => o.trim())
-        .filter(Boolean);
+      const tool = (collectDomainTool || '').trim();
+      if (collectSource === 'tool' && tool) {
+        // Domínio dinâmico: a ferramenta é o validador ÚNICO. options=[] LIMPA qualquer lista fixa antiga
+        // (senão o spread de collect a preservaria) — o backend ignora options quando domain_from_tool está
+        // presente (supervisor_fact_reason -> tool_domain_reason), mas deixar lista morta confunde a próxima edição.
+        payload.collect.options = [];
+        payload.collect.domain_from_tool = tool;
+      } else {
+        payload.collect.options = (collectOptions || '')
+          .split('\n')
+          .map(o => o.trim())
+          .filter(Boolean);
+      }
     }
   } else {
     payload.collect = null;

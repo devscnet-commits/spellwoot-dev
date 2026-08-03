@@ -151,6 +151,21 @@ const fetchLeadVariables = async () => {
     leadVariables.value = [];
   }
 };
+// (B2) Ferramentas do department: fonte do Select "opções vêm de: ferramenta" num slot choice do AiStepForm.
+// Mesmo endpoint que a aba Ferramentas (AiTools) consome; buscado aqui para passar como prop às etapas. Falha
+// ou "novo" (sem departmentId) => [] (o modo ferramenta do form avisa que não há ferramenta).
+const deptTools = ref([]);
+const fetchDeptTools = async () => {
+  if (!departmentId.value) return;
+  try {
+    const { data } = await axios.get(
+      `${deptCollectionUrl()}/${departmentId.value}/ai_tools`
+    );
+    deptTools.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    deptTools.value = [];
+  }
+};
 // AiStepForm criou uma LeadVariable inline: empilha para a opção aparecer no Select (evita refetch).
 const onVariableCreated = variable => {
   if (variable?.name) leadVariables.value.push(variable);
@@ -732,6 +747,7 @@ onMounted(async () => {
   await Promise.all([
     fetchCustomAttributes(),
     fetchLeadVariables(),
+    fetchDeptTools(),
     fetchLabels(),
     fetchTeams(),
     fetchDepartmentsList(),
@@ -1409,6 +1425,7 @@ onMounted(async () => {
                     :teams="teams"
                     :custom-attributes="customAttributes"
                     :lead-variables="leadVariables"
+                    :tools="deptTools"
                     :agent-id="route.params.agentId"
                     :department-id="departmentId"
                     :departments="departmentsList"
@@ -1483,6 +1500,7 @@ onMounted(async () => {
                 :teams="teams"
                 :custom-attributes="customAttributes"
                 :lead-variables="leadVariables"
+                :tools="deptTools"
                 :agent-id="route.params.agentId"
                 :department-id="departmentId"
                 :departments="departmentsList"

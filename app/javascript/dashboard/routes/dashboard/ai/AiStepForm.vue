@@ -24,6 +24,9 @@ const props = defineProps({
   // Variáveis INTERNAS do department (Ai::LeadVariable). Fonte do Select da chave junto com customAttributes;
   // o inline-create grava aqui (não em CustomAttributeDefinition).
   leadVariables: { type: Array, default: () => [] },
+  // (B2) Ferramentas do department (Ai::Tool), carregadas pelo pai. Fonte do Select "opções vêm de: ferramenta"
+  // num slot choice. Usadas só pelo NOME (domain_from_tool guarda o nome). Vazio => o modo ferramenta avisa.
+  tools: { type: Array, default: () => [] },
   // Contexto para o POST do inline-create de LeadVariable (nested em ai_agents -> ai_departments).
   agentId: { type: [String, Number], default: null },
   departmentId: { type: [String, Number], default: null },
@@ -59,6 +62,11 @@ const draft = reactive({
   collectOptions: Array.isArray(props.step?.collect?.options)
     ? props.step.collect.options.join('\n')
     : '',
+  // (B2) Fonte das opções de um slot choice: 'fixed' (lista digitada) ou 'tool' (domínio dinâmico = resultado
+  // da ferramenta). Semeado do banco: collect.domain_from_tool presente => 'tool'. collectDomainTool guarda o
+  // NOME da ferramenta (é o que Ai::StepSlot.domain_from_tool lê e resolve por department.tools.find_by(name:)).
+  collectSource: props.step?.collect?.domain_from_tool ? 'tool' : 'fixed',
+  collectDomainTool: props.step?.collect?.domain_from_tool || '',
   // Obrigatório? SEMPRE no nível da etapa (slot_required), NUNCA collect.required (Gap 2 desacoplou).
   // Default obrigatório; null/undefined legado => obrigatório.
   slotRequired: props.step?.slot_required ?? true,
@@ -214,6 +222,25 @@ const slotTypeOptions = computed(() => [
   },
 ]);
 
+// (B2) Ferramentas do department como opções do Select "opções vêm de: ferramenta". O value é o NOME (é o que
+// domain_from_tool grava e o backend resolve). Placeholder vazio quando o department não tem ferramenta.
+const toolOptions = computed(() =>
+  (props.tools || [])
+    .map(tl => (tl?.name || '').trim())
+    .filter(Boolean)
+    .map(name => ({ value: name, label: name }))
+);
+
+// Aviso anti-degradação-silenciosa: o slot está em modo ferramenta e o NOME salvo não existe (mais) na lista
+// do department (ferramenta removida/renomeada). O runtime já faz fail-open + emite tool_domain.unextractable,
+// mas quem edita a etapa precisa VER que o slot voltou a aceitar qualquer valor. Só alerta quando há nome salvo.
+const toolDomainMissing = computed(() => {
+  if (draft.collectSource !== 'tool') return false;
+  const chosen = (draft.collectDomainTool || '').trim();
+  if (!chosen) return false;
+  return !toolOptions.value.some(o => o.value === chosen);
+});
+
 const typeOptions = computed(() => [
   { value: 'tag', label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_TAG') },
   { value: 'webhook', label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_WEBHOOK') },
@@ -301,6 +328,8 @@ const onSave = () => {
       collectAttribute: draft.collectAttribute,
       collectType: draft.collectType,
       collectOptions: draft.collectOptions,
+      collectSource: draft.collectSource,
+      collectDomainTool: draft.collectDomainTool,
       slotRequired: draft.slotRequired,
       knowledgeQuery: draft.knowledgeQuery,
       knowledgeKinds: draft.knowledgeKinds,
@@ -474,20 +503,87 @@ const onSave = () => {
           {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
           <Select v-model="draft.collectType" :options="slotTypeOptions" />
         </label>
-        <label
+        <!-- choice: as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio dinâmico). Um
+             modo por vez — o campo do outro some (dois campos de opções visíveis convida a preencher os dois). -->
+        <div
           v-if="draft.collectType === 'choice'"
-          class="flex flex-col gap-1 text-xs"
+          class="flex flex-col gap-2 text-xs"
         >
-          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
-          <textarea
-            v-model="draft.collectOptions"
-            rows="2"
-            :placeholder="
-              $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
-            "
-            class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 resize-y"
-          />
-        </label>
+          <span class="text-n-slate-11">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE') }}
+          </span>
+          <div class="flex flex-col gap-1">
+            <label class="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                v-model="draft.collectSource"
+                type="radio"
+                value="fixed"
+                class="mt-0.5"
+              />
+              <span>{{
+                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE_FIXED')
+              }}</span>
+            </label>
+            <label class="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                v-model="draft.collectSource"
+                type="radio"
+                value="tool"
+                class="mt-0.5"
+              />
+              <span>{{
+                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE_TOOL')
+              }}</span>
+            </label>
+          </div>
+
+          <!-- lista fixa -->
+          <label
+            v-if="draft.collectSource !== 'tool'"
+            class="flex flex-col gap-1"
+          >
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
+            <textarea
+              v-model="draft.collectOptions"
+              rows="2"
+              :placeholder="
+                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
+              "
+              class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 resize-y"
+            />
+          </label>
+
+          <!-- domínio dinâmico: o resultado da ferramenta é o conjunto de valores aceitos -->
+          <template v-else>
+            <label class="flex flex-col gap-1">
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL') }}
+              <Select
+                v-if="toolOptions.length"
+                v-model="draft.collectDomainTool"
+                :options="toolOptions"
+              />
+              <span v-else class="text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_EMPTY') }}
+              </span>
+            </label>
+            <p class="text-n-slate-10">
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_HINT') }}
+            </p>
+            <!-- ferramenta salva não existe mais (removida/renomeada): avisa que o slot voltou a aceitar tudo -->
+            <p
+              v-if="toolDomainMissing"
+              data-testid="tool-domain-missing"
+              class="flex items-start gap-1.5 text-n-ruby-11"
+            >
+              <span class="i-lucide-alert-triangle size-3.5 mt-0.5 shrink-0" />
+              <span>{{
+                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_MISSING', {
+                  tool: draft.collectDomainTool,
+                })
+              }}</span>
+            </p>
+          </template>
+        </div>
 
         <div class="flex flex-col gap-1 pt-1.5 border-t border-n-teal-5">
           <label class="flex items-start gap-2 text-sm cursor-pointer">
