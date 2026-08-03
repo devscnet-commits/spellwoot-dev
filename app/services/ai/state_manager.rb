@@ -648,7 +648,9 @@ class Ai::StateManager
     expected = supervisor_expected_keys(department, slot_steps)
     cleaned.each_with_object({}) do |(key, value), out|
       step = key.to_s == active_key ? expected_step : slot_steps[key.to_s]
-      reason = supervisor_fact_reason(key, value, expected, step)
+      tool_dom = tool_domain(step, department)
+      emit_tool_domain_unextractable(key, tool_dom) # (B2) fail-open COM telemetria (não degradar em silêncio)
+      reason = supervisor_fact_reason(key, value, expected, step, tool_dom)
       if reason
         emit('facts.rejected', { attribute: key.to_s, reason: reason })
         @rejected_invalid[key.to_s] = value if reason == 'invalid_value' # (4) só formato errado (não recusa/chave inválida)
@@ -656,6 +658,72 @@ class Ai::StateManager
         out[key] = value
       end
     end
+  end
+
+  # (B2) DOMÍNIO DINÂMICO do slot vindo do RESULTADO da ferramenta do turno (opt-in via collect['domain_from_tool']).
+  # Devolve nil quando não configurado (slot comum, gate inalterado). Quando configurado: { list: [...], tool: }
+  # se der para extrair UM array de escalares do output; { list: nil, tool:, reason: } (fail-open) quando a
+  # ferramenta não existe, não rodou no turno, ou o output não tem exatamente UM array de escalares.
+  def tool_domain(step, department)
+    tool_name = Ai::StepSlot.domain_from_tool(step)
+    return nil if tool_name.blank?
+
+    tool = department.respond_to?(:tools) ? department.tools.find_by(name: tool_name) : nil
+    return { list: nil, tool: tool_name, reason: 'no_tool' } if tool.nil?
+
+    output = latest_tool_output(tool)
+    return { list: nil, tool: tool_name, reason: 'no_execution' } if output.blank?
+
+    domain_from_output(output).merge(tool: tool_name)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#tool_domain] #{e.class}: #{e.message}"
+    nil
+  end
+
+  def latest_tool_output(tool)
+    Ai::CapabilityExecution.where(conversation_id: @conversation.id, ai_tool_id: tool.id, status: 'executed')
+                           .order(created_at: :desc).first&.output
+  end
+
+  # UM array de escalares -> é o domínio; zero/múltiplos -> não adivinha (fail-open, com reason p/ telemetria).
+  def domain_from_output(output)
+    arrays = scalar_arrays(output).uniq
+    return { list: nil, reason: arrays.empty? ? 'none' : 'ambiguous' } unless arrays.size == 1
+
+    { list: arrays.first.map { |v| v.to_s.strip }.reject(&:blank?) }
+  end
+
+  def out_of_tool_domain?(value, tool_dom)
+    tool_dom && tool_dom[:list] && !in_tool_domain?(value, tool_dom[:list])
+  end
+
+  def emit_tool_domain_unextractable(key, tool_dom)
+    return unless tool_dom && tool_dom[:list].nil?
+
+    emit('tool_domain.unextractable', { attribute: key.to_s, tool: tool_dom[:tool], reason: tool_dom[:reason] })
+  end
+
+  # Acha, RECURSIVAMENTE e em QUALQUER profundidade, arrays cujos elementos são TODOS escalares (string/número)
+  # — genérico, sem assumir a forma do webhook ({body:{periodos}}, {data:{slots}}, {available:[]}, lista crua).
+  def scalar_arrays(node)
+    case node
+    when Array
+      inner = node.flat_map { |v| scalar_arrays(v) }
+      scalar_array?(node) ? [node] + inner : inner
+    when Hash
+      node.values.flat_map { |v| scalar_arrays(v) }
+    else
+      []
+    end
+  end
+
+  def scalar_array?(arr)
+    arr.any? && arr.all? { |e| e.is_a?(String) || e.is_a?(Numeric) }
+  end
+
+  def in_tool_domain?(value, list)
+    v = value.to_s.strip
+    list.any? { |d| d.casecmp?(v) }
   end
 
   # (item 5) O valor CRU do slot da etapa CORRENTE passaria no gate? MESMO veredito do gated_facts
@@ -673,7 +741,7 @@ class Ai::StateManager
     return false if value.to_s.strip.blank?
 
     expected = supervisor_expected_keys(department, declared_slot_steps(department))
-    supervisor_fact_reason(slot, value, expected, step).nil?
+    supervisor_fact_reason(slot, value, expected, step, tool_domain(step, department)).nil?
   rescue StandardError => e
     Rails.logger.error "[Ai::StateManager#supervisor_slot_valid?] #{e.class}: #{e.message}"
     false
@@ -724,12 +792,16 @@ class Ai::StateManager
   # conjunto esperado; 'invalid_value' = tipo de formato conhecido cujo valor não passa no extractor.
   # `step` = a etapa que DECLARA esta chave (nil p/ lead_variable/fillable, que não têm step). Chave
   # esperada de tipo livre (text/derivável nil) é aceita (não há formato para validar).
-  def supervisor_fact_reason(key, value, expected, step)
+  def supervisor_fact_reason(key, value, expected, step, tool_dom = nil)
     return 'unexpected_key' unless expected.include?(key.to_s)
     # Gap 1: valor de recusa/ausência do modelo (token ou expressão) NÃO vira fato — antes da validação de
     # formato, para pegar também slot de TEXTO (fecha o nome_cliente="não informado" aberto pelo gate fix).
     # A sentinela em ai_collected_facts vem só do caminho fill_absent (slot opcional), com o token canônico.
     return 'declined' if Ai::SlotAbsence.absence_value?(value)
+    # (B2) Domínio DINÂMICO da ferramenta: se a etapa declara domain_from_tool e o resultado do turno é um
+    # domínio EXTRAÍVEL, o valor tem de estar nele — vale para modelo E juiz (ambos via :supervisor). Domínio
+    # não-extraível (tool_dom[:list] nil) => fail-open (não rejeita; a telemetria sai no gated_facts).
+    return 'not_in_tool_result' if out_of_tool_domain?(value, tool_dom)
 
     type = supervisor_fact_type(key, step)
     return nil unless Ai::SlotExtractor.known_format?(type)

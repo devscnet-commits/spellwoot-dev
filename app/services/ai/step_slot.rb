@@ -80,6 +80,16 @@ module Ai::StepSlot
     collect ? Array(collect['options'] || collect[:options]) : []
   end
 
+  # (B2) Nome da ferramenta cujo RESULTADO do turno é o DOMÍNIO dinâmico deste slot (opt-in). Vazio/ausente =
+  # slot comum (domínio estático ou nenhum). Configurável hoje por console/save do front (jsonb do step, não
+  # strippado — to_unsafe_h); a UI do campo é pendência. Lido pelo gate (Ai::StateManager#tool_domain).
+  def domain_from_tool(step)
+    collect = collect_of(step)
+    return nil unless collect
+
+    (collect['domain_from_tool'] || collect[:domain_from_tool]).to_s.strip.presence
+  end
+
   # Critério de conclusão declarado ('attribute_present' | 'always' | ...), ou '' quando ausente.
   def criterion(step)
     return '' unless step.is_a?(Hash)
