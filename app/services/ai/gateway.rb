@@ -175,7 +175,10 @@ class Ai::Gateway
       # etapa (ai_step_turns, reusado p/ a escalada soft ao humano). O prompt explica em vez de reperguntar.
       slot_feedback: {
         'invalid' => (@conversation.additional_attributes || {})['ai_last_invalid'],
-        'step_turns' => (@conversation.additional_attributes || {})['ai_step_turns'].to_i
+        'step_turns' => (@conversation.additional_attributes || {})['ai_step_turns'].to_i,
+        # Proposta pendente (ai_last_proposed_value, de QUALQUER origem): dispara a linha de CONTRATO que
+        # obriga o modelo a popular attributes[slot] na confirmação (senão vem mudo -> echo_missing).
+        'pending_proposed' => (@conversation.additional_attributes || {})['ai_last_proposed_value']
       }
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })

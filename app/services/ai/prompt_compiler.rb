@@ -138,6 +138,8 @@ class Ai::PromptCompiler
     lines.concat(Array(rejection_feedback_line(steps, step_index, slot, slot_feedback)))
     # PR3 (Frente C): pré-preenchimento da memória, SÓ slot de FORMATO (ver memory_prefill_line). Array(nil)=[].
     lines.concat(Array(memory_prefill_line(steps, step_index, slot, customer_memory)))
+    # Proposta pendente (contrato): obriga a popular attributes[slot] na confirmação (ver método).
+    lines.concat(Array(pending_proposal_line(slot, slot_feedback)))
     lines.concat(confirmation_guidance_lines)
     lines.join("\n")
   end
@@ -207,6 +209,24 @@ class Ai::PromptCompiler
       "NÃO pergunte do zero: PROPONHA esse valor e peça UMA confirmação objetiva (ex.: \"Ainda é #{value}?\"). " \
       "Quando o cliente responder, SEMPRE devolva em \"attributes\" a chave #{slot} (o valor que ele disser, ou " \
       'a própria confirmação). Se confirmar, esse valor é aceito; se corrigir, use o novo.'
+  end
+
+  # CONTRATO (NÃO orientação de conversa) — dispara quando há PROPOSTA PENDENTE para o slot corrente:
+  # ai_last_proposed_value, de QUALQUER origem (memória OU o próprio modelo, ex.: propôs um plano). Sem isto, a
+  # confirmação vem MUDA (attributes={}) e Ai::TurnCapture#substitute_proposed_value não tem o que promover
+  # (proposal.echo_missing; 12/13 em plano_escolhido — a memory_prefill_line acima só cobre proposta vinda da
+  # MEMÓRIA). Dirigido por ESTADO DO MOTOR (a proposta pendente), não por estilo de atendimento -> vive no código.
+  # SEM exemplo, SEM "apresente/pergunte": apresentar a opção é da INSTRUÇÃO DA ETAPA (tenant); aqui só a mecânica
+  # do canal attributes. A promoção em si é do motor (substitute_proposed_value + gate) — aqui só se exige o ECO.
+  def self.pending_proposal_line(slot, slot_feedback)
+    return nil if slot.blank?
+
+    proposed = (slot_feedback || {})['pending_proposed'].to_s.strip
+    return nil if proposed.blank?
+
+    "PROPOSTA PENDENTE para \"#{slot}\": você propôs um valor e aguarda a resposta do cliente. Quando ele " \
+      "responder, SEMPRE popule \"attributes\" com a chave #{slot} (o valor dele, ou a confirmação) — nunca " \
+      'deixe "attributes" vazio neste turno. O motor grava o valor proposto se ele confirmar; o novo se ele corrigir.'
   end
 
   # Slot de FORMATO conhecido? Governa o escopo do pré-preenchimento (decisão (D): só formato, onde o gate valida).
