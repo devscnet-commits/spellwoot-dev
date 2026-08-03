@@ -234,6 +234,14 @@ RSpec.describe Ai::PromptAssistant do
       it 'princípio — declara que o MOTOR já valida/acusa/avança/trata ausência' do
         expect(step).to include('O MOTOR já cuida de')
       end
+
+      # Dado de TERCEIRO (indicado) não pode reusar a variável do cliente e sobrescrever (bug real).
+      it 'entidade — reusa só o dado do MESMO cliente; dado de outra pessoa vira variável NOVA (CRIE A VARIÁVEL)' do
+        expect(step).to include('DE QUEM é o dado')
+        expect(step).to include('PERTENCE A OUTRA PESSOA') # CRITÉRIO, não lista de palavras PT
+        expect(step).to include('NA DÚVIDA de quem é o dado, prefira CRIAR') # viés conservador
+        expect(step).to include('CRIE A VARIÁVEL') # saída explícita: precisa criar ANTES
+      end
     end
   end
 end
