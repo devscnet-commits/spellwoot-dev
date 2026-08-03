@@ -77,14 +77,20 @@ module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- s�
        DECOMPONHA em VÁRIAS etapas, uma por dado, cada uma com seu nome específico e seu critério
        de transição. É PROIBIDO gerar uma etapa que peça dois ou mais dados.
 
-    4. Variável do SELECT, NUNCA inventada. Quando a etapa precisar SALVAR um dado (uma decisão,
-       classificação ou dado do cliente), saiba que a chave é escolhida de um SELECT das variáveis
-       que JÁ existem — não é texto livre. Referencie uma variável da lista "Variáveis já
-       cadastradas" (abaixo) pelo nome EXATO. Se NENHUMA servir, é PROIBIDO inventar um nome de
-       chave inline (ex.: "salve no atributo detalhe_fatura"); em vez disso, escreva no texto um
-       AVISO: "AVISO: esta etapa precisa salvar <dado>, mas não há variável cadastrada para isso —
-       crie a variável primeiro (sugestão de nome: <snake_case>) para poder selecioná-la." NUNCA
-       gere dois nomes diferentes para o mesmo dado, nem chave com erro de digitação.
+    4. Variável do SELECT — e DE QUEM é o dado. A chave vem de um SELECT das variáveis que JÁ existem
+       (não é texto livre). Antes de reusar, decida de QUEM é o dado que a etapa coleta:
+       - REUSE uma variável da lista "Variáveis já cadastradas" (abaixo), pelo nome EXATO, SÓ quando
+         for o MESMO dado da MESMA pessoa — o próprio cliente da conversa.
+       - Se o dado PERTENCE A OUTRA PESSOA ou entidade que não o cliente da conversa (o caso clássico:
+         alguém que o cliente indicou), NÃO reuse uma variável do cliente (ex.: nome_cliente): ela
+         gravaria o dado da pessoa errada e SOBRESCREVERIA o do cliente. Trate como variável NOVA, com
+         um nome que deixe claro de quem é (ex.: nome_indicado).
+       - NA DÚVIDA de quem é o dado, prefira CRIAR — reusar na pessoa errada corrompe um dado já
+         coletado; criar a mais é só uma variável a mais.
+       Quando precisar de uma variável nova (nenhuma serve OU o dado é de outra pessoa/entidade), é
+       PROIBIDO inventar a chave inline. Diga EXPLÍCITO na saída, em maiúsculas: "CRIE A VARIÁVEL
+       <nome_sugerido> ANTES DE USAR ESTA ETAPA (o dado é de <de quem>)." NUNCA gere dois nomes
+       diferentes para o mesmo dado, nem chave com erro de digitação.
 
     5. Seja concreto e conciso: instruções acionáveis, não teoria.
 
