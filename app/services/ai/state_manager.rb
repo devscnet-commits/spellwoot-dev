@@ -651,6 +651,8 @@ class Ai::StateManager
       tool_dom = tool_domain(step, department)
       emit_tool_domain_unextractable(key, tool_dom) # (B2) fail-open COM telemetria (não degradar em silêncio)
       reason = supervisor_fact_reason(key, value, expected, step, tool_dom)
+      emit_inferred_type_used(key, step, expected) # instrumentação temporária (Fase 1 do type_for_key)
+      reason = supervisor_fact_reason(key, value, expected, step)
       if reason
         emit('facts.rejected', { attribute: key.to_s, reason: reason })
         @rejected_invalid[key.to_s] = value if reason == 'invalid_value' # (4) só formato errado (não recusa/chave inválida)
@@ -724,6 +726,19 @@ class Ai::StateManager
   def in_tool_domain?(value, list)
     v = value.to_s.strip
     list.any? { |d| d.casecmp?(v) }
+  # INSTRUMENTAÇÃO TEMPORÁRIA (Fase 1 do type_for_key) — mede o RESIDUAL step-less antes de apagar a
+  # inferência de tipo por vocabulário PT/BR. Emite quando o gate resolveria o tipo de um fato ESPERADO pela
+  # INFERÊNCIA (type_for_key), não por `type` declarado — ou seja, o caso que PERDE validação na Fase 2. Slots
+  # de etapa já declaram o tipo (query em prod = 0); isto pega lead_variable/fillable (step nil) e qualquer step
+  # com `type` 'text'. REMOVER junto com type_for_key na Fase 2. Recomputa type_for_key (barato); não altera o gate.
+  def emit_inferred_type_used(key, step, expected)
+    return unless expected.include?(key.to_s)            # só o que seria de fato validado
+    return if step && Ai::StepSlot.type(step) != 'text'  # tipo DECLARADO -> não é inferência
+
+    inferred = Ai::SlotExtractor.type_for_key(key)
+    return if inferred.blank?                             # a chave não infere formato -> nada a medir
+
+    emit('slot.inferred_type_used', { attribute: key.to_s, inferred_type: inferred, step_less: step.nil? })
   end
 
   # (item 5) O valor CRU do slot da etapa CORRENTE passaria no gate? MESMO veredito do gated_facts
