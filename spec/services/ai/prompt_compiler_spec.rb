@@ -186,12 +186,15 @@ RSpec.describe Ai::PromptCompiler do
 
     # Contrato pergunta↔etapa: o campo asked_slot precisa estar no TEMPLATE JSON e ter instrução própria,
     # senão o modelo nunca o devolve e o roteamento por pergunta (TurnCapture) fica sempre no fallback.
-    it 'o response_contract inclui asked_slot no template JSON e a instrução do campo' do
+    it 'o response_contract inclui asked_slot no template JSON e a instrução (cobre escolha/permissão + exemplo)' do
       contract = described_class.response_contract
 
       aggregate_failures do
         expect(contract).to include('"asked_slot":""')
-        expect(contract).to include('Em "asked_slot", informe o slot que a sua reply_text está pedindo neste turno')
+        expect(contract).to include('Em "asked_slot", informe a CHAVE EXATA do slot')
+        # o furo dos 35%: pergunta de escolha/permissão cuja resposta É o slot — com o exemplo real
+        expect(contract).to include('perguntas de ESCOLHA, PERMISSÃO ou CONFIRMAÇÃO')
+        expect(contract).to include('asked_slot = escolha_caminho')
       end
     end
 
