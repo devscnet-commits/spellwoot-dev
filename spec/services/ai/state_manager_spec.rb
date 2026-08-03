@@ -171,7 +171,9 @@ RSpec.describe Ai::StateManager do
       expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
     end
 
-    # Frente B: o valor PROPOSTO vive AO LADO do asked_slot, com o MESMO ciclo incondicional.
+    # Frente B: o valor PROPOSTO é gravado AO LADO do asked_slot, MAS tem ciclo de vida próprio na hora de
+    # apagar — sobrevive a asked_slot="" enquanto o slot-alvo estiver vazio (ver os testes de ciclo de vida
+    # abaixo). Gravação ainda é ao lado; a diferença é a RESOLUÇÃO.
     def proposed
       conversation.reload.additional_attributes['ai_last_proposed_value']
     end
@@ -194,15 +196,55 @@ RSpec.describe Ai::StateManager do
       expect(conversation.reload.additional_attributes).not_to have_key('ai_last_proposed_value')
     end
 
-    it 'asked_slot "" LIMPA também ai_last_proposed_value (sem pergunta não há proposta pendente)' do
+    # CICLO DE VIDA (conserto do proposed_value apagado na confirmação, CONV 431/run 2944): o proposed_value NÃO
+    # compartilha a disciplina incondicional do asked_slot. asked_slot = "o que acabei de perguntar" (morre quando
+    # paro). proposed_value = "o que ofereci e aguarda resolução" (vive até resolver). No turno de confirmação o
+    # modelo para de perguntar (asked_slot="") JUSTO quando a proposta seria consumida — apagar aqui era o bug.
+    it 'asked_slot "" PRESERVA o par quando há proposta pendente p/ slot ainda VAZIO (conserto do wipe na confirmação)' do
       conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b',
-                                                    'ai_last_proposed_value' => 'tarde' })
+                                                    'ai_last_proposed_value' => 'tarde' }) # campo_b sem valor em facts
 
-      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '', 'proposed_value' => 'tarde' },
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '', 'proposed_value' => '' },
+                         dispatcher: dispatcher, run: run)
+
+      attrs = conversation.reload.additional_attributes
+      expect(attrs['ai_last_asked_slot']).to eq('campo_b')
+      expect(attrs['ai_last_proposed_value']).to eq('tarde')
+    end
+
+    it 'asked_slot "" APAGA o par quando o slot-alvo JÁ ENCHEU (proposta resolvida -> não sobrevive)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b',
+                                                    'ai_last_proposed_value' => 'tarde',
+                                                    'ai_collected_facts' => { 'campo_b' => 'tarde' } })
+
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '', 'proposed_value' => '' },
+                         dispatcher: dispatcher, run: run)
+
+      attrs = conversation.reload.additional_attributes
+      expect(attrs).not_to have_key('ai_last_asked_slot')
+      expect(attrs).not_to have_key('ai_last_proposed_value')
+    end
+
+    it 'asked_slot "" APAGA o par quando o slot-alvo tem TOKEN DE AUSÊNCIA (declínio já é resolução)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b',
+                                                    'ai_last_proposed_value' => 'tarde',
+                                                    'ai_collected_facts' => { 'campo_b' => '__sem_valor__' } })
+
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '', 'proposed_value' => '' },
+                         dispatcher: dispatcher, run: run)
+
+      attrs = conversation.reload.additional_attributes
+      expect(attrs).not_to have_key('ai_last_asked_slot')
+      expect(attrs).not_to have_key('ai_last_proposed_value')
+    end
+
+    it 'asked_slot "" LIMPA o par quando NÃO há proposta pendente (asked_slot puro segue a disciplina do #304)' do
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'campo_b' })
+
+      manager.track_step(department, { 'step_completed' => false, 'asked_slot' => '' },
                          dispatcher: dispatcher, run: run)
 
       expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
-      expect(conversation.reload.additional_attributes).not_to have_key('ai_last_proposed_value')
     end
 
     # Regressão #304/conv 397 ponta a ponta: sem a limpeza, o asked_slot VELHO (slot já preenchido) fazia a
