@@ -74,7 +74,7 @@ class Ai::StateManager
     emit('attributes.updated', { keys: known.keys })
     gated
   rescue StandardError => e
-    Rails.logger.error "[Ai::StateManager#persist_attributes] #{e.class}: #{e.message}"
+    rescue_signal('persist_attributes', e)
     {}
   end
 
@@ -273,7 +273,7 @@ class Ai::StateManager
     # Camada B: NÃO força avanço (dado faltando). outcome[:signal] leva o pedido de handoff ao Gateway.
     outcome[:signal]
   rescue StandardError => e
-    Rails.logger.error "[Ai::StateManager#track_step] #{e.class}: #{e.message}"
+    rescue_signal('track_step', e)
     nil
   end
 
@@ -296,7 +296,7 @@ class Ai::StateManager
                    .update!(summary: summary)
     emit('memory.updated', { chars: summary.length })
   rescue StandardError => e
-    Rails.logger.error "[Ai::StateManager#memory] #{e.class}: #{e.message}"
+    rescue_signal('update_memory', e)
   end
 
   # (Camada 3) Reivindica o turno ANTES do track_step, reusando o MESMO turn_capture memoizado. Assim o
@@ -746,7 +746,7 @@ class Ai::StateManager
 
     domain_from_output(output).merge(tool: tool_name)
   rescue StandardError => e
-    Rails.logger.error "[Ai::StateManager#tool_domain] #{e.class}: #{e.message}"
+    rescue_signal('tool_domain', e) # CONV 436: NoMethodError aqui era engolido em silêncio — agora emite evento
     nil
   end
 
@@ -919,6 +919,25 @@ class Ai::StateManager
 
   # Espelha o Ai::Gateway#emit: grava o ai_event na MESMA stream, com ai_run_id nil (attributes.updated
   # e memory.updated nunca setavam run_id). account_id vem da conversa (== @account.id do Gateway).
+  # Erros de CÓDIGO (bug de programação) — distintos de ESPERADOS (provedor fora, timeout, rede). Um rescue que
+  # engole um destes vira "some em silêncio" na forma mais pura: CONV 436 — Ai::StepSlot.domain_from_tool não
+  # deployado no worker -> NoMethodError -> rescue do tool_domain -> domínio dinâmico ignorado, ZERO evento, uma
+  # hora perdida diagnosticando. O Rails.logger.error NÃO aparece na UI de eventos; quem opera não vê. NoMethodError
+  # < NameError (basta NameError), mas listamos explícito p/ documentar a intenção.
+  CODE_ERRORS = [NoMethodError, NameError, ArgumentError, TypeError, KeyError].freeze
+
+  # Loga TODO erro e, se for de CÓDIGO, emite 'internal.code_error' (VISÍVEL no stream) com a classe/escopo — o
+  # sinal que faltou na 436. Erro ESPERADO só loga (degradação operacional normal, não bug). Chamado de dentro dos
+  # rescues do StateManager; o próprio emit é protegido para nunca derrubar o rescue que o chama.
+  def rescue_signal(scope, err)
+    Rails.logger.error "[Ai::StateManager##{scope}] #{err.class}: #{err.message}"
+    return unless CODE_ERRORS.any? { |k| err.is_a?(k) }
+
+    emit('internal.code_error', { scope: scope, error: err.class.name, message: err.message.to_s.first(200) })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#rescue_signal] #{e.class}: #{e.message}"
+  end
+
   def emit(type, payload)
     Ai::Event.create!(
       account_id: @conversation.account_id, conversation_id: @conversation.id,
