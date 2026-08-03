@@ -459,10 +459,38 @@ class Ai::StateManager
       proposed = decision['proposed_value'].to_s.strip
       proposed = seed_proposed_from_memory(attrs, step, asked) if proposed.blank? # PR3 (Frente C)
       proposed.present? ? (attrs['ai_last_proposed_value'] = proposed) : attrs.delete('ai_last_proposed_value')
+    elsif asked.blank? && pending_proposal_unresolved?(attrs)
+      # CICLO DE VIDA (conserto do proposed_value apagado na confirmação): os dois ponteiros têm SIGNIFICADOS
+      # DIFERENTES e não podem compartilhar a mesma disciplina —
+      #   ai_last_asked_slot   = "o que ACABEI DE PERGUNTAR" -> morre quando paro de perguntar (é o que a
+      #                          atribuição incondicional acima garante: asked "" apaga; disciplina do #304).
+      #   ai_last_proposed_value = "o que OFERECI e AGUARDA RESOLUÇÃO" -> vive até resolver (confirmado /
+      #                          recusado / preenchido com valor real / substituído por nova proposta).
+      # Estender a disciplina do primeiro ao segundo foi o bug: no TURNO DE CONFIRMAÇÃO o modelo para de
+      # perguntar (asked_slot="") justamente quando a proposta seria consumida, e o wipe a apagava — a
+      # captura do próximo turno ficava sem o que substituir (loop na etapa de venda, CONV 431/run 2944).
+      # Aqui o PAR sobrevive ENQUANTO o slot-alvo segue VAZIO; assim que ele enche (valor real ou token de
+      # ausência) ou o modelo pergunta outro slot (ramo `if` regrava), a resolução apaga normalmente. O
+      # consumidor (Ai::TurnCapture#substitute_proposed_value) exige o PAR — por isso preservamos os dois,
+      # não só o proposed_value.
+      nil
     else
       attrs.delete('ai_last_asked_slot')
       attrs.delete('ai_last_proposed_value')
     end
+  end
+
+  # Há proposta pendente (proposed_value ao lado de um asked_slot) cujo slot-alvo ainda está VAZIO em
+  # ai_collected_facts? Então a proposta AGUARDA resolução — o par não pode ser apagado só porque o modelo
+  # parou de perguntar neste turno. Slot cheio (inclui o token de ausência = declínio, já é uma resolução)
+  # => devolve false => o ramo `else` apaga como antes. Lê os fatos JÁ atualizados por persist_progress
+  # (roda antes de persist_step_state), então enxerga o preenchimento deste turno.
+  def pending_proposal_unresolved?(attrs)
+    slot = attrs['ai_last_asked_slot'].to_s.strip
+    proposed = attrs['ai_last_proposed_value'].to_s.strip
+    return false if slot.blank? || proposed.blank?
+
+    ((attrs['ai_collected_facts'] || {})[slot]).to_s.strip.blank?
   end
 
   # PR3 (Frente C) — PRÉ-PREENCHIMENTO DA MEMÓRIA, SÓ SLOT DE FORMATO. Semeia como "proposto" o valor LEMBRADO
