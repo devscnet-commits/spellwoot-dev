@@ -497,13 +497,13 @@ class Ai::StateManager
   # de avanço (o erro invisível que a moldura evita); aqui `step` é pós-avanço, então isso não acontece.
   def fill_omitted_asked_slot(attrs, decision, step)
     slot = Ai::StepSlot.attribute(step)
+    # Etapa SEM slot (terminal/informativa, ex.: FINALIZAÇÃO): não há alvo de captura, então asked_slot vazio é
+    # o ESPERADO, não uma omissão. NÃO mede (poluía o asked_slot.omitted com slot:nil) nem preenche o ponteiro.
+    return attrs.delete('ai_last_asked_slot') if slot.blank?
+
     reply_q = decision['reply_text'].to_s.strip.end_with?('?')
     emit_asked_slot_omitted(step, slot, decision, reply_q)
-    if reply_q && slot.present?
-      attrs['ai_last_asked_slot'] = slot
-    else
-      attrs.delete('ai_last_asked_slot') # não é pergunta OU etapa sem slot -> como hoje (o fallback cobre)
-    end
+    reply_q ? (attrs['ai_last_asked_slot'] = slot) : attrs.delete('ai_last_asked_slot') # não-pergunta: fallback cobre
   end
 
   # Telemetria da omissão do asked_slot. Emite na omissão INTEIRA (não só quando preenche) para que a TAXA seja

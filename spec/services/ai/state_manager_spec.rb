@@ -261,6 +261,20 @@ RSpec.describe Ai::StateManager do
                                                'attributes_match_slot' => true) # attributes vazio => concorda
     end
 
+    # Etapa SEM slot (terminal/informativa, ex.: FINALIZAÇÃO): asked_slot vazio é o ESPERADO, não omissão —
+    # não polui a medição. Prod: um asked_slot.omitted com slot:nil na FINALIZAÇÃO era falso-positivo.
+    it 'etapa SEM slot + asked_slot "" (mesmo com reply "?") -> NÃO emite asked_slot.omitted' do
+      d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Fim', status: 'active', behavior: {})
+      d.create_playbook!(active: true, steps: [{ 'name' => 'FINALIZAÇÃO' }]) # sem collect => sem slot
+      conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+
+      manager.track_step(d, { 'step_completed' => false, 'asked_slot' => '', 'reply_text' => 'Posso encerrar?' },
+                         dispatcher: dispatcher, run: run)
+
+      expect(omitted_event).to be_nil
+      expect(conversation.reload.additional_attributes).not_to have_key('ai_last_asked_slot')
+    end
+
     it 'reply NÃO termina em "?" + asked_slot "" -> NÃO preenche (como hoje); evento filled:false' do
       dept = req_dept
       conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_last_asked_slot' => 'velho' })
