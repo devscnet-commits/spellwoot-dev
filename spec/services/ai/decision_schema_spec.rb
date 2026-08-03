@@ -33,6 +33,14 @@ RSpec.describe Ai::DecisionSchema do
       expect(props[:asked_slot][:type]).to eq('string')
       expect(inner[:required]).to include(:asked_slot)
     end
+
+    # A descrição (que o modelo VÊ no structured output) precisa cobrir pergunta de escolha/permissão cuja
+    # resposta É o slot — senão o modelo devolve "" (o furo dos 35%). Guarda contra reverter para o texto vago.
+    it 'a descrição cobre escolha/permissão/confirmação (não só "pede dado")' do
+      desc = props[:asked_slot][:description]
+      expect(desc).to include('escolha, permissão ou confirmação')
+      expect(desc).to include('Vazio SÓ quando a resposta do cliente não preenche slot nenhum')
+    end
   end
 
   describe 'proposed_value (Frente B — confirmação de valor proposto)' do

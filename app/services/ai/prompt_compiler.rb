@@ -361,7 +361,7 @@ class Ai::PromptCompiler
       A etapa atual é DEFINIDA PELO SISTEMA (ver "ETAPA ATUAL" acima) — você NÃO escolhe nem muda de etapa. Em "current_step", apenas repita o nome dessa etapa atual como CONFIRMAÇÃO/registro (é só log; não decide o avanço). Em "step_completed", responda true SOMENTE no turno em que CONCLUIR essa etapa (já obteve tudo que ela exigia); nesse momento o SISTEMA avança sozinho para a próxima. Nos demais turnos, responda false. Nunca volte para uma etapa anterior por conta própria.
       Para chamar uma ferramenta, preencha "tool_name" com o nome EXATO e "tool_input_json" com o input como STRING JSON (um objeto); sem ferramenta, "tool_name" vazio e "tool_input_json" igual a "{}".
       Em "attributes_list", liste os dados coletados do cliente como itens {"key":"chave","value":"valor"}; use [] se não houver nada novo.
-      Em "asked_slot", informe o slot que a sua reply_text está pedindo neste turno; vazio se não pede dado.
+      Em "asked_slot", informe a CHAVE EXATA do slot que a sua reply_text está pedindo neste turno — incluindo perguntas de ESCOLHA, PERMISSÃO ou CONFIRMAÇÃO cuja resposta preenche o slot. Vazio SÓ quando a resposta do cliente não preenche slot nenhum. Ex.: "Posso te fazer 2 perguntas ou prefere ver os planos?" tem asked_slot = escolha_caminho, porque a resposta do cliente preenche esse slot.
     TXT
   end
 end

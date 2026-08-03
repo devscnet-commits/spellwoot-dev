@@ -35,7 +35,9 @@ class Ai::DecisionSchema < RubyLLM::Schema
   # tool_name/handoff_reason. O motor usa isto para (a) rotear a resposta do cliente ao slot certo — o
   # destino da captura passa a seguir a PERGUNTA — e (b) medir dessincronia (slot.asked_desync) quando
   # difere do slot da etapa corrente. NÃO decide o avanço (isso segue o slot da etapa).
-  string :asked_slot, description: 'O slot que a sua reply_text está pedindo neste turno; vazio se não pede dado.'
+  string :asked_slot, description: 'A chave EXATA do slot que a sua reply_text está pedindo neste turno. ' \
+                                   'Inclui perguntas de escolha, permissão ou confirmação cuja resposta ' \
+                                   'preenche o slot. Vazio SÓ quando a resposta do cliente não preenche slot nenhum.'
 
   # Proposta de valor para confirmação (Frente B). Quando a sua reply_text PROPÕE um valor concreto ao
   # cliente e pede um sim/não (ex.: só há um horário disponível -> "posso reservar para a TARDE?"), preencha
