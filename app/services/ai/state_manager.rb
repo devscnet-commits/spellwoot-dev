@@ -696,8 +696,14 @@ class Ai::StateManager
     { list: arrays.first.map { |v| v.to_s.strip }.reject(&:blank?) }
   end
 
-  def out_of_tool_domain?(value, tool_dom)
-    tool_dom && tool_dom[:list] && !in_tool_domain?(value, tool_dom[:list])
+  # Verdito do domínio de ferramenta quando domain_from_tool está CONFIGURADO — é o validador ÚNICO (substitui
+  # o estático). Lista extraível: rejeita fora dela; dentro -> aceita. Lista nil (não-extraível): fail-open,
+  # aceita (a telemetria sai no gated_facts) — e NÃO cai no estático (senão choice de-ferramenta com options
+  # vazias rejeitaria à toa). Chamado só com tool_dom presente (configurado).
+  def tool_domain_reason(value, tool_dom)
+    return nil if tool_dom[:list].nil?
+
+    in_tool_domain?(value, tool_dom[:list]) ? nil : 'not_in_tool_result'
   end
 
   def emit_tool_domain_unextractable(key, tool_dom)
@@ -816,10 +822,12 @@ class Ai::StateManager
     # formato, para pegar também slot de TEXTO (fecha o nome_cliente="não informado" aberto pelo gate fix).
     # A sentinela em ai_collected_facts vem só do caminho fill_absent (slot opcional), com o token canônico.
     return 'declined' if Ai::SlotAbsence.absence_value?(value)
-    # (B2) Domínio DINÂMICO da ferramenta: se a etapa declara domain_from_tool e o resultado do turno é um
-    # domínio EXTRAÍVEL, o valor tem de estar nele — vale para modelo E juiz (ambos via :supervisor). Domínio
-    # não-extraível (tool_dom[:list] nil) => fail-open (não rejeita; a telemetria sai no gated_facts).
-    return 'not_in_tool_result' if out_of_tool_domain?(value, tool_dom)
+    # (B2) Domínio DINÂMICO da ferramenta: se a etapa declara domain_from_tool, o RESULTADO da ferramenta é o
+    # validador ÚNICO — substitui o estático (known_format/options), NÃO soma a ele. Vale p/ modelo E juiz
+    # (ambos :supervisor). CRÍTICO p/ o choice-de-ferramenta (UI): esse slot tem options estáticas VAZIAS, então
+    # cair no estático rejeitaria como invalid_value um valor que ESTÁ na lista da ferramenta (double-reject).
+    # Domínio não-extraível (tool_dom[:list] nil) => fail-open aqui também (aceita; telemetria no gated_facts).
+    return tool_domain_reason(value, tool_dom) if tool_dom
 
     type = supervisor_fact_type(key, step)
     return nil unless Ai::SlotExtractor.known_format?(type)

@@ -128,6 +128,48 @@ RSpec.describe 'Ai slot tool-domain (B2 mitigação)' do # rubocop:disable RSpec
     expect(events('tool_domain.unextractable').last.payload).to include('reason' => 'none')
   end
 
+  # ===== choice + de-ferramenta (options estáticas VAZIAS): o tool_dom é o validador ÚNICO (não double-reject) =====
+  # Este é o slot que a UI "opções vêm de: ferramenta" grava: type=choice, options=[] (a lista fixa some),
+  # domain_from_tool preenchido. Sem a correção do validador-único, o valor cairia no extract(choice, opts:[]) ->
+  # blank -> 'invalid_value', rejeitando à toa um valor que ESTÁ na lista da ferramenta.
+  context 'quando o slot é choice com options estáticas vazias (opções vêm da ferramenta)' do # rubocop:disable RSpec/ContextWording
+    let(:dept) do
+      d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Reserva', status: 'active', behavior: {})
+      d.create_playbook!(active: true, steps: [
+                           { 'name' => 'Período',
+                             'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice', 'options' => [],
+                                            'domain_from_tool' => 'consultar_periodos', 'required' => true } }
+                         ])
+      d
+    end
+
+    it 'valor DENTRO do domínio -> aceita (o estático de options vazias NÃO rejeita)' do
+      executed({ 'periodos' => %w[tarde noite] })
+
+      persist('tarde')
+
+      expect(facts['periodo_reservado']).to eq('tarde')
+    end
+
+    it 'valor FORA do domínio -> rejeita como not_in_tool_result (não como invalid_value do estático)' do
+      executed({ 'periodos' => %w[tarde noite] })
+
+      persist('manhã')
+
+      expect(facts).not_to have_key('periodo_reservado')
+      expect(events('facts.rejected').last.payload).to include('reason' => 'not_in_tool_result')
+    end
+
+    it 'ferramenta não rodou -> fail-open (grava), NÃO cai no estático de options vazias' do
+      tool
+
+      persist('manhã')
+
+      expect(facts['periodo_reservado']).to eq('manhã')
+      expect(events('tool_domain.unextractable').last.payload).to include('reason' => 'no_execution')
+    end
+  end
+
   # ===== O AVANÇO respeita o domínio (não avança sobre valor fora da ferramenta) =====
   it 'supervisor_slot_valid?: valor fora do domínio -> false (não avança); dentro -> true' do
     executed({ 'periodos' => %w[tarde] })
