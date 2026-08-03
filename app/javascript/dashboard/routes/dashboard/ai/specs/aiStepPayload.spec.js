@@ -270,6 +270,72 @@ describe('aiStepPayload', () => {
     });
   });
 
+  // (B2) choice: as opções vêm de uma lista fixa OU do resultado de uma ferramenta (domínio dinâmico).
+  describe('buildStepPayload — choice: fonte das opções (lista fixa vs ferramenta)', () => {
+    const base = {
+      name: 'Período',
+      collectAttribute: 'periodo_reservado',
+      collectType: 'choice',
+    };
+
+    it('fonte "fixed" grava options da lista digitada, SEM domain_from_tool', () => {
+      const p = buildStepPayload({
+        ...base,
+        collectSource: 'fixed',
+        collectOptions: 'Manhã\nTarde',
+      });
+      expect(p.collect.options).toEqual(['Manhã', 'Tarde']);
+      expect('domain_from_tool' in p.collect).toBe(false);
+    });
+
+    it('fonte "tool" grava domain_from_tool (o NOME) e LIMPA options (=[])', () => {
+      const p = buildStepPayload({
+        ...base,
+        collectSource: 'tool',
+        collectDomainTool: 'consultar_periodos',
+        // lista fixa antiga presente no draft: deve ser descartada, não vazar
+        collectOptions: 'Manhã\nTarde',
+      });
+      expect(p.collect.domain_from_tool).toBe('consultar_periodos');
+      expect(p.collect.options).toEqual([]);
+    });
+
+    it('fonte "tool" sem ferramenta escolhida cai na lista fixa (não grava domain_from_tool vazio)', () => {
+      const p = buildStepPayload({
+        ...base,
+        collectSource: 'tool',
+        collectDomainTool: '',
+        collectOptions: 'Manhã',
+      });
+      expect('domain_from_tool' in p.collect).toBe(false);
+      expect(p.collect.options).toEqual(['Manhã']);
+    });
+
+    it('voltar de "tool" para "fixed" NÃO deixa domain_from_tool no payload (limpo pela reconstrução do collect)', () => {
+      const p = buildStepPayload({
+        ...base,
+        collectSource: 'fixed',
+        collectDomainTool: 'consultar_periodos', // resquício do draft; ignorado no modo fixed
+        collectOptions: 'Manhã',
+      });
+      expect('domain_from_tool' in p.collect).toBe(false);
+    });
+
+    it('domain_from_tool só existe em type=choice (type=text nunca emite)', () => {
+      const p = buildStepPayload({
+        name: 'X',
+        collectAttribute: 'periodo_reservado',
+        collectType: 'text',
+        collectSource: 'tool',
+        collectDomainTool: 'consultar_periodos',
+      });
+      expect(p.collect).toEqual({
+        attribute: 'periodo_reservado',
+        type: 'text',
+      });
+    });
+  });
+
   describe('buildStepPayload — on_complete (desfecho declarado, (b)-core)', () => {
     const base = { name: 'Finalização' };
 

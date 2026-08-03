@@ -227,6 +227,66 @@ describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO Cus
   });
 });
 
+// (B2) choice: opções vêm de lista fixa OU do resultado de uma ferramenta (domínio dinâmico).
+describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferramenta)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  // Mesma armadilha #306/knowledge: buildStepPayload emite domain_from_tool, então sem semear o draft de
+  // collect.domain_from_tool, editar a etapa apagaria o vínculo. Trava a semeadura de collectSource/tool.
+  it('carregar choice com domain_from_tool e salvar SEM tocar preserva o vínculo (options limpa)', async () => {
+    const wrapper = mountForm(
+      {
+        name: 'Período',
+        collect: {
+          attribute: 'periodo_reservado',
+          type: 'choice',
+          domain_from_tool: 'consultar_periodos',
+        },
+      },
+      { tools: [{ name: 'consultar_periodos' }] }
+    );
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+
+    const collect = wrapper.emitted('save')[0][0].collect;
+    expect(collect.domain_from_tool).toBe('consultar_periodos');
+    expect(collect.options).toEqual([]);
+
+    wrapper.unmount();
+  });
+
+  // Anti-degradação-silenciosa: a ferramenta salva não existe mais na lista do department -> avisa na tela
+  // (o runtime já faz fail-open + tool_domain.unextractable, mas quem edita precisa VER).
+  it('ferramenta salva ausente da lista -> mostra o aviso; presente -> não mostra', () => {
+    const step = {
+      name: 'Período',
+      collect: {
+        attribute: 'periodo_reservado',
+        type: 'choice',
+        domain_from_tool: 'consultar_periodos',
+      },
+    };
+
+    const semTool = mountForm(step, { tools: [{ name: 'outra_coisa' }] });
+    expect(semTool.find('[data-testid="tool-domain-missing"]').exists()).toBe(
+      true
+    );
+    semTool.unmount();
+
+    const comTool = mountForm(step, {
+      tools: [{ name: 'consultar_periodos' }],
+    });
+    expect(comTool.find('[data-testid="tool-domain-missing"]').exists()).toBe(
+      false
+    );
+    comTool.unmount();
+  });
+});
+
 // Higiene de variáveis: preview da normalização (item 1) + exclusão (item 4). A busca (item 5) é o ComboBox.
 describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)', () => {
   afterEach(() => {
