@@ -541,6 +541,40 @@ RSpec.describe Ai::PromptCompiler do
     end
   end
 
+  # CONTRATO (não orientação): quando há proposta pendente, o modelo tem de popular attributes[slot] na confirmação
+  # — senão vem mudo (echo_missing; 12/13 em plano_escolhido). Dirigido por estado do motor (ai_last_proposed_value).
+  describe '.pending_proposal_line (proposta pendente obriga a popular attributes)' do
+    it 'emite a linha de contrato quando há proposta pendente para o slot' do
+      line = described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => 'Fibra 300' })
+      aggregate_failures do
+        expect(line).to include('PROPOSTA PENDENTE')
+        expect(line).to include('plano_escolhido')
+        expect(line).to include('attributes')
+      end
+    end
+
+    # A guarda de arquitetura: a linha é CONTRATO PURO. Se alguém colar exemplo/apresentação aqui, quebra a fronteira
+    # (vira orientação de conversa hardcoded — o hardcode que o tenant deveria controlar na INSTRUÇÃO DA ETAPA).
+    it 'é CONTRATO PURO — sem exemplo, "posso seguir", apresentação ou vocabulário de conversa' do
+      line = described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => 'Fibra 300' })
+      expect(line).not_to match(/posso seguir|apresent|Ainda é|Ex\.:|pergunte/i)
+    end
+
+    it 'NÃO emite sem proposta pendente nem sem slot' do
+      aggregate_failures do
+        expect(described_class.pending_proposal_line('plano_escolhido', {})).to be_nil
+        expect(described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => '' })).to be_nil
+        expect(described_class.pending_proposal_line('', { 'pending_proposed' => 'X' })).to be_nil
+      end
+    end
+
+    it 'integra no collection_state_block quando o slot da etapa corrente tem proposta pendente' do
+      steps = [{ 'name' => 'PLANOS', 'collect' => { 'attribute' => 'plano_escolhido', 'type' => 'choice', 'options' => %w[a b] } }]
+      block = described_class.collection_state_block(steps, 0, {}, nil, { 'pending_proposed' => 'Fibra 300' })
+      expect(block).to include('PROPOSTA PENDENTE')
+    end
+  end
+
   # Frente C — bloco da memória do CONTATO. Apresenta o dado como de atendimentos ANTERIORES (não desta
   # conversa) e NÃO diz mais "use e não pergunte de novo" (o que fazer é da instrução da etapa).
   describe 'bloco Memória do cliente (Frente C)' do
