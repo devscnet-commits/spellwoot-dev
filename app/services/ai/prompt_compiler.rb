@@ -225,8 +225,8 @@ class Ai::PromptCompiler
     return nil if proposed.blank?
 
     "PROPOSTA PENDENTE para \"#{slot}\": você propôs um valor e aguarda a resposta do cliente. Quando ele " \
-      "responder, SEMPRE popule \"attributes\" com a chave #{slot} (o valor dele, ou a confirmação) — nunca " \
-      'deixe "attributes" vazio neste turno. O motor grava o valor proposto se ele confirmar; o novo se ele corrigir.'
+      "responder, SEMPRE popule \"attributes\" com a chave #{slot} (o valor dele, ou a confirmação); " \
+      "\"attributes\" NÃO pode vir vazio neste turno. O motor grava o valor proposto se ele confirmar; o novo se ele corrigir."
   end
 
   # Slot de FORMATO conhecido? Governa o escopo do pré-preenchimento (decisão (D): só formato, onde o gate valida).
