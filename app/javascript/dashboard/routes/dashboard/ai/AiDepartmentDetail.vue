@@ -155,6 +155,10 @@ const fetchLeadVariables = async () => {
 const onVariableCreated = variable => {
   if (variable?.name) leadVariables.value.push(variable);
 };
+// AiStepForm excluiu uma LeadVariable: remove da lista (a opção some do select de todas as etapas).
+const onVariableDeleted = id => {
+  leadVariables.value = leadVariables.value.filter(v => v.id !== id);
+};
 
 // Fontes para os seletores das automações de etapa (tag/time). Falha → lista vazia (não quebra a tela).
 const labels = ref([]);
@@ -1414,6 +1418,7 @@ onMounted(async () => {
                     @save="saveStep"
                     @cancel="cancelStep"
                     @variable-created="onVariableCreated"
+                    @variable-deleted="onVariableDeleted"
                   />
                   <!-- Linha colapsada -->
                   <div v-else class="flex items-center gap-3 px-3 py-2.5">
@@ -1486,6 +1491,7 @@ onMounted(async () => {
                 @save="saveStep"
                 @cancel="cancelStep"
                 @variable-created="onVariableCreated"
+                @variable-deleted="onVariableDeleted"
               />
             </div>
 

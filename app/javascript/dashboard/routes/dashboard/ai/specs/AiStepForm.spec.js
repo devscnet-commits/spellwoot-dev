@@ -226,3 +226,49 @@ describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO Cus
     wrapper.unmount();
   });
 });
+
+// Higiene de variáveis: preview da normalização (item 1) + exclusão (item 4). A busca (item 5) é o ComboBox.
+describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('preview: "número_conta" mostra a chave normalizada que vai nascer ("numero_conta")', async () => {
+    const wrapper = mountForm({ name: 'Coleta' });
+
+    await wrapper.get('button.underline').trigger('click'); // abre criar
+    await wrapper
+      .get('[data-testid="new-variable-name"]')
+      .setValue('número_conta');
+
+    expect(wrapper.get('[data-testid="normalized-preview"]').text()).toContain(
+      'numero_conta'
+    );
+    wrapper.unmount();
+  });
+
+  it('excluir variável interna: confirma, chama DELETE no endpoint e emite variable-deleted', async () => {
+    const wrapper = mountForm(
+      { name: 'Coleta' },
+      { leadVariables: [{ id: 99, name: 'documento_cpf' }] }
+    );
+    vi.stubGlobal('axios', {
+      post: vi.fn(),
+      delete: vi.fn().mockResolvedValue({}),
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    await wrapper.get('button.underline').trigger('click'); // abre criar/gerenciar
+    await wrapper
+      .get('[data-testid="delete-variable-documento_cpf"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(window.axios.delete.mock.calls[0][0]).toContain(
+      '/ai_lead_variables/99'
+    );
+    expect(wrapper.emitted('variableDeleted')[0]).toEqual([99]);
+    wrapper.unmount();
+  });
+});

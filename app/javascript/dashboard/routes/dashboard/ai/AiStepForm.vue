@@ -4,6 +4,7 @@ import { reactive, computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import AiPromptAssistant from './AiPromptAssistant.vue';
 import { buildStepPayload } from './aiStepPayload';
 import { buildSlotKeyOptions } from './aiSlotSource';
@@ -33,7 +34,12 @@ const props = defineProps({
   handoffTeams: { type: Array, default: () => [] },
   handoffAgents: { type: Array, default: () => [] },
 });
-const emit = defineEmits(['save', 'cancel', 'variableCreated']);
+const emit = defineEmits([
+  'save',
+  'cancel',
+  'variableCreated',
+  'variableDeleted',
+]);
 const { t } = useI18n();
 const route = useRoute();
 const assistantOpen = ref(false);
@@ -128,6 +134,53 @@ const cancelCreate = () => {
   creatingVariable.value = false;
   newVariableName.value = '';
   createError.value = '';
+};
+
+// Preview da normalização — espelha Ai::LeadVariable#normalize_name (o backend é a autoridade). Regra de
+// FORMATO, não de idioma: remove acentos (Latin), minúsculas, só [a-z0-9_]. O usuário vê o que vai virar
+// ANTES de criar; vazio (ex.: só caracteres não-latinos) sinaliza que precisa de uma chave em letras/números.
+const normalizeVariableName = raw =>
+  (raw || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+const normalizedPreview = computed(() =>
+  normalizeVariableName(newVariableName.value)
+);
+
+// Variáveis INTERNAS (LeadVariable) — só estas dá para excluir aqui (CAD é da conta, gerido em Configurações).
+const internalVariables = computed(() =>
+  (props.leadVariables || []).filter(v => v?.name)
+);
+
+// Exclusão: o backend BLOQUEIA (422) se a variável estiver em uso por alguma etapa; o dado já coletado
+// permanece em ai_collected_facts/memória do contato (a variável é só metadado do select). Confirma antes.
+const deletingId = ref(null);
+const deleteError = ref('');
+const deleteVariable = async v => {
+  if (!v?.id) return;
+  const ask = t('AI_DEPARTMENTS.FORM.SLOT_KEY_DELETE_CONFIRM', { key: v.name });
+  // eslint-disable-next-line no-alert
+  if (!window.confirm(ask)) return;
+  deletingId.value = v.id;
+  deleteError.value = '';
+  try {
+    await axios.delete(
+      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}` +
+        `/ai_departments/${props.departmentId}/ai_lead_variables/${v.id}`
+    );
+    if (draft.collectAttribute === v.name) draft.collectAttribute = ''; // era a selecionada -> limpa
+    emit('variableDeleted', v.id); // pai remove de leadVariables
+  } catch (error) {
+    deleteError.value =
+      error.response?.data?.errors?.join('. ') ||
+      t('AI_DEPARTMENTS.FORM.SLOT_KEY_DELETE_ERROR');
+  } finally {
+    deletingId.value = null;
+  }
 };
 
 // Resumo do estado dos ajustes avançados (mostrado no cabeçalho da seção fechada).
@@ -312,11 +365,13 @@ const onSave = () => {
         {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_LABEL') }}
       </span>
 
-      <!-- modo normal: Select da chave + atalho "criar variável" -->
+      <!-- modo normal: ComboBox COM BUSCA da chave + atalho "criar/gerenciar variável". A busca é o que faz
+           o usuário VER "documento_cpf" antes de criar "numero_conta" — mata a duplicata na apresentação. -->
       <template v-if="!creatingVariable">
-        <Select
+        <ComboBox
           v-model="draft.collectAttribute"
           :options="slotKeyOptions"
+          :search-placeholder="$t('AI_DEPARTMENTS.FORM.SLOT_KEY_SEARCH')"
           data-testid="slot-key-select"
         />
         <button
@@ -356,12 +411,56 @@ const onSave = () => {
             {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
           </button>
         </div>
+        <!-- item 1: preview da normalização — o usuário vê a chave que vai nascer, sem surpresa -->
+        <span
+          v-if="newVariableName.trim()"
+          class="text-xs"
+          data-testid="normalized-preview"
+        >
+          {{
+            normalizedPreview
+              ? $t('AI_DEPARTMENTS.FORM.SLOT_KEY_NORMALIZED', {
+                  key: normalizedPreview,
+                })
+              : $t('AI_DEPARTMENTS.FORM.SLOT_KEY_NORMALIZED_EMPTY')
+          }}
+        </span>
         <span class="text-xs">
           {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_CREATE_HINT') }}
         </span>
         <span v-if="createError" class="text-xs text-n-ruby-11">
           {{ createError }}
         </span>
+
+        <!-- item 4: gerenciar/excluir variáveis internas existentes. O backend BLOQUEIA se estiver em uso. -->
+        <div v-if="internalVariables.length" class="mt-1 flex flex-col gap-1">
+          <span class="text-xs font-medium">
+            {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_MANAGE_LABEL') }}
+          </span>
+          <div
+            v-for="v in internalVariables"
+            :key="v.id"
+            class="flex items-center justify-between gap-2 text-xs"
+          >
+            <span class="font-mono truncate">{{ v.name }}</span>
+            <button
+              type="button"
+              class="shrink-0 inline-flex items-center gap-1 text-n-ruby-11 hover:underline disabled:opacity-50"
+              :disabled="deletingId === v.id"
+              :data-testid="`delete-variable-${v.name}`"
+              @click="deleteVariable(v)"
+            >
+              <span class="i-lucide-trash-2 size-3.5" />
+              {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_DELETE') }}
+            </button>
+          </div>
+          <span class="text-xs">
+            {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_DELETE_HINT') }}
+          </span>
+          <span v-if="deleteError" class="text-xs text-n-ruby-11">
+            {{ deleteError }}
+          </span>
+        </div>
       </template>
 
       <!-- confirmação de etapa informativa (empty): afirmativo, NÃO erro. Etapa sem coleta é legítima. -->
