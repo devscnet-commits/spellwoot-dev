@@ -553,6 +553,16 @@ RSpec.describe Ai::PromptCompiler do
       end
     end
 
+    # GUARDA DE POLARIDADE (conv 437: a linha foi lida como o oposto por causa da quebra do "nunca"): a instrução
+    # tem de mandar POPULAR, nunca deixar vazio. Falha se alguém inverter o sentido num refactor.
+    it 'INSTRUI a popular attributes, NÃO a deixar vazio' do
+      line = described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => 'Fibra 300' })
+      aggregate_failures do
+        expect(line).to include('SEMPRE popule')
+        expect(line).to include('NÃO pode vir vazio')
+      end
+    end
+
     # A guarda de arquitetura: a linha é CONTRATO PURO. Se alguém colar exemplo/apresentação aqui, quebra a fronteira
     # (vira orientação de conversa hardcoded — o hardcode que o tenant deveria controlar na INSTRUÇÃO DA ETAPA).
     it 'é CONTRATO PURO — sem exemplo, "posso seguir", apresentação ou vocabulário de conversa' do
