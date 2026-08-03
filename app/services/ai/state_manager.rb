@@ -650,9 +650,10 @@ class Ai::StateManager
       step = key.to_s == active_key ? expected_step : slot_steps[key.to_s]
       tool_dom = tool_domain(step, department)
       emit_tool_domain_unextractable(key, tool_dom) # (B2) fail-open COM telemetria (não degradar em silêncio)
+      emit_inferred_type_used(key, step, expected)  # instrumentação temporária (Fase 1 do type_for_key)
+      # UM único reason, COM o tool_dom — o merge do #365 duplicou esta linha e a 2ª (sem tool_dom) descartava
+      # o resultado do domínio dinâmico (dead code). Recuperação: os dois lados coexistem, sem sobrescrita.
       reason = supervisor_fact_reason(key, value, expected, step, tool_dom)
-      emit_inferred_type_used(key, step, expected) # instrumentação temporária (Fase 1 do type_for_key)
-      reason = supervisor_fact_reason(key, value, expected, step)
       if reason
         emit('facts.rejected', { attribute: key.to_s, reason: reason })
         @rejected_invalid[key.to_s] = value if reason == 'invalid_value' # (4) só formato errado (não recusa/chave inválida)
@@ -726,6 +727,8 @@ class Ai::StateManager
   def in_tool_domain?(value, list)
     v = value.to_s.strip
     list.any? { |d| d.casecmp?(v) }
+  end
+
   # INSTRUMENTAÇÃO TEMPORÁRIA (Fase 1 do type_for_key) — mede o RESIDUAL step-less antes de apagar a
   # inferência de tipo por vocabulário PT/BR. Emite quando o gate resolveria o tipo de um fato ESPERADO pela
   # INFERÊNCIA (type_for_key), não por `type` declarado — ou seja, o caso que PERDE validação na Fase 2. Slots
