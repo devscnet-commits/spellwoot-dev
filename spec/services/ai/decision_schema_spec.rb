@@ -50,6 +50,26 @@ RSpec.describe Ai::DecisionSchema do
     end
   end
 
+  describe 'handoff_target (4ª aplicação: descrição vaga → modelo preenche errado)' do
+    it 'é um campo string REQUIRED' do
+      expect(props[:handoff_target][:type]).to eq('string')
+      expect(inner[:required]).to include(:handoff_target)
+    end
+
+    # Guarda contra regredir para a descrição vaga que causava o bug:
+    # modelo inventava categoria genérica ("Assistente", "suporte") em vez de copiar o nome da whitelist.
+    it 'a descrição proíbe explicitamente categoria genérica' do
+      desc = props[:handoff_target][:description]
+      expect(desc).to include('NUNCA')
+      expect(desc).to include('lista')
+    end
+
+    it 'a descrição instrui a copiar o nome exatamente como na lista' do
+      desc = props[:handoff_target][:description]
+      expect(desc).to match(/cop[ie]/i)
+    end
+  end
+
   describe 'campos livres representados como formas FECHADAS' do
     it 'tool_input_json é STRING (JSON serializado)' do
       expect(props[:tool_input_json][:type]).to eq('string')

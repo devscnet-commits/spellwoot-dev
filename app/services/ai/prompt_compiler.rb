@@ -64,14 +64,16 @@ class Ai::PromptCompiler
         desc.present? ? "- #{t.name}: #{desc}" : "- #{t.name}"
       end
       fixed << "Para transferir para um ATENDENTE HUMANO, NÃO apenas escreva no texto: retorne decision " \
-               "\"handoff\" e o nome EXATO do time em handoff_target. Times disponíveis:\n#{lines.join("\n")}"
+               "\"handoff\" e o nome EXATO do time em handoff_target (copie como está na lista; NUNCA " \
+               "uma categoria genérica como \"suporte\" ou \"comercial\"). Times disponíveis:\n#{lines.join("\n")}"
     end
 
     targets = handoff_targets(agent)
     if targets.present?
       lines = targets.map { |tg| tg[:hint].present? ? "- #{tg[:name]}: #{tg[:hint]}" : "- #{tg[:name]}" }
       fixed << "Você pode transferir para outra IA quando o assunto for melhor atendido por ela. IAs de destino:\n" \
-               "#{lines.join("\n")}\nPara transferir, retorne decision \"handoff\" e o nome EXATO da IA em handoff_target."
+               "#{lines.join("\n")}\nPara transferir, retorne decision \"handoff\" e o nome EXATO da IA em " \
+               "handoff_target (copie como está na lista; NUNCA invente um nome ou use termos genéricos)."
     end
 
     # response_contract é FIXO -> encerra o prefixo cacheável (era o ÚLTIMO de tudo). Tudo que muda por

@@ -25,7 +25,14 @@ class Ai::DecisionSchema < RubyLLM::Schema
   string :tool_input_json, description: 'Input da ferramenta como STRING JSON (ex.: um objeto); "{}" se nenhuma.'
 
   string :handoff_reason, description: 'Motivo do handoff; vazio se não aplicável.'
-  string :handoff_target, description: 'Nome EXATO do time/IA de destino; vazio se não aplicável.'
+  # 4ª aplicação do padrão "descrição vaga → modelo preenche errado" (após asked_slot, proposed_value,
+  # handoff_summary). O modelo inventava uma CATEGORIA genérica ("Assistente", "suporte", "comercial")
+  # em vez de copiar o nome real da whitelist → não casava → motor caia no fallback (time errado).
+  # Contrato explícito: só nome da LISTA; nunca categoria; vazio se nenhum nome da lista servir.
+  string :handoff_target, description: 'O NOME EXATO de um time ou IA da lista de transferência ' \
+                                       'mostrada no prompt (copie exatamente como está escrito). ' \
+                                       'NUNCA uma categoria ou função genérica ("suporte", "comercial", ' \
+                                       '"assistente"): se nenhum nome da lista servir, deixe vazio.'
   string :current_step, description: 'Nome da etapa atual (confirmação/registro; não decide o avanço).'
   boolean :step_completed, description: 'true SOMENTE no turno em que concluir a etapa atual; senão false.'
   number :confidence, description: 'Confiança de 0.0 a 1.0.'
