@@ -1874,12 +1874,12 @@ RSpec.describe Ai::StateManager do
     end
   end
 
-  # (5) known_slot_keys no allowlist + validação ACOPLADA ao step declarante. Contrato: corrigir dado de
-  # etapa PASSADA e adiantar dado de etapa FUTURA passam; chave fora do playbook/conta/lead continua
-  # barrada; o valor ainda é validado pelo tipo/options do step QUE DECLARA a chave (não do slot corrente),
-  # então valor fora das options de um slot choice cai mesmo com a etapa dele inativa. Prova de mutação
-  # por nome: cada teste morre se o acoplamento (5) for revertido ou desacoplado.
-  describe '#persist_attributes — gate (5): allowlist de slots declarados + validação acoplada' do
+  # (5)+(6) known_slot_keys no allowlist + validação ACOPLADA ao step declarante + guard already_filled.
+  # Contrato: PRIMEIRO PREENCHIMENTO de slot de etapa passada/futura passa; SOBRESCRITA de slot já
+  # preenchido de etapa não-ativa é bloqueada (already_filled — guard 6); chave fora do playbook/conta/
+  # lead continua barrada; valor ainda é validado pelo tipo/options do step declarante mesmo com etapa
+  # inativa. Prova de mutação por nome: cada teste morre se o acoplamento for revertido ou desacoplado.
+  describe '#persist_attributes — gate (5)+(6): allowlist declarado + acoplamento + already_filled' do
     def collected_facts
       conversation.reload.additional_attributes.to_h['ai_collected_facts']
     end
@@ -1902,9 +1902,9 @@ RSpec.describe Ai::StateManager do
       dept
     end
 
-    it 'correção de slot de etapa ANTERIOR é aceita (etapa ativa já é posterior ao slot)' do
+    it 'PRIMEIRO preenchimento de slot de etapa ANTERIOR (ainda vazio) é aceito' do
       dept = funnel_with_choice
-      conversation.update!(additional_attributes: { 'ai_step_index' => 2 }) # ativo = telefone; plano ficou pra trás
+      conversation.update!(additional_attributes: { 'ai_step_index' => 2 }) # ativo = telefone; plano ficou pra trás, mas sem valor
       active = dept.playbook.steps[2]
 
       manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
@@ -1950,20 +1950,80 @@ RSpec.describe Ai::StateManager do
       expect(rejected_events.last.payload).to include('attribute' => 'plano_escolhido', 'reason' => 'invalid_value')
     end
 
-    it 'eco IDÊNTICO de um fato já coletado é no-op (não reescreve, não rejeita)' do
+    # (6) Guard already_filled: slot JÁ PREENCHIDO de etapa não-ativa é bloqueado — o modelo não pode
+    # sobrescrever via output de outra etapa (ex.: step B com instrução agressiva sobrescreve slot do step A).
+    it '(6) slot JÁ PREENCHIDO de etapa NÃO-ATIVA é bloqueado (already_filled)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: {
+                             'ai_step_index' => 2,
+                             'ai_collected_facts' => { 'plano_escolhido' => 'Internet Fibra 600 Mega' }
+                           })
+      active = dept.playbook.steps[2] # ativo = telefone; plano já foi preenchido no passo anterior
+
+      manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
+                                 source: :supervisor, expected_step: active)
+
+      expect(collected_facts['plano_escolhido']).to eq('Internet Fibra 600 Mega') # não sobrescreveu
+      expect(rejected_events.last.payload).to include('attribute' => 'plano_escolhido', 'reason' => 'already_filled')
+    end
+
+    it '(6) slot da etapa ATIVA pode sempre sobrescrever mesmo já preenchido (active_key exemption)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: {
+                             'ai_step_index' => 1,
+                             'ai_collected_facts' => { 'plano_escolhido' => 'Internet Fibra 600 Mega' }
+                           })
+      active = dept.playbook.steps[1] # ativo = plano (o próprio slot)
+
+      manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
+                                 source: :supervisor, expected_step: active)
+
+      expect(collected_facts['plano_escolhido']).to eq('Combo Fibra + Wi-Fi Mesh')
+      expect(rejected_events).to be_empty
+    end
+
+    it '(6) correção explícita de slot já preenchido É ACEITA quando não há coleta ativa (active_key ausente)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: {
+                             'ai_collected_facts' => { 'plano_escolhido' => 'Internet Fibra 600 Mega' }
+                           })
+      # expected_step nil → active_key nil → guard não dispara → cliente corrige no fim do atendimento
+      manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
+                                 source: :supervisor, expected_step: nil)
+
+      expect(collected_facts['plano_escolhido']).to eq('Combo Fibra + Wi-Fi Mesh')
+      expect(rejected_events).to be_empty
+    end
+
+    it '(6) slot com token de ausência pode ser substituído por valor real de etapa não-ativa' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: {
+                             'ai_step_index' => 2,
+                             'ai_collected_facts' => { 'plano_escolhido' => Ai::StepSlot::ABSENT }
+                           })
+      active = dept.playbook.steps[2] # ativo = telefone; plano tem ausência (não é "preenchido")
+
+      manager.persist_attributes({ 'plano_escolhido' => 'Internet Fibra 600 Mega' }, dept,
+                                 source: :supervisor, expected_step: active)
+
+      expect(collected_facts['plano_escolhido']).to eq('Internet Fibra 600 Mega')
+      expect(rejected_events).to be_empty
+    end
+
+    it 'eco IDÊNTICO de slot NÃO-ATIVO já preenchido é bloqueado (already_filled, sem update! no dado)' do
       dept = funnel_with_choice
       conversation.update!(additional_attributes: {
                              'ai_step_index' => 0,
                              'ai_collected_facts' => { 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }
                            })
-      active = dept.playbook.steps[0]
-      # mutação: se o guard de idempotência (persist_collected_facts) sumir, haverá update! e o teste morre.
+      active = dept.playbook.steps[0] # ativo = email; plano já preenchido
+      # mutação: dado não muda (already_filled bloqueia antes do persist_collected_facts)
       expect(conversation).not_to receive(:update!)
 
       manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
                                  source: :supervisor, expected_step: active)
 
-      expect(rejected_events).to be_empty
+      expect(rejected_events.last.payload).to include('attribute' => 'plano_escolhido', 'reason' => 'already_filled')
     end
   end
 

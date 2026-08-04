@@ -695,13 +695,12 @@ class Ai::StateManager
   # Só filtra o que entra em ai_collected_facts — o espelho em custom_attributes segue igual.
   #
   # (5) allowlist ÍNDICE-INDEPENDENTE + validação ACOPLADA: o allowlist inclui todo slot declarado (não
-  # só o da etapa corrente), então CORRIGIR um dado de etapa passada e ADIANTAR um de etapa futura passam
-  # a ser aceitos. Mas a chave é validada pelo tipo/options do STEP QUE A DECLARA (não do slot corrente):
-  # um valor fora das options de um slot choice é rejeitado mesmo com a etapa dele inativa — é o
-  # acoplamento que impede a misattribution que "abrir todos os slots" abriria. LIMITE CONHECIDO E ACEITO:
-  # eco DIVERGENTE de formato válido (ex.: telefone com um dígito trocado) sobrescreve o valor bom — os
-  # dois são válidos, não há como distinguir; o prompt entrega o valor exato no "JÁ TENHO", então o eco
-  # tende a ser idêntico e no-op. O custo do contrário é contrato errado, que é pior.
+  # só o da etapa corrente), então ADIANTAR um dado de etapa futura e o PRIMEIRO PREENCHIMENTO de slot de
+  # etapa passada passam a ser aceitos. SOBRESCRITA de slot JÁ PREENCHIDO de etapa não-ativa é bloqueada
+  # pelo guard (6) — o modelo não pode gravar via output de outra etapa o valor capturado antes (ex.:
+  # classificação agressiva em step B sobrescrevia slot do step A). A etapa CORRENTE (active_key) pode
+  # sempre gravar/corrigir o seu slot. A chave é validada pelo tipo/options do STEP QUE A DECLARA (não do
+  # slot corrente): valor fora das options de um slot choice é rejeitado mesmo com a etapa dele inativa.
   def gated_facts(cleaned, department, source, expected_step = nil)
     @rejected_invalid = {} # (4) feedback de rejeição: chaves barradas por FORMATO neste turno (reset sempre)
     return cleaned unless source == :supervisor
@@ -713,8 +712,18 @@ class Ai::StateManager
     slot_steps = declared_slot_steps(department)
     active_key = expected_step.is_a?(Hash) ? Ai::StepSlot.attribute(expected_step).to_s : nil
     expected = supervisor_expected_keys(department, slot_steps)
+    # (6) Guard already_filled: lê snapshot UMA VEZ antes do loop (não reusar cache obsoleto de run anterior).
+    persisted_facts = (@conversation.additional_attributes || {})['ai_collected_facts'] || {}
     cleaned.each_with_object({}) do |(key, value), out|
       step = key.to_s == active_key ? expected_step : slot_steps[key.to_s]
+      # (6) Slot de etapa NÃO-ATIVA já preenchido → bloqueado SOMENTE quando há coleta ativa (active_key
+      # presente). Se active_key está vazio/nil (fase de conclusão, etapa terminal, ou sem expected_step),
+      # correções explícitas do cliente passam. Lead/fillables (step nil) passam livremente.
+      # Ausência (__sem_valor__) não conta como preenchido e pode ser substituída por valor real.
+      if active_key.present? && key.to_s != active_key && step && already_filled_fact?(key.to_s, persisted_facts)
+        emit('facts.rejected', { attribute: key.to_s, reason: 'already_filled' })
+        next
+      end
       tool_dom = tool_domain(step, department)
       emit_tool_domain_unextractable(key, tool_dom) # (B2) fail-open COM telemetria (não degradar em silêncio)
       emit_inferred_type_used(key, step, expected)  # instrumentação temporária (Fase 1 do type_for_key)
@@ -915,6 +924,13 @@ class Ai::StateManager
     else
       Ai::SlotExtractor.type_for_key(key)
     end
+  end
+
+  # (6) Guard already_filled: slot tem valor REAL em ai_collected_facts? Token de ausência não conta —
+  # pode ser sobrescrito por valor real mesmo de etapa não-ativa (usuário mudou de ideia).
+  def already_filled_fact?(key, persisted_facts)
+    val = persisted_facts[key].to_s.strip
+    val.present? && !Ai::SlotAbsence.absence_value?(val)
   end
 
   # Espelha o Ai::Gateway#emit: grava o ai_event na MESMA stream, com ai_run_id nil (attributes.updated
