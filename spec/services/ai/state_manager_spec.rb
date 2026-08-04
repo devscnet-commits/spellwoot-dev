@@ -1982,6 +1982,19 @@ RSpec.describe Ai::StateManager do
       expect(rejected_events).to be_empty
     end
 
+    it '(6) correção explícita de slot já preenchido É ACEITA quando não há coleta ativa (active_key ausente)' do
+      dept = funnel_with_choice
+      conversation.update!(additional_attributes: {
+                             'ai_collected_facts' => { 'plano_escolhido' => 'Internet Fibra 600 Mega' }
+                           })
+      # expected_step nil → active_key nil → guard não dispara → cliente corrige no fim do atendimento
+      manager.persist_attributes({ 'plano_escolhido' => 'Combo Fibra + Wi-Fi Mesh' }, dept,
+                                 source: :supervisor, expected_step: nil)
+
+      expect(collected_facts['plano_escolhido']).to eq('Combo Fibra + Wi-Fi Mesh')
+      expect(rejected_events).to be_empty
+    end
+
     it '(6) slot com token de ausência pode ser substituído por valor real de etapa não-ativa' do
       dept = funnel_with_choice
       conversation.update!(additional_attributes: {

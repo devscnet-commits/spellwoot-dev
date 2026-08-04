@@ -716,9 +716,11 @@ class Ai::StateManager
     persisted_facts = (@conversation.additional_attributes || {})['ai_collected_facts'] || {}
     cleaned.each_with_object({}) do |(key, value), out|
       step = key.to_s == active_key ? expected_step : slot_steps[key.to_s]
-      # (6) Slot de etapa NÃO-ATIVA já preenchido → bloqueado. Lead/fillables (step nil) passam livremente.
+      # (6) Slot de etapa NÃO-ATIVA já preenchido → bloqueado SOMENTE quando há coleta ativa (active_key
+      # presente). Se active_key está vazio/nil (fase de conclusão, etapa terminal, ou sem expected_step),
+      # correções explícitas do cliente passam. Lead/fillables (step nil) passam livremente.
       # Ausência (__sem_valor__) não conta como preenchido e pode ser substituída por valor real.
-      if key.to_s != active_key && step && already_filled_fact?(key.to_s, persisted_facts)
+      if active_key.present? && key.to_s != active_key && step && already_filled_fact?(key.to_s, persisted_facts)
         emit('facts.rejected', { attribute: key.to_s, reason: 'already_filled' })
         next
       end
