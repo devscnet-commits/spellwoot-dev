@@ -84,6 +84,14 @@ class Ai::Gateway
       return finalize(run_record, 'credit_exhausted')
     end
 
+    # Teto de respostas da IA (max_replies): ao atingir o limite configurado no departamento, a IA
+    # para de responder e TRANSFERE para humano — mesmo fluxo do force_credit_handoff (nota interna +
+    # transfer + assign, sem mensagem ao cliente). Verifica antes de rodar o modelo (zero custo LLM).
+    if @acts_live && max_replies_reached?(department)
+      force_max_replies_handoff(run_record, department)
+      return finalize(run_record, 'max_replies')
+    end
+
     # Fase 3 — circuit breaker por (conta, provider). Com o breaker ABERTO, PULA todo o caminho condenado
     # (RAG + montagem de contexto + chamada ao modelo) e vai direto ao handoff da Fase 1 — MESMO padrão
     # pré-chamada do credit_exhausted? acima, custo e latência ZERO. Só ao vivo (shadow nunca transfere nem
@@ -745,6 +753,27 @@ class Ai::Gateway
     emit(run_record, 'handoff.credit_exhausted', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_credit_handoff] #{e.class}: #{e.message}"
+  end
+
+  # Transferência silenciosa ao atingir o teto de respostas (max_replies). Espelha force_credit_handoff:
+  # nota interna ao atendente + transfer + assign_human, SEM mensagem ao cliente. Não usa reply() para
+  # o aviso porque o próprio gate de max_replies bloquearia a mensagem — o humano recebe e responde ele mesmo.
+  def force_max_replies_handoff(run_record, department)
+    max = department.behavior.to_h['max_replies'].to_i
+    action_dispatcher.internal_note("⚠️ Limite de #{max} respostas da IA atingido — atendimento transferido para um humano.")
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'max_replies_reached' })
+    handoff_coordinator.assign_human(team_id, reason: 'max_replies_reached')
+    emit(run_record, 'handoff.max_replies_reached', { max: max, team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_max_replies_handoff] #{e.class}: #{e.message}"
+  end
+
+  def max_replies_reached?(department)
+    max = department.behavior.to_h['max_replies'].to_i
+    max.positive? && Ai::Event.where(conversation_id: @conversation.id, event_type: 'reply.sent').count >= max
   end
 
   # Provider de IA indisponível (rate-limit/cota/billing, ou auth não recuperado pelo BYOK): a IA não
