@@ -616,4 +616,32 @@ RSpec.describe Ai::PromptCompiler do
       expect(compile_with_memory(empty)).not_to include('Memória deste cliente')
     end
   end
+
+  # 4ª aplicação do padrão "descrição vaga → modelo preenche errado": o bloco de handoff no prompt
+  # precisa proibir explicitamente categoria genérica ("suporte", "comercial"), senão o modelo inventa
+  # o nome em vez de copiar da lista → não casa → motor faz fallback pro time errado.
+  describe 'contrato handoff_target no prompt — NUNCA categoria genérica' do
+    let(:account) { create(:account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:agent_with_team) do
+      ag = Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id)
+      ag.update!(handoff_team_ids: [create(:team, account: account, name: 'Suporte N2').id])
+      ag
+    end
+    let(:dept) do
+      Ai::Department.create!(account: account, ai_agent_id: agent_with_team.id, name: 'Comercial',
+                             objetivo: 'Vender', status: 'active', behavior: {})
+    end
+
+    it 'o bloco de times humanos inclui a proibição de categoria genérica' do
+      prompt = described_class.compile(agent: agent_with_team, department: dept,
+                                       knowledge: [], memory: nil, tools: [])
+
+      expect(prompt).to include('NUNCA')
+      expect(prompt).to match(/copie|como está/)
+    end
+  end
 end
