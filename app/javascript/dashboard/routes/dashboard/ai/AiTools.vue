@@ -341,23 +341,6 @@ onMounted(() => {
       </button>
     </div>
 
-    <div
-      class="rounded-lg border border-n-weak bg-n-alpha-1 px-4 py-3 flex flex-col gap-2 text-xs text-n-slate-11"
-    >
-      <p class="mb-0">{{ $t('AI_TOOLS.INFO.FIELDS') }}</p>
-      <div class="flex flex-col gap-1 border-t border-n-weak pt-2">
-        <p class="mb-0 font-medium text-n-slate-12">
-          {{ $t('AI_TOOLS.INFO.TYPES_TITLE') }}
-        </p>
-        <p class="mb-0">{{ $t('AI_TOOLS.INFO.TYPE_CAPABILITY') }}</p>
-        <p class="mb-0">{{ $t('AI_TOOLS.INFO.TYPE_INTEGRATION') }}</p>
-        <p class="mb-0">{{ $t('AI_TOOLS.INFO.TYPE_WEBHOOK') }}</p>
-      </div>
-      <p class="mb-0 border-t border-n-weak pt-2">
-        {{ $t('AI_TOOLS.INFO.ARGS') }}
-      </p>
-    </div>
-
     <p
       v-if="!isLoading && !tools.length"
       class="text-sm text-n-slate-11 py-6 text-center"
