@@ -515,8 +515,6 @@
     "FOLLOWUP": {
       "TITLE": "Retomar contato quando o cliente some",
       "HINT": "Quando o cliente recebe uma resposta e fica em silêncio, a IA envia mensagens para retomar a conversa. Crie uma ou mais tentativas; sem nenhuma, o follow-up fica desligado.",
-      "INSTRUCTIONS": "Como a IA deve chamar o cliente de volta",
-      "INSTRUCTIONS_PLACEHOLDER": "Como a IA deve abordar a retomada (tom, objetivo). Deixe em branco para usar só as mensagens das tentativas.",
       "BEHAVIORS_TITLE": "Regras por horário",
       "BEHAVIORS_HINT": "Defina regras diferentes para dentro e fora do horário de atendimento. Se os horários coincidirem, a regra 'Personalizado' vale primeiro.",
       "BEHAVIORS_EMPTY": "Nenhum comportamento. O follow-up está desligado.",
