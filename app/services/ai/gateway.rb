@@ -292,6 +292,23 @@ class Ai::Gateway
     # stall. Take a SECOND turn feeding the tool result back so the AI answers the customer with it.
     # Single hop (we don't execute another tool) to avoid loops; `result` is replaced for dispatch.
     if intended_tool.present? && @acts_live && execution&.status == 'executed'
+      # Auto-fill: se o output da ferramenta contém a chave do slot da etapa corrente, persiste o valor
+      # SEM depender de o modelo reportar o dado em `attributes` no followup (o modelo frequentemente diz
+      # attributes:{} no followup pois o prompt enxuto não instrui extração). Source :trusted (default)
+      # — a ferramenta é fonte autorizada, bypassa o gate incluindo o guard already_filled.
+      # Só escalares (String/Numeric) — hashes/arrays não formam um slot simples. Só persiste se o valor
+      # for não-vazio. Procura primeiro em output['body'] (formato de webhook), cai no output inteiro.
+      if active_step
+        slot_key = Ai::StepSlot.attribute(active_step)
+        if slot_key.present?
+          out_hash = execution.output.is_a?(Hash) ? execution.output : {}
+          body = out_hash['body'].is_a?(Hash) ? out_hash['body'] : out_hash
+          slot_val = body[slot_key]
+          if (slot_val.is_a?(String) || slot_val.is_a?(Numeric)) && slot_val.to_s.strip.present?
+            state_manager.persist_attributes({ slot_key => slot_val.to_s.strip }, department)
+          end
+        end
+      end
       # 2ª chamada só REDIGE a resposta pós-ferramenta (não avança etapa, não grava attributes, não roda
       # outra ferramenta) -> usa um prompt ENXUTO (sem playbook/âncora/estado-da-coleta/lead_vars/tools)
       # para cortar o custo do reenvio. Recompilado AQUI (só quando há followup), reusando RAG/memória já
