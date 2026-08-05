@@ -93,8 +93,18 @@ const draft = reactive({
   })),
 });
 
-// Ao trocar o atributo coletado: se o novo for um CAD do tipo "lista", auto-preenche tipo=choice e as
-// opções do CAD. Só dispara na MUDANÇA (não em mount) — respeita a regra de não mutar ao só abrir a tela.
+// Retorna as opções de um CAD como array de strings, ou [] quando não há valores.
+const cadOptionsFor = key => {
+  if (!key) return [];
+  const cad = (props.customAttributes || []).find(a => a.attribute_key === key);
+  if (!cad) return [];
+  return Array.isArray(cad.attribute_values)
+    ? cad.attribute_values.filter(Boolean)
+    : [];
+};
+
+// Ao trocar o atributo coletado: se o CAD for do tipo "lista", auto-preenche tipo=choice e as opções.
+// Só dispara na MUDANÇA (não em mount) — respeita a regra de não mutar ao só abrir a tela.
 watch(
   () => draft.collectAttribute,
   newKey => {
@@ -103,11 +113,24 @@ watch(
       a => a.attribute_key === newKey && a.attribute_display_type === 'list'
     );
     if (!cad) return;
-    const values = Array.isArray(cad.attribute_values)
-      ? cad.attribute_values.filter(Boolean)
-      : [];
+    const values = cadOptionsFor(newKey);
     if (!values.length) return;
     draft.collectType = 'choice';
+    draft.collectSource = 'fixed';
+    draft.collectOptions = values.join('\n');
+  }
+);
+
+// Fallback: ao mudar manualmente para tipo "choice", preenche as opções do CAD se ainda estiverem vazias.
+// Cobre o caso em que o CAD não é do tipo "lista" no sistema (não dispara o watch acima), mas o usuário
+// sabe que o atributo tem valores possíveis e quer o atalho.
+watch(
+  () => draft.collectType,
+  newType => {
+    if (newType !== 'choice') return;
+    if ((draft.collectOptions || '').trim()) return; // já tem opções — não sobrescreve
+    const values = cadOptionsFor(draft.collectAttribute);
+    if (!values.length) return;
     draft.collectSource = 'fixed';
     draft.collectOptions = values.join('\n');
   }
