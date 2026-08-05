@@ -118,6 +118,8 @@ export const buildStepPayload = ({
         .map(k => k.trim())
         .filter(Boolean),
     };
+  } else {
+    payload.knowledge = null; // LIMPA (mergeStepEdit sobrescreve o backfill anterior); não omitir
   }
   const action = (onCompleteAction || '').trim();
   if (action) {
