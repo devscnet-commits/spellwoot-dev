@@ -1,6 +1,6 @@
 <script setup>
 /* global axios */
-import { reactive, computed, ref } from 'vue';
+import { reactive, computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
@@ -92,6 +92,26 @@ const draft = reactive({
     params: { ...(a?.params || {}) },
   })),
 });
+
+// Ao trocar o atributo coletado: se o novo for um CAD do tipo "lista", auto-preenche tipo=choice e as
+// opções do CAD. Só dispara na MUDANÇA (não em mount) — respeita a regra de não mutar ao só abrir a tela.
+watch(
+  () => draft.collectAttribute,
+  newKey => {
+    if (!newKey) return;
+    const cad = (props.customAttributes || []).find(
+      a => a.attribute_key === newKey && a.attribute_display_type === 'list'
+    );
+    if (!cad) return;
+    const values = Array.isArray(cad.attribute_values)
+      ? cad.attribute_values.filter(Boolean)
+      : [];
+    if (!values.length) return;
+    draft.collectType = 'choice';
+    draft.collectSource = 'fixed';
+    draft.collectOptions = values.join('\n');
+  }
+);
 
 // --- Chave do slot: Select da união (LeadVariable ∪ CustomAttributeDefinition), com a ORIGEM marcada
 // (interna = memória da IA; painel = espelha na lateral). Empty = etapa informativa. ------------------
