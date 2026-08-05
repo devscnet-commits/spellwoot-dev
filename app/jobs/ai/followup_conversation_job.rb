@@ -38,7 +38,17 @@ class Ai::FollowupConversationJob < ApplicationJob
     return if binding.nil?
     return unless binding.agent.account&.feature_enabled?('ai_core')
 
-    department = binding.agent.departments.active.first
+    # DepartmentResolver: respeita ai_department_override (change_ai_department) e mapeamento
+    # inbox→department. Sem mensagem no contexto de follow-up — classifier pulado (cai em
+    # default/first). Para agente com único departamento (caso comum) retorna antes do classifier.
+    # BUG ANTERIOR: `.departments.active.first` ignorava override e mapeamento → follow-up do
+    # departamento errado disparava (ex.: config do agente anterior em nova conversa).
+    department, = Ai::DepartmentResolver.resolve(
+      agent: binding.agent,
+      inbox_id: conversation.inbox_id,
+      message_content: nil,
+      conversation: conversation
+    )
     return if department.nil?
 
     behaviors = Array(department.follow_up.to_h['behaviors'])
