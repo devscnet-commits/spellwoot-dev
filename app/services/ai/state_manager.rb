@@ -67,10 +67,19 @@ class Ai::StateManager
     #    não casa no select do painel ("Selecione o valor") e um save humano pode zerar o campo (conv 367).
     known = normalize_list_values(known)
 
-    merged = (@conversation.custom_attributes || {}).merge(known)
-    return gated if merged == @conversation.custom_attributes
+    # Merge rápido em memória para o early-return: se a visão em memória já tem todos os valores,
+    # não há necessidade de ir ao banco (guard barato, pode ser stale — o update_all abaixo é idempotente).
+    merged_mem = (@conversation.custom_attributes || {}).merge(known)
+    return gated if merged_mem == @conversation.custom_attributes
 
-    @conversation.update!(custom_attributes: merged)
+    # Merge ATÔMICO no Postgres (||, operador jsonb): não depende de lock_version (bypassa o controle
+    # de concorrência otimista). Dois workers concorrentes com lock_version stale não se cancelam mais
+    # — cada um apenas grava seu subconjunto de chaves. Último vence POR CHAVE, sem sobrescrever chaves
+    # do outro (ao contrário do update! do objeto inteiro). Antes, StaleObjectError era engolido pelo
+    # rescue StandardError, então o espelho nunca acontecia (ai_collected_facts cheio, custom_attributes {}).
+    ::Conversation.where(id: @conversation.id)
+                  .update_all(['custom_attributes = custom_attributes || ?::jsonb', known.to_json])
+    @conversation.custom_attributes = merged_mem # sincroniza memória sem reload
     emit('attributes.updated', { keys: known.keys })
     gated
   rescue StandardError => e
