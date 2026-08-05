@@ -513,8 +513,8 @@
       "SAVE": "Salvar integrações"
     },
     "FOLLOWUP": {
-      "TITLE": "Retomar contato quando o cliente some",
-      "HINT": "Quando o cliente recebe uma resposta e fica em silêncio, a IA envia mensagens para retomar a conversa. Crie uma ou mais tentativas; sem nenhuma, o follow-up fica desligado.",
+      "TITLE": "Retomar contato quando não há resposta",
+      "HINT": "Após a IA responder e o cliente não retornar, mensagens de retomada são enviadas automaticamente. Configure uma ou mais regras por horário com tentativas, intervalos e texto. Sem regras, o follow-up está desligado.",
       "INSTRUCTIONS": "Como a IA deve chamar o cliente de volta",
       "INSTRUCTIONS_PLACEHOLDER": "Como a IA deve abordar a retomada (tom, objetivo). Deixe em branco para usar só as mensagens das tentativas.",
       "BEHAVIORS_TITLE": "Regras por horário",
