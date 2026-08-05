@@ -622,14 +622,6 @@
   "AI_TOOLS": {
     "TITLE": "Ferramentas",
     "DESCRIPTION": "Ações que a IA pode executar durante a conversa.",
-    "INFO": {
-      "FIELDS": "Nome é a chave que o modelo usa para identificar a ferramenta. Descrição é o que ele lê para decidir quando chamar. Os dois são obrigatórios — a descrição é o que faz a IA saber em qual situação usar.",
-      "TYPES_TITLE": "Os três tipos",
-      "TYPE_CAPABILITY": "Capacidade interna — ações nativas do sistema: consultar dados do contato, atualizar dados, transferir para humano, encerrar conversa.",
-      "TYPE_INTEGRATION": "Integração externa — conecta a uma integração cadastrada em Configurações → Integrações.",
-      "TYPE_WEBHOOK": "Webhook — chama qualquer URL com método (GET/POST/PUT/PATCH/DELETE) e cabeçalhos. Timeout: 30 segundos.",
-      "ARGS": "⚠ Argumentos: o tipo \"Lista\" não é um array — é escolha única entre as opções definidas. Todo argumento adicionado é obrigatório para a IA preencher antes de chamar."
-    },
     "NEW": "Nova ferramenta",
     "EMPTY": "Nenhuma ferramenta neste departamento.",
     "FORM": {
