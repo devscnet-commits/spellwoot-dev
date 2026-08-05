@@ -8,6 +8,30 @@ require 'rails_helper'
 RSpec.describe Ai::FollowupConversationJob do
   let(:job) { described_class.new }
 
+  # BUG FIX: run() usa DepartmentResolver em vez de .departments.active.first.
+  # Prova que o departamento CORRETO é resolvido — override e inbox_mapping vencendo .first.
+  describe '#run — resolução de departamento via DepartmentResolver' do
+    let(:account)      { create(:account) }
+    let(:agent)        { create(:ai_agent, account: account) }
+    let(:inbox)        { create(:inbox, account: account) }
+    let(:conversation) { create(:conversation, account: account, inbox: inbox, status: 'open', assignee_id: nil) }
+
+    before do
+      account.update!(custom_attributes: { 'ai_core' => true }) if account.respond_to?(:custom_attributes)
+      allow(account).to receive(:feature_enabled?).with('ai_core').and_return(true)
+    end
+
+    it 'usa o departamento indicado por ai_department_override em vez do primeiro' do
+      dept_first   = create(:ai_department, agent: agent, follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours', 'attempts' => [{ 'message' => 'vamos seguir?', 'delay_minutes' => 1 }] }] })
+      dept_correct = create(:ai_department, agent: agent, follow_up: {})
+      conversation.update!(additional_attributes: { 'ai_department_override' => dept_correct.id })
+      create(:ai_agent_inbox, agent: agent, inbox: inbox, status: 'live')
+
+      # dept_correct não tem follow-up → job retorna sem enviar mensagem
+      expect { job.perform(conversation.id) }.not_to(change { conversation.messages.count })
+    end
+  end
+
   describe '#effective_message' do
     it 'reuses the previous non-empty message when the current is blank' do
       attempts = [{ 'message' => 'oi' }, { 'message' => '' }, { 'message' => 'voltei' }]

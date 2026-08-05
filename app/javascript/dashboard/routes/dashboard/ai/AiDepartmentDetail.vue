@@ -95,7 +95,6 @@ const form = reactive({
   max_input_action: 'truncate',
   max_input_message: '',
   // Follow-up: SÓ retoma a conversa. Decisões de entrega ficam em Atribuição.
-  followup_instructions: '',
   // Lista de comportamentos de follow-up (1 por contexto de horário); cada um com
   // suas tentativas, carência e a ação se o cliente não responder.
   followup_behaviors: [],
@@ -366,7 +365,6 @@ const hydrate = dept => {
     max_input_chars: behavior.max_input_chars ?? '',
     max_input_action: behavior.max_input_action || 'truncate',
     max_input_message: behavior.max_input_message || '',
-    followup_instructions: followUp.instructions || '',
     followup_behaviors: hydrateBehaviors(followUp),
     close_message: close.message || '',
     inactivity_minutes: close.inactivity_minutes ?? 30,
@@ -417,7 +415,6 @@ const buildFollowUp = () => {
   }));
   return {
     enabled: behaviors.length > 0,
-    instructions: (form.followup_instructions || '').trim(),
     behaviors,
   };
 };
@@ -1094,18 +1091,6 @@ onMounted(async () => {
                 {{ $t('AI_DEPARTMENTS.FOLLOWUP.HINT') }}
               </p>
             </div>
-
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS') }}
-              <textarea
-                v-model="form.followup_instructions"
-                rows="3"
-                :placeholder="
-                  $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS_PLACEHOLDER')
-                "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem]"
-              />
-            </label>
 
             <div class="flex flex-col gap-0.5">
               <span class="text-sm font-medium text-n-slate-12">
