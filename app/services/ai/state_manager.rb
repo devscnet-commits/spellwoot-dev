@@ -67,19 +67,25 @@ class Ai::StateManager
     #    não casa no select do painel ("Selecione o valor") e um save humano pode zerar o campo (conv 367).
     known = normalize_list_values(known)
 
-    # Merge rápido em memória para o early-return: se a visão em memória já tem todos os valores,
-    # não há necessidade de ir ao banco (guard barato, pode ser stale — o update_all abaixo é idempotente).
-    merged_mem = (@conversation.custom_attributes || {}).merge(known)
-    return gated if merged_mem == @conversation.custom_attributes
+    old_custom = @conversation.custom_attributes || {}
+    merged = old_custom.merge(known)
+    return gated if merged == old_custom
 
-    # Merge ATÔMICO no Postgres (||, operador jsonb): não depende de lock_version (bypassa o controle
-    # de concorrência otimista). Dois workers concorrentes com lock_version stale não se cancelam mais
-    # — cada um apenas grava seu subconjunto de chaves. Último vence POR CHAVE, sem sobrescrever chaves
-    # do outro (ao contrário do update! do objeto inteiro). Antes, StaleObjectError era engolido pelo
-    # rescue StandardError, então o espelho nunca acontecia (ai_collected_facts cheio, custom_attributes {}).
-    ::Conversation.where(id: @conversation.id)
-                  .update_all(['custom_attributes = custom_attributes || ?::jsonb', known.to_json])
-    @conversation.custom_attributes = merged_mem # sincroniza memória sem reload
+    # update! dispara after_update_commit -> notify_conversation_updation -> WebSocket para o browser.
+    # Race frequente: persist_collected_facts já incrementou lock_version via seu próprio update!; se um
+    # segundo worker Sidekiq salvar a conversa entre essas duas gravações, o lock_version em memória fica
+    # stale -> StaleObjectError -> o rescue StandardError abaixo engolia o erro em silêncio -> espelho
+    # nunca acontecia (ai_collected_facts cheio, custom_attributes {}). Solução: capturar StaleObjectError
+    # especificamente, recarregar o objeto (lock_version fresco + custom_attributes fresco do banco) e
+    # tentar UMA vez. Neste ponto additional_attributes já foi salvo por persist_collected_facts, então
+    # o reload é seguro (não clobberará nada que ainda precise ser gravado neste run).
+    begin
+      @conversation.update!(custom_attributes: merged)
+    rescue ActiveRecord::StaleObjectError
+      @conversation.reload
+      merged = (@conversation.custom_attributes || {}).merge(known)
+      @conversation.update!(custom_attributes: merged) unless merged == @conversation.custom_attributes
+    end
     emit('attributes.updated', { keys: known.keys })
     gated
   rescue StandardError => e
