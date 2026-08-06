@@ -193,6 +193,9 @@ class Ai::Gateway
 
     @stage = :decision
     user_message_text = context_builder.user_message(effective_content)
+    # Histórico estruturado: [{role: :user/:assistant, content: '...'}] em vez de um blob de texto.
+    # Injetado via chat.add_message no ModelRouter para preservar a alternância user/assistant real.
+    structured = context_builder.structured_messages(effective_content)
     # Native tool loop: when department has active tools in live mode, register adapters so
     # ruby_llm handles tool_use → execute → tool_result internally with correct IDs (no
     # text-injected second call). In shadow or when no tools, fall back to decide() unchanged.
@@ -202,12 +205,14 @@ class Ai::Gateway
     result = if adapters.any?
                Ai::ModelRouter.call_with_tools(
                  profile: @agent.operation_profile, system_prompt: system_prompt,
-                 user_message: user_message_text, tools: adapters, account_id: @account.id
+                 user_message: user_message_text, tools: adapters, account_id: @account.id,
+                 messages: structured
                )
              else
                Ai::ModelRouter.decide(
                  profile: @agent.operation_profile, system_prompt: system_prompt,
-                 user_message: user_message_text, account_id: @account.id, json: true
+                 user_message: user_message_text, account_id: @account.id, json: true,
+                 messages: structured
                )
              end
     # BYOK (billing Fase 3): se a chave PRÓPRIA do cliente falhou por auth (401), sinaliza com tag,
@@ -919,7 +924,7 @@ class Ai::Gateway
     retried = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
       user_message: context_builder.user_message(user_message), account_id: @account.id, json: true,
-      force_global_key: true
+      force_global_key: true, messages: context_builder.structured_messages(user_message)
     )
     consume_byok_fallback_credit if retried[:status] != 'error'
     retried

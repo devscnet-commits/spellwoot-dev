@@ -34,8 +34,12 @@ class Ai::ModelRouter
   # the department classifier) must leave it false so they aren't forced into JSON mode.
   # force_global_key: BYOK (billing Fase 3). Quando true, ignora a chave própria da conta e usa a chave
   # global da SCNET — o Gateway aciona isso no retry após a chave do cliente falhar por auth (401).
+  # messages: array estruturado [{role: :user/:assistant, content: '...'}] do context_builder.structured_messages.
+  # Quando presente, injeta os turnos históricos via chat.add_message antes do ask (contexto real vs blob).
+  # O último elemento é sempre {role: :user} com a mensagem atual — usado como argumento do chat.ask.
+  # user_message é mantido como fallback quando messages não é fornecido (retrocompat com callers antigos).
   def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil,
-                  temperature: nil, json: false, force_global_key: false)
+                  temperature: nil, json: false, force_global_key: false, messages: nil)
     # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
@@ -59,7 +63,7 @@ class Ai::ModelRouter
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
                      user_message: user_message, account_id: account_id, temperature: temperature, json: json,
-                     force_global_key: force_global_key, schema: schema)
+                     force_global_key: force_global_key, schema: schema, messages: messages)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     # Ponto ÚNICO de parse + normalização: com schema o ruby_llm já devolve Hash; sem schema, parse
@@ -86,8 +90,10 @@ class Ai::ModelRouter
   # NOTE: validate the exact RubyLLM call shape when running; isolated here on purpose.
   # image: anexo para modelos de VISÃO (aceita ActiveStorage::Attached/Blob, path ou URL — o ruby_llm
   # resolve o tipo). nil = chamada de texto normal (comportamento inalterado: `with: nil` == sem anexo).
+  # messages: array estruturado [{role:, content:}] do context_builder.structured_messages. Quando presente,
+  # injeta os turnos históricos via chat.add_message (contexto estruturado real) e usa o último como ask.
   def self.call_model(provider:, model:, system_prompt:, user_message:, account_id: nil, temperature: nil,
-                      timeout: nil, json: false, image: nil, force_global_key: false, schema: nil)
+                      timeout: nil, json: false, image: nil, force_global_key: false, schema: nil, messages: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     context = provider_context(provider, account_id: account_id, timeout: timeout, force_global_key: force_global_key)
@@ -103,8 +109,17 @@ class Ai::ModelRouter
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
     chat.with_instructions(system_prompt) if chat.respond_to?(:with_instructions)
     chat = configure_output(chat, provider, json, schema)
+    # Mensagens estruturadas: injeta o histórico como turnos individuais user/assistant antes do ask,
+    # preservando a alternância que a API espera. O último elemento (role: :user) é a mensagem atual.
+    # Fallback para user_message quando messages não é fornecido (retrocompat).
+    if messages.present? && chat.respond_to?(:add_message)
+      messages[0..-2].each { |m| chat.add_message(m) }
+      current_text = messages.last[:content]
+    else
+      current_text = user_message
+    end
     # Só passa `with:` no caminho de visão — o de texto fica idêntico ao anterior (sem mudança).
-    response = image ? chat.ask(user_message, with: image) : chat.ask(user_message)
+    response = image ? chat.ask(current_text, with: image) : chat.ask(current_text)
     # usage da resposta (single_usage). Prompt caching: cached_tokens é subconjunto de input_tokens — só
     # MEDIÇÃO (estimate_cost cobra input cheio, não sabemos o preço do token cacheado). sum_tool_loop_usage
     # fica disponível p/ quando houver loop de tools (nenhum caller hoje) — mede o custo real por rodada.
@@ -131,9 +146,11 @@ class Ai::ModelRouter
   # Adapters run synchronously and accumulate CapabilityExecution records in their #executions
   # array — the gateway inspects these for event emission and auto-fill after this returns.
   # Returns the same hash structure as decide() so the gateway can treat both uniformly.
+  # messages: array estruturado [{role:, content:}] do context_builder.structured_messages.
+  # Injetado via chat.add_message antes do ask para preservar contexto real entre turnos.
   def self.call_with_tools(profile:, system_prompt:, user_message:, tools:,
                             provider: nil, model: nil, account_id: nil,
-                            temperature: nil, force_global_key: false)
+                            temperature: nil, force_global_key: false, messages: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     provider    = provider.presence || profile&.supervisor_provider.presence || 'openai'
@@ -162,8 +179,16 @@ class Ai::ModelRouter
                     "diretamente quando necessário. NÃO retorne decision:\"invoke_tool\". " \
                     "Após a ferramenta rodar, responda com decision:\"reply\" (ou handoff/close/noop). " \
                     "Valores válidos de \"decision\" neste turno: reply, handoff, close, noop."
-    chat.with_instructions(native_prompt)   if chat.respond_to?(:with_instructions)
-    chat.with_tools(*tools)                 if tools.any? && chat.respond_to?(:with_tools)
+    chat.with_instructions(native_prompt) if chat.respond_to?(:with_instructions)
+    # choice: :auto (ruby_llm 1.16.0+) — modelo decide quando usar ferramentas. Passamos :auto
+    # explicitamente para não depender do default da gem mudar; with_tools sem choice= é equivalente.
+    if tools.any? && chat.respond_to?(:with_tools)
+      if chat.method(:with_tools).parameters.any? { |_, n| n == :choice }
+        chat.with_tools(*tools, choice: :auto)
+      else
+        chat.with_tools(*tools)
+      end
+    end
     # Peça 4 — Prompt caching (Anthropic only; OpenAI caches automatically for prompts > 1 024 tokens).
     # Provider#complete deep_merges @params OVER render_payload, so with_params(:system) overrides
     # the system block built from @messages without touching the gem internals.
@@ -179,8 +204,15 @@ class Ai::ModelRouter
     # causes OpenAI to enforce the schema on the first response turn, which blocks tool_use blocks.
     # json_object is compatible with function calling and still nudges the model to emit valid JSON.
     chat = configure_output(chat, provider, true, nil)
+    # Mensagens estruturadas: injeta o histórico como turnos individuais antes do ask.
+    if messages.present? && chat.respond_to?(:add_message)
+      messages[0..-2].each { |m| chat.add_message(m) }
+      current_text = messages.last[:content]
+    else
+      current_text = user_message
+    end
 
-    response   = chat.ask(user_message)
+    response   = chat.ask(current_text)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     text   = response.respond_to?(:content) ? response.content : response.to_s

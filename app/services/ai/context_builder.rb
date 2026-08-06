@@ -35,6 +35,32 @@ class Ai::ContextBuilder
     "Histórico recente da conversa:\n#{history.join("\n")}\n\nMensagem atual do cliente:\n#{current}"
   end
 
+  # Retorna o histórico como mensagens ESTRUTURADAS para o chat object do ruby_llm — cada entrada da
+  # conversa vira um {role:, content:} separado, seguido da mensagem atual do cliente. Isso preserva
+  # a alternância user/assistant que as APIs esperam e evita colocar todo o contexto em um só blob.
+  # A mensagem atual (current) é sempre o ÚLTIMO elemento do array (role: :user).
+  def structured_messages(current)
+    quoted = quoted_message_content
+    current_text = quoted.present? ? "(O cliente está respondendo a: \"#{quoted}\")\n#{current}" : current
+
+    last_out_id = @conversation.messages.outgoing.maximum(:id) || 0
+    history = @conversation.messages
+                           .where(message_type: %i[incoming outgoing])
+                           .where('messages.id <= ?', last_out_id)
+                           .includes(:attachments)
+                           .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
+
+    result = history.filter_map do |m|
+      body = message_body(m)
+      next if body.blank?
+
+      { role: m.incoming? ? :user : :assistant, content: body }
+    end
+
+    result << { role: :user, content: current_text }
+    result
+  end
+
   # Atributos personalizados de conversa que a IA pode preencher: as definições da conta menos os
   # que o department desabilitou (lista "Atributos personalizados" da tela). Vira a instrução de
   # quais chaves preencher em `attributes`.
