@@ -249,7 +249,7 @@ class Ai::ModelRouter
   MAX_TOOL_ITERATIONS = 6
 
   def self.call_with_tools_responses_api(api_key:, model:, system_prompt:, user_message:,
-                                          temperature:, adapters:, schema: nil, conversation_id: nil)
+                                          temperature:, adapters:, conversation_id: nil)
     require 'net/http'
     uri = URI(RESPONSES_API_URL)
     http = Net::HTTP.new(uri.host, uri.port)
@@ -262,17 +262,11 @@ class Ai::ModelRouter
       { type: 'function', name: a.name, description: a.description, parameters: params }
     end
 
-    # Resolve schema format once before the loop — applied on every iteration so the model's
-    # final text response (after any tool calls) is structured. json_schema works without
-    # requiring "json" in the input message (unlike json_object which causes HTTP 400).
-    text_format = if schema
-                    si           = schema.is_a?(Class) ? schema.new : schema
-                    so           = si.to_json_schema
-                    schema_def   = (so[:schema] || {}).reject { |k, _| k.to_s == 'strict' }
-                    is_strict    = so.dig(:schema, :strict) != false
-                    schema_name  = (so[:name] || 'response').to_s.gsub(/[^a-zA-Z0-9_-]/, '_')
-                    { format: { type: 'json_schema', name: schema_name, schema: schema_def, strict: is_strict } }
-                  end
+    # Sem text.format no loop de ferramentas: json_object exige "json" no input (HTTP 400 com
+    # mensagens naturais) e json_schema confunde o modelo entre chamar ferramenta nativa e devolver
+    # o envelope de decisão como texto. O system_prompt instrui JSON na resposta final; o modelo
+    # chama ferramentas via native function calls e devolve JSON/linguagem natural no turno final.
+    # build_tool_loop_decision trata ambos os casos tolerantemente.
 
     current_conv_id = conversation_id
     current_input   = [{ role: 'user', content: user_message }]
@@ -288,7 +282,6 @@ class Ai::ModelRouter
         parallel_tool_calls: false,
         store: true
       }
-      body[:text] = text_format if text_format
       # instructions só na primeira chamada (user message); nas continuações (tool results) omite.
       body[:instructions] = system_prompt if first_call
       body[:previous_response_id] = current_conv_id if current_conv_id.present?
@@ -401,7 +394,6 @@ class Ai::ModelRouter
       raw = call_with_tools_responses_api(
         api_key: api_key, model: model, system_prompt: native_prompt,
         user_message: current_msg, temperature: temperature, adapters: tools,
-        schema: decision_schema_for('openai', true),
         conversation_id: conversation_id
       )
       latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
@@ -495,12 +487,12 @@ class Ai::ModelRouter
   # already looks like a valid decision, use it; otherwise synthesise a reply decision so the
   # gateway can dispatch without special-casing this path.
   def self.build_tool_loop_decision(parsed, raw_text)
-    # invoke_tool arriving here means the model used the old JSON format instead of the native API
-    # block — tools either already ran natively or not at all. Either way the gateway's old path
-    # must NOT re-execute them. Convert to reply using whatever text the model provided.
+    # invoke_tool arriving here means the model chose the JSON envelope instead of a native function
+    # call. Never fall back to raw_text — it's the full JSON envelope, not a user-facing message.
+    # Use reply_text only when the model explicitly provided one; otherwise noop (no message sent).
     if parsed.is_a?(Hash) && parsed['decision'] == 'invoke_tool'
-      text = parsed['reply_text'].to_s.presence || raw_text.to_s.strip
-      return text.blank? ? { 'decision' => 'unparsed' } : { 'decision' => 'reply', 'reply_text' => text }
+      text = parsed['reply_text'].to_s.presence
+      return text.blank? ? { 'decision' => 'noop' } : { 'decision' => 'reply', 'reply_text' => text }
     end
 
     return parsed if parsed.is_a?(Hash) &&
