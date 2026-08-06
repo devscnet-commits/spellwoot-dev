@@ -202,16 +202,16 @@ class Ai::Gateway
     adapters = @acts_live && tools.any? \
                ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
                : []
-    # Responses API: só para departamentos SEM ferramentas (evita split de histórico entre as duas APIs).
-    # Em shadow ou com tools, openai_conv_id fica nil e o decide usa o caminho normal de messages.
-    openai_conv_id = @acts_live && tools.empty? \
+    # Responses API: passa o conversation_id para ambos os caminhos (com e sem ferramentas).
+    # Em shadow fica nil — shadow não persiste estado; o histórico server-side é só para live.
+    openai_conv_id = @acts_live \
                      ? (@conversation.additional_attributes || {})['openai_conversation_id'] \
                      : nil
     result = if adapters.any?
                Ai::ModelRouter.call_with_tools(
                  profile: @agent.operation_profile, system_prompt: system_prompt,
                  user_message: user_message_text, tools: adapters, account_id: @account.id,
-                 messages: structured
+                 messages: structured, conversation_id: openai_conv_id
                )
              else
                Ai::ModelRouter.decide(
