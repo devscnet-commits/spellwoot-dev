@@ -29,6 +29,75 @@ class Ai::ModelRouter
   # mais consistentes/determinísticas, adequado a atendimento.
   DEFAULT_TEMPERATURE = 0.3
 
+  # Responses API (OpenAI /v1/responses): chamada com conversation_id server-side — o OpenAI armazena
+  # todo o histórico, sem reconstrução cliente-a-cliente. conversation_id nil = primeira mensagem (cria
+  # a conversa). Retorna o mesmo formato de hash que call_model + :openai_conversation_id.
+  # Usado pelo `decide` quando provider=openai e conversation_id foi passado pelo Gateway.
+  RESPONSES_API_URL = 'https://api.openai.com/v1/responses'.freeze
+
+  def self.call_responses_api(api_key:, model:, system_prompt:, user_message:, temperature:,
+                               json:, schema:, conversation_id: nil)
+    require 'net/http'
+    uri = URI(RESPONSES_API_URL)
+
+    body = {
+      model: model,
+      instructions: system_prompt,
+      temperature: temperature.to_f,
+      input: [{ role: 'user', content: user_message }],
+      store: true
+    }
+    body[:conversation] = conversation_id if conversation_id.present?
+    if json && schema
+      body[:text] = { format: { type: 'json_schema', name: schema[:name].to_s,
+                                 schema: schema[:schema], strict: (schema[:strict] != false) } }
+    elsif json
+      body[:text] = { format: { type: 'json_object' } }
+    end
+
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.read_timeout = 60
+    http.open_timeout = 10
+    req = Net::HTTP::Post.new(uri.path)
+    req['Content-Type'] = 'application/json'
+    req['Authorization'] = "Bearer #{api_key}"
+    req.body = body.to_json
+
+    resp = http.request(req)
+    unless resp.is_a?(Net::HTTPSuccess)
+      parsed_err = JSON.parse(resp.body) rescue {}
+      err_msg = parsed_err.dig('error', 'message') || resp.body.to_s.first(200)
+      return { text: nil, tokens_in: 0, tokens_out: 0, cached_tokens: 0, openai_conversation_id: nil,
+               status: 'error', error_type: resp.code.to_s == '401' ? 'auth_error' : 'provider_error',
+               error: "HTTP #{resp.code}: #{err_msg}" }
+    end
+
+    data = JSON.parse(resp.body)
+    text = nil
+    (data['output'] || []).each do |item|
+      next unless item['type'] == 'message'
+      content = (item['content'] || []).find { |c| c['type'] == 'text' }
+      (text = content['text'].to_s) && break if content
+    end
+    conv_id = data.dig('conversation', 'id')
+    usage = data['usage'] || {}
+    tokens_in_total = usage['input_tokens'].to_i
+    tokens_out      = usage['output_tokens'].to_i
+    cached          = usage.dig('input_tokens_details', 'cached_tokens').to_i
+    { text: text.to_s, openai_conversation_id: conv_id,
+      tokens_in: [tokens_in_total - cached, 0].max, tokens_out: tokens_out, cached_tokens: cached,
+      status: 'recorded' }
+  rescue Net::ReadTimeout => e
+    Rails.logger.error "[Ai::ModelRouter#call_responses_api] Timeout: #{e.message}"
+    { text: nil, tokens_in: 0, tokens_out: 0, cached_tokens: 0, openai_conversation_id: nil,
+      status: 'error', error_type: 'provider_error', error: "Timeout: #{e.message}" }
+  rescue StandardError => e
+    Rails.logger.error "[Ai::ModelRouter#call_responses_api] #{e.class}: #{e.message}"
+    { text: nil, tokens_in: 0, tokens_out: 0, cached_tokens: 0, openai_conversation_id: nil,
+      status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
+  end
+
   # json: opt-in to force a JSON-object response (OpenAI response_format). Only the supervisor
   # decision path sets it — its prompt always carries the JSON contract. Plain-text callers (e.g.
   # the department classifier) must leave it false so they aren't forced into JSON mode.
@@ -38,8 +107,10 @@ class Ai::ModelRouter
   # Quando presente, injeta os turnos históricos via chat.add_message antes do ask (contexto real vs blob).
   # O último elemento é sempre {role: :user} com a mensagem atual — usado como argumento do chat.ask.
   # user_message é mantido como fallback quando messages não é fornecido (retrocompat com callers antigos).
+  # conversation_id: ID de conversa OpenAI (Responses API). Quando presente, o histórico fica server-side
+  # e passamos só a mensagem atual. Retornado no resultado como :openai_conversation_id p/ o Gateway salvar.
   def self.decide(profile:, system_prompt:, user_message:, provider: nil, model: nil, account_id: nil,
-                  temperature: nil, json: false, force_global_key: false, messages: nil)
+                  temperature: nil, json: false, force_global_key: false, messages: nil, conversation_id: nil)
     # Default to openai: it reuses the platform's always-configured Captain key, so an agent with no
     # level (or a level missing a provider) still answers instead of crashing for an Anthropic key.
     provider = provider.presence || profile&.supervisor_provider.presence || 'openai'
@@ -61,9 +132,20 @@ class Ai::ModelRouter
     schema = decision_schema_for(provider, json)
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    raw = call_model(provider: provider, model: model, system_prompt: system_prompt,
-                     user_message: user_message, account_id: account_id, temperature: temperature, json: json,
-                     force_global_key: force_global_key, schema: schema, messages: messages)
+    # Responses API (OpenAI): histórico server-side via conversation_id — sem reconstrução cliente.
+    # Mensagem atual = último elemento do array structurado (sem o blob de histórico do user_message).
+    # Fallback: se a API falhar ou provider não for openai, retorna ao call_model normal.
+    raw = if provider.to_s == 'openai'
+            api_key = resolve_openai_key(account_id, force_global_key)
+            current_msg = messages&.last&.dig(:content).presence || user_message
+            call_responses_api(api_key: api_key, model: model, system_prompt: system_prompt,
+                               user_message: current_msg, temperature: temperature, json: json, schema: schema,
+                               conversation_id: conversation_id)
+          else
+            call_model(provider: provider, model: model, system_prompt: system_prompt,
+                       user_message: user_message, account_id: account_id, temperature: temperature, json: json,
+                       force_global_key: force_global_key, schema: schema, messages: messages)
+          end
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
     # Ponto ÚNICO de parse + normalização: com schema o ruby_llm já devolve Hash; sem schema, parse
@@ -83,7 +165,9 @@ class Ai::ModelRouter
       latency_ms: latency_ms,
       status: raw[:status],
       # BYOK: 'auth_error' (401) vs 'provider_error' (demais) — o Gateway usa isso para o fallback.
-      error_type: raw[:error_type]
+      error_type: raw[:error_type],
+      # Responses API: conversation_id retornado p/ o Gateway persistir em additional_attributes.
+      openai_conversation_id: raw[:openai_conversation_id]
     }
   end
 
@@ -483,6 +567,12 @@ class Ai::ModelRouter
       yield c
       c.request_timeout = timeout if timeout && c.respond_to?(:request_timeout=)
     end
+  end
+
+  # Resolve OpenAI key para chamadas diretas (Responses API): chave da conta (BYOK) ou global SCNET.
+  def self.resolve_openai_key(account_id, force_global_key = false)
+    account_key = force_global_key ? nil : account_openai_key(account_id)
+    account_key || credential('CAPTAIN_OPEN_AI_API_KEY', 'OPENAI_API_KEY')
   end
 
   # OpenAI key from the account's "APIs & Credentials" (integrations-hub), resolved account→global→ENV.
