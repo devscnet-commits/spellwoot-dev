@@ -47,7 +47,7 @@ class Ai::ModelRouter
       input: [{ role: 'user', content: user_message }],
       store: true
     }
-    body[:conversation] = conversation_id if conversation_id.present?
+    body[:previous_response_id] = conversation_id if conversation_id.present?
     if json && schema
       body[:text] = { format: { type: 'json_schema', name: schema[:name].to_s,
                                  schema: schema[:schema], strict: (schema[:strict] != false) } }
@@ -77,10 +77,10 @@ class Ai::ModelRouter
     text = nil
     (data['output'] || []).each do |item|
       next unless item['type'] == 'message'
-      content = (item['content'] || []).find { |c| c['type'] == 'text' }
+      content = (item['content'] || []).find { |c| c['type'] == 'output_text' }
       (text = content['text'].to_s) && break if content
     end
-    conv_id = data.dig('conversation', 'id')
+    conv_id = data['id']
     usage = data['usage'] || {}
     tokens_in_total = usage['input_tokens'].to_i
     tokens_out      = usage['output_tokens'].to_i
@@ -267,7 +267,7 @@ class Ai::ModelRouter
       }
       # instructions só na primeira chamada (user message); nas continuações (tool results) omite.
       body[:instructions] = system_prompt if first_call
-      body[:conversation]  = current_conv_id if current_conv_id.present?
+      body[:previous_response_id] = current_conv_id if current_conv_id.present?
       first_call = false
 
       req = Net::HTTP::Post.new(uri.path)
@@ -286,7 +286,7 @@ class Ai::ModelRouter
       end
 
       data = JSON.parse(resp.body)
-      current_conv_id ||= data.dig('conversation', 'id')
+      current_conv_id = data['id']
 
       usage = data['usage'] || {}
       tokens_in_total = usage['input_tokens'].to_i
@@ -304,7 +304,7 @@ class Ai::ModelRouter
         text = nil
         output.each do |item|
           next unless item['type'] == 'message'
-          c = (item['content'] || []).find { |x| x['type'] == 'text' }
+          c = (item['content'] || []).find { |x| x['type'] == 'output_text' }
           (text = c['text'].to_s) && break if c
         end
         return { text: text.to_s, openai_conversation_id: current_conv_id,
