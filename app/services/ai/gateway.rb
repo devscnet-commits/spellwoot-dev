@@ -202,6 +202,11 @@ class Ai::Gateway
     adapters = @acts_live && tools.any? \
                ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
                : []
+    # Responses API: só para departamentos SEM ferramentas (evita split de histórico entre as duas APIs).
+    # Em shadow ou com tools, openai_conv_id fica nil e o decide usa o caminho normal de messages.
+    openai_conv_id = @acts_live && tools.empty? \
+                     ? (@conversation.additional_attributes || {})['openai_conversation_id'] \
+                     : nil
     result = if adapters.any?
                Ai::ModelRouter.call_with_tools(
                  profile: @agent.operation_profile, system_prompt: system_prompt,
@@ -212,9 +217,11 @@ class Ai::Gateway
                Ai::ModelRouter.decide(
                  profile: @agent.operation_profile, system_prompt: system_prompt,
                  user_message: user_message_text, account_id: @account.id, json: true,
-                 messages: structured
+                 messages: structured, conversation_id: openai_conv_id
                )
              end
+    # Persiste o conversation_id retornado pela Responses API para o próximo turno continuar o fio.
+    persist_openai_conversation_id(result[:openai_conversation_id]) if result[:openai_conversation_id].present?
     # BYOK (billing Fase 3): se a chave PRÓPRIA do cliente falhou por auth (401), sinaliza com tag,
     # refaz a decisão na chave global da SCNET e cobra 1 crédito SCNET desse retry. Substitui `result`.
     # Só no caminho decide() — adapters já usaram a chave correta e têm seu próprio error_type.
@@ -897,6 +904,21 @@ class Ai::Gateway
   end
 
   # 1 e-mail por (conta, provedor) a cada PROVIDER_ERROR_NOTIFY_TTL. Mesmo padrão cache-based do
+  # Persiste o conversation_id da Responses API em additional_attributes da conversa. Usa lock! para
+  # não colidir com persist_collected_facts do StateManager (ambos fazem lock!/reload antes de escrever).
+  def persist_openai_conversation_id(conv_id)
+    return if conv_id.blank?
+
+    @conversation.lock!
+    attrs = (@conversation.additional_attributes || {}).dup
+    return if attrs['openai_conversation_id'] == conv_id
+
+    attrs['openai_conversation_id'] = conv_id
+    @conversation.update!(additional_attributes: attrs)
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::Gateway#persist_openai_conversation_id] #{e.class}: #{e.message}"
+  end
+
   # notify_throttle_allows? do HandoffCoordinator (perder o estado = no máximo 1 e-mail extra), mas
   # chave e janela PRÓPRIAS — não altera o comportamento daquele. Escreve a marca ao permitir.
   def provider_error_notify_allows?(provider)
