@@ -290,7 +290,7 @@ class Ai::Gateway
     @stage = :tool
     intended_tool = result.dig(:decision, 'tool')
     execution = nil
-    if intended_tool.present?
+    if adapters.empty? && intended_tool.present?
       tool = department.tools.active.find_by(name: intended_tool['name'])
       if @acts_live && tool
         execution = Ai::ToolExecutor.new(
@@ -306,7 +306,7 @@ class Ai::Gateway
     # An `invoke_tool` decision only runs the tool — it carries no reply, so the conversation would
     # stall. Take a SECOND turn feeding the tool result back so the AI answers the customer with it.
     # Single hop (we don't execute another tool) to avoid loops; `result` is replaced for dispatch.
-    if intended_tool.present? && @acts_live && execution&.status == 'executed'
+    if adapters.empty? && intended_tool.present? && @acts_live && execution&.status == 'executed'
       # Auto-fill: se o output da ferramenta contém a chave do slot da etapa corrente, persiste o valor
       # SEM depender de o modelo reportar o dado em `attributes` no followup (o modelo frequentemente diz
       # attributes:{} no followup pois o prompt enxuto não instrui extração). Source :trusted (default)
@@ -417,7 +417,7 @@ class Ai::Gateway
       safe_reply = guard_against_loop(run_record, system_prompt, effective_content,
                                       (result[:decision] || {})['reply_text'])
       action_dispatcher.reply(department, safe_reply) if safe_reply
-    elsif intended_tool.present? && @acts_live
+    elsif adapters.empty? && intended_tool.present? && @acts_live
       # Safety net: a tool ran but the follow-up decision still isn't a plain reply/close/handoff —
       # send whatever text we have so the customer is never left waiting after a tool call.
       action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
