@@ -49,8 +49,12 @@ class Ai::ModelRouter
     }
     body[:previous_response_id] = conversation_id if conversation_id.present?
     if json && schema
-      body[:text] = { format: { type: 'json_schema', name: schema[:name].to_s,
-                                 schema: schema[:schema], strict: (schema[:strict] != false) } }
+      schema_instance  = schema.is_a?(Class) ? schema.new : schema
+      schema_output    = schema_instance.to_json_schema
+      schema_def       = (schema_output[:schema] || {}).reject { |k, _| k.to_s == 'strict' }
+      is_strict        = schema_output.dig(:schema, :strict) != false
+      schema_name      = (schema_output[:name] || 'response').to_s.gsub(/[^a-zA-Z0-9_-]/, '_')
+      body[:text] = { format: { type: 'json_schema', name: schema_name, schema: schema_def, strict: is_strict } }
     elsif json
       body[:text] = { format: { type: 'json_object' } }
     end
