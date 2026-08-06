@@ -50,11 +50,21 @@ class Ai::ContextBuilder
                            .includes(:attachments)
                            .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
 
-    result = history.filter_map do |m|
+    raw = history.filter_map do |m|
       body = message_body(m)
       next if body.blank?
 
       { role: m.incoming? ? :user : :assistant, content: body }
+    end
+
+    # A API exige alternância user/assistant. Quando o bot envia 2 mensagens seguidas (ou o cliente
+    # manda 2 mensagens seguidas), mesclamos num único turno para não violar o contrato da API.
+    result = raw.each_with_object([]) do |msg, acc|
+      if acc.last && acc.last[:role] == msg[:role]
+        acc.last[:content] = "#{acc.last[:content]}\n#{msg[:content]}"
+      else
+        acc << msg.dup
+      end
     end
 
     result << { role: :user, content: current_text }
