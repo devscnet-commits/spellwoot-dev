@@ -68,22 +68,29 @@ class Ai::ModelRouter
     req['Authorization'] = "Bearer #{api_key}"
     req.body = body.to_json
 
+    debug_body = body.except(:instructions)
+    Rails.logger.info "[Ai::ModelRouter#call_responses_api] REQUEST model=#{model} format=#{body.dig(:text, :format, :type).inspect} prev_id=#{conversation_id.inspect} body_keys=#{debug_body.keys}"
+    Rails.logger.debug "[Ai::ModelRouter#call_responses_api] TEXT_FORMAT #{body[:text].to_json}" if body[:text]
+
     resp = http.request(req)
     unless resp.is_a?(Net::HTTPSuccess)
       parsed_err = JSON.parse(resp.body) rescue {}
       err_msg = parsed_err.dig('error', 'message') || resp.body.to_s.first(200)
+      Rails.logger.error "[Ai::ModelRouter#call_responses_api] HTTP #{resp.code}: #{err_msg}"
       return { text: nil, tokens_in: 0, tokens_out: 0, cached_tokens: 0, openai_conversation_id: nil,
                status: 'error', error_type: resp.code.to_s == '401' ? 'auth_error' : 'provider_error',
                error: "HTTP #{resp.code}: #{err_msg}" }
     end
 
     data = JSON.parse(resp.body)
+    Rails.logger.info "[Ai::ModelRouter#call_responses_api] RESPONSE id=#{data['id'].inspect} output_types=#{(data['output'] || []).map { |o| o['type'] }.inspect}"
     text = nil
     (data['output'] || []).each do |item|
       next unless item['type'] == 'message'
       content = (item['content'] || []).find { |c| c['type'] == 'output_text' }
       (text = content['text'].to_s) && break if content
     end
+    Rails.logger.info "[Ai::ModelRouter#call_responses_api] TEXT_EXTRACTED length=#{text.to_s.length} blank=#{text.blank?}"
     conv_id = data['id']
     usage = data['usage'] || {}
     tokens_in_total = usage['input_tokens'].to_i
