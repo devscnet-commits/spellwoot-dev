@@ -55,9 +55,10 @@ class Ai::ModelRouter
       is_strict        = schema_output.dig(:schema, :strict) != false
       schema_name      = (schema_output[:name] || 'response').to_s.gsub(/[^a-zA-Z0-9_-]/, '_')
       body[:text] = { format: { type: 'json_schema', name: schema_name, schema: schema_def, strict: is_strict } }
-    elsif json
-      body[:text] = { format: { type: 'json_object' } }
     end
+    # json_object omitido: a Responses API exige a palavra "json" na mensagem de input (não em
+    # instructions), o que causa HTTP 400 com mensagens naturais do cliente ("olá", "quero contratar").
+    # Quando schema=nil e json=true, o system_prompt já instrui JSON — sem enforcement de formato.
 
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
@@ -248,7 +249,7 @@ class Ai::ModelRouter
   MAX_TOOL_ITERATIONS = 6
 
   def self.call_with_tools_responses_api(api_key:, model:, system_prompt:, user_message:,
-                                          temperature:, adapters:, conversation_id: nil)
+                                          temperature:, adapters:, schema: nil, conversation_id: nil)
     require 'net/http'
     uri = URI(RESPONSES_API_URL)
     http = Net::HTTP.new(uri.host, uri.port)
@@ -257,9 +258,21 @@ class Ai::ModelRouter
     http.open_timeout = 10
 
     tools_payload = adapters.map do |a|
-      schema = a.params_schema || { 'type' => 'object', 'properties' => {} }
-      { type: 'function', name: a.name, description: a.description, parameters: schema }
+      params = a.params_schema || { 'type' => 'object', 'properties' => {} }
+      { type: 'function', name: a.name, description: a.description, parameters: params }
     end
+
+    # Resolve schema format once before the loop — applied on every iteration so the model's
+    # final text response (after any tool calls) is structured. json_schema works without
+    # requiring "json" in the input message (unlike json_object which causes HTTP 400).
+    text_format = if schema
+                    si           = schema.is_a?(Class) ? schema.new : schema
+                    so           = si.to_json_schema
+                    schema_def   = (so[:schema] || {}).reject { |k, _| k.to_s == 'strict' }
+                    is_strict    = so.dig(:schema, :strict) != false
+                    schema_name  = (so[:name] || 'response').to_s.gsub(/[^a-zA-Z0-9_-]/, '_')
+                    { format: { type: 'json_schema', name: schema_name, schema: schema_def, strict: is_strict } }
+                  end
 
     current_conv_id = conversation_id
     current_input   = [{ role: 'user', content: user_message }]
@@ -273,9 +286,9 @@ class Ai::ModelRouter
         input: current_input,
         tools: tools_payload,
         parallel_tool_calls: false,
-        text: { format: { type: 'json_object' } },
         store: true
       }
+      body[:text] = text_format if text_format
       # instructions só na primeira chamada (user message); nas continuações (tool results) omite.
       body[:instructions] = system_prompt if first_call
       body[:previous_response_id] = current_conv_id if current_conv_id.present?
@@ -388,6 +401,7 @@ class Ai::ModelRouter
       raw = call_with_tools_responses_api(
         api_key: api_key, model: model, system_prompt: native_prompt,
         user_message: current_msg, temperature: temperature, adapters: tools,
+        schema: decision_schema_for('openai', true),
         conversation_id: conversation_id
       )
       latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
