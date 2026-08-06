@@ -155,7 +155,14 @@ class Ai::ModelRouter
              context.chat(model: model)
            end
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
-    chat.with_instructions(system_prompt)   if chat.respond_to?(:with_instructions)
+    # Override appended so the model uses native API tool calls instead of the invoke_tool JSON field
+    # still present in the compiled response_contract. Appended last → takes precedence over the body.
+    native_prompt = "#{system_prompt}\n\n---\n" \
+                    "MODO FERRAMENTAS NATIVAS: as ferramentas estão disponíveis via API — chame-as " \
+                    "diretamente quando necessário. NÃO retorne decision:\"invoke_tool\". " \
+                    "Após a ferramenta rodar, responda com decision:\"reply\" (ou handoff/close/noop). " \
+                    "Valores válidos de \"decision\" neste turno: reply, handoff, close, noop."
+    chat.with_instructions(native_prompt)   if chat.respond_to?(:with_instructions)
     chat.with_tools(*tools)                 if tools.any? && chat.respond_to?(:with_tools)
     # Peça 4 — Prompt caching (Anthropic only; OpenAI caches automatically for prompts > 1 024 tokens).
     # Provider#complete deep_merges @params OVER render_payload, so with_params(:system) overrides
@@ -164,13 +171,14 @@ class Ai::ModelRouter
     # system prompt at ~10% of normal input-token cost.
     if provider.to_s == 'anthropic' && chat.respond_to?(:with_params)
       chat.with_params(
-        system: [{ 'type' => 'text', 'text' => system_prompt,
+        system: [{ 'type' => 'text', 'text' => native_prompt,
                    'cache_control' => { 'type' => 'ephemeral' } }]
       )
     end
-    # JSON mode for the final text turn (decision envelope). Does not affect tool_use turns —
-    # those are native API blocks, not constrained by response_format.
-    chat = configure_output(chat, provider, true, decision_schema_for(provider, true))
+    # nil schema → json_object mode. response_format:json_schema (strict) + tools in the same payload
+    # causes OpenAI to enforce the schema on the first response turn, which blocks tool_use blocks.
+    # json_object is compatible with function calling and still nudges the model to emit valid JSON.
+    chat = configure_output(chat, provider, true, nil)
 
     response   = chat.ask(user_message)
     latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
@@ -209,6 +217,14 @@ class Ai::ModelRouter
   # already looks like a valid decision, use it; otherwise synthesise a reply decision so the
   # gateway can dispatch without special-casing this path.
   def self.build_tool_loop_decision(parsed, raw_text)
+    # invoke_tool arriving here means the model used the old JSON format instead of the native API
+    # block — tools either already ran natively or not at all. Either way the gateway's old path
+    # must NOT re-execute them. Convert to reply using whatever text the model provided.
+    if parsed.is_a?(Hash) && parsed['decision'] == 'invoke_tool'
+      text = parsed['reply_text'].to_s.presence || raw_text.to_s.strip
+      return text.blank? ? { 'decision' => 'unparsed' } : { 'decision' => 'reply', 'reply_text' => text }
+    end
+
     return parsed if parsed.is_a?(Hash) &&
                      parsed.key?('decision') &&
                      parsed['decision'] != 'unparsed'
