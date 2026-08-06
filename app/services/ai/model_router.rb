@@ -225,6 +225,119 @@ class Ai::ModelRouter
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
   end
 
+  # Loop de ferramentas via Responses API (/v1/responses). Substitui o ruby_llm Chat Completions
+  # para departamentos com ferramentas quando provider=openai — o histórico fica server-side e o
+  # contexto nunca se perde entre turnos (sem HISTORY_LIMIT). Conversa continua pelo conversation_id.
+  # conversation_id nil = primeiro turno (cria a conversa). Retorna mesmo hash do decide() +
+  # :openai_conversation_id para o Gateway persistir.
+  #
+  # Loop: chama /v1/responses → se output tem function_call → executa via adapter → envia
+  # function_call_output → repete. Para ao receber resposta de texto (sem tool calls).
+  # Teto de segurança: 6 iterações (cobre loops de encadeamento de ferramentas).
+  MAX_TOOL_ITERATIONS = 6
+
+  def self.call_with_tools_responses_api(api_key:, model:, system_prompt:, user_message:,
+                                          temperature:, adapters:, conversation_id: nil)
+    require 'net/http'
+    uri = URI(RESPONSES_API_URL)
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.read_timeout = 60
+    http.open_timeout = 10
+
+    tools_payload = adapters.map do |a|
+      schema = a.params_schema || { 'type' => 'object', 'properties' => {} }
+      { type: 'function', name: a.name, description: a.description, parameters: schema }
+    end
+
+    current_conv_id = conversation_id
+    current_input   = [{ role: 'user', content: user_message }]
+    first_call      = true
+    accumulated     = { tokens_in: 0, tokens_out: 0, cached_tokens: 0 }
+
+    MAX_TOOL_ITERATIONS.times do
+      body = {
+        model: model,
+        temperature: temperature.to_f,
+        input: current_input,
+        tools: tools_payload,
+        parallel_tool_calls: false,
+        text: { format: { type: 'json_object' } },
+        store: true
+      }
+      # instructions só na primeira chamada (user message); nas continuações (tool results) omite.
+      body[:instructions] = system_prompt if first_call
+      body[:conversation]  = current_conv_id if current_conv_id.present?
+      first_call = false
+
+      req = Net::HTTP::Post.new(uri.path)
+      req['Content-Type'] = 'application/json'
+      req['Authorization'] = "Bearer #{api_key}"
+      req.body = body.to_json
+
+      resp = http.request(req)
+      unless resp.is_a?(Net::HTTPSuccess)
+        parsed_err = JSON.parse(resp.body) rescue {}
+        err_msg = parsed_err.dig('error', 'message') || resp.body.to_s.first(200)
+        return { text: nil, openai_conversation_id: current_conv_id,
+                 tokens_in: 0, tokens_out: 0, cached_tokens: 0,
+                 status: 'error', error_type: resp.code.to_s == '401' ? 'auth_error' : 'provider_error',
+                 error: "HTTP #{resp.code}: #{err_msg}" }
+      end
+
+      data = JSON.parse(resp.body)
+      current_conv_id ||= data.dig('conversation', 'id')
+
+      usage = data['usage'] || {}
+      tokens_in_total = usage['input_tokens'].to_i
+      tokens_out_iter = usage['output_tokens'].to_i
+      cached_iter     = usage.dig('input_tokens_details', 'cached_tokens').to_i
+      accumulated[:tokens_in]      += [tokens_in_total - cached_iter, 0].max
+      accumulated[:tokens_out]     += tokens_out_iter
+      accumulated[:cached_tokens]  += cached_iter
+
+      output     = data['output'] || []
+      tool_calls = output.select { |item| item['type'] == 'function_call' }
+
+      # Sem tool calls: resposta final de texto — encerra o loop.
+      if tool_calls.empty?
+        text = nil
+        output.each do |item|
+          next unless item['type'] == 'message'
+          c = (item['content'] || []).find { |x| x['type'] == 'text' }
+          (text = c['text'].to_s) && break if c
+        end
+        return { text: text.to_s, openai_conversation_id: current_conv_id,
+                 **accumulated, status: 'recorded' }
+      end
+
+      # Executa cada ferramenta e prepara os resultados para a próxima iteração.
+      current_input = tool_calls.map do |tc|
+        adapter = adapters.find { |a| a.name == tc['name'] }
+        args    = JSON.parse(tc['arguments'].to_s) rescue {}
+        output_str = if adapter
+                       adapter.execute(**args.transform_keys(&:to_sym))
+                     else
+                       { error: "Tool not found: #{tc['name']}" }.to_json
+                     end
+        { type: 'function_call_output', call_id: tc['call_id'], output: output_str.to_s }
+      end
+    end
+
+    # Teto excedido — devolve erro de segurança.
+    Rails.logger.error '[Ai::ModelRouter#call_with_tools_responses_api] tool loop limit exceeded'
+    { text: nil, openai_conversation_id: current_conv_id, **accumulated,
+      status: 'error', error_type: 'provider_error', error: 'tool loop limit exceeded' }
+  rescue Net::ReadTimeout => e
+    Rails.logger.error "[Ai::ModelRouter#call_with_tools_responses_api] Timeout: #{e.message}"
+    { text: nil, tokens_in: 0, tokens_out: 0, cached_tokens: 0, openai_conversation_id: nil,
+      status: 'error', error_type: 'provider_error', error: "Timeout: #{e.message}" }
+  rescue StandardError => e
+    Rails.logger.error "[Ai::ModelRouter#call_with_tools_responses_api] #{e.class}: #{e.message}"
+    { text: nil, tokens_in: 0, tokens_out: 0, cached_tokens: 0, openai_conversation_id: nil,
+      status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
+  end
+
   # Native tool loop: registers Ai::LlmToolAdapter instances on the chat so ruby_llm handles
   # the tool_use → execute → tool_result cycle internally (both Anthropic and OpenAI).
   # Adapters run synchronously and accumulate CapabilityExecution records in their #executions
@@ -232,9 +345,10 @@ class Ai::ModelRouter
   # Returns the same hash structure as decide() so the gateway can treat both uniformly.
   # messages: array estruturado [{role:, content:}] do context_builder.structured_messages.
   # Injetado via chat.add_message antes do ask para preservar contexto real entre turnos.
+  # conversation_id: ID da Responses API para continuar o histórico server-side (OpenAI only).
   def self.call_with_tools(profile:, system_prompt:, user_message:, tools:,
                             provider: nil, model: nil, account_id: nil,
-                            temperature: nil, force_global_key: false, messages: nil)
+                            temperature: nil, force_global_key: false, messages: nil, conversation_id: nil)
     raise 'RubyLLM indisponível' unless defined?(RubyLLM)
 
     provider    = provider.presence || profile&.supervisor_provider.presence || 'openai'
@@ -247,8 +361,37 @@ class Ai::ModelRouter
                     DEFAULT_TEMPERATURE
                   end
 
+    # Instrução de modo ferramentas nativas — usada em ambos os caminhos (Responses API e ruby_llm).
+    native_prompt = "#{system_prompt}\n\n---\n" \
+                    "MODO FERRAMENTAS NATIVAS: as ferramentas estão disponíveis via API — chame-as " \
+                    "diretamente quando necessário. NÃO retorne decision:\"invoke_tool\". " \
+                    "Após a ferramenta rodar, responda com decision:\"reply\" (ou handoff/close/noop). " \
+                    "Valores válidos de \"decision\" neste turno: reply, handoff, close, noop."
+
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
+    # Responses API (OpenAI): histórico server-side + loop de ferramentas próprio (sem ruby_llm).
+    if provider.to_s == 'openai'
+      api_key     = resolve_openai_key(account_id, force_global_key)
+      current_msg = messages&.last&.dig(:content).presence || user_message
+      raw = call_with_tools_responses_api(
+        api_key: api_key, model: model, system_prompt: native_prompt,
+        user_message: current_msg, temperature: temperature, adapters: tools,
+        conversation_id: conversation_id
+      )
+      latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+      decision   = build_tool_loop_decision(normalize_decision(coerce_decision(raw[:text])), raw[:text].to_s)
+      return {
+        provider: provider, model: model, temperature: temperature.to_f,
+        decision: decision,
+        tokens_in: raw[:tokens_in], tokens_out: raw[:tokens_out], cached_tokens: raw[:cached_tokens],
+        cost: estimate_cost(model, raw[:tokens_in], raw[:tokens_out]),
+        latency_ms: latency_ms, status: raw[:status], error_type: raw[:error_type],
+        openai_conversation_id: raw[:openai_conversation_id]
+      }
+    end
+
+    # Outros providers (Anthropic, Google, Groq): ruby_llm Chat Completions com structured_messages.
     context = provider_context(provider, account_id: account_id, force_global_key: force_global_key)
     chat = if provider.to_s == 'groq'
              context.chat(model: model, provider: :openai, assume_model_exists: true)
@@ -256,13 +399,6 @@ class Ai::ModelRouter
              context.chat(model: model)
            end
     chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
-    # Override appended so the model uses native API tool calls instead of the invoke_tool JSON field
-    # still present in the compiled response_contract. Appended last → takes precedence over the body.
-    native_prompt = "#{system_prompt}\n\n---\n" \
-                    "MODO FERRAMENTAS NATIVAS: as ferramentas estão disponíveis via API — chame-as " \
-                    "diretamente quando necessário. NÃO retorne decision:\"invoke_tool\". " \
-                    "Após a ferramenta rodar, responda com decision:\"reply\" (ou handoff/close/noop). " \
-                    "Valores válidos de \"decision\" neste turno: reply, handoff, close, noop."
     chat.with_instructions(native_prompt) if chat.respond_to?(:with_instructions)
     # choice: :auto (ruby_llm 1.16.0+) — modelo decide quando usar ferramentas. Passamos :auto
     # explicitamente para não depender do default da gem mudar; with_tools sem choice= é equivalente.
@@ -316,7 +452,8 @@ class Ai::ModelRouter
       cost:          estimate_cost(model, usage[:tokens_in], usage[:tokens_out]),
       latency_ms:    latency_ms,
       status:        'recorded',
-      error_type:    nil
+      error_type:    nil,
+      openai_conversation_id: nil
     }
   rescue RubyLLM::UnauthorizedError => e
     Rails.logger.error "[Ai::ModelRouter#call_with_tools] UNAUTHORIZED: #{e.message}"
