@@ -126,6 +126,99 @@ class Ai::ModelRouter
     { text: nil, tokens_in: 0, tokens_out: 0, status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
   end
 
+  # Native tool loop: registers Ai::LlmToolAdapter instances on the chat so ruby_llm handles
+  # the tool_use → execute → tool_result cycle internally (both Anthropic and OpenAI).
+  # Adapters run synchronously and accumulate CapabilityExecution records in their #executions
+  # array — the gateway inspects these for event emission and auto-fill after this returns.
+  # Returns the same hash structure as decide() so the gateway can treat both uniformly.
+  def self.call_with_tools(profile:, system_prompt:, user_message:, tools:,
+                            provider: nil, model: nil, account_id: nil,
+                            temperature: nil, force_global_key: false)
+    raise 'RubyLLM indisponível' unless defined?(RubyLLM)
+
+    provider    = provider.presence || profile&.supervisor_provider.presence || 'openai'
+    model       = model.presence    || profile&.supervisor_model.presence    || DEFAULT_MODELS.fetch(provider, 'gpt-4.1-mini')
+    temperature = if !temperature.nil?
+                    temperature
+                  elsif profile
+                    Ai::TemperatureMapper.resolve(provider, profile.temperature_position)
+                  else
+                    DEFAULT_TEMPERATURE
+                  end
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+    context = provider_context(provider, account_id: account_id, force_global_key: force_global_key)
+    chat = if provider.to_s == 'groq'
+             context.chat(model: model, provider: :openai, assume_model_exists: true)
+           else
+             context.chat(model: model)
+           end
+    chat.with_temperature(temperature.to_f) if temperature && chat.respond_to?(:with_temperature)
+    chat.with_instructions(system_prompt)   if chat.respond_to?(:with_instructions)
+    chat.with_tools(*tools)                 if tools.any? && chat.respond_to?(:with_tools)
+    # Peça 4 — Prompt caching (Anthropic only; OpenAI caches automatically for prompts > 1 024 tokens).
+    # Provider#complete deep_merges @params OVER render_payload, so with_params(:system) overrides
+    # the system block built from @messages without touching the gem internals.
+    # The tool_result follow-up (second HTTP request inside the ruby_llm loop) reuses the cached
+    # system prompt at ~10% of normal input-token cost.
+    if provider.to_s == 'anthropic' && chat.respond_to?(:with_params)
+      chat.with_params(
+        system: [{ 'type' => 'text', 'text' => system_prompt,
+                   'cache_control' => { 'type' => 'ephemeral' } }]
+      )
+    end
+    # JSON mode for the final text turn (decision envelope). Does not affect tool_use turns —
+    # those are native API blocks, not constrained by response_format.
+    chat = configure_output(chat, provider, true, decision_schema_for(provider, true))
+
+    response   = chat.ask(user_message)
+    latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+
+    text   = response.respond_to?(:content) ? response.content : response.to_s
+    usage  = sum_tool_loop_usage(chat, response)
+    # Tolerant parse: model should return the decision envelope after the tool loop, but may
+    # reply in natural language. build_tool_loop_decision wraps the latter as a reply decision.
+    decision = build_tool_loop_decision(normalize_decision(coerce_decision(text)), text)
+
+    {
+      provider:      provider,
+      model:         model,
+      temperature:   temperature.to_f,
+      decision:      decision,
+      tokens_in:     usage[:tokens_in],
+      tokens_out:    usage[:tokens_out],
+      cached_tokens: usage[:cached_tokens],
+      cost:          estimate_cost(model, usage[:tokens_in], usage[:tokens_out]),
+      latency_ms:    latency_ms,
+      status:        'recorded',
+      error_type:    nil
+    }
+  rescue RubyLLM::UnauthorizedError => e
+    Rails.logger.error "[Ai::ModelRouter#call_with_tools] UNAUTHORIZED: #{e.message}"
+    { decision: { 'error' => e.message }, tokens_in: 0, tokens_out: 0, cached_tokens: 0,
+      status: 'error', error_type: 'auth_error', error: "#{e.class}: #{e.message}" }
+  rescue StandardError => e
+    Rails.logger.error "[Ai::ModelRouter#call_with_tools] #{e.class}: #{e.message}"
+    { decision: { 'error' => e.message }, tokens_in: 0, tokens_out: 0, cached_tokens: 0,
+      status: 'error', error_type: 'provider_error', error: "#{e.class}: #{e.message}" }
+  end
+
+  # After the native tool loop the model sometimes replies in natural language instead of the
+  # JSON decision envelope (common on Anthropic after a tool_result). If the parsed result
+  # already looks like a valid decision, use it; otherwise synthesise a reply decision so the
+  # gateway can dispatch without special-casing this path.
+  def self.build_tool_loop_decision(parsed, raw_text)
+    return parsed if parsed.is_a?(Hash) &&
+                     parsed.key?('decision') &&
+                     parsed['decision'] != 'unparsed'
+
+    reply = raw_text.to_s.strip
+    return { 'decision' => 'unparsed' } if reply.blank?
+
+    { 'decision' => 'reply', 'reply_text' => reply }
+  end
+
   # Usage de UMA resposta (comportamento padrão). Extraído para reuso e para o par abaixo.
   def self.single_usage(response)
     { tokens_in: response.try(:input_tokens).to_i,

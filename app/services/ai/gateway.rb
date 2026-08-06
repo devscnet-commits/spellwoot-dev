@@ -192,13 +192,28 @@ class Ai::Gateway
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
     @stage = :decision
-    result = Ai::ModelRouter.decide(
-      profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: context_builder.user_message(effective_content), account_id: @account.id, json: true
-    )
+    user_message_text = context_builder.user_message(effective_content)
+    # Native tool loop: when department has active tools in live mode, register adapters so
+    # ruby_llm handles tool_use → execute → tool_result internally with correct IDs (no
+    # text-injected second call). In shadow or when no tools, fall back to decide() unchanged.
+    adapters = @acts_live && tools.any? \
+               ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
+               : []
+    result = if adapters.any?
+               Ai::ModelRouter.call_with_tools(
+                 profile: @agent.operation_profile, system_prompt: system_prompt,
+                 user_message: user_message_text, tools: adapters, account_id: @account.id
+               )
+             else
+               Ai::ModelRouter.decide(
+                 profile: @agent.operation_profile, system_prompt: system_prompt,
+                 user_message: user_message_text, account_id: @account.id, json: true
+               )
+             end
     # BYOK (billing Fase 3): se a chave PRÓPRIA do cliente falhou por auth (401), sinaliza com tag,
     # refaz a decisão na chave global da SCNET e cobra 1 crédito SCNET desse retry. Substitui `result`.
-    result = maybe_byok_fallback(run_record, system_prompt, effective_content, result)
+    # Só no caminho decide() — adapters já usaram a chave correta e têm seu próprio error_type.
+    result = maybe_byok_fallback(run_record, system_prompt, effective_content, result) if adapters.empty?
     run_record.update!(
       provider: result[:provider], model: result[:model],
       tokens_in: result[:tokens_in], tokens_out: result[:tokens_out], cached_tokens: result[:cached_tokens],
@@ -324,6 +339,32 @@ class Ai::Gateway
         step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i
       )
       result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution)
+    end
+
+    # Native tool path: emit tool.executed events and auto-fill the active slot from each
+    # adapter's executions. The tool section above is a no-op for this path because the
+    # decision from call_with_tools carries no 'tool' key — tools already ran inside.
+    if adapters.any? && @acts_live
+      adapters.each do |adapter|
+        adapter.executions.each do |exec|
+          emit(run_record, 'tool.executed',
+               { tool: adapter.ai_tool.name, status: exec.status, execution_id: exec.id })
+        end
+      end
+      if active_step
+        slot_key = Ai::StepSlot.attribute(active_step)
+        if slot_key.present?
+          adapters.flat_map(&:executions).each do |exec|
+            next unless exec.status == 'executed'
+            out_hash = exec.output.is_a?(Hash) ? exec.output : {}
+            body     = out_hash['body'].is_a?(Hash) ? out_hash['body'] : out_hash
+            slot_val = body[slot_key]
+            next unless (slot_val.is_a?(String) || slot_val.is_a?(Numeric)) && slot_val.to_s.strip.present?
+            state_manager.persist_attributes({ slot_key => slot_val.to_s.strip }, department)
+            break
+          end
+        end
+      end
     end
 
     @stage = :dispatch
