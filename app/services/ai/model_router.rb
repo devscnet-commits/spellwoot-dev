@@ -72,6 +72,8 @@ class Ai::ModelRouter
     debug_body = body.except(:instructions)
     Rails.logger.info "[Ai::ModelRouter#call_responses_api] REQUEST model=#{model} format=#{body.dig(:text, :format, :type).inspect} prev_id=#{conversation_id.inspect} body_keys=#{debug_body.keys}"
     Rails.logger.debug "[Ai::ModelRouter#call_responses_api] TEXT_FORMAT #{body[:text].to_json}" if body[:text]
+    Rails.logger.debug "[AI_DEBUG] INSTRUCTIONS ENVIADAS (decide): #{system_prompt}"
+    Rails.logger.debug "[AI_DEBUG] INPUT ENVIADO (decide): #{body[:input].to_json}"
 
     resp = http.request(req)
     unless resp.is_a?(Net::HTTPSuccess)
@@ -301,6 +303,9 @@ class Ai::ModelRouter
       # cada turno; o histórico server-side não repõe instructions omitidas.
       body[:instructions] = system_prompt
       body[:previous_response_id] = current_conv_id if current_conv_id.present?
+
+      Rails.logger.debug "[AI_DEBUG] INSTRUCTIONS ENVIADAS (iter=#{iteration}): #{system_prompt}"
+      Rails.logger.debug "[AI_DEBUG] INPUT ENVIADO (iter=#{iteration}): #{current_input.to_json}"
 
       req = Net::HTTP::Post.new(uri.path)
       req['Content-Type'] = 'application/json'
