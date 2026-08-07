@@ -353,7 +353,11 @@ class Ai::Gateway
           .merge(@conversation.custom_attributes || {}),
         step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i
       )
-      result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution)
+      result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution,
+                             conversation_id: result[:openai_conversation_id])
+      # Persiste o ID do followup para que o próximo turno do cliente encadeie a partir dele,
+      # não do ID da chamada decide original (que ficou no meio da cadeia).
+      persist_openai_conversation_id(result[:openai_conversation_id]) if result[:openai_conversation_id].present?
     end
 
     # Native tool path: emit tool.executed events and auto-fill the active slot from each
@@ -604,13 +608,17 @@ class Ai::Gateway
   # Second model turn after a tool ran: feeds the tool output back so the AI replies to the customer
   # with the result (e.g. coverage lookup -> "sim, atendemos sua cidade"). Returns the new decision
   # for the normal dispatch. Single hop — it never triggers another tool execution.
-  def tool_followup(run_record, system_prompt, user_message, tool_call, execution)
+  def tool_followup(run_record, system_prompt, user_message, tool_call, execution, conversation_id: nil)
     followup_message = "#{user_message}\n\n[Resultado da ferramenta \"#{tool_call['name']}\"]:\n" \
                        "#{execution.output.to_json}\n\n" \
                        'Use esse resultado para responder ao cliente agora (decision: "reply").'
+    # conversation_id: encadeia via previous_response_id da chamada decide que pediu a ferramenta,
+    # mantendo o histórico completo server-side. O resultado da ferramenta vai como texto (não como
+    # function_call_output, pois o decide usa text-decision, não native function_call — sem call_id).
     result = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: followup_message, account_id: @account.id, json: true
+      user_message: followup_message, account_id: @account.id, json: true,
+      conversation_id: conversation_id
     )
     emit(run_record, 'tool.followup',
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms],
