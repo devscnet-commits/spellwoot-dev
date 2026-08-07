@@ -187,7 +187,10 @@ class Ai::Gateway
         # Proposta pendente (ai_last_proposed_value, de QUALQUER origem): dispara a linha de CONTRATO que
         # obriga o modelo a popular attributes[slot] na confirmação (senão vem mudo -> echo_missing).
         'pending_proposed' => (@conversation.additional_attributes || {})['ai_last_proposed_value']
-      }
+      },
+      # native_tools: suprime invoke_tool do contrato e o bloco de ferramentas do prompt —
+      # as ferramentas são registradas como function definitions no payload da API.
+      native_tools: native_tools_on?
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
@@ -196,13 +199,13 @@ class Ai::Gateway
     # Histórico estruturado: [{role: :user/:assistant, content: '...'}] em vez de um blob de texto.
     # Injetado via chat.add_message no ModelRouter para preservar a alternância user/assistant real.
     structured = context_builder.structured_messages(effective_content)
-    # Native tool loop desabilitado para OpenAI: a Responses API com native function_calls
-    # introduz instabilidade (modelo ignora instrução de chamar nativa, repergunta slots já
-    # preenchidos, loop de retentativas). OpenAI vai por decide() → invoice_tool → ToolExecutor
-    # → webhook → tool_followup — caminho comprovado. Providers alternativos (Anthropic etc.)
-    # mantêm o loop nativo via ruby_llm que já funcionava.
+    # Loop nativo de ferramentas: habilitado para todos os providers quando native_tools_on?.
+    # OpenAI com native_tools OFF (default): usa decide() → invoke_tool → ToolExecutor → tool_followup
+    # (caminho comprovado, sem instabilidade). Com native_tools ON: usa call_with_tools →
+    # call_with_tools_responses_api (function_call nativa + function_call_output). Providers
+    # alternativos (Anthropic etc.) sempre usam o loop nativo via ruby_llm.
     supervisor_provider = (@agent.operation_profile&.supervisor_provider.presence || 'openai').to_s
-    adapters = @acts_live && tools.any? && supervisor_provider != 'openai' \
+    adapters = @acts_live && tools.any? && (supervisor_provider != 'openai' || native_tools_on?) \
                ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
                : []
     # Responses API: passa o conversation_id para ambos os caminhos (com e sem ferramentas).
@@ -475,6 +478,21 @@ class Ai::Gateway
   # e o fluxo fica byte-idêntico ao atual.
   def trivial_gate_on?
     @agent.operation_profile&.worker('trivial_gate')&.dig('mode').to_s == 'on'
+  end
+
+  # Loop nativo de ferramentas via Responses API (function_call/function_call_output).
+  # Ativação gradual: por agente (worker_overrides['native_tools']['mode'] == 'on') OU por
+  # ambiente (ENV/InstallationConfig 'AI_NATIVE_TOOLS' == 'on'). Default OFF — sem esta flag o
+  # comportamento é byte-idêntico ao atual. Memoizado: o flag é constante por run.
+  def native_tools_on?
+    return @native_tools_on if defined?(@native_tools_on)
+
+    per_agent = @agent.operation_profile&.worker('native_tools')&.dig('mode').to_s == 'on'
+    env_raw   = ENV['AI_NATIVE_TOOLS'].presence ||
+                (InstallationConfig.find_by(name: 'AI_NATIVE_TOOLS')&.value if defined?(InstallationConfig))
+    @native_tools_on = per_agent || env_raw.to_s.strip.downcase == 'on'
+  rescue StandardError
+    @native_tools_on = false
   end
 
   # (Camadas 3/4) Decide a busca de conhecimento a partir da INTENÇÃO do worker. Devolve

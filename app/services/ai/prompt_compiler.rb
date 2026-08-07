@@ -11,7 +11,8 @@ class Ai::PromptCompiler
   # blocos). Em AMBOS os modos a ordem é FIXO-primeiro, VARIÁVEL-depois (prompt caching): o conjunto de
   # blocos de cada modo é o mesmo de antes — só a ordem mudou.
   def self.compile(agent:, department:, knowledge:, memory:, tools:, collected: {}, fillable_attributes: [],
-                   customer_memory: nil, step_index: nil, followup: false, knowledge_gap: false, slot_feedback: {})
+                   customer_memory: nil, step_index: nil, followup: false, knowledge_gap: false,
+                   slot_feedback: {}, native_tools: false)
     # PROMPT CACHING: prefixo FIXO (igual entre turnos) primeiro, blocos VARIÁVEIS (mudam por turno)
     # depois. O cache de prefixo do provider exige que tudo que muda venha DEPOIS de tudo que é estável —
     # por isso o response_contract (fixo) subiu para o fim da seção fixa, e âncora/estado/RAG/memória
@@ -52,7 +53,9 @@ class Ai::PromptCompiler
       fixed << "Atributos da conversa para preencher quando o cliente informar (use a CHAVE exata em \"attributes\", ex.: {\"cidade\":\"Maravilha\"}):\n#{lines.join("\n")}"
     end
 
-    if !followup && tools.present?
+    # native_tools: ferramentas são registradas como function definitions no payload da API —
+    # não precisam (e não devem) aparecer no prompt. invoke_tool também é suprimido do contrato.
+    if !followup && !native_tools && tools.present?
       lines = tools.map { |t| "- #{t.name}: #{t.description} (input: #{t.input_schema.to_json})" }
       fixed << "Ferramentas disponíveis (use quando necessário):\n#{lines.join("\n")}"
     end
@@ -78,7 +81,7 @@ class Ai::PromptCompiler
 
     # response_contract é FIXO -> encerra o prefixo cacheável (era o ÚLTIMO de tudo). Tudo que muda por
     # turno vem DEPOIS dele.
-    fixed << response_contract
+    fixed << response_contract(native_tools: native_tools)
 
     # ===== Blocos VARIÁVEIS (mudam por turno) — depois do prefixo fixo, para habilitar prompt caching =====
     variable = []
@@ -375,15 +378,29 @@ class Ai::PromptCompiler
     lines
   end
 
-  def self.response_contract
-    <<~TXT.strip
-      Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
-      {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool_name":"","tool_input_json":"{}","handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"asked_slot":"","confidence":0.0,"attributes_list":[]}
-      O campo "decision" aceita SOMENTE um destes 5 valores: reply, invoke_tool, handoff, close, noop. NÃO invente outros (ex.: "text", "message", "resposta"). Para responder ao cliente use SEMPRE "reply".
-      A etapa atual é DEFINIDA PELO SISTEMA (ver "ETAPA ATUAL" acima) — você NÃO escolhe nem muda de etapa. Em "current_step", apenas repita o nome dessa etapa atual como CONFIRMAÇÃO/registro (é só log; não decide o avanço). Em "step_completed", responda true SOMENTE no turno em que CONCLUIR essa etapa (já obteve tudo que ela exigia); nesse momento o SISTEMA avança sozinho para a próxima. Nos demais turnos, responda false. Nunca volte para uma etapa anterior por conta própria.
-      Para chamar uma ferramenta, preencha "tool_name" com o nome EXATO e "tool_input_json" com o input como STRING JSON (um objeto); sem ferramenta, "tool_name" vazio e "tool_input_json" igual a "{}".
-      Em "attributes_list", liste os dados coletados do cliente como itens {"key":"chave","value":"valor"}; use [] se não houver nada novo.
-      Em "asked_slot", informe a CHAVE EXATA do slot que a sua reply_text está pedindo neste turno — incluindo perguntas de ESCOLHA, PERMISSÃO ou CONFIRMAÇÃO cuja resposta preenche o slot. Vazio SÓ quando a resposta do cliente não preenche slot nenhum. Ex.: "Posso te fazer 2 perguntas ou prefere ver os planos?" tem asked_slot = escolha_caminho, porque a resposta do cliente preenche esse slot.
-    TXT
+  # native_tools: true → contrato sem invoke_tool/tool_name/tool_input_json (ferramentas são chamadas
+  # nativamente via function_call da API; o modelo NUNCA deve devolver invoke_tool neste modo).
+  # native_tools: false (default) → contrato completo com invoke_tool e campos de ferramenta.
+  def self.response_contract(native_tools: false)
+    if native_tools
+      <<~TXT.strip
+        Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
+        {"decision":"reply|handoff|close|noop","reply_text":"texto ao cliente","handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"asked_slot":"","confidence":0.0,"attributes_list":[]}
+        O campo "decision" aceita SOMENTE um destes 4 valores: reply, handoff, close, noop. NÃO invente outros. Para responder ao cliente use SEMPRE "reply". As ferramentas são chamadas diretamente via API — NÃO use decision:"invoke_tool".
+        A etapa atual é DEFINIDA PELO SISTEMA (ver "ETAPA ATUAL" acima) — você NÃO escolhe nem muda de etapa. Em "current_step", apenas repita o nome dessa etapa atual como CONFIRMAÇÃO/registro (é só log; não decide o avanço). Em "step_completed", responda true SOMENTE no turno em que CONCLUIR essa etapa (já obteve tudo que ela exigia); nesse momento o SISTEMA avança sozinho para a próxima. Nos demais turnos, responda false. Nunca volte para uma etapa anterior por conta própria.
+        Em "attributes_list", liste os dados coletados do cliente como itens {"key":"chave","value":"valor"}; use [] se não houver nada novo.
+        Em "asked_slot", informe a CHAVE EXATA do slot que a sua reply_text está pedindo neste turno — incluindo perguntas de ESCOLHA, PERMISSÃO ou CONFIRMAÇÃO cuja resposta preenche o slot. Vazio SÓ quando a resposta do cliente não preenche slot nenhum. Ex.: "Posso te fazer 2 perguntas ou prefere ver os planos?" tem asked_slot = escolha_caminho, porque a resposta do cliente preenche esse slot.
+      TXT
+    else
+      <<~TXT.strip
+        Decida a próxima ação. Retorne ESTRITAMENTE um JSON válido, sem texto fora dele:
+        {"decision":"reply|invoke_tool|handoff|close|noop","reply_text":"texto ao cliente","tool_name":"","tool_input_json":"{}","handoff_reason":"","handoff_target":"","current_step":"","step_completed":false,"asked_slot":"","confidence":0.0,"attributes_list":[]}
+        O campo "decision" aceita SOMENTE um destes 5 valores: reply, invoke_tool, handoff, close, noop. NÃO invente outros (ex.: "text", "message", "resposta"). Para responder ao cliente use SEMPRE "reply".
+        A etapa atual é DEFINIDA PELO SISTEMA (ver "ETAPA ATUAL" acima) — você NÃO escolhe nem muda de etapa. Em "current_step", apenas repita o nome dessa etapa atual como CONFIRMAÇÃO/registro (é só log; não decide o avanço). Em "step_completed", responda true SOMENTE no turno em que CONCLUIR essa etapa (já obteve tudo que ela exigia); nesse momento o SISTEMA avança sozinho para a próxima. Nos demais turnos, responda false. Nunca volte para uma etapa anterior por conta própria.
+        Para chamar uma ferramenta, preencha "tool_name" com o nome EXATO e "tool_input_json" com o input como STRING JSON (um objeto); sem ferramenta, "tool_name" vazio e "tool_input_json" igual a "{}".
+        Em "attributes_list", liste os dados coletados do cliente como itens {"key":"chave","value":"valor"}; use [] se não houver nada novo.
+        Em "asked_slot", informe a CHAVE EXATA do slot que a sua reply_text está pedindo neste turno — incluindo perguntas de ESCOLHA, PERMISSÃO ou CONFIRMAÇÃO cuja resposta preenche o slot. Vazio SÓ quando a resposta do cliente não preenche slot nenhum. Ex.: "Posso te fazer 2 perguntas ou prefere ver os planos?" tem asked_slot = escolha_caminho, porque a resposta do cliente preenche esse slot.
+      TXT
+    end
   end
 end
