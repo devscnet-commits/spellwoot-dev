@@ -329,13 +329,25 @@ class Ai::ModelRouter
       end
 
       # Executa cada ferramenta e prepara os resultados para a próxima iteração.
+      # Quando a execução falha, substitui o output por instrução em linguagem natural para que
+      # o modelo responda ao cliente imediatamente sem tentar a ferramenta novamente (evita o
+      # loop de 6 tentativas que esgota o MAX_TOOL_ITERATIONS e dispara o force_provider_handoff).
       current_input = tool_calls.map do |tc|
         adapter = adapters.find { |a| a.name == tc['name'] }
         args    = JSON.parse(tc['arguments'].to_s) rescue {}
         output_str = if adapter
-                       adapter.execute(**args.transform_keys(&:to_sym))
+                       result    = adapter.execute(**args.transform_keys(&:to_sym))
+                       last_exec = adapter.executions.last
+                       if last_exec && last_exec.status != 'executed'
+                         "Ferramenta indisponível (#{last_exec.status}). NÃO tente novamente. " \
+                         "Responda ao cliente de forma natural informando que não foi possível " \
+                         "verificar as informações neste momento e ofereça que um especialista " \
+                         "entrará em contato — sem mencionar detalhes técnicos."
+                       else
+                         result
+                       end
                      else
-                       { error: "Tool not found: #{tc['name']}" }.to_json
+                       "Ferramenta '#{tc['name']}' não encontrada. Responda sem ela."
                      end
         { type: 'function_call_output', call_id: tc['call_id'], output: output_str.to_s }
       end
