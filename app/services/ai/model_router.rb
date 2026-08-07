@@ -270,10 +270,9 @@ class Ai::ModelRouter
 
     current_conv_id = conversation_id
     current_input   = [{ role: 'user', content: user_message }]
-    first_call      = true
     accumulated     = { tokens_in: 0, tokens_out: 0, cached_tokens: 0 }
 
-    MAX_TOOL_ITERATIONS.times do
+    MAX_TOOL_ITERATIONS.times.with_index do |_, iteration|
       body = {
         model: model,
         temperature: temperature.to_f,
@@ -282,17 +281,19 @@ class Ai::ModelRouter
         parallel_tool_calls: false,
         store: true
       }
-      # instructions só na primeira chamada (user message); nas continuações (tool results) omite.
-      body[:instructions] = system_prompt if first_call
+      # instructions em TODA iteração: na Responses API, omitir instructions nas iterações de
+      # function_call_output faz o modelo perder o system prompt ("JÁ TENHO", âncora de etapa,
+      # contrato JSON) e reroga dados já coletados. O provider usa o prompt mais recente para
+      # cada turno; o histórico server-side não repõe instructions omitidas.
+      body[:instructions] = system_prompt
       body[:previous_response_id] = current_conv_id if current_conv_id.present?
-      first_call = false
 
       req = Net::HTTP::Post.new(uri.path)
       req['Content-Type'] = 'application/json'
       req['Authorization'] = "Bearer #{api_key}"
       req.body = body.to_json
 
-      Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] iter=#{first_call ? 0 : '?'} input_types=#{current_input.map { |i| i[:type] || i['type'] }.inspect}"
+      Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] iter=#{iteration} input_types=#{current_input.map { |i| i[:type] || i['type'] }.inspect}"
       resp = http.request(req)
       unless resp.is_a?(Net::HTTPSuccess)
         parsed_err = JSON.parse(resp.body) rescue {}
