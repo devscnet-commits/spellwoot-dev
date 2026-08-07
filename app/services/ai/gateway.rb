@@ -187,7 +187,10 @@ class Ai::Gateway
         # Proposta pendente (ai_last_proposed_value, de QUALQUER origem): dispara a linha de CONTRATO que
         # obriga o modelo a popular attributes[slot] na confirmação (senão vem mudo -> echo_missing).
         'pending_proposed' => (@conversation.additional_attributes || {})['ai_last_proposed_value']
-      }
+      },
+      # native_tools: suprime invoke_tool do contrato e o bloco de ferramentas do prompt —
+      # as ferramentas são registradas como function definitions no payload da API.
+      native_tools: native_tools_on?
     )
     emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
 
@@ -196,10 +199,13 @@ class Ai::Gateway
     # Histórico estruturado: [{role: :user/:assistant, content: '...'}] em vez de um blob de texto.
     # Injetado via chat.add_message no ModelRouter para preservar a alternância user/assistant real.
     structured = context_builder.structured_messages(effective_content)
-    # Native tool loop: when department has active tools in live mode, register adapters so
-    # ruby_llm handles tool_use → execute → tool_result internally with correct IDs (no
-    # text-injected second call). In shadow or when no tools, fall back to decide() unchanged.
-    adapters = @acts_live && tools.any? \
+    # Loop nativo de ferramentas: habilitado para todos os providers quando native_tools_on?.
+    # OpenAI com native_tools OFF (default): usa decide() → invoke_tool → ToolExecutor → tool_followup
+    # (caminho comprovado, sem instabilidade). Com native_tools ON: usa call_with_tools →
+    # call_with_tools_responses_api (function_call nativa + function_call_output). Providers
+    # alternativos (Anthropic etc.) sempre usam o loop nativo via ruby_llm.
+    supervisor_provider = (@agent.operation_profile&.supervisor_provider.presence || 'openai').to_s
+    adapters = @acts_live && tools.any? && (supervisor_provider != 'openai' || native_tools_on?) \
                ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
                : []
     # Responses API: passa o conversation_id para ambos os caminhos (com e sem ferramentas).
@@ -350,7 +356,11 @@ class Ai::Gateway
           .merge(@conversation.custom_attributes || {}),
         step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i
       )
-      result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution)
+      result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution,
+                             conversation_id: result[:openai_conversation_id])
+      # Persiste o ID do followup para que o próximo turno do cliente encadeie a partir dele,
+      # não do ID da chamada decide original (que ficou no meio da cadeia).
+      persist_openai_conversation_id(result[:openai_conversation_id]) if result[:openai_conversation_id].present?
     end
 
     # Native tool path: emit tool.executed events and auto-fill the active slot from each
@@ -468,6 +478,21 @@ class Ai::Gateway
   # e o fluxo fica byte-idêntico ao atual.
   def trivial_gate_on?
     @agent.operation_profile&.worker('trivial_gate')&.dig('mode').to_s == 'on'
+  end
+
+  # Loop nativo de ferramentas via Responses API (function_call/function_call_output).
+  # Ativação gradual: por agente (worker_overrides['native_tools']['mode'] == 'on') OU por
+  # ambiente (ENV/InstallationConfig 'AI_NATIVE_TOOLS' == 'on'). Default OFF — sem esta flag o
+  # comportamento é byte-idêntico ao atual. Memoizado: o flag é constante por run.
+  def native_tools_on?
+    return @native_tools_on if defined?(@native_tools_on)
+
+    per_agent = @agent.operation_profile&.worker('native_tools')&.dig('mode').to_s == 'on'
+    env_raw   = ENV['AI_NATIVE_TOOLS'].presence ||
+                (InstallationConfig.find_by(name: 'AI_NATIVE_TOOLS')&.value if defined?(InstallationConfig))
+    @native_tools_on = per_agent || env_raw.to_s.strip.downcase == 'on'
+  rescue StandardError
+    @native_tools_on = false
   end
 
   # (Camadas 3/4) Decide a busca de conhecimento a partir da INTENÇÃO do worker. Devolve
@@ -601,13 +626,17 @@ class Ai::Gateway
   # Second model turn after a tool ran: feeds the tool output back so the AI replies to the customer
   # with the result (e.g. coverage lookup -> "sim, atendemos sua cidade"). Returns the new decision
   # for the normal dispatch. Single hop — it never triggers another tool execution.
-  def tool_followup(run_record, system_prompt, user_message, tool_call, execution)
+  def tool_followup(run_record, system_prompt, user_message, tool_call, execution, conversation_id: nil)
     followup_message = "#{user_message}\n\n[Resultado da ferramenta \"#{tool_call['name']}\"]:\n" \
                        "#{execution.output.to_json}\n\n" \
                        'Use esse resultado para responder ao cliente agora (decision: "reply").'
+    # conversation_id: encadeia via previous_response_id da chamada decide que pediu a ferramenta,
+    # mantendo o histórico completo server-side. O resultado da ferramenta vai como texto (não como
+    # function_call_output, pois o decide usa text-decision, não native function_call — sem call_id).
     result = Ai::ModelRouter.decide(
       profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: followup_message, account_id: @account.id, json: true
+      user_message: followup_message, account_id: @account.id, json: true,
+      conversation_id: conversation_id
     )
     emit(run_record, 'tool.followup',
          { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms],
