@@ -196,10 +196,13 @@ class Ai::Gateway
     # Histórico estruturado: [{role: :user/:assistant, content: '...'}] em vez de um blob de texto.
     # Injetado via chat.add_message no ModelRouter para preservar a alternância user/assistant real.
     structured = context_builder.structured_messages(effective_content)
-    # Native tool loop: when department has active tools in live mode, register adapters so
-    # ruby_llm handles tool_use → execute → tool_result internally with correct IDs (no
-    # text-injected second call). In shadow or when no tools, fall back to decide() unchanged.
-    adapters = @acts_live && tools.any? \
+    # Native tool loop desabilitado para OpenAI: a Responses API com native function_calls
+    # introduz instabilidade (modelo ignora instrução de chamar nativa, repergunta slots já
+    # preenchidos, loop de retentativas). OpenAI vai por decide() → invoice_tool → ToolExecutor
+    # → webhook → tool_followup — caminho comprovado. Providers alternativos (Anthropic etc.)
+    # mantêm o loop nativo via ruby_llm que já funcionava.
+    supervisor_provider = (@agent.operation_profile&.supervisor_provider.presence || 'openai').to_s
+    adapters = @acts_live && tools.any? && supervisor_provider != 'openai' \
                ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
                : []
     # Responses API: passa o conversation_id para ambos os caminhos (com e sem ferramentas).
