@@ -248,8 +248,13 @@ class Ai::ModelRouter
   # Teto de segurança: 6 iterações (cobre loops de encadeamento de ferramentas).
   MAX_TOOL_ITERATIONS = 6
 
+  # messages: array estruturado [{role:, content:}] do ContextBuilder#structured_messages.
+  # Quando presente, o histórico é enviado EXPLICITAMENTE no input da primeira iteração, sem depender
+  # de previous_response_id (abordagem n8n). Garante contexto completo ("JÁ TENHO", histórico real)
+  # mesmo quando a cadeia server-side é nova ou inexistente. Iterações seguintes (function_call_output)
+  # encadeiam normalmente via previous_response_id da iteração anterior.
   def self.call_with_tools_responses_api(api_key:, model:, system_prompt:, user_message:,
-                                          temperature:, adapters:, conversation_id: nil)
+                                          temperature:, adapters:, messages: nil, conversation_id: nil)
     require 'net/http'
     uri = URI(RESPONSES_API_URL)
     http = Net::HTTP.new(uri.host, uri.port)
@@ -268,8 +273,17 @@ class Ai::ModelRouter
     # chama ferramentas via native function calls e devolve JSON/linguagem natural no turno final.
     # build_tool_loop_decision trata ambos os casos tolerantemente.
 
-    current_conv_id = conversation_id
-    current_input   = [{ role: 'user', content: user_message }]
+    # Abordagem n8n: quando há histórico explícito (messages), a PRIMEIRA iteração envia o histórico
+    # completo no input sem previous_response_id — o modelo vê todo o contexto diretamente.
+    # Sem histórico explícito, cai no fallback: mensagem atual + previous_response_id da cadeia salva.
+    # Em AMBOS os casos, as iterações seguintes (tool results) encadeiam pelo ID da resposta anterior.
+    initial_input = if messages.present?
+                      messages.map { |m| { role: m[:role].to_s, content: m[:content].to_s } }
+                    else
+                      [{ role: 'user', content: user_message }]
+                    end
+    current_conv_id = messages.present? ? nil : conversation_id
+    current_input   = initial_input
     accumulated     = { tokens_in: 0, tokens_out: 0, cached_tokens: 0 }
 
     MAX_TOOL_ITERATIONS.times.with_index do |_, iteration|
@@ -414,7 +428,7 @@ class Ai::ModelRouter
       raw = call_with_tools_responses_api(
         api_key: api_key, model: model, system_prompt: native_prompt,
         user_message: current_msg, temperature: temperature, adapters: tools,
-        conversation_id: conversation_id
+        messages: messages, conversation_id: conversation_id
       )
       latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
       decision   = build_tool_loop_decision(normalize_decision(coerce_decision(raw[:text])), raw[:text].to_s)

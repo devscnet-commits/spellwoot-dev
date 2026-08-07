@@ -208,21 +208,18 @@ class Ai::Gateway
     adapters = @acts_live && tools.any? && (supervisor_provider != 'openai' || native_tools_on?) \
                ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
                : []
-    # Responses API: dois IDs distintos para os dois modos de chamada.
-    # openai_conversation_id  → cadeia do decide() (texto/JSON, sem ferramentas nativas).
-    # openai_native_conv_id   → cadeia do call_with_tools() (function_call nativo).
-    # Separação necessária: o decide() grava histórico com instruções invoke_tool; passar esse ID
-    # para o loop nativo injeta contexto conflitante e faz o modelo reroga dados já coletados.
-    # Em shadow fica nil — shadow não persiste estado; histórico server-side só para live.
-    attrs = @acts_live ? (@conversation.additional_attributes || {}) : {}
-    openai_conv_id        = attrs['openai_conversation_id']
-    openai_native_conv_id = attrs['openai_native_conversation_id']
+    # Responses API: apenas o decide() usa cadeia server-side (previous_response_id persistido).
+    # O loop nativo (call_with_tools) usa histórico explícito no input da primeira iteração — não
+    # depende de previous_response_id entre turnos do usuário (abordagem n8n). Em shadow fica nil.
+    attrs          = @acts_live ? (@conversation.additional_attributes || {}) : {}
+    openai_conv_id = attrs['openai_conversation_id']
 
     result = if adapters.any?
                Ai::ModelRouter.call_with_tools(
                  profile: @agent.operation_profile, system_prompt: system_prompt,
                  user_message: user_message_text, tools: adapters, account_id: @account.id,
-                 messages: structured, conversation_id: openai_native_conv_id
+                 messages: structured
+                 # sem conversation_id: structured_messages já carrega o contexto explicitamente
                )
              else
                Ai::ModelRouter.decide(
@@ -231,12 +228,8 @@ class Ai::Gateway
                  messages: structured, conversation_id: openai_conv_id
                )
              end
-    # Persiste o ID no campo certo: nativo em openai_native_conversation_id, decide em openai_conversation_id.
-    if adapters.any?
-      persist_openai_native_conversation_id(result[:openai_conversation_id]) if result[:openai_conversation_id].present?
-    else
-      persist_openai_conversation_id(result[:openai_conversation_id]) if result[:openai_conversation_id].present?
-    end
+    # Loop nativo não persiste ID (contexto vem de structured_messages); decide persiste normalmente.
+    persist_openai_conversation_id(result[:openai_conversation_id]) if adapters.empty? && result[:openai_conversation_id].present?
     # BYOK (billing Fase 3): se a chave PRÓPRIA do cliente falhou por auth (401), sinaliza com tag,
     # refaz a decisão na chave global da SCNET e cobra 1 crédito SCNET desse retry. Substitui `result`.
     # Só no caminho decide() — adapters já usaram a chave correta e têm seu próprio error_type.
