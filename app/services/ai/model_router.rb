@@ -292,10 +292,12 @@ class Ai::ModelRouter
       req['Authorization'] = "Bearer #{api_key}"
       req.body = body.to_json
 
+      Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] iter=#{first_call ? 0 : '?'} input_types=#{current_input.map { |i| i[:type] || i['type'] }.inspect}"
       resp = http.request(req)
       unless resp.is_a?(Net::HTTPSuccess)
         parsed_err = JSON.parse(resp.body) rescue {}
         err_msg = parsed_err.dig('error', 'message') || resp.body.to_s.first(200)
+        Rails.logger.error "[Ai::ModelRouter#call_with_tools_responses_api] HTTP #{resp.code}: #{err_msg}"
         return { text: nil, openai_conversation_id: current_conv_id,
                  tokens_in: 0, tokens_out: 0, cached_tokens: 0,
                  status: 'error', error_type: resp.code.to_s == '401' ? 'auth_error' : 'provider_error',
@@ -315,6 +317,7 @@ class Ai::ModelRouter
 
       output     = data['output'] || []
       tool_calls = output.select { |item| item['type'] == 'function_call' }
+      Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] resp_id=#{current_conv_id.inspect} output_types=#{output.map { |o| o['type'] }.inspect} tool_calls=#{tool_calls.map { |t| t['name'] }.inspect}"
 
       # Sem tool calls: resposta final de texto — encerra o loop.
       if tool_calls.empty?
@@ -324,18 +327,34 @@ class Ai::ModelRouter
           c = (item['content'] || []).find { |x| x['type'] == 'output_text' }
           (text = c['text'].to_s) && break if c
         end
+        Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] FINAL text_length=#{text.to_s.length}"
         return { text: text.to_s, openai_conversation_id: current_conv_id,
                  **accumulated, status: 'recorded' }
       end
 
       # Executa cada ferramenta e prepara os resultados para a próxima iteração.
+      # Quando a execução falha, substitui o output por instrução em linguagem natural para que
+      # o modelo responda ao cliente imediatamente sem tentar a ferramenta novamente (evita o
+      # loop de 6 tentativas que esgota o MAX_TOOL_ITERATIONS e dispara o force_provider_handoff).
       current_input = tool_calls.map do |tc|
         adapter = adapters.find { |a| a.name == tc['name'] }
         args    = JSON.parse(tc['arguments'].to_s) rescue {}
+        Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] TOOL name=#{tc['name'].inspect} call_id=#{tc['call_id'].inspect} adapter=#{adapter.present?} args=#{args.inspect}"
         output_str = if adapter
-                       adapter.execute(**args.transform_keys(&:to_sym))
+                       result    = adapter.execute(**args.transform_keys(&:to_sym))
+                       last_exec = adapter.executions.last
+                       Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] EXEC status=#{last_exec&.status.inspect} output_preview=#{result.to_s.first(200).inspect}"
+                       if last_exec && last_exec.status != 'executed'
+                         "Ferramenta indisponível (#{last_exec.status}). NÃO tente novamente. " \
+                         "Responda ao cliente de forma natural informando que não foi possível " \
+                         "verificar as informações neste momento e ofereça que um especialista " \
+                         "entrará em contato — sem mencionar detalhes técnicos."
+                       else
+                         result
+                       end
                      else
-                       { error: "Tool not found: #{tc['name']}" }.to_json
+                       Rails.logger.warn "[Ai::ModelRouter#call_with_tools_responses_api] TOOL_NOT_FOUND name=#{tc['name'].inspect} available=#{adapters.map(&:name).inspect}"
+                       "Ferramenta '#{tc['name']}' não encontrada. Responda sem ela."
                      end
         { type: 'function_call_output', call_id: tc['call_id'], output: output_str.to_s }
       end
