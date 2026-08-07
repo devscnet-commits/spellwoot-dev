@@ -934,36 +934,25 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#notify_admin_provider_error] #{e.class}: #{e.message}"
   end
 
-  # 1 e-mail por (conta, provedor) a cada PROVIDER_ERROR_NOTIFY_TTL. Mesmo padrão cache-based do
-  # Persiste o conversation_id da Responses API em additional_attributes da conversa. Usa lock! para
-  # não colidir com persist_collected_facts do StateManager (ambos fazem lock!/reload antes de escrever).
+  # Persiste o conversation_id da Responses API em additional_attributes da conversa.
+  # NÃO usa @conversation.lock! — lock! lança RuntimeError quando o objeto tem mudanças em memória
+  # não persistidas (dirty object, frequente no fim do run quando StateManager/ActionDispatcher
+  # setam estado sem salvar). Solução: instância NOVA via SELECT FOR UPDATE (nunca dirty) +
+  # update_columns (sem callbacks/validações, equivalente ao update_column do lock! original).
   def persist_openai_conversation_id(conv_id)
     return if conv_id.blank?
 
-    @conversation.lock!
-    attrs = (@conversation.additional_attributes || {}).dup
-    return if attrs['openai_conversation_id'] == conv_id
+    ::Conversation.transaction do
+      fresh = ::Conversation.lock.find_by(id: @conversation.id)
+      next unless fresh
 
-    attrs['openai_conversation_id'] = conv_id
-    @conversation.update!(additional_attributes: attrs)
+      attrs = (fresh.additional_attributes || {}).dup
+      next if attrs['openai_conversation_id'] == conv_id
+
+      fresh.update_columns(additional_attributes: attrs.merge('openai_conversation_id' => conv_id))
+    end
   rescue StandardError => e
     Rails.logger.warn "[Ai::Gateway#persist_openai_conversation_id] #{e.class}: #{e.message}"
-  end
-
-  # Persiste o conversation_id do loop nativo (call_with_tools) em campo SEPARADO do decide().
-  # Separação necessária para não contaminar a cadeia nativa com histórico do decide (invoke_tool)
-  # nem a cadeia do decide com respostas do loop nativo. Mesma lógica de lock!/reload do decide.
-  def persist_openai_native_conversation_id(conv_id)
-    return if conv_id.blank?
-
-    @conversation.lock!
-    attrs = (@conversation.additional_attributes || {}).dup
-    return if attrs['openai_native_conversation_id'] == conv_id
-
-    attrs['openai_native_conversation_id'] = conv_id
-    @conversation.update!(additional_attributes: attrs)
-  rescue StandardError => e
-    Rails.logger.warn "[Ai::Gateway#persist_openai_native_conversation_id] #{e.class}: #{e.message}"
   end
 
   # notify_throttle_allows? do HandoffCoordinator (perder o estado = no máximo 1 e-mail extra), mas
