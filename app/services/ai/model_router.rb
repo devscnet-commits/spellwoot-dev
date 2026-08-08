@@ -376,7 +376,9 @@ class Ai::ModelRouter
                        Rails.logger.warn "[Ai::ModelRouter#call_with_tools_responses_api] TOOL_NOT_FOUND name=#{tc['name'].inspect} available=#{adapters.map(&:name).inspect}"
                        "Ferramenta '#{tc['name']}' não encontrada. Responda sem ela."
                      end
-        { type: 'function_call_output', call_id: tc['call_id'], output: output_str.to_s }
+        fco = { type: 'function_call_output', call_id: tc['call_id'], output: output_str.to_s }
+        Rails.logger.warn "[AI_DEBUG_TOOL] function_call_output call_id=#{tc['call_id'].inspect} output_size=#{fco[:output].bytesize} output_preview=#{fco[:output].first(300).inspect}"
+        fco
       end
     end
 
