@@ -214,6 +214,7 @@ class Ai::Gateway
     attrs          = @acts_live ? (@conversation.additional_attributes || {}) : {}
     openai_conv_id = attrs['openai_conversation_id']
 
+    Rails.logger.warn "[AI_DEBUG_ROUTING] acts_live=#{@acts_live} tools_any=#{tools.any?} provider=#{supervisor_provider} native_on=#{native_tools_on?} adapters_count=#{adapters&.size}"
     result = if adapters.any?
                Ai::ModelRouter.call_with_tools(
                  profile: @agent.operation_profile, system_prompt: system_prompt,
@@ -492,7 +493,7 @@ class Ai::Gateway
     per_agent = @agent.operation_profile&.worker('native_tools')&.dig('mode').to_s == 'on'
     env_raw   = ENV['AI_NATIVE_TOOLS'].presence ||
                 (InstallationConfig.find_by(name: 'AI_NATIVE_TOOLS')&.value if defined?(InstallationConfig))
-    @native_tools_on = per_agent || env_raw.to_s.strip.downcase == 'on'
+    @native_tools_on = per_agent || %w[on true 1].include?(env_raw.to_s.strip.downcase)
   rescue StandardError
     @native_tools_on = false
   end
