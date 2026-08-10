@@ -1,3 +1,4 @@
+import json
 import logging
 import secrets
 from typing import Optional
@@ -8,6 +9,10 @@ from pydantic import BaseModel
 import config
 import orchestrator
 
+# uvicorn doesn't attach a handler to the root logger by default, so a plain getLogger(...).info()
+# would silently go nowhere — basicConfig gives it a stdout handler so `docker logs` actually shows
+# these (this file and orchestrator.py share the same logger name, one config covers both).
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("ai_orchestrator")
 
 app = FastAPI(title="AI Orchestrator")
@@ -43,6 +48,15 @@ def _authenticate(authorization: Optional[str]) -> None:
 @app.post("/process", response_model=ProcessResponse)
 def process(request: ProcessRequest, authorization: Optional[str] = Header(None)) -> ProcessResponse:
     _authenticate(authorization)
+
+    # DEBUG (temporary): dump exactly what Rails sent, to catch a payload that's building a
+    # generic/hallucinated flow instead of using the configured tools/knowledge — remove once
+    # the tools-not-firing issue is confirmed fixed.
+    logger.info(
+        "ticket_id=%s ai_department_id=%s payload received:\nsystem_prompt=%s\ntools_schema=%s\nvector_store_id=%s",
+        request.ticket_id, request.ai_department_id, request.system_prompt,
+        json.dumps(request.tools_schema, ensure_ascii=False), request.vector_store_id,
+    )
 
     try:
         reply_text, response_id = orchestrator.run_conversation(

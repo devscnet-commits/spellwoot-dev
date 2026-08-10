@@ -1,9 +1,12 @@
 import json
+import logging
 
 from openai import OpenAI
 
 import config
 import tools
+
+logger = logging.getLogger("ai_orchestrator")
 
 _client = OpenAI(api_key=config.OPENAI_API_KEY)
 
@@ -46,6 +49,13 @@ def run_conversation(
     # Multi-tenant: Rails resolves this per Account (Ai::OperationProfile); config.OPENAI_MODEL is
     # only the fallback for a tenant with no profile, never a global override.
     resolved_model = model or config.OPENAI_MODEL
+
+    # DEBUG (temporary): confirm what actually reaches responses.create — same investigation as the
+    # payload dump in main.py, this is the OTHER end (post-translation from tools_schema).
+    logger.info(
+        "ticket_id=%s model=%s tools sent to OpenAI: %s",
+        ticket_id, resolved_model, json.dumps(openai_tools, ensure_ascii=False),
+    )
 
     create_kwargs = {
         "model": resolved_model,
