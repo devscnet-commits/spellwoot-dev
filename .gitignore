@@ -33,6 +33,11 @@ master.key
 # Ignore env files
 .env
 
+# ai-orchestrator (Python microservice)
+ai-orchestrator/.env
+ai-orchestrator/__pycache__/
+ai-orchestrator/.venv*/
+
 public/uploads
 public/packs*
 public/assets/administrate*
