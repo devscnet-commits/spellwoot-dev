@@ -8,6 +8,14 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   def create
     conversation = ::Conversation.find(params[:ticket_id])
     department = Ai::Department.find(params[:ai_department_id])
+    # Multi-tenant guard: the department must belong to the SAME account as the conversation. Without
+    # this, a malformed/forged payload could execute one account's tool against another account's
+    # conversation. 404 (not 403) so a cross-tenant probe learns nothing about whether the department
+    # id exists at all — same shape as a plain not-found.
+    unless department.account_id == conversation.account_id
+      raise ActiveRecord::RecordNotFound, "department #{department.id} does not belong to this conversation's account"
+    end
+
     tool = department.tools.active.find_by!(name: params[:tool_name])
 
     execution = Ai::ToolExecutor.new(
