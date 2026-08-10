@@ -86,6 +86,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
       )
 
       expect(result).to eq(reply: nil, response_id: nil)
+      # Auditoria de confiança: sem isto, um erro ANTES do HTTParty.post (ex.: exceção montando o
+      # payload) cairia no MESMO rescue e devolveria o MESMO {reply: nil, response_id: nil} — o teste
+      # passaria "por acidente" sem nunca ter tentado a requisição real. have_requested prova que o
+      # POST aconteceu de verdade e que foi a resposta 500 do stub que produziu o resultado, não uma
+      # exceção interna silenciosa.
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
     end
 
     it 'nunca sobe uma exceção em timeout de rede — devolve reply em branco' do
@@ -96,6 +102,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
       )
 
       expect(result).to eq(reply: nil, response_id: nil)
+      # Mesma auditoria: confirma que a requisição foi tentada (e o WebMock a interceptou para simular
+      # o timeout), não que o código nunca chegou a discar.
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
     end
   end
 
