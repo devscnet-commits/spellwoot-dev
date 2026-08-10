@@ -44,22 +44,27 @@ class Ai::Workers::MediaProcessor
   MAX_VISION_PAGES = 5
   PDF_RASTER_DPI = 150
 
-  def self.process(message, profile = nil)
+  # skip_vision: pula SÓ o ramo de imagem (Ai::Gateway passa true quando department.behavior
+  # ['python_orchestrator'] está ligado — a OpenAI já recebe a imagem crua via image_url e enxerga
+  # nativamente, então rodar o worker de OCR ali é custo/latência duplicado, sem uso). Áudio/documento/
+  # vídeo continuam INTACTOS nos dois caminhos — o path Python não tem equivalente nativo pra eles ainda.
+  def self.process(message, profile = nil, skip_vision: false)
     attachments = message.attachments.to_a
     return nil if attachments.empty?
 
     account_id = message.account_id
     conversation_id = message.conversation_id
-    attachments.map { |attachment| extract(attachment, account_id, profile, conversation_id) }.compact.join("\n").presence
+    attachments.map { |attachment| extract(attachment, account_id, profile, conversation_id, skip_vision: skip_vision) }
+               .compact.join("\n").presence
   rescue StandardError => e
     Rails.logger.error "[Ai::Workers::MediaProcessor] #{e.class}: #{e.message}"
     nil
   end
 
-  def self.extract(attachment, account_id, profile = nil, conversation_id = nil)
+  def self.extract(attachment, account_id, profile = nil, conversation_id = nil, skip_vision: false)
     case attachment.file_type
     when 'audio' then transcribe(attachment, account_id) || '[O cliente enviou um áudio]'
-    when 'image' then ocr(attachment, account_id, profile, conversation_id) || '[O cliente enviou uma imagem]'
+    when 'image' then skip_vision ? nil : (ocr(attachment, account_id, profile, conversation_id) || '[O cliente enviou uma imagem]')
     when 'file'  then document(attachment, account_id, profile, conversation_id) || '[O cliente enviou um arquivo]'
     when 'video' then '[O cliente enviou um vídeo]'
     end

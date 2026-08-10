@@ -33,16 +33,17 @@ class Ai::Gateway
     )
     emit(run_record, 'message.received', { content: @message.content.to_s.first(500), message_id: @message.id })
 
-    # Invisible worker: turn media (audio/image) into text the supervisor can use. Passa o profile
-    # do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']).
-    media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile)
-    emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
     base_content = @content_override.presence || @message.content
-    effective_content = [base_content, media_text].compact.join("\n").strip
 
+    # Department resolvido ANTES do worker de mídia (antes vinha depois) — python_orchestrator_on?
+    # precisa do department pra decidir se pula o OCR legado (ver bloco de mídia abaixo). Efeito
+    # colateral aceito: a classificação por IA (Ai::DepartmentResolver#classify, só quando há >1
+    # department sem mapeamento de caixa) passa a ver o texto CRU da mensagem, sem a legenda do OCR —
+    # só importa pro caso raro de uma imagem SEM texto que dependia da legenda pra rotear certo;
+    # single/inbox_mapping/override (o caminho comum) nem chegam a olhar message_content.
     @stage = :department
     department, resolution = Ai::DepartmentResolver.resolve(
-      agent: @agent, inbox_id: @message.inbox_id, message_content: effective_content, conversation: @conversation
+      agent: @agent, inbox_id: @message.inbox_id, message_content: base_content, conversation: @conversation
     )
 
     # A partir daqui NÃO é mais classificação de departamento: gravar o resultado e o estado é
@@ -56,6 +57,16 @@ class Ai::Gateway
     return finalize(run_record, 'no_department') unless department
 
     run_record.update!(ai_department_id: department.id)
+
+    # Invisible worker: turn media (audio/image) into text the supervisor can use. Passa o profile
+    # do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']). skip_vision
+    # pula SÓ a imagem quando o department está no path Python — a OpenAI já recebe a imagem crua
+    # (image_url, Ai::PythonOrchestratorClient) e enxerga nativamente; áudio/documento/vídeo continuam
+    # rodando nos dois caminhos (sem equivalente nativo no Python ainda).
+    media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile,
+                                                      skip_vision: python_orchestrator_on?(department))
+    emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
+    effective_content = [base_content, media_text].compact.join("\n").strip
 
     # Config do departamento + gate de política (reply state) + caminho ask_resume — nada disso é
     # classificação; erro aqui é 'internal_error', não 'classification_failed'.
