@@ -99,15 +99,16 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # Etapa ATUAL (server-tracked ai_step_index) vira UMA tool de function-calling (Ai::StepCaptureTool)
-  # + sua instrução vai pro system_prompt — nunca o playbook inteiro de uma vez (decisão explícita:
-  # "Nunca mande todas as etapas juntas").
-  describe 'etapa atual (ai_step_index) vira tools_schema + instrução no system_prompt' do
-    it 'inclui a tool real do department JUNTO com a "registrar_<attribute>" SÓ da etapa ativa — e a instrução SÓ dela' do
+  # Fluxo agentic: TODAS as "registrar_*" (qualquer etapa do playbook) + as 3 tools de controle
+  # (avancar_etapa/resolve/transfer) vão SEMPRE, sem gate por etapa ativa — a IA decide o que chamar.
+  # A instrução no system_prompt continua ancorada só na etapa ATUAL (âncora narrativa, não trava nada).
+  describe 'fluxo agentic: tools_schema traz TODAS as registrar_* + tools de controle sempre' do
+    it 'inclui a tool real do department + TODAS as "registrar_<attribute>" do playbook + avancar_etapa/resolve/transfer' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente com calor.' },
         { 'name' => 'Endereço', 'instructions' => 'Peça o endereço completo.',
-          'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }
+          'collect' => { 'attribute' => 'endereco', 'type' => 'text' } },
+        { 'name' => 'Telefone extra', 'collect' => { 'attribute' => 'telefone_extra' } }
       ])
       conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 1))
       Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'conversation.add_label',
@@ -119,32 +120,68 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
         names = body['tools_schema'].map { |t| t['name'] }
-        names.sort == %w[conversation.add_label registrar_endereco] &&
+        # a instrução da etapa ATIVA (índice 1) aparece; a de OUTRA etapa (índice 0), não — só o texto
+        # narrativo é ancorado na etapa atual, a captura de dado (tools) não é.
+        names.sort == %w[avancar_etapa conversation.add_label conversation.resolve conversation.transfer
+                          registrar_endereco registrar_telefone_extra].sort &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
           !body['system_prompt'].include?('Cumprimente com calor.')
       }
     end
 
-    it 'etapa ativa sem collect (informativa): tools_schema só tem as tools reais, sem "Etapa atual" no prompt' do
-      Ai::Playbook.create!(department: department, steps: [{ 'name' => 'Boas-vindas', 'instructions' => '' }])
+    it 'sem playbook, tools_schema ainda traz as 3 tools de controle (sempre disponíveis) mas nenhuma registrar_*' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
-        body['tools_schema'] == [] && !body['system_prompt'].include?('Etapa atual')
+        names = body['tools_schema'].map { |t| t['name'] }
+        names.sort == %w[avancar_etapa conversation.resolve conversation.transfer] &&
+          !body['system_prompt'].include?('Etapa atual')
+      }
+    end
+  end
+
+  describe 'system_prompt traz encerramento/transferência configurados + instrução de tools' do
+    it 'inclui transfer_when/close_when (do playbook) e a mensagem de encerramento (do department)' do
+      Ai::Playbook.create!(department: department, transfer_when: ['cliente pede humano'],
+                           close_when: ['cliente confirma que não quer mais nada'])
+      department.update!(close_rules: { 'message' => 'Foi um prazer te atender!' })
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('Transfira para humano quando: cliente pede humano.') &&
+          prompt.include?('Encerre quando: cliente confirma que não quer mais nada.') &&
+          prompt.include?('Foi um prazer te atender!') &&
+          prompt.include?('conversation.resolve') &&
+          prompt.include?('conversation.transfer')
+      }
+    end
+  end
+
+  describe 'force_handoff_notice (teto de segurança por etapa, decidido pelo Ai::Gateway)' do
+    it 'quando true, injeta a instrução forçada de transferência imediata no system_prompt' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department,
+                                      mode: 'live', force_handoff_notice: true)
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['system_prompt'].include?('LIMITE DE TENTATIVAS ATINGIDO')
       }
     end
 
-    it 'sem playbook, tools_schema e system_prompt ficam como hoje' do
+    it 'default false — não injeta nada' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        body = JSON.parse(req.body)
-        body['tools_schema'] == [] && !body['system_prompt'].include?('Etapa atual')
+        !JSON.parse(req.body)['system_prompt'].include?('LIMITE DE TENTATIVAS ATINGIDO')
       }
     end
   end

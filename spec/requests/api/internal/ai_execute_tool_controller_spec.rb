@@ -41,25 +41,110 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    def call_tool(tool_name, arguments: {}, mode: 'live')
+      with_modified_env INTERNAL_AI_TOKEN: correct_token do
+        post '/api/internal/ai_execute_tool',
+             params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: tool_name,
+                        arguments: arguments, mode: mode },
+             headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
+      end
+    end
+
     context 'chamada de uma capture tool "registrar_*" (Ai::StepCaptureTool — etapa do playbook, não uma Ai::Tool real)' do
-      it 'grava o valor em ai_collected_facts via Ai::StateManager, SEM criar uma Ai::CapabilityExecution' do
+      before do
         Ai::Playbook.create!(department: department,
                              steps: [{ 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }])
+      end
 
-        expect do
-          with_modified_env INTERNAL_AI_TOKEN: correct_token do
-            post '/api/internal/ai_execute_tool',
-                 params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: 'registrar_endereco',
-                            arguments: { endereco: 'Rua X, 123' }, mode: 'live' },
-                 headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
-          end
-        end.not_to change(Ai::CapabilityExecution, :count)
+      it 'grava o valor em ai_collected_facts via Ai::StateManager, SEM criar uma Ai::CapabilityExecution' do
+        expect { call_tool('registrar_endereco', arguments: { endereco: 'Rua X, 123' }) }
+          .not_to change(Ai::CapabilityExecution, :count)
 
         expect(response).to have_http_status(:success)
         expect(conversation.reload.additional_attributes['ai_collected_facts']).to eq('endereco' => 'Rua X, 123')
         json = response.parsed_body
         expect(json['status']).to eq('executed')
         expect(json['result']).to eq('endereco' => 'Rua X, 123')
+      end
+
+      it 'upsert: chamar de novo com outro valor ATUALIZA (não duplica)' do
+        call_tool('registrar_endereco', arguments: { endereco: 'Rua X, 123' })
+        call_tool('registrar_endereco', arguments: { endereco: 'Rua Y, 456' })
+
+        expect(conversation.reload.additional_attributes['ai_collected_facts']).to eq('endereco' => 'Rua Y, 456')
+      end
+
+      it 'em modo shadow, NÃO grava nada (mesmo gate de Ai::ToolExecutor)' do
+        call_tool('registrar_endereco', arguments: { endereco: 'Rua X, 123' }, mode: 'shadow')
+
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['status']).to eq('skipped')
+        expect(conversation.reload.additional_attributes['ai_collected_facts']).to be_nil
+      end
+    end
+
+    context 'chamada de "avancar_etapa" (avanço agentic — a IA decide, não um índice travado)' do
+      before do
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Boas-vindas' },
+          { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco' } },
+          { 'name' => 'Fim' }
+        ])
+      end
+
+      it 'incrementa ai_step_index e zera ai_step_turns' do
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0, 'ai_step_turns' => 3 })
+
+        call_tool('avancar_etapa')
+
+        expect(response).to have_http_status(:success)
+        attrs = conversation.reload.additional_attributes
+        expect(attrs['ai_step_index']).to eq(1)
+        expect(attrs['ai_step_turns']).to eq(0)
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+
+      it 'trava na última etapa (não estoura o array)' do
+        conversation.update!(additional_attributes: { 'ai_step_index' => 2 })
+
+        call_tool('avancar_etapa')
+
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(2)
+      end
+
+      it 'em modo shadow, não avança nada' do
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+
+        call_tool('avancar_etapa', mode: 'shadow')
+
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(0)
+        expect(response.parsed_body['status']).to eq('skipped')
+      end
+    end
+
+    context 'chamada de "conversation.resolve"/"conversation.transfer" (tools de controle, sempre disponíveis)' do
+      it 'conversation.resolve chama Ai::CapabilityRegistry e marca a conversa como resolvida' do
+        call_tool('conversation.resolve')
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.status).to eq('resolved')
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+
+      it 'conversation.transfer chama Ai::CapabilityRegistry e reabre/desatribui a conversa' do
+        conversation.update!(status: 'resolved', assignee_id: nil)
+
+        call_tool('conversation.transfer')
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.status).to eq('open')
+      end
+
+      it 'em modo shadow, nenhuma das duas muda a conversa' do
+        call_tool('conversation.resolve', mode: 'shadow')
+
+        expect(conversation.reload.status).to eq('open')
+        expect(response.parsed_body['status']).to eq('skipped')
       end
     end
 
