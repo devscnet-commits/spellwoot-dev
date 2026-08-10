@@ -58,8 +58,26 @@ class Ai::PythonOrchestratorClient
       tools_schema: tools_schema,
       vector_store_id: @department.behavior.to_h['vector_store_id'],
       user_input: @content.to_s,
-      previous_response_id: @conversation.additional_attributes&.dig('openai_conversation_id')
+      previous_response_id: @conversation.additional_attributes&.dig('openai_conversation_id'),
+      # Multi-tenant: cada Account escolhe seu próprio modelo/temperatura via Ai::OperationProfile
+      # (tela de admin). nil quando o agente não tem perfil — o orquestrador cai no OPENAI_MODEL do
+      # seu próprio .env e deixa a OpenAI usar o default de temperatura, não hardcodeia nada aqui.
+      model: operation_profile&.supervisor_model,
+      temperature: temperature
     }
+  end
+
+  def operation_profile
+    @agent.operation_profile
+  end
+
+  # Mesma tradução posição-do-slider -> temperatura real que Ai::ModelRouter já usa
+  # (Ai::TemperatureMapper) — para o mesmo perfil, o Python deve receber a MESMA temperatura que o
+  # caminho decide()/call_with_tools() já aplicaria.
+  def temperature
+    return nil unless operation_profile
+
+    Ai::TemperatureMapper.resolve(operation_profile.supervisor_provider, operation_profile.temperature_position)
   end
 
   # Trimmed identity/persona prompt (no playbook steps/slots — this path doesn't run

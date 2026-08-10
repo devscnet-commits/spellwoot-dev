@@ -43,8 +43,24 @@ RSpec.describe Ai::PythonOrchestratorClient do
           'user_input' => 'Quero saber o preço',
           # confirma que o histórico encadeia pelo previous_response_id já salvo — não reenvia um
           # blob de mensagens (é exatamente isso que substitui o HISTORY_LIMIT do Ai::ContextBuilder).
-          'previous_response_id' => 'resp_previous_123'
+          'previous_response_id' => 'resp_previous_123',
+          # multi-tenant: modelo do Ai::OperationProfile da account, não um valor fixo no .env do Python.
+          'model' => 'gpt-4o',
+          # temperature_position default (20) traduzido pelas âncoras 'openai' do TemperatureMapper.
+          'temperature' => Ai::TemperatureMapper.resolve('openai', 20)
         ))
+    end
+
+    it 'manda model/temperature em branco quando o agente não tem operation_profile' do
+      agent.update_column(:ai_operation_profile_id, nil)
+      stub_orchestrator
+
+      described_class.process_message(
+        conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
+      )
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('model' => nil, 'temperature' => nil))
     end
 
     it 'nunca sobe uma exceção quando o orquestrador responde com erro — devolve reply em branco' do

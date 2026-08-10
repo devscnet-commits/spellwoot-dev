@@ -36,22 +36,30 @@ def run_conversation(
     vector_store_id: str | None,
     user_input: str,
     previous_response_id: str | None,
+    model: str | None = None,
+    temperature: float | None = None,
 ) -> tuple[str, str]:
     """Owns the OpenAI Responses API reasoning/tool-call loop for one turn. Always returns
     (reply_text, response_id) — including when MAX_TOOL_ITERATIONS is hit — so the caller
     (main.py) never has to special-case a cut-off loop, only real transport/API failures."""
     openai_tools = _build_tools(tools_schema, vector_store_id)
+    # Multi-tenant: Rails resolves this per Account (Ai::OperationProfile); config.OPENAI_MODEL is
+    # only the fallback for a tenant with no profile, never a global override.
+    resolved_model = model or config.OPENAI_MODEL
 
     create_kwargs = {
-        "model": config.OPENAI_MODEL,
+        "model": resolved_model,
         "instructions": system_prompt,
         "input": user_input,
         "tools": openai_tools,
     }
     # Omitted entirely (not sent as null) when absent, so OpenAI starts a fresh conversation
-    # instead of trying to resume a previous_response_id that doesn't exist.
+    # instead of trying to resume a previous_response_id that doesn't exist, and so temperature
+    # falls back to OpenAI's own default instead of us hardcoding one.
     if previous_response_id:
         create_kwargs["previous_response_id"] = previous_response_id
+    if temperature is not None:
+        create_kwargs["temperature"] = temperature
 
     response = _client.responses.create(**create_kwargs)
 
@@ -82,11 +90,15 @@ def run_conversation(
                 "output": json.dumps(result),
             })
 
-        response = _client.responses.create(
-            model=config.OPENAI_MODEL,
-            previous_response_id=response.id,
-            input=tool_outputs,
-        )
+        followup_kwargs = {
+            "model": resolved_model,
+            "previous_response_id": response.id,
+            "input": tool_outputs,
+        }
+        if temperature is not None:
+            followup_kwargs["temperature"] = temperature
+
+        response = _client.responses.create(**followup_kwargs)
 
     # MAX_TOOL_ITERATIONS exceeded: still return the latest response_id (so history keeps
     # chaining next turn) even if there's no final text yet.
