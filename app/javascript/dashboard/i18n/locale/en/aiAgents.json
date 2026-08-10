@@ -822,7 +822,7 @@
     },
     "ADVANCED": {
       "TITLE": "Avançado (motor)",
-      "DESCRIPTION": "Modelo da IA, workers e orçamento. Só para usuários avançados — o nível acima já define bons padrões."
+      "DESCRIPTION": "Modelo da IA e orçamento. Só para usuários avançados — o nível acima já define bons padrões."
     },
     "SUPERVISOR": {
       "TITLE": "Modelo da IA",
@@ -832,20 +832,6 @@
       "TEMPERATURE_RIGID": "Rígido",
       "TEMPERATURE_BALANCED": "Equilibrado",
       "TEMPERATURE_CREATIVE": "Criativo"
-    },
-    "WORKERS": {
-      "TITLE": "Workers (modelos auxiliares)",
-      "DESCRIPTION": "Modelos especializados e mais baratos para tarefas de apoio.",
-      "OCR": "OCR (imagem → texto)",
-      "CLASSIFICATION": "Classificação (fluxo)",
-      "SUMMARY": "Resumo da conversa",
-      "TRANSLATION": "Tradução",
-      "RAG": "RAG (embeddings)",
-      "CAPTURE_JUDGE": "Juiz de captura",
-      "JUDGE_MODE": "Juiz de captura — acionamento",
-      "JUDGE_MODE_OFF": "Desligado",
-      "JUDGE_MODE_WHEN_SILENT": "Quando o modelo não extrai",
-      "JUDGE_MODE_ALWAYS": "Sempre"
     },
     "BUDGET": {
       "TITLE": "Orçamento",

@@ -100,6 +100,36 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  it 'department com python_orchestrator ligado: pula o OCR legado (skip_vision: true no MediaProcessor)' do
+    deliver
+
+    expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, skip_vision: true)
+  end
+
+  it 'department SEM python_orchestrator: roda o OCR legado normalmente (skip_vision: false)' do
+    # Agente/inbox PRÓPRIOS (não o `agent`/`department` do resto do arquivo, que já tem a flag ligada)
+    # — senão agent.departments.active passaria a ter 2 registros e Ai::DepartmentResolver cairia no
+    # classificador por IA (chamada real ao LLM) em vez do atalho 'single'.
+    legacy_agent = Ai::Agent.create!(account: account, name: 'Bot Legado', status: 'active', ai_operation_profile_id: profile.id)
+    legacy_inbox = create(:inbox, account: account)
+    Ai::Department.create!(account: account, ai_agent_id: legacy_agent.id, name: 'Legado', status: 'active',
+                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
+    legacy_binding = Ai::AgentInbox.create!(ai_agent_id: legacy_agent.id, inbox_id: legacy_inbox.id, mode: 'live', active: true)
+    convo = create(:conversation, account: account, inbox: legacy_inbox, status: 'open')
+    message = create(:message, account: account, inbox: legacy_inbox, conversation: convo,
+                               message_type: 'incoming', content: 'oi')
+    # Department sem a flag cai no caminho legado (decide()) — precisa do MESMO stub que
+    # gateway_spec.rb usa pra isolar o Ai::ModelRouter (sem isso, tenta uma chamada HTTP real).
+    allow(Ai::ModelRouter).to receive(:decide).and_return(
+      provider: 'openai', model: 'gpt-4.1-mini', decision: { 'decision' => 'reply', 'reply_text' => 'oi' },
+      tokens_in: 10, tokens_out: 5, cost: 0.0, latency_ms: 1, status: 'recorded'
+    )
+
+    described_class.new(message: message, agent_inbox: legacy_binding, mode: 'live').run
+
+    expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, skip_vision: false)
+  end
+
   it 'em modo shadow, não incrementa ai_step_turns (mesmo gate de @acts_live do resto do Gateway)' do
     shadow_binding = Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'shadow', active: true)
     convo = create(:conversation, account: account, inbox: inbox, status: 'open')

@@ -118,4 +118,29 @@ RSpec.describe Ai::Workers::MediaProcessor do
       expect(described_class.extract(attachment, account.id)).to eq('[O cliente enviou um áudio]')
     end
   end
+
+  # skip_vision: Ai::Gateway passa true quando department.behavior['python_orchestrator'] está ligado
+  # (a OpenAI já recebe a imagem crua via image_url, o OCR legado fica redundante). Cirúrgico — só a
+  # imagem é pulada; áudio/documento/vídeo continuam rodando nos dois caminhos.
+  describe '.process com skip_vision' do
+    it 'skip_vision: true pula a imagem (nem o marcador genérico é gravado) mas continua transcrevendo áudio' do
+      message.attachments.create!(account: account, file_type: :image)
+      audio = message.attachments.create!(account: account, file_type: :audio)
+      audio.file.attach(
+        io: File.open(Rails.public_path.join('audio/widget/ding.mp3')),
+        filename: 'audio.mp3', content_type: 'audio/mpeg', identify: false
+      )
+      allow(described_class).to receive(:transcribe).and_return('[Transcrição do áudio]: oi')
+
+      result = described_class.process(message, nil, skip_vision: true)
+
+      expect(result).to eq('[Transcrição do áudio]: oi')
+    end
+
+    it 'skip_vision: false (default) grava o marcador genérico da imagem quando não há worker de OCR configurado' do
+      message.attachments.create!(account: account, file_type: :image)
+
+      expect(described_class.process(message, nil)).to eq('[O cliente enviou uma imagem]')
+    end
+  end
 end

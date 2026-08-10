@@ -24,16 +24,6 @@ const groqModelOptions = GROQ_APPROVED_MODELS.map(m => ({
   value: m,
   label: m,
 }));
-const WORKER_KEYS = ['ocr', 'summary', 'translation', 'rag', 'capture_judge'];
-// Juiz de captura: nasce DESLIGADO (modo 'off'). Modos de acionamento (worker_overrides.capture_judge.mode).
-const JUDGE_MODES = ['off', 'when_silent', 'always'];
-// Nenhum worker escondido hoje. O antigo 'classification' era vestígio do "flow routing" removido e
-// foi retirado de WORKER_KEYS: o classificador de departamento é INTERNO ao DepartmentResolver
-// (provider do supervisor + modelo barato), não um worker configurável. Ver Ai::DepartmentResolver.
-const HIDDEN_WORKERS = [];
-const visibleWorkers = computed(() =>
-  WORKER_KEYS.filter(w => !HIDDEN_WORKERS.includes(w))
-);
 const PRESET_KEYS = ['economico', 'balanceado', 'premium', 'customizado'];
 
 // Default operational strategies. One model per level (no routing).
@@ -42,39 +32,18 @@ const PRESETS = {
   economico: {
     name: 'Econômico',
     model: ['openai', 'gpt-4.1-mini'],
-    workers: {
-      ocr: ['openai', 'gpt-4.1-mini'],
-      summary: ['openai', 'gpt-4.1-mini'],
-      translation: ['openai', 'gpt-4.1-mini'],
-      rag: ['openai', 'text-embedding-3-small'],
-      capture_judge: ['openai', 'gpt-4.1-mini'],
-    },
     budget: 50,
     on_limit: 'stop',
   },
   balanceado: {
     name: 'Balanceado',
     model: ['openai', 'gpt-4.1'],
-    workers: {
-      ocr: ['openai', 'gpt-4.1-mini'],
-      summary: ['openai', 'gpt-4.1-mini'],
-      translation: ['openai', 'gpt-4.1-mini'],
-      rag: ['openai', 'text-embedding-3-small'],
-      capture_judge: ['openai', 'gpt-4.1-mini'],
-    },
     budget: 150,
     on_limit: 'downgrade',
   },
   premium: {
     name: 'Premium',
     model: ['anthropic', 'claude-3-5-sonnet-latest'],
-    workers: {
-      ocr: ['openai', 'gpt-4.1'],
-      summary: ['openai', 'gpt-4.1'],
-      translation: ['openai', 'gpt-4.1'],
-      rag: ['openai', 'text-embedding-3-large'],
-      capture_judge: ['openai', 'gpt-4.1'],
-    },
     budget: 500,
     on_limit: 'alert',
   },
@@ -85,12 +54,6 @@ const profiles = ref([]);
 const isLoading = ref(false);
 const showForm = ref(false);
 
-const emptyWorkers = () =>
-  WORKER_KEYS.reduce((acc, k) => {
-    acc[k] = { provider: 'openai', model: '' };
-    return acc;
-  }, {});
-
 const blank = () => ({
   id: null,
   preset: 'balanceado',
@@ -98,7 +61,6 @@ const blank = () => ({
   supervisor_provider: 'openai',
   supervisor_model: '',
   temperature_position: 20,
-  workers: emptyWorkers(),
   route_high: 0.95,
   route_low: 0.85,
   cheap_provider: 'openai',
@@ -107,7 +69,6 @@ const blank = () => ({
   premium_model: '',
   budget_usd: '',
   on_limit: 'downgrade',
-  judge_mode: 'off',
 });
 const form = reactive(blank());
 const { isDirty, capture } = useFormDirty(() => ({ ...form }));
@@ -127,7 +88,7 @@ watch(
   }
 );
 
-// The whole engine (supervisor/workers/routing/budget) lives behind a single
+// The whole engine (supervisor/routing/budget) lives behind a single
 // "Avançado" disclosure so the main flow is just: pick a level + name it.
 const sections = reactive({ advanced: false });
 
@@ -147,25 +108,12 @@ const onLimitOptions = computed(() =>
   }))
 );
 
-const judgeModeOptions = computed(() =>
-  JUDGE_MODES.map(v => ({
-    value: v,
-    label: t(`AI_PROFILES.WORKERS.JUDGE_MODE_${v.toUpperCase()}`),
-  }))
-);
-
 const applyPreset = key => {
   form.preset = key;
   const preset = PRESETS[key];
   if (!preset) return;
   form.name = form.name || preset.name;
   [form.supervisor_provider, form.supervisor_model] = preset.model;
-  WORKER_KEYS.forEach(w => {
-    form.workers[w] = {
-      provider: preset.workers[w][0],
-      model: preset.workers[w][1],
-    };
-  });
   // One model per level: cheap/premium mirror the single model (no routing).
   [form.cheap_provider, form.cheap_model] = preset.model;
   [form.premium_provider, form.premium_model] = preset.model;
@@ -206,7 +154,6 @@ const openNew = () => {
 
 const openEdit = profile => {
   const routing = profile.routing_strategy || {};
-  const workers = profile.worker_overrides || {};
   const budget = profile.budget || {};
   Object.assign(form, blank(), {
     id: profile.id,
@@ -215,13 +162,6 @@ const openEdit = profile => {
     supervisor_provider: profile.supervisor_provider,
     supervisor_model: profile.supervisor_model,
     temperature_position: profile.temperature_position ?? 20,
-    workers: WORKER_KEYS.reduce((acc, k) => {
-      acc[k] = {
-        provider: workers[k]?.provider || 'openai',
-        model: workers[k]?.model || '',
-      };
-      return acc;
-    }, {}),
     route_high: routing.high_threshold ?? 0.95,
     route_low: routing.low_threshold ?? 0.85,
     cheap_provider: routing.cheap_provider || 'openai',
@@ -230,7 +170,6 @@ const openEdit = profile => {
     premium_model: routing.premium_model || '',
     budget_usd: budget.monthly_usd ?? '',
     on_limit: budget.on_limit || 'downgrade',
-    judge_mode: workers.capture_judge?.mode || 'off',
   });
   showForm.value = true;
   capture();
@@ -252,11 +191,12 @@ const save = async () => {
       supervisor_provider: form.supervisor_provider,
       supervisor_model: form.supervisor_model,
       temperature_position: clampPosition(form.temperature_position),
-      worker_overrides: {
-        ...form.workers,
-        // Juiz de captura carrega o modo de acionamento junto do provider/model.
-        capture_judge: { ...form.workers.capture_judge, mode: form.judge_mode },
-      },
+      // worker_overrides NÃO entra no payload de propósito (nem {} nem um valor parcial): esta tela
+      // não edita mais nenhuma chave de worker (OCR/Summary/Tradução/RAG/Juiz de captura removidos —
+      // a OpenAI faz Visão e Memória nativamente no path novo). O controller só toca a coluna
+      // worker_overrides quando a chave está PRESENTE no payload (Api::V1::Accounts::
+      // AiOperationProfilesController#jsonb_params) — omitir preserva o que já está salvo (inclusive
+      // chaves sem UI nenhuma, como trivial_gate/native_tools) em vez de sobrescrever com um hash vazio.
       routing_strategy: {
         high_threshold: Number(form.route_high),
         low_threshold: Number(form.route_low),
@@ -530,46 +470,6 @@ onMounted(fetchProfiles);
                       {{ $t('AI_PROFILES.SUPERVISOR.TEMPERATURE_HINT') }}
                     </p>
                   </div>
-                </div>
-              </div>
-
-              <!-- Workers -->
-              <div class="flex flex-col gap-2">
-                <div class="flex flex-col gap-0.5">
-                  <h3 class="text-sm font-semibold text-n-slate-12">
-                    {{ $t('AI_PROFILES.WORKERS.TITLE') }}
-                  </h3>
-                  <p class="text-xs text-n-slate-11 mb-0">
-                    {{ $t('AI_PROFILES.WORKERS.DESCRIPTION') }}
-                  </p>
-                </div>
-                <div
-                  v-for="w in visibleWorkers"
-                  :key="w"
-                  class="grid grid-cols-1 sm:grid-cols-[8rem,1fr,1.5fr] gap-2 items-center"
-                >
-                  <span class="text-sm text-n-slate-12">{{
-                    $t(`AI_PROFILES.WORKERS.${w.toUpperCase()}`)
-                  }}</span>
-                  <Select
-                    v-model="form.workers[w].provider"
-                    :options="providerOptions"
-                  />
-                  <Input
-                    v-model="form.workers[w].model"
-                    :placeholder="$t('AI_PROFILES.FORM.MODEL')"
-                  />
-                </div>
-                <div
-                  class="grid grid-cols-1 sm:grid-cols-[8rem,1fr] gap-2 items-center"
-                >
-                  <span class="text-sm text-n-slate-12">{{
-                    $t('AI_PROFILES.WORKERS.JUDGE_MODE')
-                  }}</span>
-                  <Select
-                    v-model="form.judge_mode"
-                    :options="judgeModeOptions"
-                  />
                 </div>
               </div>
 
