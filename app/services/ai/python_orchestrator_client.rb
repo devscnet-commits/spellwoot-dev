@@ -88,8 +88,10 @@ class Ai::PythonOrchestratorClient
     Ai::TemperatureMapper.resolve(operation_profile.supervisor_provider, operation_profile.temperature_position)
   end
 
-  # Trimmed identity/persona prompt (no playbook steps/slots — this path doesn't run
+  # Trimmed identity/persona prompt (no playbook step INSTRUCTIONS text — this path doesn't run
   # Ai::StateManager#track_step, so anchoring the model to a step it never advances would mislead it).
+  # What DOES come from the playbook is the "registrar_*" capture tools below — flow-control text
+  # replaced by function calls, not by more prompt.
   def system_prompt
     lines = []
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
@@ -98,12 +100,36 @@ class Ai::PythonOrchestratorClient
     lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
+    lines << capture_tools_instruction if step_capture_tools.present?
     lines.join("\n")
   end
 
+  # Generic (step-agnostic) instruction covering EVERY "registrar_*" tool at once — not one paragraph
+  # per step. Explicitly allows calling more than one in the same turn: a customer who front-loads
+  # several answers (e.g. name + address in message 1) must not be forced to repeat them one at a
+  # time just because a single "current step" gate would only accept one call per turn.
+  def capture_tools_instruction
+    'Use as ferramentas "registrar_*" para gravar cada dado assim que o cliente informar, na ordem ' \
+      'em que ele fornecer — pode chamar mais de uma na mesma resposta se ele adiantar vários dados ' \
+      'de uma vez. Nunca peça de novo um dado que o cliente já informou nesta conversa.'
+  end
+
+  # Real Ai::Tool-backed tools (webhooks/capabilities/integrations, unchanged) + one function-calling
+  # tool per attribute the playbook's steps declare via `collect` (Ai::StepCaptureTool) — replaces the
+  # old "Etapas do atendimento" text block from Ai::PromptCompiler. A capture tool losing to a
+  # same-named REAL tool (name collision) is intentional: the configured tool wins.
   def tools_schema
-    @department.tools.active.map do |tool|
+    real_names = real_tools.map { |t| t[:name] }
+    real_tools + step_capture_tools.reject { |t| real_names.include?(t[:name]) }
+  end
+
+  def real_tools
+    @real_tools ||= @department.tools.active.map do |tool|
       { name: tool.name, description: tool.description, input_schema: tool.input_schema }
     end
+  end
+
+  def step_capture_tools
+    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook)
   end
 end

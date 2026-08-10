@@ -41,6 +41,28 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    context 'chamada de uma capture tool "registrar_*" (Ai::StepCaptureTool — etapa do playbook, não uma Ai::Tool real)' do
+      it 'grava o valor em ai_collected_facts via Ai::StateManager, SEM criar uma Ai::CapabilityExecution' do
+        Ai::Playbook.create!(department: department,
+                             steps: [{ 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }])
+
+        expect do
+          with_modified_env INTERNAL_AI_TOKEN: correct_token do
+            post '/api/internal/ai_execute_tool',
+                 params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: 'registrar_endereco',
+                            arguments: { endereco: 'Rua X, 123' }, mode: 'live' },
+                 headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
+          end
+        end.not_to change(Ai::CapabilityExecution, :count)
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.additional_attributes['ai_collected_facts']).to eq('endereco' => 'Rua X, 123')
+        json = response.parsed_body
+        expect(json['status']).to eq('executed')
+        expect(json['result']).to eq('endereco' => 'Rua X, 123')
+      end
+    end
+
     context 'validação de segurança do webhook' do
       it 'retorna 401 quando nenhum Bearer token é enviado' do
         call_webhook(headers: {})

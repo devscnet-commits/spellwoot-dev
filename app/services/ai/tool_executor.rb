@@ -18,6 +18,7 @@ class Ai::ToolExecutor
   def perform
     return record('skipped', reason: 'shadow_mode') unless @mode == 'live'
     return record('skipped', reason: 'tool_inactive') unless @tool&.status == 'active'
+    return missing_prerequisites_result if missing_prerequisites.present?
 
     execute_now
   rescue StandardError => e
@@ -68,6 +69,36 @@ class Ai::ToolExecutor
   def execute_now
     output, rollback, key = self.class.run_for(@tool, @conversation, @input)
     build('executed', output: output, rollback_data: rollback, key: key)
+  end
+
+  # Backend guardrail for "flexible" tool ordering (Ai::PythonOrchestratorClient exposes ALL of a
+  # department's tools every turn instead of gating by playbook step): a tool marked with
+  # required_attributes (e.g. gerar_contrato needing endereco) is blocked — not executed — until
+  # those attributes exist. The error text is deliberately readable BY THE MODEL: it comes back as
+  # this execution's `error`, which the caller (Api::Internal::AiExecuteToolController) returns to
+  # Python as the function_call_output, so the AI reads it and asks the customer for what's missing
+  # instead of the ordering being enforced by which tools are even offered.
+  def missing_prerequisites
+    required = Array(@tool&.required_attributes)
+    return [] if required.blank?
+
+    collected = collected_attributes
+    required.reject { |key| collected[key.to_s].present? }
+  end
+
+  # Same merge order Ai::Gateway/Ai::PromptCompiler use for "collected" data: contact-level facts,
+  # then this conversation's live facts (freshest), then the custom_attributes mirror.
+  def collected_attributes
+    (@conversation.contact&.custom_attributes || {})
+      .merge(@conversation.additional_attributes&.dig('ai_collected_facts') || {})
+      .merge(@conversation.custom_attributes || {})
+      .stringify_keys
+  end
+
+  def missing_prerequisites_result
+    missing = missing_prerequisites
+    record('skipped', reason: 'missing_required_attributes',
+                       error: "Faltam os dados obrigatórios antes de usar esta ferramenta: #{missing.join(', ')}")
   end
 
   def record(status, reason: nil, approval: 'not_required', error: nil)
