@@ -50,9 +50,9 @@ class Ai::PythonOrchestratorClient
 
   def payload
     {
-      # Sent as strings: the orchestrator's Pydantic request model types both ids as `str`.
-      ticket_id: @conversation.id.to_s,
-      ai_department_id: @department.id.to_s,
+      # Sent as integers, matching the orchestrator's Pydantic request model (ticket_id/ai_department_id: int).
+      ticket_id: @conversation.id,
+      ai_department_id: @department.id,
       mode: @mode,
       system_prompt: system_prompt,
       tools_schema: tools_schema,

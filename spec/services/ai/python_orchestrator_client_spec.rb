@@ -37,8 +37,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(result).to eq(reply: 'Olá! Como posso ajudar?', response_id: 'resp_novo_456')
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
         .with(body: hash_including(
-          'ticket_id' => conversation.id.to_s,
-          'ai_department_id' => department.id.to_s,
+          'ticket_id' => conversation.id,
+          'ai_department_id' => department.id,
           'mode' => 'live',
           'user_input' => 'Quero saber o preço',
           # confirma que o histórico encadeia pelo previous_response_id já salvo — não reenvia um

@@ -55,6 +55,25 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(response).to have_http_status(:unauthorized)
         expect(conversation.reload.label_list).not_to include('Cliente em Negociação')
       end
+
+      it 'retorna 403 quando o ai_department_id não pertence à account do ticket_id (guard multi-tenant)' do
+        other_account = create(:account)
+        other_operation_profile = Ai::OperationProfile.create!(account: other_account, name: 'padrão',
+                                                                supervisor_provider: 'openai', supervisor_model: 'gpt-4o')
+        other_agent = Ai::Agent.create!(account: other_account, name: 'Assistente',
+                                        ai_operation_profile_id: other_operation_profile.id)
+        other_department = Ai::Department.create!(account: other_account, ai_agent_id: other_agent.id, name: 'Outra conta')
+
+        with_modified_env INTERNAL_AI_TOKEN: correct_token do
+          post '/api/internal/ai_execute_tool',
+               params: { ticket_id: conversation.id, ai_department_id: other_department.id, tool_name: 'conversation.add_label',
+                          arguments: { label: 'Cliente em Negociação' }, mode: 'live' },
+               headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
+        end
+
+        expect(response).to have_http_status(:forbidden)
+        expect(conversation.reload.label_list).not_to include('Cliente em Negociação')
+      end
     end
   end
 end

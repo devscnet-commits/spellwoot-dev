@@ -10,10 +10,10 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     department = Ai::Department.find(params[:ai_department_id])
     # Multi-tenant guard: the department must belong to the SAME account as the conversation. Without
     # this, a malformed/forged payload could execute one account's tool against another account's
-    # conversation. 404 (not 403) so a cross-tenant probe learns nothing about whether the department
-    # id exists at all — same shape as a plain not-found.
+    # conversation. This endpoint already sits behind the internal Bearer token (authenticate_internal_request!),
+    # so 403 here doesn't expose anything to an unauthenticated caller — only to whoever already holds that token.
     unless department.account_id == conversation.account_id
-      raise ActiveRecord::RecordNotFound, "department #{department.id} does not belong to this conversation's account"
+      return render json: { error: 'forbidden' }, status: :forbidden
     end
 
     tool = department.tools.active.find_by!(name: params[:tool_name])
