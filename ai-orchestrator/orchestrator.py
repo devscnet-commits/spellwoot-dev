@@ -11,6 +11,23 @@ logger = logging.getLogger("ai_orchestrator")
 _client = OpenAI(api_key=config.OPENAI_API_KEY)
 
 
+def _build_input(user_input: str, image_url: str | None):
+    """Plain string when there's no image (unchanged shape); a multimodal content list — the
+    Responses API's input_text/input_image parts — when the customer sent a WhatsApp photo, so the
+    model's own vision reads the actual image instead of relying only on the Rails-side caption
+    worker (Ai::Workers::MediaProcessor) that already folded a text description into user_input."""
+    if not image_url:
+        return user_input
+
+    return [{
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": user_input},
+            {"type": "input_image", "image_url": image_url},
+        ],
+    }]
+
+
 def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
     openai_tools = []
     if vector_store_id:
@@ -41,6 +58,7 @@ def run_conversation(
     previous_response_id: str | None,
     model: str | None = None,
     temperature: float | None = None,
+    image_url: str | None = None,
 ) -> tuple[str, str]:
     """Owns the OpenAI Responses API reasoning/tool-call loop for one turn. Always returns
     (reply_text, response_id) — including when MAX_TOOL_ITERATIONS is hit — so the caller
@@ -60,7 +78,7 @@ def run_conversation(
     create_kwargs = {
         "model": resolved_model,
         "instructions": system_prompt,
-        "input": user_input,
+        "input": _build_input(user_input, image_url),
         "tools": openai_tools,
     }
     # Omitted entirely (not sent as null) when absent, so OpenAI starts a fresh conversation

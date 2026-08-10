@@ -99,46 +99,77 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # Etapas do playbook viram tools de function-calling (Ai::StepCaptureTool), NÃO texto de instrução —
-  # substitui o "Etapas do atendimento" do Ai::PromptCompiler nesse path. Todas as tools vão de uma vez
-  # (arquitetura "flexível": sem gate por etapa ativa), então um cliente que adianta vários dados no
-  # mesmo turno não é forçado a repetir um de cada vez.
-  describe 'etapas do playbook viram tools_schema (Ai::StepCaptureTool)' do
-    it 'envia a tool real do department JUNTO com uma "registrar_<attribute>" por etapa com collect' do
+  # Etapa ATUAL (server-tracked ai_step_index) vira UMA tool de function-calling (Ai::StepCaptureTool)
+  # + sua instrução vai pro system_prompt — nunca o playbook inteiro de uma vez (decisão explícita:
+  # "Nunca mande todas as etapas juntas").
+  describe 'etapa atual (ai_step_index) vira tools_schema + instrução no system_prompt' do
+    it 'inclui a tool real do department JUNTO com a "registrar_<attribute>" SÓ da etapa ativa — e a instrução SÓ dela' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente com calor.' },
+        { 'name' => 'Endereço', 'instructions' => 'Peça o endereço completo.',
+          'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }
+      ])
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 1))
       Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'conversation.add_label',
                        implementation_type: 'capability', capability_key: 'conversation.add_label', status: 'active')
-      Ai::Playbook.create!(department: department,
-                           steps: [{ 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }])
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        names = JSON.parse(req.body)['tools_schema'].map { |t| t['name'] }
-        names.include?('conversation.add_label') && names.include?('registrar_endereco')
-      }
-    end
-
-    it 'instrui a IA a usar "registrar_*" dinamicamente (mais de uma por turno) quando há etapas com collect' do
-      Ai::Playbook.create!(department: department, steps: [{ 'collect' => { 'attribute' => 'nome' } }])
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['system_prompt'].include?('registrar_*')
-      }
-    end
-
-    it 'sem playbook (ou sem collect nas etapas), tools_schema e system_prompt ficam como hoje' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
-        body['tools_schema'] == [] && !body['system_prompt'].include?('registrar_*')
+        names = body['tools_schema'].map { |t| t['name'] }
+        names.sort == %w[conversation.add_label registrar_endereco] &&
+          body['system_prompt'].include?('Peça o endereço completo.') &&
+          !body['system_prompt'].include?('Cumprimente com calor.')
       }
+    end
+
+    it 'etapa ativa sem collect (informativa): tools_schema só tem as tools reais, sem "Etapa atual" no prompt' do
+      Ai::Playbook.create!(department: department, steps: [{ 'name' => 'Boas-vindas', 'instructions' => '' }])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        body = JSON.parse(req.body)
+        body['tools_schema'] == [] && !body['system_prompt'].include?('Etapa atual')
+      }
+    end
+
+    it 'sem playbook, tools_schema e system_prompt ficam como hoje' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        body = JSON.parse(req.body)
+        body['tools_schema'] == [] && !body['system_prompt'].include?('Etapa atual')
+      }
+    end
+  end
+
+  describe 'imagem do WhatsApp (image_url no payload)' do
+    it 'inclui a URL real do anexo de imagem da mensagem, quando passada' do
+      message = create(:message, conversation: conversation, account: account)
+      attachment = message.attachments.create!(account: account, file_type: :image)
+      allow(attachment).to receive(:download_url).and_return('https://cdn.example.com/foto.jpg')
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department,
+                                      mode: 'live', message: message)
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('image_url' => 'https://cdn.example.com/foto.jpg'))
+    end
+
+    it 'image_url vem nil quando não há mensagem/anexo de imagem' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('image_url' => nil))
     end
   end
 end

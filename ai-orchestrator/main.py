@@ -31,6 +31,9 @@ class ProcessRequest(BaseModel):
     # Falls back to config.OPENAI_MODEL / the OpenAI default when the tenant has no profile.
     model: Optional[str] = None
     temperature: Optional[float] = None
+    # Raw WhatsApp image URL (Rails' Attachment#download_url) — lets the model's own vision read the
+    # image directly instead of relying only on the MediaProcessor text-caption worker.
+    image_url: Optional[str] = None
 
 
 class ProcessResponse(BaseModel):
@@ -70,6 +73,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             previous_response_id=request.previous_response_id,
             model=request.model,
             temperature=request.temperature,
+            image_url=request.image_url,
         )
     except Exception:
         # Never leak internals (stack traces, prompts, API errors) to the Rails side.

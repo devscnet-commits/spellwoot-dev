@@ -7,6 +7,14 @@
 # History: no flattened message blob is sent. previous_response_id (reused from the SAME
 # conversation.additional_attributes['openai_conversation_id'] field the existing decide()/
 # call_with_tools() paths already read/write) lets OpenAI keep the full turn history server-side.
+#
+# Per-turn scope (deliberate, not the "send everything" shape this class had earlier): system_prompt
+# carries the agent's base persona + ONLY the CURRENT step's instructions text (read the same way
+# Ai::PromptCompiler's step anchor does — server-tracked ai_step_index, never all steps at once), and
+# tools_schema carries the department's real tools + ONLY the current step's capture tool (Ai::StepCaptureTool),
+# not one per step. The step's `instructions` text stays a first-class, always-visible field (Python
+# reads it) — it is NOT being replaced by function-calling; only the OLD "dump every step's tool at
+# once" shape was.
 class Ai::PythonOrchestratorClient
   # Normalizes AI_ORCHESTRATOR_URL whether or not it already includes the /process path — an env var
   # pointed at just the service root (e.g. http://ai-orchestrator:8000) was POSTing to '/' and 404ing.
@@ -19,16 +27,18 @@ class Ai::PythonOrchestratorClient
   ORCHESTRATOR_URL = build_orchestrator_url(ENV.fetch('AI_ORCHESTRATOR_URL', 'http://localhost:8000'))
   TIMEOUT = 60
 
-  def self.process_message(conversation:, content:, agent:, department:, mode:)
-    new(conversation: conversation, content: content, agent: agent, department: department, mode: mode).perform
+  def self.process_message(conversation:, content:, agent:, department:, mode:, message: nil)
+    new(conversation: conversation, content: content, agent: agent, department: department, mode: mode,
+        message: message).perform
   end
 
-  def initialize(conversation:, content:, agent:, department:, mode:)
+  def initialize(conversation:, content:, agent:, department:, mode:, message: nil)
     @conversation = conversation
     @content = content
     @agent = agent
     @department = department
     @mode = mode
+    @message = message
   end
 
   def perform
@@ -66,6 +76,10 @@ class Ai::PythonOrchestratorClient
       tools_schema: tools_schema,
       vector_store_id: @department.behavior.to_h['vector_store_id'],
       user_input: @content.to_s,
+      # WhatsApp image: the RAW url (not the MediaProcessor text caption already folded into
+      # @content upstream in Ai::Gateway) — lets the model's own vision read the image directly
+      # instead of relying only on the auxiliary caption worker.
+      image_url: image_url,
       previous_response_id: @conversation.additional_attributes&.dig('openai_conversation_id'),
       # Multi-tenant: cada Account escolhe seu próprio modelo/temperatura via Ai::OperationProfile
       # (tela de admin). nil quando o agente não tem perfil — o orquestrador cai no OPENAI_MODEL do
@@ -73,6 +87,10 @@ class Ai::PythonOrchestratorClient
       model: operation_profile&.supervisor_model,
       temperature: temperature
     }
+  end
+
+  def image_url
+    @message&.attachments&.to_a&.find { |a| a.file_type == 'image' }&.download_url.presence
   end
 
   def operation_profile
@@ -88,10 +106,8 @@ class Ai::PythonOrchestratorClient
     Ai::TemperatureMapper.resolve(operation_profile.supervisor_provider, operation_profile.temperature_position)
   end
 
-  # Trimmed identity/persona prompt (no playbook step INSTRUCTIONS text — this path doesn't run
-  # Ai::StateManager#track_step, so anchoring the model to a step it never advances would mislead it).
-  # What DOES come from the playbook is the "registrar_*" capture tools below — flow-control text
-  # replaced by function calls, not by more prompt.
+  # Persona geral do agente + a instrução da ETAPA ATUAL (server-tracked ai_step_index, mesma leitura
+  # pura de Ai::StateManager#current_step — nunca avança nada aqui). Nunca as etapas todas juntas.
   def system_prompt
     lines = []
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
@@ -100,27 +116,23 @@ class Ai::PythonOrchestratorClient
     lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
-    lines << capture_tools_instruction if step_capture_tools.present?
+    lines << "Etapa atual: #{current_step_instructions}" if current_step_instructions.present?
     lines.join("\n")
   end
 
-  # Generic (step-agnostic) instruction covering EVERY "registrar_*" tool at once — not one paragraph
-  # per step. Explicitly allows calling more than one in the same turn: a customer who front-loads
-  # several answers (e.g. name + address in message 1) must not be forced to repeat them one at a
-  # time just because a single "current step" gate would only accept one call per turn.
-  def capture_tools_instruction
-    'Use as ferramentas "registrar_*" para gravar cada dado assim que o cliente informar, na ordem ' \
-      'em que ele fornecer — pode chamar mais de uma na mesma resposta se ele adiantar vários dados ' \
-      'de uma vez. Nunca peça de novo um dado que o cliente já informou nesta conversa.'
+  def current_step_instructions
+    return nil unless current_step.is_a?(Hash)
+
+    (current_step['instructions'] || current_step[:instructions]).to_s.strip.presence
   end
 
-  # Real Ai::Tool-backed tools (webhooks/capabilities/integrations, unchanged) + one function-calling
-  # tool per attribute the playbook's steps declare via `collect` (Ai::StepCaptureTool) — replaces the
-  # old "Etapas do atendimento" text block from Ai::PromptCompiler. A capture tool losing to a
-  # same-named REAL tool (name collision) is intentional: the configured tool wins.
+  # Tools reais do department (webhooks/capabilities/integrations, inalteradas) + a tool de captura
+  # (Ai::StepCaptureTool) SÓ da etapa atual — não uma por etapa do playbook inteiro.
   def tools_schema
-    real_names = real_tools.map { |t| t[:name] }
-    real_tools + step_capture_tools.reject { |t| real_names.include?(t[:name]) }
+    tool = step_capture_tool
+    return real_tools if tool.nil? || real_tools.any? { |t| t[:name] == tool[:name] }
+
+    real_tools + [tool]
   end
 
   def real_tools
@@ -129,7 +141,13 @@ class Ai::PythonOrchestratorClient
     end
   end
 
-  def step_capture_tools
-    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook)
+  def step_capture_tool
+    Ai::StepCaptureTool.build_schema(current_step)
+  end
+
+  # Leitura PURA do índice server-tracked (Ai::StateManager#current_step) — não roda track_step, não
+  # avança nada; só lê o mesmo ai_step_index que o caminho legado também lê.
+  def current_step
+    @current_step ||= Ai::StateManager.new(conversation: @conversation, agent: @agent).current_step(@department)
   end
 end

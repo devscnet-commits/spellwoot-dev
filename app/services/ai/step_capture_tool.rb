@@ -20,17 +20,11 @@ module Ai::StepCaptureTool
     name.start_with?(PREFIX) ? name.delete_prefix(PREFIX).presence : nil
   end
 
-  # One schema per DISTINCT attribute declared across the playbook's steps — several steps can
-  # declare the same attribute (revisited later in the flow); OpenAI needs unique function names
-  # per request, so dedup by attribute, not by step. {name:, description:, input_schema:} — the
-  # SAME shape Ai::PythonOrchestratorClient already sends for Ai::Tool-backed tools, so no change
-  # needed on the Python side to consume these.
-  def schemas_for(playbook)
-    return [] unless playbook
-
-    Array(playbook.steps).filter_map { |step| build_schema(step) }.uniq { |schema| schema[:name] }
-  end
-
+  # {name:, description:, input_schema:} for the ONE step passed in (Ai::PythonOrchestratorClient
+  # calls this with just the current step — server-tracked ai_step_index — never the whole playbook
+  # at once). nil when the step has no `collect` (informative step, nothing to capture). Same shape
+  # Ai::PythonOrchestratorClient already sends for Ai::Tool-backed tools, so no change needed on the
+  # Python side to consume this.
   def build_schema(step)
     attribute = Ai::StepSlot.attribute(step)
     return nil if attribute.blank?
