@@ -15,6 +15,33 @@ RSpec.describe Ai::StepCaptureTool do
     end
   end
 
+  describe '.schemas_for' do
+    it 'nil (sem playbook) devolve lista vazia' do
+      expect(described_class.schemas_for(nil)).to eq([])
+    end
+
+    it 'uma tool por atributo declarado em QUALQUER etapa — todas de uma vez (fluxo agentic)' do
+      playbook = instance_double(Ai::Playbook, steps: [
+                                    { 'name' => 'Acolhimento', 'instructions' => 'Cumprimente' }, # sem collect
+                                    { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } },
+                                    { 'name' => 'Telefone extra', 'collect' => { 'attribute' => 'telefone_extra' } }
+                                  ])
+
+      names = described_class.schemas_for(playbook).map { |s| s[:name] }
+
+      expect(names).to contain_exactly('registrar_endereco', 'registrar_telefone_extra')
+    end
+
+    it 'dedup por atributo — duas etapas declarando o mesmo attribute geram UMA tool só (nomes únicos p/ a OpenAI)' do
+      playbook = instance_double(Ai::Playbook, steps: [
+                                    { 'collect' => { 'attribute' => 'cidade' } },
+                                    { 'collect' => { 'attribute' => 'cidade' } }
+                                  ])
+
+      expect(described_class.schemas_for(playbook).size).to eq(1)
+    end
+  end
+
   describe '.build_schema' do
     it 'nil quando a etapa não declara collect (etapa informativa)' do
       expect(described_class.build_schema({ 'name' => 'Acolhimento', 'instructions' => 'Cumprimente' })).to be_nil

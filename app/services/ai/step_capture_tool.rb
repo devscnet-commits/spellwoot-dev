@@ -20,11 +20,22 @@ module Ai::StepCaptureTool
     name.start_with?(PREFIX) ? name.delete_prefix(PREFIX).presence : nil
   end
 
-  # {name:, description:, input_schema:} for the ONE step passed in (Ai::PythonOrchestratorClient
-  # calls this with just the current step — server-tracked ai_step_index — never the whole playbook
-  # at once). nil when the step has no `collect` (informative step, nothing to capture). Same shape
-  # Ai::PythonOrchestratorClient already sends for Ai::Tool-backed tools, so no change needed on the
-  # Python side to consume this.
+  # One schema per DISTINCT attribute declared across the playbook's steps — several steps can
+  # declare the same attribute; OpenAI needs unique function names per request, so dedup by
+  # attribute, not by step. Agentic flow (deliberate): ALL of them go out every turn, not just the
+  # current step's — the model decides which to call based on what the customer actually says, so a
+  # customer who front-loads several answers in one message gets captured in one turn, and a
+  # correction ("na verdade é rua Y") re-calls the same tool — Ai::StateManager#persist_attributes
+  # already merges by key, so this is an upsert with no extra plumbing needed here.
+  def schemas_for(playbook)
+    return [] unless playbook
+
+    Array(playbook.steps).filter_map { |step| build_schema(step) }.uniq { |schema| schema[:name] }
+  end
+
+  # {name:, description:, input_schema:} for ONE step. nil when the step has no `collect`
+  # (informative step, nothing to capture). Same shape Ai::PythonOrchestratorClient already sends
+  # for Ai::Tool-backed tools, so no change needed on the Python side to consume this.
   def build_schema(step)
     attribute = Ai::StepSlot.attribute(step)
     return nil if attribute.blank?

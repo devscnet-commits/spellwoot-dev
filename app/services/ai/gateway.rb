@@ -159,11 +159,21 @@ class Ai::Gateway
     # Ai::ToolExecutor's own mode gate (not this branch) is what keeps shadow from acting.
     if python_orchestrator_on?(department)
       @stage = :decision
+      # Teto de segurança por etapa (ai_step_turns), lido ANTES de chamar o Python — Rails é o
+      # guarda-fio da contagem, a IA só interpreta texto. Se já estourou o limite configurado na tela
+      # (transfer_rules['stuck_handoff_turns'], mesma chave do caminho legado), o client injeta uma
+      # instrução forçada no turno para a IA transferir AGORA via a tool conversation.transfer.
+      step_index_before = (@conversation.additional_attributes || {})['ai_step_index'].to_i
+      force_handoff_notice = step_turns_exceeded?(department)
+
       result = Ai::PythonOrchestratorClient.process_message(
         conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode,
-        message: @message
+        message: @message, force_handoff_notice: force_handoff_notice
       )
       persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
+      # "avancar_etapa" (chamado mid-loop pelo Python, via Api::Internal::AiExecuteToolController) já
+      # zerou ai_step_turns se a etapa avançou; senão este turno não produziu avanço -> soma 1.
+      bump_step_turns_unless_advanced(step_index_before) if @acts_live
       status = result[:reply].present? ? 'recorded' : 'error'
       run_record.update!(provider: 'openai', decision: { 'kind' => 'reply', 'text' => result[:reply] },
                           status: status, error_type: (status == 'error' ? 'provider_error' : nil))
@@ -510,6 +520,30 @@ class Ai::Gateway
   # to today's decide()/call_with_tools() path.
   def python_orchestrator_on?(department)
     department.behavior.to_h['python_orchestrator'] == true
+  end
+
+  # Mesma chave/default do caminho legado (Ai::StateManager#stuck_handoff_limit) — teto ausente =>
+  # DEFAULT_STUCK_HANDOFF_TURNS (rede ligada por padrão); 0 = desligado.
+  def step_turns_exceeded?(department)
+    limit = department.transfer_rules.to_h.key?('stuck_handoff_turns') ? department.transfer_rules['stuck_handoff_turns'].to_i : Ai::StateManager::DEFAULT_STUCK_HANDOFF_TURNS
+    return false unless limit.positive?
+
+    (@conversation.additional_attributes || {})['ai_step_turns'].to_i >= limit
+  end
+
+  # +1 turno "parado" na etapa, A MENOS que este turno tenha avançado (a tool "avancar_etapa",
+  # executada por um processo separado — Api::Internal::AiExecuteToolController, chamado pelo Python
+  # mid-loop — já zerou ai_step_turns nesse caso). Reload obrigatório: esse avanço acontece numa
+  # request HTTP própria, commitada num objeto Conversation diferente deste em memória.
+  def bump_step_turns_unless_advanced(step_index_before)
+    @conversation.reload
+    attrs = @conversation.additional_attributes || {}
+    return if attrs['ai_step_index'].to_i != step_index_before
+
+    attrs['ai_step_turns'] = attrs['ai_step_turns'].to_i + 1
+    @conversation.update!(additional_attributes: attrs)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#bump_step_turns_unless_advanced] #{e.class}: #{e.message}"
   end
 
   # Loop nativo de ferramentas via Responses API (function_call/function_call_output).
