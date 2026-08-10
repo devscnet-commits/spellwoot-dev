@@ -1378,7 +1378,8 @@ CREATE TABLE public.ai_tools (
     status character varying DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    webhook_config jsonb DEFAULT '{}'::jsonb NOT NULL
+    webhook_config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    required_attributes jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 
@@ -9686,6 +9687,7 @@ ALTER TABLE ONLY public.subscriptions
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260810150000'),
 ('20260731120000'),
 ('20260730130000'),
 ('20260730120000'),

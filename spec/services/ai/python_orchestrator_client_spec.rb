@@ -98,4 +98,47 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(result).to eq(reply: nil, response_id: nil)
     end
   end
+
+  # Etapas do playbook viram tools de function-calling (Ai::StepCaptureTool), NÃO texto de instrução —
+  # substitui o "Etapas do atendimento" do Ai::PromptCompiler nesse path. Todas as tools vão de uma vez
+  # (arquitetura "flexível": sem gate por etapa ativa), então um cliente que adianta vários dados no
+  # mesmo turno não é forçado a repetir um de cada vez.
+  describe 'etapas do playbook viram tools_schema (Ai::StepCaptureTool)' do
+    it 'envia a tool real do department JUNTO com uma "registrar_<attribute>" por etapa com collect' do
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'conversation.add_label',
+                       implementation_type: 'capability', capability_key: 'conversation.add_label', status: 'active')
+      Ai::Playbook.create!(department: department,
+                           steps: [{ 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        names = JSON.parse(req.body)['tools_schema'].map { |t| t['name'] }
+        names.include?('conversation.add_label') && names.include?('registrar_endereco')
+      }
+    end
+
+    it 'instrui a IA a usar "registrar_*" dinamicamente (mais de uma por turno) quando há etapas com collect' do
+      Ai::Playbook.create!(department: department, steps: [{ 'collect' => { 'attribute' => 'nome' } }])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['system_prompt'].include?('registrar_*')
+      }
+    end
+
+    it 'sem playbook (ou sem collect nas etapas), tools_schema e system_prompt ficam como hoje' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        body = JSON.parse(req.body)
+        body['tools_schema'] == [] && !body['system_prompt'].include?('registrar_*')
+      }
+    end
+  end
 end
