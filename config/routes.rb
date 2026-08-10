@@ -563,6 +563,14 @@ Rails.application.routes.draw do
     end
   end
 
+  # Internal, machine-to-machine API (Bearer token via INTERNAL_AI_TOKEN, not devise) — used by the
+  # Python AI orchestrator to execute Rails-side tools mid function-calling loop.
+  namespace :api, defaults: { format: 'json' } do
+    namespace :internal do
+      post 'ai_execute_tool', to: 'ai_execute_tool#create'
+    end
+  end
+
   if ChatwootApp.enterprise?
     namespace :enterprise, defaults: { format: 'json' } do
       namespace :api do

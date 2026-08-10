@@ -150,6 +150,27 @@ class Ai::Gateway
       end
     end
 
+    # Python orchestrator path (opt-in per department via behavior['python_orchestrator']): replaces
+    # knowledge retrieval + Ai::PromptCompiler + Ai::ContextBuilder + Ai::ModelRouter wholesale — Python
+    # owns the OpenAI Responses API reasoning/tool-call loop (native tools resolved in Python,
+    # Rails-side tools proxied via Api::Internal::AiExecuteToolController). Gateway still runs the
+    # gates above (billing/breaker/trivial) and still delivers via action_dispatcher below, unchanged.
+    # Runs in BOTH modes (like decide() below) so shadow keeps recording a decision for evaluation;
+    # Ai::ToolExecutor's own mode gate (not this branch) is what keeps shadow from acting.
+    if python_orchestrator_on?(department)
+      @stage = :decision
+      result = Ai::PythonOrchestratorClient.process_message(
+        conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode
+      )
+      persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
+      status = result[:reply].present? ? 'recorded' : 'error'
+      run_record.update!(provider: 'openai', decision: { 'kind' => 'reply', 'text' => result[:reply] },
+                          status: status, error_type: (status == 'error' ? 'provider_error' : nil))
+      emit(run_record, 'decision.made', { decision: { 'kind' => 'reply' }, source: 'python_orchestrator' }, run_id: run_record.id)
+      action_dispatcher.reply(department, result[:reply])
+      return finalize(run_record, status)
+    end
+
     judge_result =
       if @acts_live && effective_content.present? && state_manager.judge_enabled? && state_manager.claim_turn(@message)
         state_manager.run_turn_judge(active_step, effective_content)
@@ -481,6 +502,13 @@ class Ai::Gateway
   # e o fluxo fica byte-idêntico ao atual.
   def trivial_gate_on?
     @agent.operation_profile&.worker('trivial_gate')&.dig('mode').to_s == 'on'
+  end
+
+  # Opt-in per department (behavior['python_orchestrator'] == true, set like the other behavior
+  # toggles — max_input_chars, max_replies). Default OFF: without it the pipeline is byte-identical
+  # to today's decide()/call_with_tools() path.
+  def python_orchestrator_on?(department)
+    department.behavior.to_h['python_orchestrator'] == true
   end
 
   # Loop nativo de ferramentas via Responses API (function_call/function_call_output).
