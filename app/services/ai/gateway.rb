@@ -160,7 +160,8 @@ class Ai::Gateway
     if python_orchestrator_on?(department)
       @stage = :decision
       result = Ai::PythonOrchestratorClient.process_message(
-        conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode
+        conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode,
+        message: @message
       )
       persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
       status = result[:reply].present? ? 'recorded' : 'error'
