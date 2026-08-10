@@ -110,6 +110,18 @@ services:
       - 1026:1025
       - 8025:8025
 
+  ai-orchestrator:
+    build:
+      context: ./ai-orchestrator
+      dockerfile: ./Dockerfile
+    image: spellwoot-ai-orchestrator:development
+    env_file: .env
+    environment:
+      # Reach Rails by its compose service name, not localhost, from inside the Docker network.
+      - RAILS_BASE_URL=http://rails:3000
+    ports:
+      - 8000:8000
+
 volumes:
   postgres:
   redis:
