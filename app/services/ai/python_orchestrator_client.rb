@@ -8,7 +8,15 @@
 # conversation.additional_attributes['openai_conversation_id'] field the existing decide()/
 # call_with_tools() paths already read/write) lets OpenAI keep the full turn history server-side.
 class Ai::PythonOrchestratorClient
-  ORCHESTRATOR_URL = ENV.fetch('AI_ORCHESTRATOR_URL', 'http://localhost:8000/process')
+  # Normalizes AI_ORCHESTRATOR_URL whether or not it already includes the /process path — an env var
+  # pointed at just the service root (e.g. http://ai-orchestrator:8000) was POSTing to '/' and 404ing.
+  # Idempotent: a URL that already ends in /process (with or without a trailing slash) passes through.
+  def self.build_orchestrator_url(raw)
+    base = raw.to_s.chomp('/')
+    base.end_with?('/process') ? base : "#{base}/process"
+  end
+
+  ORCHESTRATOR_URL = build_orchestrator_url(ENV.fetch('AI_ORCHESTRATOR_URL', 'http://localhost:8000'))
   TIMEOUT = 60
 
   def self.process_message(conversation:, content:, agent:, department:, mode:)

@@ -26,6 +26,21 @@ RSpec.describe Ai::PythonOrchestratorClient do
       .to_return(status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
   end
 
+  describe '.build_orchestrator_url' do
+    it 'acrescenta /process quando AI_ORCHESTRATOR_URL aponta só pra raiz do serviço (era o bug: POST em "/" -> 404)' do
+      expect(described_class.build_orchestrator_url('http://ai-orchestrator:8000')).to eq('http://ai-orchestrator:8000/process')
+    end
+
+    it 'não duplica /process quando a env var já vem correta' do
+      expect(described_class.build_orchestrator_url('http://ai-orchestrator:8000/process')).to eq('http://ai-orchestrator:8000/process')
+    end
+
+    it 'lida com barra final nos dois casos' do
+      expect(described_class.build_orchestrator_url('http://ai-orchestrator:8000/')).to eq('http://ai-orchestrator:8000/process')
+      expect(described_class.build_orchestrator_url('http://ai-orchestrator:8000/process/')).to eq('http://ai-orchestrator:8000/process')
+    end
+  end
+
   describe '.process_message' do
     it 'envia o payload compilado e devolve a resposta parseada — sem rede real, sem gastar tokens da OpenAI' do
       stub_orchestrator
