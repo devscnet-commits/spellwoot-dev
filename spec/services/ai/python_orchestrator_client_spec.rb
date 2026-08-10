@@ -218,4 +218,61 @@ RSpec.describe Ai::PythonOrchestratorClient do
         .with(body: hash_including('image_url' => nil))
     end
   end
+
+  # Fecha a lacuna de identidade (IA sugerindo concorrentes) + a base de conhecimento real deste
+  # path (Ai::KnowledgeRetriever — pgvector já populado, NÃO o vector_store nativo da OpenAI, que
+  # não existe: vector_store_id sempre vem vazio, auditado, sem tela/job que o preencha).
+  describe 'identidade + conhecimento (Ai::KnowledgeRetriever) no system_prompt' do
+    it 'a instrução de identidade é a PRIMEIRA linha do system_prompt, antes de qualquer outra coisa' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['system_prompt'].lines.first.include?('IDENTIDADE') &&
+          JSON.parse(req.body)['system_prompt'].include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras')
+      }
+    end
+
+    it 'injeta os trechos retornados por Ai::KnowledgeRetriever num bloco "Conhecimento da empresa"' do
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve)
+        .with(query: 'quanto custa o plano fibra?', account_id: account.id, department_id: department.id)
+        .and_return(['Plano Fibra 500MB: R$ 99,90/mês', 'Plano Fibra 1GB: R$ 129,90/mês'])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'quanto custa o plano fibra?',
+                                      agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('Conhecimento da empresa') &&
+          prompt.include?('Plano Fibra 500MB: R$ 99,90/mês') &&
+          prompt.include?('Plano Fibra 1GB: R$ 129,90/mês')
+      }
+    end
+
+    it 'sem chunks (base vazia pra esse department), o bloco de conhecimento nem aparece' do
+      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      # A instrução de IDENTIDADE já cita "Conhecimento da empresa" entre aspas (aponta pro bloco) —
+      # checar essa substring simples daria falso positivo mesmo sem o bloco. O cabeçalho do bloco em
+      # si ("...use para responder...") só existe quando knowledge_block realmente injeta algo.
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('Conhecimento da empresa (use para responder')
+      }
+    end
+
+    it 'vector_store_id continua sendo lido de department.behavior e enviado (auditoria: sempre vazio na prática, mas o código está correto)' do
+      department.update!(behavior: { 'vector_store_id' => 'vs_abc123' })
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('vector_store_id' => 'vs_abc123'))
+    end
+  end
 end

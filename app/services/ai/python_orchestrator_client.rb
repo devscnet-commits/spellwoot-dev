@@ -81,6 +81,10 @@ class Ai::PythonOrchestratorClient
       mode: @mode,
       system_prompt: system_prompt,
       tools_schema: tools_schema,
+      # SEMPRE vazio hoje — nada neste projeto cria/sincroniza um vector store da OpenAI (auditado:
+      # nenhuma tela, nenhum job). Mantido (lido corretamente de department.behavior) para quando essa
+      # sincronização existir; até lá, a base de conhecimento chega pelo #knowledge_block abaixo
+      # (Ai::KnowledgeRetriever — pgvector, já populado, mesmo mecanismo do caminho legado).
       vector_store_id: @department.behavior.to_h['vector_store_id'],
       user_input: @content.to_s,
       # WhatsApp image: the RAW url (not the MediaProcessor text caption already folded into
@@ -118,12 +122,17 @@ class Ai::PythonOrchestratorClient
   # o que dizer agora) + como usar as tools de controle. Nunca a lista de etapas inteira como texto.
   def system_prompt
     lines = []
+    # Fixa e inegociável, ANTES de qualquer outra coisa: fecha a lacuna de identidade que fazia a IA
+    # sugerir concorrentes ("pesquisar outros provedores") — ela esquecia que É a própria provedora.
+    lines << identity_instruction
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
     lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
+    kb = knowledge_block
+    lines << kb if kb.present?
     lines << "Etapa atual: #{current_step_instructions}" if current_step_instructions.present?
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
@@ -131,6 +140,29 @@ class Ai::PythonOrchestratorClient
     lines << tool_usage_instruction
     lines << force_handoff_instruction if @force_handoff_notice
     lines.join("\n")
+  end
+
+  # Texto do pedido, com UM ajuste: a frase original citava "a ferramenta de busca (file_search)" —
+  # mas não existe vector store nenhum aqui (ver comentário em #payload), então instruir a IA a chamar
+  # uma tool que não existe seria pior que o problema original. Aponta pro bloco de conhecimento que
+  # o Rails já injeta abaixo (#knowledge_block) em vez disso — mesma intenção, mecanismo real.
+  def identity_instruction
+    'IDENTIDADE: Você é um atendente de IA DA PRÓPRIA EMPRESA. A empresa para quem você trabalha É a ' \
+      'provedora do serviço. É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras empresas, ' \
+      'operadoras ou provedores. Se o cliente quiser preços, planos ou dúvidas, consulte o bloco ' \
+      '"Conhecimento da empresa" abaixo antes de responder — nunca invente o que não estiver lá.'
+  end
+
+  # Ai::KnowledgeRetriever: pgvector, o MESMO mecanismo (e a MESMA base já populada) que o caminho
+  # legado usa hoje — não o file_search/vector_store nativo da OpenAI (inexistente neste projeto).
+  # Query = mensagem atual do cliente; [] sem fonte cadastrada ou sem query, o bloco nem aparece.
+  def knowledge_block
+    chunks = Ai::KnowledgeRetriever.retrieve(query: @content.to_s, account_id: @department.account_id,
+                                             department_id: @department.id)
+    return nil if chunks.blank?
+
+    "Conhecimento da empresa (use para responder sobre planos/preços/dúvidas — não invente o que não " \
+      "estiver aqui):\n#{chunks.map { |c| "- #{c}" }.join("\n")}"
   end
 
   def current_step_instructions
