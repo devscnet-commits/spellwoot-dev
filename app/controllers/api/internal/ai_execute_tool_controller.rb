@@ -8,6 +8,12 @@
 # a JSON decision contract. Real (admin-configured) tools still delegate to the existing
 # Ai::ToolExecutor/Ai::CapabilityRegistry framework — same audited path (Ai::CapabilityExecution)
 # used by Ai::Gateway's own tool handling.
+#
+# Name translation: Ai::PythonOrchestratorClient SANITIZES every tool name before it reaches OpenAI
+# (Ai::ToolNameSanitizer — OpenAI 400s on anything outside [a-zA-Z0-9_-], and Ai::CapabilityRegistry's
+# whole convention is dotted keys). Python calls back with that SAME sanitized name, so every lookup
+# here resolves it against the real candidate set (CONTROL_CAPABILITIES / the department's own tool
+# names) instead of guessing what character a "_" used to be.
 class Api::Internal::AiExecuteToolController < ActionController::API
   before_action :authenticate_internal_request!
 
@@ -25,12 +31,14 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     end
 
     return render json: advance_step(conversation, department) if params[:tool_name] == Ai::PythonOrchestratorClient::ADVANCE_STEP_TOOL
-    return render json: run_capability(conversation, params[:tool_name]) if CONTROL_CAPABILITIES.include?(params[:tool_name])
+
+    control_key = resolve_control_capability(params[:tool_name])
+    return render json: run_capability(conversation, control_key) if control_key
 
     attribute = Ai::StepCaptureTool.attribute_for(params[:tool_name])
     return render json: capture_attribute(conversation, department, attribute) if attribute
 
-    tool = department.tools.active.find_by!(name: params[:tool_name])
+    tool = find_real_tool!(department, params[:tool_name])
 
     execution = Ai::ToolExecutor.new(
       tool: tool,
@@ -45,6 +53,21 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   end
 
   private
+
+  # nil when tool_name doesn't sanitize-match either control capability (not a control tool call).
+  def resolve_control_capability(sanitized_name)
+    CONTROL_CAPABILITIES.find { |key| Ai::ToolNameSanitizer.sanitize(key) == sanitized_name }
+  end
+
+  # Ai::Tool#name has no format validation — an admin could type spaces/accents/dots into it, which
+  # Ai::PythonOrchestratorClient would ALSO have sanitized on the way out. Resolve against the
+  # department's own (real, unsanitized) tool names before hitting the DB by name.
+  def find_real_tool!(department, sanitized_name)
+    tools = department.tools.active.to_a
+    original_name = Ai::ToolNameSanitizer.resolve(sanitized_name, tools.map(&:name))
+    tools.find { |t| t.name == original_name } ||
+      raise(ActiveRecord::RecordNotFound, "Couldn't find Ai::Tool with name=#{sanitized_name.inspect}")
+  end
 
   def mode
     params[:mode].presence || 'shadow'

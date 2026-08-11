@@ -16,18 +16,21 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
   end
   let(:correct_token) { 'internal-test-token' }
 
+  # Nome SANITIZADO — é isto que o Python realmente manda (Ai::PythonOrchestratorClient sanitiza todo
+  # nome de tool antes de chegar na OpenAI; ver Ai::ToolNameSanitizer). O tool real no banco continua
+  # com o ponto ('conversation.add_label') — o controller precisa resolver um pro outro.
   def call_webhook(headers: {})
     with_modified_env INTERNAL_AI_TOKEN: correct_token do
       post '/api/internal/ai_execute_tool',
-           params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: 'conversation.add_label',
+           params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: 'conversation_add_label',
                       arguments: { label: 'Cliente em Negociação' }, mode: 'live' },
            headers: headers, as: :json
     end
   end
 
   describe 'POST /api/internal/ai_execute_tool' do
-    context 'com o Bearer token correto (chamada simulada do Python pedindo conversation.add_label)' do
-      it 'executa a tool via Ai::ToolExecutor, adiciona a label na conversa e devolve { result: ... } para o Python continuar' do
+    context 'com o Bearer token correto (chamada simulada do Python pedindo o nome SANITIZADO conversation_add_label)' do
+      it 'resolve "conversation_add_label" -> "conversation.add_label" e executa via Ai::ToolExecutor, devolve { result: ... }' do
         call_webhook(headers: { 'Authorization' => "Bearer #{correct_token}" })
 
         expect(response).to have_http_status(:success)
@@ -38,6 +41,17 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(json['status']).to eq('executed')
         expect(json['result']).to be_present
         expect(json['result']['labels']).to include('Cliente em Negociação')
+      end
+
+      it 'tool desconhecida (não é controle, capture nem tool real — nem sanitizada nem não) devolve 404' do
+        with_modified_env INTERNAL_AI_TOKEN: correct_token do
+          post '/api/internal/ai_execute_tool',
+               params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: 'tool_que_nao_existe',
+                          arguments: {}, mode: 'live' },
+               headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
+        end
+
+        expect(response).to have_http_status(:not_found)
       end
     end
 
@@ -124,7 +138,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
 
     context 'chamada de "conversation.resolve"/"conversation.transfer" (tools de controle, sempre disponíveis)' do
       it 'conversation.resolve chama Ai::CapabilityRegistry e marca a conversa como resolvida' do
-        call_tool('conversation.resolve')
+        call_tool('conversation_resolve')
 
         expect(response).to have_http_status(:success)
         expect(conversation.reload.status).to eq('resolved')
@@ -134,14 +148,14 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       it 'conversation.transfer chama Ai::CapabilityRegistry e reabre/desatribui a conversa' do
         conversation.update!(status: 'resolved', assignee_id: nil)
 
-        call_tool('conversation.transfer')
+        call_tool('conversation_transfer')
 
         expect(response).to have_http_status(:success)
         expect(conversation.reload.status).to eq('open')
       end
 
       it 'em modo shadow, nenhuma das duas muda a conversa' do
-        call_tool('conversation.resolve', mode: 'shadow')
+        call_tool('conversation_resolve', mode: 'shadow')
 
         expect(conversation.reload.status).to eq('open')
         expect(response.parsed_body['status']).to eq('skipped')
@@ -173,7 +187,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
 
         with_modified_env INTERNAL_AI_TOKEN: correct_token do
           post '/api/internal/ai_execute_tool',
-               params: { ticket_id: conversation.id, ai_department_id: other_department.id, tool_name: 'conversation.add_label',
+               params: { ticket_id: conversation.id, ai_department_id: other_department.id, tool_name: 'conversation_add_label',
                           arguments: { label: 'Cliente em Negociação' }, mode: 'live' },
                headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
         end
