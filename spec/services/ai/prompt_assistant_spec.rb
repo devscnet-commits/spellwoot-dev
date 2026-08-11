@@ -221,18 +221,36 @@ RSpec.describe Ai::PromptAssistant do
         expect(step).to include('NUNCA prometa "seguir sem" um dado obrigatório') # item 4 (não trava o estrangeiro)
       end
 
-      it 'item 2 — PROÍBE instrução de validação de formato (quem valida é o gate pelo tipo)' do
-        expect(step).to include('NÃO gere instrução de VALIDAÇÃO de formato')
-        expect(step).to include('Quem valida o formato é o MOTOR, pelo TIPO do slot')
+      it 'item 2 — PROÍBE instrução de validação manual de formato' do
+        expect(step).to include('NÃO gere instrução de VALIDAÇÃO manual de formato')
       end
 
-      it 'item 3 — PROÍBE turno só para confirmar (o motor já faz o aviso inline, #310)' do
+      it 'item 3 — PROÍBE turno só para confirmar' do
         expect(step).to include('NÃO gere turno só para CONFIRMAR um valor')
         expect(step).to include('está certinho?') # cita o próprio anti-padrão como proibido
       end
 
-      it 'princípio — declara que o MOTOR já valida/acusa/avança/trata ausência' do
-        expect(step).to include('O MOTOR já cuida de')
+      # Motor novo (agêntico): quem valida/decide avançar é a própria IA via tools — não um motor à
+      # parte. Guarda contra REINTRODUZIR a alegação antiga (contradiria o motor Python/agêntico).
+      it 'princípio — NÃO alega que um motor à parte valida formato ou decide avançar sozinho' do
+        expect(step).not_to include('O MOTOR já cuida de')
+        expect(step).not_to include('Quem valida o formato é o MOTOR')
+      end
+
+      it 'princípio — instrui USO DE FERRAMENTAS: registrar_<variável> ao receber o dado, avancar_etapa ao concluir' do
+        expect(step).to include('registrar_<variável>')
+        expect(step).to include('avancar_etapa')
+      end
+
+      it 'formato de saída — Objetivo / Regras / Fala sugerida' do
+        expect(step).to include('**Objetivo:**')
+        expect(step).to include('**Regras:**')
+        expect(step).to include('**Fala sugerida:**')
+      end
+
+      it 'NÃO proíbe mais etapa com múltiplos dados (o motor agêntico salva um por um via tools)' do
+        expect(step).not_to include('UMA etapa = UM dado')
+        expect(step).not_to include('É PROIBIDO gerar uma etapa que peça dois ou mais dados')
       end
 
       # Dado de TERCEIRO (indicado) não pode reusar a variável do cliente e sobrescrever (bug real).
