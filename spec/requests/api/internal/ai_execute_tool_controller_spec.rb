@@ -154,6 +154,28 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(conversation.reload.status).to eq('open')
       end
 
+      it 'conversation.transfer salva o handoff_summary da IA em additional_attributes' do
+        call_tool('conversation_transfer', arguments: { handoff_summary: 'Cliente já forneceu nome e cidade, falta CPF' })
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.additional_attributes['handoff_summary'])
+          .to eq('Cliente já forneceu nome e cidade, falta CPF')
+      end
+
+      it 'conversation.transfer sem handoff_summary (vazio/ausente) não grava nada, mas ainda transfere' do
+        call_tool('conversation_transfer', arguments: {})
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.additional_attributes['handoff_summary']).to be_nil
+      end
+
+      it 'em modo shadow, não salva handoff_summary nem transfere (mesmo gate de live?)' do
+        call_tool('conversation_transfer', arguments: { handoff_summary: 'não deveria salvar' }, mode: 'shadow')
+
+        expect(conversation.reload.additional_attributes['handoff_summary']).to be_nil
+        expect(response.parsed_body['status']).to eq('skipped')
+      end
+
       it 'em modo shadow, nenhuma das duas muda a conversa' do
         call_tool('conversation_resolve', mode: 'shadow')
 

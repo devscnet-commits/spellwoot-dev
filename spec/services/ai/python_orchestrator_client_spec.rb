@@ -339,4 +339,31 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
   end
+
+  # Resumo de transferência: a tool conversation_transfer ganha um parâmetro obrigatório
+  # handoff_summary — a IA preenche, o controller salva em additional_attributes['handoff_summary']
+  # (ver spec/requests/api/internal/ai_execute_tool_controller_spec.rb pro lado da gravação).
+  describe 'handoff_summary na tool conversation_transfer' do
+    it 'conversation_transfer exige handoff_summary (string) no input_schema' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        transfer_tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'conversation_transfer' }
+        transfer_tool['input_schema']['required'] == ['handoff_summary'] &&
+          transfer_tool['input_schema']['properties']['handoff_summary']['type'] == 'string'
+      }
+    end
+
+    it 'system_prompt instrui a IA a SEMPRE preencher handoff_summary ao transferir' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['system_prompt'].include?('você DEVE preencher o parâmetro "handoff_summary"')
+      }
+    end
+  end
 end

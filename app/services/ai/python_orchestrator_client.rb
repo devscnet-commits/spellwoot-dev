@@ -250,7 +250,9 @@ class Ai::PythonOrchestratorClient
       'diferente ATUALIZA o dado, não duplica). Use "avancar_etapa" (sem parâmetros) quando julgar a etapa ' \
       'atual concluída, ou se o cliente recusar dar um dado opcional — avance com empatia, sem forçar. Se ' \
       "precisar encerrar o atendimento, use a tool \"#{sanitized_resolve_tool}\". Se precisar transferir " \
-      "para um humano, use a tool \"#{sanitized_transfer_tool}\"."
+      "para um humano, use a tool \"#{sanitized_transfer_tool}\". Quando for transferir para um humano, " \
+      'você DEVE preencher o parâmetro "handoff_summary" com um resumo do que já foi conseguido (ex: ' \
+      '"Cliente já forneceu nome e cidade, falta CPF") e o motivo da transferência.'
   end
 
   def force_handoff_instruction
@@ -320,8 +322,17 @@ class Ai::PythonOrchestratorClient
         input_schema: { type: 'object', properties: {} } },
       { name: sanitized_transfer_tool,
         description: 'Transfere o atendimento para um humano quando as condições de transferência ' \
-                     'configuradas forem atendidas, ou quando instruído a transferir imediatamente.',
-        input_schema: { type: 'object', properties: {} } }
+                     'configuradas forem atendidas, ou quando instruído a transferir imediatamente. ' \
+                     'SEMPRE preencha handoff_summary: um resumo do que já foi conseguido e o motivo da transferência.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            'handoff_summary' => { type: 'string',
+                                    description: 'Resumo do que já foi conseguido (ex.: "Cliente já forneceu ' \
+                                                 'nome e cidade, falta CPF") e o motivo da transferência.' }
+          },
+          required: ['handoff_summary']
+        } }
     ]
   end
 
