@@ -386,11 +386,44 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('É PROIBIDO dizer que "anotou" ou "registrou" sem chamar a tool') &&
+        prompt.include?('REGRA DE SALVAMENTO INEGOCIÁVEL') &&
           prompt.include?('REGRA DE AÇÃO IMEDIATA (OBRIGATÓRIO)') &&
           prompt.include?('É PROIBIDO inventar situações, recursos ou funcionalidades que não existem') &&
           prompt.include?('SÓ transfira para humano se') &&
           prompt.include?('Peça os dados da etapa atual UM DE CADA VEZ')
+      }
+    end
+
+    # Bug real ao vivo, round 2: DEPOIS que tool_choice="required" passou a existir, a IA achou um
+    # jeito NOVO de fingir — chamava "continuar_conversa" (o no-op) e dizia em texto "Recebi seu CPF!"
+    # sem NUNCA chamar registrar_*/salvar_memoria_ia. Nada persistia; a etapa seguinte repetia a
+    # pergunta (loop de dados). Guarda contra REMOVER a regra que nomeia esse escape explicitamente.
+    it 'REGRA DE SALVAMENTO INEGOCIÁVEL: nomeia salvar_memoria_ia/registrar_* e diz que continuar_conversa NÃO CONTA como salvar' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'meu cpf é 123', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('É ESTRITAMENTE PROIBIDO dizer "Recebi seu dado", "Anotado"') &&
+          prompt.include?('chamar a tool "salvar_memoria_ia" ou a tool "registrar_*"') &&
+          prompt.include?('Chamar "continuar_conversa" NÃO CONTA como salvar') &&
+          prompt.include?('o dado será PERDIDO')
+      }
+    end
+
+    # A descrição da PRÓPRIA tool (o ponto de decisão) também precisa dizer isso — não só o parágrafo
+    # geral de guardrails.
+    it 'a descrição da tool continuar_conversa avisa explicitamente pra não usar quando há dado novo' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'continuar_conversa' }
+        tool.present? &&
+          tool['description'].include?('NUNCA use esta ferramenta se o cliente ACABOU de fornecer um dado') &&
+          tool['description'].include?('PERDE o dado do cliente')
       }
     end
 

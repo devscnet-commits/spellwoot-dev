@@ -68,6 +68,36 @@ RSpec.describe Ai::FollowupConversationJob do
       expect { job.perform(conversation.id) }.not_to(change { conversation.messages.count })
       expect(dept_default.reload.follow_up['behaviors']).to be_blank # sanity: o escolhido é o vazio
     end
+
+    # Bug real ao vivo (isolamento): "o follow-up... está puxando a mensagem de OUTROS departamentos".
+    # Mesmo cenário multi-department acima, mas agora existe um Ai::Run PROVANDO qual department de
+    # fato conduziu esta conversa — a fonte de verdade real deve VENCER o palpite is_default/primeiro
+    # do resolver, mesmo esse department não sendo o default.
+    it 'existindo Ai::Run desta conversa, usa o department REAL que a atendeu (não o is_default/palpite)' do
+      Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Padrão',
+                             status: 'active', is_default: true, behavior: {}, follow_up: {})
+      dept_vendas = Ai::Department.create!(
+        account: account, ai_agent_id: agent.id, name: 'Vendas', status: 'active', is_default: false,
+        behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' }, # Ai::ReplyPolicy exige isso pra enviar
+        follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours', 'attempts' => [{ 'message' => 'vamos seguir?', 'delay_minutes' => 1 }] }] }
+      )
+      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
+      allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
+      # A conversa foi REALMENTE atendida pelo department de Vendas (Ai::Gateway grava isso a cada
+      # turno real — ver app/services/ai/gateway.rb:59).
+      Ai::Run.create!(account_id: account.id, conversation_id: conversation.id, ai_department_id: dept_vendas.id,
+                      status: 'recorded')
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'incoming',
+                       content: 'oi', created_at: 20.minutes.ago)
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                       content: 'como posso ajudar?', created_at: 15.minutes.ago)
+      conversation.update!(last_activity_at: 15.minutes.ago)
+
+      expect(Ai::ModelRouter).not_to receive(:call_model) # nem chega a precisar do classificador
+
+      expect { job.perform(conversation.id) }.to change { conversation.messages.count }.by(1)
+      expect(conversation.messages.last.content).to eq('vamos seguir?')
+    end
   end
 
   describe '#effective_message' do
@@ -101,6 +131,25 @@ RSpec.describe Ai::FollowupConversationJob do
       inbox = instance_double(Inbox, available_now?: true)
       custom = [{ 'context' => 'outside_hours' }]
       expect(job.send(:active_behavior, custom, inbox)).to be_nil
+    end
+  end
+
+  # Bug real ao vivo: follow-up disparando numa conversa que "acabou de receber mensagem" — piso de
+  # segurança FIXO (MIN_SAFETY_QUIET_MINUTES = 10), independente do delay_minutes configurado.
+  describe '#too_recent?' do
+    it 'true quando last_activity_at é mais recente que o piso de segurança' do
+      conversation = instance_double(Conversation, last_activity_at: 5.minutes.ago)
+      expect(job.send(:too_recent?, conversation)).to be(true)
+    end
+
+    it 'false quando last_activity_at já passou do piso de segurança' do
+      conversation = instance_double(Conversation, last_activity_at: 11.minutes.ago)
+      expect(job.send(:too_recent?, conversation)).to be(false)
+    end
+
+    it 'false quando last_activity_at é nil (nunca trava por dado ausente)' do
+      conversation = instance_double(Conversation, last_activity_at: nil)
+      expect(job.send(:too_recent?, conversation)).to be(false)
     end
   end
 
