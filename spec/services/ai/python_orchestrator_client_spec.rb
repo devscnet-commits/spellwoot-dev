@@ -130,8 +130,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
         body = JSON.parse(req.body)
         names = body['tools_schema'].map { |t| t['name'] }
         # a instrução da etapa ATIVA (índice 1) aparece; a de OUTRA etapa (índice 0), não — só o texto
-        # narrativo é ancorado na etapa atual, a captura de dado (tools) não é.
-        names.sort == %w[avancar_etapa conversation.add_label conversation.resolve conversation.transfer
+        # narrativo é ancorado na etapa atual, a captura de dado (tools) não é. Nomes SANITIZADOS
+        # (Ai::ToolNameSanitizer): "conversation.add_label"/".resolve"/".transfer" viram "_" — a
+        # OpenAI rejeita ponto no nome da function (achado ao vivo, ver spec do sanitizer).
+        names.sort == %w[avancar_etapa conversation_add_label conversation_resolve conversation_transfer
                           registrar_endereco registrar_telefone_extra].sort &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
           !body['system_prompt'].include?('Cumprimente com calor.')
@@ -146,7 +148,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
         names = body['tools_schema'].map { |t| t['name'] }
-        names.sort == %w[avancar_etapa conversation.resolve conversation.transfer] &&
+        names.sort == %w[avancar_etapa conversation_resolve conversation_transfer] &&
           !body['system_prompt'].include?('Etapa atual')
       }
     end
@@ -166,8 +168,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt.include?('Transfira para humano quando: cliente pede humano.') &&
           prompt.include?('Encerre quando: cliente confirma que não quer mais nada.') &&
           prompt.include?('Foi um prazer te atender!') &&
-          prompt.include?('conversation.resolve') &&
-          prompt.include?('conversation.transfer')
+          prompt.include?('conversation_resolve') &&
+          prompt.include?('conversation_transfer')
       }
     end
   end

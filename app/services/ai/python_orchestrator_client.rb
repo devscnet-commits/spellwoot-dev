@@ -190,18 +190,23 @@ class Ai::PythonOrchestratorClient
       'mais de uma na mesma resposta se ele adiantar vários dados de uma vez; chamar de novo com um valor ' \
       'diferente ATUALIZA o dado, não duplica). Use "avancar_etapa" (sem parâmetros) quando julgar a etapa ' \
       'atual concluída, ou se o cliente recusar dar um dado opcional — avance com empatia, sem forçar. Se ' \
-      "precisar encerrar o atendimento, use a tool \"#{RESOLVE_TOOL}\". Se precisar transferir para um " \
-      "humano, use a tool \"#{TRANSFER_TOOL}\"."
+      "precisar encerrar o atendimento, use a tool \"#{sanitized_resolve_tool}\". Se precisar transferir " \
+      "para um humano, use a tool \"#{sanitized_transfer_tool}\"."
   end
 
   def force_handoff_instruction
     'LIMITE DE TENTATIVAS ATINGIDO NESTA ETAPA. Transfira para um humano AGORA usando a tool ' \
-      "\"#{TRANSFER_TOOL}\", mesmo que a etapa não tenha concluído."
+      "\"#{sanitized_transfer_tool}\", mesmo que a etapa não tenha concluído."
   end
 
-  # Tools reais do department (webhooks/capabilities/integrations, inalteradas) + UMA "registrar_*" por
-  # atributo declarado em QUALQUER etapa do playbook (Ai::StepCaptureTool, todas de uma vez — fluxo
-  # agentic, sem gate por etapa ativa) + as tools de controle (avançar/encerrar/transferir).
+  # Tools reais do department (webhooks/capabilities/integrations) + UMA "registrar_*" por atributo
+  # declarado em QUALQUER etapa do playbook (Ai::StepCaptureTool, todas de uma vez — fluxo agentic,
+  # sem gate por etapa ativa) + as tools de controle (avançar/encerrar/transferir). Nomes SANITIZADOS
+  # (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400 "does not
+  # match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
+  # conversation.add_label, contact.update_attributes...) por convenção. Api::Internal::
+  # AiExecuteToolController reverte isso batendo o nome recebido contra este MESMO catálogo
+  # (department.tools.active + as 2 constantes de controle), não adivinhando "_" == ".".
   def tools_schema
     real_names = real_tools.map { |t| t[:name] }
     synthesized = step_capture_tools + control_tools
@@ -210,7 +215,7 @@ class Ai::PythonOrchestratorClient
 
   def real_tools
     @real_tools ||= @department.tools.active.map do |tool|
-      { name: tool.name, description: tool.description, input_schema: tool.input_schema }
+      { name: Ai::ToolNameSanitizer.sanitize(tool.name), description: tool.description, input_schema: tool.input_schema }
     end
   end
 
@@ -218,19 +223,29 @@ class Ai::PythonOrchestratorClient
     @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook)
   end
 
+  def sanitized_resolve_tool
+    Ai::ToolNameSanitizer.sanitize(RESOLVE_TOOL)
+  end
+
+  def sanitized_transfer_tool
+    Ai::ToolNameSanitizer.sanitize(TRANSFER_TOOL)
+  end
+
   # Sempre disponíveis (não dependem de configuração por department) — o modelo controla o avanço da
   # etapa e pode encerrar/transferir a qualquer momento, seguindo as regras do system_prompt acima.
+  # ADVANCE_STEP_TOOL já é seguro (sem pontuação) — sanitizar é no-op, mas passa pela MESMA função por
+  # uniformidade (nunca dois caminhos diferentes decidindo "isso já está seguro ou não").
   def control_tools
     [
-      { name: ADVANCE_STEP_TOOL,
+      { name: Ai::ToolNameSanitizer.sanitize(ADVANCE_STEP_TOOL),
         description: 'Avança para a próxima etapa do atendimento. Use quando a etapa atual estiver ' \
                      'concluída, ou quando o cliente recusar um dado opcional — nunca force, avance com empatia.',
         input_schema: { type: 'object', properties: {} } },
-      { name: RESOLVE_TOOL,
+      { name: sanitized_resolve_tool,
         description: 'Encerra o atendimento (marca a conversa como resolvida) quando as condições de ' \
                      'encerramento configuradas forem atendidas.',
         input_schema: { type: 'object', properties: {} } },
-      { name: TRANSFER_TOOL,
+      { name: sanitized_transfer_tool,
         description: 'Transfere o atendimento para um humano quando as condições de transferência ' \
                      'configuradas forem atendidas, ou quando instruído a transferir imediatamente.',
         input_schema: { type: 'object', properties: {} } }
