@@ -136,6 +136,48 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    context 'chamada de "salvar_memoria_ia" (catch-all de memória — híbrido com registrar_*)' do
+      it 'grava chave/valor em ai_collected_facts via Ai::StateManager, SEM criar uma Ai::CapabilityExecution' do
+        expect { call_tool('salvar_memoria_ia', arguments: { chave: 'nome_do_pet', valor: 'Rex' }) }
+          .not_to change(Ai::CapabilityExecution, :count)
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.additional_attributes['ai_collected_facts']).to eq('nome_do_pet' => 'Rex')
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+
+      it 'upsert: chamar de novo com outro valor pra mesma chave ATUALIZA (não duplica)' do
+        call_tool('salvar_memoria_ia', arguments: { chave: 'nome_do_pet', valor: 'Rex' })
+        call_tool('salvar_memoria_ia', arguments: { chave: 'nome_do_pet', valor: 'Totó' })
+
+        expect(conversation.reload.additional_attributes['ai_collected_facts']).to eq('nome_do_pet' => 'Totó')
+      end
+
+      it 'chave vazia/ausente não grava nada' do
+        call_tool('salvar_memoria_ia', arguments: { valor: 'sem chave' })
+
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['status']).to eq('skipped')
+        expect(conversation.reload.additional_attributes['ai_collected_facts']).to be_nil
+      end
+
+      it 'em modo shadow, NÃO grava nada (mesmo gate de Ai::ToolExecutor)' do
+        call_tool('salvar_memoria_ia', arguments: { chave: 'nome_do_pet', valor: 'Rex' }, mode: 'shadow')
+
+        expect(response.parsed_body['status']).to eq('skipped')
+        expect(conversation.reload.additional_attributes['ai_collected_facts']).to be_nil
+      end
+
+      it 'se a chave livre coincidir com um CustomAttributeDefinition real, espelha em custom_attributes igual a qualquer escrita :trusted (sem proteção especial)' do
+        CustomAttributeDefinition.create!(account: account, attribute_key: 'cidade', attribute_display_name: 'Cidade',
+                                          attribute_model: 'conversation_attribute', attribute_display_type: 'text')
+
+        call_tool('salvar_memoria_ia', arguments: { chave: 'cidade', valor: 'Chapecó' })
+
+        expect(conversation.reload.custom_attributes['cidade']).to eq('Chapecó')
+      end
+    end
+
     context 'chamada de "conversation.resolve"/"conversation.transfer" (tools de controle, sempre disponíveis)' do
       it 'conversation.resolve chama Ai::CapabilityRegistry e marca a conversa como resolvida' do
         call_tool('conversation_resolve')
