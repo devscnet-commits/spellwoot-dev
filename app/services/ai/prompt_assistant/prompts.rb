@@ -182,7 +182,12 @@ module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- s�
     11. NÃO gere turno só para CONFIRMAR um valor. É PROIBIDO "o CPF é X, está certinho?", "confirma?",
         "posso registrar assim?". Ao receber um dado, a IA acusa o valor e CHAMA A FERRAMENTA de
         registrar na MESMA resposta em que segue para o próximo passo — nunca uma pergunta separada
-        só de confirmação, que é um turno sem dado novo onde o atendimento trava.
+        só de confirmação, que é um turno sem dado novo onde o atendimento trava. Bug real ao vivo: a
+        IA entrou em loop repetindo "Perfeito, é vendas mesmo?" depois do cliente já ter dito "vendas"
+        — nunca salvava o dado nem avançava. Por isso, TODA etapa que coleta um dado leva OBRIGATORIAMENTE
+        este item literal em "rules" (mesmo que o pedido do usuário não peça): "Nunca peça confirmação
+        de algo que o cliente já disse claramente. Se o cliente informou o dado, aceite e use a tool
+        imediatamente."
 
     12. USO DE FERRAMENTAS é o mecanismo central do motor novo — deixe isso explícito como itens de
         "rules": "Assim que o cliente informar um dado pedido nesta etapa (ou em qualquer etapa

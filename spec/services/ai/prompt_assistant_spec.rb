@@ -318,6 +318,17 @@ RSpec.describe Ai::PromptAssistant do
         expect(step).to include('está certinho?') # cita o próprio anti-padrão como proibido
       end
 
+      # Bug real ao vivo (WhatsApp): cliente disse "vendas", a IA respondeu "Perfeito, é vendas
+      # mesmo?" em loop, sem nunca salvar o dado nem chamar avancar_etapa. Diferente do item 3 (que só
+      # proíbe o assistente de GERAR esse anti-padrão): esta regra OBRIGA o assistente a incluir, em
+      # TODA etapa que coleta dado, um item literal de "rules" contra confirmação — reforço redundante
+      # de propósito, mesmo padrão do item 6 (cláusula de escape obrigatória).
+      it 'item 3b — OBRIGA (não só proíbe) um item fixo de "rules" contra loop de confirmação' do
+        expect(step).to include('OBRIGATORIAMENTE este item literal em "rules"')
+        expect(step).to include('Nunca peça confirmação de algo que o cliente já disse claramente')
+        expect(step).to include('Se o cliente informou o dado, aceite e use a tool imediatamente')
+      end
+
       # Motor novo (agêntico): quem valida/decide avançar é a própria IA via tools — não um motor à
       # parte. Guarda contra REINTRODUZIR a alegação antiga (contradiria o motor Python/agêntico).
       it 'princípio — NÃO alega que um motor à parte valida formato ou decide avançar sozinho' do

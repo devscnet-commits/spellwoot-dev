@@ -315,7 +315,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # chamar de verdade, inventando situações/recursos que não existem, transferindo sem motivo (pulando
   # o fluxo de etapas), e empilhando várias perguntas de etapas diferentes na mesma mensagem.
   describe 'guardrails de comportamento (achados em teste ao vivo)' do
-    it 'inclui as 4 instruções — chamar registrar_* de verdade, não inventar, disciplina de transferência, uma pergunta por vez' do
+    it 'inclui as 5 instruções — chamar registrar_* de verdade, não fazer loop de confirmação, não inventar, disciplina de transferência, uma pergunta por vez' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -323,9 +323,30 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
         prompt.include?('É PROIBIDO dizer que "anotou" ou "registrou" sem chamar a tool') &&
+          prompt.include?('REGRA DE AÇÃO IMEDIATA (OBRIGATÓRIO)') &&
           prompt.include?('É PROIBIDO inventar situações, recursos ou funcionalidades que não existem') &&
           prompt.include?('SÓ transfira para humano se') &&
           prompt.include?('Peça os dados da etapa atual UM DE CADA VEZ')
+      }
+    end
+
+    # Bug real ao vivo (WhatsApp), 2 rodadas: cliente disse "vendas", a IA respondeu "Perfeito, é
+    # vendas mesmo?" em loop, sem nunca chamar registrar_*/avancar_etapa. A 1ª instrução (mais curta)
+    # não bastou — reforçada com passos numerados + o exemplo concreto "vendas". Guarda contra
+    # REMOVER ou enfraquecer essa instrução de novo.
+    it 'REGRA DE AÇÃO IMEDIATA: registrar_* + avancar_etapa nos 2 passos numerados, proibição explícita de confirmar, exemplo "vendas"' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'vendas', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('REGRA DE AÇÃO IMEDIATA (OBRIGATÓRIO)') &&
+          prompt.include?("1. Chamar a tool 'registrar_*' correspondente para salvar o dado IMEDIATAMENTE.") &&
+          prompt.include?("2. Chamar a tool 'avancar_etapa' para avançar o fluxo.") &&
+          prompt.include?("É ESTRITAMENTE PROIBIDO pedir confirmação ('é isso mesmo?', 'posso confirmar?')") &&
+          prompt.include?("Se o cliente falou 'vendas', salve 'vendas' e avance") &&
+          prompt.include?('Não responda apenas com texto, USE AS TOOLS')
       }
     end
 
