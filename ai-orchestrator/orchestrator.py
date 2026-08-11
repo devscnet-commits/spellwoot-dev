@@ -81,6 +81,18 @@ def run_conversation(
         "input": _build_input(user_input, image_url),
         "tools": openai_tools,
     }
+    # Live bug: the model replied with text-only confirmation loops ("é vendas mesmo?") and never
+    # called any tool, so Rails never advanced ai_step_index. tool_choice="required" forces at least
+    # one function call on THIS (first) call of the turn — never text-only. Safe to force unconditionally
+    # because Rails always includes "continuar_conversa" (Ai::PythonOrchestratorClient::CONTINUE_TOOL)
+    # in tools_schema, a genuine no-op the model can call when it only wants to talk — without it,
+    # forcing a call here would push the model to misuse a real tool (advance early, save garbage) on
+    # any turn with nothing to actually save. Only on the FIRST call: the followup call below (after
+    # tool results are fed back) doesn't resend "tools" at all, so there's nothing to require there —
+    # and forcing a SECOND mandatory call right after the model already acted would just invite it to
+    # call something pointless a second time instead of finally replying in text.
+    if openai_tools:
+        create_kwargs["tool_choice"] = "required"
     # Omitted entirely (not sent as null) when absent, so OpenAI starts a fresh conversation
     # instead of trying to resume a previous_response_id that doesn't exist, and so temperature
     # falls back to OpenAI's own default instead of us hardcoding one.

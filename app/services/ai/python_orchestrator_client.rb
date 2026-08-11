@@ -15,6 +15,13 @@
 # (Api::Internal::AiExecuteToolController, Ai::Gateway). system_prompt still anchors the model to the
 # CURRENT step's instructions text (server-tracked ai_step_index) so the conversation has a narrative
 # thread, but that never gates which data can be captured.
+#
+# tool_choice="required" (orchestrator.py, live bug: the AI replied with text-only confirmation loops
+# and never called any tool, so ai_step_index never advanced): the Responses API now FORCES a tool
+# call every turn. CONTINUE_TOOL ("continuar_conversa") exists so that constraint is never a trap — a
+# genuine no-op the model can call when it only wants to talk (greet, ask, answer a question) without
+# registering data or advancing the step. Without it, tool_choice="required" would force the AI to
+# misuse a real tool (advance early, save garbage) on every turn that has nothing to actually save.
 class Ai::PythonOrchestratorClient
   # Normalizes AI_ORCHESTRATOR_URL whether or not it already includes the /process path — an env var
   # pointed at just the service root (e.g. http://ai-orchestrator:8000) was POSTing to '/' and 404ing.
@@ -32,6 +39,13 @@ class Ai::PythonOrchestratorClient
   ADVANCE_STEP_TOOL = 'avancar_etapa'
   RESOLVE_TOOL = 'conversation.resolve'
   TRANSFER_TOOL = 'conversation.transfer'
+  # No-op de propósito: existe SÓ pra dar à IA uma opção válida quando orchestrator.py manda
+  # tool_choice="required" (loop de confirmação — a IA respondia só com texto e nunca chamava
+  # nenhuma tool, então o Rails nunca avançava o índice). Sem esta tool, tool_choice="required" forçaria
+  # a IA a chamar registrar_*/avancar_etapa mesmo quando só quer falar (cumprimentar, tirar dúvida,
+  # fazer a PRIMEIRA pergunta de uma etapa nova) — risco pior que o bug original (avanço/registro
+  # prematuro). O controller NUNCA toca o banco por causa dela (ver #continue_conversation).
+  CONTINUE_TOOL = 'continuar_conversa'
   # Catch-all de memória (híbrida, deliberado — ver #memory_tool): complementa "registrar_*", não
   # substitui. Pra atributo JÁ conhecido (collect ou CustomAttributeDefinition), "registrar_*" é
   # SEMPRE a via certa — o nome da tool garante a chave exata, sem risco de a IA inventar uma chave
@@ -280,7 +294,11 @@ class Ai::PythonOrchestratorClient
       "forçar. Se precisar encerrar o atendimento, use a tool \"#{sanitized_resolve_tool}\". Se precisar " \
       "transferir para um humano, use a tool \"#{sanitized_transfer_tool}\". Quando for transferir para um " \
       'humano, você DEVE preencher o parâmetro "handoff_summary" com um resumo do que já foi conseguido ' \
-      '(ex: "Cliente já forneceu nome e cidade, falta CPF") e o motivo da transferência.'
+      '(ex: "Cliente já forneceu nome e cidade, falta CPF") e o motivo da transferência. TODA resposta ' \
+      'sua PRECISA vir acompanhada de UMA chamada de ferramenta — nunca responda só com texto, sem ' \
+      "chamar nada. Se você só precisa FALAR com o cliente (fazer uma pergunta, cumprimentar, tirar uma " \
+      "dúvida) sem registrar nenhum dado nem avançar a etapa, chame \"#{sanitized_continue_tool}\" (sem " \
+      'parâmetros) — ela não faz nada no sistema, existe só para liberar sua resposta em texto.'
   end
 
   def force_handoff_instruction
@@ -290,7 +308,8 @@ class Ai::PythonOrchestratorClient
 
   # Tools reais do department (webhooks/capabilities/integrations) + UMA "registrar_*" por atributo
   # declarado em QUALQUER etapa do playbook (Ai::StepCaptureTool, todas de uma vez — fluxo agentic,
-  # sem gate por etapa ativa) + as tools de controle (memória genérica/avançar/encerrar/transferir). Nomes SANITIZADOS
+  # sem gate por etapa ativa) + as tools de controle (continuar/memória genérica/avançar/encerrar/
+  # transferir — CONTINUE_TOOL é o no-op que sustenta tool_choice="required" no orchestrator.py). Nomes SANITIZADOS
   # (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400 "does not
   # match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
   # conversation.add_label, contact.update_attributes...) por convenção. Api::Internal::
@@ -334,12 +353,21 @@ class Ai::PythonOrchestratorClient
     Ai::ToolNameSanitizer.sanitize(TRANSFER_TOOL)
   end
 
+  def sanitized_continue_tool
+    Ai::ToolNameSanitizer.sanitize(CONTINUE_TOOL)
+  end
+
   # Sempre disponíveis (não dependem de configuração por department) — o modelo controla o avanço da
   # etapa e pode encerrar/transferir a qualquer momento, seguindo as regras do system_prompt acima.
   # ADVANCE_STEP_TOOL já é seguro (sem pontuação) — sanitizar é no-op, mas passa pela MESMA função por
   # uniformidade (nunca dois caminhos diferentes decidindo "isso já está seguro ou não").
   def control_tools
     [
+      { name: sanitized_continue_tool,
+        description: 'Use esta ferramenta quando quiser apenas enviar uma mensagem de texto ao cliente ' \
+                     '(fazer uma pergunta, cumprimentar, responder uma dúvida) sem salvar dados ou ' \
+                     'avançar a etapa.',
+        input_schema: { type: 'object', properties: {} } },
       { name: Ai::ToolNameSanitizer.sanitize(MEMORY_TOOL),
         description: 'Salva qualquer informação relevante que o cliente fornecer e que NÃO tenha uma ' \
                      'ferramenta "registrar_*" específica — memória de contexto (não espelha para ' \
