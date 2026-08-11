@@ -156,6 +156,7 @@
       "RESULT_LABEL": "Sugestão",
       "COPY": "Copiar",
       "APPLY": "Usar esta sugestão",
+      "ADMIN_WARNINGS_LABEL": "Atenção — para você, não para a IA",
       "COPIED": "Copiado para a área de transferência.",
       "EMPTY_BRIEF": "Descreva o que você quer antes de gerar.",
       "ERROR": "Não consegui gerar agora. Tente novamente.",

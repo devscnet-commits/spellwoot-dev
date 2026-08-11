@@ -14,10 +14,12 @@ RSpec.describe Ai::PromptAssistant do
       tokens_in: 10, tokens_out: 20, status: status }
   end
 
-  # step_instructions: 3 campos SEPARADOS (objective/rules/suggested_script), não {"suggestion"}.
-  def call_model_step_result(objective: 'Obter a cidade', rules: ['Uma regra'], suggested_script: 'Oi!', status: 'recorded')
+  # step_instructions: 4 campos SEPARADOS (objective/rules/suggested_script/admin_warnings), não {"suggestion"}.
+  def call_model_step_result(objective: 'Obter a cidade', rules: ['Uma regra'], suggested_script: 'Oi!',
+                             admin_warnings: [], status: 'recorded')
     { provider: 'openai', model: 'gpt-4.1-mini',
-      text: { objective: objective, rules: rules, suggested_script: suggested_script }.to_json,
+      text: { objective: objective, rules: rules, suggested_script: suggested_script,
+              admin_warnings: admin_warnings }.to_json,
       tokens_in: 10, tokens_out: 20, status: status }
   end
 
@@ -98,8 +100,9 @@ RSpec.describe Ai::PromptAssistant do
     end
 
     # step_instructions: a tela tem 3 campos (Ai::StepForm.vue), não 1 textarea — o contrato de saída
-    # do assistente tem de bater: objective (string), rules (ARRAY), suggested_script (string).
-    describe 'step_instructions — 3 campos SEPARADOS (não {"suggestion"})' do
+    # do assistente tem de bater: objective (string), rules (ARRAY), suggested_script (string), mais
+    # admin_warnings (ARRAY, só pro admin humano — NUNCA aplicado ao form).
+    describe 'step_instructions — 4 campos SEPARADOS (não {"suggestion"})' do
       it 'faz o parse de objective/rules/suggested_script do TEXTO cru do call_model' do
         allow(Ai::ModelRouter).to receive(:call_model).and_return(
           call_model_step_result(objective: 'Obter a cidade e o tipo de cliente',
@@ -114,6 +117,31 @@ RSpec.describe Ai::PromptAssistant do
         expect(result).not_to have_key('suggestion') # NÃO é mais o contrato de 1 campo
       end
 
+      # Bug real ao vivo: a IA leu "AVISO: CRIE A VARIÁVEL..." dentro da instrução como se fosse
+      # comportamento — admin_warnings existe pra isso NUNCA mais acontecer (campo separado, nunca
+      # aplicado ao form/step, só mostrado pro admin em AiPromptAssistant.vue).
+      it 'faz o parse de admin_warnings (avisos pro admin, SEPARADOS dos campos de máquina)' do
+        allow(Ai::ModelRouter).to receive(:call_model).and_return(
+          call_model_step_result(admin_warnings: ['Crie a variável setor_cliente antes de publicar esta etapa.'])
+        )
+
+        result = described_class.new(account: account, kind: 'step_instructions', brief: 'x').suggest
+
+        expect(result['admin_warnings']).to eq(['Crie a variável setor_cliente antes de publicar esta etapa.'])
+      end
+
+      it 'admin_warnings ausente no JSON vira array vazio (nunca quebra o contrato)' do
+        allow(Ai::ModelRouter).to receive(:call_model).and_return(
+          { provider: 'openai', model: 'gpt-4.1-mini',
+            text: { objective: 'x', rules: [], suggested_script: 'y' }.to_json, # sem "admin_warnings"
+            tokens_in: 1, tokens_out: 1, status: 'recorded' }
+        )
+
+        result = described_class.new(account: account, kind: 'step_instructions', brief: 'x').suggest
+
+        expect(result['admin_warnings']).to eq([])
+      end
+
       it 'degrada sem quebrar quando o call_model não devolve JSON (texto cru vira suggested_script)' do
         allow(Ai::ModelRouter).to receive(:call_model)
           .and_return({ provider: 'openai', model: 'gpt-4.1-mini', text: 'texto solto sem json',
@@ -124,6 +152,7 @@ RSpec.describe Ai::PromptAssistant do
         expect(result['objective']).to eq('')
         expect(result['rules']).to eq([])
         expect(result['suggested_script']).to eq('texto solto sem json')
+        expect(result['admin_warnings']).to eq([])
       end
 
       it 'rules ausente ou não-array no JSON vira array (nunca quebra o contrato)' do
@@ -232,8 +261,18 @@ RSpec.describe Ai::PromptAssistant do
       expect(prompt).to include('- cpf_cnpj (aparece no painel)')
     end
 
-    it 'SEM department: degrada com CONTEXTO INDISPONÍVEL (não recusa)' do
+    # step_instructions: o aviso de "sem contexto" vai em admin_warnings (nunca em objective/rules/
+    # suggested_script) — diferente do base_prompt, que ainda embute "AVISO:" no próprio texto.
+    it 'SEM department (step_instructions): degrada com CONTEXTO INDISPONÍVEL, aviso roteado pra admin_warnings' do
       prompt = capture_system_prompt(kind: 'step_instructions', dept: nil)
+
+      expect(prompt).to include('CONTEXTO INDISPONÍVEL')
+      expect(prompt).to include('coloque o aviso SOMENTE em admin_warnings')
+      expect(prompt).not_to include('AVISO: verifique se existe ferramenta cadastrada')
+    end
+
+    it 'SEM department (base_prompt): ainda embute "AVISO:" no próprio texto (copy-paste, sem apply direto)' do
+      prompt = capture_system_prompt(kind: 'base_prompt', dept: nil)
 
       expect(prompt).to include('CONTEXTO INDISPONÍVEL')
       expect(prompt).to include('AVISO: verifique se existe ferramenta cadastrada')
@@ -308,11 +347,39 @@ RSpec.describe Ai::PromptAssistant do
       end
 
       # Dado de TERCEIRO (indicado) não pode reusar a variável do cliente e sobrescrever (bug real).
-      it 'entidade — reusa só o dado do MESMO cliente; dado de outra pessoa vira variável NOVA (CRIE A VARIÁVEL)' do
+      it 'entidade — reusa só o dado do MESMO cliente; dado de outra pessoa vira variável NOVA' do
         expect(step).to include('DE QUEM é o dado')
         expect(step).to include('PERTENCE A OUTRA PESSOA') # CRITÉRIO, não lista de palavras PT
         expect(step).to include('NA DÚVIDA de quem é o dado, prefira CRIAR') # viés conservador
-        expect(step).to include('CRIE A VARIÁVEL') # saída explícita: precisa criar ANTES
+      end
+
+      # Bug real ao vivo (o motivo desta rodada de ajuste): a IA leu "AVISO: CRIE A VARIÁVEL X ANTES
+      # DE USAR ESTA ETAPA" dentro da instrução e ficou confusa — não é regra de comportamento, é
+      # aviso pro admin. Guardas contra REINTRODUZIR esse vazamento nos 3 campos de máquina.
+      describe 'admin_warnings — avisos pro admin NUNCA vazam pros campos de máquina (bug real)' do
+        it 'declara o 4º campo admin_warnings e a REGRA DE OURO (3 campos de máquina vs aviso pro admin)' do
+          expect(step).to include('"admin_warnings"')
+          expect(step).to include('REGRA DE OURO')
+          expect(step).to include('vão DIRETO pro system_prompt')
+        end
+
+        it 'PROÍBE explicitamente as frases do bug real dentro de objective/rules/suggested_script' do
+          expect(step).to include('"AVISO:"')
+          expect(step).to include('"CRIE A VARIÁVEL"')
+          expect(step).to include('"ANTES DE USAR ESTA ETAPA"')
+        end
+
+        it 'regra da variável nova: o aviso "Crie a variável..." vai em admin_warnings, não em rules' do
+          expect(step).to include('O AVISO de que a variável ainda precisa ser criada')
+          expect(step).to include('vai em "admin_warnings"')
+          expect(step).to include('Crie a variável <nome_sugerido> antes de publicar')
+        end
+
+        it 'regra de ação-só-com-fonte: o aviso de consulta sem fonte vai em admin_warnings, não na instrução' do
+          expect(step).to include('NÃO menciona essa consulta')
+          expect(step).to include('O aviso do motivo vai SÓ em')
+          expect(step).to include('"admin_warnings": "Você pediu consulta a')
+        end
       end
     end
   end

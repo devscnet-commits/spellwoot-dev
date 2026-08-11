@@ -7,6 +7,12 @@
 // "Usar esta sugestão" pra aplicar direto nos 3 campos do form (emit('apply')); nada é salvo sozinho,
 // o Salvar da etapa continua sendo o único gesto que persiste. Usa o axios GLOBAL do Chatwoot
 // (autenticado) — nunca o import cru.
+//
+// admin_warnings (4º campo, só em step_instructions): avisos pro ADMIN humano (ex.: "crie a variável
+// X antes de publicar"), mostrados num bloco À PARTE (adminWarnings, abaixo) — NUNCA entram em
+// `structured` nem no payload do apply(). Bug real que isso corrige: o assistente costumava escrever
+// esse aviso DENTRO de objective/rules, a IA lia como se fosse instrução de comportamento e ficava
+// confusa (objective/rules/suggested_script vão direto pro system_prompt da IA).
 import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -32,7 +38,8 @@ const isStepKind = computed(() => props.kind === 'step_instructions');
 
 const brief = ref('');
 const suggestion = ref(''); // base_prompt: texto único
-const structured = ref(null); // step_instructions: { objective, rules, suggestedScript }
+const structured = ref(null); // step_instructions: { objective, rules, suggestedScript } — SÓ isso vai pro apply()
+const adminWarnings = ref([]); // step_instructions: avisos pro admin humano — NUNCA aplicados ao form
 const loading = ref(false);
 
 const title = computed(() =>
@@ -42,7 +49,9 @@ const title = computed(() =>
 );
 
 const hasResult = computed(() =>
-  isStepKind.value ? !!structured.value : !!suggestion.value
+  isStepKind.value
+    ? !!structured.value || adminWarnings.value.length > 0
+    : !!suggestion.value
 );
 
 const close = () => emit('update:open', false);
@@ -52,6 +61,7 @@ const generate = async () => {
   loading.value = true;
   suggestion.value = '';
   structured.value = null;
+  adminWarnings.value = [];
   try {
     const { data } = await axios.post(
       `/api/v1/accounts/${route.params.accountId}/ai_prompt_assistant`,
@@ -62,17 +72,24 @@ const generate = async () => {
       }
     );
     if (isStepKind.value) {
+      const warnings = Array.isArray(data?.admin_warnings)
+        ? data.admin_warnings
+        : [];
       const hasContent =
         data &&
         (data.objective ||
           (data.rules && data.rules.length) ||
-          data.suggested_script);
+          data.suggested_script ||
+          warnings.length);
       if (hasContent) {
+        // SEMPRE os 3 campos (mesmo vazios) — nunca null enquanto houver algo pra mostrar (evita
+        // template quebrar lendo structured.objective quando só veio admin_warnings).
         structured.value = {
           objective: data.objective || '',
           rules: Array.isArray(data.rules) ? data.rules : [],
           suggestedScript: data.suggested_script || '',
         };
+        adminWarnings.value = warnings;
       } else {
         useAlert(t('AI_AGENTS.PROMPT_ASSISTANT.ERROR'));
       }
@@ -236,6 +253,23 @@ const apply = () => {
                   <q>{{ structured.suggestedScript }}</q>
                 </p>
               </div>
+            </div>
+
+            <!-- admin_warnings: SÓ pro admin humano ler. Bloco à parte, de propósito — NUNCA entra no
+                 apply() (não é conteúdo do form, é uma nota sobre configuração pendente). -->
+            <div
+              v-if="isStepKind && adminWarnings.length"
+              class="flex flex-col gap-1.5 rounded-lg border border-n-amber-6 bg-n-amber-2 p-3"
+              data-testid="admin-warnings"
+            >
+              <span class="text-xs font-medium text-n-amber-11">
+                {{ $t('AI_AGENTS.PROMPT_ASSISTANT.ADMIN_WARNINGS_LABEL') }}
+              </span>
+              <ul class="text-sm text-n-amber-11 mb-0 pl-4 list-disc">
+                <li v-for="(warning, i) in adminWarnings" :key="i">
+                  {{ warning }}
+                </li>
+              </ul>
             </div>
           </div>
         </div>

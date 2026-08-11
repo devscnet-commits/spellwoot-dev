@@ -156,11 +156,16 @@ describe('AiPromptAssistant.vue', () => {
       expect(wrapper.emitted('update:open')[0]).toEqual([false]);
     });
 
-    it('resposta sem NENHUM dos 3 campos preenchidos mostra erro (não quebra)', async () => {
+    it('resposta sem NENHUM dos 4 campos preenchidos mostra erro (não quebra)', async () => {
       const useAlertModule = await import('dashboard/composables');
       const post = vi.fn(() =>
         Promise.resolve({
-          data: { objective: '', rules: [], suggested_script: '' },
+          data: {
+            objective: '',
+            rules: [],
+            suggested_script: '',
+            admin_warnings: [],
+          },
         })
       );
       const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
@@ -172,6 +177,125 @@ describe('AiPromptAssistant.vue', () => {
 
       expect(useAlertModule.useAlert).toHaveBeenCalled();
       wrapper.unmount();
+    });
+  });
+
+  // Bug real ao vivo: a IA leu "AVISO: CRIE A VARIÁVEL..." dentro da instrução como se fosse
+  // comportamento. admin_warnings existe pra isso nunca mais acontecer — mostrado num bloco À PARTE,
+  // NUNCA incluído no payload do apply() (que só carrega objective/rules/suggestedScript).
+  describe('kind=step_instructions — admin_warnings (aviso pro admin, nunca pra IA)', () => {
+    it('mostra admin_warnings num bloco separado do preview dos 3 campos de máquina', async () => {
+      const post = vi.fn(() =>
+        Promise.resolve({
+          data: {
+            objective: 'Obter o setor',
+            rules: [
+              'Assim que o cliente informar o setor, chame registrar_setor_cliente.',
+            ],
+            suggested_script: 'Qual o seu setor?',
+            admin_warnings: [
+              'Crie a variável setor_cliente antes de publicar esta etapa.',
+            ],
+          },
+        })
+      );
+      const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
+
+      wrapper.findComponent(TextArea).vm.$emit('update:modelValue', 'x');
+      await nextTick();
+      wrapper.findComponent(Button).vm.$emit('click');
+      await flushPromises();
+
+      const warningsBlock = wrapper.find('[data-testid="admin-warnings"]');
+      expect(warningsBlock.exists()).toBe(true);
+      expect(warningsBlock.text()).toContain(
+        'Crie a variável setor_cliente antes de publicar esta etapa.'
+      );
+    });
+
+    it('apply() NUNCA inclui admin_warnings — só objective/rules/suggestedScript vão pro form', async () => {
+      const post = vi.fn(() =>
+        Promise.resolve({
+          data: {
+            objective: 'Obter o setor',
+            rules: ['Regra 1'],
+            suggested_script: 'Oi!',
+            admin_warnings: [
+              'Crie a variável setor_cliente antes de publicar esta etapa.',
+            ],
+          },
+        })
+      );
+      const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
+
+      wrapper.findComponent(TextArea).vm.$emit('update:modelValue', 'x');
+      await nextTick();
+      wrapper.findComponent(Button).vm.$emit('click');
+      await flushPromises();
+
+      const applyButton = wrapper.findAllComponents(Button).at(-1);
+      await applyButton.vm.$emit('click');
+
+      const applied = wrapper.emitted('apply')[0][0];
+      expect(applied).toEqual({
+        objective: 'Obter o setor',
+        rules: ['Regra 1'],
+        suggestedScript: 'Oi!',
+      });
+      expect('adminWarnings' in applied).toBe(false);
+      expect('admin_warnings' in applied).toBe(false);
+    });
+
+    // Se SÓ vier admin_warnings (nada de objective/rules/suggested_script), ainda mostra o aviso —
+    // não trata como resposta vazia/erro.
+    it('resposta só com admin_warnings (sem conteúdo de máquina) ainda mostra o aviso, sem erro', async () => {
+      const useAlertModule = await import('dashboard/composables');
+      const post = vi.fn(() =>
+        Promise.resolve({
+          data: {
+            objective: '',
+            rules: [],
+            suggested_script: '',
+            admin_warnings: [
+              'Você pediu consulta a faturas, mas não há ferramenta cadastrada.',
+            ],
+          },
+        })
+      );
+      const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
+
+      wrapper.findComponent(TextArea).vm.$emit('update:modelValue', 'x');
+      await nextTick();
+      wrapper.findComponent(Button).vm.$emit('click');
+      await flushPromises();
+
+      expect(useAlertModule.useAlert).not.toHaveBeenCalled();
+      expect(wrapper.find('[data-testid="admin-warnings"]').exists()).toBe(
+        true
+      );
+    });
+
+    it('sem admin_warnings: o bloco não aparece', async () => {
+      const post = vi.fn(() =>
+        Promise.resolve({
+          data: {
+            objective: 'x',
+            rules: ['y'],
+            suggested_script: 'z',
+            admin_warnings: [],
+          },
+        })
+      );
+      const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
+
+      wrapper.findComponent(TextArea).vm.$emit('update:modelValue', 'x');
+      await nextTick();
+      wrapper.findComponent(Button).vm.$emit('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="admin-warnings"]').exists()).toBe(
+        false
+      );
     });
   });
 });
