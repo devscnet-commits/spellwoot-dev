@@ -82,4 +82,50 @@ RSpec.describe Ai::DepartmentResolver do
       expect(method).not_to eq('override')
     end
   end
+
+  # Bug real ao vivo: Ai::FollowupConversationJob chama .resolve com message_content: nil (não há
+  # mensagem nova no contexto de follow-up). O comentário do job já dizia "classifier pulado", mas o
+  # código NÃO pulava de verdade pra agente multi-department sem mapeamento único — chamava o LLM pra
+  # classificar uma mensagem VAZIA, resultado não-determinístico, follow-up caindo num department sem
+  # nada configurado. Sem override/mapeamento único, dept_a/dept_b (o fixture do describe) caem
+  # exatamente nesse caso: SÓ o classifier decidiria entre os dois.
+  describe 'classificador SKIP quando message_content está em branco (bug real: follow-up com mensagem nil)' do
+    def resolve_with(content)
+      described_class.resolve(agent: agent, inbox_id: inbox.id, message_content: content, conversation: conversation)
+    end
+
+    it 'message_content nil: NÃO chama .classify, cai direto no default determinístico' do
+      expect(described_class).not_to receive(:classify)
+
+      dept, method = resolve_with(nil)
+
+      expect(method).to eq('default')
+      expect(dept).to eq(dept_a) # is_default: true no fixture
+    end
+
+    it 'message_content "" (string vazia): mesmo skip' do
+      expect(described_class).not_to receive(:classify)
+
+      _dept, method = resolve_with('')
+
+      expect(method).to eq('default')
+    end
+
+    it 'message_content "   " (só espaço, .presence trata como blank): mesmo skip' do
+      expect(described_class).not_to receive(:classify)
+
+      _dept, method = resolve_with('   ')
+
+      expect(method).to eq('default')
+    end
+
+    it 'message_content presente: continua chamando .classify normalmente (não regride o caminho real)' do
+      expect(described_class).to receive(:classify).and_return(dept_b)
+
+      dept, method = resolve_with('quero saber sobre vendas')
+
+      expect(method).to eq('classifier')
+      expect(dept).to eq(dept_b)
+    end
+  end
 end

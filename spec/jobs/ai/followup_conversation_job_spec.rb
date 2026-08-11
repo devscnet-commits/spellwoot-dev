@@ -11,24 +11,62 @@ RSpec.describe Ai::FollowupConversationJob do
   # BUG FIX: run() usa DepartmentResolver em vez de .departments.active.first.
   # Prova que o departamento CORRETO é resolvido — override e inbox_mapping vencendo .first.
   describe '#run — resolução de departamento via DepartmentResolver' do
-    let(:account)      { create(:account) }
-    let(:agent)        { create(:ai_agent, account: account) }
-    let(:inbox)        { create(:inbox, account: account) }
+    let(:account) { create(:account) }
+    let(:inbox)   { create(:inbox, account: account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'balanceado',
+                                   supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
+    end
+    # :ai_agent/:ai_department/:ai_agent_inbox NÃO são factories registradas (achado ao investigar
+    # esta rodada — a versão anterior deste teste usava create(:ai_agent, ...) e nunca rodava de
+    # verdade, KeyError "Factory not registered"). Modelos reais direto, mesmo padrão comprovado de
+    # spec/jobs/ai/followup_sweep_job_integration_spec.rb / spec/services/ai/department_resolver_spec.rb.
+    let(:agent) do
+      Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
+    end
     let(:conversation) { create(:conversation, account: account, inbox: inbox, status: 'open', assignee_id: nil) }
 
-    before do
-      account.update!(custom_attributes: { 'ai_core' => true }) if account.respond_to?(:custom_attributes)
-      allow(account).to receive(:feature_enabled?).with('ai_core').and_return(true)
-    end
+    before { account.enable_features!('ai_core') }
 
     it 'usa o departamento indicado por ai_department_override em vez do primeiro' do
-      dept_first   = create(:ai_department, agent: agent, follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours', 'attempts' => [{ 'message' => 'vamos seguir?', 'delay_minutes' => 1 }] }] })
-      dept_correct = create(:ai_department, agent: agent, follow_up: {})
+      dept_first = Ai::Department.create!(
+        account: account, ai_agent_id: agent.id, name: 'Primeiro', status: 'active', behavior: {},
+        follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours', 'attempts' => [{ 'message' => 'vamos seguir?', 'delay_minutes' => 1 }] }] }
+      )
+      dept_correct = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Correto',
+                                            status: 'active', behavior: {}, follow_up: {})
       conversation.update!(additional_attributes: { 'ai_department_override' => dept_correct.id })
-      create(:ai_agent_inbox, agent: agent, inbox: inbox, status: 'live')
+      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
 
-      # dept_correct não tem follow-up → job retorna sem enviar mensagem
+      # dept_correct não tem follow-up → job retorna sem enviar mensagem. dept_first existir (com
+      # follow-up configurado) e NÃO ser usado é a prova de que o override venceu.
+      expect(dept_first.follow_up['behaviors']).to be_present # sanity: dept_first não é um dummy vazio
       expect { job.perform(conversation.id) }.not_to(change { conversation.messages.count })
+    end
+
+    # Bug real ao vivo (2026-08): DepartmentResolver chamava .classify com message_content: nil pra
+    # QUALQUER agente multi-department sem override/mapeamento único — LLM "chutava" um índice sem
+    # sinal nenhum, então o follow-up podia cair não-deterministicamente num department SEM nada
+    # configurado (ou ignorando as regras do department certo). Corrigido no resolver (classify só
+    # roda com message_content presente); aqui provamos o efeito ponta-a-ponta pelo job de follow-up.
+    it 'agente com MÚLTIPLOS departments, SEM override/mapeamento: resolve por is_default (não chama o classificador)' do
+      dept_default = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Padrão',
+                                            status: 'active', is_default: true, behavior: {}, follow_up: {})
+      Ai::Department.create!(
+        account: account, ai_agent_id: agent.id, name: 'Vendas', status: 'active', is_default: false,
+        behavior: {},
+        follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours', 'attempts' => [{ 'message' => 'vamos seguir?', 'delay_minutes' => 1 }] }] }
+      )
+      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
+      # Nenhum ai_department_override, nenhum Ai::DepartmentInbox mapeado -> SEM o fix, cairia no
+      # classificador de verdade (Ai::ModelRouter.call_model, HTTP real, WebMock bloquearia e
+      # estouraria NetConnectNotAllowedError se chamado). O guard abaixo é a prova de que NÃO roda.
+      expect(Ai::ModelRouter).not_to receive(:call_model)
+
+      # dept_default (is_default: true, é quem o resolver escolhe sem classificador) não tem
+      # follow-up configurado -> job não envia nada, mesmo o OUTRO department tendo um attempt pronto.
+      expect { job.perform(conversation.id) }.not_to(change { conversation.messages.count })
+      expect(dept_default.reload.follow_up['behaviors']).to be_blank # sanity: o escolhido é o vazio
     end
   end
 
