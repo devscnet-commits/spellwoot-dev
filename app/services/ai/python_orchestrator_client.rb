@@ -32,6 +32,13 @@ class Ai::PythonOrchestratorClient
   ADVANCE_STEP_TOOL = 'avancar_etapa'
   RESOLVE_TOOL = 'conversation.resolve'
   TRANSFER_TOOL = 'conversation.transfer'
+  # Catch-all de memória (híbrida, deliberado — ver #memory_tool): complementa "registrar_*", não
+  # substitui. Pra atributo JÁ conhecido (collect ou CustomAttributeDefinition), "registrar_*" é
+  # SEMPRE a via certa — o nome da tool garante a chave exata, sem risco de a IA inventar uma chave
+  # livre que não bate com o CustomAttributeDefinition e o espelhamento pra custom_attributes falhar
+  # em silêncio (já aconteceu neste projeto uma vez, com o modelo escrevendo "cidade_usuario" em vez
+  # de "cidade"). Esta tool é só pro que SOBRA: contexto que o cliente deu e não tem "botão" nenhum.
+  MEMORY_TOOL = 'salvar_memoria_ia'
 
   def self.process_message(conversation:, content:, agent:, department:, mode:, message: nil, force_handoff_notice: false)
     new(conversation: conversation, content: content, agent: agent, department: department, mode: mode,
@@ -247,12 +254,15 @@ class Ai::PythonOrchestratorClient
   def tool_usage_instruction
     'Use as ferramentas "registrar_*" para gravar cada dado assim que o cliente informar (pode chamar ' \
       'mais de uma na mesma resposta se ele adiantar vários dados de uma vez; chamar de novo com um valor ' \
-      'diferente ATUALIZA o dado, não duplica). Use "avancar_etapa" (sem parâmetros) quando julgar a etapa ' \
-      'atual concluída, ou se o cliente recusar dar um dado opcional — avance com empatia, sem forçar. Se ' \
-      "precisar encerrar o atendimento, use a tool \"#{sanitized_resolve_tool}\". Se precisar transferir " \
-      "para um humano, use a tool \"#{sanitized_transfer_tool}\". Quando for transferir para um humano, " \
-      'você DEVE preencher o parâmetro "handoff_summary" com um resumo do que já foi conseguido (ex: ' \
-      '"Cliente já forneceu nome e cidade, falta CPF") e o motivo da transferência.'
+      'diferente ATUALIZA o dado, não duplica). Se o cliente informar algo relevante que NÃO tem uma ' \
+      'ferramenta "registrar_*" específica, use "salvar_memoria_ia" com chave=nome do dado (ex: "nome", ' \
+      '"cpf", "plano") e valor=o que o cliente disse — nunca deixe uma informação relevante se perder só ' \
+      'porque não existe uma tool dedicada para ela. Use "avancar_etapa" (sem parâmetros) quando julgar a ' \
+      'etapa atual concluída, ou se o cliente recusar dar um dado opcional — avance com empatia, sem ' \
+      "forçar. Se precisar encerrar o atendimento, use a tool \"#{sanitized_resolve_tool}\". Se precisar " \
+      "transferir para um humano, use a tool \"#{sanitized_transfer_tool}\". Quando for transferir para um " \
+      'humano, você DEVE preencher o parâmetro "handoff_summary" com um resumo do que já foi conseguido ' \
+      '(ex: "Cliente já forneceu nome e cidade, falta CPF") e o motivo da transferência.'
   end
 
   def force_handoff_instruction
@@ -262,7 +272,7 @@ class Ai::PythonOrchestratorClient
 
   # Tools reais do department (webhooks/capabilities/integrations) + UMA "registrar_*" por atributo
   # declarado em QUALQUER etapa do playbook (Ai::StepCaptureTool, todas de uma vez — fluxo agentic,
-  # sem gate por etapa ativa) + as tools de controle (avançar/encerrar/transferir). Nomes SANITIZADOS
+  # sem gate por etapa ativa) + as tools de controle (memória genérica/avançar/encerrar/transferir). Nomes SANITIZADOS
   # (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400 "does not
   # match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
   # conversation.add_label, contact.update_attributes...) por convenção. Api::Internal::
@@ -312,6 +322,19 @@ class Ai::PythonOrchestratorClient
   # uniformidade (nunca dois caminhos diferentes decidindo "isso já está seguro ou não").
   def control_tools
     [
+      { name: Ai::ToolNameSanitizer.sanitize(MEMORY_TOOL),
+        description: 'Salva qualquer informação relevante que o cliente fornecer e que NÃO tenha uma ' \
+                     'ferramenta "registrar_*" específica — memória de contexto (não espelha para ' \
+                     'painel/CRM, só fica disponível para a própria IA não perguntar de novo). Substitua ' \
+                     '"chave" pelo nome do dado (ex: nome, cpf, plano) e "valor" pelo conteúdo informado.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            'chave' => { type: 'string', description: 'Nome do dado (ex.: "nome_do_animal_de_estimacao").' },
+            'valor' => { type: 'string', description: 'O que o cliente informou.' }
+          },
+          required: %w[chave valor]
+        } },
       { name: Ai::ToolNameSanitizer.sanitize(ADVANCE_STEP_TOOL),
         description: 'Avança para a próxima etapa do atendimento. Use quando a etapa atual estiver ' \
                      'concluída, ou quando o cliente recusar um dado opcional — nunca force, avance com empatia.',

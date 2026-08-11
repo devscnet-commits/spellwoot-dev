@@ -170,7 +170,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
-    it 'sem playbook, tools_schema ainda traz as 3 tools de controle + o registrar_* do CustomAttributeDefinition padrão da conta (Deals) — nenhuma tool de etapa' do
+    it 'sem playbook, tools_schema ainda traz as 4 tools de controle + o registrar_* do CustomAttributeDefinition padrão da conta (Deals) — nenhuma tool de etapa' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -180,7 +180,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         names = body['tools_schema'].map { |t| t['name'] }
         # 'marcado_como_ganho_ou_perdido' vem do CustomAttributeDefinition seedado em TODA Account
         # (Account#create_default_custom_attributes) — known_slot_keys inclui mesmo sem playbook.
-        names.sort == %w[avancar_etapa conversation_resolve conversation_transfer
+        names.sort == %w[avancar_etapa conversation_resolve conversation_transfer salvar_memoria_ia
                           registrar_marcado_como_ganho_ou_perdido].sort &&
           !body['system_prompt'].include?('Etapa atual')
       }
@@ -363,6 +363,36 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         JSON.parse(req.body)['system_prompt'].include?('você DEVE preencher o parâmetro "handoff_summary"')
+      }
+    end
+  end
+
+  # Híbrido (achado ao vivo, discutido com o usuário): "registrar_*" continua sendo a via pra
+  # atributo JÁ conhecido (garante a chave exata pro espelhamento em custom_attributes);
+  # "salvar_memoria_ia" é um catch-all pra QUALQUER outra coisa que o cliente informar, pra nunca
+  # perder um dado só porque não existe uma tool dedicada pra ele.
+  describe 'tool genérica "salvar_memoria_ia" (catch-all de memória)' do
+    it 'sempre presente em tools_schema, com chave/valor string obrigatórios' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'salvar_memoria_ia' }
+        tool.present? &&
+          tool['input_schema']['required'].sort == %w[chave valor] &&
+          tool['input_schema']['properties']['chave']['type'] == 'string' &&
+          tool['input_schema']['properties']['valor']['type'] == 'string'
+      }
+    end
+
+    it 'system_prompt instrui a IA a usar salvar_memoria_ia quando não há registrar_* específica' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['system_prompt'].include?('use "salvar_memoria_ia" com chave=nome do dado')
       }
     end
   end

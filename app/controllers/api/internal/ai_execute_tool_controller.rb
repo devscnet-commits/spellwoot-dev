@@ -38,6 +38,8 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     attribute = Ai::StepCaptureTool.attribute_for(params[:tool_name])
     return render json: capture_attribute(conversation, department, attribute) if attribute
 
+    return render json: save_memory(conversation, department) if params[:tool_name] == Ai::PythonOrchestratorClient::MEMORY_TOOL
+
     tool = find_real_tool!(department, params[:tool_name])
 
     execution = Ai::ToolExecutor.new(
@@ -89,11 +91,32 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   def capture_attribute(conversation, department, attribute)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
-    value = arguments[attribute]
+    persist_and_report(conversation, department, attribute, arguments[attribute])
+  end
+
+  # Híbrido, deliberado (Ai::PythonOrchestratorClient::MEMORY_TOOL comment): "registrar_*" continua
+  # sendo a via pra atributo JÁ conhecido (collect/CustomAttributeDefinition) — o NOME da tool garante
+  # a chave exata, sem risco de a IA inventar uma chave livre que não bate com nenhum
+  # CustomAttributeDefinition (já aconteceu neste projeto — "cidade_usuario" em vez de "cidade" — e o
+  # espelhamento pra custom_attributes falhou em silêncio). "salvar_memoria_ia" é só pro que SOBRA:
+  # contexto sem tool dedicada. Mesmo mecanismo de persistência (persist_attributes, source: :trusted,
+  # sem gate) — se a IA por acaso usar uma chave que JÁ é um CustomAttributeDefinition real, espelha
+  # igual a qualquer outro dado :trusted; não há proteção especial contra isso aqui, é o mesmo
+  # comportamento de qualquer escrita confiável.
+  def save_memory(conversation, department)
+    return { result: {}, status: 'skipped', error: nil } unless live?
+
+    chave = arguments['chave'].to_s.strip
+    return { result: {}, status: 'skipped', error: 'chave vazia — nada foi registrado' } if chave.blank?
+
+    persist_and_report(conversation, department, chave, arguments['valor'])
+  end
+
+  def persist_and_report(conversation, department, key, value)
     gated = Ai::StateManager.new(conversation: conversation, agent: department.agent)
-                            .persist_attributes({ attribute => value }, department, source: :trusted)
-    persisted = gated.key?(attribute)
-    { result: { attribute => value }, status: persisted ? 'executed' : 'skipped',
+                            .persist_attributes({ key => value }, department, source: :trusted)
+    persisted = gated.key?(key)
+    { result: { key => value }, status: persisted ? 'executed' : 'skipped',
       error: persisted ? nil : 'valor vazio — nada foi registrado' }
   end
 
