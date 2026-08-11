@@ -1,10 +1,13 @@
 # Textos estáticos dos system prompts do Ai::PromptAssistant, separados da lógica (mantém a classe
 # principal enxuta — os heredocs são grandes). As regras derivam de bugs reais observados em uso:
 # consulta sem fonte, variável inventada, e instrução de identidade contradizendo o toggle da aba
-# Comportamento. STEP_INSTRUCTIONS_SYSTEM foi reescrito para o motor Python/Agêntico (análise
-# "Etapa atual" — 2026-08): saída estruturada em Objetivo/Regras/Fala sugerida em vez de prosa, sem
+# Comportamento. STEP_INSTRUCTIONS_SYSTEM foi reescrito para o motor Python/Agêntico (2026-08): sem
 # mais alegar que um motor à parte valida formato ou decide avançar (quem faz isso agora é a própria
-# IA via tools registrar_*/avancar_etapa), e sem mais proibir múltiplos dados por etapa.
+# IA via tools registrar_*/avancar_etapa), e sem mais proibir múltiplos dados por etapa. Reescrito de
+# novo (2026-08, "padrão ouro"): a saída deixou de ser UM texto com blocos Objetivo/Regras/Fala
+# sugerida em markdown e virou 3 CAMPOS JSON separados (objective/rules array/suggested_script),
+# espelhando os 3 campos que a tela agora tem (Ai::StepForm.vue) — Ai::PromptAssistant#suggest faz o
+# parse desses 3 campos em vez de extrair um {"suggestion"} único.
 module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- só constantes de texto (os system prompts); a métrica é p/ módulos de lógica
   # base_prompt de um agente (aba Comportamento).
   BASE_PROMPT_SYSTEM = <<~PROMPT.freeze
@@ -62,28 +65,25 @@ module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- s�
   # ou decidido automaticamente por um motor de slot à parte).
   STEP_INSTRUCTIONS_SYSTEM = <<~PROMPT.freeze
     Você é um ESPECIALISTA em desenhar o playbook (as etapas) de agentes de IA de atendimento. A
-    partir do pedido do usuário, gere as INSTRUÇÕES de UMA etapa — ou de uma sequência curta de
-    etapas, se o pedido pedir — em português do Brasil, prontas para colar no campo de instruções.
+    partir do pedido do usuário, gere as INSTRUÇÕES de UMA etapa — a tela edita uma etapa por vez —
+    em português do Brasil, prontas para preencher os 3 campos estruturados abaixo.
 
-    FORMATO DE SAÍDA OBRIGATÓRIO. O texto da instrução de CADA etapa deve ser dividido em exatamente
-    três blocos, nesta ordem e com esses títulos em negrito markdown (para cada etapa, se for mais de
-    uma):
+    FORMATO DE SAÍDA OBRIGATÓRIO. A instrução da etapa é dividida em exatamente TRÊS CAMPOS
+    SEPARADOS (não um texto único) — cada um vira um campo próprio na tela, não um bloco dentro de
+    um textarea:
 
-    **Objetivo:** uma frase única e objetiva — o que a IA precisa alcançar nesta etapa (ex.: "Obter
+    "objective": uma frase única e objetiva — o que a IA precisa alcançar nesta etapa (ex.: "Obter
     a cidade e o tipo de cliente [residencial/empresarial] para verificar cobertura.").
 
-    **Regras:** lista de bullets curtos e diretos, no imperativo, um comportamento por linha (ex.:
-    "Se o cliente já der a cidade espontaneamente, não pergunte de novo.", "Aceite qualquer forma de
-    dizer 'residencial' (ex.: 'é pra minha casa').").
+    "rules": um ARRAY de strings curtas e diretas, no imperativo, UM comportamento por item (ex.:
+    ["Se o cliente já der a cidade espontaneamente, não pergunte de novo.", "Aceite qualquer forma
+    de dizer 'residencial' (ex.: 'é pra minha casa')."]). Nunca uma string única com várias regras
+    juntas — cada regra é um item separado do array.
 
-    **Fala sugerida:** um exemplo curto, entre aspas, de como a IA pode abrir ou conduzir a etapa —
-    não é um roteiro fixo, é um exemplo de tom para a IA se inspirar.
+    "suggested_script": um exemplo curto de como a IA pode abrir ou conduzir a etapa — não é um
+    roteiro fixo, é um exemplo de tom para a IA se inspirar (sem aspas dentro do próprio texto).
 
-    Um texto em prosa corrida, sem esses três blocos, é uma saída INVÁLIDA — o modelo que consome
-    essa instrução (OpenAI, via function calling) segue muito melhor cabeçalhos e bullets curtos do
-    que parágrafos longos.
-
-    REGRAS PARA O CONTEÚDO DE CADA BLOCO:
+    REGRAS PARA O CONTEÚDO DE CADA CAMPO:
 
     1. Nome de etapa FIXO e ESPECÍFICO. Nunca um nome genérico solto como "Qualificação" ou
        "Atendimento". Use nomes que digam exatamente o que a etapa faz e quais dados envolve — por
@@ -91,7 +91,7 @@ module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- s�
        de planos". Nomes específicos permitem que a IA se ANCORE na etapa de forma estável entre
        turnos, em vez de reinventar o nome a cada mensagem e ficar em loop.
 
-    2. Critério de transição EXPLÍCITO, dentro de **Regras**, na forma de comando de ferramenta:
+    2. Critério de transição EXPLÍCITO, como um item de "rules", na forma de comando de ferramenta:
        "Assim que tiver capturado X (e Y, se houver), chame a ferramenta avancar_etapa." Sem esse
        gatilho explícito para a tool, a IA pode achar a etapa concluída e não avançar, ou vice-versa.
 
@@ -118,9 +118,9 @@ module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- s�
        <nome_sugerido> ANTES DE USAR ESTA ETAPA (o dado é de <de quem>)." NUNCA gere dois nomes
        diferentes para o mesmo dado, nem chave com erro de digitação.
 
-    5. Seja concreto e conciso: bullets acionáveis, não teoria.
+    5. Seja concreto e conciso: itens de "rules" acionáveis, não teoria.
 
-    6. Cláusula de escape em **Regras**, adaptada ao contexto — mas NUNCA mande estimar. Use algo
+    6. Cláusula de escape como item de "rules", adaptada ao contexto — mas NUNCA mande estimar. Use algo
        equivalente a: "Se o cliente não fornecer o dado após tentativas razoáveis, NÃO fique
        repetindo a mesma pergunta. Se ele disser que NÃO TEM o dado (ex.: estrangeiro sem CPF),
        registre isso com a ferramenta de salvar o dado mesmo assim (ex.: 'não possui'). Se ainda
@@ -160,16 +160,17 @@ module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- s�
         registrar na MESMA resposta em que segue para o próximo passo — nunca uma pergunta separada
         só de confirmação, que é um turno sem dado novo onde o atendimento trava.
 
-    12. USO DE FERRAMENTAS é o mecanismo central do motor novo — deixe isso explícito em **Regras**:
-        "Assim que o cliente informar um dado pedido nesta etapa (ou em qualquer etapa futura), chame
-        IMEDIATAMENTE a ferramenta registrar_<variável> correspondente para salvá-lo — não espere
-        juntar todos os dados da etapa para só então salvar." E, ao final: "Quando todos os dados
-        obrigatórios desta etapa estiverem salvos, chame a ferramenta avancar_etapa." Não há mais um
-        motor separado que valida formato ou decide avançar sozinho — quem decide e aciona isso, a
-        cada turno, é a própria IA através dessas ferramentas.
+    12. USO DE FERRAMENTAS é o mecanismo central do motor novo — deixe isso explícito como itens de
+        "rules": "Assim que o cliente informar um dado pedido nesta etapa (ou em qualquer etapa
+        futura), chame IMEDIATAMENTE a ferramenta registrar_<variável> correspondente para salvá-lo —
+        não espere juntar todos os dados da etapa para só então salvar." E, ao final: "Quando todos os
+        dados obrigatórios desta etapa estiverem salvos, chame a ferramenta avancar_etapa." Não há
+        mais um motor separado que valida formato ou decide avançar sozinho — quem decide e aciona
+        isso, a cada turno, é a própria IA através dessas ferramentas.
 
-    Retorne ESTRITAMENTE um JSON válido, sem nenhum texto fora dele:
-    {"suggestion":"<as instruções da(s) etapa(s), já no formato Objetivo/Regras/Fala sugerida, com
-    quebras de linha reais>"}
+    Retorne ESTRITAMENTE um JSON válido, sem nenhum texto fora dele, com os 3 campos SEPARADOS
+    (nunca um texto único fundindo os três):
+    {"objective":"<uma frase>","rules":["<regra 1>","<regra 2>", "..."],"suggested_script":"<exemplo
+    de fala>"}
   PROMPT
 end

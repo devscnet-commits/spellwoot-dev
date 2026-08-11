@@ -14,6 +14,13 @@ RSpec.describe Ai::PromptAssistant do
       tokens_in: 10, tokens_out: 20, status: status }
   end
 
+  # step_instructions: 3 campos SEPARADOS (objective/rules/suggested_script), não {"suggestion"}.
+  def call_model_step_result(objective: 'Obter a cidade', rules: ['Uma regra'], suggested_script: 'Oi!', status: 'recorded')
+    { provider: 'openai', model: 'gpt-4.1-mini',
+      text: { objective: objective, rules: rules, suggested_script: suggested_script }.to_json,
+      tokens_in: 10, tokens_out: 20, status: status }
+  end
+
   describe '#suggest' do
     it 'gera sugestão de base_prompt e grava um Ai::Run SEM conversa/agente' do
       allow(Ai::ModelRouter).to receive(:call_model).and_return(call_model_result(suggestion: 'meu base prompt'))
@@ -75,7 +82,7 @@ RSpec.describe Ai::PromptAssistant do
       allow(Ai::ModelRouter).to receive(:call_model)
         .and_return(call_model_result(suggestion: "linha 1\nlinha 2"))
 
-      result = described_class.new(account: account, kind: 'step_instructions', brief: 'x').suggest
+      result = described_class.new(account: account, kind: 'base_prompt', brief: 'x').suggest
 
       expect(result['suggestion']).to eq("linha 1\nlinha 2")
     end
@@ -88,6 +95,48 @@ RSpec.describe Ai::PromptAssistant do
       result = described_class.new(account: account, kind: 'base_prompt', brief: 'x').suggest
 
       expect(result['suggestion']).to eq('texto solto sem json')
+    end
+
+    # step_instructions: a tela tem 3 campos (Ai::StepForm.vue), não 1 textarea — o contrato de saída
+    # do assistente tem de bater: objective (string), rules (ARRAY), suggested_script (string).
+    describe 'step_instructions — 3 campos SEPARADOS (não {"suggestion"})' do
+      it 'faz o parse de objective/rules/suggested_script do TEXTO cru do call_model' do
+        allow(Ai::ModelRouter).to receive(:call_model).and_return(
+          call_model_step_result(objective: 'Obter a cidade e o tipo de cliente',
+                                 rules: ['Regra 1', 'Regra 2'], suggested_script: 'Oi! Me diz sua cidade?')
+        )
+
+        result = described_class.new(account: account, kind: 'step_instructions', brief: 'x').suggest
+
+        expect(result['objective']).to eq('Obter a cidade e o tipo de cliente')
+        expect(result['rules']).to eq(['Regra 1', 'Regra 2'])
+        expect(result['suggested_script']).to eq('Oi! Me diz sua cidade?')
+        expect(result).not_to have_key('suggestion') # NÃO é mais o contrato de 1 campo
+      end
+
+      it 'degrada sem quebrar quando o call_model não devolve JSON (texto cru vira suggested_script)' do
+        allow(Ai::ModelRouter).to receive(:call_model)
+          .and_return({ provider: 'openai', model: 'gpt-4.1-mini', text: 'texto solto sem json',
+                        tokens_in: 1, tokens_out: 1, status: 'recorded' })
+
+        result = described_class.new(account: account, kind: 'step_instructions', brief: 'x').suggest
+
+        expect(result['objective']).to eq('')
+        expect(result['rules']).to eq([])
+        expect(result['suggested_script']).to eq('texto solto sem json')
+      end
+
+      it 'rules ausente ou não-array no JSON vira array (nunca quebra o contrato)' do
+        allow(Ai::ModelRouter).to receive(:call_model).and_return(
+          { provider: 'openai', model: 'gpt-4.1-mini',
+            text: { objective: 'x', suggested_script: 'y' }.to_json, # sem "rules"
+            tokens_in: 1, tokens_out: 1, status: 'recorded' }
+        )
+
+        result = described_class.new(account: account, kind: 'step_instructions', brief: 'x').suggest
+
+        expect(result['rules']).to eq([])
+      end
     end
 
     it 'computa o custo localmente (call_model não devolve cost) — Run com cost numérico' do
@@ -242,10 +291,15 @@ RSpec.describe Ai::PromptAssistant do
         expect(step).to include('avancar_etapa')
       end
 
-      it 'formato de saída — Objetivo / Regras / Fala sugerida' do
-        expect(step).to include('**Objetivo:**')
-        expect(step).to include('**Regras:**')
-        expect(step).to include('**Fala sugerida:**')
+      # "padrão ouro" (2026-08): a saída deixou de ser 1 texto com blocos markdown e virou 3 campos JSON
+      # SEPARADOS — espelha os 3 campos da tela (Ai::StepForm.vue), não 1 textarea.
+      it 'formato de saída — 3 campos JSON separados: objective / rules (array) / suggested_script' do
+        expect(step).to include('"objective"')
+        expect(step).to include('"rules"')
+        expect(step).to include('"suggested_script"')
+        expect(step).not_to include('**Objetivo:**') # formato antigo (markdown num texto só) removido
+        expect(step).not_to include('**Regras:**')
+        expect(step).not_to include('**Fala sugerida:**')
       end
 
       it 'NÃO proíbe mais etapa com múltiplos dados (o motor agêntico salva um por um via tools)' do

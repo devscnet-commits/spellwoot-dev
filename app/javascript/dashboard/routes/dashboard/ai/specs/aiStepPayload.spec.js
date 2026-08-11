@@ -58,6 +58,93 @@ describe('reconcileSteps — merge no save defasado (409)', () => {
 });
 
 describe('aiStepPayload', () => {
+  // "Padrão ouro" (2026-08): instructions (1 textarea) virou objective/rules/suggested_script (3
+  // campos). buildStepPayload NUNCA MAIS emite `instructions` — etapa antiga preserva o texto legado
+  // via mergeStepEdit (chave ausente no payload = não sobrescreve).
+  describe('objective/rules/suggested_script — substituem instructions (1 textarea -> 3 campos)', () => {
+    it('buildStepPayload SEMPRE emite objective (trim) e suggested_script (trim)', () => {
+      const p = buildStepPayload({
+        name: 'X',
+        objective: '  Obter a cidade  ',
+        suggestedScript: '  Oi, tudo bem?  ',
+      });
+      expect(p.objective).toBe('Obter a cidade');
+      expect(p.suggested_script).toBe('Oi, tudo bem?');
+    });
+
+    it('buildStepPayload divide rules (textarea cru, uma por linha) em array, descartando linhas vazias', () => {
+      const p = buildStepPayload({
+        name: 'X',
+        rules: 'Regra 1\n  Regra 2  \n\nRegra 3',
+      });
+      expect(p.rules).toEqual(['Regra 1', 'Regra 2', 'Regra 3']);
+    });
+
+    it('objective/rules/suggested_script ausentes -> defaults vazios ("" / [] / "")', () => {
+      const p = buildStepPayload({ name: 'X' });
+      expect(p.objective).toBe('');
+      expect(p.rules).toEqual([]);
+      expect(p.suggested_script).toBe('');
+    });
+
+    it('buildStepPayload NUNCA emite a chave instructions (motor legado; etapa antiga sobrevive via merge)', () => {
+      expect('instructions' in buildStepPayload({ name: 'X' })).toBe(false);
+    });
+
+    it('parseStep: etapa NOVA (objective já preenchido) preserva objective/rules/suggested_script', () => {
+      const parsed = parseStep({
+        name: 'Qualificação',
+        objective: 'Obter a cidade',
+        rules: ['Regra 1', 'Regra 2'],
+        suggested_script: 'Oi!',
+      });
+      expect(parsed.objective).toBe('Obter a cidade');
+      expect(parsed.rules).toEqual(['Regra 1', 'Regra 2']);
+      expect(parsed.suggested_script).toBe('Oi!');
+    });
+
+    // Migração: etapa ANTIGA (só instructions, objective ainda não existe) — o texto legado migra pro
+    // campo Objetivo no form, nada se perde. Etapa que JÁ tem objective NÃO é tocada por instructions.
+    it('parseStep: etapa ANTIGA (só instructions) semeia objective com o texto legado', () => {
+      const parsed = parseStep({
+        name: 'Cadastro',
+        instructions: 'Peça e grave o CPF do cliente.',
+      });
+      expect(parsed.objective).toBe('Peça e grave o CPF do cliente.');
+      expect(parsed.rules).toEqual([]);
+    });
+
+    it('parseStep: objective presente NÃO é sobrescrito por instructions legado', () => {
+      const parsed = parseStep({
+        name: 'X',
+        objective: 'Novo formato',
+        instructions: 'Texto antigo, deve ser ignorado',
+      });
+      expect(parsed.objective).toBe('Novo formato');
+    });
+
+    it('stepToApi normaliza rules: trim em cada item, remove vazios', () => {
+      const api = stepToApi({
+        name: 'X',
+        rules: ['  Regra 1  ', '', '   ', 'Regra 2'],
+      });
+      expect(api.rules).toEqual(['Regra 1', 'Regra 2']);
+    });
+
+    it('round-trip (backend -> form -> backend) preserva objective/rules/suggested_script', () => {
+      const fromBackend = {
+        name: 'X',
+        objective: 'Obter a cidade',
+        rules: ['Regra 1'],
+        suggested_script: 'Oi!',
+      };
+      const roundTripped = stepToApi(parseStep(fromBackend));
+      expect(roundTripped.objective).toBe('Obter a cidade');
+      expect(roundTripped.rules).toEqual(['Regra 1']);
+      expect(roundTripped.suggested_script).toBe('Oi!');
+    });
+  });
+
   describe('preservação de chaves (spread) — a classe de bug que fechou', () => {
     it('parseStep preserva collect/slot_required e QUALQUER campo desconhecido; normaliza + injeta uid', () => {
       const parsed = parseStep({

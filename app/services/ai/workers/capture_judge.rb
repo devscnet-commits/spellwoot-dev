@@ -103,7 +103,7 @@ class Ai::Workers::CaptureJudge
   end
 
   def self.user_message(step, slot, message_text, collected)
-    instruction = (step.is_a?(Hash) ? (step['instructions'] || step[:instructions]) : nil).to_s.strip
+    instruction = Ai::StepInstructionText.render(step).to_s
     facts = (collected || {}).reject { |_k, v| v.to_s.strip.empty? }
                              .map { |k, v| "#{k}=#{v}" }.join(', ').presence || 'nenhum'
     <<~MSG.strip

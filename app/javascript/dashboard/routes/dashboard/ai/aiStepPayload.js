@@ -4,6 +4,14 @@
 // (name/instructions/automations/group_delay_seconds), então qualquer campo que o backend lê — collect,
 // slot_required (Gap 2), e futuros — morria no primeiro save (e no load). Aqui usamos SPREAD-e-sobrescreve:
 // preserva tudo, normaliza só o que a tela edita. Campo novo do backend sobrevive sem tocar em nenhuma lista.
+//
+// "Padrão ouro" (2026-08): a instrução da etapa deixou de ser 1 textarea (`instructions`) e virou 3 campos
+// estruturados — objective (string), rules (array), suggested_script (string) — pro motor Python/Agêntico
+// seguir melhor (Ai::StepInstructionText no backend). buildStepPayload NUNCA MAIS emite `instructions`: uma
+// etapa ANTIGA que ainda só tem instructions mantém o texto legado intacto (sobrevive pelo mergeStepEdit,
+// que só sobrescreve as chaves que o payload emite); Ai::StepInstructionText cai nesse fallback quando os 3
+// campos novos estão vazios. parseStep semeia objective a partir de instructions quando objective ainda não
+// existe, pra migrar o texto pro form sem perder o que já estava escrito.
 
 let stepUid = 0;
 export const nextStepUid = () => {
@@ -17,7 +25,9 @@ export const parseStep = s => {
     return {
       uid: nextStepUid(),
       name: s,
-      instructions: '',
+      objective: '',
+      rules: [],
+      suggested_script: '',
       automations: [],
       group_delay_seconds: '',
     };
@@ -26,7 +36,11 @@ export const parseStep = s => {
     ...s,
     uid: nextStepUid(),
     name: s.name || '',
-    instructions: s.instructions || s.objective || '',
+    // Migração: etapa ANTIGA (só instructions, sem objective) carrega o texto legado pro campo Objetivo —
+    // nada se perde; o admin edita/divide dali. Etapa que JÁ tem objective não é tocada por instructions.
+    objective: s.objective || s.instructions || '',
+    rules: Array.isArray(s.rules) ? s.rules : [],
+    suggested_script: s.suggested_script || '',
     automations: Array.isArray(s.automations) ? s.automations : [],
     group_delay_seconds: s.group_delay_seconds ?? '',
   };
@@ -38,7 +52,11 @@ export const stepToApi = s => {
   return {
     ...rest,
     name: (s.name || '').trim(),
-    instructions: (s.instructions || '').trim(),
+    objective: (s.objective || '').trim(),
+    rules: Array.isArray(s.rules)
+      ? s.rules.map(r => (r || '').toString().trim()).filter(Boolean)
+      : [],
+    suggested_script: (s.suggested_script || '').trim(),
     automations: Array.isArray(s.automations) ? s.automations : [],
     group_delay_seconds:
       s.group_delay_seconds === '' || s.group_delay_seconds == null
@@ -48,6 +66,9 @@ export const stepToApi = s => {
 };
 
 // Payload que o AiStepForm devolve no save. Regras (Gaps 1–3 no backend):
+//  - objective/rules/suggested_script SEMPRE emitidos (mesma convenção de name/slot_required — trim,
+//    array normalizado); `instructions` NUNCA é emitido (etapa antiga preserva o texto legado via
+//    mergeStepEdit — buildStepPayload não conhece mais esse campo);
 //  - slot_required SEMPRE no nível da etapa, NUNCA collect.required (o Gap 2 desacoplou; não reacoplar);
 //  - chave escolhida no Select -> collect = { attribute, type[, options] } SEM required; vazia => collect null;
 //  - slot_required reflete SEMPRE a escolha do radio (draft.slotRequired, semeado do banco), DESACOPLADO de
@@ -64,7 +85,11 @@ export const stepToApi = s => {
 //    (a mesma armadilha de #306/knowledge: emitir sem semear apagaria o backfill em silêncio).
 export const buildStepPayload = ({
   name,
-  instructions,
+  objective = '',
+  // Texto bruto do textarea, UMA regra por linha (a mesma convenção de collectOptions/knowledgeKinds) —
+  // dividido e limpo aqui, não no componente.
+  rules = '',
+  suggestedScript = '',
   groupDelaySeconds,
   automations = [],
   collectAttribute = '',
@@ -84,7 +109,12 @@ export const buildStepPayload = ({
   const attribute = (collectAttribute || '').trim();
   const payload = {
     name: (name || '').trim(),
-    instructions: (instructions || '').trim(),
+    objective: (objective || '').trim(),
+    rules: (rules || '')
+      .split('\n')
+      .map(r => r.trim())
+      .filter(Boolean),
+    suggested_script: (suggestedScript || '').trim(),
     group_delay_seconds: groupDelaySeconds,
     automations: automations.map(a => ({ type: a.type, params: a.params })),
     slot_required: !!slotRequired,

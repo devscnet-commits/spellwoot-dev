@@ -72,7 +72,11 @@ describe('AiPromptAssistant.vue', () => {
   // PR4 — quando a tela sabe o department (etapas/Comportamento), envia department_id para o backend
   // ancorar as capacidades reais (não sugerir consulta sem fonte nem variável inventada).
   it('envia department_id no corpo quando a prop está preenchida', async () => {
-    const post = vi.fn(() => Promise.resolve({ data: { suggestion: 'ok' } }));
+    const post = vi.fn(() =>
+      Promise.resolve({
+        data: { objective: 'x', rules: ['y'], suggested_script: 'z' },
+      })
+    );
     const wrapper = mountPanel(
       { post },
       { kind: 'step_instructions', departmentId: 42 }
@@ -93,5 +97,81 @@ describe('AiPromptAssistant.vue', () => {
         department_id: 42,
       }
     );
+  });
+
+  // "Padrão ouro" (2026-08): step_instructions NÃO devolve mais {"suggestion"} — devolve 3 campos
+  // SEPARADOS (objective/rules/suggested_script), espelhando os 3 campos de AiStepForm.vue.
+  describe('kind=step_instructions — contrato de 3 campos separados', () => {
+    it('mostra o preview estruturado (objective/rules/suggested_script) em vez do <pre> de texto único', async () => {
+      const post = vi.fn(() =>
+        Promise.resolve({
+          data: {
+            objective: 'Obter a cidade',
+            rules: ['Regra 1', 'Regra 2'],
+            suggested_script: 'Oi! Me diz sua cidade?',
+          },
+        })
+      );
+      const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
+
+      wrapper.findComponent(TextArea).vm.$emit('update:modelValue', 'x');
+      await nextTick();
+      wrapper.findComponent(Button).vm.$emit('click');
+      await flushPromises();
+
+      expect(wrapper.text()).toContain('Obter a cidade');
+      expect(wrapper.text()).toContain('Regra 1');
+      expect(wrapper.text()).toContain('Regra 2');
+      expect(wrapper.text()).toContain('Oi! Me diz sua cidade?');
+      expect(wrapper.find('pre').exists()).toBe(false); // não é mais 1 texto único copiável
+    });
+
+    // O botão "Usar esta sugestão" emite 'apply' com os 3 campos — AiStepForm aplica direto no draft.
+    it('clicar em "Usar esta sugestão" emite apply com os 3 campos e fecha o painel', async () => {
+      const post = vi.fn(() =>
+        Promise.resolve({
+          data: {
+            objective: 'Obter a cidade',
+            rules: ['Regra 1'],
+            suggested_script: 'Oi!',
+          },
+        })
+      );
+      const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
+
+      wrapper.findComponent(TextArea).vm.$emit('update:modelValue', 'x');
+      await nextTick();
+      wrapper.findComponent(Button).vm.$emit('click');
+      await flushPromises();
+
+      // 2 Button no painel agora: Gerar sugestão + Usar esta sugestão. O segundo é o Apply.
+      const applyButton = wrapper.findAllComponents(Button).at(-1);
+      await applyButton.vm.$emit('click');
+
+      expect(wrapper.emitted('apply')[0][0]).toEqual({
+        objective: 'Obter a cidade',
+        rules: ['Regra 1'],
+        suggestedScript: 'Oi!',
+      });
+      expect(wrapper.emitted('update:open')[0]).toEqual([false]);
+    });
+
+    it('resposta sem NENHUM dos 3 campos preenchidos mostra erro (não quebra)', async () => {
+      const useAlertModule = await import('dashboard/composables');
+      const post = vi.fn(() =>
+        Promise.resolve({
+          data: { objective: '', rules: [], suggested_script: '' },
+        })
+      );
+      const wrapper = mountPanel({ post }, { kind: 'step_instructions' });
+
+      wrapper.findComponent(TextArea).vm.$emit('update:modelValue', 'x');
+      await nextTick();
+      wrapper.findComponent(Button).vm.$emit('click');
+      await flushPromises();
+
+      expect(useAlertModule.useAlert).toHaveBeenCalled();
+      wrapper.unmount();
+    });
   });
 });
