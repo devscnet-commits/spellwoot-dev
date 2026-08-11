@@ -225,18 +225,20 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # path (Ai::KnowledgeRetriever — pgvector já populado, NÃO o vector_store nativo da OpenAI, que
   # não existe: vector_store_id sempre vem vazio, auditado, sem tela/job que o preencha).
   describe 'identidade + conhecimento (Ai::KnowledgeRetriever) no system_prompt' do
-    it 'a instrução de identidade é a PRIMEIRA linha do system_prompt, antes de qualquer outra coisa' do
+    it 'a instrução de identidade é a PRIMEIRA linha, e o guardrail anti-"médias de mercado" é a SEGUNDA' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['system_prompt'].lines.first.include?('IDENTIDADE') &&
-          JSON.parse(req.body)['system_prompt'].include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras')
+        prompt_lines = JSON.parse(req.body)['system_prompt'].lines
+        prompt_lines.first.include?('IDENTIDADE') &&
+          prompt_lines.first.include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras') &&
+          prompt_lines[1].include?('Nunca cite concorrentes, médias de mercado')
       }
     end
 
-    it 'injeta os trechos retornados por Ai::KnowledgeRetriever num bloco "Conhecimento da empresa"' do
+    it 'injeta os trechos retornados por Ai::KnowledgeRetriever num bloco "CONHECIMENTO OFICIAL DA EMPRESA" agressivo/inegociável' do
       allow(Ai::KnowledgeRetriever).to receive(:retrieve)
         .with(query: 'quanto custa o plano fibra?', account_id: account.id, department_id: department.id)
         .and_return(['Plano Fibra 500MB: R$ 99,90/mês', 'Plano Fibra 1GB: R$ 129,90/mês'])
@@ -247,7 +249,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('Conhecimento da empresa') &&
+        prompt.include?('## CONHECIMENTO OFICIAL DA EMPRESA') &&
+          prompt.include?('É PROIBIDO usar conhecimento externo, médias de mercado ou suposições') &&
           prompt.include?('Plano Fibra 500MB: R$ 99,90/mês') &&
           prompt.include?('Plano Fibra 1GB: R$ 129,90/mês')
       }
@@ -259,11 +262,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
-      # A instrução de IDENTIDADE já cita "Conhecimento da empresa" entre aspas (aponta pro bloco) —
-      # checar essa substring simples daria falso positivo mesmo sem o bloco. O cabeçalho do bloco em
-      # si ("...use para responder...") só existe quando knowledge_block realmente injeta algo.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        !JSON.parse(req.body)['system_prompt'].include?('Conhecimento da empresa (use para responder')
+        !JSON.parse(req.body)['system_prompt'].include?('## CONHECIMENTO OFICIAL DA EMPRESA')
       }
     end
 
@@ -275,6 +275,35 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
         .with(body: hash_including('vector_store_id' => 'vs_abc123'))
+    end
+  end
+
+  # 4 falhas de comportamento achadas em teste ao vivo: IA "fingindo" ter chamado registrar_* sem
+  # chamar de verdade, inventando situações/recursos que não existem, transferindo sem motivo (pulando
+  # o fluxo de etapas), e empilhando várias perguntas de etapas diferentes na mesma mensagem.
+  describe 'guardrails de comportamento (achados em teste ao vivo)' do
+    it 'inclui as 4 instruções — chamar registrar_* de verdade, não inventar, disciplina de transferência, uma pergunta por vez' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('É PROIBIDO dizer que "anotou" ou "registrou" sem chamar a tool') &&
+          prompt.include?('É PROIBIDO inventar situações, recursos ou funcionalidades que não existem') &&
+          prompt.include?('SÓ transfira para humano se') &&
+          prompt.include?('Peça os dados da etapa atual UM DE CADA VEZ')
+      }
+    end
+
+    it 'NÃO inclui nenhuma instrução de "uma mensagem só" (múltiplas mensagens por turno é o modo identify_as="human", intencional)' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('APENAS UMA mensagem por turno')
+      }
     end
   end
 end

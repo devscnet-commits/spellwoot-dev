@@ -122,9 +122,17 @@ class Ai::PythonOrchestratorClient
   # o que dizer agora) + como usar as tools de controle. Nunca a lista de etapas inteira como texto.
   def system_prompt
     lines = []
-    # Fixa e inegociável, ANTES de qualquer outra coisa: fecha a lacuna de identidade que fazia a IA
-    # sugerir concorrentes ("pesquisar outros provedores") — ela esquecia que É a própria provedora.
+    # Fixas e inegociáveis, ANTES de qualquer outra coisa: fecham lacunas achadas em teste ao vivo —
+    # sugerir concorrentes, alucinar "médias de mercado" em vez do conhecimento real, "fingir" que
+    # chamou registrar_* sem chamar de verdade, inventar situações que não existem, e transferir sem
+    # motivo pulando o fluxo de etapas. (Múltiplas mensagens por turno NÃO entra aqui — é o
+    # comportamento esperado do modo identify_as="human", intencional.)
     lines << identity_instruction
+    lines << market_average_guardrail
+    lines << must_call_capture_tools_instruction
+    lines << no_fabrication_instruction
+    lines << transfer_discipline_instruction
+    lines << gradual_conversation_instruction
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
@@ -150,19 +158,70 @@ class Ai::PythonOrchestratorClient
     'IDENTIDADE: Você é um atendente de IA DA PRÓPRIA EMPRESA. A empresa para quem você trabalha É a ' \
       'provedora do serviço. É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras empresas, ' \
       'operadoras ou provedores. Se o cliente quiser preços, planos ou dúvidas, consulte o bloco ' \
-      '"Conhecimento da empresa" abaixo antes de responder — nunca invente o que não estiver lá.'
+      '"CONHECIMENTO OFICIAL DA EMPRESA" abaixo antes de responder — nunca invente o que não estiver lá.'
+  end
+
+  # Reforço explícito contra "médias de mercado": IA alucinava preço/regra plausível-mas-inventado
+  # em vez de usar o conhecimento real, e só se corrigia quando o cliente reclamava — reforça a
+  # mesma proibição de #identity_instruction com outra frase, mirando especificamente esse padrão.
+  def market_average_guardrail
+    'Você é um atendente DA EMPRESA. Nunca cite concorrentes, médias de mercado ou valores que não ' \
+      'estejam no bloco de conhecimento abaixo.'
+  end
+
+  # Achado em teste ao vivo: a IA "fingia" ter anotado um dado (reply_text tipo "Anotei seu nome!")
+  # sem de fato chamar registrar_*, então nada era persistido — o fluxo agentic (tools_schema traz
+  # TODOS os registrar_* de uma vez) só funciona se o modelo realmente as chamar quando o cliente
+  # informa algo, não apenas narrar que anotou.
+  def must_call_capture_tools_instruction
+    'COMPORTAMENTO OBRIGATÓRIO: Quando o cliente fornecer QUALQUER dado (nome, endereço, CPF, telefone, ' \
+      'email, etc), você DEVE chamar a tool "registrar_*" correspondente IMEDIATAMENTE. É PROIBIDO dizer ' \
+      'que "anotou" ou "registrou" sem chamar a tool. Se você não chamar a tool, o dado não será salvo.'
+  end
+
+  # Achado em teste ao vivo: a IA inventava situações plausíveis mas inexistentes ("instabilidade no
+  # sistema", "link seguro", "formulário externo") pra preencher lacunas em vez de admitir que não sabe.
+  def no_fabrication_instruction
+    'É PROIBIDO inventar situações, recursos ou funcionalidades que não existem (ex: "instabilidade no ' \
+      'sistema", "link seguro", "formulário externo"). Se algo não estiver disponível, diga simplesmente ' \
+      'que vai encaminhar para um especialista.'
+  end
+
+  # Achado em teste ao vivo: a IA transferia pra humano "achando" que devia, pulando o fluxo de etapas
+  # inteiro — o "5 mensagens" aqui é um limite NARRATIVO fixo pedido pelo usuário, independente do teto
+  # REAL enforçado no backend (Ai::Gateway#step_turns_exceeded?, transfer_rules['stuck_handoff_turns'],
+  # default 10 — ver force_handoff_instruction). Os dois números podem divergir; documentado, não
+  # unificado — o pedido foi por um texto fixo, não calculado a partir da config real.
+  def transfer_discipline_instruction
+    'SÓ transfira para humano se: o cliente pedir explicitamente, demonstrar frustração clara, ou se ' \
+      'você já tentou cumprir a etapa atual por 5 mensagens sem sucesso. NUNCA transfira só porque ' \
+      '"achou" que deve. Siga o fluxo de etapas até o final.'
+  end
+
+  # Achado em teste ao vivo (esclarecido pelo usuário: NÃO é sobre várias mensagens por turno — isso é
+  # o modo identify_as="human" funcionando como esperado): a IA perguntava várias etapas de uma vez
+  # (nome + endereço + CPF + telefone na mesma mensagem) em vez de conduzir uma pergunta por vez, mesmo
+  # com TODAS as tools "registrar_*" disponíveis simultaneamente (fluxo agentic, sem gate por etapa).
+  def gradual_conversation_instruction
+    'Peça os dados da etapa atual UM DE CADA VEZ, de forma natural e conversacional — mesmo que várias ' \
+      'ferramentas "registrar_*" estejam disponíveis ao mesmo tempo, não liste várias perguntas na mesma ' \
+      'mensagem. Espere a resposta do cliente antes de pedir o próximo dado.'
   end
 
   # Ai::KnowledgeRetriever: pgvector, o MESMO mecanismo (e a MESMA base já populada) que o caminho
   # legado usa hoje — não o file_search/vector_store nativo da OpenAI (inexistente neste projeto).
   # Query = mensagem atual do cliente; [] sem fonte cadastrada ou sem query, o bloco nem aparece.
+  # Cabeçalho agressivo/inegociável de propósito (## + maiúsculas): a versão anterior, mais suave
+  # ("use para responder... não invente"), não impediu a IA de alucinar "médias de mercado" — só
+  # se corrigia quando o cliente reclamava.
   def knowledge_block
     chunks = Ai::KnowledgeRetriever.retrieve(query: @content.to_s, account_id: @department.account_id,
                                              department_id: @department.id)
     return nil if chunks.blank?
 
-    "Conhecimento da empresa (use para responder sobre planos/preços/dúvidas — não invente o que não " \
-      "estiver aqui):\n#{chunks.map { |c| "- #{c}" }.join("\n")}"
+    '## CONHECIMENTO OFICIAL DA EMPRESA (Use APENAS este texto para responder sobre planos/preços/regras. ' \
+      'É PROIBIDO usar conhecimento externo, médias de mercado ou suposições. Se não estiver aqui, diga ' \
+      "que não sabe):\n#{chunks.map { |c| "- #{c}" }.join("\n")}"
   end
 
   def current_step_instructions
