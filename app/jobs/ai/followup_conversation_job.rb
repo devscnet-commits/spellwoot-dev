@@ -43,6 +43,12 @@ class Ai::FollowupConversationJob < ApplicationJob
     # default/first). Para agente com único departamento (caso comum) retorna antes do classifier.
     # BUG ANTERIOR: `.departments.active.first` ignorava override e mapeamento → follow-up do
     # departamento errado disparava (ex.: config do agente anterior em nova conversa).
+    # 2º BUG (real ao vivo, achado depois): esta linha JÁ dizia "classifier pulado", mas
+    # Ai::DepartmentResolver não pulava de verdade pra agente MULTI-department sem mapeamento —
+    # chamava o LLM pra classificar uma mensagem VAZIA (message_content: nil), então o resultado era
+    # não-determinístico e podia cair num department SEM follow-up configurado a cada ciclo do sweep.
+    # Corrigido NO RESOLVER (Ai::DepartmentResolver#resolve só chama .classify se message_content
+    # estiver presente) — este comentário agora é fiel ao código, não precisa mudar nada aqui.
     department, = Ai::DepartmentResolver.resolve(
       agent: binding.agent,
       inbox_id: conversation.inbox_id,

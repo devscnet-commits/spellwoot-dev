@@ -1,7 +1,8 @@
 # Resolves which department handles a message within an already-resolved agent.
-# Order: single department -> explicit inbox->department mapping -> classifier (cheap LLM worker)
-# -> default department (is_default) -> first candidate. Departments are tried in `position` order.
-# Returns [department, method].
+# Order: single department -> explicit inbox->department mapping -> classifier (cheap LLM worker,
+# SKIPPED when message_content is blank — nothing to classify, e.g. Ai::FollowupConversationJob's
+# no-new-message context) -> default department (is_default) -> first candidate. Departments are
+# tried in `position` order. Returns [department, method].
 class Ai::DepartmentResolver
   # Cheapest model per provider for the routing decision — trivial task, don't burn the supervisor.
   # Keeps the supervisor's provider (so we reuse its configured key), only drops to the cheap model.
@@ -39,7 +40,14 @@ class Ai::DepartmentResolver
     return [mapped.first, 'inbox_mapping'] if mapped.size == 1
 
     candidates = mapped.presence || departments
-    chosen = classify(candidates, message_content, agent)
+    # Bug real ao vivo: Ai::FollowupConversationJob chama .resolve com message_content: nil (não há
+    # mensagem nova no contexto de follow-up) — SEM este guard, .classify rodava mesmo assim, pedindo
+    # pro LLM classificar uma mensagem VAZIA. Resultado não-determinístico (o modelo "chuta" um índice
+    # 1..N sem sinal nenhum pra se basear), então o follow-up de uma conta multi-department podia cair
+    # no department ERRADO a cada ciclo do sweep (1x/minuto) — explicava tanto "disparou follow-up sem
+    # eu configurar nada" quanto "não respeitou as regras do department certo". Content em branco não
+    # tem NADA a classificar; pular direto pro default/first é estritamente melhor que adivinhar.
+    chosen = classify(candidates, message_content, agent) if message_content.present?
     return [chosen, 'classifier'] if chosen
 
     fallback = candidates.find(&:is_default) || departments.find(&:is_default)
