@@ -106,7 +106,7 @@ def run_conversation(
     for _ in range(config.MAX_TOOL_ITERATIONS):
         function_calls = [item for item in response.output if item.type == "function_call"]
         if not function_calls:
-            return response.output_text or "", response.id
+            break
 
         tool_outputs = []
         for call in function_calls:
@@ -140,6 +140,46 @@ def run_conversation(
 
         response = _client.responses.create(**followup_kwargs)
 
-    # MAX_TOOL_ITERATIONS exceeded: still return the latest response_id (so history keeps
-    # chaining next turn) even if there's no final text yet.
-    return response.output_text or "", response.id
+    # Live bug: tool_choice="required" (above) forces the FIRST call to be tool-call-only (no text
+    # alongside a forced call), and the follow-up call right after feeding tool_outputs back sometimes
+    # ALSO comes back with no visible text — the model considers the turn "done" once it has acted,
+    # without a word to the customer. Rails' Ai::ActionDispatcher#reply no-ops on a blank reply (never
+    # sends anything), so the customer got silence — which then looked "unanswered" to the separate
+    # follow-up feature, which fired its own configured nudge message unrelated to this bug. Applies to
+    # BOTH loop exits: the natural "no more function_calls" break above, and MAX_TOOL_ITERATIONS
+    # exhausted below (same gap, same fix).
+    reply_text = response.output_text or ""
+    if not reply_text.strip():
+        reply_text, response_id = _force_text_reply(
+            previous_response_id=response.id, model=resolved_model, temperature=temperature,
+        )
+        return reply_text, response_id
+
+    return reply_text, response.id
+
+
+def _force_text_reply(*, previous_response_id: str, model: str, temperature: float | None) -> tuple[str, str]:
+    """Last-resort guardrail: the tool-calling loop finished (or was cut off) with zero visible text.
+    Chained via previous_response_id (full turn history + tool results are already there) and with NO
+    tools/tool_choice — text is the only possible output, so this call can't itself degrade into
+    another empty function-call turn. Explicitly asks the model to say something to the customer now."""
+    kwargs = {
+        "model": model,
+        "previous_response_id": previous_response_id,
+        "input": "Responda ao cliente agora, em texto, com base no que você acabou de fazer.",
+    }
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+
+    response = _client.responses.create(**kwargs)
+    reply_text = response.output_text or ""
+    if not reply_text.strip():
+        # Should be unreachable (no tools = the model has nothing else it CAN do but reply in text),
+        # but Ai::ActionDispatcher#reply silently drops a blank reply — never send literal silence.
+        logger.warning(
+            "response_id=%s: _force_text_reply ALSO came back empty; using the static fallback",
+            response.id,
+        )
+        return "Só um instante, já te retorno!", response.id
+
+    return reply_text, response.id

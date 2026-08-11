@@ -80,4 +80,9 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
         logger.exception("ticket_id=%s ai_department_id=%s: AI processing failed", request.ticket_id, request.ai_department_id)
         raise HTTPException(status_code=502, detail="AI processing failed")
 
+    # DEBUG (temporary): a blank reply here means Ai::ActionDispatcher#reply on the Rails side no-ops
+    # (never sends anything) — the customer got silence. orchestrator.py now guards against this
+    # (_force_text_reply), so this log is what confirms whether that guard is actually firing/working.
+    logger.info(f"Reply enviada para Rails: {reply_text}")
+
     return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, response_id=response_id)
