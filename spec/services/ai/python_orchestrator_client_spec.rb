@@ -129,18 +129,48 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
         names = body['tools_schema'].map { |t| t['name'] }
+        # Checagem por INCLUSÃO, não igualdade exata do conjunto: toda Account real ganha um
+        # CustomAttributeDefinition seedado automaticamente (Account#create_default_custom_attributes,
+        # 'marcado_como_ganho_ou_perdido' — feature de Deals), então known_slot_keys sempre traz pelo
+        # menos essa chave a mais — comportamento correto, não ruído a mascarar.
         # a instrução da etapa ATIVA (índice 1) aparece; a de OUTRA etapa (índice 0), não — só o texto
         # narrativo é ancorado na etapa atual, a captura de dado (tools) não é. Nomes SANITIZADOS
         # (Ai::ToolNameSanitizer): "conversation.add_label"/".resolve"/".transfer" viram "_" — a
         # OpenAI rejeita ponto no nome da function (achado ao vivo, ver spec do sanitizer).
-        names.sort == %w[avancar_etapa conversation_add_label conversation_resolve conversation_transfer
-                          registrar_endereco registrar_telefone_extra].sort &&
+        expected = %w[avancar_etapa conversation_add_label conversation_resolve conversation_transfer
+                      registrar_endereco registrar_telefone_extra]
+        expected.all? { |n| names.include?(n) } &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
           !body['system_prompt'].include?('Cumprimente com calor.')
       }
     end
 
-    it 'sem playbook, tools_schema ainda traz as 3 tools de controle (sempre disponíveis) mas nenhuma registrar_*' do
+    # ACHADO AO VIVO: etapa 1 "Apresente-se" (sem collect) — só ela existir já bastava pra alucinação
+    # se as demais etapas do playbook, mesmo declarando dado, não cobrissem tudo que a INSTRUÇÃO em
+    # texto livre pedia. Aqui uma etapa pede "CPF, email e telefone" mas collect só nomeia 'cpf' —
+    # email/telefone vêm de CustomAttributeDefinition (não de collect nenhum) e ainda assim precisam
+    # de tool, senão a IA tem a instrução mas não o "botão" pra usar.
+    it 'gera registrar_* pra atributo de CustomAttributeDefinition que NENHUMA etapa declara via collect' do
+      CustomAttributeDefinition.create!(account: account, attribute_key: 'email', attribute_display_name: 'Email',
+                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
+      CustomAttributeDefinition.create!(account: account, attribute_key: 'telefone', attribute_display_name: 'Telefone',
+                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Apresente-se', 'instructions' => 'Cumprimente o cliente.' }, # sem collect (etapa 1 do achado ao vivo)
+        { 'name' => 'Coleta', 'instructions' => 'Colete CPF, email e telefone.',
+          'collect' => { 'attribute' => 'cpf' } } # só CPF está no dropdown
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        names = JSON.parse(req.body)['tools_schema'].map { |t| t['name'] }
+        %w[registrar_cpf registrar_email registrar_telefone].all? { |n| names.include?(n) }
+      }
+    end
+
+    it 'sem playbook, tools_schema ainda traz as 3 tools de controle + o registrar_* do CustomAttributeDefinition padrão da conta (Deals) — nenhuma tool de etapa' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -148,7 +178,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
         names = body['tools_schema'].map { |t| t['name'] }
-        names.sort == %w[avancar_etapa conversation_resolve conversation_transfer] &&
+        # 'marcado_como_ganho_ou_perdido' vem do CustomAttributeDefinition seedado em TODA Account
+        # (Account#create_default_custom_attributes) — known_slot_keys inclui mesmo sem playbook.
+        names.sort == %w[avancar_etapa conversation_resolve conversation_transfer
+                          registrar_marcado_como_ganho_ou_perdido].sort &&
           !body['system_prompt'].include?('Etapa atual')
       }
     end

@@ -278,8 +278,22 @@ class Ai::PythonOrchestratorClient
     end
   end
 
+  # Catálogo COMPLETO — não só o que a etapa atual (ou qualquer etapa) declara via collect. Achado ao
+  # vivo: uma etapa cuja instrução em texto livre pede "CPF, email e telefone" só tinha 1 desses no
+  # dropdown collect, então a IA recebia a instrução mas não tinha o "botão" (a tool) pros outros 2 —
+  # alucinava "problema técnico". known_slot_keys já é a união certa (Ai::StateManager: steps ∪
+  # lead_variables ∪ CustomAttributeDefinition da account) — mesma fonte que o caminho legado usa pro
+  # contrato de asked_slot, reaproveitada aqui em vez de duplicada.
   def step_capture_tools
-    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook)
+    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook, known_attribute_keys)
+  end
+
+  def known_attribute_keys
+    state_manager.known_slot_keys(@department)
+  end
+
+  def state_manager
+    @state_manager ||= Ai::StateManager.new(conversation: @conversation, agent: @agent)
   end
 
   def sanitized_resolve_tool
@@ -315,6 +329,6 @@ class Ai::PythonOrchestratorClient
   # avança nada; só lê o mesmo ai_step_index que o caminho legado também lê. Quem avança é
   # Api::Internal::AiExecuteToolController ao receber uma chamada de "avancar_etapa".
   def current_step
-    @current_step ||= Ai::StateManager.new(conversation: @conversation, agent: @agent).current_step(@department)
+    @current_step ||= state_manager.current_step(@department)
   end
 end

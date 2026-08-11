@@ -1,10 +1,17 @@
-# Turns a playbook step's declared `collect` slot (Ai::StepSlot) into an OpenAI function-calling
-# tool schema, so the Python orchestrator path captures structured data via a tool call instead of
-# the text-instruction prompt the legacy decide()/call_with_tools() path uses. Ai::StepSlot stays
-# the single source of truth for what a step's collect means — this module only reshapes it for
-# the wire, both when Ai::PythonOrchestratorClient builds tools_schema and when
-# Api::Internal::AiExecuteToolController receives a callback and needs to recognize one of these
-# tool names as a capture (not a real Ai::Tool record — no CapabilityExecution audit row for these).
+# Turns a KNOWN attribute key into an OpenAI function-calling tool schema ("registrar_<attribute>"),
+# so the Python orchestrator path captures structured data via a tool call instead of the
+# text-instruction prompt the legacy decide()/call_with_tools() path uses.
+#
+# Deliberately NOT tied to any single step's `collect` field (achado ao vivo): the admin's step
+# INSTRUCTIONS are free text ("Colete CPF, email e telefone"), but `collect` is a single dropdown —
+# one attribute per step. A step whose text asks for 3 things but whose collect only names 1 gave
+# the model an instruction with no "button" for the other 2 — it had no registrar_email/
+# registrar_telefone tool to call, so it hallucinated "problema técnico" instead. Fix: generate a
+# tool for EVERY key in Ai::StateManager#known_slot_keys (steps' collect ∪ department.lead_variables
+# ∪ the account's CustomAttributeDefinition catalog — the SAME union the legacy path already uses
+# for its asked_slot contract), not just the current (or any single) step's collect. When a key IS
+# also declared via some step's collect, that step's type/options build a more precise JSON Schema
+# property; otherwise it falls back to a generic string.
 module Ai::StepCaptureTool
   PREFIX = 'registrar_'
 
@@ -20,26 +27,24 @@ module Ai::StepCaptureTool
     name.start_with?(PREFIX) ? name.delete_prefix(PREFIX).presence : nil
   end
 
-  # One schema per DISTINCT attribute declared across the playbook's steps — several steps can
-  # declare the same attribute; OpenAI needs unique function names per request, so dedup by
-  # attribute, not by step. Agentic flow (deliberate): ALL of them go out every turn, not just the
-  # current step's — the model decides which to call based on what the customer actually says, so a
-  # customer who front-loads several answers in one message gets captured in one turn, and a
-  # correction ("na verdade é rua Y") re-calls the same tool — Ai::StateManager#persist_attributes
-  # already merges by key, so this is an upsert with no extra plumbing needed here.
-  def schemas_for(playbook)
-    return [] unless playbook
+  # One schema per key in `attribute_keys` (Ai::StateManager#known_slot_keys — the full catalog, not
+  # any one step's collect). playbook is used ONLY to look up a more precise type/options when some
+  # step happens to declare that same attribute via collect; a playbook-less department (or a key no
+  # step ever declares) still gets a schema, just a generic string property.
+  def schemas_for(playbook, attribute_keys)
+    step_by_attribute = Array(playbook&.steps).each_with_object({}) do |step, acc|
+      attribute = Ai::StepSlot.attribute(step)
+      acc[attribute] ||= step if attribute.present?
+    end
 
-    Array(playbook.steps).filter_map { |step| build_schema(step) }.uniq { |schema| schema[:name] }
+    Array(attribute_keys).uniq.map { |attribute| build_schema(attribute, step_by_attribute[attribute]) }
   end
 
-  # {name:, description:, input_schema:} for ONE step. nil when the step has no `collect`
-  # (informative step, nothing to capture). Same shape Ai::PythonOrchestratorClient already sends
-  # for Ai::Tool-backed tools, so no change needed on the Python side to consume this.
-  def build_schema(step)
-    attribute = Ai::StepSlot.attribute(step)
-    return nil if attribute.blank?
-
+  # {name:, description:, input_schema:} for one attribute key. `step` (optional) supplies
+  # type/options when that attribute happens to be declared via some step's collect; nil ->
+  # generic string property. Same shape Ai::PythonOrchestratorClient already sends for
+  # Ai::Tool-backed tools, so no change needed on the Python side to consume this.
+  def build_schema(attribute, step = nil)
     {
       name: tool_name(attribute),
       description: "Registra o dado \"#{attribute}\" assim que o cliente informar — mesmo que ele " \
@@ -53,6 +58,8 @@ module Ai::StepCaptureTool
   end
 
   def property_schema(step)
+    return { type: 'string' } unless step
+
     options = Ai::StepSlot.options(step)
     return { type: 'string', enum: options } if options.present?
 
