@@ -22,6 +22,12 @@
 # genuine no-op the model can call when it only wants to talk (greet, ask, answer a question) without
 # registering data or advancing the step. Without it, tool_choice="required" would force the AI to
 # misuse a real tool (advance early, save garbage) on every turn that has nothing to actually save.
+#
+# Round 2 of that same bug (live, worse): the AI found the OPPOSITE abuse of CONTINUE_TOOL — calling
+# it to satisfy tool_choice="required" cheaply while claiming in text ("Recebi seu CPF!") that it saved
+# a REAL customer-provided datum, without ever calling registrar_*/salvar_memoria_ia. Nothing
+# persisted, so the next step re-asked for the same data (loop). #must_call_capture_tools_instruction
+# and CONTINUE_TOOL's own description were both sharpened to name this exact failure mode.
 class Ai::PythonOrchestratorClient
   # Normalizes AI_ORCHESTRATOR_URL whether or not it already includes the /process path — an env var
   # pointed at just the service root (e.g. http://ai-orchestrator:8000) was POSTing to '/' and 404ing.
@@ -192,14 +198,23 @@ class Ai::PythonOrchestratorClient
       'estejam no bloco de conhecimento abaixo.'
   end
 
-  # Achado em teste ao vivo: a IA "fingia" ter anotado um dado (reply_text tipo "Anotei seu nome!")
-  # sem de fato chamar registrar_*, então nada era persistido — o fluxo agentic (tools_schema traz
-  # TODOS os registrar_* de uma vez) só funciona se o modelo realmente as chamar quando o cliente
-  # informa algo, não apenas narrar que anotou.
+  # Achado em teste ao vivo (2 rodadas): (1) a IA "fingia" ter anotado um dado (reply_text tipo "Anotei
+  # seu nome!") sem de fato chamar registrar_*, então nada era persistido. (2) DEPOIS que
+  # tool_choice="required" (ver #no_confirmation_loop_instruction) passou a forçar alguma tool a cada
+  # turno, a IA achou um jeito NOVO de continuar fingindo: chamava "continuar_conversa" (o no-op —
+  # existe pra quando ela só quer FALAR, não pra escapar de salvar) e dizia em texto "Recebi seu CPF!"
+  # sem NUNCA chamar registrar_*/salvar_memoria_ia — satisfaz a exigência da API sem salvar nada, o
+  # cliente repete o dado na etapa seguinte (loop). Por isso a regra abaixo é redundante de propósito
+  # com o resto do prompt: cita os dois nomes de tool de salvamento E nomeia "continuar_conversa"
+  # explicitamente como NÃO valendo pra esse caso.
   def must_call_capture_tools_instruction
-    'COMPORTAMENTO OBRIGATÓRIO: Quando o cliente fornecer QUALQUER dado (nome, endereço, CPF, telefone, ' \
-      'email, etc), você DEVE chamar a tool "registrar_*" correspondente IMEDIATAMENTE. É PROIBIDO dizer ' \
-      'que "anotou" ou "registrou" sem chamar a tool. Se você não chamar a tool, o dado não será salvo.'
+    'REGRA DE SALVAMENTO INEGOCIÁVEL: É ESTRITAMENTE PROIBIDO dizer "Recebi seu dado", "Anotado" ou ' \
+      'qualquer variação sem ANTES chamar a tool "salvar_memoria_ia" ou a tool "registrar_*" ' \
+      'correspondente. Chamar "continuar_conversa" NÃO CONTA como salvar — essa tool é só pra quando ' \
+      'você não tem NENHUM dado novo pra registrar. Se o cliente forneceu um dado (nome, endereço, ' \
+      'CPF, telefone, email, etc.) e você respondeu sem ter chamado a tool de salvamento, o dado será ' \
+      'PERDIDO. Se você disser que anotou, você DEVE ter chamado a tool antes — nunca depois, nunca no ' \
+      'próximo turno.'
   end
 
   # Achado em teste ao vivo (WhatsApp real): cliente disse "vendas", a IA respondeu "Perfeito, você
@@ -384,9 +399,12 @@ class Ai::PythonOrchestratorClient
   def control_tools
     [
       { name: sanitized_continue_tool,
-        description: 'Use esta ferramenta quando quiser apenas enviar uma mensagem de texto ao cliente ' \
-                     '(fazer uma pergunta, cumprimentar, responder uma dúvida) sem salvar dados ou ' \
-                     'avançar a etapa.',
+        description: 'Use esta ferramenta APENAS quando você NÃO tem nenhum dado novo do cliente pra ' \
+                     'salvar — fazer uma pergunta, cumprimentar, responder uma dúvida. NUNCA use esta ' \
+                     'ferramenta se o cliente ACABOU de fornecer um dado (nome, CPF, endereço, etc.): ' \
+                     'nesse caso chame "registrar_*" ou "salvar_memoria_ia" primeiro. Chamar esta ' \
+                     'ferramenta e depois dizer "recebi"/"anotei" em texto, sem ter salvo nada, PERDE o ' \
+                     'dado do cliente.',
         input_schema: { type: 'object', properties: {} } },
       { name: Ai::ToolNameSanitizer.sanitize(MEMORY_TOOL),
         description: 'Salva qualquer informação relevante que o cliente fornecer e que NÃO tenha uma ' \
