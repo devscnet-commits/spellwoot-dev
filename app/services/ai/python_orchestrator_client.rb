@@ -250,7 +250,9 @@ class Ai::PythonOrchestratorClient
       'diferente ATUALIZA o dado, não duplica). Use "avancar_etapa" (sem parâmetros) quando julgar a etapa ' \
       'atual concluída, ou se o cliente recusar dar um dado opcional — avance com empatia, sem forçar. Se ' \
       "precisar encerrar o atendimento, use a tool \"#{sanitized_resolve_tool}\". Se precisar transferir " \
-      "para um humano, use a tool \"#{sanitized_transfer_tool}\"."
+      "para um humano, use a tool \"#{sanitized_transfer_tool}\". Quando for transferir para um humano, " \
+      'você DEVE preencher o parâmetro "handoff_summary" com um resumo do que já foi conseguido (ex: ' \
+      '"Cliente já forneceu nome e cidade, falta CPF") e o motivo da transferência.'
   end
 
   def force_handoff_instruction
@@ -278,8 +280,22 @@ class Ai::PythonOrchestratorClient
     end
   end
 
+  # Catálogo COMPLETO — não só o que a etapa atual (ou qualquer etapa) declara via collect. Achado ao
+  # vivo: uma etapa cuja instrução em texto livre pede "CPF, email e telefone" só tinha 1 desses no
+  # dropdown collect, então a IA recebia a instrução mas não tinha o "botão" (a tool) pros outros 2 —
+  # alucinava "problema técnico". known_slot_keys já é a união certa (Ai::StateManager: steps ∪
+  # lead_variables ∪ CustomAttributeDefinition da account) — mesma fonte que o caminho legado usa pro
+  # contrato de asked_slot, reaproveitada aqui em vez de duplicada.
   def step_capture_tools
-    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook)
+    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook, known_attribute_keys)
+  end
+
+  def known_attribute_keys
+    state_manager.known_slot_keys(@department)
+  end
+
+  def state_manager
+    @state_manager ||= Ai::StateManager.new(conversation: @conversation, agent: @agent)
   end
 
   def sanitized_resolve_tool
@@ -306,8 +322,17 @@ class Ai::PythonOrchestratorClient
         input_schema: { type: 'object', properties: {} } },
       { name: sanitized_transfer_tool,
         description: 'Transfere o atendimento para um humano quando as condições de transferência ' \
-                     'configuradas forem atendidas, ou quando instruído a transferir imediatamente.',
-        input_schema: { type: 'object', properties: {} } }
+                     'configuradas forem atendidas, ou quando instruído a transferir imediatamente. ' \
+                     'SEMPRE preencha handoff_summary: um resumo do que já foi conseguido e o motivo da transferência.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            'handoff_summary' => { type: 'string',
+                                    description: 'Resumo do que já foi conseguido (ex.: "Cliente já forneceu ' \
+                                                 'nome e cidade, falta CPF") e o motivo da transferência.' }
+          },
+          required: ['handoff_summary']
+        } }
     ]
   end
 
@@ -315,6 +340,6 @@ class Ai::PythonOrchestratorClient
   # avança nada; só lê o mesmo ai_step_index que o caminho legado também lê. Quem avança é
   # Api::Internal::AiExecuteToolController ao receber uma chamada de "avancar_etapa".
   def current_step
-    @current_step ||= Ai::StateManager.new(conversation: @conversation, agent: @agent).current_step(@department)
+    @current_step ||= state_manager.current_step(@department)
   end
 end

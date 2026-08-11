@@ -1,8 +1,9 @@
 require 'rails_helper'
 
-# Cobertura da tradução etapa -> tool de function-calling (substitui a tool que a etapa ATUAL gera
-# no path do orquestrador Python — ver Ai::PythonOrchestratorClient; o texto de instructions da
-# etapa continua indo pro system_prompt, não é este módulo que cobre isso).
+# Cobertura da tradução atributo -> tool de function-calling (substitui a tool que a etapa gera no
+# path do orquestrador Python — ver Ai::PythonOrchestratorClient). Desde o achado ao vivo (uma etapa
+# com instrução em texto livre "colete CPF, email e telefone" mas collect só declarando 1 desses),
+# schemas_for gera tool pra QUALQUER chave do catálogo passado — não só o que alguma etapa declara.
 RSpec.describe Ai::StepCaptureTool do
   describe '.tool_name / .attribute_for' do
     it 'são inversas uma da outra' do
@@ -16,45 +17,51 @@ RSpec.describe Ai::StepCaptureTool do
   end
 
   describe '.schemas_for' do
-    it 'nil (sem playbook) devolve lista vazia' do
-      expect(described_class.schemas_for(nil)).to eq([])
+    it 'uma tool por chave do catálogo, mesmo sem playbook nenhum (ex.: veio só de CustomAttributeDefinition/lead_variable)' do
+      names = described_class.schemas_for(nil, %w[cpf email telefone]).map { |s| s[:name] }
+
+      expect(names).to contain_exactly('registrar_cpf', 'registrar_email', 'registrar_telefone')
     end
 
-    it 'uma tool por atributo declarado em QUALQUER etapa — todas de uma vez (fluxo agentic)' do
+    it 'ACHADO AO VIVO: gera tool pra uma chave que NENHUMA etapa declara via collect — só precisa estar no catálogo' do
       playbook = instance_double(Ai::Playbook, steps: [
-                                    { 'name' => 'Acolhimento', 'instructions' => 'Cumprimente' }, # sem collect
-                                    { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } },
-                                    { 'name' => 'Telefone extra', 'collect' => { 'attribute' => 'telefone_extra' } }
+                                    { 'name' => 'Coleta', 'instructions' => 'Colete CPF, email e telefone.',
+                                      'collect' => { 'attribute' => 'cpf' } } # só CPF está no dropdown collect
                                   ])
 
-      names = described_class.schemas_for(playbook).map { |s| s[:name] }
+      # email/telefone vieram de outra fonte do catálogo (CustomAttributeDefinition/lead_variable),
+      # não de collect nenhum — é exatamente o gap que travava a IA.
+      names = described_class.schemas_for(playbook, %w[cpf email telefone]).map { |s| s[:name] }
 
-      expect(names).to contain_exactly('registrar_endereco', 'registrar_telefone_extra')
+      expect(names).to contain_exactly('registrar_cpf', 'registrar_email', 'registrar_telefone')
     end
 
-    it 'dedup por atributo — duas etapas declarando o mesmo attribute geram UMA tool só (nomes únicos p/ a OpenAI)' do
+    it 'quando a chave TAMBÉM é declarada via collect em alguma etapa, usa o type/options daquela etapa' do
       playbook = instance_double(Ai::Playbook, steps: [
-                                    { 'collect' => { 'attribute' => 'cidade' } },
-                                    { 'collect' => { 'attribute' => 'cidade' } }
+                                    { 'collect' => { 'attribute' => 'idade', 'type' => 'number' } },
+                                    { 'collect' => { 'attribute' => 'plano', 'options' => %w[Basico Premium] } }
                                   ])
 
-      expect(described_class.schemas_for(playbook).size).to eq(1)
+      schemas = described_class.schemas_for(playbook, %w[idade plano email]).index_by { |s| s[:name] }
+
+      expect(schemas['registrar_idade'][:input_schema][:properties]['idade']).to eq(type: 'number')
+      expect(schemas['registrar_plano'][:input_schema][:properties]['plano']).to eq(type: 'string', enum: %w[Basico Premium])
+      # 'email' não está em nenhum collect -> fallback string genérica
+      expect(schemas['registrar_email'][:input_schema][:properties]['email']).to eq(type: 'string')
+    end
+
+    it 'dedup — chave repetida no catálogo gera UMA tool só (nomes únicos p/ a OpenAI)' do
+      expect(described_class.schemas_for(nil, %w[cidade cidade]).size).to eq(1)
+    end
+
+    it 'catálogo vazio devolve lista vazia' do
+      expect(described_class.schemas_for(nil, [])).to eq([])
     end
   end
 
   describe '.build_schema' do
-    it 'nil quando a etapa não declara collect (etapa informativa)' do
-      expect(described_class.build_schema({ 'name' => 'Acolhimento', 'instructions' => 'Cumprimente' })).to be_nil
-    end
-
-    it 'nil quando a etapa é nil (sem etapa ativa)' do
-      expect(described_class.build_schema(nil)).to be_nil
-    end
-
-    it 'gera a tool a partir do collect da etapa' do
-      step = { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }
-
-      expect(described_class.build_schema(step)).to eq(
+    it 'sem step (nil), propriedade string genérica' do
+      expect(described_class.build_schema('endereco')).to eq(
         name: 'registrar_endereco',
         description: 'Registra o dado "endereco" assim que o cliente informar — mesmo que ele ' \
                      'adiante esse dado junto de outros, fora de ordem, na mesma mensagem.',
@@ -62,9 +69,9 @@ RSpec.describe Ai::StepCaptureTool do
       )
     end
 
-    it 'etapa tipo number vira propriedade number; etapa com options vira enum' do
-      number_schema = described_class.build_schema({ 'collect' => { 'attribute' => 'idade', 'type' => 'number' } })
-      choice_schema = described_class.build_schema({ 'collect' => { 'attribute' => 'plano', 'options' => %w[Basico Premium] } })
+    it 'com step, usa o type/options do collect daquela etapa' do
+      number_schema = described_class.build_schema('idade', { 'collect' => { 'attribute' => 'idade', 'type' => 'number' } })
+      choice_schema = described_class.build_schema('plano', { 'collect' => { 'attribute' => 'plano', 'options' => %w[Basico Premium] } })
 
       expect(number_schema[:input_schema][:properties]['idade']).to eq(type: 'number')
       expect(choice_schema[:input_schema][:properties]['plano']).to eq(type: 'string', enum: %w[Basico Premium])

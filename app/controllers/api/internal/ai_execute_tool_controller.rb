@@ -123,11 +123,25 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   def run_capability(conversation, key)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
+    save_handoff_summary(conversation) if key == Ai::PythonOrchestratorClient::TRANSFER_TOOL
     result = Ai::CapabilityRegistry.execute(key, conversation: conversation, input: arguments)
     { result: result[:output], status: 'executed', error: nil }
   rescue StandardError => e
     Rails.logger.error "[Api::Internal::AiExecuteToolController#run_capability] #{key}: #{e.class}: #{e.message}"
     { result: {}, status: 'failed', error: e.message }
+  end
+
+  # A IA é instruída (Ai::PythonOrchestratorClient#tool_usage_instruction) a SEMPRE preencher
+  # handoff_summary ao chamar conversation.transfer — resumo do que já foi conseguido + o motivo,
+  # pro humano que assumir não começar do zero. Salvo ANTES de executar a capability (que reabre/
+  # desatribui a conversa) para não depender de ordem de commit entre as duas escritas.
+  def save_handoff_summary(conversation)
+    summary = arguments['handoff_summary'].to_s.strip
+    return if summary.blank?
+
+    attrs = conversation.additional_attributes || {}
+    attrs['handoff_summary'] = summary
+    conversation.update!(additional_attributes: attrs)
   end
 
   def authenticate_internal_request!
