@@ -148,7 +148,7 @@ class Ai::PythonOrchestratorClient
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
     kb = knowledge_block
     lines << kb if kb.present?
-    lines << "Etapa atual: #{current_step_instructions}" if current_step_instructions.present?
+    lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
     lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
@@ -231,10 +231,10 @@ class Ai::PythonOrchestratorClient
       "que não sabe):\n#{chunks.map { |c| "- #{c}" }.join("\n")}"
   end
 
+  # Objetivo/Regras/Fala sugerida (padrão estruturado) quando a etapa já foi migrada; texto livre de
+  # step['instructions'] (fallback) para etapas antigas — Ai::StepInstructionText decide qual dos dois.
   def current_step_instructions
-    return nil unless current_step.is_a?(Hash)
-
-    (current_step['instructions'] || current_step[:instructions]).to_s.strip.presence
+    Ai::StepInstructionText.render(current_step)
   end
 
   # Mesma fonte e formatação que Ai::PromptCompiler#step_lines/compile já usa para transfer_when/

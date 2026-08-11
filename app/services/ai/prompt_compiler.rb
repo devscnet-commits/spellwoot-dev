@@ -345,15 +345,16 @@ class Ai::PromptCompiler
     step.is_a?(Hash) ? (step['name'] || step[:name]).to_s.strip : step.to_s.strip
   end
 
-  # Steps may be the new object form ({name, instructions}) or the legacy string form.
-  # Renders one bullet per step: "- Nome: instruções".
+  # Steps may be the new object form ({name, objective/rules/suggested_script OR legacy instructions})
+  # or the legacy string form. Renders one bullet per step: "- Nome: instruções" (Ai::StepInstructionText
+  # decide entre o formato estruturado novo e o fallback de texto livre).
   def self.step_lines(steps)
     Array(steps).map do |s|
       if s.is_a?(Hash)
         name = (s['name'] || s[:name]).to_s.strip
-        instr = (s['instructions'] || s[:instructions]).to_s.strip
         next if name.blank?
 
+        instr = Ai::StepInstructionText.render(s)
         instr.present? ? "- #{name}: #{instr}" : "- #{name}"
       else
         s.to_s.strip.presence&.then { |line| "- #{line}" }

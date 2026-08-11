@@ -52,7 +52,15 @@ const WEBHOOK_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE'];
 
 const draft = reactive({
   name: props.step?.name || '',
-  instructions: props.step?.instructions || '',
+  // "Padrão ouro": 3 campos separados em vez de 1 textarea (Objetivo/Regras/Fala sugerida) — melhora a
+  // atenção do modelo (texto estruturado > prosa longa). Migração: etapa ANTIGA (só instructions, sem
+  // objective) semeia objective com o texto legado — nada se perde, o admin edita/divide dali.
+  objective: props.step?.objective || props.step?.instructions || '',
+  // rulesText é o textarea cru (uma regra por linha); buildStepPayload divide em array no save.
+  rulesText: Array.isArray(props.step?.rules)
+    ? props.step.rules.join('\n')
+    : props.step?.rules || '',
+  suggestedScript: props.step?.suggested_script || '',
   group_delay_seconds: props.step?.group_delay_seconds ?? '',
   // Chave do slot que a etapa coleta (collect['attribute']). Escolhida no Select da união (LeadVariable ∪
   // CustomAttributeDefinition). Vazia => etapa informativa (buildStepPayload emite collect: null). NÃO há
@@ -365,7 +373,9 @@ const onSave = () => {
     'save',
     buildStepPayload({
       name: draft.name,
-      instructions: draft.instructions,
+      objective: draft.objective,
+      rules: draft.rulesText,
+      suggestedScript: draft.suggestedScript,
       groupDelaySeconds: draft.group_delay_seconds,
       automations: draft.automations,
       collectAttribute: draft.collectAttribute,
@@ -381,6 +391,16 @@ const onSave = () => {
       onCompleteTarget: draft.onCompleteTarget,
     })
   );
+};
+
+// Aplica a sugestão do assistente (✨) nos 3 campos — o admin ainda revisa/edita antes de salvar a
+// etapa (o "Salvar" continua sendo o único gesto que persiste). Não fecha campos existentes: SOBRESCREVE
+// (o usuário abriu o assistente para gerar; se já tinha texto, o preview do assistente já deixou claro
+// o que vai entrar).
+const applyAssistantSuggestion = ({ objective, rules, suggestedScript }) => {
+  draft.objective = objective || '';
+  draft.rulesText = Array.isArray(rules) ? rules.join('\n') : rules || '';
+  draft.suggestedScript = suggestedScript || '';
 };
 </script>
 
@@ -401,28 +421,79 @@ const onSave = () => {
       />
     </div>
 
-    <!-- b) Instruções: o campo PRINCIPAL -->
-    <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-      <span class="flex items-center gap-2">
-        <span class="font-medium">
-          {{ $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS_LABEL') }}
-        </span>
-        <span class="text-xs text-n-slate-11">
-          {{ $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS_MICROHINT') }}
-        </span>
+    <!-- b) Instrução da etapa: 3 campos estruturados (Objetivo/Regras/Fala sugerida) em vez de 1
+         textarea — texto estruturado segura melhor a atenção do modelo do que prosa longa. -->
+    <div class="flex flex-col gap-3">
+      <div class="flex items-center gap-2 text-sm text-n-slate-12">
+        <span class="font-medium">{{
+          $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTION_TITLE')
+        }}</span>
         <button
           type="button"
           class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
           :title="$t('AI_AGENTS.PROMPT_ASSISTANT.OPEN')"
           @click="assistantOpen = true"
         />
-      </span>
-      <textarea
-        v-model="draft.instructions"
-        :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTIONS_PLACEHOLDER')"
-        class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-2 resize-y min-h-[150px] leading-relaxed"
-      />
-    </label>
+      </div>
+
+      <!-- Objetivo -->
+      <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+        <span class="flex items-center gap-2">
+          <span class="font-medium">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE_LABEL') }}
+          </span>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE_MICROHINT') }}
+          </span>
+        </span>
+        <textarea
+          v-model="draft.objective"
+          rows="2"
+          data-testid="step-objective"
+          :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE_PLACEHOLDER')"
+          class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-2 resize-y leading-relaxed"
+        />
+      </label>
+
+      <!-- Regras -->
+      <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+        <span class="flex items-center gap-2">
+          <span class="font-medium">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_RULES_LABEL') }}
+          </span>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_RULES_MICROHINT') }}
+          </span>
+        </span>
+        <textarea
+          v-model="draft.rulesText"
+          data-testid="step-rules"
+          :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_RULES_PLACEHOLDER')"
+          class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-2 resize-y min-h-[110px] leading-relaxed"
+        />
+      </label>
+
+      <!-- Fala sugerida -->
+      <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+        <span class="flex items-center gap-2">
+          <span class="font-medium">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_LABEL') }}
+          </span>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_MICROHINT') }}
+          </span>
+        </span>
+        <textarea
+          v-model="draft.suggestedScript"
+          rows="2"
+          data-testid="step-suggested-script"
+          :placeholder="
+            $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_PLACEHOLDER')
+          "
+          class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-2 resize-y leading-relaxed"
+        />
+      </label>
+    </div>
 
     <!-- c) Chave do slot: a etapa DECLARA a variável que coleta (Select da união LeadVariable ∪
          CustomAttributeDefinition, origem marcada). Empty = etapa informativa (escolha explícita, não
@@ -999,6 +1070,7 @@ const onSave = () => {
       v-model:open="assistantOpen"
       kind="step_instructions"
       :department-id="departmentId"
+      @apply="applyAssistantSuggestion"
     />
   </div>
 </template>

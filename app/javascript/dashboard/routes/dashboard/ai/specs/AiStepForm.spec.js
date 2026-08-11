@@ -1,5 +1,6 @@
 import { shallowMount, flushPromises } from '@vue/test-utils';
 import AiStepForm from '../AiStepForm.vue';
+import AiPromptAssistant from '../AiPromptAssistant.vue';
 
 // O componente usa useRoute (accountId p/ o POST do inline-create) e o axios GLOBAL (window.axios).
 vi.mock('vue-router', () => ({
@@ -30,6 +31,83 @@ const mountForm = (step, extraProps = {}) => {
     },
   });
 };
+
+// "Padrão ouro" (2026-08): instructions (1 textarea) virou objective/rules/suggested_script (3 campos).
+describe('AiStepForm.vue — Objetivo/Regras/Fala sugerida (3 campos estruturados)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('etapa NOVA: carrega objective/rules/suggested_script nos 3 campos e emite no save', async () => {
+    const wrapper = mountForm({
+      name: 'Qualificação',
+      objective: 'Obter a cidade',
+      rules: ['Regra 1', 'Regra 2'],
+      suggested_script: 'Oi! Me diz sua cidade?',
+    });
+
+    expect(wrapper.get('[data-testid="step-objective"]').element.value).toBe(
+      'Obter a cidade'
+    );
+    expect(wrapper.get('[data-testid="step-rules"]').element.value).toBe(
+      'Regra 1\nRegra 2'
+    );
+    expect(
+      wrapper.get('[data-testid="step-suggested-script"]').element.value
+    ).toBe('Oi! Me diz sua cidade?');
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+
+    const saved = wrapper.emitted('save')[0][0];
+    expect(saved.objective).toBe('Obter a cidade');
+    expect(saved.rules).toEqual(['Regra 1', 'Regra 2']);
+    expect(saved.suggested_script).toBe('Oi! Me diz sua cidade?');
+    expect('instructions' in saved).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  // Migração: etapa ANTIGA (só instructions) carrega o texto legado no campo Objetivo — nada se perde.
+  it('etapa ANTIGA (só instructions): migra o texto legado pro campo Objetivo', async () => {
+    const wrapper = mountForm({
+      name: 'Cadastro',
+      instructions: 'Peça e grave o CPF do cliente.',
+    });
+
+    expect(wrapper.get('[data-testid="step-objective"]').element.value).toBe(
+      'Peça e grave o CPF do cliente.'
+    );
+
+    wrapper.unmount();
+  });
+
+  // AiPromptAssistant emite 'apply' com { objective, rules, suggestedScript } — o form aplica direto
+  // nos 3 campos (o admin ainda revisa e clica Salvar).
+  it('aplica a sugestão do assistente (evento apply) nos 3 campos', async () => {
+    const wrapper = mountForm({ name: 'Coleta' });
+
+    await wrapper.findComponent(AiPromptAssistant).vm.$emit('apply', {
+      objective: 'Objetivo sugerido',
+      rules: ['Regra sugerida 1', 'Regra sugerida 2'],
+      suggestedScript: 'Fala sugerida',
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="step-objective"]').element.value).toBe(
+      'Objetivo sugerido'
+    );
+    expect(wrapper.get('[data-testid="step-rules"]').element.value).toBe(
+      'Regra sugerida 1\nRegra sugerida 2'
+    );
+    expect(
+      wrapper.get('[data-testid="step-suggested-script"]').element.value
+    ).toBe('Fala sugerida');
+
+    wrapper.unmount();
+  });
+});
 
 describe('AiStepForm.vue — preservação de step.knowledge (semeadura do draft, PR 2)', () => {
   afterEach(() => {

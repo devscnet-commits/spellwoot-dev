@@ -1440,10 +1440,10 @@ onMounted(async () => {
                         {{ element.name }}
                       </p>
                       <p
-                        v-if="element.instructions"
+                        v-if="element.objective"
                         class="text-xs text-n-slate-11 mb-0 truncate"
                       >
-                        {{ element.instructions }}
+                        {{ element.objective }}
                       </p>
                     </div>
                     <span

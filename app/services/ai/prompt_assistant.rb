@@ -1,6 +1,9 @@
-# Dev-time helper that suggests good prompts. Given a free-text brief from the user, generates ONE
-# text suggestion for either an agent base_prompt or a playbook step's instructions. Suggestion-only
-# (the UI never auto-fills — the user copies if they like it). Account-scoped, but when a `department`
+# Dev-time helper that suggests good prompts. Given a free-text brief from the user, generates a
+# suggestion for either an agent base_prompt (1 string) or a playbook step's instructions (3 SEPARATE
+# fields: objective/rules/suggested_script — mirrors Ai::StepForm.vue's 3 fields, not 1 textarea).
+# Suggestion-only for base_prompt (copy-paste); step_instructions can be applied directly into the
+# form's 3 fields (AiPromptAssistant.vue's "apply" button) — either way nothing is auto-saved to the
+# backend, the user still reviews before saving the step. Account-scoped, but when a `department`
 # is given it grounds the suggestion in that department's REAL capabilities (tools, knowledge sources,
 # variables) — so it stops teaching the user to promise consultations that have no source (o bug de
 # "vou verificar suas faturas" sem ferramenta). Os system prompts (texto grande) ficam em
@@ -26,15 +29,17 @@ class Ai::PromptAssistant
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     # call_model (entrada LIVRE, SEM schema) — como o handoff_summary/CaptureJudge. O `decide` imporia o
     # DecisionSchema strict e a saída viraria o ENVELOPE de decisão (decision/asked_slot/proposed_value/...),
-    # NUNCA o {"suggestion"} que o prompt pede (bug #302: o formato dependia de qual método chamava o modelo).
+    # NUNCA o formato que o prompt pede (bug #302: o formato dependia de qual método chamava o modelo).
     raw = Ai::ModelRouter.call_model(
       provider: 'openai', model: MODEL,
       system_prompt: full_system_prompt, user_message: @brief, account_id: @account.id, json: true
     )
-    suggestion = extract_suggestion(raw[:text])
-    record_run(run, raw, suggestion, started)
+    # base_prompt: {"suggestion":"<texto>"} (1 campo). step_instructions: {"objective","rules",
+    # "suggested_script"} (3 campos SEPARADOS — a tela tem 3 campos, não 1 textarea; ver Ai::StepForm.vue).
+    result = @kind == 'step_instructions' ? extract_step_fields(raw[:text]) : { 'suggestion' => extract_suggestion(raw[:text]) }
+    record_run(run, raw, result, started)
 
-    { 'suggestion' => suggestion, 'run_id' => run.id, 'status' => raw[:status] == 'error' ? 'error' : 'recorded' }
+    result.merge('run_id' => run.id, 'status' => raw[:status] == 'error' ? 'error' : 'recorded')
   rescue StandardError => e
     Rails.logger.error "[Ai::PromptAssistant] account=#{@account&.id} kind=#{@kind} #{e.class}: #{e.message}"
     { 'error' => "#{e.class}: #{e.message}" }
@@ -142,16 +147,35 @@ class Ai::PromptAssistant
     str.strip
   end
 
+  # step_instructions: 3 campos SEPARADOS, não 1 string. Parser tolerante igual ao #extract_suggestion —
+  # se o modelo não devolver JSON (ou vier sem os campos), degrada jogando o texto cru em suggested_script
+  # (nada se perde silenciosamente; o admin ainda vê algo pra revisar/editar).
+  def extract_step_fields(text)
+    str = text.to_s
+    data = begin
+      JSON.parse(str[/\{.*\}/m].to_s)
+    rescue JSON::ParserError
+      nil
+    end
+    return { 'objective' => '', 'rules' => [], 'suggested_script' => str.strip } if data.blank?
+
+    {
+      'objective' => data['objective'].to_s,
+      'rules' => Array(data['rules']).map(&:to_s),
+      'suggested_script' => data['suggested_script'].to_s
+    }
+  end
+
   # call_model NÃO devolve cost/latency (o decide devolvia) — computamos aqui, como o handoff_summary, senão
-  # o ai:cost_report subconta o assistente.
-  def record_run(run, raw, suggestion, started)
+  # o ai:cost_report subconta o assistente. `result` já é o hash certo por kind (#suggest) — grava como veio.
+  def record_run(run, raw, result, started)
     tin = raw[:tokens_in].to_i
     tout = raw[:tokens_out].to_i
     run.update!(
       provider: raw[:provider] || 'openai', model: raw[:model] || MODEL, tokens_in: tin, tokens_out: tout,
       cost: Ai::ModelRouter.estimate_cost(MODEL, tin, tout),
       latency_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round,
-      decision: { 'suggestion' => suggestion }, status: raw[:status] == 'error' ? 'error' : 'recorded'
+      decision: result, status: raw[:status] == 'error' ? 'error' : 'recorded'
     )
   end
 end

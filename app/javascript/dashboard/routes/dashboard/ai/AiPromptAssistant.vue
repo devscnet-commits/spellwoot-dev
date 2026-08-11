@@ -1,8 +1,12 @@
 <script setup>
 /* global axios */
-// Slide-over (painel lateral) que sugere um base_prompt ou instruções de etapa a partir de um brief
-// do usuário. Single-shot: descreve -> gera -> UMA sugestão (não preenche o campo; o usuário copia).
-// Usa o axios GLOBAL do Chatwoot (autenticado) — nunca o import cru.
+// Slide-over (painel lateral) que sugere um base_prompt ou instruções de etapa a partir de um brief do
+// usuário. base_prompt: single-shot, UMA sugestão em texto (não preenche o campo; o usuário copia) —
+// o base_prompt não tem "campos" pra aplicar direto. step_instructions: contrato de 3 campos SEPARADOS
+// (objective/rules/suggested_script, espelha AiStepForm.vue) — o admin revisa o preview e clica
+// "Usar esta sugestão" pra aplicar direto nos 3 campos do form (emit('apply')); nada é salvo sozinho,
+// o Salvar da etapa continua sendo o único gesto que persiste. Usa o axios GLOBAL do Chatwoot
+// (autenticado) — nunca o import cru.
 import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -19,19 +23,26 @@ const props = defineProps({
   // assistente não sugerir consulta sem fonte nem variável inventada. Ausente => o backend degrada.
   departmentId: { type: [String, Number], default: null },
 });
-const emit = defineEmits(['update:open']);
+const emit = defineEmits(['update:open', 'apply']);
 
 const route = useRoute();
 const { t } = useI18n();
 
+const isStepKind = computed(() => props.kind === 'step_instructions');
+
 const brief = ref('');
-const suggestion = ref('');
+const suggestion = ref(''); // base_prompt: texto único
+const structured = ref(null); // step_instructions: { objective, rules, suggestedScript }
 const loading = ref(false);
 
 const title = computed(() =>
-  props.kind === 'step_instructions'
+  isStepKind.value
     ? t('AI_AGENTS.PROMPT_ASSISTANT.TITLE_STEP_INSTRUCTIONS')
     : t('AI_AGENTS.PROMPT_ASSISTANT.TITLE_BASE_PROMPT')
+);
+
+const hasResult = computed(() =>
+  isStepKind.value ? !!structured.value : !!suggestion.value
 );
 
 const close = () => emit('update:open', false);
@@ -40,6 +51,7 @@ const generate = async () => {
   if (loading.value || !brief.value.trim()) return; // mata duplo-clique / brief vazio
   loading.value = true;
   suggestion.value = '';
+  structured.value = null;
   try {
     const { data } = await axios.post(
       `/api/v1/accounts/${route.params.accountId}/ai_prompt_assistant`,
@@ -49,7 +61,22 @@ const generate = async () => {
         department_id: props.departmentId || undefined,
       }
     );
-    if (data && data.suggestion) {
+    if (isStepKind.value) {
+      const hasContent =
+        data &&
+        (data.objective ||
+          (data.rules && data.rules.length) ||
+          data.suggested_script);
+      if (hasContent) {
+        structured.value = {
+          objective: data.objective || '',
+          rules: Array.isArray(data.rules) ? data.rules : [],
+          suggestedScript: data.suggested_script || '',
+        };
+      } else {
+        useAlert(t('AI_AGENTS.PROMPT_ASSISTANT.ERROR'));
+      }
+    } else if (data && data.suggestion) {
       suggestion.value = data.suggestion;
     } else {
       useAlert(t('AI_AGENTS.PROMPT_ASSISTANT.ERROR'));
@@ -75,6 +102,14 @@ const copy = async () => {
   } catch (error) {
     // clipboard indisponível: o usuário seleciona manualmente o texto.
   }
+};
+
+// step_instructions: aplica direto nos 3 campos do AiStepForm (o admin ainda revisa/edita e clica
+// Salvar) — em vez de copiar/colar manualmente 3 blocos separados.
+const apply = () => {
+  if (!structured.value) return;
+  emit('apply', structured.value);
+  close();
 };
 </script>
 
@@ -135,7 +170,7 @@ const copy = async () => {
           />
 
           <div
-            v-if="suggestion"
+            v-if="hasResult"
             class="flex flex-col gap-2 border-t border-n-weak pt-4"
           >
             <div class="flex items-center justify-between gap-2">
@@ -143,17 +178,65 @@ const copy = async () => {
                 {{ $t('AI_AGENTS.PROMPT_ASSISTANT.RESULT_LABEL') }}
               </span>
               <Button
+                v-if="!isStepKind"
                 variant="ghost"
                 color="slate"
                 size="sm"
                 :label="$t('AI_AGENTS.PROMPT_ASSISTANT.COPY')"
                 @click="copy"
               />
+              <Button
+                v-else
+                variant="solid"
+                color="blue"
+                size="sm"
+                :label="$t('AI_AGENTS.PROMPT_ASSISTANT.APPLY')"
+                @click="apply"
+              />
             </div>
+
+            <!-- base_prompt: texto único, copiável -->
             <pre
+              v-if="!isStepKind"
               class="text-sm text-n-slate-12 whitespace-pre-wrap break-words bg-n-solid-2 border border-n-weak rounded-lg p-3 mb-0"
               >{{ suggestion }}</pre
             >
+
+            <!-- step_instructions: preview dos 3 campos SEPARADOS (o que vai ser aplicado no form) -->
+            <div v-else class="flex flex-col gap-3">
+              <div class="flex flex-col gap-1">
+                <span class="text-xs font-medium text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.STEP_OBJECTIVE_LABEL') }}
+                </span>
+                <p
+                  class="text-sm text-n-slate-12 bg-n-solid-2 border border-n-weak rounded-lg p-3 mb-0"
+                >
+                  {{ structured.objective }}
+                </p>
+              </div>
+              <div class="flex flex-col gap-1">
+                <span class="text-xs font-medium text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.STEP_RULES_LABEL') }}
+                </span>
+                <ul
+                  class="text-sm text-n-slate-12 bg-n-solid-2 border border-n-weak rounded-lg p-3 mb-0 pl-4 list-disc"
+                >
+                  <li v-for="(rule, i) in structured.rules" :key="i">
+                    {{ rule }}
+                  </li>
+                </ul>
+              </div>
+              <div class="flex flex-col gap-1">
+                <span class="text-xs font-medium text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_LABEL') }}
+                </span>
+                <p
+                  class="text-sm text-n-slate-12 italic bg-n-solid-2 border border-n-weak rounded-lg p-3 mb-0"
+                >
+                  <q>{{ structured.suggestedScript }}</q>
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
