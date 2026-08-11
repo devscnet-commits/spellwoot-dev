@@ -163,6 +163,7 @@ class Ai::PythonOrchestratorClient
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
     kb = knowledge_block
     lines << kb if kb.present?
+    lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
@@ -261,6 +262,25 @@ class Ai::PythonOrchestratorClient
     '## CONHECIMENTO OFICIAL DA EMPRESA (Use APENAS este texto para responder sobre planos/preços/regras. ' \
       'É PROIBIDO usar conhecimento externo, médias de mercado ou suposições. Se não estiver aqui, diga ' \
       "que não sabe):\n#{chunks.map { |c| "- #{c}" }.join("\n")}"
+  end
+
+  # Bug real ao vivo: o Rails salvava certinho em ai_collected_facts (Ai::StateManager#persist_attributes,
+  # via os "registrar_*"/"salvar_memoria_ia" do Api::Internal::AiExecuteToolController), mas o
+  # system_prompt nunca injetava esse resumo de volta — a IA "esquecia" o que o próprio cliente já tinha
+  # informado, porque cada turno só recebia o histórico bruto (via previous_response_id), sem um resumo
+  # explícito do que JÁ está salvo. Espelha o antigo "Dados já coletados" do caminho legado
+  # (Ai::PromptCompiler — hoje um bloco mais elaborado, ESTADO DA COLETA, mas o princípio é o mesmo).
+  def collected_facts_block
+    facts = @conversation.additional_attributes&.dig('ai_collected_facts')
+    return nil if facts.blank?
+
+    lines = ['DADOS JÁ COLETADOS NESTA CONVERSA (Não pergunte nada disso de novo, já está salvo no sistema):']
+    # Ai::StepSlot.display: mesmo mapeamento do caminho legado — nunca vaza o token interno de recusa
+    # (Ai::StepSlot::ABSENT, '__sem_valor__') cru pro modelo, caso esta conversa também tenha dado
+    # gravado pelo motor legado (department pode ter alternado o flag python_orchestrator no meio do
+    # atendimento — ai_collected_facts vive na conversation, não é exclusivo de um motor).
+    facts.each { |key, value| lines << "- #{key}: #{Ai::StepSlot.display(value)}" }
+    lines.join("\n")
   end
 
   # Objetivo/Regras/Fala sugerida (padrão estruturado) quando a etapa já foi migrada; texto livre de

@@ -312,6 +312,69 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Bug real ao vivo: Rails gravava certinho em ai_collected_facts (via registrar_*/salvar_memoria_ia),
+  # mas o system_prompt nunca injetava esse resumo de volta — a IA "esquecia" o que o próprio cliente
+  # já tinha informado e reperguntava. Espelha o "Dados já coletados" do caminho legado.
+  describe 'DADOS JÁ COLETADOS (ai_collected_facts injetado no system_prompt)' do
+    def with_facts(facts)
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_collected_facts' => facts))
+    end
+
+    it 'injeta cada chave/valor de ai_collected_facts, ANTES do bloco ETAPA ATUAL' do
+      with_facts('nome' => 'Maria', 'cidade' => 'Chapecó')
+      Ai::Playbook.create!(department: department, steps: [{ 'name' => 'Boas-vindas', 'objective' => 'Cumprimentar.' }])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        facts_idx = prompt.index('DADOS JÁ COLETADOS NESTA CONVERSA')
+        etapa_idx = prompt.index('ETAPA ATUAL')
+        prompt.include?('- nome: Maria') &&
+          prompt.include?('- cidade: Chapecó') &&
+          prompt.include?('Não pergunte nada disso de novo, já está salvo no sistema') &&
+          facts_idx.present? && etapa_idx.present? && facts_idx < etapa_idx
+      }
+    end
+
+    it 'ai_collected_facts VAZIO ({}): o bloco não aparece' do
+      with_facts({})
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('DADOS JÁ COLETADOS')
+      }
+    end
+
+    it 'sem ai_collected_facts (conversa nova): o bloco não aparece' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('DADOS JÁ COLETADOS')
+      }
+    end
+
+    # Gap 1 do caminho legado: Ai::StepSlot::ABSENT ('__sem_valor__') é um TOKEN interno — nunca pode
+    # vazar cru pro modelo (motivo: pode ter sido gravado pelo motor legado nesta MESMA conversa, se o
+    # department alternou o flag python_orchestrator no meio do atendimento).
+    it 'valor ABSENT (recusa do motor legado) aparece como "não informado", NUNCA o token cru' do
+      with_facts('cpf' => Ai::StepSlot::ABSENT)
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('- cpf: não informado') && !prompt.include?('__sem_valor__')
+      }
+    end
+  end
+
   # 4 falhas de comportamento achadas em teste ao vivo: IA "fingindo" ter chamado registrar_* sem
   # chamar de verdade, inventando situações/recursos que não existem, transferindo sem motivo (pulando
   # o fluxo de etapas), e empilhando várias perguntas de etapas diferentes na mesma mensagem.
