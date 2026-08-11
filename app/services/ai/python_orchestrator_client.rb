@@ -137,6 +137,7 @@ class Ai::PythonOrchestratorClient
     lines << identity_instruction
     lines << market_average_guardrail
     lines << must_call_capture_tools_instruction
+    lines << no_confirmation_loop_instruction
     lines << no_fabrication_instruction
     lines << transfer_discipline_instruction
     lines << gradual_conversation_instruction
@@ -184,6 +185,23 @@ class Ai::PythonOrchestratorClient
     'COMPORTAMENTO OBRIGATÓRIO: Quando o cliente fornecer QUALQUER dado (nome, endereço, CPF, telefone, ' \
       'email, etc), você DEVE chamar a tool "registrar_*" correspondente IMEDIATAMENTE. É PROIBIDO dizer ' \
       'que "anotou" ou "registrou" sem chamar a tool. Se você não chamar a tool, o dado não será salvo.'
+  end
+
+  # Achado em teste ao vivo (WhatsApp real): cliente disse "vendas", a IA respondeu "Perfeito, você
+  # quer falar com o setor de vendas! Só pra confirmar, é vendas mesmo?" e ficou nesse loop — nunca
+  # chamava registrar_*/avancar_etapa, só reconfirmava o mesmo dado. Instrução separada e agressiva de
+  # #must_call_capture_tools_instruction porque o problema aqui não é deixar de chamar a tool (a IA às
+  # vezes ATÉ chama), é INSERIR um turno de confirmação extra ANTES de chamar — o cliente já respondeu
+  # e a IA pergunta de novo em vez de agir. Reforçada (2 rodadas ao vivo: o primeiro texto não bastou)
+  # com passos numerados + o exemplo concreto "vendas" — o mesmo caso real que travou no WhatsApp.
+  def no_confirmation_loop_instruction
+    "REGRA DE AÇÃO IMEDIATA (OBRIGATÓRIO):\n" \
+      "Assim que o cliente fornecer a informação solicitada pela etapa atual, você DEVE:\n" \
+      "1. Chamar a tool 'registrar_*' correspondente para salvar o dado IMEDIATAMENTE.\n" \
+      "2. Chamar a tool 'avancar_etapa' para avançar o fluxo.\n" \
+      "É ESTRITAMENTE PROIBIDO pedir confirmação ('é isso mesmo?', 'posso confirmar?') para dados " \
+      "que o cliente já falou claramente. Aja com decisão. Se o cliente falou 'vendas', salve " \
+      "'vendas' e avance. Não responda apenas com texto, USE AS TOOLS."
   end
 
   # Achado em teste ao vivo: a IA inventava situações plausíveis mas inexistentes ("instabilidade no
