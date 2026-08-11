@@ -137,8 +137,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # narrativo é ancorado na etapa atual, a captura de dado (tools) não é. Nomes SANITIZADOS
         # (Ai::ToolNameSanitizer): "conversation.add_label"/".resolve"/".transfer" viram "_" — a
         # OpenAI rejeita ponto no nome da function (achado ao vivo, ver spec do sanitizer).
-        expected = %w[avancar_etapa conversation_add_label conversation_resolve conversation_transfer
-                      registrar_endereco registrar_telefone_extra]
+        expected = %w[avancar_etapa continuar_conversa conversation_add_label conversation_resolve
+                      conversation_transfer registrar_endereco registrar_telefone_extra]
         expected.all? { |n| names.include?(n) } &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
           !body['system_prompt'].include?('Cumprimente com calor.')
@@ -170,7 +170,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
-    it 'sem playbook, tools_schema ainda traz as 4 tools de controle + o registrar_* do CustomAttributeDefinition padrão da conta (Deals) — nenhuma tool de etapa' do
+    it 'sem playbook, tools_schema ainda traz as 5 tools de controle + o registrar_* do CustomAttributeDefinition padrão da conta (Deals) — nenhuma tool de etapa' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -180,8 +180,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
         names = body['tools_schema'].map { |t| t['name'] }
         # 'marcado_como_ganho_ou_perdido' vem do CustomAttributeDefinition seedado em TODA Account
         # (Account#create_default_custom_attributes) — known_slot_keys inclui mesmo sem playbook.
-        names.sort == %w[avancar_etapa conversation_resolve conversation_transfer salvar_memoria_ia
-                          registrar_marcado_como_ganho_ou_perdido].sort &&
+        # continuar_conversa: no-op que sustenta tool_choice="required" no orchestrator.py.
+        names.sort == %w[avancar_etapa continuar_conversa conversation_resolve conversation_transfer
+                          salvar_memoria_ia registrar_marcado_como_ganho_ou_perdido].sort &&
           !body['system_prompt'].include?('Etapa atual')
       }
     end
@@ -414,6 +415,38 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         JSON.parse(req.body)['system_prompt'].include?('use "salvar_memoria_ia" com chave=nome do dado')
+      }
+    end
+  end
+
+  # Bug real ao vivo: a IA respondia só com texto ("é vendas mesmo?") e nunca chamava nenhuma tool, então
+  # o Rails nunca avançava o índice. orchestrator.py passou a mandar tool_choice="required" (fora do
+  # escopo Rails), o que OBRIGA alguma tool a ser chamada — "continuar_conversa" é o escape-valve: um
+  # no-op pra quando a IA só quer falar, sem registrar dado nem avançar etapa. Sem ela, tool_choice=
+  # "required" empurraria a IA a usar uma tool REAL (avancar_etapa cedo demais, registrar_* com lixo)
+  # em qualquer turno sem nada de fato pra salvar — regressão pior que o bug original.
+  describe 'tool no-op "continuar_conversa" (sustenta tool_choice="required" no orchestrator.py)' do
+    it 'sempre presente em tools_schema, sem parâmetros' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'continuar_conversa' }
+        tool.present? && tool['input_schema'] == { 'type' => 'object', 'properties' => {} }
+      }
+    end
+
+    it 'system_prompt explica QUANDO usar continuar_conversa e que toda resposta precisa vir com uma tool' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('TODA resposta sua PRECISA vir acompanhada de UMA chamada de ferramenta') &&
+          prompt.include?('chame "continuar_conversa"') &&
+          prompt.include?('ela não faz nada no sistema')
       }
     end
   end

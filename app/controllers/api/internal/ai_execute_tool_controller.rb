@@ -2,12 +2,13 @@
 # OpenAI decides to invoke a Rails-side (non-native) tool OR one of the synthetic control tools
 # Ai::PythonOrchestratorClient always offers on this path: "registrar_*" (Ai::StepCaptureTool — a
 # playbook step's collect slot), "avancar_etapa" (agentic step advance — the model decides, not a
-# server-side index gate), and "conversation.resolve"/"conversation.transfer" (close/handoff). None
-# of these four are a configured Ai::Tool row — they're recognized by name, same as the legacy
-# path's non-tool decision fields (handoff/close), just reached via function-calling here instead of
-# a JSON decision contract. Real (admin-configured) tools still delegate to the existing
-# Ai::ToolExecutor/Ai::CapabilityRegistry framework — same audited path (Ai::CapabilityExecution)
-# used by Ai::Gateway's own tool handling.
+# server-side index gate), "conversation.resolve"/"conversation.transfer" (close/handoff), and
+# "continuar_conversa" (pure no-op — the safe option under tool_choice="required" when the model just
+# wants to talk). None of these five are a configured Ai::Tool row — they're recognized by name, same
+# as the legacy path's non-tool decision fields (handoff/close), just reached via function-calling
+# here instead of a JSON decision contract. Real (admin-configured) tools still delegate to the
+# existing Ai::ToolExecutor/Ai::CapabilityRegistry framework — same audited path
+# (Ai::CapabilityExecution) used by Ai::Gateway's own tool handling.
 #
 # Name translation: Ai::PythonOrchestratorClient SANITIZES every tool name before it reaches OpenAI
 # (Ai::ToolNameSanitizer — OpenAI 400s on anything outside [a-zA-Z0-9_-], and Ai::CapabilityRegistry's
@@ -29,6 +30,8 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     unless department.account_id == conversation.account_id
       return render json: { error: 'forbidden' }, status: :forbidden
     end
+
+    return render json: continue_conversation if params[:tool_name] == Ai::PythonOrchestratorClient::CONTINUE_TOOL
 
     return render json: advance_step(conversation, department) if params[:tool_name] == Ai::PythonOrchestratorClient::ADVANCE_STEP_TOOL
 
@@ -118,6 +121,14 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     persisted = gated.key?(key)
     { result: { key => value }, status: persisted ? 'executed' : 'skipped',
       error: persisted ? nil : 'valor vazio — nada foi registrado' }
+  end
+
+  # "continuar_conversa" (Ai::PythonOrchestratorClient::CONTINUE_TOOL): pure no-op, NEVER touches the
+  # database — it exists only so tool_choice="required" (orchestrator.py) always has a safe option
+  # when the model just wants to talk (greet, ask, answer) without registering data or advancing the
+  # step. No live/shadow gate either: there's no side effect to distinguish.
+  def continue_conversation
+    { result: 'ok', status: 'executed', error: nil }
   end
 
   # Agentic step advance: the AI decides a step is done (or the customer declined an optional field)

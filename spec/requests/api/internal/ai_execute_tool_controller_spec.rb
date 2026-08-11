@@ -136,6 +136,39 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    # Bug real ao vivo: a IA respondia só com texto e nunca chamava nenhuma tool, então o
+    # ai_step_index nunca avançava. orchestrator.py passou a mandar tool_choice="required" — esta tool
+    # é o escape-valve: um no-op puro pra quando a IA só quer falar (perguntar/cumprimentar/responder)
+    # sem registrar dado nem avançar etapa. NUNCA toca o banco, em NENHUM modo.
+    context 'chamada de "continuar_conversa" (no-op — sustenta tool_choice="required" no orchestrator.py)' do
+      it 'devolve { result: "ok", status: "executed" } SEM tocar a conversa nem criar Ai::CapabilityExecution' do
+        expect { call_tool('continuar_conversa') }
+          .not_to change(Ai::CapabilityExecution, :count)
+
+        expect(response).to have_http_status(:success)
+        json = response.parsed_body
+        expect(json['result']).to eq('ok')
+        expect(json['status']).to eq('executed')
+        expect(json['error']).to be_nil
+      end
+
+      it 'não muda additional_attributes (nem ai_step_index, nem ai_collected_facts)' do
+        before_attrs = conversation.additional_attributes
+
+        call_tool('continuar_conversa')
+
+        expect(conversation.reload.additional_attributes).to eq(before_attrs)
+      end
+
+      # Diferente de avancar_etapa/registrar_*/salvar_memoria_ia (que "skipam" em shadow): não há
+      # side effect nenhum a distinguir, então NÃO é gated por live/shadow — sempre "executed".
+      it 'em modo shadow, ainda devolve "executed" (não há efeito colateral a distinguir)' do
+        call_tool('continuar_conversa', mode: 'shadow')
+
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+    end
+
     context 'chamada de "salvar_memoria_ia" (catch-all de memória — híbrido com registrar_*)' do
       it 'grava chave/valor em ai_collected_facts via Ai::StateManager, SEM criar uma Ai::CapabilityExecution' do
         expect { call_tool('salvar_memoria_ia', arguments: { chave: 'nome_do_pet', valor: 'Rex' }) }
