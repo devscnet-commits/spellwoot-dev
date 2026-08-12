@@ -310,6 +310,7 @@
       "STEPS": "Etapas do atendimento (uma por linha)",
       "STEP_NAME": "Nome do estágio",
       "STEP_NAME_PLACEHOLDER": "Ex.: Boas-vindas",
+      "STEP_NAME_REQUIRED": "Dê um nome pra essa etapa — é o que falta pra habilitar o Salvar.",
       "STEP_INSTRUCTIONS": "Instruções da etapa",
       "STEP_DELAY": "Delay de agrupamento desta etapa (segundos)",
       "STEP_DELAY_PLACEHOLDER": "Ex.: 5",

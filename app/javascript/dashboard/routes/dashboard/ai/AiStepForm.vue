@@ -364,11 +364,22 @@ const removeOnComplete = () => {
   draft.onCompleteTarget = '';
 };
 
+// Nome é o único campo que bloqueia o Salvar (:disabled do botão, no rodapé) — mas até aqui nada no
+// campo em si avisava disso, só o guard genérico de "você vai perder o progresso" ao tentar sair.
+// nameTouched marca "o usuário já teve chance de perceber que o nome está vazio" (blur do campo OU
+// tentativa de passar o mouse/focar o botão Salvar desabilitado) para então destacar o campo — não
+// mostra erro de cara num rascunho novo que ainda nem foi tocado.
+const nameTouched = ref(false);
+const nameError = computed(() => nameTouched.value && !draft.name.trim());
+
 // Payload montado em aiStepPayload.buildStepPayload: slot_required no nível da etapa (nunca
 // collect.required), collect só com a chave DECLARADA (collectAttribute; vazio => collect null), sem
 // complete_when. Sem flush de inferência — a etapa declara a variável, não há estado assíncrono.
 const onSave = () => {
-  if (!draft.name.trim()) return;
+  if (!draft.name.trim()) {
+    nameTouched.value = true;
+    return;
+  }
   emit(
     'save',
     buildStepPayload({
@@ -407,18 +418,29 @@ const applyAssistantSuggestion = ({ objective, rules, suggestedScript }) => {
 <template>
   <div class="flex flex-col gap-4">
     <!-- a) Cabeçalho: badge da etapa + nome como TÍTULO do card -->
-    <div class="flex items-center gap-2.5">
-      <span
-        class="shrink-0 px-2 py-0.5 rounded-full bg-n-alpha-2 text-xs font-medium text-n-slate-11"
-      >
-        {{ $t('AI_DEPARTMENTS.FORM.STEP_NUMBER', { number: index + 1 }) }}
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2.5">
+        <span
+          class="shrink-0 px-2 py-0.5 rounded-full bg-n-alpha-2 text-xs font-medium text-n-slate-11"
+        >
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_NUMBER', { number: index + 1 }) }}
+        </span>
+        <input
+          v-model="draft.name"
+          type="text"
+          :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_NAME_PLACEHOLDER')"
+          class="flex-1 min-w-0 px-2 py-1 text-base font-medium text-n-slate-12 bg-transparent border-0 border-b focus:outline-none"
+          :class="
+            nameError
+              ? 'border-n-ruby-9 focus:border-n-ruby-9'
+              : 'border-transparent hover:border-n-weak focus:border-n-brand'
+          "
+          @blur="nameTouched = true"
+        />
+      </div>
+      <span v-if="nameError" class="text-xs text-n-ruby-11">
+        {{ $t('AI_DEPARTMENTS.FORM.STEP_NAME_REQUIRED') }}
       </span>
-      <input
-        v-model="draft.name"
-        type="text"
-        :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_NAME_PLACEHOLDER')"
-        class="flex-1 min-w-0 px-2 py-1 text-base font-medium text-n-slate-12 bg-transparent border-0 border-b border-transparent hover:border-n-weak focus:border-n-brand focus:outline-none"
-      />
     </div>
 
     <!-- b) Instrução da etapa: 3 campos estruturados (Objetivo/Regras/Fala sugerida) em vez de 1
@@ -1051,18 +1073,30 @@ const applyAssistantSuggestion = ({ objective, rules, suggestedScript }) => {
         >
           {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
         </button>
-        <button
-          type="button"
-          :disabled="!draft.name.trim()"
-          class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-          @click="onSave"
+        <!-- Wrapper (não o <button> em si): um <button disabled> não dispara mouseenter/title de forma
+             confiável no Chrome (elementos desabilitados não recebem eventos de mouse) — o span por
+             fora sempre recebe o hover, então é ele quem revela a dica e acende o campo do nome. -->
+        <span
+          :title="
+            !draft.name.trim()
+              ? $t('AI_DEPARTMENTS.FORM.STEP_NAME_REQUIRED')
+              : null
+          "
+          @mouseenter="nameTouched = true"
         >
-          {{
-            isNew
-              ? $t('AI_DEPARTMENTS.FORM.STEP_CREATE')
-              : $t('AI_DEPARTMENTS.FORM.SAVE')
-          }}
-        </button>
+          <button
+            type="button"
+            :disabled="!draft.name.trim()"
+            class="text-sm font-medium px-3 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            @click="onSave"
+          >
+            {{
+              isNew
+                ? $t('AI_DEPARTMENTS.FORM.STEP_CREATE')
+                : $t('AI_DEPARTMENTS.FORM.SAVE')
+            }}
+          </button>
+        </span>
       </div>
     </div>
 
