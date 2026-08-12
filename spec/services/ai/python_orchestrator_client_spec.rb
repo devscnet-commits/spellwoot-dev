@@ -235,6 +235,63 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Bug URGENTE ao vivo: etapas escritas (ou geradas pelo Ai::PromptAssistant) ANTES da migração pra
+  # Structured Outputs têm texto tipo "chame a ferramenta registrar_X"/"chame a ferramenta
+  # avancar_etapa" salvo no banco — tools que orchestrator.py não oferece mais à OpenAI. A IA lia,
+  # procurava a tool, não achava, e desistia (encerrava o atendimento). #current_step_instructions
+  # reescreve essas referências pelo equivalente no contrato JSON, SEM apagar o resto da frase.
+  describe 'sanitização de texto de etapa com tool-calling obsoleto (bug do encerramento prematuro)' do
+    it 'reescreve "chame a ferramenta registrar_X" preservando o critério ao redor' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Nome', 'objective' => 'Coletar o nome.',
+          'rules' => ['Assim que o cliente informar o nome, chame a ferramenta registrar_nome_cliente.'],
+          'collect' => { 'attribute' => 'nome_cliente' } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('Assim que o cliente informar o nome, inclua esse dado em "dados_coletados" no seu JSON de resposta.') &&
+          !prompt.include?('chame a ferramenta registrar_nome_cliente') &&
+          !prompt.include?('registrar_nome_cliente')
+      }
+    end
+
+    it 'reescreve "chame a ferramenta avancar_etapa" preservando o critério ao redor' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Nome', 'objective' => 'Coletar o nome.',
+          'rules' => ['Assim que tiver capturado o nome, chame a ferramenta avancar_etapa.'] }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('Assim que tiver capturado o nome, defina "avancar_etapa": true no seu JSON de resposta.') &&
+          !prompt.include?('chame a ferramenta avancar_etapa')
+      }
+    end
+
+    it 'NÃO mexe em referência a uma tool REAL (admin-configurada) na etapa' do
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'consultar_periodos',
+                       implementation_type: 'capability', capability_key: 'x.y', status: 'active', description: 'x')
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Períodos', 'objective' => 'Informar períodos disponíveis.',
+          'rules' => ['Antes de responder, chame a ferramenta consultar_periodos.'] }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['system_prompt'].include?('chame a ferramenta consultar_periodos')
+      }
+    end
+  end
+
   describe 'system_prompt traz encerramento/transferência configurados + instrução do contrato JSON' do
     it 'inclui transfer_when/close_when (do playbook) e a mensagem de encerramento (do department)' do
       Ai::Playbook.create!(department: department, transfer_when: ['cliente pede humano'],

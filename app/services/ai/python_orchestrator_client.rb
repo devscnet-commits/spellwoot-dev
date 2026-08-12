@@ -263,8 +263,39 @@ class Ai::PythonOrchestratorClient
 
   # Objetivo/Regras/Fala sugerida (padrão estruturado) quando a etapa já foi migrada; texto livre de
   # step['instructions'] (fallback) para etapas antigas — Ai::StepInstructionText decide qual dos dois.
+  # Sanitizado (ver #sanitize_stale_tool_calls) SÓ aqui, não no módulo compartilhado — o motor legado
+  # (Ai::PromptCompiler) não usa este método.
   def current_step_instructions
-    Ai::StepInstructionText.render(current_step)
+    sanitize_stale_tool_calls(Ai::StepInstructionText.render(current_step))
+  end
+
+  # Bug URGENTE ao vivo: etapas escritas (ou geradas pelo Ai::PromptAssistant) ANTES da migração pra
+  # Structured Outputs têm texto tipo "chame a ferramenta registrar_nome_cliente"/"chame a ferramenta
+  # avancar_etapa" — tools que orchestrator.py não oferece MAIS à OpenAI (filtradas, ver
+  # _is_superseded_tool). A IA lia a instrução, procurava a tool entre as oferecidas, não achava, e
+  # DESISTIA — encerrava o atendimento prematuramente. Ai::PromptAssistant::Prompts para de GERAR essa
+  # frase daqui pra frente, mas isso não corrige texto JÁ salvo no banco — este método reescreve (não
+  # apaga) as 5 referências reservadas de controle/captura pelo EQUIVALENTE no contrato JSON, mantendo
+  # o resto da frase (ex.: o critério "assim que tiver capturado X e Y" continua, só a AÇÃO citada
+  # muda). Referência a uma tool REAL (ex.: "consulte a ferramenta consultar_periodos") nunca bate
+  # nestes 5 nomes reservados — Ai::StepCaptureTool::PREFIX ('registrar_') e as 4 constantes de
+  # controle nunca colidem com o nome de um Ai::Tool admin-configurado, então não há risco de mexer
+  # em instrução de tool real por engano.
+  def sanitize_stale_tool_calls(text)
+    return text if text.blank?
+
+    sanitized = text.dup
+    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?registrar_\w+['"]?\s*(?:correspondente)?/i,
+                     'inclua esse dado em "dados_coletados" no seu JSON de resposta')
+    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?avancar_etapa['"]?/i,
+                     'defina "avancar_etapa": true no seu JSON de resposta')
+    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?salvar_memoria_ia['"]?/i,
+                     'inclua esse dado em "dados_coletados" no seu JSON de resposta')
+    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?conversation[._]transfer['"]?/i,
+                     'defina "transferir_humano": true no seu JSON de resposta')
+    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?conversation[._]resolve['"]?/i,
+                     'defina "encerrar_atendimento": true no seu JSON de resposta')
+    sanitized
   end
 
   # Achado pelo usuário: o admin escreve SÓ "Objetivo"/"Regras" em linguagem natural na tela da etapa
