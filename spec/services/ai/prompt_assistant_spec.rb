@@ -326,7 +326,7 @@ RSpec.describe Ai::PromptAssistant do
       it 'item 3b — OBRIGA (não só proíbe) um item fixo de "rules" contra loop de confirmação' do
         expect(step).to include('OBRIGATORIAMENTE este item literal em "rules"')
         expect(step).to include('Nunca peça confirmação de algo que o cliente já disse claramente')
-        expect(step).to include('Se o cliente informou o dado, aceite e use a tool imediatamente')
+        expect(step).to include('Se o cliente informou o dado, aceite e inclua em "dados_coletados" imediatamente')
       end
 
       # Motor novo (agêntico): quem valida/decide avançar é a própria IA via tools — não um motor à
@@ -336,9 +336,14 @@ RSpec.describe Ai::PromptAssistant do
         expect(step).not_to include('Quem valida o formato é o MOTOR')
       end
 
-      it 'princípio — instrui USO DE FERRAMENTAS: registrar_<variável> ao receber o dado, avancar_etapa ao concluir' do
-        expect(step).to include('registrar_<variável>')
+      # Structured Outputs: o assistente parou de gerar "chame a ferramenta registrar_X"/
+      # "avancar_etapa" — essas tools não existem mais no motor novo (a IA que lia essa instrução
+      # procurava a tool, não achava, e desistia — encerrava o atendimento). Guarda dos dois lados:
+      # o contrato JSON precisa aparecer, e o texto de tool-calling precisa ter sumido de vez.
+      it 'princípio — instrui USO DO CONTRATO JSON: "dados_coletados" ao receber o dado, "avancar_etapa" ao concluir' do
+        expect(step).to include('dados_coletados')
         expect(step).to include('avancar_etapa')
+        expect(step).not_to match(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?(?:registrar_|avancar_etapa)/i)
       end
 
       # "padrão ouro" (2026-08): a saída deixou de ser 1 texto com blocos markdown e virou 3 campos JSON
