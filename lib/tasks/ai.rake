@@ -52,3 +52,66 @@ namespace :ai do
     puts "Department ##{department.id} (#{department.name}): python_orchestrator = false"
   end
 end
+
+# Diagnóstico do bug URGENTE ao vivo: "Python em silêncio total desde o deploy, rede confirmada OK".
+# Lógica em Ai::PythonOrchestratorDiagnostics (devolve DADOS, não texto — só formata aqui). READ-ONLY
+# quanto a dado real: a ÚNICA chamada que toca rede/custa tokens é o passo 4, forçado em mode: 'shadow'
+# (nunca muta conversa/contato — ver o comentário do service).
+namespace :ai do
+  desc 'Diagnostica por que o Python não recebe requisição pra UMA conversa (Sidekiq, Ai::Run, python_orchestrator_on?, chamada direta em shadow)'
+  task :diagnose_python_orchestrator, %i[conversation_id] => :environment do |_t, args|
+    conversation = Conversation.find_by(id: args[:conversation_id])
+    abort("Conversation ##{args[:conversation_id]} não encontrada.") unless conversation
+
+    puts '=' * 70
+    puts "1. SIDEKIQ — fila 'medium' (Ai::GatewayRunJob) e falhas"
+    puts '=' * 70
+    sidekiq = Ai::PythonOrchestratorDiagnostics.sidekiq_status
+    if sidekiq[:error]
+      puts "  erro consultando Sidekiq: #{sidekiq[:error]}"
+    else
+      puts "  fila medium: #{sidekiq[:medium_queue_size]} job(s) pendente(s)"
+      puts "  retry set: #{sidekiq[:gateway_run_job_retrying]} Ai::GatewayRunJob em retry"
+      puts "  dead set:  #{sidekiq[:gateway_run_job_dead]} Ai::GatewayRunJob morto(s)"
+    end
+
+    puts "\n#{'=' * 70}"
+    puts '2. AI::RUN — últimos runs desta conversa'
+    puts '=' * 70
+    runs = Ai::PythonOrchestratorDiagnostics.recent_runs(conversation)
+    if runs.empty?
+      puts '  NENHUM Ai::Run encontrado — o Gateway nunca rodou pra essa conversa (problema é ANTES do Gateway).'
+    else
+      runs.each { |r| puts "  ##{r[:id]} #{r[:created_at]} status=#{r[:status]} error_type=#{r[:error_type]} department_id=#{r[:department_id]}" }
+    end
+
+    puts "\n#{'=' * 70}"
+    puts '3. PYTHON_ORCHESTRATOR_ON? — valor real por department candidato'
+    puts '=' * 70
+    flags = Ai::PythonOrchestratorDiagnostics.flag_status(conversation)
+    if flags.empty?
+      puts '  Não achei nenhum department candidato (nem via Ai::Run, nem via Ai::AgentInbox desta inbox).'
+    else
+      flags.each { |f| puts "  department ##{f[:department_id]} (#{f[:name]}): raw=#{f[:raw].inspect} class=#{f[:raw_class]} => #{f[:on]}" }
+    end
+
+    puts "\n#{'=' * 70}"
+    puts "4. CHAMADA DIRETA (mode: 'shadow' forçado — nunca muta dado real, gasta tokens de verdade)"
+    puts '=' * 70
+    direct = Ai::PythonOrchestratorDiagnostics.direct_call(conversation)
+    if direct[:skipped]
+      puts "  #{direct[:skipped]}"
+    elsif direct[:exception]
+      puts "  !!! EXCEÇÃO (isso é o que o rescue silencioso normalmente esconde): #{direct[:exception]}"
+      direct[:backtrace].each { |l| puts "      #{l}" }
+    else
+      puts "  department resolvido: ##{direct[:department_id]} (#{direct[:department_name]}), method=#{direct[:resolve_method]}"
+      puts "  resultado: #{direct[:result].inspect}"
+      if direct[:result][:reply].present?
+        puts '  -> a chamada FUNCIONOU (Python respondeu).'
+      else
+        puts "  -> reply veio vazio/nil — ver logs do ai-orchestrator e do Rails pro ticket_id=#{conversation.id}."
+      end
+    end
+  end
+end
