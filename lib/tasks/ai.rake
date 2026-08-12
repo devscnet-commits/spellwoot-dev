@@ -27,3 +27,28 @@ namespace :ai do
     end
   end
 end
+
+# python_orchestrator não tem UI (Ai::Gateway#python_orchestrator_on?, comportamento default OFF —
+# departments sem a chave continuam byte-idênticos ao caminho legado decide()/call_with_tools()). Só
+# um rails console/runner ligava a flag até aqui; estas tasks substituem isso por um comando único,
+# continuam opt-in POR department (nunca ligam pra ninguém além do id passado) — deliberadamente NÃO
+# um default automático ligado a ter Ai::AgentInbox ativo, que migraria 100% da base de uma vez.
+namespace :ai do
+  desc 'Liga behavior[\'python_orchestrator\'] = true para UM department (opt-in, sem console)'
+  task :enable_python_orchestrator, %i[department_id] => :environment do |_t, args|
+    department = Ai::Department.find_by(id: args[:department_id])
+    abort("Department ##{args[:department_id]} não encontrado.") unless department
+
+    department.update!(behavior: department.behavior.to_h.merge('python_orchestrator' => true))
+    puts "Department ##{department.id} (#{department.name}): python_orchestrator = true"
+  end
+
+  desc 'Desliga behavior[\'python_orchestrator\'] para UM department (volta ao caminho legado)'
+  task :disable_python_orchestrator, %i[department_id] => :environment do |_t, args|
+    department = Ai::Department.find_by(id: args[:department_id])
+    abort("Department ##{args[:department_id]} não encontrado.") unless department
+
+    department.update!(behavior: department.behavior.to_h.merge('python_orchestrator' => false))
+    puts "Department ##{department.id} (#{department.name}): python_orchestrator = false"
+  end
+end
