@@ -50,15 +50,30 @@ def _is_superseded_tool(name: str) -> bool:
     return name in _CONTROL_TOOL_NAMES or name.startswith(_CAPTURE_TOOL_PREFIX)
 
 
-def _build_input(user_input: str, image_url: str | None):
-    """Plain string when there's no image (unchanged shape); a multimodal content list — the
-    Responses API's input_text/input_image parts — when the customer sent a WhatsApp photo, so the
-    model's own vision reads the actual image instead of relying only on the Rails-side caption
-    worker (Ai::Workers::MediaProcessor) that already folded a text description into user_input."""
-    if not image_url:
-        return user_input
+# OpenAI's text.format=json_object requires the word "json" to appear in the INPUT messages
+# themselves — live 400 confirmed it: "Response input messages must contain the word 'json' in some
+# form to use 'text.format' of type 'json_object'." `instructions` (system_prompt) doesn't count,
+# no matter how much it talks about JSON — a plain "Oi" as the whole input 400s every time. Sent as
+# its OWN separate input item (not prefixed onto the customer's message) so user_input reaching the
+# model — and whatever OpenAI stores server-side for previous_response_id — stays byte-identical to
+# what the customer actually typed.
+_JSON_FORMAT_REMINDER = {
+    "role": "user",
+    "content": "Lembrete de formato: sua resposta final a este turno deve ser SEMPRE o objeto JSON "
+               "definido nas instructions — nunca texto livre.",
+}
 
-    return [{
+
+def _build_input(user_input: str, image_url: str | None):
+    """Always a list (never a bare string, unlike before) — the json-format reminder item goes first,
+    then the customer's own turn: plain text, or a multimodal input_text/input_image list when the
+    customer sent a WhatsApp photo, so the model's own vision reads the actual image instead of
+    relying only on the Rails-side caption worker (Ai::Workers::MediaProcessor) that already folded
+    a text description into user_input."""
+    if not image_url:
+        return [_JSON_FORMAT_REMINDER, {"role": "user", "content": user_input}]
+
+    return [_JSON_FORMAT_REMINDER, {
         "role": "user",
         "content": [
             {"type": "input_text", "text": user_input},
@@ -172,7 +187,9 @@ def run_conversation(
         followup_kwargs = {
             "model": resolved_model,
             "previous_response_id": response.id,
-            "input": tool_outputs,
+            # tool_outputs alone (function_call_output items) has no guaranteed "json" text in it —
+            # same 400 risk as the plain-text turn above, so the reminder rides along here too.
+            "input": [_JSON_FORMAT_REMINDER, *tool_outputs],
             "text": {"format": {"type": "json_object"}},
         }
         if temperature is not None:
