@@ -53,7 +53,6 @@ namespace :ai do
   end
 end
 
-<<<<<<< HEAD
 # Item 3 do usuário: identificar e (opcionalmente) remover Ai::LeadVariable órfãs — variáveis que
 # nenhuma etapa do playbook ATUAL do department referencia mais em collect.attribute. Lógica em
 # Ai::LeadVariableOrphanFinder (mesma definição de "em uso" que já bloqueia exclusão manual pela tela).
@@ -184,7 +183,7 @@ namespace :ai do
     end
   end
 end
-=======
+
 # Pedido do usuário: antes de eliminar o motor legado (decide()/call_with_tools()) e tornar o Python o
 # ÚNICO motor, listar quem só funciona direito no legado hoje. READ-ONLY — lógica em
 # Ai::PythonMigrationAuditor.
@@ -280,4 +279,3 @@ namespace :ai do
     end
   end
 end
->>>>>>> a8a6b6cd45f9f07a5463354a381b55465933d4a2
