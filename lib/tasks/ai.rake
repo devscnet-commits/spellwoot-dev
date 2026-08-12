@@ -52,3 +52,50 @@ namespace :ai do
     puts "Department ##{department.id} (#{department.name}): python_orchestrator = false"
   end
 end
+
+# Pedido do usuário: antes de eliminar o motor legado (decide()/call_with_tools()) e tornar o Python o
+# ÚNICO motor, listar quem só funciona direito no legado hoje. READ-ONLY — lógica em
+# Ai::PythonMigrationAuditor.
+namespace :ai do
+  desc 'Lista departments que quebrariam se o motor legado fosse eliminado agora (provider != openai, automações de etapa)'
+  task python_migration_audit: :environment do
+    report = Ai::PythonMigrationAuditor.report
+
+    puts '=' * 70
+    puts '1. PROVIDER != OPENAI — orchestrator.py só chama a OpenAI, sempre'
+    puts '=' * 70
+    if report[:non_openai_provider].empty?
+      puts '  Nenhum. Todo department roteado hoje usa (ou cairia no default) provider openai.'
+    else
+      report[:non_openai_provider].each do |d|
+        puts "  department ##{d[:department_id]} (#{d[:name]}, conta #{d[:account_id]}): provider=#{d[:provider]}"
+      end
+    end
+
+    puts "\n#{'=' * 70}"
+    puts '2. AUTOMAÇÕES DE ETAPA — nunca disparam no branch do Python (Ai::Gateway#run faz `return`'
+    puts '   antes de chegar em Ai::StateManager#track_step/#fire_step_automations)'
+    puts '=' * 70
+    if report[:step_automations].empty?
+      puts '  Nenhum. Nenhum playbook ativo tem etapa com automations configurada.'
+    else
+      report[:step_automations].each do |d|
+        puts "  department ##{d[:department_id]} (#{d[:name]}, conta #{d[:account_id]}): etapas #{d[:step_names].join(', ')}"
+      end
+    end
+
+    puts "\n#{'=' * 70}"
+    puts '3. ALCANCE — quantos departments seriam movidos se a flag sumisse'
+    puts '=' * 70
+    puts "  já no Python: #{report[:engine_split][:on_python]}  |  ainda no legado (seriam movidos): #{report[:engine_split][:on_legacy]}"
+
+    total_blockers = report[:non_openai_provider].size + report[:step_automations].size
+    puts "\n#{'=' * 70}"
+    if total_blockers.zero?
+      puts '  Nenhum blocker encontrado nestes 2 pontos.'
+    else
+      puts "  #{total_blockers} department(s) com pelo menos 1 blocker — NÃO eliminar o legado sem tratar esses casos."
+    end
+    puts '=' * 70
+  end
+end
