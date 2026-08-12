@@ -114,10 +114,12 @@ class Ai::PythonOrchestratorClient
       # (Ai::KnowledgeRetriever — pgvector, já populado, mesmo mecanismo do caminho legado).
       vector_store_id: @department.behavior.to_h['vector_store_id'],
       user_input: @content.to_s,
-      # WhatsApp image: the RAW url (not the MediaProcessor text caption already folded into
-      # @content upstream in Ai::Gateway) — lets the model's own vision read the image directly
-      # instead of relying only on the auxiliary caption worker.
-      image_url: image_url,
+      # RAW pixels the model reads NATIVELY (not text captions folded into @content upstream in
+      # Ai::Gateway): the WhatsApp photo's own url, if any, THEN the rasterized pages (base64 data
+      # URIs) of any scanned-document PDF attachment (Ai::Workers::MediaProcessor.pending_vision_images
+      # — CNH/RG/comprovante), so the SAME governed turn reads them instead of a separate, context-blind
+      # captioning call (that's what misread a CNH's "1997" as "1991" live — see #document_image_urls).
+      image_urls: image_urls,
       previous_response_id: @conversation.additional_attributes&.dig('openai_conversation_id'),
       # Multi-tenant: cada Account escolhe seu próprio modelo/temperatura via Ai::OperationProfile
       # (tela de admin). nil quando o agente não tem perfil — o orquestrador cai no OPENAI_MODEL do
@@ -129,6 +131,21 @@ class Ai::PythonOrchestratorClient
 
   def image_url
     @message&.attachments&.to_a&.find { |a| a.file_type == 'image' }&.download_url.presence
+  end
+
+  # Scanned-PDF pages (CNH/RG/comprovante) rasterized by Ai::Workers::MediaProcessor, deferred here so
+  # the SAME model turn that already has the step's context reads them — not a separate Rails-side
+  # vision call with a generic, context-blind prompt (that's the actual root cause of a live bug: a
+  # CNH's "1997" read as "1991"). Genuine text-layer PDFs never appear here — MediaProcessor only
+  # defers pages it already decided (via #poor_extraction?) need vision to read at all.
+  def document_image_urls
+    Ai::Workers::MediaProcessor.pending_vision_images(@message)
+  end
+
+  # Direct photo first (if any), then document pages — order doesn't matter functionally, just keeps
+  # the customer's own attachment first when both happen to be present in the same message.
+  def image_urls
+    ([image_url] + document_image_urls).compact
   end
 
   def operation_profile
@@ -159,6 +176,7 @@ class Ai::PythonOrchestratorClient
     lines << no_fabrication_instruction
     lines << transfer_discipline_instruction
     lines << gradual_conversation_instruction
+    lines << document_extraction_instruction
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
@@ -224,6 +242,27 @@ class Ai::PythonOrchestratorClient
     'Peça os dados da etapa atual UM DE CADA VEZ, de forma natural e conversacional — mesmo que várias ' \
       'ferramentas "registrar_*" estejam disponíveis ao mesmo tempo, não liste várias perguntas na mesma ' \
       'mensagem. Espere a resposta do cliente antes de pedir o próximo dado.'
+  end
+
+  # Achado ao vivo: a IA leu uma CNH em PDF e alucinou o ano (1997 virou 1991), além de salvar dados
+  # que a etapa nem tinha pedido (data de nascimento, RG). A leitura em si é DESEJADA (o usuário foi
+  # explícito: não proibir) — o problema é confiar cegamente num número que não deu pra ler direito.
+  # Documentos escaneados (imagem direta OU PDF via Ai::PythonOrchestratorClient#document_image_urls)
+  # chegam como pixels crus NESTE MESMO turno agora (não mais uma legenda de uma chamada separada e
+  # sem contexto) — a regra de "não chutar" vale exatamente porque é a IA MESMA, com o contexto da
+  # etapa, quem está olhando a imagem.
+  def document_extraction_instruction
+    "REGRA DE EXTRAÇÃO DE DOCUMENTOS (PDFs e Imagens):\n" \
+      "- Quando o cliente enviar um documento (CNH, RG, comprovante), analise a imagem cuidadosamente " \
+      "para extrair os dados solicitados pela etapa atual.\n" \
+      "- Extraia os dados que a etapa atual pede. Olhe o documento, encontre o dado e inclua em " \
+      "\"dados_coletados\".\n" \
+      '- Validação de imagem: se a imagem estiver borrada ou você não tiver 100% de certeza sobre um ' \
+      'número (ex.: não sabe se é 1991 ou 1997), NÃO chute. Só inclua o dado em "dados_coletados" se ' \
+      'tiver certeza visual. Se não tiver certeza, não preencha esse dado e diga ao cliente algo como: ' \
+      "\"Não consegui ler o [dado] com clareza na foto. Pode me confirmar qual é?\"\n" \
+      '- Não invente nem infira dados que o documento não pediu explicitamente e a etapa não pede — ' \
+      'extraia SÓ o que a etapa atual está pedindo, mesmo que o documento mostre outros campos.'
   end
 
   # Ai::KnowledgeRetriever: pgvector, o MESMO mecanismo (e a MESMA base já populada) que o caminho
