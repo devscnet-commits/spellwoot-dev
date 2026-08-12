@@ -632,6 +632,37 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Mesma classe de bug do "fake-save" (dizer que salvou sem preencher dados_coletados) — só que pros
+  # campos transferir_humano/encerrar_atendimento: nada impedia o modelo de escrever "vou te
+  # transferir"/"atendimento encerrado" em mensagem_para_cliente sem marcar o booleano correspondente.
+  # O cliente recebia a promessa; a ação (handoff real / resolver a conversa) nunca acontecia.
+  describe 'PROIBIÇÃO de "fake-transfer"/"fake-close" (dizer sem marcar o campo)' do
+    it 'proíbe alegar transferência sem marcar transferir_humano+handoff_summary' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('É ESTRITAMENTE PROIBIDO escrever em "mensagem_para_cliente" qualquer variação de "vou transferir"') &&
+          prompt.include?('marcar "transferir_humano": true e preencher "handoff_summary"') &&
+          prompt.include?('a transferência NÃO acontece e o cliente fica sem atendimento')
+      }
+    end
+
+    it 'proíbe alegar encerramento sem marcar encerrar_atendimento' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('É ESTRITAMENTE PROIBIDO escrever em "mensagem_para_cliente" qualquer variação de "atendimento encerrado"') &&
+          prompt.include?('sem marcar "encerrar_atendimento": true na MESMA resposta')
+      }
+    end
+  end
+
   # 4 falhas de comportamento achadas em teste ao vivo: IA "fingindo" ter salvo um dado sem salvar de
   # verdade, inventando situações/recursos que não existem, transferindo sem motivo (pulando o fluxo
   # de etapas), e empilhando várias perguntas de etapas diferentes na mesma mensagem. As duas primeiras
