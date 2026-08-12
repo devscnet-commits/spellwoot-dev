@@ -111,6 +111,7 @@ def run_conversation(
     user_input: str,
     previous_response_id: str | None,
     model: str | None = None,
+    provider: str | None = None,
     temperature: float | None = None,
     image_urls: list[str] | None = None,
 ) -> tuple[str, str]:
@@ -120,15 +121,19 @@ def run_conversation(
     Real (admin-configured) business tools are still offered as function tools for genuine external
     actions. Always returns (reply_text, response_id) — including when parsing fails or
     MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to special-case a cut-off turn,
-    only real transport/API failures."""
+    only real transport/API failures.
+
+    `provider` is accepted and logged ONLY — no dispatch yet. _client stays a single hardcoded
+    OpenAI client regardless of what's passed here; this is step 1 (confirm the right value arrives)
+    before any actual multi-provider routing exists."""
     openai_tools = _build_tools(tools_schema, vector_store_id)
     # Multi-tenant: Rails resolves this per Account (Ai::OperationProfile); config.OPENAI_MODEL is
     # only the fallback for a tenant with no profile, never a global override.
     resolved_model = model or config.OPENAI_MODEL
 
     logger.info(
-        "ticket_id=%s model=%s function tools sent to OpenAI: %s",
-        ticket_id, resolved_model, json.dumps(openai_tools, ensure_ascii=False),
+        "ticket_id=%s provider=%s model=%s function tools sent to OpenAI: %s",
+        ticket_id, provider, resolved_model, json.dumps(openai_tools, ensure_ascii=False),
     )
 
     create_kwargs = {

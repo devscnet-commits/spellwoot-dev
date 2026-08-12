@@ -61,12 +61,14 @@ RSpec.describe Ai::PythonOrchestratorClient do
           'previous_response_id' => 'resp_previous_123',
           # multi-tenant: modelo do Ai::OperationProfile da account, não um valor fixo no .env do Python.
           'model' => 'gpt-4o',
+          # trafega desde já (Python só loga, ainda sem dispatch por provider — ver orchestrator.py).
+          'provider' => 'openai',
           # temperature_position default (20) traduzido pelas âncoras 'openai' do TemperatureMapper.
           'temperature' => Ai::TemperatureMapper.resolve('openai', 20)
         ))
     end
 
-    it 'manda model/temperature em branco quando o agente não tem operation_profile' do
+    it 'manda model/provider/temperature em branco quando o agente não tem operation_profile' do
       agent.update_column(:ai_operation_profile_id, nil)
       stub_orchestrator
 
@@ -75,7 +77,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
       )
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
-        .with(body: hash_including('model' => nil, 'temperature' => nil))
+        .with(body: hash_including('model' => nil, 'provider' => nil, 'temperature' => nil))
     end
 
     it 'nunca sobe uma exceção quando o orquestrador responde com erro — devolve reply em branco' do

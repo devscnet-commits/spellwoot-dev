@@ -125,6 +125,10 @@ class Ai::PythonOrchestratorClient
       # (tela de admin). nil quando o agente não tem perfil — o orquestrador cai no OPENAI_MODEL do
       # seu próprio .env e deixa a OpenAI usar o default de temperatura, não hardcodeia nada aqui.
       model: operation_profile&.supervisor_model,
+      # Trafega desde já (logado no lado Python) — dispatch por provider ainda não existe lá
+      # (orchestrator.py segue com _client = OpenAI(...) fixo); primeiro passo de habilitar troca de
+      # provider sem mexer em código é confirmar que o valor certo está chegando.
+      provider: operation_profile&.supervisor_provider,
       temperature: temperature
     }
   end
