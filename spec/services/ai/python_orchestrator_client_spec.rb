@@ -188,6 +188,53 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Ponto do usuário: o admin só escreve Objetivo/Regras em linguagem natural na tela da etapa —
+  # "JSON"/"dados_coletados" nunca deveriam vir da BOCA do admin. Esta regra é montada pelo Rails a
+  # partir do "Dado que esta etapa coleta" (o mesmo Select/collect.attribute), nomeando a chave exata
+  # que a IA deve preencher em "dados_coletados" NESTA etapa — sem o admin nunca digitar isso.
+  describe 'REGRA DE EXTRAÇÃO JSON (step_extraction_instruction — nomeia o collect.attribute da etapa ATUAL)' do
+    it 'nomeia o attribute declarado no collect da etapa ativa' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente.' },
+        { 'name' => 'CPF', 'instructions' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf', 'type' => 'text' } }
+      ])
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 1))
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a 'cpf'") &&
+          prompt.include?('preencher o objeto "dados_coletados"') &&
+          prompt.include?('com a chave "cpf"')
+      }
+    end
+
+    it 'não aparece numa etapa informativa (sem collect)' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente.' }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('REGRA DE EXTRAÇÃO JSON')
+      }
+    end
+
+    it 'sem playbook nenhum, não aparece (current_step é nil)' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('REGRA DE EXTRAÇÃO JSON')
+      }
+    end
+  end
+
   describe 'system_prompt traz encerramento/transferência configurados + instrução do contrato JSON' do
     it 'inclui transfer_when/close_when (do playbook) e a mensagem de encerramento (do department)' do
       Ai::Playbook.create!(department: department, transfer_when: ['cliente pede humano'],

@@ -169,6 +169,7 @@ class Ai::PythonOrchestratorClient
     lines << kb if kb.present?
     lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
+    lines << step_extraction_instruction if step_extraction_instruction.present?
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
     lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
@@ -264,6 +265,23 @@ class Ai::PythonOrchestratorClient
   # step['instructions'] (fallback) para etapas antigas — Ai::StepInstructionText decide qual dos dois.
   def current_step_instructions
     Ai::StepInstructionText.render(current_step)
+  end
+
+  # Achado pelo usuário: o admin escreve SÓ "Objetivo"/"Regras" em linguagem natural na tela da etapa
+  # (AiStepForm.vue) — "JSON"/"dados_coletados" nunca deveriam aparecer ali. Esta regra é montada AQUI
+  # pelo Rails, nunca digitada pelo admin, a partir do "Dado que esta etapa coleta" (o Select que grava
+  # collect.attribute — MESMA fonte, Ai::StepSlot.attribute, que o design antigo de function-calling
+  # usava pra nomear a tool "registrar_<attribute>", Ai::StepCaptureTool). Complementa (não substitui)
+  # #structured_output_instruction: aquela é a regra GERAL do contrato JSON; esta nomeia a chave exata
+  # que importa NESTA etapa, pra IA não "escolher" um nome de chave por conta própria. nil numa etapa
+  # informativa (sem collect) — não força a IA a inventar uma chave que não existe.
+  def step_extraction_instruction
+    attribute = Ai::StepSlot.attribute(current_step)
+    return nil if attribute.blank?
+
+    "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}'. Assim " \
+      "que o cliente informar isso, você DEVE preencher o objeto \"dados_coletados\" no seu JSON de " \
+      "resposta com a chave \"#{attribute}\" e o valor extraído."
   end
 
   # Mesma fonte e formatação que Ai::PromptCompiler#step_lines/compile já usa para transfer_when/
