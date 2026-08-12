@@ -454,8 +454,16 @@ class Ai::PythonOrchestratorClient
       "- \"transferir_humano\": true SOMENTE quando precisar transferir para um atendente humano; nesse " \
       "caso preencha \"handoff_summary\" com o que já foi conseguido (ex: \"Cliente já forneceu nome e " \
       "cidade, falta CPF\") e o motivo da transferência.\n" \
+      "- É ESTRITAMENTE PROIBIDO escrever em \"mensagem_para_cliente\" qualquer variação de \"vou " \
+      "transferir\", \"chamar um especialista\", \"encaminhar para atendente\" ou similar sem, na MESMA " \
+      "resposta, marcar \"transferir_humano\": true e preencher \"handoff_summary\" — se você disser " \
+      "que vai transferir sem marcar o campo, a transferência NÃO acontece e o cliente fica sem " \
+      "atendimento.\n" \
       "- \"encerrar_atendimento\": true SOMENTE quando as condições de encerramento configuradas abaixo " \
       "forem atendidas.\n" \
+      "- É ESTRITAMENTE PROIBIDO escrever em \"mensagem_para_cliente\" qualquer variação de " \
+      "\"atendimento encerrado\", \"até logo\", \"finalizando\" ou similar sem marcar " \
+      "\"encerrar_atendimento\": true na MESMA resposta.\n" \
       'Nunca responda fora deste formato JSON, mesmo que só queira cumprimentar ou tirar uma dúvida — ' \
       'nesse caso "dados_coletados" fica {} e os demais booleanos ficam false.'
   end
