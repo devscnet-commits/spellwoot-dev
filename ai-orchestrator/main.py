@@ -30,6 +30,9 @@ class ProcessRequest(BaseModel):
     # Multi-tenant: each Rails Account picks its own model/temperature via Ai::OperationProfile.
     # Falls back to config.OPENAI_MODEL / the OpenAI default when the tenant has no profile.
     model: Optional[str] = None
+    # Trafega desde já (logado em run_conversation) mas NÃO dispatcha ainda — orchestrator.py segue
+    # com um único client OpenAI fixo. Plumbing só, primeiro passo antes do dispatch real por provider.
+    provider: Optional[str] = None
     temperature: Optional[float] = None
     # Raw pixels the model reads NATIVELY instead of relying on a separate, context-blind captioning
     # call: the WhatsApp photo's own URL (Rails' Attachment#download_url), and/or base64 data URIs for
@@ -74,6 +77,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             user_input=request.user_input,
             previous_response_id=request.previous_response_id,
             model=request.model,
+            provider=request.provider,
             temperature=request.temperature,
             image_urls=request.image_urls,
         )
