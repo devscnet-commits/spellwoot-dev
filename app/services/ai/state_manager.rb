@@ -67,26 +67,18 @@ class Ai::StateManager
     #    não casa no select do painel ("Selecione o valor") e um save humano pode zerar o campo (conv 367).
     known = normalize_list_values(known)
 
-    old_custom = @conversation.custom_attributes || {}
-    merged = old_custom.merge(known)
-    return gated if merged == old_custom
+    # 4. CADA chave espelha no modelo que a PRÓPRIA definição declara (CustomAttributeDefinition
+    #    #attribute_model) — conversation_attribute -> Conversation#custom_attributes (como sempre foi),
+    #    contact_attribute -> Contact#custom_attributes (NOVO: até aqui nunca era tocado, então um "CPF"/
+    #    "telefone" cadastrado como atributo de CONTATO nunca aparecia pro atendente humano, só sumia
+    #    dentro de ai_collected_facts). O dropdown "Dado que esta etapa coleta" (aiSlotSource.js) já
+    #    oferece os dois tipos — aqui é só rotear pro dono certo.
+    keys_by_model = fillable_keys_by_model(department)
+    known_conversation = known.select { |k, _v| keys_by_model['conversation_attribute'].include?(k.to_s) }
+    known_contact = known.select { |k, _v| keys_by_model['contact_attribute'].include?(k.to_s) }
 
-    # update! dispara after_update_commit -> notify_conversation_updation -> WebSocket para o browser.
-    # Race frequente: persist_collected_facts já incrementou lock_version via seu próprio update!; se um
-    # segundo worker Sidekiq salvar a conversa entre essas duas gravações, o lock_version em memória fica
-    # stale -> StaleObjectError -> o rescue StandardError abaixo engolia o erro em silêncio -> espelho
-    # nunca acontecia (ai_collected_facts cheio, custom_attributes {}). Solução: capturar StaleObjectError
-    # especificamente, recarregar o objeto (lock_version fresco + custom_attributes fresco do banco) e
-    # tentar UMA vez. Neste ponto additional_attributes já foi salvo por persist_collected_facts, então
-    # o reload é seguro (não clobberará nada que ainda precise ser gravado neste run).
-    begin
-      @conversation.update!(custom_attributes: merged)
-    rescue ActiveRecord::StaleObjectError
-      @conversation.reload
-      merged = (@conversation.custom_attributes || {}).merge(known)
-      @conversation.update!(custom_attributes: merged) unless merged == @conversation.custom_attributes
-    end
-    emit('attributes.updated', { keys: known.keys })
+    mirror_conversation_attributes(known_conversation)
+    mirror_contact_attributes(known_contact)
     gated
   rescue StandardError => e
     rescue_signal('persist_attributes', e)
@@ -138,6 +130,69 @@ class Ai::StateManager
     @conversation.update!(additional_attributes: attrs) if changed
   end
 
+  # Espelho de conversation_attribute (comportamento ORIGINAL, extraído sem mudar nada — só passou a
+  # receber o subconjunto já separado por #attribute_model_for_keys em vez do `known` inteiro).
+  def mirror_conversation_attributes(known)
+    return if known.empty?
+
+    old_custom = @conversation.custom_attributes || {}
+    merged = old_custom.merge(known)
+    return if merged == old_custom
+
+    # update! dispara after_update_commit -> notify_conversation_updation -> WebSocket para o browser.
+    # Race frequente: persist_collected_facts já incrementou lock_version via seu próprio update!; se um
+    # segundo worker Sidekiq salvar a conversa entre essas duas gravações, o lock_version em memória fica
+    # stale -> StaleObjectError -> o rescue StandardError abaixo engolia o erro em silêncio -> espelho
+    # nunca acontecia (ai_collected_facts cheio, custom_attributes {}). Solução: capturar StaleObjectError
+    # especificamente, recarregar o objeto (lock_version fresco + custom_attributes fresco do banco) e
+    # tentar UMA vez. Neste ponto additional_attributes já foi salvo por persist_collected_facts, então
+    # o reload é seguro (não clobberará nada que ainda precise ser gravado neste run).
+    begin
+      @conversation.update!(custom_attributes: merged)
+    rescue ActiveRecord::StaleObjectError
+      @conversation.reload
+      merged = (@conversation.custom_attributes || {}).merge(known)
+      @conversation.update!(custom_attributes: merged) unless merged == @conversation.custom_attributes
+    end
+    emit('attributes.updated', { keys: known.keys, model: 'conversation' })
+  end
+
+  # NOVO: espelho de contact_attribute — até aqui nunca existia (só conversation_attribute era
+  # espelhado), então um "atributo personalizado" cadastrado como do CONTATO nunca aparecia pro
+  # atendente humano; o dado só vivia dentro de ai_collected_facts (invisível fora do prompt). Contact
+  # NÃO tem lock_version (conferido em db/structure.sql) — sem StaleObjectError possível, sem o rescue
+  # que #mirror_conversation_attributes precisa. No-op sem contato vinculado (raro, mas existe).
+  def mirror_contact_attributes(known)
+    return if known.empty?
+
+    contact = @conversation.contact
+    return if contact.nil?
+
+    old_custom = contact.custom_attributes || {}
+    merged = old_custom.merge(known)
+    return if merged == old_custom
+
+    contact.update!(custom_attributes: merged)
+    emit('attributes.updated', { keys: known.keys, model: 'contact' })
+  end
+
+  # {'conversation_attribute' => [chaves...], 'contact_attribute' => [chaves...]} — mesmo filtro de
+  # desabilitadas (disabled_custom_attributes) aplicado aos DOIS conjuntos, pra #persist_attributes
+  # rotear cada chave pro modelo que a PRÓPRIA definição declara. Uma chave cadastrada nos DOIS tipos
+  # (raro, mas a uniqueness é scoped a [account_id, attribute_model] — pode acontecer) aparece nos DOIS
+  # conjuntos e espelha nos DOIS lugares; não é ambíguo porque não escolhemos "um vencedor".
+  def fillable_keys_by_model(department)
+    disabled = Array(department&.behavior.to_h['disabled_custom_attributes'])
+    scope = ::CustomAttributeDefinition.where(account_id: @conversation.account_id).where.not(attribute_key: disabled)
+    {
+      'conversation_attribute' => scope.where(attribute_model: :conversation_attribute).pluck(:attribute_key).map(&:to_s),
+      'contact_attribute' => scope.where(attribute_model: :contact_attribute).pluck(:attribute_key).map(&:to_s)
+    }
+  rescue StandardError => e
+    Rails.logger.error "[Ai::StateManager#fillable_keys_by_model] #{e.class}: #{e.message}"
+    { 'conversation_attribute' => [], 'contact_attribute' => [] }
+  end
+
   # Frente C: memória por CONTATO (Ai::CustomerMemory.key_facts), cross-conversa e cross-agente. Espelha os
   # fatos GATEADOS não-ausência, ÚLTIMA-VENCE por chave (merge; chave não tocada é preservada). SEM allowlist
   # de CustomAttributeDefinition — o contato guarda tudo o que o motor capturou. NÃO gera summary (isso é o
@@ -176,26 +231,20 @@ class Ai::StateManager
     known.to_h
   end
 
-  # Chaves de atributo de CONVERSA que a IA pode preencher — espelha o Ai::ContextBuilder#fillable_attributes
-  # (definições da conta menos as desabilitadas pelo department). É o allowlist do persist_attributes.
+  # Chaves de atributo (conversa OU contato) que a IA pode preencher — UNIÃO dos dois tipos (quem decide
+  # o ALVO do espelho é #fillable_keys_by_model, chamado separadamente em #persist_attributes). É o
+  # allowlist do persist_attributes — known_slot_keys/supervisor_expected_keys só precisam saber "é uma
+  # chave válida", não em qual dos dois modelos ela mora.
   def fillable_attribute_keys(department)
-    disabled = Array(department&.behavior.to_h['disabled_custom_attributes'])
-    ::CustomAttributeDefinition
-      .where(account_id: @conversation.account_id, attribute_model: :conversation_attribute)
-      .where.not(attribute_key: disabled)
-      .pluck(:attribute_key)
-      .map(&:to_s)
-  rescue StandardError => e
-    Rails.logger.error "[Ai::StateManager#fillable_attribute_keys] #{e.class}: #{e.message}"
-    []
+    fillable_keys_by_model(department).values.flatten.uniq
   end
 
   # Troca cada valor pela opção CANÔNICA quando a definição é do tipo list e o valor casa (ignorando
   # caixa/acento/espaços) com alguma attribute_values. Não casou ou não é list -> valor como veio.
-  # NÃO descarta nada — só canonicaliza o espelho de custom_attributes.
+  # NÃO descarta nada — só canonicaliza o espelho de custom_attributes/contact custom_attributes.
   def normalize_list_values(known)
     definitions = ::CustomAttributeDefinition
-                  .where(account_id: @conversation.account_id, attribute_model: :conversation_attribute,
+                  .where(account_id: @conversation.account_id, attribute_model: %i[conversation_attribute contact_attribute],
                          attribute_key: known.keys.map(&:to_s))
                   .index_by(&:attribute_key)
     known.each_with_object({}) do |(key, value), out|
