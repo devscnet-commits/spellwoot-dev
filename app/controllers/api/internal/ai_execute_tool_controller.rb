@@ -1,12 +1,13 @@
-# Machine-to-machine endpoint called by the Python AI orchestrator mid function-calling loop, when
-# OpenAI decides to invoke a Rails-side (non-native) tool OR one of the synthetic control tools
-# Ai::PythonOrchestratorClient always offers on this path: "registrar_*" (Ai::StepCaptureTool — a
-# playbook step's collect slot), "avancar_etapa" (agentic step advance — the model decides, not a
-# server-side index gate), "conversation.resolve"/"conversation.transfer" (close/handoff), and
-# "continuar_conversa" (pure no-op — the safe option under tool_choice="required" when the model just
-# wants to talk). None of these five are a configured Ai::Tool row — they're recognized by name, same
-# as the legacy path's non-tool decision fields (handoff/close), just reached via function-calling
-# here instead of a JSON decision contract. Real (admin-configured) tools still delegate to the
+# Machine-to-machine endpoint called by the Python AI orchestrator, either mid function-calling loop
+# (OpenAI invoking a Rails-side admin-configured tool) or — since the Structured Outputs refactor,
+# orchestrator.py — for the five control actions Python itself dispatches from the model's parsed JSON
+# reply (dados_coletados/avancar_etapa/transferir_humano/encerrar_atendimento): "registrar_*"/
+# "salvar_memoria_ia" (Ai::StepCaptureTool / free-form save — a playbook step's collect slot, or
+# anything else), "avancar_etapa" (agentic step advance — the model decides, not a server-side index
+# gate), "conversation.resolve"/"conversation.transfer" (close/handoff), and "continuar_conversa"
+# (legacy no-op, no longer called — kept recognized here for backward compatibility, harmless). None
+# of these five are a configured Ai::Tool row — they're recognized by name, same as the legacy path's
+# non-tool decision fields (handoff/close). Real (admin-configured) tools still delegate to the
 # existing Ai::ToolExecutor/Ai::CapabilityRegistry framework — same audited path
 # (Ai::CapabilityExecution) used by Ai::Gateway's own tool handling.
 #
