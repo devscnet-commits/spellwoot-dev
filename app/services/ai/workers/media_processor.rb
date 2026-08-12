@@ -1,3 +1,5 @@
+require 'base64'
+
 # Invisible worker: turns a message's media attachments into text for the context. Real transcription
 # (audio, Whisper) and image analysis (visão via o worker de OCR do perfil) já implementados; se
 # faltar config/arquivo/API cai no marcador genérico. `profile` = Ai::OperationProfile do agente,
@@ -44,10 +46,16 @@ class Ai::Workers::MediaProcessor
   MAX_VISION_PAGES = 5
   PDF_RASTER_DPI = 150
 
-  # skip_vision: pula SÓ o ramo de imagem (Ai::Gateway passa true quando department.behavior
-  # ['python_orchestrator'] está ligado — a OpenAI já recebe a imagem crua via image_url e enxerga
-  # nativamente, então rodar o worker de OCR ali é custo/latência duplicado, sem uso). Áudio/documento/
-  # vídeo continuam INTACTOS nos dois caminhos — o path Python não tem equivalente nativo pra eles ainda.
+  # skip_vision: pula o ramo de imagem E o fallback de PDF escaneado pra visão (Ai::Gateway passa true
+  # quando department.behavior['python_orchestrator'] está ligado). Nos dois casos a OpenAI já vai
+  # receber os pixels crus (image_url — imagem direta, ou as páginas rasterizadas de um PDF escaneado,
+  # ver Ai::PythonOrchestratorClient#document_image_urls/Ai::Workers::MediaProcessor.pending_vision_images)
+  # e lê nativamente NO MESMO turno principal — rodar o worker de visão AQUI seria custo/latência
+  # duplicado E uma leitura por um prompt genérico que não sabe o que a etapa pede (era a causa real de
+  # um bug ao vivo: CNH com "1997" lido como "1991" — a chamada de visão daqui não tinha contexto
+  # nenhum pra saber que precisão importava). PDF de TEXTO real (não escaneado) não passa por visão em
+  # NENHUM dos dois motores — pdf-reader é confiável, sem risco de alucinação. Áudio/docx/vídeo
+  # continuam INTACTOS nos dois caminhos — sem vision nenhuma envolvida.
   def self.process(message, profile = nil, skip_vision: false)
     attachments = message.attachments.to_a
     return nil if attachments.empty?
@@ -65,7 +73,7 @@ class Ai::Workers::MediaProcessor
     case attachment.file_type
     when 'audio' then transcribe(attachment, account_id) || '[O cliente enviou um áudio]'
     when 'image' then skip_vision ? nil : (ocr(attachment, account_id, profile, conversation_id) || '[O cliente enviou uma imagem]')
-    when 'file'  then document(attachment, account_id, profile, conversation_id) || '[O cliente enviou um arquivo]'
+    when 'file'  then document(attachment, account_id, profile, conversation_id, skip_vision: skip_vision) || '[O cliente enviou um arquivo]'
     when 'video' then '[O cliente enviou um vídeo]'
     end
   end
@@ -197,7 +205,7 @@ class Ai::Workers::MediaProcessor
 
   # Extração de documento (PDF texto/escaneado + docx). Tipos não suportados (xlsx/txt/...) ou falha
   # => nil => marcador. Logs distintos: sem-arquivo / (escaneado) sem-worker / erro de processamento.
-  def self.document(attachment, account_id, profile, conversation_id = nil)
+  def self.document(attachment, account_id, profile, conversation_id = nil, skip_vision: false)
     unless attachment.file.attached?
       Rails.logger.warn '[Ai::Workers::MediaProcessor] documento sem arquivo anexado (download da mídia falhou?), extração pulada'
       return nil
@@ -206,7 +214,7 @@ class Ai::Workers::MediaProcessor
     content_type = attachment.file.blob.content_type.to_s
     filename = attachment.file.blob.filename.to_s.downcase
     if pdf?(content_type, filename)
-      extract_pdf(attachment, account_id, profile, conversation_id)
+      extract_pdf(attachment, account_id, profile, conversation_id, skip_vision: skip_vision)
     elsif docx?(content_type, filename)
       extract_docx(attachment)
     end
@@ -215,17 +223,20 @@ class Ai::Workers::MediaProcessor
     nil
   end
 
-  # PDF: tenta texto real (pdf-reader, primeiras MAX_DOC_PAGES páginas). Vazio/curto demais => PDF
-  # escaneado => visão (Opção B: manda o PDF INTEIRO ao worker; ruby_llm aceita PDF nativo, sem
-  # rasterizar/poppler). Cap real por página no caminho escaneado exigiria rasterização (futuro); por
-  # ora anexamos só a nota de >10 páginas.
-  def self.extract_pdf(attachment, account_id, profile, conversation_id = nil)
+  # PDF: tenta texto real (pdf-reader, primeiras MAX_DOC_PAGES páginas) — SEMPRE, nos dois motores,
+  # sem vision nenhuma (pdf-reader não alucina). Vazio/curto demais => PDF escaneado => precisa de
+  # visão pra ler: skip_vision (motor Python) devolve nil AQUI de propósito — quem lê de verdade é o
+  # turno principal, via #pending_vision_images/Ai::PythonOrchestratorClient#document_image_urls, não
+  # uma chamada redundante e sem contexto da etapa (ver comentário de #process).
+  def self.extract_pdf(attachment, account_id, profile, conversation_id = nil, skip_vision: false)
     reader = PDF::Reader.new(StringIO.new(attachment.file.download))
     page_count = reader.page_count
     pages = reader.pages.first(MAX_DOC_PAGES)
     text = pages.map { |p| p.text.to_s }.join("\n").strip
 
     if poor_extraction?(text, pages.size)
+      return nil if skip_vision
+
       pdf_via_vision(attachment, account_id, profile, page_count, conversation_id)
     else
       pdf_text_result(text, page_count)
@@ -332,6 +343,62 @@ class Ai::Workers::MediaProcessor
       end
     end
     texts
+  end
+
+  # Motor Python (python_orchestrator ligado): entrada pública p/ Ai::PythonOrchestratorClient
+  # coletar os PDFs escaneados de UMA mensagem como imagens (base64), pro turno principal ler
+  # nativamente em vez de #pdf_via_vision rodar uma chamada de visão própria e sem contexto — ver o
+  # comentário de #process. Reavalia texto-vs-escaneado (mesmo #poor_extraction? de #extract_pdf) —
+  # redundante com a leitura que #process já fez pro mesmo attachment (duas parses de PDF::Reader),
+  # mas PDF::Reader é local/barato; a chamada de visão (a parte cara/arriscada) só roda UMA vez, aqui
+  # ou lá, nunca as duas. PDF de texto real (não escaneado) nunca entra nesta lista — pdf-reader já
+  # bastou, sem risco de alucinação.
+  def self.pending_vision_images(message)
+    return [] if message.nil?
+
+    message.attachments.to_a.flat_map do |attachment|
+      next [] unless attachment.file_type == 'file' && attachment.file.attached?
+
+      content_type = attachment.file.blob.content_type.to_s
+      filename = attachment.file.blob.filename.to_s.downcase
+      next [] unless pdf?(content_type, filename)
+
+      reader = PDF::Reader.new(StringIO.new(attachment.file.download))
+      pages = reader.pages.first(MAX_DOC_PAGES)
+      text = pages.map { |p| p.text.to_s }.join("\n").strip
+      next [] unless poor_extraction?(text, pages.size)
+
+      rasterize_for_native_vision(attachment, reader.page_count)
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Workers::MediaProcessor] pending_vision_images: #{e.class}: #{e.message}"
+    []
+  end
+
+  # Rasteriza as primeiras MAX_VISION_PAGES páginas em PNG e devolve como data URIs base64 — o mesmo
+  # formato que um image_url de anexo direto já usa (Ai::PythonOrchestratorClient#image_urls), então
+  # orchestrator.py trata os dois exatamente igual (um item "input_image" por URL). Mesmo cap/DPI que
+  # #pdf_via_vision usava pro caminho legado.
+  def self.rasterize_for_native_vision(attachment, page_count)
+    vision_pages = [page_count, MAX_VISION_PAGES].min
+    images = []
+    Tempfile.create(['ai-doc', '.pdf']) do |pdf|
+      pdf.binmode
+      pdf.write(attachment.file.download)
+      pdf.rewind
+
+      (0...vision_pages).each do |i|
+        png = pdf_page_to_png(pdf.path, i)
+        next unless png
+
+        begin
+          images << "data:image/png;base64,#{Base64.strict_encode64(File.binread(png.path))}"
+        ensure
+          png.close!
+        end
+      end
+    end
+    images
   end
 
   # docx: texto dos parágrafos (gem docx = rubyzip + nokogiri). Cap por caracteres.

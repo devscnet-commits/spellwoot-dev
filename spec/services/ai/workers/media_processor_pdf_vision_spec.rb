@@ -85,6 +85,86 @@ RSpec.describe Ai::Workers::MediaProcessor do
         expect(result).to start_with('[Documento (PDF)]:')
       end
     end
+
+    # Achado ao vivo: uma CNH em PDF foi lida por ESTA chamada de visão (vision_call, prompt genérico
+    # sem contexto da etapa) e alucinou o ano (1997 virou 1991). skip_vision: true (motor Python) corta
+    # essa chamada de vez — quem lê é o turno principal, via #pending_vision_images.
+    context 'com skip_vision: true (motor Python) e extração pobre (PDF escaneado)' do
+      let(:reader) { double('reader', page_count: 1, pages: [double(text: ('a' * 300) + ("\n" * 800))]) }
+
+      it 'NÃO chama a visão própria — devolve nil (o marcador genérico assume em #extract)' do
+        expect(Ai::ModelRouter).not_to receive(:call_model)
+
+        expect(described_class.document(attachment, account.id, profile, skip_vision: true)).to be_nil
+      end
+    end
+
+    context 'com skip_vision: true e extração densa (PDF de texto real)' do
+      let(:reader) { double('reader', page_count: 1, pages: [double(text: 'conteudo real da pagina ' * 100)]) }
+
+      it 'continua devolvendo o texto extraído — texto real nunca depende de visão em nenhum motor' do
+        result = described_class.document(attachment, account.id, profile, skip_vision: true)
+
+        expect(result).to start_with('[Documento (PDF)]:')
+      end
+    end
+  end
+
+  # Achado ao vivo: uma CNH em PDF foi lida por uma chamada de visão separada (Ai::Workers::
+  # MediaProcessor#pdf_via_vision), sem o contexto da etapa, e alucinou o ano (1997 virou 1991).
+  # #pending_vision_images substitui essa leitura por páginas rasterizadas que o TURNO PRINCIPAL
+  # (Ai::PythonOrchestratorClient, mesmo contexto/regra de "não chutar") lê nativamente.
+  describe '.pending_vision_images (motor Python: páginas de PDF escaneado pra visão nativa)' do
+    let(:account) { create(:account) }
+    let(:conversation) { create(:conversation, account: account) }
+    let(:message) { create(:message, conversation: conversation) }
+
+    def attach_pdf(message)
+      att = message.attachments.create!(account: account, file_type: :file)
+      att.file.attach(io: StringIO.new('%PDF-1.4 conteudo binario'), filename: 'CNH-e.pdf', content_type: 'application/pdf')
+      att
+    end
+
+    # pdf_page_to_png devolve um Tempfile REAL (não um double) — #pending_vision_images lê os bytes
+    # de verdade (File.binread) pra codificar em base64, diferente do describe acima (que só checa
+    # SE a visão foi chamada, nunca lê o arquivo).
+    def stub_rasterized_page(bytes: 'fake-png-bytes')
+      png = Tempfile.new(['fake-page', '.png'])
+      png.binmode
+      png.write(bytes)
+      png.rewind
+      allow(described_class).to receive(:pdf_page_to_png).and_return(png)
+    end
+
+    it 'PDF escaneado: devolve as páginas rasterizadas como data URI base64' do
+      attach_pdf(message)
+      allow(PDF::Reader).to receive(:new)
+        .and_return(double('reader', page_count: 1, pages: [double(text: ('a' * 300) + ("\n" * 800))]))
+      stub_rasterized_page(bytes: 'fake-png-bytes')
+
+      images = described_class.pending_vision_images(message)
+
+      expect(images).to eq(["data:image/png;base64,#{Base64.strict_encode64('fake-png-bytes')}"])
+    end
+
+    it 'PDF de texto real (não escaneado): não rasteriza nada — pdf-reader já bastou' do
+      attach_pdf(message)
+      allow(PDF::Reader).to receive(:new)
+        .and_return(double('reader', page_count: 1, pages: [double(text: 'conteudo real da pagina ' * 100)]))
+      expect(described_class).not_to receive(:pdf_page_to_png)
+
+      expect(described_class.pending_vision_images(message)).to eq([])
+    end
+
+    it 'sem anexo nenhum: lista vazia' do
+      expect(described_class.pending_vision_images(message)).to eq([])
+    end
+
+    it 'anexo de IMAGEM (não PDF): ignorado — só documentos "file" entram aqui' do
+      message.attachments.create!(account: account, file_type: :image)
+
+      expect(described_class.pending_vision_images(message)).to eq([])
+    end
   end
 
   describe 'débito de crédito (Ai::Run vision_ocr)' do

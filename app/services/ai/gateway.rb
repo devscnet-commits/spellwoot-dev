@@ -58,11 +58,12 @@ class Ai::Gateway
 
     run_record.update!(ai_department_id: department.id)
 
-    # Invisible worker: turn media (audio/image) into text the supervisor can use. Passa o profile
-    # do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']). skip_vision
-    # pula SÓ a imagem quando o department está no path Python — a OpenAI já recebe a imagem crua
-    # (image_url, Ai::PythonOrchestratorClient) e enxerga nativamente; áudio/documento/vídeo continuam
-    # rodando nos dois caminhos (sem equivalente nativo no Python ainda).
+    # Invisible worker: turn media (audio/image/PDF escaneado) into text the supervisor can use. Passa
+    # o profile do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']).
+    # skip_vision pula a imagem E o fallback de PDF escaneado quando o department está no path Python —
+    # a OpenAI já recebe os pixels crus (Ai::PythonOrchestratorClient#image_urls: foto direta E/OU
+    # páginas rasterizadas de PDF escaneado) e enxerga nativamente no MESMO turno; áudio/docx/vídeo
+    # continuam rodando nos dois caminhos (sem equivalente nativo no Python ainda).
     media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile,
                                                       skip_vision: python_orchestrator_on?(department))
     emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?

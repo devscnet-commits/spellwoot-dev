@@ -64,22 +64,20 @@ _JSON_FORMAT_REMINDER = {
 }
 
 
-def _build_input(user_input: str, image_url: str | None):
+def _build_input(user_input: str, image_urls: list[str] | None):
     """Always a list (never a bare string, unlike before) — the json-format reminder item goes first,
-    then the customer's own turn: plain text, or a multimodal input_text/input_image list when the
-    customer sent a WhatsApp photo, so the model's own vision reads the actual image instead of
-    relying only on the Rails-side caption worker (Ai::Workers::MediaProcessor) that already folded
-    a text description into user_input."""
-    if not image_url:
+    then the customer's own turn: plain text, or a multimodal input_text/input_image(s) list when
+    there's something to see this turn — a WhatsApp photo, and/or a scanned document's rasterized
+    pages (base64 data URIs, Ai::Workers::MediaProcessor.pending_vision_images) — so the model's own
+    vision reads them directly in THIS SAME governed turn instead of relying on a separate,
+    context-blind captioning call folded into user_input as text (that's what previously let a CNH's
+    "1997" get misread as "1991" by a call that had no idea what data the step even needed)."""
+    if not image_urls:
         return [_JSON_FORMAT_REMINDER, {"role": "user", "content": user_input}]
 
-    return [_JSON_FORMAT_REMINDER, {
-        "role": "user",
-        "content": [
-            {"type": "input_text", "text": user_input},
-            {"type": "input_image", "image_url": image_url},
-        ],
-    }]
+    content = [{"type": "input_text", "text": user_input}]
+    content += [{"type": "input_image", "image_url": url} for url in image_urls]
+    return [_JSON_FORMAT_REMINDER, {"role": "user", "content": content}]
 
 
 def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
@@ -114,7 +112,7 @@ def run_conversation(
     previous_response_id: str | None,
     model: str | None = None,
     temperature: float | None = None,
-    image_url: str | None = None,
+    image_urls: list[str] | None = None,
 ) -> tuple[str, str]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
     (text.format=json_object) — control flow (save/advance/transfer/close) is decided by Python from
@@ -136,7 +134,7 @@ def run_conversation(
     create_kwargs = {
         "model": resolved_model,
         "instructions": system_prompt,
-        "input": _build_input(user_input, image_url),
+        "input": _build_input(user_input, image_urls),
         "tools": openai_tools,
         # Responses API structured-output param — NOT "response_format" (that's the older Chat
         # Completions name; passing it here would raise a TypeError on this SDK/API instead of

@@ -338,7 +338,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  describe 'imagem do WhatsApp (image_url no payload)' do
+  describe 'imagem do WhatsApp e documentos escaneados (image_urls no payload)' do
     it 'inclui a URL real do anexo de imagem da mensagem, quando passada' do
       message = create(:message, conversation: conversation, account: account)
       attachment = message.attachments.create!(account: account, file_type: :image)
@@ -349,16 +349,48 @@ RSpec.describe Ai::PythonOrchestratorClient do
                                       mode: 'live', message: message)
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
-        .with(body: hash_including('image_url' => 'https://cdn.example.com/foto.jpg'))
+        .with(body: hash_including('image_urls' => ['https://cdn.example.com/foto.jpg']))
     end
 
-    it 'image_url vem nil quando não há mensagem/anexo de imagem' do
+    it 'image_urls vem [] quando não há mensagem/anexo de imagem nem documento escaneado' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
-        .with(body: hash_including('image_url' => nil))
+        .with(body: hash_including('image_urls' => []))
+    end
+
+    # Achado ao vivo: PDF escaneado (CNH) lido por uma chamada de visão SEPARADA (Ai::Workers::
+    # MediaProcessor), sem contexto da etapa, alucinava dado (1997 virou 1991). Agora as páginas
+    # rasterizadas entram em image_urls — o MESMO turno principal (com o contexto da etapa e a regra
+    # de "não chutar", ver #document_extraction_instruction) lê o documento, não uma chamada à parte.
+    it 'inclui as páginas rasterizadas de um PDF escaneado (via MediaProcessor.pending_vision_images)' do
+      message = create(:message, conversation: conversation, account: account)
+      allow(Ai::Workers::MediaProcessor).to receive(:pending_vision_images).with(message)
+                                                                            .and_return(['data:image/png;base64,AAAA'])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department,
+                                      mode: 'live', message: message)
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('image_urls' => ['data:image/png;base64,AAAA']))
+    end
+
+    it 'foto direta E páginas de documento no mesmo turno: foto primeiro, depois as páginas' do
+      message = create(:message, conversation: conversation, account: account)
+      attachment = message.attachments.create!(account: account, file_type: :image)
+      allow(attachment).to receive(:download_url).and_return('https://cdn.example.com/foto.jpg')
+      allow(Ai::Workers::MediaProcessor).to receive(:pending_vision_images).with(message)
+                                                                            .and_return(['data:image/png;base64,BBBB'])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department,
+                                      mode: 'live', message: message)
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('image_urls' => ['https://cdn.example.com/foto.jpg', 'data:image/png;base64,BBBB']))
     end
   end
 
@@ -478,6 +510,37 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
         prompt.include?('- cpf: não informado') && !prompt.include?('__sem_valor__')
+      }
+    end
+  end
+
+  # Achado ao vivo: a IA leu uma CNH (PDF) e alucinou o ano (1997 virou 1991) + salvou dado que a
+  # etapa nem pediu (nascimento, RG). Ler o documento é DESEJADO (não proibir) — o problema era
+  # confiar cegamente numa leitura incerta E extrair mais do que foi pedido.
+  describe 'REGRA DE EXTRAÇÃO DE DOCUMENTOS (document_extraction_instruction)' do
+    it 'instrui a IA a extrair o que a etapa pede, sem chutar quando não tiver certeza visual' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('REGRA DE EXTRAÇÃO DE DOCUMENTOS') &&
+          prompt.include?('analise a imagem cuidadosamente para extrair os dados solicitados pela etapa atual') &&
+          prompt.include?('NÃO chute') &&
+          prompt.include?('Não consegui ler o [dado] com clareza na foto') &&
+          prompt.include?('extraia SÓ o que a etapa atual está pedindo, mesmo que o documento mostre outros campos')
+      }
+    end
+
+    it 'NÃO proíbe a leitura de documentos — o usuário foi explícito que a IA DEVE ler' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        !prompt.include?('PROIBIDO extrair dados de imagens ou PDFs')
       }
     end
   end
