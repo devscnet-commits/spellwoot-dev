@@ -106,6 +106,18 @@ RSpec.describe Ai::Gateway do
     expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, skip_vision: true)
   end
 
+  # Achado URGENTE: nenhuma tela admin escreve behavior['python_orchestrator'] (só console/seed) —
+  # a checagem antiga (`== true`) caía SILENCIOSAMENTE pro caminho legado se alguém gravasse a STRING
+  # "true" em vez do booleano (sem exceção, sem log no Python — o request nem saía). Reproduz esse
+  # exato caso e prova que #python_orchestrator_on? agora aceita a string também.
+  it 'python_orchestrator gravado como STRING "true" (não booleano) ainda ativa o caminho Python' do
+    department.update!(behavior: department.behavior.merge('python_orchestrator' => 'true'))
+
+    deliver
+
+    expect(Ai::PythonOrchestratorClient).to have_received(:process_message)
+  end
+
   it 'department SEM python_orchestrator: roda o OCR legado normalmente (skip_vision: false)' do
     # Agente/inbox PRÓPRIOS (não o `agent`/`department` do resto do arquivo, que já tem a flag ligada)
     # — senão agent.departments.active passaria a ter 2 registros e Ai::DepartmentResolver cairia no

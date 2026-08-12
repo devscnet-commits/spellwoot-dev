@@ -526,11 +526,23 @@ class Ai::Gateway
     @agent.operation_profile&.worker('trivial_gate')&.dig('mode').to_s == 'on'
   end
 
-  # Opt-in per department (behavior['python_orchestrator'] == true, set like the other behavior
-  # toggles — max_input_chars, max_replies). Default OFF: without it the pipeline is byte-identical
-  # to today's decide()/call_with_tools() path.
+  # Opt-in per department (behavior['python_orchestrator'], set like the other behavior toggles —
+  # max_input_chars, max_replies). Default OFF: without it the pipeline is byte-identical to today's
+  # decide()/call_with_tools() path. NO admin UI writes this key today (grep confirms it — only a
+  # rails console/seed does), so it silently landing as the STRING "true" instead of the boolean
+  # true was a live possibility with the old `== true` check: no exception, no Python log, the run
+  # just falls through to the legacy decide() path below — same symptom as the flag never being set
+  # at all. truthy? below accepts both. Logged (não silencioso) so `docker logs`/Sidekiq shows
+  # exactly what this resolved to for every turn, instead of having to guess from behavior alone.
   def python_orchestrator_on?(department)
-    department.behavior.to_h['python_orchestrator'] == true
+    raw = department.behavior.to_h['python_orchestrator']
+    on = truthy?(raw)
+    Rails.logger.info "[Ai::Gateway] python_orchestrator_on? department_id=#{department.id} raw=#{raw.inspect} class=#{raw.class} => #{on}"
+    on
+  end
+
+  def truthy?(value)
+    value == true || value.to_s.strip.casecmp?('true')
   end
 
   # Mesma chave/default do caminho legado (Ai::StateManager#stuck_handoff_limit) — teto ausente =>
