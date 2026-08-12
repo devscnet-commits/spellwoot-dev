@@ -188,6 +188,7 @@ class Ai::PythonOrchestratorClient
     lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
     lines << step_extraction_instruction if step_extraction_instruction.present?
+    lines << data_validation_instruction if data_validation_instruction.present?
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
     lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
@@ -349,9 +350,57 @@ class Ai::PythonOrchestratorClient
     attribute = Ai::StepSlot.attribute(current_step)
     return nil if attribute.blank?
 
-    "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}'. Assim " \
-      "que o cliente informar isso, você DEVE preencher o objeto \"dados_coletados\" no seu JSON de " \
-      "resposta com a chave \"#{attribute}\" e o valor extraído."
+    "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}' " \
+      "(#{step_slot_metadata_text}). Assim que o cliente informar isso, você DEVE preencher o " \
+      "objeto \"dados_coletados\" no seu JSON de resposta com a chave \"#{attribute}\" e o valor " \
+      'extraído.'
+  end
+
+  # Tipo/opções/obrigatoriedade do slot da etapa ATUAL, pro contexto de #data_validation_instruction
+  # ter algo real pra validar contra — sem isso a IA só teria o NOME do atributo, sem saber se é CPF,
+  # telefone, uma lista fechada de opções, etc. tools_schema TINHA essa info (o input_schema de
+  # "registrar_<attribute>"), mas essa tool é filtrada antes de chegar à OpenAI (orchestrator.py) — só
+  # sobrava o nome da chave. Ai::StepSlot é a MESMA fonte que gerava aquele input_schema.
+  def step_slot_metadata_text
+    type = Ai::StepSlot.type(current_step)
+    options = Ai::StepSlot.options(current_step)
+    required = !Ai::StepSlot.optional?(current_step)
+
+    parts = ["tipo: #{type}"]
+    parts << "opções válidas: #{options.join(', ')}" if options.present?
+    parts << (required ? 'OBRIGATÓRIO' : 'opcional')
+    parts.join(', ')
+  end
+
+  # Pedido do usuário: apertar o foco da coleta (só o dado da etapa atual, com exceção clara pra
+  # front-loading) + validar formato por tipo antes de gravar + escalar (esclarecer 1x, depois
+  # transferir/aceitar vazio) quando o valor não bate ou não vem. Convive com — não substitui —
+  # #structured_output_instruction (a regra GERAL "grave QUALQUER dado que o cliente der" continua
+  # valendo; esta é mais específica: QUAL dado follow essa etapa espera e QUANDO ele é válido pra
+  # gravar). nil numa etapa informativa (sem collect) — nada pra validar sem um slot declarado.
+  def data_validation_instruction
+    attribute = Ai::StepSlot.attribute(current_step)
+    return nil if attribute.blank?
+
+    "REGRAS DE FOCO E VALIDAÇÃO DA COLETA (além da regra geral de \"dados_coletados\" acima):\n" \
+      "- Extraia para \"dados_coletados\" APENAS o dado que a etapa atual está pedindo explicitamente " \
+      "(\"#{attribute}\", ver REGRA DE EXTRAÇÃO JSON). Se o cliente disser algo avulso, fora do foco " \
+      "da etapa e que não é um dado real de nenhuma etapa, IGNORE — não crie uma chave pra isso.\n" \
+      "- EXCEÇÃO: se o cliente adiantar espontaneamente um dado de uma etapa FUTURA, de forma clara e " \
+      "válida, capture também em \"dados_coletados\" (mesma lógica: chave = nome do dado).\n" \
+      "- Grave sempre o VALOR extraído, nunca a frase inteira do cliente (ex.: cliente disse \"meu " \
+      "nome é Jaqueline\" → grave \"Jaqueline\", não a frase completa).\n" \
+      "- Antes de gravar, confira se o valor bate com o TIPO e as OPÇÕES da etapa atual (indicados na " \
+      "REGRA DE EXTRAÇÃO JSON acima). Referência por tipo: CPF = 11 dígitos numéricos; telefone = " \
+      "mínimo 8 dígitos numéricos; e-mail = contém @ e domínio válido; número = só dígitos; escolha = " \
+      "valor dentro das opções listadas; anexo = só se um arquivo foi realmente enviado; texto = " \
+      "qualquer valor com conteúdo semântico real (não vazio, não só pontuação).\n" \
+      "- Se o valor NÃO bater com o tipo: peça esclarecimento UMA vez. Se o cliente não corrigir: " \
+      "campo OBRIGATÓRIO → defina \"transferir_humano\": true (preencha \"handoff_summary\"); campo " \
+      "opcional → não grave nada nessa chave e siga em frente.\n" \
+      "- Se o cliente simplesmente NÃO fornecer o dado pedido: campo OBRIGATÓRIO → peça UMA vez; se " \
+      "ele ignorar de novo, defina \"transferir_humano\": true; campo opcional → mande " \
+      '"dados_coletados" vazio ({}) e defina "avancar_etapa": true.'
   end
 
   # Mesma fonte e formatação que Ai::PromptCompiler#step_lines/compile já usa para transfer_when/

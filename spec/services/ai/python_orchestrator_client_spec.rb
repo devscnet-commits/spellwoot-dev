@@ -233,6 +233,93 @@ RSpec.describe Ai::PythonOrchestratorClient do
         !JSON.parse(req.body)['system_prompt'].include?('REGRA DE EXTRAÇÃO JSON')
       }
     end
+
+    # Pedido do usuário (validação de formato): a IA só consegue validar CPF/telefone/escolha/etc.
+    # contra o tipo/opções REAIS da etapa se esses dados chegarem no prompt — sem isso ela só tem o
+    # nome do atributo. tools_schema tinha essa info (input_schema de "registrar_*"), mas essa tool é
+    # filtrada antes de chegar à OpenAI no motor Python; step_slot_metadata_text é quem preenche a lacuna.
+    it 'inclui tipo/opções/obrigatoriedade do slot (pro contexto de validação de formato)' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Plano', 'instructions' => 'Pergunte o plano.',
+          'collect' => { 'attribute' => 'plano', 'type' => 'choice', 'options' => %w[Fibra 5G] } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('tipo: choice') && prompt.include?('opções válidas: Fibra, 5G') && prompt.include?('OBRIGATÓRIO')
+      }
+    end
+
+    it 'campo opcional (slot_required: false): metadata diz "opcional", não "OBRIGATÓRIO"' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Indicação', 'instructions' => 'Pergunte se tem indicação.', 'slot_required' => false,
+          'collect' => { 'attribute' => 'indicacao', 'type' => 'text' } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('tipo: text, opcional') && !prompt.include?('tipo: text, OBRIGATÓRIO')
+      }
+    end
+  end
+
+  # Pedido do usuário: apertar o foco (só o dado da etapa, exceto front-loading válido) + validar
+  # formato por tipo antes de gravar + escalar (esclarecer 1x, depois transferir/aceitar vazio).
+  describe 'REGRAS DE FOCO E VALIDAÇÃO DA COLETA (data_validation_instruction)' do
+    it 'inclui foco na etapa atual, exceção de front-loading, valor-não-frase, e referência de formato por tipo' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'CPF', 'instructions' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf', 'type' => 'text' } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('REGRAS DE FOCO E VALIDAÇÃO DA COLETA') &&
+          prompt.include?('Extraia para "dados_coletados" APENAS o dado que a etapa atual está pedindo explicitamente') &&
+          prompt.include?('EXCEÇÃO: se o cliente adiantar espontaneamente um dado de uma etapa FUTURA') &&
+          prompt.include?('Grave sempre o VALOR extraído, nunca a frase inteira do cliente') &&
+          prompt.include?('CPF = 11 dígitos numéricos') &&
+          prompt.include?('telefone = mínimo 8 dígitos numéricos') &&
+          prompt.include?('e-mail = contém @ e domínio válido')
+      }
+    end
+
+    it 'inclui a escalada: esclarecer 1x, depois transferir (obrigatório) ou aceitar vazio (opcional)' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'CPF', 'instructions' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf', 'type' => 'text' } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('peça esclarecimento UMA vez') &&
+          prompt.include?('campo OBRIGATÓRIO → defina "transferir_humano": true') &&
+          prompt.include?('mande "dados_coletados" vazio ({}) e defina "avancar_etapa": true')
+      }
+    end
+
+    it 'não aparece numa etapa informativa (sem collect) — nada pra validar' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente.' }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('REGRAS DE FOCO E VALIDAÇÃO DA COLETA')
+      }
+    end
   end
 
   # Bug URGENTE ao vivo: etapas escritas (ou geradas pelo Ai::PromptAssistant) ANTES da migração pra
