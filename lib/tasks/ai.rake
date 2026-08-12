@@ -53,16 +53,52 @@ namespace :ai do
   end
 end
 
-# Diagnóstico do bug URGENTE ao vivo: "Python em silêncio total desde o deploy, rede confirmada OK".
-# Lógica em Ai::PythonOrchestratorDiagnostics (devolve DADOS, não texto — só formata aqui). READ-ONLY
-# quanto a dado real: a ÚNICA chamada que toca rede/custa tokens é o passo 4, forçado em mode: 'shadow'
-# (nunca muta conversa/contato — ver o comentário do service).
+# Pedido do usuário: antes de eliminar o motor legado (decide()/call_with_tools()) e tornar o Python o
+# ÚNICO motor, listar quem só funciona direito no legado hoje. READ-ONLY — lógica em
+# Ai::PythonMigrationAuditor.
 namespace :ai do
+  desc 'Lista departments que quebrariam se o motor legado fosse eliminado agora (provider != openai, automações de etapa)'
+  task python_migration_audit: :environment do
+    report = Ai::PythonMigrationAuditor.report
+    puts '=' * 70
+    puts '1. PROVIDER != OPENAI — orchestrator.py só chama a OpenAI, sempre'
+    puts '=' * 70
+    if report[:non_openai_provider].empty?
+      puts '  Nenhum. Todo department roteado hoje usa (ou cairia no default) provider openai.'
+    else
+      report[:non_openai_provider].each do |d|
+        puts "  department ##{d[:department_id]} (#{d[:name]}, conta #{d[:account_id]}): provider=#{d[:provider]}"
+      end
+    end
+    puts "\n#{'=' * 70}"
+    puts '2. AUTOMAÇÕES DE ETAPA — nunca disparam no branch do Python (Ai::Gateway#run faz `return`'
+    puts '   antes de chegar em Ai::StateManager#track_step/#fire_step_automations)'
+    puts '=' * 70
+    if report[:step_automations].empty?
+      puts '  Nenhum. Nenhum playbook ativo tem etapa com automations configurada.'
+    else
+      report[:step_automations].each do |d|
+        puts "  department ##{d[:department_id]} (#{d[:name]}, conta #{d[:account_id]}): etapas #{d[:step_names].join(', ')}"
+      end
+    end
+    puts "\n#{'=' * 70}"
+    puts '3. ALCANCE — quantos departments seriam movidos se a flag sumisse'
+    puts '=' * 70
+    puts "  já no Python: #{report[:engine_split][:on_python]}  |  ainda no legado (seriam movidos): #{report[:engine_split][:on_legacy]}"
+    total_blockers = report[:non_openai_provider].size + report[:step_automations].size
+    puts "\n#{'=' * 70}"
+    if total_blockers.zero?
+      puts '  Nenhum blocker encontrado nestes 2 pontos.'
+    else
+      puts "  #{total_blockers} department(s) com pelo menos 1 blocker — NÃO eliminar o legado sem tratar esses casos."
+    end
+    puts '=' * 70
+  end
+
   desc 'Diagnostica por que o Python não recebe requisição pra UMA conversa (Sidekiq, Ai::Run, python_orchestrator_on?, chamada direta em shadow)'
   task :diagnose_python_orchestrator, %i[conversation_id] => :environment do |_t, args|
     conversation = Conversation.find_by(id: args[:conversation_id])
     abort("Conversation ##{args[:conversation_id]} não encontrada.") unless conversation
-
     puts '=' * 70
     puts "1. SIDEKIQ — fila 'medium' (Ai::GatewayRunJob) e falhas"
     puts '=' * 70
@@ -74,7 +110,6 @@ namespace :ai do
       puts "  retry set: #{sidekiq[:gateway_run_job_retrying]} Ai::GatewayRunJob em retry"
       puts "  dead set:  #{sidekiq[:gateway_run_job_dead]} Ai::GatewayRunJob morto(s)"
     end
-
     puts "\n#{'=' * 70}"
     puts '2. AI::RUN — últimos runs desta conversa'
     puts '=' * 70
@@ -84,7 +119,6 @@ namespace :ai do
     else
       runs.each { |r| puts "  ##{r[:id]} #{r[:created_at]} status=#{r[:status]} error_type=#{r[:error_type]} department_id=#{r[:department_id]}" }
     end
-
     puts "\n#{'=' * 70}"
     puts '3. PYTHON_ORCHESTRATOR_ON? — valor real por department candidato'
     puts '=' * 70
@@ -94,7 +128,6 @@ namespace :ai do
     else
       flags.each { |f| puts "  department ##{f[:department_id]} (#{f[:name]}): raw=#{f[:raw].inspect} class=#{f[:raw_class]} => #{f[:on]}" }
     end
-
     puts "\n#{'=' * 70}"
     puts "4. CHAMADA DIRETA (mode: 'shadow' forçado — nunca muta dado real, gasta tokens de verdade)"
     puts '=' * 70
