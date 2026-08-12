@@ -1539,6 +1539,81 @@ RSpec.describe Ai::StateManager do
     end
   end
 
+  # Item 1 do usuário: um "atributo personalizado" cadastrado como attribute_model: contact_attribute
+  # NUNCA era espelhado em lugar nenhum antes disso — só sumia dentro de ai_collected_facts, invisível
+  # pro atendente humano. aiSlotSource.js já oferece os dois tipos no dropdown; aqui é o backend
+  # roteando cada chave pro modelo (Conversation vs Contact) que a PRÓPRIA definição declara.
+  describe '#persist_attributes — espelho de contact_attribute (Contact#custom_attributes)' do
+    def define_contact_attr(key, display = key.capitalize)
+      CustomAttributeDefinition.create!(
+        account: account, attribute_key: key, attribute_display_name: display,
+        attribute_model: 'contact_attribute', attribute_display_type: 'text'
+      )
+    end
+
+    def define_conversation_attr(key, display = key.capitalize)
+      CustomAttributeDefinition.create!(
+        account: account, attribute_key: key, attribute_display_name: display,
+        attribute_model: 'conversation_attribute', attribute_display_type: 'text'
+      )
+    end
+
+    it 'espelha em Contact#custom_attributes, NÃO em Conversation#custom_attributes' do
+      define_contact_attr('cpf')
+
+      manager.persist_attributes({ 'cpf' => '11122233344' }, department)
+
+      expect(conversation.contact.reload.custom_attributes['cpf']).to eq('11122233344')
+      expect(conversation.reload.custom_attributes).not_to have_key('cpf')
+    end
+
+    it 'uma chave conversation_attribute continua indo SÓ pra Conversation (contrapartida, sem regressão)' do
+      define_conversation_attr('protocolo')
+
+      manager.persist_attributes({ 'protocolo' => '12345' }, department)
+
+      expect(conversation.reload.custom_attributes['protocolo']).to eq('12345')
+      expect(conversation.contact.reload.custom_attributes).not_to have_key('protocolo')
+    end
+
+    it 'chave cadastrada nos DOIS tipos (mesma conta) espelha nos DOIS lugares' do
+      define_contact_attr('telefone')
+      define_conversation_attr('telefone')
+
+      manager.persist_attributes({ 'telefone' => '4999998888' }, department)
+
+      expect(conversation.contact.reload.custom_attributes['telefone']).to eq('4999998888')
+      expect(conversation.reload.custom_attributes['telefone']).to eq('4999998888')
+    end
+
+    it 'respeita disabled_custom_attributes do department pra contact_attribute também' do
+      define_contact_attr('cpf')
+      department.update!(behavior: department.behavior.merge('disabled_custom_attributes' => ['cpf']))
+
+      manager.persist_attributes({ 'cpf' => '11122233344' }, department)
+
+      expect(conversation.contact.reload.custom_attributes).not_to have_key('cpf')
+    end
+
+    it 'sempre grava em ai_collected_facts independente do modelo espelhado (comportamento existente preservado)' do
+      define_contact_attr('cpf')
+
+      manager.persist_attributes({ 'cpf' => '11122233344' }, department)
+
+      expect(conversation.reload.additional_attributes['ai_collected_facts']['cpf']).to eq('11122233344')
+    end
+
+    it 'emite attributes.updated com model: "contact" pro espelho de contato' do
+      define_contact_attr('cpf')
+
+      manager.persist_attributes({ 'cpf' => '11122233344' }, department)
+
+      event = Ai::Event.where(conversation_id: conversation.id, event_type: 'attributes.updated').last
+      expect(event.payload['keys']).to eq(['cpf'])
+      expect(event.payload['model']).to eq('contact')
+    end
+  end
+
   describe '#persist_attributes — normalização de valor para atributo tipo LIST' do
     def define_list(key, values)
       CustomAttributeDefinition.create!(
