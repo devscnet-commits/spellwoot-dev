@@ -188,7 +188,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  describe 'system_prompt traz encerramento/transferência configurados + instrução de tools' do
+  describe 'system_prompt traz encerramento/transferência configurados + instrução do contrato JSON' do
     it 'inclui transfer_when/close_when (do playbook) e a mensagem de encerramento (do department)' do
       Ai::Playbook.create!(department: department, transfer_when: ['cliente pede humano'],
                            close_when: ['cliente confirma que não quer mais nada'])
@@ -199,11 +199,14 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
+        # Structured Outputs (orchestrator.py): a IA não chama mais "conversation.resolve"/
+        # "conversation.transfer" por nome — expressa a mesma decisão via "transferir_humano"/
+        # "encerrar_atendimento" no JSON, que o Python lê e é quem chama o webhook.
         prompt.include?('Transfira para humano quando: cliente pede humano.') &&
           prompt.include?('Encerre quando: cliente confirma que não quer mais nada.') &&
           prompt.include?('Foi um prazer te atender!') &&
-          prompt.include?('conversation_resolve') &&
-          prompt.include?('conversation_transfer')
+          prompt.include?('"transferir_humano": true ou false') &&
+          prompt.include?('"encerrar_atendimento": true ou false')
       }
     end
   end
@@ -375,46 +378,50 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # 4 falhas de comportamento achadas em teste ao vivo: IA "fingindo" ter chamado registrar_* sem
-  # chamar de verdade, inventando situações/recursos que não existem, transferindo sem motivo (pulando
-  # o fluxo de etapas), e empilhando várias perguntas de etapas diferentes na mesma mensagem.
+  # 4 falhas de comportamento achadas em teste ao vivo: IA "fingindo" ter salvo um dado sem salvar de
+  # verdade, inventando situações/recursos que não existem, transferindo sem motivo (pulando o fluxo
+  # de etapas), e empilhando várias perguntas de etapas diferentes na mesma mensagem. As duas primeiras
+  # agora são cobertas pelo contrato Structured Outputs (#structured_output_instruction) em vez de
+  # instruções de function-calling — ver describe abaixo.
   describe 'guardrails de comportamento (achados em teste ao vivo)' do
-    it 'inclui as 5 instruções — chamar registrar_* de verdade, não fazer loop de confirmação, não inventar, disciplina de transferência, uma pergunta por vez' do
+    it 'inclui as 4 instruções — contrato JSON estruturado, não inventar, disciplina de transferência, uma pergunta por vez' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('REGRA DE SALVAMENTO INEGOCIÁVEL') &&
-          prompt.include?('REGRA DE AÇÃO IMEDIATA (OBRIGATÓRIO)') &&
+        prompt.include?('FORMATO DE RESPOSTA OBRIGATÓRIO') &&
           prompt.include?('É PROIBIDO inventar situações, recursos ou funcionalidades que não existem') &&
           prompt.include?('SÓ transfira para humano se') &&
           prompt.include?('Peça os dados da etapa atual UM DE CADA VEZ')
       }
     end
 
-    # Bug real ao vivo, round 2: DEPOIS que tool_choice="required" passou a existir, a IA achou um
-    # jeito NOVO de fingir — chamava "continuar_conversa" (o no-op) e dizia em texto "Recebi seu CPF!"
-    # sem NUNCA chamar registrar_*/salvar_memoria_ia. Nada persistia; a etapa seguinte repetia a
-    # pergunta (loop de dados). Guarda contra REMOVER a regra que nomeia esse escape explicitamente.
-    it 'REGRA DE SALVAMENTO INEGOCIÁVEL: nomeia salvar_memoria_ia/registrar_* e diz que continuar_conversa NÃO CONTA como salvar' do
+    # Bug real ao vivo, round 2 (era do design de tool-calling): a IA chamava "continuar_conversa" (o
+    # no-op que sustentava tool_choice="required") e dizia em texto "Recebi seu CPF!" sem NUNCA chamar
+    # registrar_*/salvar_memoria_ia — nada persistia, a etapa seguinte repetia a pergunta (loop de
+    # dados). Sob Structured Outputs isso deixou de ser possível por construção: não há mais tool
+    # nenhuma pra "fingir" chamar, só o campo "dados_coletados" do JSON — guarda contra REMOVER a
+    # regra que proíbe alegar salvamento sem preencher esse campo.
+    it 'proíbe alegar que salvou sem preencher "dados_coletados", e diz que o dado se perde se isso acontecer' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'meu cpf é 123', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('É ESTRITAMENTE PROIBIDO dizer "Recebi seu dado", "Anotado"') &&
-          prompt.include?('chamar a tool "salvar_memoria_ia" ou a tool "registrar_*"') &&
-          prompt.include?('Chamar "continuar_conversa" NÃO CONTA como salvar') &&
+        prompt.include?('É ESTRITAMENTE PROIBIDO dizer em "mensagem_para_cliente" que recebeu/anotou um dado') &&
+          prompt.include?('colocar esse dado em "dados_coletados"') &&
           prompt.include?('o dado será PERDIDO')
       }
     end
 
-    # A descrição da PRÓPRIA tool (o ponto de decisão) também precisa dizer isso — não só o parágrafo
-    # geral de guardrails.
-    it 'a descrição da tool continuar_conversa avisa explicitamente pra não usar quando há dado novo' do
+    # A descrição da PRÓPRIA tool "continuar_conversa" (Ai::PythonOrchestratorClient#control_tools)
+    # ainda existe em tools_schema — legado inofensivo, filtrado no lado Python antes de chegar à
+    # OpenAI (orchestrator.py, tool_choice="required" não existe mais) — mas o texto de aviso segue
+    # correto caso algum department antigo ainda leia esse catálogo por outro caminho.
+    it 'a descrição da tool continuar_conversa (tools_schema) avisa explicitamente pra não usar quando há dado novo' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -428,22 +435,19 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
 
     # Bug real ao vivo (WhatsApp), 2 rodadas: cliente disse "vendas", a IA respondeu "Perfeito, é
-    # vendas mesmo?" em loop, sem nunca chamar registrar_*/avancar_etapa. A 1ª instrução (mais curta)
-    # não bastou — reforçada com passos numerados + o exemplo concreto "vendas". Guarda contra
-    # REMOVER ou enfraquecer essa instrução de novo.
-    it 'REGRA DE AÇÃO IMEDIATA: registrar_* + avancar_etapa nos 2 passos numerados, proibição explícita de confirmar, exemplo "vendas"' do
+    # vendas mesmo?" em loop, sem nunca registrar/avançar. A instrução original (function-calling) foi
+    # substituída pela regra equivalente do contrato JSON: registrar em "dados_coletados" e marcar
+    # "avancar_etapa": true na MESMA resposta, sem turno extra de confirmação.
+    it 'proíbe pedir confirmação e manda registrar + avançar na mesma resposta, sem turno extra' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'vendas', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('REGRA DE AÇÃO IMEDIATA (OBRIGATÓRIO)') &&
-          prompt.include?("1. Chamar a tool 'registrar_*' correspondente para salvar o dado IMEDIATAMENTE.") &&
-          prompt.include?("2. Chamar a tool 'avancar_etapa' para avançar o fluxo.") &&
-          prompt.include?("É ESTRITAMENTE PROIBIDO pedir confirmação ('é isso mesmo?', 'posso confirmar?')") &&
-          prompt.include?("Se o cliente falou 'vendas', salve 'vendas' e avance") &&
-          prompt.include?('Não responda apenas com texto, USE AS TOOLS')
+        prompt.include?("NÃO peça confirmação ('é isso mesmo?', 'posso confirmar?')") &&
+          prompt.include?('registre o dado em "dados_coletados" E marque "avancar_etapa": true na') &&
+          prompt.include?('sem inserir um turno extra de confirmação')
       }
     end
 
@@ -480,7 +484,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['system_prompt'].include?('você DEVE preencher o parâmetro "handoff_summary"')
+        JSON.parse(req.body)['system_prompt'].include?('preencha "handoff_summary" com o que já foi conseguido')
       }
     end
   end
@@ -504,25 +508,29 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
-    it 'system_prompt instrui a IA a usar salvar_memoria_ia quando não há registrar_* específica' do
+    # Structured Outputs: a IA não escolhe mais entre "registrar_*" e "salvar_memoria_ia" — todo dado
+    # (com ou sem tool dedicada no design antigo) vai pro mesmo lugar, "dados_coletados"; é o Python
+    # (orchestrator.py#_dispatch_structured_reply) quem sempre chama o webhook salvar_memoria_ia por
+    # baixo, pra CADA chave do dicionário, sem a IA precisar saber que essa tool existe.
+    it 'system_prompt instrui a IA a colocar QUALQUER dado em "dados_coletados", sem tool dedicada' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['system_prompt'].include?('use "salvar_memoria_ia" com chave=nome do dado')
+        JSON.parse(req.body)['system_prompt'].include?('coloque TODOS em "dados_coletados"')
       }
     end
   end
 
-  # Bug real ao vivo: a IA respondia só com texto ("é vendas mesmo?") e nunca chamava nenhuma tool, então
-  # o Rails nunca avançava o índice. orchestrator.py passou a mandar tool_choice="required" (fora do
-  # escopo Rails), o que OBRIGA alguma tool a ser chamada — "continuar_conversa" é o escape-valve: um
-  # no-op pra quando a IA só quer falar, sem registrar dado nem avançar etapa. Sem ela, tool_choice=
-  # "required" empurraria a IA a usar uma tool REAL (avancar_etapa cedo demais, registrar_* com lixo)
-  # em qualquer turno sem nada de fato pra salvar — regressão pior que o bug original.
-  describe 'tool no-op "continuar_conversa" (sustenta tool_choice="required" no orchestrator.py)' do
-    it 'sempre presente em tools_schema, sem parâmetros' do
+  # Histórico: era o escape-valve pra tool_choice="required" (bug antigo — a IA respondia só com texto
+  # e nunca chamava nenhuma tool). orchestrator.py não força mais tool_choice nenhum (Structured
+  # Outputs substituiu essa mecânica inteira): "continuar_conversa" continua sendo GERADA aqui
+  # (Ai::PythonOrchestratorClient#control_tools) por ora, mas orchestrator.py a filtra antes de montar
+  # a lista de tools da OpenAI — leftover inofensivo, não usado pelo contrato JSON novo. O
+  # system_prompt não fala mais dela (ver #structured_output_instruction).
+  describe 'tool "continuar_conversa" (legado — filtrada no lado Python, nunca chega à OpenAI)' do
+    it 'ainda presente em tools_schema, sem parâmetros' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -530,19 +538,6 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'continuar_conversa' }
         tool.present? && tool['input_schema'] == { 'type' => 'object', 'properties' => {} }
-      }
-    end
-
-    it 'system_prompt explica QUANDO usar continuar_conversa e que toda resposta precisa vir com uma tool' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('TODA resposta sua PRECISA vir acompanhada de UMA chamada de ferramenta') &&
-          prompt.include?('chame "continuar_conversa"') &&
-          prompt.include?('ela não faz nada no sistema')
       }
     end
   end

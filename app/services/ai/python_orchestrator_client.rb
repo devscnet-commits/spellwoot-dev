@@ -16,18 +16,19 @@
 # CURRENT step's instructions text (server-tracked ai_step_index) so the conversation has a narrative
 # thread, but that never gates which data can be captured.
 #
-# tool_choice="required" (orchestrator.py, live bug: the AI replied with text-only confirmation loops
-# and never called any tool, so ai_step_index never advanced): the Responses API now FORCES a tool
-# call every turn. CONTINUE_TOOL ("continuar_conversa") exists so that constraint is never a trap — a
-# genuine no-op the model can call when it only wants to talk (greet, ask, answer a question) without
-# registering data or advancing the step. Without it, tool_choice="required" would force the AI to
-# misuse a real tool (advance early, save garbage) on every turn that has nothing to actually save.
-#
-# Round 2 of that same bug (live, worse): the AI found the OPPOSITE abuse of CONTINUE_TOOL — calling
-# it to satisfy tool_choice="required" cheaply while claiming in text ("Recebi seu CPF!") that it saved
-# a REAL customer-provided datum, without ever calling registrar_*/salvar_memoria_ia. Nothing
-# persisted, so the next step re-asked for the same data (loop). #must_call_capture_tools_instruction
-# and CONTINUE_TOOL's own description were both sharpened to name this exact failure mode.
+# SUPERSEDED (kept for history): tool_choice="required" + CONTINUE_TOOL ("continuar_conversa") used to
+# force a tool call every turn so the AI couldn't reply with text-only confirmation loops that never
+# advanced ai_step_index — and CONTINUE_TOOL existed as the safe no-op for turns with nothing to save.
+# That mechanism had a round-2 failure mode, live and worse: the AI abused CONTINUE_TOOL to satisfy
+# tool_choice="required" cheaply while claiming in TEXT ("Recebi seu CPF!") that it saved a real datum,
+# without ever calling registrar_*/salvar_memoria_ia — nothing persisted, the next step re-asked
+# (the data loop this whole class exists to prevent). Structured Outputs (orchestrator.py,
+# text.format=json_object) replaced the entire mechanism: the model's ONLY output is now the JSON
+# contract in #structured_output_instruction, and Python (not the model's tool choice) decides
+# save/advance/transfer/close from what's actually IN that JSON. CONTINUE_TOOL/ADVANCE_STEP_TOOL/
+# MEMORY_TOOL/RESOLVE_TOOL/TRANSFER_TOOL constants are still used as the tool_name strings Python posts
+# to Api::Internal::AiExecuteToolController (unchanged), just never offered to OpenAI as callable tools
+# anymore (orchestrator.py filters them out before building the tools list).
 class Ai::PythonOrchestratorClient
   # Normalizes AI_ORCHESTRATOR_URL whether or not it already includes the /process path — an env var
   # pointed at just the service root (e.g. http://ai-orchestrator:8000) was POSTing to '/' and 404ing.
@@ -45,12 +46,11 @@ class Ai::PythonOrchestratorClient
   ADVANCE_STEP_TOOL = 'avancar_etapa'
   RESOLVE_TOOL = 'conversation.resolve'
   TRANSFER_TOOL = 'conversation.transfer'
-  # No-op de propósito: existe SÓ pra dar à IA uma opção válida quando orchestrator.py manda
-  # tool_choice="required" (loop de confirmação — a IA respondia só com texto e nunca chamava
-  # nenhuma tool, então o Rails nunca avançava o índice). Sem esta tool, tool_choice="required" forçaria
-  # a IA a chamar registrar_*/avancar_etapa mesmo quando só quer falar (cumprimentar, tirar dúvida,
-  # fazer a PRIMEIRA pergunta de uma etapa nova) — risco pior que o bug original (avanço/registro
-  # prematuro). O controller NUNCA toca o banco por causa dela (ver #continue_conversation).
+  # Legado (Structured Outputs substituiu tool_choice="required" — ver #structured_output_instruction):
+  # existia SÓ pra dar à IA uma opção válida quando orchestrator.py forçava alguma tool a cada turno.
+  # Ainda gerada aqui e ainda reconhecida pelo controller (não quebra nada), mas orchestrator.py filtra
+  # esta tool antes de montar a lista pra OpenAI — não é mais oferecida, não é mais chamada. O
+  # controller NUNCA toca o banco por causa dela de qualquer forma (ver #continue_conversation).
   CONTINUE_TOOL = 'continuar_conversa'
   # Catch-all de memória (híbrida, deliberado — ver #memory_tool): complementa "registrar_*", não
   # substitui. Pra atributo JÁ conhecido (collect ou CustomAttributeDefinition), "registrar_*" é
@@ -156,8 +156,6 @@ class Ai::PythonOrchestratorClient
     # comportamento esperado do modo identify_as="human", intencional.)
     lines << identity_instruction
     lines << market_average_guardrail
-    lines << must_call_capture_tools_instruction
-    lines << no_confirmation_loop_instruction
     lines << no_fabrication_instruction
     lines << transfer_discipline_instruction
     lines << gradual_conversation_instruction
@@ -174,7 +172,7 @@ class Ai::PythonOrchestratorClient
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
     lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
-    lines << tool_usage_instruction
+    lines << structured_output_instruction
     lines << force_handoff_instruction if @force_handoff_notice
     lines.join("\n")
   end
@@ -196,42 +194,6 @@ class Ai::PythonOrchestratorClient
   def market_average_guardrail
     'Você é um atendente DA EMPRESA. Nunca cite concorrentes, médias de mercado ou valores que não ' \
       'estejam no bloco de conhecimento abaixo.'
-  end
-
-  # Achado em teste ao vivo (2 rodadas): (1) a IA "fingia" ter anotado um dado (reply_text tipo "Anotei
-  # seu nome!") sem de fato chamar registrar_*, então nada era persistido. (2) DEPOIS que
-  # tool_choice="required" (ver #no_confirmation_loop_instruction) passou a forçar alguma tool a cada
-  # turno, a IA achou um jeito NOVO de continuar fingindo: chamava "continuar_conversa" (o no-op —
-  # existe pra quando ela só quer FALAR, não pra escapar de salvar) e dizia em texto "Recebi seu CPF!"
-  # sem NUNCA chamar registrar_*/salvar_memoria_ia — satisfaz a exigência da API sem salvar nada, o
-  # cliente repete o dado na etapa seguinte (loop). Por isso a regra abaixo é redundante de propósito
-  # com o resto do prompt: cita os dois nomes de tool de salvamento E nomeia "continuar_conversa"
-  # explicitamente como NÃO valendo pra esse caso.
-  def must_call_capture_tools_instruction
-    'REGRA DE SALVAMENTO INEGOCIÁVEL: É ESTRITAMENTE PROIBIDO dizer "Recebi seu dado", "Anotado" ou ' \
-      'qualquer variação sem ANTES chamar a tool "salvar_memoria_ia" ou a tool "registrar_*" ' \
-      'correspondente. Chamar "continuar_conversa" NÃO CONTA como salvar — essa tool é só pra quando ' \
-      'você não tem NENHUM dado novo pra registrar. Se o cliente forneceu um dado (nome, endereço, ' \
-      'CPF, telefone, email, etc.) e você respondeu sem ter chamado a tool de salvamento, o dado será ' \
-      'PERDIDO. Se você disser que anotou, você DEVE ter chamado a tool antes — nunca depois, nunca no ' \
-      'próximo turno.'
-  end
-
-  # Achado em teste ao vivo (WhatsApp real): cliente disse "vendas", a IA respondeu "Perfeito, você
-  # quer falar com o setor de vendas! Só pra confirmar, é vendas mesmo?" e ficou nesse loop — nunca
-  # chamava registrar_*/avancar_etapa, só reconfirmava o mesmo dado. Instrução separada e agressiva de
-  # #must_call_capture_tools_instruction porque o problema aqui não é deixar de chamar a tool (a IA às
-  # vezes ATÉ chama), é INSERIR um turno de confirmação extra ANTES de chamar — o cliente já respondeu
-  # e a IA pergunta de novo em vez de agir. Reforçada (2 rodadas ao vivo: o primeiro texto não bastou)
-  # com passos numerados + o exemplo concreto "vendas" — o mesmo caso real que travou no WhatsApp.
-  def no_confirmation_loop_instruction
-    "REGRA DE AÇÃO IMEDIATA (OBRIGATÓRIO):\n" \
-      "Assim que o cliente fornecer a informação solicitada pela etapa atual, você DEVE:\n" \
-      "1. Chamar a tool 'registrar_*' correspondente para salvar o dado IMEDIATAMENTE.\n" \
-      "2. Chamar a tool 'avancar_etapa' para avançar o fluxo.\n" \
-      "É ESTRITAMENTE PROIBIDO pedir confirmação ('é isso mesmo?', 'posso confirmar?') para dados " \
-      "que o cliente já falou claramente. Aja com decisão. Se o cliente falou 'vendas', salve " \
-      "'vendas' e avance. Não responda apenas com texto, USE AS TOOLS."
   end
 
   # Achado em teste ao vivo: a IA inventava situações plausíveis mas inexistentes ("instabilidade no
@@ -318,35 +280,63 @@ class Ai::PythonOrchestratorClient
     @department.close_rules.to_h['message'].presence
   end
 
-  def tool_usage_instruction
-    'Use as ferramentas "registrar_*" para gravar cada dado assim que o cliente informar (pode chamar ' \
-      'mais de uma na mesma resposta se ele adiantar vários dados de uma vez; chamar de novo com um valor ' \
-      'diferente ATUALIZA o dado, não duplica). Se o cliente informar algo relevante que NÃO tem uma ' \
-      'ferramenta "registrar_*" específica, use "salvar_memoria_ia" com chave=nome do dado (ex: "nome", ' \
-      '"cpf", "plano") e valor=o que o cliente disse — nunca deixe uma informação relevante se perder só ' \
-      'porque não existe uma tool dedicada para ela. Use "avancar_etapa" (sem parâmetros) quando julgar a ' \
-      'etapa atual concluída, ou se o cliente recusar dar um dado opcional — avance com empatia, sem ' \
-      "forçar. Se precisar encerrar o atendimento, use a tool \"#{sanitized_resolve_tool}\". Se precisar " \
-      "transferir para um humano, use a tool \"#{sanitized_transfer_tool}\". Quando for transferir para um " \
-      'humano, você DEVE preencher o parâmetro "handoff_summary" com um resumo do que já foi conseguido ' \
-      '(ex: "Cliente já forneceu nome e cidade, falta CPF") e o motivo da transferência. TODA resposta ' \
-      'sua PRECISA vir acompanhada de UMA chamada de ferramenta — nunca responda só com texto, sem ' \
-      "chamar nada. Se você só precisa FALAR com o cliente (fazer uma pergunta, cumprimentar, tirar uma " \
-      "dúvida) sem registrar nenhum dado nem avançar a etapa, chame \"#{sanitized_continue_tool}\" (sem " \
-      'parâmetros) — ela não faz nada no sistema, existe só para liberar sua resposta em texto.'
+  # Substitui a antiga instrução de function-calling (tool_usage_instruction/
+  # must_call_capture_tools_instruction/no_confirmation_loop_instruction — removidas): orchestrator.py
+  # não oferece mais "registrar_*"/"avancar_etapa"/"salvar_memoria_ia"/"continuar_conversa"/
+  # conversation.resolve/conversation.transfer como tools à OpenAI (Ai::PythonOrchestratorClient ainda
+  # os calcula em #tools_schema — inofensivo, o Python os filtra antes de montar a lista de tools).
+  # Structured Outputs (response.text.format=json_object, orchestrator.py) força CADA resposta a ser
+  # este objeto JSON; o Python decide sozinho quando chamar os webhooks de controle, a partir do que
+  # está NO JSON — dizer que salvou sem preencher "dados_coletados" deixou de ser possível, porque
+  # "dados_coletados" É o salvamento, não uma alegação em texto que dependia da IA lembrar de chamar
+  # uma tool à parte.
+  def structured_output_instruction
+    "FORMATO DE RESPOSTA OBRIGATÓRIO: Toda resposta sua DEVE ser um único objeto JSON válido, e SOMENTE " \
+      "o JSON — sem texto antes ou depois, sem markdown, no formato exato:\n" \
+      "{\n" \
+      "  \"mensagem_para_cliente\": \"o texto que será enviado ao cliente no WhatsApp\",\n" \
+      "  \"dados_coletados\": {\"chave_do_dado\": \"valor_do_dado\"},\n" \
+      "  \"avancar_etapa\": true ou false,\n" \
+      "  \"transferir_humano\": true ou false,\n" \
+      "  \"encerrar_atendimento\": true ou false,\n" \
+      "  \"handoff_summary\": \"resumo do atendimento — obrigatório quando transferir_humano for true\"\n" \
+      "}\n" \
+      "REGRAS:\n" \
+      "- Se o cliente forneceu QUALQUER dado (nome, endereço, CPF, telefone, email, preferência, etc.), " \
+      "coloque TODOS em \"dados_coletados\", com uma chave descritiva por dado; chamar de novo com um " \
+      "valor diferente ATUALIZA o dado, não duplica. Se não forneceu nada novo neste turno, " \
+      "\"dados_coletados\" DEVE ser o objeto vazio {}.\n" \
+      "- É ESTRITAMENTE PROIBIDO dizer em \"mensagem_para_cliente\" que recebeu/anotou um dado sem, na " \
+      "MESMA resposta, colocar esse dado em \"dados_coletados\" — o dado só existe no sistema se " \
+      "estiver ali; se você disser que anotou sem preencher \"dados_coletados\", o dado será PERDIDO.\n" \
+      "- Assim que o cliente responder o que a etapa atual pede, NÃO peça confirmação ('é isso mesmo?', " \
+      "'posso confirmar?') — registre o dado em \"dados_coletados\" E marque \"avancar_etapa\": true na " \
+      "MESMA resposta, sem inserir um turno extra de confirmação.\n" \
+      "- \"avancar_etapa\": true quando a etapa atual estiver concluída, ou quando o cliente recusar um " \
+      "dado opcional (avance com empatia, sem forçar); caso contrário, false.\n" \
+      "- \"transferir_humano\": true SOMENTE quando precisar transferir para um atendente humano; nesse " \
+      "caso preencha \"handoff_summary\" com o que já foi conseguido (ex: \"Cliente já forneceu nome e " \
+      "cidade, falta CPF\") e o motivo da transferência.\n" \
+      "- \"encerrar_atendimento\": true SOMENTE quando as condições de encerramento configuradas abaixo " \
+      "forem atendidas.\n" \
+      'Nunca responda fora deste formato JSON, mesmo que só queira cumprimentar ou tirar uma dúvida — ' \
+      'nesse caso "dados_coletados" fica {} e os demais booleanos ficam false.'
   end
 
   def force_handoff_instruction
-    'LIMITE DE TENTATIVAS ATINGIDO NESTA ETAPA. Transfira para um humano AGORA usando a tool ' \
-      "\"#{sanitized_transfer_tool}\", mesmo que a etapa não tenha concluído."
+    'LIMITE DE TENTATIVAS ATINGIDO NESTA ETAPA. Responda AGORA com "transferir_humano": true e ' \
+      '"handoff_summary" preenchido, mesmo que a etapa não tenha concluído.'
   end
 
   # Tools reais do department (webhooks/capabilities/integrations) + UMA "registrar_*" por atributo
   # declarado em QUALQUER etapa do playbook (Ai::StepCaptureTool, todas de uma vez — fluxo agentic,
   # sem gate por etapa ativa) + as tools de controle (continuar/memória genérica/avançar/encerrar/
-  # transferir — CONTINUE_TOOL é o no-op que sustenta tool_choice="required" no orchestrator.py). Nomes SANITIZADOS
-  # (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400 "does not
-  # match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
+  # transferir). Structured Outputs (orchestrator.py) substituiu o mecanismo de controle por
+  # function-calling — este método continua gerando o catálogo completo (histórico + o formato que
+  # Api::Internal::AiExecuteToolController já reconhece), mas orchestrator.py filtra "registrar_*" e as
+  # 5 tools de controle antes de montar a lista que vai pra OpenAI; só tools REAIS chegam lá. Nomes
+  # SANITIZADOS (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400
+  # "does not match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
   # conversation.add_label, contact.update_attributes...) por convenção. Api::Internal::
   # AiExecuteToolController reverte isso batendo o nome recebido contra este MESMO catálogo
   # (department.tools.active + as 2 constantes de controle), não adivinhando "_" == ".".
