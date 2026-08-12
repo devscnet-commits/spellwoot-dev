@@ -15,16 +15,25 @@ class Ai::FollowupSweepJob < ApplicationJob
   MIN_QUIET = 1.minute
 
   def perform
-    lock = Redis::LockManager.new
-    return unless lock.lock(LOCK_KEY, LOCK_TTL) # outro sweep já está rodando
-
-    begin
-      candidate_conversations.find_each do |conversation|
-        Ai::FollowupConversationJob.perform_later(conversation.id)
-      end
-    ensure
-      lock.unlock(LOCK_KEY)
-    end
+    # DESATIVADO TEMPORARIAMENTE (pedido do usuário, urgente): follow-up disparando em conversas
+    # ativas mesmo em agentes sem follow-up configurado, interferindo nos testes ao vivo do
+    # Structured Outputs. Cortado aqui (o único ponto de entrada — sem sweep, nenhum
+    # Ai::FollowupConversationJob é enfileirado) em vez de em cada job por-conversa: um ponto de
+    # controle só. NÃO é o fix — a causa raiz (provavelmente #resolved_department pegando o
+    # department ERRADO quando ainda não há Ai::Run pra essa conversa, ou follow_up/close_rules
+    # com config residual de teste) segue sem investigar. Reativar: descomentar o corpo abaixo e
+    # apagar este `return` (comentado, não apagado, pra não virar Lint/UnreachableCode do rubocop).
+    return
+    # lock = Redis::LockManager.new
+    # return unless lock.lock(LOCK_KEY, LOCK_TTL) # outro sweep já está rodando
+    #
+    # begin
+    #   candidate_conversations.find_each do |conversation|
+    #     Ai::FollowupConversationJob.perform_later(conversation.id)
+    #   end
+    # ensure
+    #   lock.unlock(LOCK_KEY)
+    # end
   end
 
   private
