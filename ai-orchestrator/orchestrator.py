@@ -165,6 +165,26 @@ def _build_input(user_input: str, image_urls: list[str] | None):
     return [_JSON_FORMAT_REMINDER, {"role": "user", "content": content}]
 
 
+def _normalize_tool_result(result: dict) -> dict:
+    """Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed, ver
+    Api::Internal::AiExecuteToolController#search_knowledge) pra QUALQUER tool real: achado ao vivo
+    (conv 556) — quando uma ferramenta real falhava, o modelo não tinha nenhum sinal confiável de que
+    era um ERRO técnico (em vez de "a ferramenta rodou e não achou nada"), e travava enrolando o
+    cliente. Duas formas de falha chegam aqui com shapes DIFERENTES: (a) falha de transporte
+    (tools.ToolExecutionError, vira {"error": "<mensagem>"} sem "status"); (b) falha lógica que o
+    Rails devolve com HTTP 200 (Ai::ToolExecutor#build -> {"result":, "status":"failed", "error":}).
+    Normaliza as duas no MESMO envelope {"error": true, "message": "..."} — só quando é falha DE
+    VERDADE; "skipped" (shadow, missing_required_attributes, tool inativa) fica intocado, porque ali
+    "error" já é uma mensagem de dado faltando, não uma falha técnica — o modelo já sabe reagir a
+    isso pedindo o dado, não avisando "problema técnico"."""
+    status = result.get("status")
+    if status == "failed":
+        return {"error": True, "message": result.get("error") or "Falha ao executar a ferramenta."}
+    if status is None and result.get("error"):
+        return {"error": True, "message": result["error"]}
+    return result
+
+
 def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
     openai_tools = []
     if vector_store_id:
@@ -278,16 +298,18 @@ def run_conversation(
                 # tool degrades the turn instead of aborting it — the model can apologize/retry.
                 result = {"error": str(e)}
 
-            # Achado ao vivo (conv 556): o retrieve da OpenAI só devolve .output de cada response —
-            # o function_call_output que REALMENTE foi mandado de volta pro modelo vive no INPUT da
-            # chamada seguinte, que a API não expõe via retrieve nenhum. Sem isto não dava pra saber
-            # se uma tool call ficou "pendurada" porque o resultado veio vazio/erro/schema errado, sem
-            # reconstruir tudo via os logs do webhook Rails (Ai::CapabilityExecution) cruzando por
-            # timestamp. Loga aqui, no ponto exato que decide o que o modelo vai ler.
-            logger.info(
-                "ticket_id=%s call_id=%s tool_name=%s function_call_output bruto: %s",
-                ticket_id, call.call_id, call.name, json.dumps(result, ensure_ascii=False),
-            )
+result = _normalize_tool_result(result)
+
+# Achado ao vivo (conv 556): o retrieve da OpenAI só devolve .output de cada response —
+# o function_call_output que REALMENTE foi mandado de volta pro modelo vive no INPUT da
+# chamada seguinte, que a API não expõe via retrieve nenhuma. Sem isto pendurada porque
+# o resultado veio vazio/erro/schema errado, sem reconstruir tudo via os logs do webhook Rails
+# (Ai::CapabilityExecution) cruzando por timestamp. Loga aqui, no ponto exato que decide
+# o que o modelo vai ler.
+logger.info(
+    "ticket_id=%s call_id=%s tool_name=%s function_call_output bruto: %s",
+    ticket_id, call.call_id, call.name, json.dumps(result, ensure_ascii=False),
+)
 
             tool_outputs.append({
                 "type": "function_call_output",

@@ -201,6 +201,7 @@ class Ai::PythonOrchestratorClient
     lines << market_average_guardrail
     lines << no_fabrication_instruction
     lines << transfer_discipline_instruction
+    lines << tool_error_instruction
     lines << gradual_conversation_instruction
     lines << document_extraction_instruction
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
@@ -289,6 +290,21 @@ class Ai::PythonOrchestratorClient
       'conseguir fornecer um dado válido mesmo depois de 1 pedido de esclarecimento — não exija mais de ' \
       '1 nova tentativa por dado antes de transferir, insistir além disso cansa o cliente. NUNCA ' \
       'transfira só porque "achou" que deve. Siga o fluxo de etapas até o final.'
+  end
+
+  # Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
+  # QUALQUER ferramenta real: achado ao vivo (conv 556, consultar_periodos) — quando uma ferramenta
+  # falhava de verdade (erro técnico, não falta de dado), o modelo não tinha NENHUMA instrução de como
+  # reagir e travava enrolando o cliente em 4 respostas vagas, sem nunca avisar do problema nem
+  # chamar de novo. orchestrator.py agora normaliza toda falha real de tool em {"error": true,
+  # "message": "..."} (ver _normalize_tool_result) — esta instrução ensina o modelo a reconhecer esse
+  # sinal específico e agir.
+  def tool_error_instruction
+    'Se o resultado de QUALQUER ferramenta vier com "error": true, isso é uma falha TÉCNICA real da ' \
+      'ferramenta (não falta de dado do cliente) — avise o cliente que teve um problema técnico agora ' \
+      'e ofereça transferir para um atendente humano. NUNCA invente uma resposta no lugar do resultado ' \
+      'que faltou, e NUNCA chame a mesma ferramenta de novo no mesmo turno esperando um resultado ' \
+      'diferente.'
   end
 
   # Achado em teste ao vivo (esclarecido pelo usuário: NÃO é sobre várias mensagens por turno — isso é
