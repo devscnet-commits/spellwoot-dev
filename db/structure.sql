@@ -1,11 +1,12 @@
-\restrict BBNfh3Tq2Wpbb5fJf5pB25RDOKvXHu3XfMx0kS5ISdmXqRYFaclJHDbwpU7oicl
+\restrict pgAN0aRoj3lrJZGkNR6H5UseDWKjNST7nLWzX4all0BfLXCQeLb5ernv6jITIn9
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
--- Dumped by pg_dump version 16.14
+-- Dumped by pg_dump version 17.10
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -1765,6 +1766,30 @@ ALTER SEQUENCE public.calls_id_seq OWNED BY public.calls.id;
 
 
 --
+-- Name: camp_dpid_seq_10483; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_10483
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_9766; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_9766
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: campaigns; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2743,6 +2768,30 @@ CREATE SEQUENCE public.contacts_id_seq
 --
 
 ALTER SEQUENCE public.contacts_id_seq OWNED BY public.contacts.id;
+
+
+--
+-- Name: conv_dpid_seq_10483; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_10483
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_9766; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_9766
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
 
 --
@@ -9682,7 +9731,7 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict BBNfh3Tq2Wpbb5fJf5pB25RDOKvXHu3XfMx0kS5ISdmXqRYFaclJHDbwpU7oicl
+\unrestrict pgAN0aRoj3lrJZGkNR6H5UseDWKjNST7nLWzX4all0BfLXCQeLb5ernv6jITIn9
 
 SET search_path TO "$user", public;
 

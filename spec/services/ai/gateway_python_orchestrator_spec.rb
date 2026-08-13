@@ -1,9 +1,10 @@
 require 'rails_helper'
 
-# Teto de segurança por etapa (ai_step_turns) no caminho do orquestrador Python: o Gateway é o
-# guarda-fio da contagem (Rails), não a IA. Isola o Ai::PythonOrchestratorClient (stub direto do
-# método de classe) para testar SÓ o comportamento do Gateway ao redor dele — a montagem do payload
-# em si já é coberta por spec/services/ai/python_orchestrator_client_spec.rb.
+# Teto de segurança por etapa (ai_step_turns) no caminho do orquestrador Python (motor ÚNICO desde a
+# eliminação do legado — não há mais flag por department): o Gateway é o guarda-fio da contagem
+# (Rails), não a IA. Isola o Ai::PythonOrchestratorClient (stub direto do método de classe) para
+# testar SÓ o comportamento do Gateway ao redor dele — a montagem do payload em si já é coberta por
+# spec/services/ai/python_orchestrator_client_spec.rb.
 RSpec.describe Ai::Gateway do
   let(:account) { create(:account) }
   let(:inbox) { create(:inbox, account: account) }
@@ -13,10 +14,10 @@ RSpec.describe Ai::Gateway do
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
   # let! — precisa existir no banco ANTES do Ai::DepartmentResolver rodar dentro de #deliver; um
   # `let` preguiçoso nunca referenciado explicitamente nos testes nunca seria criado (o Gateway
-  # cairia direto em 'no_department', sem nunca chegar no branch do python_orchestrator).
+  # cairia direto em 'no_department', sem nunca chegar na chamada ao Python).
   let!(:department) do
     Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all', 'python_orchestrator' => true },
+                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' },
                            transfer_rules: transfer_rules)
   end
   let(:transfer_rules) { {} }
@@ -100,46 +101,15 @@ RSpec.describe Ai::Gateway do
     end
   end
 
-  it 'department com python_orchestrator ligado: pula o OCR legado (skip_vision: true no MediaProcessor)' do
+  # Python é o motor ÚNICO — não existe mais department "sem python_orchestrator" nem checagem de
+  # flag (truthy/string) pra testar; skip_vision é incondicionalmente true pra QUALQUER department,
+  # já que a OpenAI sempre recebe os pixels crus no mesmo turno (ver Ai::PythonOrchestratorClient).
+  # Substituem os 3 testes antigos (ligado/string-truthy/sem-flag), que testavam um branch que não
+  # existe mais desde a eliminação do motor legado.
+  it 'skip_vision é sempre true no MediaProcessor, pra qualquer department' do
     deliver
 
     expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, skip_vision: true)
-  end
-
-  # Achado URGENTE: nenhuma tela admin escreve behavior['python_orchestrator'] (só console/seed) —
-  # a checagem antiga (`== true`) caía SILENCIOSAMENTE pro caminho legado se alguém gravasse a STRING
-  # "true" em vez do booleano (sem exceção, sem log no Python — o request nem saía). Reproduz esse
-  # exato caso e prova que #python_orchestrator_on? agora aceita a string também.
-  it 'python_orchestrator gravado como STRING "true" (não booleano) ainda ativa o caminho Python' do
-    department.update!(behavior: department.behavior.merge('python_orchestrator' => 'true'))
-
-    deliver
-
-    expect(Ai::PythonOrchestratorClient).to have_received(:process_message)
-  end
-
-  it 'department SEM python_orchestrator: roda o OCR legado normalmente (skip_vision: false)' do
-    # Agente/inbox PRÓPRIOS (não o `agent`/`department` do resto do arquivo, que já tem a flag ligada)
-    # — senão agent.departments.active passaria a ter 2 registros e Ai::DepartmentResolver cairia no
-    # classificador por IA (chamada real ao LLM) em vez do atalho 'single'.
-    legacy_agent = Ai::Agent.create!(account: account, name: 'Bot Legado', status: 'active', ai_operation_profile_id: profile.id)
-    legacy_inbox = create(:inbox, account: account)
-    Ai::Department.create!(account: account, ai_agent_id: legacy_agent.id, name: 'Legado', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
-    legacy_binding = Ai::AgentInbox.create!(ai_agent_id: legacy_agent.id, inbox_id: legacy_inbox.id, mode: 'live', active: true)
-    convo = create(:conversation, account: account, inbox: legacy_inbox, status: 'open')
-    message = create(:message, account: account, inbox: legacy_inbox, conversation: convo,
-                               message_type: 'incoming', content: 'oi')
-    # Department sem a flag cai no caminho legado (decide()) — precisa do MESMO stub que
-    # gateway_spec.rb usa pra isolar o Ai::ModelRouter (sem isso, tenta uma chamada HTTP real).
-    allow(Ai::ModelRouter).to receive(:decide).and_return(
-      provider: 'openai', model: 'gpt-4.1-mini', decision: { 'decision' => 'reply', 'reply_text' => 'oi' },
-      tokens_in: 10, tokens_out: 5, cost: 0.0, latency_ms: 1, status: 'recorded'
-    )
-
-    described_class.new(message: message, agent_inbox: legacy_binding, mode: 'live').run
-
-    expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, skip_vision: false)
   end
 
   it 'em modo shadow, não incrementa ai_step_turns (mesmo gate de @acts_live do resto do Gateway)' do

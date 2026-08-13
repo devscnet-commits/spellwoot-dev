@@ -5,31 +5,32 @@
 #
 # Table name: ai_agents
 #
-#  id                      :bigint           not null, primary key
-#  assistant_avatar        :text
-#  assistant_description   :text
-#  assistant_language      :string           default("pt-BR")
-#  assistant_name          :string
-#  assistant_personality   :text
-#  assistant_voice         :string
-#  base_prompt             :text
-#  category                :string
-#  company_name            :string
-#  guardrails              :text
-#  handoff_agent_ids       :jsonb            not null
-#  handoff_team_ids        :jsonb            not null
-#  identify_as             :string           default("ai")
-#  identity                :jsonb            not null
-#  name                    :string           not null
-#  site                    :string
-#  stage                   :string           default("sandbox"), not null
-#  status                  :string           default("active"), not null
-#  version                 :string
-#  created_at              :datetime         not null
-#  updated_at              :datetime         not null
-#  account_id              :bigint           not null
-#  ai_operation_profile_id :bigint
-#  team_id                 :bigint
+#  id                       :bigint           not null, primary key
+#  assistant_avatar         :text
+#  assistant_description    :text
+#  assistant_language       :string           default("pt-BR")
+#  assistant_name           :string
+#  assistant_personality    :text
+#  assistant_voice          :string
+#  base_prompt              :text
+#  category                 :string
+#  company_name             :string
+#  guardrails               :text
+#  handoff_agent_ids        :jsonb            not null
+#  handoff_team_ids         :jsonb            not null
+#  identify_as              :string           default("ai")
+#  identity                 :jsonb            not null
+#  name                     :string           not null
+#  site                     :string
+#  stage                    :string           default("sandbox"), not null
+#  status                   :string           default("active"), not null
+#  version                  :string
+#  created_at               :datetime         not null
+#  updated_at               :datetime         not null
+#  account_id               :bigint           not null
+#  ai_operation_profile_id  :bigint
+#  fallback_handoff_team_id :bigint
+#  team_id                  :bigint
 #
 # Indexes
 #
