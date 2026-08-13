@@ -78,13 +78,6 @@ const draft = reactive({
   // Obrigatório? SEMPRE no nível da etapa (slot_required), NUNCA collect.required (Gap 2 desacoplou).
   // Default obrigatório; null/undefined legado => obrigatório.
   slotRequired: props.step?.slot_required ?? true,
-  // Conhecimento que a etapa DECLARA precisar (step['knowledge']): a IA busca ANTES de responder. Semeado
-  // do banco (backfill do PR 1). query vazia => a etapa não declara nada. kinds separado por vírgula;
-  // input DIRETO do usuário — nenhum estado assíncrono (sem o acoplamento do hasSlot que causou o #306).
-  knowledgeQuery: props.step?.knowledge?.query || '',
-  knowledgeKinds: Array.isArray(props.step?.knowledge?.kinds)
-    ? props.step.knowledge.kinds.join(', ')
-    : '',
   // Desfecho declarado AO concluir a etapa (step['on_complete'], (b)-core). SEMEADO do banco — editar sem
   // tocar preserva o valor (a armadilha de #306/knowledge: emitir sem semear apagaria o backfill). action
   // vazia => a etapa não declara desfecho (buildStepPayload emite on_complete: null).
@@ -395,8 +388,6 @@ const onSave = () => {
       collectSource: draft.collectSource,
       collectDomainTool: draft.collectDomainTool,
       slotRequired: draft.slotRequired,
-      knowledgeQuery: draft.knowledgeQuery,
-      knowledgeKinds: draft.knowledgeKinds,
       onCompleteAction: draft.onCompleteAction,
       onCompleteTeamId: draft.onCompleteTeamId,
       onCompleteTarget: draft.onCompleteTarget,
@@ -785,40 +776,9 @@ const applyAssistantSuggestion = ({ objective, rules, suggestedScript }) => {
           />
         </label>
 
-        <!-- Consulta ao conhecimento ANTES de responder. Cronológico: a consulta é ANTES da resposta;
-             as automações são DEPOIS de concluir a etapa. Declara step['knowledge'] = { query, kinds }. -->
-        <div class="flex flex-col gap-1.5 border-t border-n-weak pt-3">
-          <span class="text-sm font-medium text-n-slate-12">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_KNOWLEDGE_LABEL') }}
-          </span>
-          <span class="text-xs text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_KNOWLEDGE_HINT') }}
-          </span>
-          <textarea
-            v-model="draft.knowledgeQuery"
-            rows="2"
-            :placeholder="
-              $t('AI_DEPARTMENTS.FORM.STEP_KNOWLEDGE_QUERY_PLACEHOLDER')
-            "
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 resize-y text-sm"
-          />
-          <label class="flex flex-col gap-1 text-xs text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_KNOWLEDGE_KINDS_LABEL') }}
-            <input
-              v-model="draft.knowledgeKinds"
-              type="text"
-              :placeholder="
-                $t('AI_DEPARTMENTS.FORM.STEP_KNOWLEDGE_KINDS_PLACEHOLDER')
-              "
-              class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-            />
-            <span class="text-n-slate-10">{{
-              $t('AI_DEPARTMENTS.FORM.STEP_KNOWLEDGE_KINDS_HINT')
-            }}</span>
-          </label>
-        </div>
-
-        <!-- (a chave do slot + obrigatório/opcional migraram para a tarja verde acima) -->
+        <!-- (a chave do slot + obrigatório/opcional migraram para a tarja verde acima; a consulta ao
+             conhecimento agora é uma tool agentic — consultar_conhecimento, sempre disponível, a IA
+             decide quando chamar — não precisa mais de configuração por etapa aqui) -->
 
         <!-- automações ao concluir a etapa -->
         <div class="flex flex-col gap-2 border-t border-n-weak pt-3">

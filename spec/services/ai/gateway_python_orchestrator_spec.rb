@@ -121,4 +121,46 @@ RSpec.describe Ai::Gateway do
 
     expect(convo.reload.additional_attributes['ai_step_turns']).to be_nil
   end
+
+  # BYOK (billing Fase 3): o Python já fez o retry pra chave global internamente (orchestrator.py) —
+  # o Gateway só precisa espelhar o que Ai::Gateway#maybe_byok_fallback fazia no caminho legado (tag +
+  # cobrança), a partir do sinal byok_fallback que Ai::PythonOrchestratorClient devolve.
+  describe 'byok_fallback (chave própria da conta falhou, Python caiu pra chave global)' do
+    it 'ao vivo: aplica a tag "chave-propria-falhou" e cobra 1 crédito SCNET ALÉM do uso normal' do
+      AiCreditBalance.create!(account_id: account.id, plan_credits: 5) # saldo suficiente pro consume! não engolir por InsufficientCredits
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Olá!', response_id: 'resp_1', byok_fallback: true)
+      allow(Ai::CapabilityRegistry).to receive(:execute)
+
+      deliver
+
+      expect(Ai::CapabilityRegistry).to have_received(:execute)
+        .with('conversation.add_label', hash_including(input: { 'label' => 'chave-propria-falhou' }))
+      # 2 débitos distintos: Ai::ActionDispatcher#reply cobra 1 crédito de USO normal (toda resposta,
+      # com ou sem BYOK) + consume_byok_fallback_credit cobra 1 crédito ADICIONAL de PENALIDADE por
+      # ter usado a chave global. 5 - 1 - 1 = 3.
+      expect(AiCreditBalance.find_by(account_id: account.id).plan_credits).to eq(3)
+    end
+
+    it 'byok_fallback false (caso comum): NÃO aplica tag nem cobra crédito' do
+      allow(Ai::CapabilityRegistry).to receive(:execute)
+
+      deliver # stub padrão do before já devolve byok_fallback: false implícito (chave ausente)
+
+      expect(Ai::CapabilityRegistry).not_to have_received(:execute).with('conversation.add_label', anything)
+      expect(AiCreditBalance.find_by(account_id: account.id)).to be_nil
+    end
+
+    it 'em modo shadow, NÃO cobra crédito mesmo com byok_fallback true (mesmo gate de @acts_live)' do
+      shadow_binding = Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'shadow', active: true)
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      message = create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming', content: 'oi')
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Olá!', response_id: 'resp_1', byok_fallback: true)
+
+      described_class.new(message: message, agent_inbox: shadow_binding, mode: 'shadow').run
+
+      expect(AiCreditBalance.find_by(account_id: account.id)).to be_nil
+    end
+  end
 end

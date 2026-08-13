@@ -49,7 +49,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'Quero saber o preço', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: 'Olá! Como posso ajudar?', response_id: 'resp_novo_456')
+      expect(result).to eq(reply: 'Olá! Como posso ajudar?', response_id: 'resp_novo_456', byok_fallback: false)
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
         .with(body: hash_including(
           'ticket_id' => conversation.id,
@@ -87,7 +87,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, response_id: nil)
+      expect(result).to eq(reply: nil, response_id: nil, byok_fallback: false)
       # Auditoria de confiança: sem isto, um erro ANTES do HTTParty.post (ex.: exceção montando o
       # payload) cairia no MESMO rescue e devolveria o MESMO {reply: nil, response_id: nil} — o teste
       # passaria "por acidente" sem nunca ter tentado a requisição real. have_requested prova que o
@@ -103,10 +103,52 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, response_id: nil)
+      expect(result).to eq(reply: nil, response_id: nil, byok_fallback: false)
       # Mesma auditoria: confirma que a requisição foi tentada (e o WebMock a interceptou para simular
       # o timeout), não que o código nunca chegou a discar.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+    end
+  end
+
+  # BYOK (billing Fase 3): GAP achado em auditoria (13/08) — o orquestrador Python nunca recebia
+  # NENHUMA chave por request antes desta mudança, sempre a global fixa; uma conta com BYOK ligado
+  # consumia a chave/cota da SCNET em silêncio. account_api_key só vai preenchido quando a conta tem a
+  # feature custom_llm_api_key ligada E uma chave de verdade salva no Hub (Ai::ModelRouter.account_provider_key).
+  describe 'BYOK (account_api_key no payload + byok_fallback na resposta)' do
+    it 'manda account_api_key quando a conta tem custom_llm_api_key ligado com chave openai configurada' do
+      account.enable_features!('custom_llm_api_key')
+      allow(Ai::ModelRouter).to receive(:account_provider_key).with(account.id, 'openai').and_return('sk-conta-propria')
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('account_api_key' => 'sk-conta-propria'))
+    end
+
+    it 'manda account_api_key nil quando a conta NÃO tem a feature ligada (comportamento de sempre)' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('account_api_key' => nil))
+    end
+
+    it 'devolve byok_fallback: true quando o Python avisa que a chave própria falhou e caiu pra global' do
+      stub_orchestrator(body: { reply: 'oi', response_id: 'resp_1', byok_fallback: true })
+
+      result = described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(result[:byok_fallback]).to be true
+    end
+
+    it 'devolve byok_fallback: false quando o Python não manda o campo (retrocompat)' do
+      stub_orchestrator(body: { reply: 'oi', response_id: 'resp_1' })
+
+      result = described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(result[:byok_fallback]).to be false
     end
   end
 
@@ -139,8 +181,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # narrativo é ancorado na etapa atual, a captura de dado (tools) não é. Nomes SANITIZADOS
         # (Ai::ToolNameSanitizer): "conversation.add_label"/".resolve"/".transfer" viram "_" — a
         # OpenAI rejeita ponto no nome da function (achado ao vivo, ver spec do sanitizer).
-        expected = %w[avancar_etapa continuar_conversa conversation_add_label conversation_resolve
-                      conversation_transfer registrar_endereco registrar_telefone_extra]
+        expected = %w[avancar_etapa consultar_conhecimento continuar_conversa conversation_add_label
+                      conversation_resolve conversation_transfer registrar_endereco registrar_telefone_extra]
         expected.all? { |n| names.include?(n) } &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
           !body['system_prompt'].include?('Cumprimente com calor.')
@@ -183,9 +225,74 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # 'marcado_como_ganho_ou_perdido' vem do CustomAttributeDefinition seedado em TODA Account
         # (Account#create_default_custom_attributes) — known_slot_keys inclui mesmo sem playbook.
         # continuar_conversa: no-op que sustenta tool_choice="required" no orchestrator.py.
-        names.sort == %w[avancar_etapa continuar_conversa conversation_resolve conversation_transfer
-                          salvar_memoria_ia registrar_marcado_como_ganho_ou_perdido].sort &&
+        names.sort == %w[avancar_etapa consultar_conhecimento continuar_conversa conversation_resolve
+                          conversation_transfer salvar_memoria_ia registrar_marcado_como_ganho_ou_perdido].sort &&
           !body['system_prompt'].include?('Etapa atual')
+      }
+    end
+  end
+
+  # Pedido do usuário: mesmo padrão achado no fluxo n8n Maya v4.0 — manda objetivo + texto da PRÓXIMA
+  # etapa junto no system_prompt, não só a atual. Reusa Ai::StateManager#next_step (já existia pro
+  # look-ahead de conhecimento do motor legado).
+  describe 'PRÓXIMA ETAPA no system_prompt (next_step_instructions)' do
+    it 'inclui a próxima etapa, DEPOIS da ETAPA ATUAL, quando existe uma' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Boas-vindas', 'objective' => 'Cumprimentar.' },
+        { 'name' => 'CPF', 'objective' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf' } },
+        { 'name' => 'Endereço', 'objective' => 'Peça o endereço.' }
+      ])
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 1))
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        atual_idx = prompt.index('ETAPA ATUAL')
+        proxima_idx = prompt.index('PRÓXIMA ETAPA')
+        prompt.include?('Peça o CPF.') && # etapa atual (índice 1)
+          prompt.include?('Peça o endereço.') && # próxima etapa (índice 2)
+          atual_idx.present? && proxima_idx.present? && atual_idx < proxima_idx
+      }
+    end
+
+    it 'NÃO trava o avanço nem a captura — o texto deixa claro que é só contexto' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'CPF', 'objective' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf' } },
+        { 'name' => 'Endereço', 'objective' => 'Peça o endereço.' }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('NÃO pule pra ela nem PEÇA o dado dela antes da hora') &&
+          prompt.include?('se o cliente ADIANTAR esse dado por conta própria, capture normalmente')
+      }
+    end
+
+    it 'não aparece na ÚLTIMA etapa (não há próxima)' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Única', 'objective' => 'Só isso.' }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('PRÓXIMA ETAPA')
+      }
+    end
+
+    it 'não aparece sem playbook nenhum' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('PRÓXIMA ETAPA')
       }
     end
   end
@@ -208,8 +315,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
         prompt.include?("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a 'cpf'") &&
-          prompt.include?('preencher o objeto "dados_coletados"') &&
-          prompt.include?('com a chave "cpf"')
+          prompt.include?('adicionar um item na lista "dados_coletados"') &&
+          prompt.include?('"chave": "cpf"')
       }
     end
 
@@ -304,9 +411,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('peça esclarecimento UMA vez') &&
+        prompt.include?('peça correção UMA vez, de forma isolada e direta') &&
           prompt.include?('campo OBRIGATÓRIO → defina "transferir_humano": true') &&
-          prompt.include?('mande "dados_coletados" vazio ({}) e defina "avancar_etapa": true')
+          prompt.include?('mande "dados_coletados" vazio ([]) e defina "avancar_etapa": true')
       }
     end
 
@@ -486,8 +593,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # Fecha a lacuna de identidade (IA sugerindo concorrentes) + a base de conhecimento real deste
   # path (Ai::KnowledgeRetriever — pgvector já populado, NÃO o vector_store nativo da OpenAI, que
   # não existe: vector_store_id sempre vem vazio, auditado, sem tela/job que o preencha).
-  describe 'identidade + conhecimento (Ai::KnowledgeRetriever) no system_prompt' do
-    it 'a instrução de identidade é a PRIMEIRA linha, e o guardrail anti-"médias de mercado" é a SEGUNDA' do
+  describe 'identidade + conhecimento no system_prompt' do
+    it 'a instrução de identidade é a PRIMEIRA linha, e o guardrail anti-"médias de mercado" é a SEGUNDA — ambas referenciam a ferramenta, não um bloco fixo' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -496,36 +603,46 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt_lines = JSON.parse(req.body)['system_prompt'].lines
         prompt_lines.first.include?('IDENTIDADE') &&
           prompt_lines.first.include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras') &&
-          prompt_lines[1].include?('Nunca cite concorrentes, médias de mercado')
+          prompt_lines.first.include?('use a ferramenta "consultar_conhecimento"') &&
+          prompt_lines[1].include?('Nunca cite concorrentes, médias de mercado') &&
+          prompt_lines[1].include?('ferramenta "consultar_conhecimento"')
       }
     end
 
-    it 'injeta os trechos retornados por Ai::KnowledgeRetriever num bloco "CONHECIMENTO OFICIAL DA EMPRESA" agressivo/inegociável' do
+    # RAG agentic: nenhuma busca automática por turno mais — Ai::KnowledgeRetriever só roda quando a
+    # PRÓPRIA IA chama a tool consultar_conhecimento (ver ai_execute_tool_controller_spec.rb), nunca
+    # embutido cego no system_prompt a partir da mensagem crua do cliente (era o bloco antigo).
+    it 'NÃO chama Ai::KnowledgeRetriever ao montar o system_prompt (a busca só acontece via tool call)' do
       allow(Ai::KnowledgeRetriever).to receive(:retrieve)
-        .with(query: 'quanto custa o plano fibra?', account_id: account.id, department_id: department.id)
-        .and_return(['Plano Fibra 500MB: R$ 99,90/mês', 'Plano Fibra 1GB: R$ 129,90/mês'])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'quanto custa o plano fibra?',
+                                      agent: agent, department: department, mode: 'live')
+
+      expect(Ai::KnowledgeRetriever).not_to have_received(:retrieve)
+    end
+
+    it 'NÃO injeta mais o bloco fixo "## CONHECIMENTO OFICIAL DA EMPRESA" — a IA busca via tool' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'quanto custa o plano fibra?',
                                       agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('## CONHECIMENTO OFICIAL DA EMPRESA') &&
-          prompt.include?('É PROIBIDO usar conhecimento externo, médias de mercado ou suposições') &&
-          prompt.include?('Plano Fibra 500MB: R$ 99,90/mês') &&
-          prompt.include?('Plano Fibra 1GB: R$ 129,90/mês')
+        !JSON.parse(req.body)['system_prompt'].include?('## CONHECIMENTO OFICIAL DA EMPRESA')
       }
     end
 
-    it 'sem chunks (base vazia pra esse department), o bloco de conhecimento nem aparece' do
-      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
+    it 'a tool "consultar_conhecimento" está SEMPRE em tools_schema, sem depender de fonte de conhecimento configurada, com "pergunta" obrigatória' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        !JSON.parse(req.body)['system_prompt'].include?('## CONHECIMENTO OFICIAL DA EMPRESA')
+        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'consultar_conhecimento' }
+        tool.present? &&
+          tool['input_schema']['required'] == ['pergunta'] &&
+          tool['input_schema']['properties']['pergunta']['type'] == 'string'
       }
     end
 
@@ -680,8 +797,42 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt = JSON.parse(req.body)['system_prompt']
         prompt.include?('FORMATO DE RESPOSTA OBRIGATÓRIO') &&
           prompt.include?('É PROIBIDO inventar situações, recursos ou funcionalidades que não existem') &&
-          prompt.include?('SÓ transfira para humano se') &&
-          prompt.include?('Peça os dados da etapa atual UM DE CADA VEZ')
+          prompt.include?('Transfira para humano quando') &&
+          prompt.include?('Prefira pedir os dados da etapa atual UM DE CADA VEZ')
+      }
+    end
+
+    # Consolidação: antes #transfer_discipline_instruction dizia "5 mensagens" e
+    # #data_validation_instruction dizia "1 vez" pro MESMO gatilho (tentativa antes de transferir) —
+    # dois limiares divergentes pra ação crítica. Unificado em 1 tentativa; frustração transfere
+    # IMEDIATO, sem exigir tentativa de esclarecimento antes.
+    it 'unifica o limiar de transferência em 1 tentativa e transfere imediato em caso de frustração' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('não conseguir fornecer um dado válido mesmo depois de 1 pedido de esclarecimento') &&
+          prompt.include?('não exija mais de 1 nova tentativa por dado antes de transferir') &&
+          prompt.include?('demonstrar frustração clara') &&
+          prompt.include?('transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes') &&
+          !prompt.include?('5 mensagens')
+      }
+    end
+
+    # Tom (cadência "uma pergunta por vez") não deve competir com fato (captura de dado front-loaded) —
+    # a regra agora tem exceção explícita em vez de proibição absoluta.
+    it 'a instrução de cadência tem exceção explícita pra dado front-loaded pelo cliente' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('EXCEÇÃO: se o cliente fornecer espontaneamente mais de um dado na mesma mensagem') &&
+          prompt.include?('registre TODOS os dados válidos fornecidos naquela mensagem') &&
+          prompt.include?('nunca finja que não viu um dado só para manter o ritmo')
       }
     end
 
@@ -798,14 +949,14 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # Structured Outputs: a IA não escolhe mais entre "registrar_*" e "salvar_memoria_ia" — todo dado
     # (com ou sem tool dedicada no design antigo) vai pro mesmo lugar, "dados_coletados"; é o Python
     # (orchestrator.py#_dispatch_structured_reply) quem sempre chama o webhook salvar_memoria_ia por
-    # baixo, pra CADA chave do dicionário, sem a IA precisar saber que essa tool existe.
+    # baixo, pra CADA item da lista, sem a IA precisar saber que essa tool existe.
     it 'system_prompt instrui a IA a colocar QUALQUER dado em "dados_coletados", sem tool dedicada' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['system_prompt'].include?('coloque TODOS em "dados_coletados"')
+        JSON.parse(req.body)['system_prompt'].include?('adicione UM ITEM em "dados_coletados"')
       }
     end
   end

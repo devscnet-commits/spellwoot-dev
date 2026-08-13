@@ -152,10 +152,10 @@ class Ai::Gateway
     # abaixo. Roda nos DOIS modos — shadow também registra uma decisão para avaliação; o próprio gate de
     # modo do Ai::ToolExecutor (não este branch) é o que impede o shadow de agir.
     @stage = :decision
-    # Teto de segurança por etapa (ai_step_turns), lido ANTES de chamar o Python — Rails é o guarda-fio
-    # da contagem, a IA só interpreta texto. Se já estourou o limite configurado na tela
-    # (transfer_rules['stuck_handoff_turns']), o client injeta uma instrução forçada no turno para a IA
-    # transferir AGORA via a tool conversation.transfer.
+    # Teto de segurança por etapa (ai_step_turns), lido ANTES de chamar o Python — Rails é o
+    # guarda-fio da contagem, a IA só interpreta texto. Se já estourou o limite configurado na tela
+    # (transfer_rules['stuck_handoff_turns'], mesma chave do caminho legado), o client injeta uma
+    # instrução forçada no turno para a IA transferir AGORA via a tool conversation.transfer.
     step_index_before = (@conversation.additional_attributes || {})['ai_step_index'].to_i
     force_handoff_notice = step_turns_exceeded?(department)
 
@@ -164,6 +164,14 @@ class Ai::Gateway
       message: @message, force_handoff_notice: force_handoff_notice
     )
     persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
+    # BYOK (billing Fase 3): o Python já fez o retry internamente (ver orchestrator.py) — aqui só
+    # espelha o que #maybe_byok_fallback fazia no caminho legado: tag de visibilidade + cobra 1
+    # crédito SCNET pela chamada que teve que usar a chave global. Só ao vivo (shadow não gasta).
+    if @acts_live && result[:byok_fallback]
+      apply_label('chave-propria-falhou')
+      emit(run_record, 'decision.byok_fallback', { provider: 'openai' })
+      consume_byok_fallback_credit
+    end
     # "avancar_etapa" (chamado mid-loop pelo Python, via Api::Internal::AiExecuteToolController) já
     # zerou ai_step_turns se a etapa avançou; senão este turno não produziu avanço -> soma 1.
     bump_step_turns_unless_advanced(step_index_before) if @acts_live
