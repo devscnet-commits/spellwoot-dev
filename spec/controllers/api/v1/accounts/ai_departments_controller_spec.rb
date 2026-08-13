@@ -118,6 +118,42 @@ RSpec.describe 'AI Departments API — step automations validation', type: :requ
     end
   end
 
+  # Bug ao vivo: toda edição pelo painel (qualquer aba) substituía behavior INTEIRO pelo que a tela mandava,
+  # apagando silenciosamente chaves fora do radar da UI (DEPARTMENT_BEHAVIOR_FIELDS) — python_orchestrator
+  # (só ligado por rake task, sem UI) voltava a nil a cada save. Fix: merge raso sobre o behavior persistido.
+  describe 'behavior faz MERGE, não substituição (achado ao vivo: python_orchestrator resetando)' do
+    it 'editar um campo da aba Comportamento preserva uma chave que a UI não conhece (python_orchestrator)' do
+      department.update!(behavior: { 'python_orchestrator' => true, 'auto_attendance' => false })
+
+      patch "/api/v1/accounts/#{account.id}/ai_agents/#{agent.id}/ai_departments/#{department.id}",
+            params: { ai_department: { behavior: { auto_attendance: true } } },
+            headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      reloaded = department.reload.behavior.to_h
+      expect(reloaded['auto_attendance']).to eq(true)      # campo editado aplicado
+      expect(reloaded['python_orchestrator']).to eq(true)  # campo fora da UI SOBREVIVE
+    end
+
+    it 'chave reenviada pela UI ATUALIZA de verdade (merge não trava updates legítimos)' do
+      department.update!(behavior: { 'max_replies' => 5 })
+
+      patch "/api/v1/accounts/#{account.id}/ai_agents/#{agent.id}/ai_departments/#{department.id}",
+            params: { ai_department: { behavior: { max_replies: 10 } } },
+            headers: admin.create_new_auth_token, as: :json
+
+      expect(department.reload.behavior.to_h['max_replies']).to eq(10)
+    end
+
+    it 'sem behavior no payload (save que só toca o playbook), behavior existente não é tocado' do
+      department.update!(behavior: { 'python_orchestrator' => true })
+
+      patch_steps([{ name: 'Coleta' }])
+
+      expect(department.reload.behavior.to_h['python_orchestrator']).to eq(true)
+    end
+  end
+
   # (Frente C / PR1) identidade estável de etapa: merge por id no upsert. O array do CLIENTE é autoritário no
   # conjunto e na ordem (o 409 já cobre concorrência); o merge só carrega o id e preserva campos backend-only.
   describe 'merge por id do playbook (Frente C)' do

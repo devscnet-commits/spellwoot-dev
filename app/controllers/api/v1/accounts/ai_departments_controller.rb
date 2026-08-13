@@ -31,7 +31,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     return render(json: { errors: errors }, status: :unprocessable_entity) if errors.present?
 
     department = @agent.departments.new(scalar_params.merge(account_id: Current.account.id))
-    department.assign_attributes(jsonb_params)
+    department.assign_attributes(jsonb_params(department))
     return render(json: { errors: department.errors.full_messages }, status: :unprocessable_entity) unless department.save
 
     ensure_single_default(department)
@@ -50,7 +50,7 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     # sobrescreve. Só barra quando o cliente MANDA um lock_version (edições que tocam o playbook).
     return render(json: { error: 'stale_playbook' }, status: :conflict) if playbook_conflict?
 
-    @department.assign_attributes(scalar_params.merge(jsonb_params))
+    @department.assign_attributes(scalar_params.merge(jsonb_params(@department)))
     return render(json: { errors: @department.errors.full_messages }, status: :unprocessable_entity) unless @department.save
 
     ensure_single_default(@department)
@@ -87,13 +87,21 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     @agent.departments.where.not(id: department.id).where(is_default: true).update_all(is_default: false)
   end
 
-  def jsonb_params
+  # MERGE raso de behavior sobre o valor JÁ PERSISTIDO (department.behavior), não substituição. Achado
+  # ao vivo: a aba "Comportamento" só manda os campos de DEPARTMENT_BEHAVIOR_FIELDS (auto_attendance/
+  # reply_scope/grouping/max_replies/...) — QUALQUER chave fora desse radar (python_orchestrator, ligada
+  # só por rake task, sem UI; vector_store_id, mesmo caso) SUMIA a cada edição pelo painel, porque
+  # assign_attributes(behavior: hashify(...)) trocava o hash INTEIRO pelo que o front mandou. department
+  # nil em #create (registro novo, nada a preservar) — hashify(nil) já devolve nil e cai fora do merge.
+  def jsonb_params(department = nil)
     source = params[:ai_department] || {}
+    incoming_behavior = hashify(source[:behavior])
+    merged_behavior = incoming_behavior && department ? department.behavior.to_h.merge(incoming_behavior) : incoming_behavior
     {
       sla: hashify(source[:sla]),
       transfer_rules: hashify(source[:transfer_rules]),
       close_rules: hashify(source[:close_rules]),
-      behavior: hashify(source[:behavior]),
+      behavior: merged_behavior,
       follow_up: hashify(source[:follow_up])
     }.compact
   end
