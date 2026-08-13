@@ -58,16 +58,15 @@ const memberSearch = ref('');
 const showAddPanel = ref(false);
 const agentSearch = ref('');
 
-// Linked inboxes state
+// Linked inboxes are managed in the inbox settings; here we only read them so a new team
+// member can be offered to the team's linked caixas.
 const linkedInboxIds = ref([]);
-const isLoadingInboxes = ref(false);
 
 const AVAILABILITY_KEYS = ['online', 'busy', 'offline'];
 
 const tabs = computed(() => [
   { key: 'members', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.MEMBERS') },
   { key: 'details', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.DETAILS') },
-  { key: 'inboxes', label: t('TEAMS_SETTINGS.EDIT_FLOW.TABS.INBOXES') },
 ]);
 
 // Função is read-only and derived from the agent's account role.
@@ -153,15 +152,12 @@ function syncFromTeam(teamData) {
 }
 
 async function loadInboxes() {
-  isLoadingInboxes.value = true;
   try {
     if (!allInboxes.value?.length) store.dispatch('inboxes/get');
     const { data } = await TeamsAPI.getInboxes({ teamId: teamId.value });
     linkedInboxIds.value = data.map(i => i.id);
   } catch {
     linkedInboxIds.value = [];
-  } finally {
-    isLoadingInboxes.value = false;
   }
 }
 
@@ -239,20 +235,6 @@ async function addPendingAgentToCaixas() {
 function removeMember(agentId) {
   const ids = members.value.map(m => m.id).filter(id => id !== agentId);
   persistMembers(ids, 'MEMBER_REMOVED');
-}
-
-async function toggleInbox(inboxId) {
-  const next = linkedInboxIds.value.includes(inboxId)
-    ? linkedInboxIds.value.filter(id => id !== inboxId)
-    : [...linkedInboxIds.value, inboxId];
-  linkedInboxIds.value = next;
-  try {
-    await TeamsAPI.updateInboxes({ teamId: teamId.value, inboxIds: next });
-    useAlert(t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.SAVED'));
-  } catch {
-    useAlert(t('TEAMS_SETTINGS.TEAM_FORM.ERROR_MESSAGE'));
-    loadInboxes();
-  }
 }
 
 async function saveDetails() {
@@ -536,38 +518,6 @@ async function saveDetails() {
           </template>
         </div>
 
-        <!-- Inboxes tab -->
-        <div v-else-if="activeTab === 'inboxes'" class="flex flex-col gap-4">
-          <p class="text-sm text-n-slate-11">
-            {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.HINT') }}
-          </p>
-          <div v-if="isLoadingInboxes" class="flex justify-center py-8">
-            <Spinner class="text-n-brand" />
-          </div>
-          <template v-else>
-            <div
-              v-if="(allInboxes || []).length"
-              class="border border-n-weak rounded-xl divide-y divide-n-weak overflow-hidden"
-            >
-              <label
-                v-for="ibx in allInboxes"
-                :key="ibx.id"
-                class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-n-alpha-2"
-              >
-                <input
-                  type="checkbox"
-                  :checked="linkedInboxIds.includes(ibx.id)"
-                  class="m-0"
-                  @change="toggleInbox(ibx.id)"
-                />
-                <span class="text-sm text-n-slate-12">{{ ibx.name }}</span>
-              </label>
-            </div>
-            <p v-else class="text-sm text-n-slate-11 text-center py-4">
-              {{ t('TEAMS_SETTINGS.EDIT_FLOW.INBOXES.EMPTY') }}
-            </p>
-          </template>
-        </div>
       </div>
 
       <woot-modal

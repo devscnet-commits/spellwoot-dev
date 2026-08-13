@@ -54,6 +54,8 @@ Rails.application.routes.draw do
             resource :contact_merge, only: [:create]
           end
           resource :bulk_actions, only: [:create]
+          # Plano/assinatura atual da conta (Configurações > Plano/Assinatura). Só leitura.
+          resource :subscription, only: [:show], controller: 'subscription'
           resources :agents, only: [:index, :create, :update, :destroy] do
             post :bulk_create, on: :collection
             member do
@@ -64,6 +66,37 @@ Rails.application.routes.draw do
                                 controller: 'agent_schedules',
                                 param: :agent_id
           end
+          resources :ai_shadow_runs, only: [:index]
+          resources :ai_shadows, only: %i[index create update destroy]
+          resources :ai_agents do
+            member { post :test }
+            resource :ai_agent_inboxes, only: %i[show update]
+            resources :ai_agent_versions, only: [:index] do
+              member { post :restore }
+            end
+            resources :ai_departments, only: %i[index create update destroy] do
+              resources :ai_tools, only: %i[index create update destroy]
+              resources :ai_lead_variables, only: %i[index create update destroy]
+              resource :ai_department_integrations, only: %i[show update]
+              resource :ai_department_inboxes, only: %i[show update]
+              resources :ai_playbook_versions, only: [:index] do
+                member { post :restore }
+              end
+              resources :ai_department_versions, only: [:index] do
+                member { post :restore }
+              end
+            end
+          end
+          resources :ai_knowledge_sources, only: %i[index create update destroy] do
+            get :departments, on: :collection
+          end
+          resources :ai_operation_profiles, only: %i[index create update destroy]
+          resources :ai_integration_links, only: %i[index create update destroy] do
+            member { post :test }
+          end
+          resources :ai_costs, only: [:index]
+          post 'conversations/:conversation_id/ai_copilot', to: 'ai_copilot#create'
+          post 'ai_prompt_assistant', to: 'ai_prompt_assistant#create'
           namespace :captain do
             resource :preferences, only: [:show, :update]
             resources :assistants do
@@ -106,6 +139,10 @@ Rails.application.routes.draw do
           end
           resources :assignable_agents, only: [:index]
           resource :audit_logs, only: [:show]
+          resource :plan, only: [] do
+            get :limits
+          end
+          resources :credit_requests, only: [:index, :create]
           resources :callbacks, only: [] do
             collection do
               post :register_facebook_page
@@ -115,6 +152,7 @@ Rails.application.routes.draw do
             end
           end
           resources :canned_responses, only: [:index, :create, :update, :destroy]
+          resources :stickers, only: [:index, :create, :update, :destroy]
           resources :automation_rules, only: [:index, :create, :show, :update, :destroy] do
             post :clone
           end
@@ -147,6 +185,7 @@ Rails.application.routes.draw do
                   post :retry
                 end
               end
+              resources :sticker_messages, only: [:create]
               resources :assignments, only: [:create]
               resources :labels, only: [:create, :index]
               resource :participants, only: [:show, :create, :update, :destroy]
@@ -169,6 +208,7 @@ Rails.application.routes.draw do
               get :closing_flow
               get :attachments
               get :inbox_assistant
+              get :ai_handoff_summary
               get :reporting_events if ChatwootApp.enterprise?
             end
           end
@@ -197,6 +237,7 @@ Rails.application.routes.draw do
             end
             member do
               get :contactable_inboxes
+              get :ai_memory
               post :destroy_custom_attributes
               delete :avatar
             end
@@ -236,6 +277,10 @@ Rails.application.routes.draw do
           end
           resources :provider_instances, only: [:index]
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do
+            # Prioridade das IAs NESTA caixa (por-caixa, entre agentes): a decisão de qual IA responde é
+            # da caixa. show lista os agentes atendentes + priority; update grava o priority de cada um.
+            resource :ai_agent_priorities, only: %i[show update],
+                                           controller: 'ai_inbox_agent_priorities'
             get :assignable_agents, on: :member
             get :campaigns, on: :member
             get :agent_bot, on: :member
@@ -518,6 +563,14 @@ Rails.application.routes.draw do
     end
   end
 
+  # Internal, machine-to-machine API (Bearer token via INTERNAL_AI_TOKEN, not devise) — used by the
+  # Python AI orchestrator to execute Rails-side tools mid function-calling loop.
+  namespace :api, defaults: { format: 'json' } do
+    namespace :internal do
+      post 'ai_execute_tool', to: 'ai_execute_tool#create'
+    end
+  end
+
   if ChatwootApp.enterprise?
     namespace :enterprise, defaults: { format: 'json' } do
       namespace :api do
@@ -677,6 +730,10 @@ Rails.application.routes.draw do
       resources :accounts, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         post :seed, on: :member
         post :reset_cache, on: :member
+      end
+      resources :credit_requests, only: [:index, :show] do
+        post :approve, on: :member
+        post :reject, on: :member
       end
       resources :users, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         delete :avatar, on: :member, action: :destroy_avatar

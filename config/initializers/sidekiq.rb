@@ -18,6 +18,12 @@ end
 Sidekiq.configure_server do |config|
   config.redis = Redis::Config.app
 
+  # Varre o scheduled set com mais frequência. O padrão do Sidekiq ESCALA esse intervalo
+  # pelo nº de processos (chegando a ~15-30s com vários workers), o que atrasava deferimentos
+  # curtos via `set(wait: ...)` — ex.: o agrupamento de mensagens da IA (~2s) só disparava
+  # ~27s depois. Com um valor baixo, jobs adiados rodam praticamente no tempo configurado.
+  config[:average_scheduled_poll_interval] = ENV.fetch('SIDEKIQ_SCHEDULED_POLL_INTERVAL', 2).to_f
+
   if ActiveModel::Type::Boolean.new.cast(ENV.fetch('ENABLE_SIDEKIQ_DEQUEUE_LOGGER', false))
     config.server_middleware do |chain|
       chain.add ChatwootDequeuedLogger

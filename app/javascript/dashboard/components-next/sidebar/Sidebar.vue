@@ -298,73 +298,49 @@ const menuItems = computed(() => {
       ],
     },
     {
-      name: 'Captain',
-      icon: 'i-woot-captain',
-      label: t('SIDEBAR.CAPTAIN'),
-      activeOn: ['captain_assistants_create_index'],
+      name: 'AIAgents',
+      icon: 'i-lucide-bot',
+      label: t('SIDEBAR.AI_AGENTS'),
+      activeOn: [
+        'ai_agents_index',
+        'ai_agent_detail',
+        'ai_department_detail',
+        'ai_knowledge_index',
+      ],
       children: [
         {
-          name: 'FAQs',
-          label: t('SIDEBAR.CAPTAIN_RESPONSES'),
+          name: 'AIAgentsList',
+          label: t('SIDEBAR.AI_AGENTS_LIST'),
           activeOn: [
-            'captain_assistants_responses_index',
-            'captain_assistants_responses_pending',
+            'ai_agents_index',
+            'ai_agent_detail',
+            'ai_department_detail',
           ],
-          to: accountScopedRoute('captain_assistants_index', {
-            navigationPath: 'captain_assistants_responses_index',
-          }),
+          to: accountScopedRoute('ai_agents_index'),
         },
         {
-          name: 'Documents',
-          label: t('SIDEBAR.CAPTAIN_DOCUMENTS'),
-          activeOn: ['captain_assistants_documents_index'],
-          to: accountScopedRoute('captain_assistants_index', {
-            navigationPath: 'captain_assistants_documents_index',
-          }),
+          name: 'AIKnowledge',
+          label: t('SIDEBAR.AI_KNOWLEDGE'),
+          activeOn: ['ai_knowledge_index'],
+          to: accountScopedRoute('ai_knowledge_index'),
         },
         {
-          name: 'Scenarios',
-          label: t('SIDEBAR.CAPTAIN_SCENARIOS'),
-          activeOn: ['captain_assistants_scenarios_index'],
-          to: accountScopedRoute('captain_assistants_index', {
-            navigationPath: 'captain_assistants_scenarios_index',
-          }),
+          name: 'AIProfiles',
+          label: t('SIDEBAR.AI_PROFILES'),
+          activeOn: ['ai_profiles_index'],
+          to: accountScopedRoute('ai_profiles_index'),
         },
         {
-          name: 'Playground',
-          label: t('SIDEBAR.CAPTAIN_PLAYGROUND'),
-          activeOn: ['captain_assistants_playground_index'],
-          to: accountScopedRoute('captain_assistants_index', {
-            navigationPath: 'captain_assistants_playground_index',
-          }),
+          name: 'AICosts',
+          label: t('SIDEBAR.AI_COSTS'),
+          activeOn: ['ai_costs_index'],
+          to: accountScopedRoute('ai_costs_index'),
         },
         {
-          name: 'Inboxes',
-          label: t('SIDEBAR.CAPTAIN_INBOXES'),
-          activeOn: ['captain_assistants_inboxes_index'],
-          to: accountScopedRoute('captain_assistants_index', {
-            navigationPath: 'captain_assistants_inboxes_index',
-          }),
-        },
-        {
-          name: 'Tools',
-          label: t('SIDEBAR.CAPTAIN_TOOLS'),
-          activeOn: ['captain_tools_index'],
-          to: accountScopedRoute('captain_assistants_index', {
-            navigationPath: 'captain_tools_index',
-          }),
-        },
-        {
-          name: 'Settings',
-          label: t('SIDEBAR.CAPTAIN_SETTINGS'),
-          activeOn: [
-            'captain_assistants_settings_index',
-            'captain_assistants_guidelines_index',
-            'captain_assistants_guardrails_index',
-          ],
-          to: accountScopedRoute('captain_assistants_index', {
-            navigationPath: 'captain_assistants_settings_index',
-          }),
+          name: 'AIShadowRuns',
+          label: t('SIDEBAR.AI_SHADOW_RUNS'),
+          activeOn: ['ai_shadows_index', 'ai_shadow_runs'],
+          to: accountScopedRoute('ai_shadows_index'),
         },
       ],
     },
@@ -674,6 +650,12 @@ const menuItems = computed(() => {
           to: accountScopedRoute('canned_list'),
         },
         {
+          name: 'Settings Stickers',
+          label: t('SIDEBAR.STICKERS'),
+          icon: 'i-lucide-sticker',
+          to: accountScopedRoute('stickers_list'),
+        },
+        {
           name: 'Settings Integrations',
           label: t('SIDEBAR.INTEGRATIONS'),
           icon: 'i-lucide-blocks',
@@ -702,6 +684,12 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.SLA'),
           icon: 'i-lucide-clock-alert',
           to: accountScopedRoute('sla_list'),
+        },
+        {
+          name: 'Settings Plan',
+          label: t('SIDEBAR.PLAN'),
+          icon: 'i-lucide-package',
+          to: accountScopedRoute('plan_settings_list'),
         },
         {
           name: 'Conversation Workflow',

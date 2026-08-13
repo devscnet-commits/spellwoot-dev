@@ -38,6 +38,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def show; end
 
+  # Resumo dedicado do ÚLTIMO handoff automático da IA nesta conversa (card na sidebar do atendente).
+  # Retorna { summary: nil } quando a conversa ainda não teve nenhum handoff automático.
+  def ai_handoff_summary
+    summary = Ai::HandoffSummary.latest_for(@conversation.id)
+    render json: (summary ? { summary: summary.content, reason: summary.reason, created_at: summary.created_at } : { summary: nil })
+  end
+
   def create
     ActiveRecord::Base.transaction do
       @conversation = ConversationBuilder.new(params: params, contact_inbox: @contact_inbox).perform

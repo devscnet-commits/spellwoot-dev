@@ -110,6 +110,27 @@ services:
       - 1026:1025
       - 8025:8025
 
+  ai-orchestrator:
+    build:
+      context: ./ai-orchestrator
+      dockerfile: ./Dockerfile
+    image: spellwoot-ai-orchestrator:development
+    env_file: .env
+    environment:
+      # Reach Rails by its compose service name, not localhost, from inside the Docker network.
+      - RAILS_BASE_URL=http://rails:3000
+    ports:
+      - 8000:8000
+    # Achado ao vivo (13/08): sem bind-mount, o Dockerfile faz COPY . . na build — o container roda uma
+    # cópia CONGELADA do código a partir da última `docker compose build`. `docker compose restart`
+    # NUNCA pega mudança de arquivo, só reinicia o mesmo processo com o mesmo código velho (3 rodadas de
+    # "teste ao vivo" deram falso-negativo por isso, achando bug que não existia). Bind-mount + --reload
+    # (uvicorn) fecha os dois lados: edição no host aparece no container na hora, e o processo reinicia
+    # sozinho. SÓ dev local — docker-compose.production.yaml não tem (nem deve ter) este volume.
+    volumes:
+      - ./ai-orchestrator:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
 volumes:
   postgres:
   redis:

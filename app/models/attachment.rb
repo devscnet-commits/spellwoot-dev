@@ -43,6 +43,15 @@ class Attachment < ApplicationRecord
   enum file_type: { :image => 0, :audio => 1, :video => 2, :file => 3, :location => 4, :fallback => 5, :share => 6, :story_mention => 7,
                     :contact => 8, :ig_reel => 9, :ig_post => 10, :ig_story => 11, :embed => 12 }
 
+  # TTL do link ASSINADO entregue a serviços externos (#download_url) que baixam a mídia ASSÍNCRONA.
+  # O default do ActiveStorage é 5 min (300s) — curto demais para a Meta: sob "DNS query shed at inflight
+  # cap" ela dá backoff e re-enfileira o download DEPOIS que a URL já expirou (WhatsApp 131053, "Downloading
+  # media from weblink failed"), transformando um soluço transiente em falha dura. 1h cobre o backoff de
+  # burst com folga. Escopado só ao #download_url (NÃO o global config.active_storage.urls_expire_in):
+  # links internos do painel/avatar/export (#file_url/url_for) seguem 300s. Se a medição pós-deploy mostrar
+  # falha persistindo além de 1h, subir aqui (candidato: 6h) — um lugar, com o porquê.
+  SIGNED_URL_TTL = 1.hour
+
   def push_event_data
     return unless file_type
 
@@ -55,9 +64,11 @@ class Attachment < ApplicationRecord
   end
 
   # NOTE: for External services use this methods since redirect doesn't work effectively in a lot of cases
+  # expires_in: SIGNED_URL_TTL sobrescreve o default de 300s SÓ para o link entregue a serviços externos
+  # (Meta/uazapi/360dialog/FB/IG/Telegram/Twilio/SMS) — ver a nota da constante.
   def download_url
     ActiveStorage::Current.url_options = Rails.application.routes.default_url_options if ActiveStorage::Current.url_options.blank?
-    file.attached? ? file.blob.url : ''
+    file.attached? ? file.blob.url(expires_in: SIGNED_URL_TTL) : ''
   end
 
   def thumb_url

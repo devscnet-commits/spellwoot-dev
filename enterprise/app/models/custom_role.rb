@@ -2,18 +2,21 @@
 #
 # Table name: custom_roles
 #
-#  id          :bigint           not null, primary key
-#  description :string
-#  name        :string
-#  permissions :text             default([]), is an Array
-#  created_at  :datetime         not null
-#  updated_at  :datetime         not null
-#  account_id  :bigint           not null
+#  id                        :bigint           not null, primary key
+#  can_view_unassigned_queue :boolean          default(TRUE), not null
+#  description               :string
+#  name                      :string
+#  permissions               :text             default([]), is an Array
+#  scope_ids                 :integer          default([]), is an Array
+#  scope_type                :string           default("all"), not null
+#  visibility_scope          :string
+#  created_at                :datetime         not null
+#  updated_at                :datetime         not null
+#  account_id                :bigint           not null
 #
 # Indexes
 #
 #  index_custom_roles_on_account_id  (account_id)
-#
 #
 
 # Available permissions for custom roles:

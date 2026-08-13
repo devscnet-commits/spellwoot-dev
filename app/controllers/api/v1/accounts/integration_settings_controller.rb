@@ -23,8 +23,20 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
       account_id: Current.account.id,
       provider: params[:provider]
     )
-    incoming = config_params.reject { |key, value| value.blank? || masked_sensitive?(key, value) }
-    setting.config  = setting.config_hash.merge(incoming).to_json
+    merged = merged_config(setting.config_hash)
+
+    # BYOK (billing Fase 3): a chave própria do cliente é validada com uma chamada REAL antes de salvar.
+    # Chave que não passa no teste é rejeitada (422) — não deixa persistir credencial quebrada que só
+    # falharia no runtime (onde cairia no fallback pra chave da SCNET, cobrando a plataforma à toa).
+    if byok_validation_required?(merged)
+      result = IntegrationSettingsService.test_connection(params[:provider], merged)
+      unless result[:ok]
+        render json: { error: result[:message] }, status: :unprocessable_entity
+        return
+      end
+    end
+
+    setting.config  = merged.to_json
     setting.enabled = params.fetch(:enabled, true)
     setting.save!
     render json: {
@@ -77,6 +89,15 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
 
   private
 
+  # Só valida a chave no save para os providers BYOK (Fase 3), quando a integração está sendo
+  # ATIVADA e há uma apiKey presente. Desativar ou salvar sem chave não dispara chamada externa; os
+  # providers legados (openai/uazapi/…) seguem com o botão "Testar conexão" opcional, sem mudança.
+  def byok_validation_required?(merged_config)
+    IntegrationSettingsService::BYOK_PROVIDERS.include?(params[:provider]) &&
+      params.fetch(:enabled, true).to_s != 'false' &&
+      merged_config['apiKey'].present?
+  end
+
   def check_authorization
     authorize(IntegrationSetting)
   end
@@ -97,6 +118,24 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
   # on/off without re-sending credentials.
   def config_params
     params.fetch(:config, ActionController::Parameters.new).permit!.to_h
+  end
+
+  # Merge the submitted config over what's stored, with three rules:
+  #   - a masked sensitive echo (unchanged secret) keeps the stored value;
+  #   - a blank sensitive value is ignored, so a secret is never wiped by an empty submit;
+  #   - a blank non-sensitive value clears the key, so optional fields like testEventCode
+  #     can actually be unset from the UI (a plain blank-rejecting merge could never remove
+  #     an already-stored value).
+  def merged_config(stored)
+    config_params.each_with_object(stored.dup) do |(key, value), merged|
+      if masked_sensitive?(key, value)
+        next
+      elsif value.blank?
+        merged.delete(key) unless SENSITIVE_KEYS.include?(key)
+      else
+        merged[key] = value
+      end
+    end
   end
 
   # The UI loads sensitive values masked (e.g. "EAAB********************xyz"). When it

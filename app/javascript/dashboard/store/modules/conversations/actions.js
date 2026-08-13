@@ -37,8 +37,18 @@ const actions = {
       const response = await ConversationApi.show(conversationId);
       commit(types.UPDATE_CONVERSATION, response.data);
       commit(`contacts/${types.SET_CONTACT_ITEM}`, response.data.meta.sender);
+      return response.data;
     } catch (error) {
-      // Ignore error
+      // NÃO engolir: registra p/ observabilidade (Sentry, padrão do store) + console p/ debug local,
+      // e retorna null para o caller (ConversationView) dar feedback em vez de tela vazia sem pista.
+      Sentry.captureException(error);
+      // eslint-disable-next-line no-console
+      console.error(
+        '[conversations/getConversation] falha ao carregar',
+        conversationId,
+        error
+      );
+      return null;
     }
   },
 

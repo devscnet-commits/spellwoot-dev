@@ -195,10 +195,18 @@ const refreshTemplates = async () => {
             <strong>{{ query }}</strong>
           </p>
         </div>
-        <div v-else-if="!whatsAppTemplateMessages.length" class="space-y-4">
+        <div v-else-if="!whatsAppTemplateMessages.length" class="space-y-2">
           <p class="text-n-slate-11">
             {{ t('WHATSAPP_TEMPLATES.PICKER.NO_TEMPLATES_AVAILABLE') }}
           </p>
+          <a
+            href="https://business.facebook.com/wa/manage/message-templates/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-block text-sm font-medium text-n-brand hover:underline"
+          >
+            {{ t('WHATSAPP_TEMPLATES.PICKER.CONFIGURE_IN_META') }}
+          </a>
         </div>
       </div>
     </div>

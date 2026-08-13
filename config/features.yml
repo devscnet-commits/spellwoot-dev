@@ -233,11 +233,52 @@
 - name: captain_tasks
   display_name: Captain Tasks
   enabled: true
-- name: conversation_required_attributes
-  display_name: Required Conversation Attributes
-  enabled: false
-  premium: true
+# IMPORTANTE: limite de 63 features — feature_flags é bigint e o FlagShihTzu usa 1 bit por
+# feature; a 64ª usaria o bit 2^63 e estoura (ActiveModel::RangeError ao salvar). O ÚLTIMO slot
+# (64º) é INUTILIZÁVEL. advanced_assignment e ai_core ficam nos slots <=63; o slot morto fica com
+# conversation_required_attributes (premium, não usada neste fork). NÃO reordene ai_core nem nada
+# acima: as contas já têm flags gravadas por POSIÇÃO e mover corromperia (a conta 2 tem ai_core).
 - name: advanced_assignment
   display_name: Advanced Assignment
   enabled: false
   premium: true
+- name: ai_core
+  display_name: AI Core (Agentes IA)
+  enabled: false
+- name: conversation_required_attributes
+  display_name: Required Conversation Attributes
+  enabled: false
+  premium: true
+# Plan-managed features (billing Fase 2). Ligadas/desligadas pela ponte Plano->conta
+# (Plan#sync_features_to!), não manualmente. Canal/reports/sla/audit reusam flags já existentes
+# acima via Plan::PLAN_FEATURE_TO_ACCOUNT_FLAG; estas 10 são novas (enforcement futuro por módulo).
+- name: ai_copilot
+  display_name: AI Copilot
+  enabled: false
+- name: conversion_api
+  display_name: Conversion API (Meta)
+  enabled: false
+- name: webhook_api
+  display_name: Webhook API
+  enabled: false
+- name: custom_llm_api_key
+  display_name: Custom LLM API Key
+  enabled: false
+- name: crm_kanban
+  display_name: CRM Kanban
+  enabled: false
+- name: crm_automations
+  display_name: CRM Automations
+  enabled: false
+- name: erp_integration
+  display_name: ERP Integration
+  enabled: false
+- name: isp_ready_flows
+  display_name: ISP Ready-made Flows
+  enabled: false
+- name: message_scheduling
+  display_name: Message Scheduling
+  enabled: false
+- name: account_manager
+  display_name: Account Manager
+  enabled: false

@@ -6,6 +6,7 @@
     "SWITCH_VIEW_LAYOUT": "Switch the layout",
     "DASHBOARD_APP_TAB_MESSAGES": "Messages",
     "UNVERIFIED_SESSION": "The identity of this user is not verified",
+    "REOPENED_TAG": "Reopened",
     "NO_MESSAGE_1": "Uh oh! Looks like there are no messages from customers in your inbox.",
     "NO_MESSAGE_2": " to send a message to your page!",
     "NO_INBOX_1": "Hola! Looks like you haven't added any inboxes yet.",
@@ -196,7 +197,8 @@
       "MESSAGE_SIGNATURE_NOT_CONFIGURED": "Message signature is not configured, please configure it in profile settings.",
       "COPILOT_MSG_INPUT": "Give copilot additional prompts, or ask anything else... Press enter to send follow-up",
       "CLICK_HERE": "Click here to update",
-      "WHATSAPP_TEMPLATES": "Whatsapp Templates"
+      "WHATSAPP_TEMPLATES": "Whatsapp Templates",
+      "WHATSAPP_TEMPLATES_EMPTY": "No templates available. Set up message templates in Meta Business Manager."
     },
     "REPLYBOX": {
       "REPLY": "Reply",
@@ -365,11 +367,31 @@
       "CONVERSATION_LABELS": "Conversation Labels",
       "CONVERSATION_INFO": "Conversation Information",
       "CONTACT_NOTES": "Contact Notes",
+      "CONTACT_AI_MEMORY": "AI Memory",
+      "CONVERSATION_HANDOFF_SUMMARY": "AI Handoff Summary",
       "CONTACT_ATTRIBUTES": "Contact Attributes",
       "PREVIOUS_CONVERSATION": "Previous Conversations",
       "MACROS": "Macros",
       "LINEAR_ISSUES": "Linked Linear Issues",
       "SHOPIFY_ORDERS": "Shopify Orders"
+    },
+    "AI_MEMORY": {
+      "EMPTY": "No memory yet — it's built automatically when conversations with this contact are resolved.",
+      "META": "Updated {date} · {count} conversations",
+      "LABEL_CUSTOMER": "Memória do cliente",
+      "LABEL_COLLECTED": "Coletado nesta conversa"
+    },
+    "HANDOFF_SUMMARY": {
+      "EMPTY": "No AI handoff yet — a summary appears here when the AI transfers this conversation to a human.",
+      "META": "Generated {date}",
+      "REASONS": {
+        "LOOP": "AI got stuck in a loop",
+        "CREDIT_EXHAUSTED": "AI credits ran out",
+        "PROVIDER_UNAVAILABLE": "AI provider unavailable",
+        "MODEL_REQUESTED": "AI chose to transfer",
+        "KEYWORD": "Customer requested a human",
+        "GENERIC": "Transferred to a human agent"
+      }
     },
     "SHOPIFY": {
       "ORDER_ID": "Order #{id}",

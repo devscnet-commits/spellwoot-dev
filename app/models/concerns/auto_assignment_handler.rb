@@ -39,6 +39,9 @@ module AutoAssignmentHandler
     return false unless inbox.enable_auto_assignment?
     # Skip auto-assignment outside business hours when working_hours_enabled
     return false if inbox.out_of_office?
+    # A IA atende primeiro: enquanto a conversa é da IA (caixa com IA live, sem handoff ainda),
+    # NÃO atribui humano na entrada. Após o handoff (ai_handoff), volta a ser elegível.
+    return false if ai_pending_handoff?
 
     # Assignment V2: Resolved/snoozed conversations still have an assignee, so bypass the
     # assignee-blank check below. The AssignmentJob needs to run to rebalance assignments.
