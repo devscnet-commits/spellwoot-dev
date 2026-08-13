@@ -260,6 +260,51 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(conversation.reload.additional_attributes['ai_step_index']).to eq(4) # aparelhos_conectados
         expect(response.parsed_body['status']).to eq('executed')
       end
+
+      # Item 5 — decisão CONFIRMADA (não é mais assunção pendente): campo opcional (slot_required:
+      # false) NUNCA trava o avanço, esteja o dado presente ou não — cliente respondeu (salva, fora do
+      # escopo de advance_step) ou não respondeu / disse "prefiro não informar" (tanto faz, sem sinal
+      # novo do modelo pra distinguir os dois casos), a etapa segue de qualquer jeito.
+      context 'campo opcional (slot_required: false) — item 5, decisão confirmada' do
+        before do
+          department.playbook.update!(steps: [
+            { 'name' => 'telefone_secundario', 'collect' => { 'attribute' => 'telefone_secundario' },
+              'slot_required' => false },
+            { 'name' => 'fim' }
+          ])
+          conversation.update!(additional_attributes: conversation.additional_attributes.to_h.merge('ai_step_index' => 0))
+        end
+
+        it 'cliente NÃO respondeu (dado ausente): avança normalmente mesmo assim' do
+          with_facts({}) # telefone_secundario ausente — nunca perguntado ou ignorado, tanto faz
+
+          call_tool('avancar_etapa')
+
+          expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1)
+          expect(response.parsed_body['status']).to eq('executed')
+        end
+
+        it 'cliente disse explicitamente "prefiro não informar" (mesmo efeito: dado ausente): avança normalmente' do
+          # Não existe sinal distinto de "recusa explícita" vs "nunca perguntado" no contrato hoje — os
+          # dois chegam aqui do MESMO jeito (chave ausente de ai_collected_facts). O teste documenta que
+          # isso é intencional: slot opcional não precisa distinguir os dois casos pra decidir avançar.
+          with_facts({})
+
+          call_tool('avancar_etapa')
+
+          expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1)
+          expect(response.parsed_body['status']).to eq('executed')
+        end
+
+        it 'cliente respondeu (dado presente): avança normalmente também — não é bloqueio condicional' do
+          with_facts('telefone_secundario' => '(49) 99999-0000')
+
+          call_tool('avancar_etapa')
+
+          expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1)
+          expect(response.parsed_body['status']).to eq('executed')
+        end
+      end
     end
 
     # Gap achado em auditoria (13/08): on_complete (desfecho declarado NA ETAPA — "Encerrar o

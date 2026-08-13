@@ -237,8 +237,12 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # collect.attribute aceita string (único formato real usado pela tela hoje) OU array — Array()
   # normaliza os dois sem inventar campo novo (suporta múltiplos campos obrigatórios por etapa se o
   # playbook algum dia vier a usar isso; hoje sempre 1 elemento). slot_required: false (NUNCA
-  # collect.required — ver AiStepForm/aiStepPayload) = campo opcional, nunca bloqueia avanço (default
-  # assumido, sem sinal novo do modelo pra "recusa" — ver item 5 da instrução).
+  # collect.required — ver AiStepForm/aiStepPayload) = campo opcional, NUNCA bloqueia avanço — decisão
+  # CONFIRMADA (não é mais assunção pendente): cliente respondeu -> salva normalmente (fora do escopo
+  # deste método, quem grava é registrar_*/salvar_memoria_ia); cliente não respondeu OU disse
+  # explicitamente "prefiro não informar" -> tanto faz pro avanço, a etapa segue de qualquer jeito
+  # porque não é obrigatória. Sem sinal novo de "recusa" vindo do modelo — a ausência do dado em
+  # ai_collected_facts já basta pra decidir (não bloqueia), não precisa distinguir os dois casos.
   def missing_required_attributes(step, facts)
     return [] unless step.is_a?(Hash)
     return [] if step['slot_required'] == false || step[:slot_required] == false
