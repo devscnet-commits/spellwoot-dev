@@ -136,6 +136,132 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    # REPRODUÇÃO — bug ticket 557 (achado 13/08, patch escrito depois de confirmar contra o código
+    # atual): #advance_step avança por ÍNDICE puro (current_index + 1), sem checar se a etapa que está
+    # sendo deixada tem o dado obrigatório (step['collect']['attribute']) em ai_collected_facts.
+    # Ai::StateManager#track_step — que faria essa validação (toda a máquina de recusa de slot, Gap
+    # 1-4) — só é chamado pelo Ai::Gateway#run LEGADO, deletado na eliminação de hoje; o caminho
+    # Python nunca passou por ali.
+    #
+    # Invariante implementado (#missing_required_attributes + varredura em #advance_step):
+    #   current_step = steps[index]
+    #   se current_step exige collect/required E o dado não está em ai_collected_facts
+    #     -> NÃO altera ai_step_index (se for a etapa de PARTIDA), status 'blocked_missing_data'
+    #   se o requisito da etapa atual está satisfeito -> avança, e CONTINUA avançando através de
+    #     quantas etapas seguintes JÁ estiverem satisfeitas na mesma chamada (varredura — cliente que
+    #     adianta várias respostas não fica preso etapa por etapa), parando na primeira insatisfeita
+    #   se não há requisito aplicável na etapa atual -> comportamento atual, sem mudança (já coberto
+    #     pelos 8 testes acima, que continuam passando)
+    context 'validação de dado obrigatório antes de avançar (bug ticket 557)' do
+      before do
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'nome_cliente', 'collect' => { 'attribute' => 'nome_cliente' } },
+          { 'name' => 'cidade', 'collect' => { 'attribute' => 'cidade' } },
+          { 'name' => 'escolha_caminho', 'collect' => { 'attribute' => 'escolha_caminho' } },
+          { 'name' => 'tamanho_imovel', 'collect' => { 'attribute' => 'tamanho_imovel' } },
+          { 'name' => 'aparelhos_conectados', 'collect' => { 'attribute' => 'aparelhos_conectados' } },
+          { 'name' => 'mostrar_planos' }
+        ])
+      end
+
+      def with_facts(facts)
+        conversation.update!(additional_attributes: (conversation.additional_attributes || {})
+          .merge('ai_collected_facts' => facts))
+      end
+
+      # Cenário A — reprodução exata do ticket 557: nome_cliente e cidade já foram adiantados/
+      # capturados (front-loaded), escolha_caminho/tamanho_imovel/aparelhos_conectados NUNCA foram
+      # perguntados. UMA chamada de avancar_etapa varre nome_cliente E cidade (ambos já satisfeitos) e
+      # trava exatamente em escolha_caminho — nunca chega em mostrar_planos, nem insistindo depois.
+      it 'A: uma chamada varre nome_cliente+cidade (dado presente) e trava em escolha_caminho (dado ausente), mesmo insistindo' do
+        with_facts('nome_cliente' => 'Jaqueline', 'cidade' => 'Maravilha')
+        conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 0))
+
+        call_tool('avancar_etapa') # varre nome_cliente(0) + cidade(1), trava em escolha_caminho(2)
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(2)
+        expect(response.parsed_body['status']).to eq('executed') # houve progresso real (0 -> 2)
+
+        call_tool('avancar_etapa') # escolha_caminho SEM dado, e é a etapa de PARTIDA agora -> bloqueia
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(2)
+        expect(response.parsed_body['status']).to eq('blocked_missing_data')
+
+        call_tool('avancar_etapa') # insistir de novo não deveria empurrar pra frente
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(2)
+        expect(response.parsed_body['status']).to eq('blocked_missing_data')
+      end
+
+      # Cenário B — separa "o modelo PEDIU" de "o sistema APLICOU". B1 (orchestrator.py, decisão do
+      # modelo é sempre repassada) fica no pytest do ai-orchestrator. Aqui (B2, lado Rails): o webhook
+      # recebe o pedido normalmente (sucesso HTTP, não é rejeitado/autenticação/erro de transporte) —
+      # é o BACKEND que decide não aplicar, não uma falha da chamada em si.
+      it 'B2: o pedido do modelo chega e é processado (sucesso HTTP) mesmo quando o backend não aplica o avanço' do
+        with_facts({}) # nome_cliente ausente
+        conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 0))
+
+        call_tool('avancar_etapa')
+
+        expect(response).to have_http_status(:success) # pedido RECEBIDO e processado, não um erro
+        expect(response.parsed_body['status']).to eq('blocked_missing_data') # mas NÃO aplicado
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(0)
+      end
+
+      # Cenário C — dado ERRADO na etapa errada: existe dado em ai_collected_facts, mas não é o dado
+      # que a etapa ATUAL pede. Garante que o patch valida o campo CERTO (step['collect']['attribute']
+      # da etapa atual), não "qualquer coisa presente em ai_collected_facts". Quando nome_cliente
+      # finalmente aparece, a varredura TAMBÉM pega cidade (já presente desde o início) na mesma
+      # chamada — não para em cidade esperando outra chamada.
+      it 'C: cidade presente não satisfaz a etapa nome_cliente — só nome_cliente aparecendo libera o avanço (e varre cidade também)' do
+        with_facts('cidade' => 'Maravilha') # sem nome_cliente
+        conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 0))
+
+        call_tool('avancar_etapa')
+
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(0) # não avançou
+        expect(response.parsed_body['status']).to eq('blocked_missing_data')
+
+        with_facts('cidade' => 'Maravilha', 'nome_cliente' => 'Jaqueline') # agora sim, o dado CERTO chegou
+        call_tool('avancar_etapa')
+
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(2) # varreu cidade também
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+
+      # Múltiplos campos obrigatórios na MESMA etapa: mesmo que o playbook de hoje não use isso (cada
+      # etapa só tem 1 collect.attribute na tela), o código tem que exigir TODOS, não só o primeiro —
+      # Array() em collect.attribute aceita string OU array sem precisar de um campo novo no schema.
+      it 'etapa com múltiplos campos obrigatórios (collect.attribute como array): só A presente NÃO libera — precisa de A e B' do
+        department.playbook.update!(steps: [
+          { 'name' => 'dados_duplos', 'collect' => { 'attribute' => %w[nome_cliente cidade] } },
+          { 'name' => 'fim' }
+        ])
+        with_facts('nome_cliente' => 'Jaqueline') # falta cidade
+        conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 0))
+
+        call_tool('avancar_etapa')
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(0)
+        expect(response.parsed_body['status']).to eq('blocked_missing_data')
+
+        with_facts('nome_cliente' => 'Jaqueline', 'cidade' => 'Maravilha') # agora os DOIS
+        call_tool('avancar_etapa')
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1)
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+
+      # Varredura através de MAIS de 2 etapas numa chamada só (cliente adianta 3 respostas de uma vez):
+      # nome_cliente sem dado seria bloqueado, então parte de index 1 (cidade) já satisfeito, com
+      # escolha_caminho/tamanho_imovel TAMBÉM já adiantados — uma chamada varre os 3 e trava em
+      # aparelhos_conectados (o único ainda sem dado).
+      it 'varre 3 etapas seguintes já satisfeitas numa chamada só (cliente adiantou tudo de uma vez)' do
+        with_facts('cidade' => 'Maravilha', 'escolha_caminho' => 'compra', 'tamanho_imovel' => '120m2')
+        conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 1))
+
+        call_tool('avancar_etapa')
+
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(4) # aparelhos_conectados
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+    end
+
     # Gap achado em auditoria (13/08): on_complete (desfecho declarado NA ETAPA — "Encerrar o
     # atendimento") nunca era lido no caminho Python; avancar_etapa só incrementava o índice, o
     # desfecho configurado nunca disparava. Espelha Ai::Gateway#force_conclusion (motor legado).

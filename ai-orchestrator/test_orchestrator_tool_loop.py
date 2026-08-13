@@ -125,3 +125,33 @@ class TestNormalizeToolResult:
 
         sent_output = json.loads(mock_client.responses.create.call_args_list[1].kwargs["input"][1]["output"])
         assert sent_output == {"error": True, "message": "404 token not found"}
+
+
+# Cenário B1 (bug ticket 557, achado 13/08) — separa "o modelo PEDIU o avanço" de "o sistema
+# APLICOU o avanço". B2 (o backend Rails recusa aplicar quando falta dado) fica em
+# spec/requests/api/internal/ai_execute_tool_controller_spec.rb. Aqui, do lado Python: confirma que
+# _dispatch_structured_reply SEMPRE repassa o pedido do modelo pro webhook Rails quando
+# avancar_etapa:true, sem NENHUMA gate própria — orchestrator.py não tem (e não deveria ter)
+# visibilidade sobre ai_collected_facts/step requirements; quem decide aplicar ou não é o Rails.
+class TestAvancarEtapaSempreRepassado:
+    def test_avancar_etapa_true_sempre_dispara_o_control_tool_independente_do_que_o_webhook_devolve(self):
+        payload = {
+            "mensagem_para_cliente": "Perfeito!",
+            "dados_coletados": [], "avancar_etapa": True, "transferir_humano": False,
+            "encerrar_atendimento": False, "handoff_summary": "",
+        }
+
+        with patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            # mesmo que o Rails devolva "recusado" (o que o patch de verdade vai fazer), Python não
+            # inspeciona esse retorno pra decidir mais nada — só dispara e segue.
+            mock_execute_tool.return_value = {"result": {}, "status": "blocked_missing_data", "error": None}
+
+            reply_text = orchestrator._dispatch_structured_reply(
+                payload, ticket_id=1, ai_department_id=1, mode="live",
+            )
+
+        mock_execute_tool.assert_any_call(
+            ticket_id=1, ai_department_id=1, tool_name=orchestrator.ADVANCE_STEP_TOOL,
+            arguments={}, mode="live",
+        )
+        assert reply_text == "Perfeito!"
