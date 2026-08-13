@@ -37,7 +37,7 @@ class Internal::AccountAnalysis::ThreatAnalyserService
 
     email.split('@').last
   rescue StandardError => e
-    Rails.logger.error("Error extracting domain from email #{PiiMasking.mask_email(email)}: #{e.message}")
+    Rails.logger.error("Error extracting domain from email #{email}: #{e.message}")
     nil
   end
 end

@@ -6,7 +6,6 @@
     "SWITCH_VIEW_LAYOUT": "Alternar o layout",
     "DASHBOARD_APP_TAB_MESSAGES": "Mensagens",
     "UNVERIFIED_SESSION": "A identidade deste usuário não foi verificada",
-    "REOPENED_TAG": "Reaberta",
     "NO_MESSAGE_1": "Oh oh! Parece que não há mensagens de clientes na sua caixa de entrada.",
     "NO_MESSAGE_2": " para enviar uma mensagem para sua página!",
     "NO_INBOX_1": "Hola! Parece que você não adicionou nenhuma caixa de entrada ainda.",
@@ -197,8 +196,7 @@
       "MESSAGE_SIGNATURE_NOT_CONFIGURED": "A assinatura da mensagem não está configurada. Por favor, configure-a nas configurações do perfil.",
       "COPILOT_MSG_INPUT": "Forneça instruções adicionais ao Copiloto ou pergunte algo mais... Pressione Enter para enviar",
       "CLICK_HERE": "Clique aqui para atualizar",
-      "WHATSAPP_TEMPLATES": "Modelos do Whatsapp",
-      "WHATSAPP_TEMPLATES_EMPTY": "Nenhum template disponível. Configure templates no Meta Business Manager."
+      "WHATSAPP_TEMPLATES": "Modelos do Whatsapp"
     },
     "REPLYBOX": {
       "REPLY": "Responder",
@@ -367,27 +365,11 @@
       "CONVERSATION_LABELS": "Etiquetas da conversa",
       "CONVERSATION_INFO": "Informação da conversa",
       "CONTACT_NOTES": "Notas do contato",
-      "CONTACT_AI_MEMORY": "Memória da IA",
-      "CONVERSATION_HANDOFF_SUMMARY": "Resumo da transferência",
       "CONTACT_ATTRIBUTES": "Atributos do contato",
       "PREVIOUS_CONVERSATION": "Conversas anteriores",
       "MACROS": "Macros",
       "LINEAR_ISSUES": "Problemas do Linear vinculados",
       "SHOPIFY_ORDERS": "Pedidos do Shopify"
-    },
-    "AI_MEMORY": {
-      "EMPTY": "Ainda não há memória — ela é criada automaticamente quando conversas com este contato são resolvidas.",
-      "META": "Atualizado em {date} · {count} conversas"
-    },
-    "HANDOFF_SUMMARY": {
-      "EMPTY": "Nenhuma transferência automática ainda — um resumo aparece aqui quando a IA transfere esta conversa para um humano.",
-      "META": "Gerado em {date}",
-      "REASONS": {
-        "LOOP": "IA entrou em loop",
-        "CREDIT_EXHAUSTED": "Créditos de IA esgotados",
-        "MODEL_REQUESTED": "IA decidiu transferir",
-        "KEYWORD": "Cliente pediu um humano"
-      }
     },
     "SHOPIFY": {
       "ORDER_ID": "Pedido #{id}",

@@ -1,17 +1,13 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAccount } from 'dashboard/composables/useAccount';
-import { useMapGetter } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
 import integrationSettingsAPI from '../../../../api/integrationSettings';
 import providerInstancesAPI from '../../../../api/providerInstances';
 
 const { t } = useI18n();
 const { accountId } = useAccount();
-const isFeatureEnabledonAccount = useMapGetter(
-  'accounts/isFeatureEnabledonAccount'
-);
 
 const PROVIDERS = [
   {
@@ -93,62 +89,7 @@ const PROVIDERS = [
       { key: 'refreshToken', label: 'Refresh Token', sensitive: true, placeholder: '', help: null },
     ],
   },
-  // BYOK (billing Fase 3): chave própria de LLM. Só aparecem para contas com custom_llm_api_key.
-  {
-    key: 'anthropic',
-    name: 'Anthropic (Claude)',
-    description: 'Use sua própria chave da Anthropic para os modelos Claude.',
-    icon: 'i-lucide-sparkles',
-    byok: true,
-    testable: true,
-    fields: [
-      { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: 'sk-ant-...', help: 'https://console.anthropic.com/settings/keys' },
-    ],
-  },
-  {
-    key: 'gemini',
-    name: 'Google Gemini',
-    description: 'Use sua própria chave do Google AI Studio para os modelos Gemini.',
-    icon: 'i-lucide-gem',
-    byok: true,
-    testable: true,
-    fields: [
-      { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: 'AIza...', help: 'https://aistudio.google.com/app/apikey' },
-    ],
-  },
-  {
-    key: 'groq',
-    name: 'Groq',
-    description: 'Use sua própria chave da Groq para inferência de baixa latência.',
-    icon: 'i-lucide-zap',
-    byok: true,
-    testable: true,
-    fields: [
-      { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: 'gsk_...', help: 'https://console.groq.com/keys' },
-    ],
-  },
-  {
-    key: 'openrouter',
-    name: 'OpenRouter',
-    description: 'Use sua própria chave do OpenRouter para acessar múltiplos modelos.',
-    icon: 'i-lucide-route',
-    byok: true,
-    testable: true,
-    fields: [
-      { key: 'apiKey', label: 'API Key', sensitive: true, placeholder: 'sk-or-...', help: 'https://openrouter.ai/keys' },
-    ],
-  },
 ];
-
-// Os cards BYOK (chave própria de LLM) só aparecem para contas com a feature custom_llm_api_key;
-// os demais providers são sempre exibidos (comportamento anterior inalterado).
-const visibleProviders = computed(() =>
-  PROVIDERS.filter(
-    p =>
-      !p.byok ||
-      isFeatureEnabledonAccount.value(accountId.value, 'custom_llm_api_key')
-  )
-);
 
 const SOURCE_LABELS = {
   account: { label: 'Esta conta', color: 'bg-n-teal-3 text-n-teal-11' },
@@ -188,7 +129,7 @@ const state = reactive(
 // Load every editable provider's status on entry so the Configurado badges show
 // without having to expand each card.
 onMounted(() => {
-  visibleProviders.value.forEach(provider => {
+  PROVIDERS.forEach(provider => {
     if (!isEnvManaged(provider)) loadProvider(provider.key);
   });
 });
@@ -333,7 +274,7 @@ const providerBadge = providerKey => {
     </div>
 
     <div
-      v-for="provider in visibleProviders"
+      v-for="provider in PROVIDERS"
       :key="provider.key"
       class="rounded-xl border border-n-weak bg-n-solid-2 overflow-hidden"
     >

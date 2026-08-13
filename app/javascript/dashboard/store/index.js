@@ -42,7 +42,6 @@ import notifications from './modules/notifications';
 import portals from './modules/helpCenterPortals';
 import reports from './modules/reports';
 import sla from './modules/sla';
-import plan from './modules/plan';
 import slaReports from './modules/SLAReports';
 import summaryReports from './modules/summaryReports';
 import teamMembers from './modules/teamMembers';
@@ -107,7 +106,6 @@ export default createStore({
     portals,
     reports,
     sla,
-    plan,
     slaReports,
     summaryReports,
     teamMembers,

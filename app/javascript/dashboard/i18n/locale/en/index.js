@@ -1,8 +1,6 @@
 import advancedFilters from './advancedFilters.json';
 import agentBots from './agentBots.json';
 import agentMgmt from './agentMgmt.json';
-import aiAgents from './aiAgents.json';
-import aiShadowRuns from './aiShadowRuns.json';
 import attributesMgmt from './attributesMgmt.json';
 import auditLogs from './auditLogs.json';
 import automation from './automation.json';
@@ -29,7 +27,6 @@ import integrations from './integrations.json';
 import labelsMgmt from './labelsMgmt.json';
 import login from './login.json';
 import macros from './macros.json';
-import plan from './plan.json';
 import report from './report.json';
 import resetPassword from './resetPassword.json';
 import search from './search.json';
@@ -38,7 +35,6 @@ import settings from './settings.json';
 import signup from './signup.json';
 import sla from './sla.json';
 import snooze from './snooze.json';
-import stickersMgmt from './stickersMgmt.json';
 import teamsSettings from './teamsSettings.json';
 import operationalFlowsSettings from './operationalFlowsSettings.json';
 import whatsappTemplates from './whatsappTemplates.json';
@@ -50,8 +46,6 @@ export default {
   ...advancedFilters,
   ...agentBots,
   ...agentMgmt,
-  ...aiAgents,
-  ...aiShadowRuns,
   ...attributesMgmt,
   ...auditLogs,
   ...automation,
@@ -78,7 +72,6 @@ export default {
   ...labelsMgmt,
   ...login,
   ...macros,
-  ...plan,
   ...report,
   ...resetPassword,
   ...search,
@@ -87,7 +80,6 @@ export default {
   ...signup,
   ...sla,
   ...snooze,
-  ...stickersMgmt,
   ...teamsSettings,
   ...operationalFlowsSettings,
   ...whatsappTemplates,

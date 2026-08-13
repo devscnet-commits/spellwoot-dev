@@ -25,32 +25,10 @@ RSpec.describe Attachment do
   end
 
   describe 'download_url' do
-    let(:attachment) do
-      att = message.attachments.new(account_id: message.account_id, file_type: :image)
-      att.file.attach(io: Rails.root.join('spec/assets/avatar.png').open, filename: 'avatar.png', content_type: 'image/png')
-      att
-    end
-
     it 'returns valid download url' do
+      attachment = message.attachments.new(account_id: message.account_id, file_type: :image)
+      attachment.file.attach(io: Rails.root.join('spec/assets/avatar.png').open, filename: 'avatar.png', content_type: 'image/png')
       expect(attachment.download_url).not_to be_nil
-    end
-
-    # WhatsApp 131053: o presigned de 300s (default) expira antes da Meta re-enfileirar o download sob carga.
-    # download_url passa expires_in = SIGNED_URL_TTL (1h). Prova de mutação: se alguém trocar o TTL escopado
-    # por config.active_storage.urls_expire_in GLOBAL, download_url volta a chamar blob.url SEM o argumento e
-    # este teste quebra (o expires_in explícito some).
-    it 'gera o link assinado com expires_in = SIGNED_URL_TTL (1h), não o default de 300s' do
-      expect(described_class::SIGNED_URL_TTL).to eq(1.hour)
-      expect_any_instance_of(ActiveStorage::Blob) # rubocop:disable RSpec/AnyInstance
-        .to receive(:url).with(expires_in: described_class::SIGNED_URL_TTL).and_call_original
-      attachment.download_url
-    end
-
-    # ESCOPO (prova de mutação): o TTL de 1h vem SÓ da chamada escopada no download_url — NÃO há expiry
-    # GLOBAL do ActiveStorage. Se alguém trocar o escopado por config.active_storage.urls_expire_in = 1.hour
-    # (afetando avatares/painel/exports), este valor deixa de ser nil e o teste quebra. É o guard do escopo.
-    it 'ESCOPO: não há urls_expire_in GLOBAL — o 1h é só do download_url' do
-      expect(ActiveStorage.urls_expire_in).to be_nil
     end
   end
 

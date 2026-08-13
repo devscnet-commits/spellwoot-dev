@@ -12,11 +12,10 @@ import VideoCallButton from '../VideoCallButton.vue';
 import { INBOX_TYPES } from 'dashboard/helper/inbox';
 import { mapGetters } from 'vuex';
 import NextButton from 'dashboard/components-next/button/Button.vue';
-import StickerPicker from './StickerPicker.vue';
 
 export default {
   name: 'ReplyBottomPanel',
-  components: { NextButton, FileUpload, VideoCallButton, StickerPicker },
+  components: { NextButton, FileUpload, VideoCallButton },
   mixins: [inboxMixin],
   props: {
     isNote: {
@@ -87,10 +86,6 @@ export default {
       default: true,
     },
     enableWhatsAppTemplates: {
-      type: Boolean,
-      default: false,
-    },
-    whatsAppTemplatesEmpty: {
       type: Boolean,
       default: false,
     },
@@ -174,7 +169,6 @@ export default {
   data() {
     return {
       ALLOWED_FILE_TYPES,
-      showStickerPicker: false,
     };
   },
   computed: {
@@ -182,11 +176,7 @@ export default {
       accountId: 'getCurrentAccountId',
       isFeatureEnabledonAccount: 'accounts/isFeatureEnabledonAccount',
       uiFlags: 'integrations/getUIFlags',
-      currentChat: 'getSelectedChat',
     }),
-    showStickerButton() {
-      return !this.isEditorDisabled && !this.isNote && !!this.currentChat?.id;
-    },
     wrapClass() {
       return {
         'is-note-mode': this.isNote,
@@ -289,12 +279,6 @@ export default {
     toggleInsertArticle() {
       this.$emit('toggleInsertArticle');
     },
-    toggleStickerPicker() {
-      this.showStickerPicker = !this.showStickerPicker;
-    },
-    closeStickerPicker() {
-      this.showStickerPicker = false;
-    },
   },
 };
 </script>
@@ -336,21 +320,6 @@ export default {
           sm
         />
       </FileUpload>
-      <div v-if="showStickerButton" class="relative inline-flex">
-        <NextButton
-          v-tooltip.top-end="$t('STICKERS_MGMT.PICKER.TITLE')"
-          icon="i-ph-sticker"
-          slate
-          faded
-          sm
-          @click="toggleStickerPicker"
-        />
-        <StickerPicker
-          v-if="showStickerPicker"
-          :conversation-id="currentChat.id"
-          @close="closeStickerPicker"
-        />
-      </div>
       <NextButton
         v-if="showAudioRecorderButton"
         v-tooltip.top-end="$t('CONVERSATION.REPLYBOX.TIP_AUDIORECORDER_ICON')"
@@ -390,11 +359,7 @@ export default {
       />
       <NextButton
         v-if="enableWhatsAppTemplates"
-        v-tooltip.top-end="
-          whatsAppTemplatesEmpty
-            ? $t('CONVERSATION.FOOTER.WHATSAPP_TEMPLATES_EMPTY')
-            : $t('CONVERSATION.FOOTER.WHATSAPP_TEMPLATES')
-        "
+        v-tooltip.top-end="$t('CONVERSATION.FOOTER.WHATSAPP_TEMPLATES')"
         icon="i-ph-whatsapp-logo"
         slate
         faded
