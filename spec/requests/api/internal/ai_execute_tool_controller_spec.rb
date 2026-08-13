@@ -396,6 +396,31 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(response.parsed_body['status']).to eq('executed')
         expect(response.parsed_body['result']['conteudo']).to include('Plano X: R$ 50/mês')
       end
+
+      # Antes: uma falha aqui subia como 500 cru pro Python (sem rescue nenhum em #search_knowledge),
+      # travando o turno inteiro em vez de deixar a IA seguir a conversa. Equivalente ao knowledge_timeout
+      # do motor legado (Ai::Run::ERROR_TYPES ainda lista a categoria).
+      it 'timeout na busca: NÃO sobe 500 — devolve status failed com a categoria "knowledge_timeout"' do
+        allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_raise(Net::ReadTimeout, 'execution expired')
+
+        call_tool('consultar_conhecimento', arguments: { pergunta: 'quanto custa o plano fibra?' })
+
+        expect(response).to have_http_status(:success)
+        json = response.parsed_body
+        expect(json['status']).to eq('failed')
+        expect(json['error']).to eq('knowledge_timeout')
+      end
+
+      it 'erro genérico (não-timeout) na busca: status failed com a categoria "knowledge_search_failed"' do
+        allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_raise(StandardError, 'embedding provider 500')
+
+        call_tool('consultar_conhecimento', arguments: { pergunta: 'quanto custa o plano fibra?' })
+
+        expect(response).to have_http_status(:success)
+        json = response.parsed_body
+        expect(json['status']).to eq('failed')
+        expect(json['error']).to eq('knowledge_search_failed')
+      end
     end
 
     context 'validação de segurança do webhook' do

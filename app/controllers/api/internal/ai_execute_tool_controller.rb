@@ -140,6 +140,29 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: department.account_id, department_id: department.id)
     conteudo = chunks.present? ? chunks.join("\n---\n") : 'Nada encontrado na base de conhecimento para essa pergunta.'
     { result: { 'encontrado' => chunks.present?, 'conteudo' => conteudo }, status: 'executed', error: nil }
+  rescue StandardError => e
+    category = knowledge_error_category(e)
+    Rails.logger.error "[Api::Internal::AiExecuteToolController#search_knowledge] #{category} #{e.class}: #{e.message}"
+    # Categorizado (equivalente ao knowledge_timeout do motor legado — Ai::Run::ERROR_TYPES ainda lista
+    # a categoria, só não tinha mais nenhum emissor vivo): sem isso, um timeout/erro na busca virava 500
+    # cru pro Python, sem sinal nenhum de PORQUE a ferramenta falhou. Devolve como qualquer outra tool
+    # (result/status/error) para a IA poder seguir a conversa em vez de travar o turno inteiro.
+    { result: {}, status: 'failed', error: category }
+  end
+
+  # Nomes de classe (comparados por NOME, não pela constante — Faraday/PG podem não estar carregados
+  # neste processo) que denotam timeout/queda de conexão. Mesmo critério de Ai::Gateway#timeout_error?,
+  # duplicado aqui de propósito: este controller não referencia estado/instância do Gateway (mesmo
+  # padrão de #execute_step_conclusion, que espelha Ai::Gateway#force_conclusion em vez de reusar).
+  KNOWLEDGE_TIMEOUT_ERROR_NAMES = %w[
+    Timeout::Error Net::OpenTimeout Net::ReadTimeout Errno::ETIMEDOUT
+    Faraday::TimeoutError PG::QueryCanceled ActiveRecord::StatementTimeout ActiveRecord::QueryCanceled
+  ].freeze
+
+  def knowledge_error_category(exception)
+    ancestors = exception.class.ancestors.filter_map(&:name)
+    timed_out = (ancestors & KNOWLEDGE_TIMEOUT_ERROR_NAMES).any? || exception.message.to_s.downcase.include?('timeout')
+    timed_out ? 'knowledge_timeout' : 'knowledge_search_failed'
   end
 
   # "continuar_conversa" (Ai::PythonOrchestratorClient::CONTINUE_TOOL): pure no-op, NEVER touches the
