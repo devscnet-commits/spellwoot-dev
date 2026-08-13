@@ -1,12 +1,9 @@
-# The AI Gateway — F1 happy-path, SHADOW only.
-# Pipeline: message.received -> resolve_agent (caller) -> resolve_department -> assemble_context
-#           -> retrieve_knowledge -> decide -> record ai_runs + ai_events.
+# The AI Gateway. Pipeline: message.received -> resolve_department -> gates (billing/breaker/
+# trivial) -> Ai::PythonOrchestratorClient (o único motor — vê knowledge/tools/decisão por conta
+# própria) -> record ai_runs + ai_events -> reply.
 # In shadow it NEVER replies, NEVER executes a tool, NEVER writes operational changes — it only
 # records intention, runs and events.
 class Ai::Gateway
-  # Valores VÁLIDOS do campo `decision` no contrato do LLM (ver Ai::PromptCompiler#response_contract).
-  # Qualquer outro valor é "fora do contrato" e cai na rede de segurança do dispatch (decision.unknown_kind).
-  KNOWN_DECISION_KINDS = %w[reply invoke_tool handoff close noop].freeze
   # Fase 2: janela do e-mail ao admin quando um erro de provedor vira handoff. 1h por (conta, provedor) —
   # maior que os 15 min do handoff-sem-agente de propósito: cota estourada é condição sustentada, o admin
   # quer UM aviso e não dezenas. Ver #notify_admin_provider_error.
@@ -35,12 +32,6 @@ class Ai::Gateway
 
     base_content = @content_override.presence || @message.content
 
-    # Department resolvido ANTES do worker de mídia (antes vinha depois) — python_orchestrator_on?
-    # precisa do department pra decidir se pula o OCR legado (ver bloco de mídia abaixo). Efeito
-    # colateral aceito: a classificação por IA (Ai::DepartmentResolver#classify, só quando há >1
-    # department sem mapeamento de caixa) passa a ver o texto CRU da mensagem, sem a legenda do OCR —
-    # só importa pro caso raro de uma imagem SEM texto que dependia da legenda pra rotear certo;
-    # single/inbox_mapping/override (o caminho comum) nem chegam a olhar message_content.
     @stage = :department
     department, resolution = Ai::DepartmentResolver.resolve(
       agent: @agent, inbox_id: @message.inbox_id, message_content: base_content, conversation: @conversation
@@ -60,12 +51,11 @@ class Ai::Gateway
 
     # Invisible worker: turn media (audio/image/PDF escaneado) into text the supervisor can use. Passa
     # o profile do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']).
-    # skip_vision pula a imagem E o fallback de PDF escaneado quando o department está no path Python —
-    # a OpenAI já recebe os pixels crus (Ai::PythonOrchestratorClient#image_urls: foto direta E/OU
-    # páginas rasterizadas de PDF escaneado) e enxerga nativamente no MESMO turno; áudio/docx/vídeo
-    # continuam rodando nos dois caminhos (sem equivalente nativo no Python ainda).
-    media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile,
-                                                      skip_vision: python_orchestrator_on?(department))
+    # skip_vision SEMPRE true — a OpenAI já recebe os pixels crus (Ai::PythonOrchestratorClient#image_urls:
+    # foto direta E/OU páginas rasterizadas de PDF escaneado) e enxerga nativamente no MESMO turno, sem
+    # o motor legado pra usar a legenda do OCR como fallback; áudio/docx/vídeo continuam passando por aqui
+    # (sem equivalente nativo no Python ainda).
+    media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile, skip_vision: true)
     emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
     effective_content = [base_content, media_text].compact.join("\n").strip
 
@@ -132,17 +122,10 @@ class Ai::Gateway
       return finalize(run_record, 'input_too_long')
     end
 
-    @stage = :knowledge
-    # (Camada 3) Conhecimento SOB DEMANDA: o worker (opt-in) roda UMA vez por turno e decide se busca e de
-    # qual kind. Só reivindica o turno cedo QUANDO vai rodar o worker (live + texto + worker on) — assim o
-    # worker fica DENTRO da idempotência do BUG 1 (claim perdido em re-exec/2º binding => worker NÃO roda),
-    # e o caminho worker-OFF (default) segue IDÊNTICO a hoje (claim continua dentro do track_step).
+    # active_step ainda alimenta a Camada 0 (triagem de turno trivial) abaixo — o resto do que dependia
+    # dele (conhecimento sob demanda, resolve_knowledge/next_step) saiu junto do motor legado; o Python
+    # busca conhecimento por conta própria (Ai::PythonOrchestratorClient).
     active_step = @acts_live ? state_manager.current_step(department) : nil
-    # Approach 1a (conv 393): o conhecimento derivado da etapa precisa da etapa que ENTRA, não da que sai.
-    # next_step é um valor SEPARADO, usado SÓ pelo resolve_knowledge (look-ahead do catálogo no turno da
-    # transição). NÃO alimenta o juiz nem o gate de atributos — ao contrário do Gap 2, aqui só o conhecimento
-    # olha o destino. nil em shadow (como o active_step) e na última etapa.
-    next_step = @acts_live ? state_manager.next_step(department) : nil
 
     # Camada 0 — triagem de turno trivial (opt-in, default OFF). ANTES de qualquer chamada ao modelo:
     # um turno trivial ("ok"/"obrigada"/emoji solto em reação à nossa última msg) NÃO acorda o supervisor.
@@ -162,354 +145,57 @@ class Ai::Gateway
       end
     end
 
-    # Python orchestrator path (opt-in per department via behavior['python_orchestrator']): replaces
-    # knowledge retrieval + Ai::PromptCompiler + Ai::ContextBuilder + Ai::ModelRouter wholesale — Python
-    # owns the OpenAI Responses API reasoning/tool-call loop (native tools resolved in Python,
-    # Rails-side tools proxied via Api::Internal::AiExecuteToolController). Gateway still runs the
-    # gates above (billing/breaker/trivial) and still delivers via action_dispatcher below, unchanged.
-    # Runs in BOTH modes (like decide() below) so shadow keeps recording a decision for evaluation;
-    # Ai::ToolExecutor's own mode gate (not this branch) is what keeps shadow from acting.
-    if python_orchestrator_on?(department)
-      @stage = :decision
-      # Teto de segurança por etapa (ai_step_turns), lido ANTES de chamar o Python — Rails é o
-      # guarda-fio da contagem, a IA só interpreta texto. Se já estourou o limite configurado na tela
-      # (transfer_rules['stuck_handoff_turns'], mesma chave do caminho legado), o client injeta uma
-      # instrução forçada no turno para a IA transferir AGORA via a tool conversation.transfer.
-      step_index_before = (@conversation.additional_attributes || {})['ai_step_index'].to_i
-      force_handoff_notice = step_turns_exceeded?(department)
-
-      result = Ai::PythonOrchestratorClient.process_message(
-        conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode,
-        message: @message, force_handoff_notice: force_handoff_notice
-      )
-      persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
-      # "avancar_etapa" (chamado mid-loop pelo Python, via Api::Internal::AiExecuteToolController) já
-      # zerou ai_step_turns se a etapa avançou; senão este turno não produziu avanço -> soma 1.
-      bump_step_turns_unless_advanced(step_index_before) if @acts_live
-      status = result[:reply].present? ? 'recorded' : 'error'
-      run_record.update!(provider: 'openai', decision: { 'kind' => 'reply', 'text' => result[:reply] },
-                          status: status, error_type: (status == 'error' ? 'provider_error' : nil))
-      emit(run_record, 'decision.made', { decision: { 'kind' => 'reply' }, source: 'python_orchestrator' }, run_id: run_record.id)
-      action_dispatcher.reply(department, result[:reply])
-      return finalize(run_record, status)
-    end
-
-    judge_result =
-      if @acts_live && effective_content.present? && state_manager.judge_enabled? && state_manager.claim_turn(@message)
-        state_manager.run_turn_judge(active_step, effective_content)
-      end
-
-    kn = resolve_knowledge(run_record, department, active_step, next_step, judge_result, effective_content)
-    knowledge = kn[:chunks]
-    emit(run_record, 'knowledge.retrieved',
-         { count: knowledge.size, preview: knowledge.first(2), kinds: kn[:kinds], source: kn[:source] })
-    run_record.update!(knowledge_count: knowledge.size)
-
-    memory = Ai::AgentMemory.find_by(conversation_id: @conversation.id, ai_agent_id: @agent.id)
-    customer_memory = @conversation.contact_id &&
-                      Ai::CustomerMemory.find_by(contact_id: @conversation.contact_id, account_id: @account.id)
-    tools  = department.tools.active.to_a
-    @stage = :context
-    system_prompt = Ai::PromptCompiler.compile(
-      agent: @agent, department: department, knowledge: knowledge, memory: memory, tools: tools,
-      collected: (@conversation.contact&.custom_attributes || {})
-        .merge(@conversation.additional_attributes&.dig('ai_collected_facts') || {})
-        .merge(@conversation.custom_attributes || {}),
-      fillable_attributes: context_builder.fillable_attributes(department),
-      customer_memory: customer_memory,
-      # Índice determinístico da etapa (fonte de verdade no servidor). O PromptCompiler ancora o
-      # modelo nesta etapa em vez de deixá-lo se autolocalizar. StateManager#track_step avança no fim.
-      step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i,
-      # Guarda (conv 397): a etapa declarou conhecimento e o retrieval voltou vazio -> o prompt avisa
-      # "não afirme, verifique" (o modelo não tem fonte).
-      knowledge_gap: kn[:declared_empty],
-      # (4) Feedback de rejeição por formato: o último valor barrado (ai_last_invalid) + os turnos gastos na
-      # etapa (ai_step_turns, reusado p/ a escalada soft ao humano). O prompt explica em vez de reperguntar.
-      slot_feedback: {
-        'invalid' => (@conversation.additional_attributes || {})['ai_last_invalid'],
-        'step_turns' => (@conversation.additional_attributes || {})['ai_step_turns'].to_i,
-        # Proposta pendente (ai_last_proposed_value, de QUALQUER origem): dispara a linha de CONTRATO que
-        # obriga o modelo a popular attributes[slot] na confirmação (senão vem mudo -> echo_missing).
-        'pending_proposed' => (@conversation.additional_attributes || {})['ai_last_proposed_value']
-      },
-      # native_tools: suprime invoke_tool do contrato e o bloco de ferramentas do prompt —
-      # as ferramentas são registradas como function definitions no payload da API.
-      native_tools: native_tools_on?
-    )
-    emit(run_record, 'context.assembled', { prompt_chars: system_prompt.length, tools: tools.map(&:name) })
-
+    # Python é o ÚNICO motor: substitui knowledge retrieval + Ai::PromptCompiler + Ai::ContextBuilder +
+    # Ai::ModelRouter por completo — o Python possui o loop de raciocínio/tool-call da Responses API
+    # (tools nativas resolvidas no Python; tools do lado Rails via Api::Internal::AiExecuteToolController).
+    # O Gateway ainda roda os gates acima (billing/breaker/trivial) e ainda entrega via action_dispatcher
+    # abaixo. Roda nos DOIS modos — shadow também registra uma decisão para avaliação; o próprio gate de
+    # modo do Ai::ToolExecutor (não este branch) é o que impede o shadow de agir.
     @stage = :decision
-    user_message_text = context_builder.user_message(effective_content)
-    # Histórico estruturado: [{role: :user/:assistant, content: '...'}] em vez de um blob de texto.
-    # Injetado via chat.add_message no ModelRouter para preservar a alternância user/assistant real.
-    structured = context_builder.structured_messages(effective_content)
-    # Loop nativo de ferramentas: habilitado para todos os providers quando native_tools_on?.
-    # OpenAI com native_tools OFF (default): usa decide() → invoke_tool → ToolExecutor → tool_followup
-    # (caminho comprovado, sem instabilidade). Com native_tools ON: usa call_with_tools →
-    # call_with_tools_responses_api (function_call nativa + function_call_output). Providers
-    # alternativos (Anthropic etc.) sempre usam o loop nativo via ruby_llm.
-    supervisor_provider = (@agent.operation_profile&.supervisor_provider.presence || 'openai').to_s
-    adapters = @acts_live && tools.any? && (supervisor_provider != 'openai' || native_tools_on?) \
-               ? Ai::LlmToolAdapter.for_department(department, conversation: @conversation, mode: @mode, run: run_record) \
-               : []
-    # Responses API: apenas o decide() usa cadeia server-side (previous_response_id persistido).
-    # O loop nativo (call_with_tools) usa histórico explícito no input da primeira iteração — não
-    # depende de previous_response_id entre turnos do usuário (abordagem n8n). Em shadow fica nil.
-    attrs          = @acts_live ? (@conversation.additional_attributes || {}) : {}
-    openai_conv_id = attrs['openai_conversation_id']
+    # Teto de segurança por etapa (ai_step_turns), lido ANTES de chamar o Python — Rails é o guarda-fio
+    # da contagem, a IA só interpreta texto. Se já estourou o limite configurado na tela
+    # (transfer_rules['stuck_handoff_turns']), o client injeta uma instrução forçada no turno para a IA
+    # transferir AGORA via a tool conversation.transfer.
+    step_index_before = (@conversation.additional_attributes || {})['ai_step_index'].to_i
+    force_handoff_notice = step_turns_exceeded?(department)
 
-    Rails.logger.warn "[AI_DEBUG_ROUTING] acts_live=#{@acts_live} tools_any=#{tools.any?} provider=#{supervisor_provider} native_on=#{native_tools_on?} adapters_count=#{adapters&.size}"
-    result = if adapters.any?
-               Ai::ModelRouter.call_with_tools(
-                 profile: @agent.operation_profile, system_prompt: system_prompt,
-                 user_message: user_message_text, tools: adapters, account_id: @account.id,
-                 messages: structured
-                 # sem conversation_id: structured_messages já carrega o contexto explicitamente
-               )
-             else
-               Ai::ModelRouter.decide(
-                 profile: @agent.operation_profile, system_prompt: system_prompt,
-                 user_message: user_message_text, account_id: @account.id, json: true,
-                 messages: structured, conversation_id: openai_conv_id
-               )
-             end
-    # Loop nativo não persiste ID (contexto vem de structured_messages); decide persiste normalmente.
-    persist_openai_conversation_id(result[:openai_conversation_id]) if adapters.empty? && result[:openai_conversation_id].present?
-    # BYOK (billing Fase 3): se a chave PRÓPRIA do cliente falhou por auth (401), sinaliza com tag,
-    # refaz a decisão na chave global da SCNET e cobra 1 crédito SCNET desse retry. Substitui `result`.
-    # Só no caminho decide() — adapters já usaram a chave correta e têm seu próprio error_type.
-    result = maybe_byok_fallback(run_record, system_prompt, effective_content, result) if adapters.empty?
-    run_record.update!(
-      provider: result[:provider], model: result[:model],
-      tokens_in: result[:tokens_in], tokens_out: result[:tokens_out], cached_tokens: result[:cached_tokens],
-      cost: result[:cost], latency_ms: result[:latency_ms],
-      decision: result[:decision] || {}, status: result[:status],
-      error_type: (result[:status] == 'error' ? 'provider_error' : nil)
+    result = Ai::PythonOrchestratorClient.process_message(
+      conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode,
+      message: @message, force_handoff_notice: force_handoff_notice
     )
-    emit(run_record, 'decision.made',
-         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms],
-           temperature: result[:temperature], cached_tokens: result[:cached_tokens] },
-         run_id: run_record.id)
+    persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
+    # "avancar_etapa" (chamado mid-loop pelo Python, via Api::Internal::AiExecuteToolController) já
+    # zerou ai_step_turns se a etapa avançou; senão este turno não produziu avanço -> soma 1.
+    bump_step_turns_unless_advanced(step_index_before) if @acts_live
+    status = result[:reply].present? ? 'recorded' : 'error'
+    run_record.update!(provider: 'openai', decision: { 'kind' => 'reply', 'text' => result[:reply] },
+                        status: status, error_type: (status == 'error' ? 'provider_error' : nil))
+    emit(run_record, 'decision.made', { decision: { 'kind' => 'reply' }, source: 'python_orchestrator' }, run_id: run_record.id)
 
     # Fase 3 — alimenta o breaker com o RESULTADO desta chamada (só ao vivo): erro incrementa as falhas
-    # consecutivas (abre na 3ª ou reabre um half-open); sucesso zera e fecha. O e-mail da abertura sai pelo
-    # force_provider_handoff (caminho de erro logo abaixo), NÃO aqui. record_* são no-op com o kill-switch OFF.
+    # consecutivas (abre na 3ª ou reabre um half-open); sucesso zera e fecha. Mesmo padrão do antigo
+    # caminho decide() — sem isto o breaker nunca mais recebe sinal algum (a chamada legada era a única
+    # fonte) e o gate de "breaker aberto" acima nunca teria motivo pra abrir.
     if @acts_live
-      if result[:status] == 'error'
+      if status == 'error'
         opened = provider_breaker.record_failure
-        emit(run_record, 'provider.breaker_opened', { provider: result[:provider] }.merge(opened)) if opened
+        emit(run_record, 'provider.breaker_opened', { provider: 'openai' }.merge(opened)) if opened
       elsif (closed_via = provider_breaker.record_success)
-        emit(run_record, 'provider.breaker_closed', { provider: result[:provider], via: closed_via })
+        emit(run_record, 'provider.breaker_closed', { provider: 'openai', via: closed_via })
       end
     end
 
-    # Provider indisponível (rate-limit/cota/billing, ou auth que o BYOK não recuperou): a decisão veio com
-    # status 'error' e VAZIA. Sem esta guarda, o dispatch cai no unknown_kind {handled:'none'} = SILÊNCIO
-    # (conv 413: "oi"/"olá?" sem resposta, sem transferência, sem alerta). Espelha o force_credit_handoff,
-    # mas PÓS-chamada (o erro do provedor só se sabe depois de tentar). Só ao vivo; em shadow apenas registra
-    # o erro, como hoje. Curto-circuita antes do track_step/dispatch (a decisão vazia não avança etapa).
-    if @acts_live && result[:status] == 'error'
+    # Provider indisponível (HTTP/timeout/exceção no client, ou reply vazio): sem esta guarda,
+    # Ai::PythonOrchestratorClient#perform já devolve reply: nil e action_dispatcher.reply(department, nil)
+    # é um no-op silencioso (text.blank? => return) — o cliente ficava sem resposta E sem handoff. Espelha
+    # o force_provider_handoff do antigo caminho decide(). Só ao vivo; em shadow apenas registra o erro.
+    if @acts_live && status == 'error'
       force_provider_handoff(run_record)
       return finalize(run_record, 'error')
     end
 
-    # Track which step the conversation is on so message grouping can use that step's delay; also
-    # fires the step's completion automations when the model signals step_completed (audited actions
-    # reuse this run's dispatcher). message_text alimenta a extração determinística de slot (Camada A).
-    # track_step swallows its own errors — never breaks the Gateway. Devolve um sinal quando a etapa de
-    # slot travou por N turnos (Camada B) — tratado logo abaixo.
-    step_signal = nil
-    if @acts_live
-      step_signal = state_manager.track_step(department, result[:decision] || {}, dispatcher: action_dispatcher,
-                                                                                  run: run_record, message_text: effective_content,
-                                                                                  message: @message, judge_result: judge_result)
-      # Grava os dados coletados (cidade, plano, etc.) nos atributos da conversa, conforme o modelo
-      # devolveu em `attributes`. Só chaves que batem com um attribute_key real do department (o resto
-      # vira attributes.unknown_key, sem sujar o JSON). Assim os campos são alimentados e reaproveitados.
-      # active_step foi resolvido ANTES do track_step acima (pré-avanço). O gate anti-contaminação valida
-      # `attributes` contra o slot que estava ATIVO neste turno — não o da próxima etapa que track_step
-      # acabou de ativar. Sem isso, o valor recém-coletado cai como unexpected_key (regressão do #284).
-      state_manager.persist_attributes((result[:decision] || {})['attributes'], department,
-                                       source: :supervisor, expected_step: active_step)
-    end
-
-    # Camada B (rede de segurança do avanço-por-slot): a IA ficou presa numa etapa de COLETA por N
-    # mensagens sem obter o dado. NÃO forçamos avanço (cadastro incompleto): avisamos o cliente e
-    # TRANSFERIMOS para humano, com motivo claro no resumo. Curto-circuita antes de qualquer dispatch.
-    # (b)-core: DESFECHO declarado pela etapa (on_complete) na conclusão determinística do funil. Mesmo canal
-    # do stuck_handoff (outcome[:signal]); o destino vem da ETAPA, não da intenção do modelo. Curto-circuita.
-    if step_signal.is_a?(Hash) && step_signal[:conclude]
-      force_conclusion(run_record, department, step_signal[:conclude], result[:decision] || {})
-      state_manager.update_memory
-      return finalize(run_record, 'recorded')
-    end
-
-    if step_signal.is_a?(Hash) && step_signal[:stuck_handoff]
-      force_stuck_handoff(run_record, department, step_signal[:stuck_handoff])
-      state_manager.update_memory
-      return finalize(run_record, 'recorded')
-    end
-
-    # Tool handling. SHADOW never executes — only records intention. LIVE runs the executor,
-    # which executes the tool immediately (tools are autonomous).
-    @stage = :tool
-    intended_tool = result.dig(:decision, 'tool')
-    execution = nil
-    if adapters.empty? && intended_tool.present?
-      tool = department.tools.active.find_by(name: intended_tool['name'])
-      if @acts_live && tool
-        execution = Ai::ToolExecutor.new(
-          tool: tool, input: intended_tool['input'], conversation: @conversation, mode: @mode, run: run_record
-        ).perform
-        emit(run_record, 'tool.executed',
-             { tool: tool.name, status: execution.status, execution_id: execution.id })
-      else
-        emit(run_record, 'tool.intended', { tool: intended_tool, executed: false, reason: action_dispatcher.not_acting_reason(tool) })
-      end
-    end
-
-    # An `invoke_tool` decision only runs the tool — it carries no reply, so the conversation would
-    # stall. Take a SECOND turn feeding the tool result back so the AI answers the customer with it.
-    # Single hop (we don't execute another tool) to avoid loops; `result` is replaced for dispatch.
-    if adapters.empty? && intended_tool.present? && @acts_live && execution&.status == 'executed'
-      # Auto-fill: se o output da ferramenta contém a chave do slot da etapa corrente, persiste o valor
-      # SEM depender de o modelo reportar o dado em `attributes` no followup (o modelo frequentemente diz
-      # attributes:{} no followup pois o prompt enxuto não instrui extração). Source :trusted (default)
-      # — a ferramenta é fonte autorizada, bypassa o gate incluindo o guard already_filled.
-      # Só escalares (String/Numeric) — hashes/arrays não formam um slot simples. Só persiste se o valor
-      # for não-vazio. Procura primeiro em output['body'] (formato de webhook), cai no output inteiro.
-      if active_step
-        slot_key = Ai::StepSlot.attribute(active_step)
-        if slot_key.present?
-          out_hash = execution.output.is_a?(Hash) ? execution.output : {}
-          body = out_hash['body'].is_a?(Hash) ? out_hash['body'] : out_hash
-          slot_val = body[slot_key]
-          if (slot_val.is_a?(String) || slot_val.is_a?(Numeric)) && slot_val.to_s.strip.present?
-            state_manager.persist_attributes({ slot_key => slot_val.to_s.strip }, department)
-          end
-        end
-      end
-      # 2ª chamada só REDIGE a resposta pós-ferramenta (não avança etapa, não grava attributes, não roda
-      # outra ferramenta) -> usa um prompt ENXUTO (sem playbook/âncora/estado-da-coleta/lead_vars/tools)
-      # para cortar o custo do reenvio. Recompilado AQUI (só quando há followup), reusando RAG/memória já
-      # carregados. Ver Ai::PromptCompiler.compile(followup: true).
-      followup_prompt = Ai::PromptCompiler.compile(
-        agent: @agent, department: department, knowledge: knowledge, memory: memory,
-        tools: [], customer_memory: customer_memory, followup: true,
-        # A âncora e o estado da coleta do followup precisam do MESMO estado da 1ª chamada: em que etapa
-        # estamos e o que já foi coletado (senão o followup repergunta / pede dado de outra etapa).
-        collected: (@conversation.contact&.custom_attributes || {})
-          .merge(@conversation.additional_attributes&.dig('ai_collected_facts') || {})
-          .merge(@conversation.custom_attributes || {}),
-        step_index: (@conversation.additional_attributes || {})['ai_step_index'].to_i
-      )
-      result = tool_followup(run_record, followup_prompt, effective_content, intended_tool, execution,
-                             conversation_id: result[:openai_conversation_id])
-      # Persiste o ID do followup para que o próximo turno do cliente encadeie a partir dele,
-      # não do ID da chamada decide original (que ficou no meio da cadeia).
-      persist_openai_conversation_id(result[:openai_conversation_id]) if result[:openai_conversation_id].present?
-    end
-
-    # Native tool path: emit tool.executed events and auto-fill the active slot from each
-    # adapter's executions. The tool section above is a no-op for this path because the
-    # decision from call_with_tools carries no 'tool' key — tools already ran inside.
-    if adapters.any? && @acts_live
-      adapters.each do |adapter|
-        adapter.executions.each do |exec|
-          emit(run_record, 'tool.executed',
-               { tool: adapter.ai_tool.name, status: exec.status, execution_id: exec.id })
-        end
-      end
-      if active_step
-        slot_key = Ai::StepSlot.attribute(active_step)
-        if slot_key.present?
-          adapters.flat_map(&:executions).each do |exec|
-            next unless exec.status == 'executed'
-            out_hash = exec.output.is_a?(Hash) ? exec.output : {}
-            body     = out_hash['body'].is_a?(Hash) ? out_hash['body'] : out_hash
-            slot_val = body[slot_key]
-            next unless (slot_val.is_a?(String) || slot_val.is_a?(Numeric)) && slot_val.to_s.strip.present?
-            state_manager.persist_attributes({ slot_key => slot_val.to_s.strip }, department)
-            break
-          end
-        end
-      end
-    end
-
-    @stage = :dispatch
-    decision_kind = (result[:decision] || {})['decision']
-
-    # Bug 3 hotfix: the model returned something we couldn't parse into a decision. NEVER dispatch it
-    # to the customer (raw JSON/config used to leak via the reply fallback) — mark the run as an error
-    # for review and stop before any action.
-    if decision_kind == 'unparsed'
-      run_record.update!(error_type: 'unparsed_decision')
-      emit(run_record, 'decision.unparsed', {})
-      return finalize(run_record, 'error')
-    end
-
-    # Intelligent handoff / close. Shadow records intention; live executes the native action.
-    handoff = Ai::HandoffEvaluator.evaluate(
-      decision: result[:decision] || {}, department: department
-    )
-    if handoff[:handoff]
-      # Try AI->AI routing first (to an allowed agent); otherwise hand to a human.
-      routed = @acts_live && handoff_coordinator.route_to_ai(result[:decision] || {})
-      unless routed
-        # Idempotência: se JÁ houve handoff nesta conversa e ela seguiu SEM responsável (1ª atribuição
-        # falhou), NÃO reenvia a mensagem de transição — só refaz a atribuição (transfer + assign),
-        # evitando a mensagem duplicada quando o cliente cobra e o fluxo re-executa.
-        retrying_handoff = @conversation.additional_attributes&.dig('ai_handoff').present? &&
-                           @conversation.assignee_id.blank?
-        # Tell the customer we're handing off (the model's "transferindo você..." text), THEN
-        # transfer (reopen + unassign for a human). Without the reply the customer saw silence.
-        action_dispatcher.reply(department, (result[:decision] || {})['reply_text']) unless retrying_handoff
-        team_id = handoff_coordinator.human_team_id(result[:decision] || {})
-        input = { 'unassign' => true }
-        input['team_id'] = team_id if team_id # roteia para o time; senão mantém o atual
-        action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: handoff[:reason], team_id: team_id })
-        # Atribuição DEPOIS do trabalho da IA: o próprio handoff atribui um humano (round-robin
-        # entre os agentes online do time/caixa). Mantenha a auto-atribuição da caixa DESLIGADA
-        # para a IA atender primeiro; aqui é o único ponto que entrega a um agente. reason vem do
-        # HandoffEvaluator (modelo_pediu_transferencia / palavra_chave) -> dispara o resumo do handoff.
-        handoff_coordinator.assign_human(team_id, reason: handoff[:reason]) if @acts_live
-      end
-    elsif decision_kind == 'close'
-      # Despedida antes de resolver (fix do encerramento silencioso): a mensagem da aba Finalização
-      # (close_rules['message']) tem prioridade; senão o reply_text que o modelo gerou nesta decisão
-      # (antes descartado); se nenhum existir, fecha em silêncio como antes. Usa o mesmo mecanismo de
-      # reply (respeita live/shadow, reply_scope e max_replies).
-      farewell = close_farewell(department, result[:decision] || {})
-      action_dispatcher.reply(department, farewell) if farewell.present?
-      action_dispatcher.execute_action('conversation.resolve', {}, run_record, 'close')
-    elsif decision_kind == 'reply'
-      safe_reply = guard_against_loop(run_record, system_prompt, effective_content,
-                                      (result[:decision] || {})['reply_text'])
-      action_dispatcher.reply(department, safe_reply) if safe_reply
-    elsif adapters.empty? && intended_tool.present? && @acts_live
-      # Safety net: a tool ran but the follow-up decision still isn't a plain reply/close/handoff —
-      # send whatever text we have so the customer is never left waiting after a tool call.
-      action_dispatcher.reply(department, (result[:decision] || {})['reply_text'])
-    elsif KNOWN_DECISION_KINDS.include?(decision_kind)
-      # noop (a IA escolheu não agir) ou invoke_tool sem execução ao vivo: valores VÁLIDOS do contrato,
-      # sem ação de saída aqui. Não é desvio — não registra decision.unknown_kind.
-    else
-      # Rede de segurança: decision FORA do contrato (ex.: "text"). Sem isto, o Gateway descartava um
-      # reply_text VÁLIDO em SILÊNCIO (cliente sem resposta, sem handoff, sem erro). Com texto, trata
-      # como reply (mesmo caminho — passa por LoopGuard e pelo consumo de crédito do reply). Sem texto,
-      # só registra o desvio para observabilidade (não some sem rastro).
-      unknown_reply = (result[:decision] || {})['reply_text']
-      if unknown_reply.present?
-        emit(run_record, 'decision.unknown_kind', { decision: decision_kind, handled: 'reply' })
-        safe_reply = guard_against_loop(run_record, system_prompt, effective_content, unknown_reply)
-        action_dispatcher.reply(department, safe_reply) if safe_reply
-      else
-        emit(run_record, 'decision.unknown_kind', { decision: decision_kind, handled: 'none' })
-      end
-    end
-
-    state_manager.update_memory
-    finalize(run_record, result[:status] == 'error' ? 'error' : 'recorded')
+    action_dispatcher.reply(department, result[:reply])
+    finalize(run_record, status)
   rescue StandardError => e
     error_type = classify_error(e)
     # Loga a etapa e a categoria junto do erro — o "porquê" fica no log; o "o quê" (agregável) na run.
@@ -525,25 +211,6 @@ class Ai::Gateway
   # e o fluxo fica byte-idêntico ao atual.
   def trivial_gate_on?
     @agent.operation_profile&.worker('trivial_gate')&.dig('mode').to_s == 'on'
-  end
-
-  # Opt-in per department (behavior['python_orchestrator'], set like the other behavior toggles —
-  # max_input_chars, max_replies). Default OFF: without it the pipeline is byte-identical to today's
-  # decide()/call_with_tools() path. NO admin UI writes this key today (grep confirms it — only a
-  # rails console/seed does), so it silently landing as the STRING "true" instead of the boolean
-  # true was a live possibility with the old `== true` check: no exception, no Python log, the run
-  # just falls through to the legacy decide() path below — same symptom as the flag never being set
-  # at all. truthy? below accepts both. Logged (não silencioso) so `docker logs`/Sidekiq shows
-  # exactly what this resolved to for every turn, instead of having to guess from behavior alone.
-  def python_orchestrator_on?(department)
-    raw = department.behavior.to_h['python_orchestrator']
-    on = truthy?(raw)
-    Rails.logger.info "[Ai::Gateway] python_orchestrator_on? department_id=#{department.id} raw=#{raw.inspect} class=#{raw.class} => #{on}"
-    on
-  end
-
-  def truthy?(value)
-    value == true || value.to_s.strip.casecmp?('true')
   end
 
   # Mesma chave/default do caminho legado (Ai::StateManager#stuck_handoff_limit) — teto ausente =>
@@ -568,93 +235,6 @@ class Ai::Gateway
     @conversation.update!(additional_attributes: attrs)
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#bump_step_turns_unless_advanced] #{e.class}: #{e.message}"
-  end
-
-  # Loop nativo de ferramentas via Responses API (function_call/function_call_output).
-  # Ativação gradual: por agente (worker_overrides['native_tools']['mode'] == 'on') OU por
-  # ambiente (ENV/InstallationConfig 'AI_NATIVE_TOOLS' == 'on'). Default OFF — sem esta flag o
-  # comportamento é byte-idêntico ao atual. Memoizado: o flag é constante por run.
-  def native_tools_on?
-    return @native_tools_on if defined?(@native_tools_on)
-
-    per_agent = @agent.operation_profile&.worker('native_tools')&.dig('mode').to_s == 'on'
-    env_raw   = ENV['AI_NATIVE_TOOLS'].presence ||
-                (InstallationConfig.find_by(name: 'AI_NATIVE_TOOLS')&.value if defined?(InstallationConfig))
-    @native_tools_on = per_agent || %w[on true 1].include?(env_raw.to_s.strip.downcase)
-  rescue StandardError
-    @native_tools_on = false
-  end
-
-  # (Camadas 3/4) Decide a busca de conhecimento a partir da INTENÇÃO do worker. Devolve
-  # { chunks:, kinds:, source: } — source audita a origem:
-  #  - judge_result nil (worker OFF/default, shadow, ou claim perdido) -> RAG como hoje (full, sem filtro,
-  #    todo turno). source 'all' — REGRESSÃO TOTAL do comportamento atual.
-  #  - worker FALHOU -> fallback: full RAG + evento knowledge.fallback (auditável). source 'fallback'.
-  #  - asks_about != 'nada' -> busca kinds:[asks_about] com a QUERY do worker (não o texto cru, que deu o
-  #    resultado ruim). source 'worker'.
-  #  - etapa DECLARA conhecimento (step['knowledge']) -> busca a query/kinds declarados. source 'step'.
-  #  - senão -> NÃO busca (economia) + evento knowledge.skipped. source 'none'.
-  def resolve_knowledge(run_record, department, step, next_step, judge_result, query_text)
-    return search_knowledge(department, nil, query_text, 'all') if judge_result.nil?
-
-    if judge_result[:status].to_s == 'failed'
-      emit(run_record, 'knowledge.fallback', { reason: judge_result[:reason].to_s.first(80) })
-      return search_knowledge(department, nil, query_text, 'fallback')
-    end
-
-    asks = judge_result[:asks_about].to_s
-    return search_knowledge(department, [asks], judge_result[:query].presence || query_text, 'worker') if asks.present? && asks != 'nada'
-
-    # Conhecimento DECLARADO pela etapa (step['knowledge']). A etapa ATUAL VENCE o look-ahead da próxima
-    # (`step` antes de `next_step`) — cravado: na conv 397 foi o look-ahead da etapa seguinte (PLANOS,
-    # kind produto) que roubou o turno da VIABILIDADE, que precisa de cidades_atendidas (kind documento).
-    # kinds e query vêm do DADO da etapa; nenhum kind/vocabulário de tenant fica em código.
-    req = step_knowledge_request(step) || step_knowledge_request(next_step)
-    return search_declared(run_record, department, req) if req
-
-    emit(run_record, 'knowledge.skipped', { reason: 'no_question_no_declared_step' })
-    { chunks: [], kinds: nil, source: 'none' }
-  end
-
-  # Busca o conhecimento DECLARADO pela etapa. GUARDA determinística (conv 397): se a etapa declarou uma
-  # fonte e o retrieval voltou VAZIO, o modelo não tem base — marca declared_empty (o PromptCompiler
-  # injeta "não afirme, verifique") e emite knowledge.declared_empty (auditável). source 'step' nos dois.
-  def search_declared(run_record, department, req)
-    result = search_knowledge(department, req[:kinds], req[:query], 'step', list_all: req[:list_all])
-    return result if result[:chunks].present?
-
-    emit(run_record, 'knowledge.declared_empty', { kinds: req[:kinds], query: req[:query].to_s.first(120) })
-    result.merge(declared_empty: true)
-  end
-
-  # Conhecimento que a etapa DECLARA precisar: step['knowledge'] = { query, kinds, list_all }. query
-  # obrigatória; kinds OPCIONAL (array; vazio => todos os kinds); list_all OPCIONAL (default false —
-  # "trazer todos os itens deste tipo", ex.: lista de planos/convênios; true bypassa a similaridade).
-  # nil quando a etapa não declara conhecimento (ou a query está vazia). Retorna { kinds:, query:, list_all: }.
-  def step_knowledge_request(step)
-    decl = step.is_a?(Hash) ? (step['knowledge'] || step[:knowledge]) : nil
-    return nil unless decl.is_a?(Hash)
-
-    query = (decl['query'] || decl[:query]).to_s.strip
-    return nil if query.blank?
-
-    kinds = Array(decl['kinds'] || decl[:kinds]).map { |k| k.to_s.strip }.reject(&:blank?)
-    list_all = (decl['list_all'] || decl[:list_all]).to_s.strip.downcase == 'true'
-    { kinds: kinds.presence, query: query, list_all: list_all }
-  end
-
-  def search_knowledge(department, kinds, query, source, list_all: false)
-    chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: @account.id,
-                                             department_id: department.id, kinds: kinds, list_all: list_all)
-    { chunks: chunks, kinds: kinds, source: source }
-  end
-
-  # Montagem do contexto textual do modelo (histórico + citação + atributos preenchíveis), extraído
-  # do Gateway (Passo 2 da quebra do God object). Memoizado — criado 1x por run, sob demanda.
-  def context_builder
-    @context_builder ||= Ai::ContextBuilder.new(
-      conversation: @conversation, message: @message, account: @account
-    )
   end
 
   # Escritas de estado derivado (atributos coletados, etapa atual, memória), extraído do Gateway
@@ -695,8 +275,6 @@ class Ai::Gateway
   def classify_error(exception)
     timed_out = timeout_error?(exception)
     case @stage
-    when :knowledge        then 'knowledge_timeout'             # busca RAG/pgvector
-    when :tool             then 'tool_failed'                   # executor de ferramenta estourou
     when :department       then 'classification_failed'         # SÓ a resolução do departamento
     when :persist, :policy then 'internal_error'               # write de estado / gate de política (não é classificação)
     when :decision         then timed_out ? 'provider_timeout' : 'provider_error'
@@ -711,30 +289,6 @@ class Ai::Gateway
   def timeout_error?(exception)
     ancestors = exception.class.ancestors.filter_map(&:name)
     (ancestors & TIMEOUT_ERROR_NAMES).any? || exception.message.to_s.downcase.include?('timeout')
-  end
-
-  # Second model turn after a tool ran: feeds the tool output back so the AI replies to the customer
-  # with the result (e.g. coverage lookup -> "sim, atendemos sua cidade"). Returns the new decision
-  # for the normal dispatch. Single hop — it never triggers another tool execution.
-  def tool_followup(run_record, system_prompt, user_message, tool_call, execution, conversation_id: nil)
-    followup_message = "#{user_message}\n\n[Resultado da ferramenta \"#{tool_call['name']}\"]:\n" \
-                       "#{execution.output.to_json}\n\n" \
-                       'Use esse resultado para responder ao cliente agora (decision: "reply").'
-    # conversation_id: encadeia via previous_response_id da chamada decide que pediu a ferramenta,
-    # mantendo o histórico completo server-side. O resultado da ferramenta vai como texto (não como
-    # function_call_output, pois o decide usa text-decision, não native function_call — sem call_id).
-    result = Ai::ModelRouter.decide(
-      profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: followup_message, account_id: @account.id, json: true,
-      conversation_id: conversation_id
-    )
-    emit(run_record, 'tool.followup',
-         { decision: result[:decision], cost: result[:cost], latency_ms: result[:latency_ms],
-           prompt_chars: system_prompt.length })
-    result
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#tool_followup] #{e.class}: #{e.message}"
-    { decision: {} }
   end
 
   # Cluster de handoff/atribuição extraído do Gateway (Passo 1 da quebra do God object): route IA->IA,
@@ -757,141 +311,6 @@ class Ai::Gateway
                                                              input: { 'label' => 'department-override-indisponivel' })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#flag_unavailable_department_override] #{e.class}: #{e.message}"
-  end
-
-  # Rede de segurança anti-loop de repergunta (defesa em profundidade). Se o reply_text repete as 2
-  # últimas respostas (parafraseando) COM o cliente respondendo entre elas, tenta 1 vez com um nudge;
-  # se AINDA repetir, força handoff e NÃO envia. Retorna o texto a enviar, ou nil (quando escalou p/
-  # handoff). Só age ao vivo; em shadow devolve o texto original (sem efeito colateral).
-  def guard_against_loop(run_record, system_prompt, user_message, reply_text)
-    return reply_text unless @acts_live && reply_text.present?
-
-    guard = Ai::LoopGuard.new(conversation: @conversation, current_run: run_record)
-    return reply_text unless guard.loop?(reply_text)
-
-    emit(run_record, 'reply.loop_detected', { chars: reply_text.length })
-    retried = loop_retry(run_record, system_prompt, user_message)
-    new_reply = (retried[:decision] || {})['reply_text'].to_s
-
-    if new_reply.present? && !guard.loop?(new_reply)
-      # A resposta regenerada saiu do loop: passa a valer (mantém a run auditável coerente).
-      run_record.update!(decision: retried[:decision]) if retried[:decision].is_a?(Hash)
-      return new_reply
-    end
-
-    # Loop persistiu mesmo após o retry -> handoff forçado, sem enviar a resposta problemática.
-    force_loop_handoff(run_record)
-    nil
-  end
-
-  # Regenera a decisão com um nudge anti-repetição no fim do system prompt. UMA tentativa só (nunca
-  # entra em loop de retry). Devolve o result do ModelRouter (ou vazio em erro).
-  def loop_retry(run_record, system_prompt, user_message)
-    nudge = "\n\nATENÇÃO: você já fez esta mesma pergunta/confirmação antes, de forma muito parecida. " \
-            'NÃO repita. Trate o que o cliente já respondeu como confirmado e AVANCE para o próximo ' \
-            'passo; se não for possível avançar, peça ajuda humana.'
-    result = Ai::ModelRouter.decide(
-      profile: @agent.operation_profile, system_prompt: "#{system_prompt}#{nudge}",
-      user_message: user_message, account_id: @account.id, json: true
-    )
-    emit(run_record, 'reply.loop_retry', { status: result[:status] })
-    result
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#loop_retry] #{e.class}: #{e.message}"
-    { decision: {} }
-  end
-
-  # Handoff forçado quando o loop persiste após o retry: entrega ao humano no time PADRÃO do agente,
-  # reaproveitando o mesmo fluxo do handoff normal (transfer + assign). Não envia texto ao cliente.
-  def force_loop_handoff(run_record)
-    team_id = handoff_coordinator.human_team_id({})
-    input = { 'unassign' => true }
-    input['team_id'] = team_id if team_id
-    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'loop' })
-    handoff_coordinator.assign_human(team_id, reason: 'loop')
-    emit(run_record, 'handoff.loop_forced', { team_id: team_id })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#force_loop_handoff] #{e.class}: #{e.message}"
-  end
-
-  # Camada B da rede de segurança do avanço-por-slot: a IA ficou presa numa etapa de COLETA por N
-  # mensagens sem obter o dado (o modelo não devolveu o attribute e a extração determinística não pegou).
-  # Em vez de FORÇAR o avanço com dado faltando (cadastro incompleto), na sequência: (1) AVISA o cliente,
-  # (2) TRANSFERE para humano reaproveitando o mesmo fluxo do force_loop_handoff (transfer + assign), (3)
-  # registra o motivo específico no resumo do handoff (o reason vira o "Resumo da transferência"), (4)
-  # emite step.stuck_handoff para telemetria (quais etapas travam mais).
-  def force_stuck_handoff(run_record, department, info)
-    action_dispatcher.reply(department, stuck_handoff_warning(department)) # aviso ANTES da transferência
-    reason = stuck_handoff_reason(info)
-    team_id = handoff_coordinator.human_team_id({})
-    input = { 'unassign' => true }
-    input['team_id'] = team_id if team_id
-    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: reason })
-    handoff_coordinator.assign_human(team_id, reason: reason) # reason livre -> vira o Resumo da transferência
-    # Gap 4: reason distingue a rede (recusa vs 'max_turns' absoluto); refusals acompanha o max_turns
-    # quando houve recusas no meio (telemetria de "quais etapas travam mais" na alternância). .compact
-    # tira os nil (a rede de recusa não manda refusals; o vazio não manda reason).
-    emit(run_record, 'step.stuck_handoff',
-         { attribute: info[:attribute], step_name: info[:step_name], turns: info[:turns],
-           reason: info[:reason], refusals: info[:refusals] }.compact)
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#force_stuck_handoff] #{e.class}: #{e.message}"
-  end
-
-  # (b)-core — DESFECHO declarado pela etapa (step['on_complete']) na conclusão do funil. Reusa a MESMA
-  # maquinaria: handoff_human -> transfer + assign_human (com resumo, reason 'conclusao') abrindo a conversa
-  # com dono na fila do atendente; close -> conversation.resolve (despedida antes); handoff_ai -> route_to_ai.
-  # O destino do handoff_human vem da ETAPA (team_id validado contra a whitelist em conclusion_team_id), não
-  # da intenção do modelo. decision leva o reply_text que o modelo redigiu nesta etapa (a despedida).
-  def force_conclusion(run_record, department, info, decision)
-    case info['action'].to_s
-    when 'close'
-      farewell = close_farewell(department, decision)
-      action_dispatcher.reply(department, farewell) if farewell.present?
-      action_dispatcher.execute_action('conversation.resolve', {}, run_record, 'close')
-      emit(run_record, 'conclusion.executed', { action: 'close' })
-    when 'handoff_ai'
-      routed = handoff_coordinator.route_to_ai({ 'handoff_target' => info['target'].to_s })
-      emit(run_record, 'conclusion.executed', { action: 'handoff_ai', target: info['target'], routed: routed ? true : false })
-    else # handoff_human (default)
-      reason = info['reason'].presence || 'conclusao'
-      team_id = handoff_coordinator.conclusion_team_id(info)
-      action_dispatcher.reply(department, decision['reply_text']) if decision['reply_text'].present?
-      input = { 'unassign' => true }
-      input['team_id'] = team_id if team_id
-      action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff',
-                                       extra: { reason: reason, team_id: team_id })
-      handoff_coordinator.assign_human(team_id, reason: reason)
-      emit(run_record, 'conclusion.executed', { action: 'handoff_human', team_id: team_id })
-    end
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#force_conclusion] #{e.class}: #{e.message}"
-  end
-
-  # Mensagem de aviso ao cliente antes de transferir (configurável via transfer_rules['stuck_message'];
-  # senão uma default acolhedora em pt-BR — o cliente não pode sentir corte seco).
-  def stuck_handoff_warning(department)
-    (department.transfer_rules || {})['stuck_message'].presence ||
-      'Vou te encaminhar para um especialista do nosso time que vai te ajudar melhor com isso, tá? 😊'
-  end
-
-  # Motivo específico e honesto — o HandoffSummaryGenerator usa este texto livre no "Resumo da transferência".
-  # Gap 4 v2: DISTINGUE as duas redes. O texto antigo chamava QUALQUER travamento de "tentou coletar sem
-  # sucesso", inclusive PERGUNTA legítima (conv 389: a compradora que pediu os planos era descrita como
-  # tentativa falha). Agora:
-  #  - 'declined' (rede de recusa): o cliente RECUSOU o dado — info[:turns] é a contagem de RECUSAS.
-  #  - 'max_turns'/fallback (teto absoluto): a etapa não AVANÇOU em N mensagens — info[:turns] é a contagem
-  #    de turnos (não implica que o cliente tentou e falhou; pode ser digressão/pergunta).
-  # Usa o nome amigável da etapa quando houver, não só a chave técnica.
-  def stuck_handoff_reason(info)
-    label = info[:step_name].presence || info[:attribute]
-    if info[:reason].to_s == 'declined'
-      "Transferido automaticamente: o cliente não forneceu o dado essencial \"#{label}\" " \
-        "(recusou #{info[:turns]} vezes). Encaminhado para atendimento humano."
-    else
-      "Transferido automaticamente: a IA não conseguiu avançar a etapa \"#{label}\" após " \
-        "#{info[:turns]} mensagens do cliente. Encaminhado para atendimento humano para não travar o cliente."
-    end
   end
 
   # Saldo de créditos de IA relevante para enforcement (billing Fase 2). nil = NÃO enforça (fail-open):
@@ -930,8 +349,8 @@ class Ai::Gateway
   end
 
   # Handoff forçado quando o saldo de créditos de IA esgota: nota interna + entrega ao humano no time
-  # PADRÃO do agente, reaproveitando o mesmo fluxo do force_loop_handoff (transfer + assign). NÃO
-  # envia texto ao cliente (a IA simplesmente não responde; um humano assume).
+  # PADRÃO do agente (transfer + assign). NÃO envia texto ao cliente (a IA simplesmente não responde;
+  # um humano assume).
   def force_credit_handoff(run_record)
     action_dispatcher.internal_note('⚠️ Crédito de IA esgotado — atendimento transferido para um humano.')
     team_id = handoff_coordinator.human_team_id({})
@@ -975,9 +394,8 @@ class Ai::Gateway
   # NÃO a cada transferência com o breaker JÁ aberto. O caminho normal (Fase 1/2) chama sem argumento =>
   # notify:true, comportamento IDÊNTICO ao de antes. Só o skip do breaker aberto passa notify:false (ali não
   # houve chamada nem provider_error novo — e run_record.provider nem está setado).
-  # Provider resolvido do perfil ANTES da chamada (mesma resolução do Ai::ModelRouter.decide: perfil ->
-  # 'openai'). Serve ao breaker pré-chamada (o result[:provider] pós-chamada é idêntico — sem provider
-  # explícito no call-site e o BYOK não troca de provider).
+  # Provider resolvido do perfil (fallback 'openai' — hoje o único que o orchestrator.py suporta, ver
+  # Ai::PythonMigrationAuditor). Serve ao breaker tanto no gate pré-chamada quanto no record pós-chamada.
   def supervisor_provider
     @agent.operation_profile&.supervisor_provider.presence || 'openai'
   end
@@ -1054,57 +472,6 @@ class Ai::Gateway
   end
 
   # BYOK (billing Fase 3): a chave própria do cliente foi recusada por auth (401). Só age ao vivo e só
-  # quando a 1ª chamada REALMENTE usou a chave própria (account_provider_key presente = feature ligada +
-  # chave no Hub) — assim um 401 da chave global da SCNET NÃO é rotulado como "chave-propria-falhou".
-  # Aplica a tag de visibilidade, refaz a decisão forçando a chave global e, se o retry der certo, cobra
-  # 1 crédito SCNET (auto-provisiona um AiCreditBalance zerado se a conta BYOK ainda não tiver um — daí a
-  # Fase 2 assume o handoff por saldo esgotado nas próximas mensagens). Best-effort: qualquer erro
-  # devolve o result original (a IA segue o caminho de erro normal).
-  def maybe_byok_fallback(run_record, system_prompt, user_message, result)
-    return result unless @acts_live
-    return result unless result[:status] == 'error' && result[:error_type] == 'auth_error'
-    return result if Ai::ModelRouter.account_provider_key(@account.id, result[:provider]).blank?
-
-    apply_label('chave-propria-falhou')
-    emit(run_record, 'decision.byok_fallback', { provider: result[:provider] })
-    retried = Ai::ModelRouter.decide(
-      profile: @agent.operation_profile, system_prompt: system_prompt,
-      user_message: context_builder.user_message(user_message), account_id: @account.id, json: true,
-      force_global_key: true, messages: context_builder.structured_messages(user_message)
-    )
-    consume_byok_fallback_credit if retried[:status] != 'error'
-    retried
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#maybe_byok_fallback] #{e.class}: #{e.message}"
-    result
-  end
-
-  # Cobra 1 crédito SCNET do fallback BYOK, FURANDO o short-circuit de billing_balance (que retorna nil
-  # para contas custom_llm_api_key): acessa o AiCreditBalance direto, auto-provisionando um zerado se
-  # ainda não existir. Sem saldo, o InsufficientCredits é engolido (a resposta já sai; a Fase 2 bloqueia
-  # a partir da próxima mensagem, pois agora existe um balance esgotado).
-  def consume_byok_fallback_credit
-    balance = AiCreditBalance.find_or_create_by(account_id: @account.id)
-    balance.consume!(1)
-  rescue AiCreditBalance::InsufficientCredits => e
-    Rails.logger.info "[Ai::Gateway] fallback BYOK sem saldo SCNET: #{e.message}"
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#consume_byok_fallback_credit] #{e.class}: #{e.message}"
-  end
-
-  # Tag de visibilidade best-effort (mesmo handler direto do flag_unavailable_department_override).
-  def apply_label(label)
-    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation, input: { 'label' => label })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#apply_label] #{e.class}: #{e.message}"
-  end
-
-  # Mensagem de despedida ao encerrar proativamente (decision 'close'): mensagem da Finalização
-  # (close_rules['message']) tem prioridade; senão o reply_text da própria decisão; senão nil (silêncio).
-  def close_farewell(department, decision)
-    department.close_rules.to_h['message'].presence || decision['reply_text'].presence
-  end
-
   def finalize(run_record, status)
     run_record.update!(status: status)
     run_record

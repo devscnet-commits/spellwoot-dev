@@ -1,9 +1,10 @@
 require 'rails_helper'
 
-# Teto de segurança por etapa (ai_step_turns) no caminho do orquestrador Python: o Gateway é o
-# guarda-fio da contagem (Rails), não a IA. Isola o Ai::PythonOrchestratorClient (stub direto do
-# método de classe) para testar SÓ o comportamento do Gateway ao redor dele — a montagem do payload
-# em si já é coberta por spec/services/ai/python_orchestrator_client_spec.rb.
+# Teto de segurança por etapa (ai_step_turns) no caminho do orquestrador Python (motor ÚNICO desde a
+# eliminação do legado — não há mais flag por department): o Gateway é o guarda-fio da contagem
+# (Rails), não a IA. Isola o Ai::PythonOrchestratorClient (stub direto do método de classe) para
+# testar SÓ o comportamento do Gateway ao redor dele — a montagem do payload em si já é coberta por
+# spec/services/ai/python_orchestrator_client_spec.rb.
 RSpec.describe Ai::Gateway do
   let(:account) { create(:account) }
   let(:inbox) { create(:inbox, account: account) }
@@ -13,10 +14,10 @@ RSpec.describe Ai::Gateway do
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
   # let! — precisa existir no banco ANTES do Ai::DepartmentResolver rodar dentro de #deliver; um
   # `let` preguiçoso nunca referenciado explicitamente nos testes nunca seria criado (o Gateway
-  # cairia direto em 'no_department', sem nunca chegar no branch do python_orchestrator).
+  # cairia direto em 'no_department', sem nunca chegar na chamada ao Python).
   let!(:department) do
     Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all', 'python_orchestrator' => true },
+                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' },
                            transfer_rules: transfer_rules)
   end
   let(:transfer_rules) { {} }

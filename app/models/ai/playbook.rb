@@ -8,6 +8,7 @@
 #  active           :boolean          default(TRUE), not null
 #  close_when       :jsonb            not null
 #  default_messages :jsonb            not null
+#  lock_version     :integer          default(0), not null
 #  objetivo         :text
 #  steps            :jsonb            not null
 #  transfer_when    :jsonb            not null
