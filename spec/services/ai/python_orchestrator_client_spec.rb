@@ -594,7 +594,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # path (Ai::KnowledgeRetriever — pgvector já populado, NÃO o vector_store nativo da OpenAI, que
   # não existe: vector_store_id sempre vem vazio, auditado, sem tela/job que o preencha).
   describe 'identidade + conhecimento no system_prompt' do
-    it 'a instrução de identidade é a PRIMEIRA linha, e o guardrail anti-"médias de mercado" é a SEGUNDA — ambas referenciam a ferramenta, não um bloco fixo' do
+    it 'a instrução de identidade é a PRIMEIRA linha, identify_as é a SEGUNDA, e o guardrail anti-"médias de mercado" é a TERCEIRA — as duas primeiras referenciam a ferramenta, não um bloco fixo' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -604,9 +604,42 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt_lines.first.include?('IDENTIDADE') &&
           prompt_lines.first.include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras') &&
           prompt_lines.first.include?('use a ferramenta "consultar_conhecimento"') &&
-          prompt_lines[1].include?('Nunca cite concorrentes, médias de mercado') &&
-          prompt_lines[1].include?('ferramenta "consultar_conhecimento"')
+          prompt_lines[2].include?('Nunca cite concorrentes, médias de mercado') &&
+          prompt_lines[2].include?('ferramenta "consultar_conhecimento"')
       }
+    end
+
+    # Regressão achada ao vivo 13/08 (Maya v5.0, identify_as='human'): esta instrução existia no
+    # Ai::PromptCompiler legado (identity_lines) e nunca foi portada pro Python — o split em várias
+    # mensagens (Ai::ActionDispatcher#split_parts) continuava funcionando no código, mas o modelo
+    # nunca era instruído a produzir "\n\n" em mensagem_para_cliente, então não tinha o que quebrar.
+    describe 'identify_as_instruction (segunda linha do system_prompt)' do
+      it 'identify_as="human" (default do agent): instrui a quebrar em mensagens curtas com linha em branco' do
+        agent.update!(identify_as: 'human')
+        stub_orchestrator
+
+        described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+        expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+          line = JSON.parse(req.body)['system_prompt'].lines[1]
+          line.include?('Aja como um atendente humano da equipe') &&
+            line.include?('Não diga que é uma inteligência artificial') &&
+            line.include?('LINHA EM BRANCO entre elas (dois \n)') &&
+            line.include?('"mensagem_para_cliente"')
+        }
+      end
+
+      it 'identify_as="ai": NÃO instrui a quebrar em várias mensagens, pode se assumir IA' do
+        agent.update!(identify_as: 'ai')
+        stub_orchestrator
+
+        described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+        expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+          line = JSON.parse(req.body)['system_prompt'].lines[1]
+          line.include?('assistente virtual (IA)') && !line.include?('LINHA EM BRANCO')
+        }
+      end
     end
 
     # RAG agentic: nenhuma busca automática por turno mais — Ai::KnowledgeRetriever só roda quando a
