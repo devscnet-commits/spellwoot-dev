@@ -194,6 +194,14 @@ class Ai::Gateway
       return finalize(run_record, 'error')
     end
 
+    # DÉBITO ACEITO (temporário, não esquecimento): Ai::LoopGuard (detecção de repergunta/paráfrase em
+    # loop + retry com nudge + handoff forçado) NÃO tem equivalente no caminho Python — nunca teve,
+    # mesmo quando a flag python_orchestrator estava ligada só para alguns departments. Antes disso era
+    # um risco isolado (só quem tinha a flag); com a eliminação do motor legado (este commit), o alcance
+    # vira 100% da base — TODO department fica sem essa rede de segurança. Decisão consciente de NÃO
+    # bloquear a eliminação por isso (ver conversa da eliminação do motor legado). Tarefa de fechamento
+    # rastreada separadamente — ver memória do projeto (loopguard-python-parity-debt) — não implementar
+    # aqui como parte deste commit.
     action_dispatcher.reply(department, result[:reply])
     finalize(run_record, status)
   rescue StandardError => e
