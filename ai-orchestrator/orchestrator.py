@@ -222,11 +222,6 @@ def run_conversation(
     # only the fallback for a tenant with no profile, never a global override.
     resolved_model = model or config.OPENAI_MODEL
 
-    logger.info(
-        "ticket_id=%s provider=%s model=%s function tools sent to OpenAI: %s",
-        ticket_id, provider, resolved_model, json.dumps(openai_tools, ensure_ascii=False),
-    )
-
     create_kwargs = {
         "model": resolved_model,
         "instructions": system_prompt,
@@ -245,6 +240,16 @@ def run_conversation(
         create_kwargs["previous_response_id"] = previous_response_id
     if temperature is not None:
         create_kwargs["temperature"] = temperature
+
+    # "text" incluso de propósito (achado ao vivo 13/08 — ticket_id=556: sem isto, não dava pra
+    # confirmar de fora se um sandbox estava rodando json_schema estrito ou ainda json_object só
+    # olhando o log). Loga create_kwargs INTEIRO menos "input" (conteúdo do cliente/histórico —
+    # não precisa duplicar aqui, e cresce sem limite turno a turno).
+    logger.info(
+        "ticket_id=%s provider=%s model=%s create_kwargs (sem 'input'): %s",
+        ticket_id, provider, resolved_model,
+        json.dumps({k: v for k, v in create_kwargs.items() if k != "input"}, ensure_ascii=False),
+    )
 
     client, using_account_key = _resolve_client(account_api_key)
     response, client, byok_fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, create_kwargs)

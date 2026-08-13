@@ -193,9 +193,11 @@ class Ai::PythonOrchestratorClient
     # Fixas e inegociáveis, ANTES de qualquer outra coisa: fecham lacunas achadas em teste ao vivo —
     # sugerir concorrentes, alucinar "médias de mercado" em vez do conhecimento real, "fingir" que
     # chamou registrar_* sem chamar de verdade, inventar situações que não existem, e transferir sem
-    # motivo pulando o fluxo de etapas. (Múltiplas mensagens por turno NÃO entra aqui — é o
-    # comportamento esperado do modo identify_as="human", intencional.)
+    # motivo pulando o fluxo de etapas. Múltiplas mensagens por turno (modo identify_as="human") tem
+    # instrução PRÓPRIA logo abaixo (#identify_as_instruction) — achado ao vivo 13/08: por um tempo
+    # esteve ausente aqui (ver comentário do método), regressão já corrigida.
     lines << identity_instruction
+    lines << identify_as_instruction
     lines << market_average_guardrail
     lines << no_fabrication_instruction
     lines << transfer_discipline_instruction
@@ -234,6 +236,26 @@ class Ai::PythonOrchestratorClient
       'provedora do serviço. É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras empresas, ' \
       'operadoras ou provedores. Se o cliente quiser preços, planos ou dúvidas, use a ferramenta ' \
       '"consultar_conhecimento" antes de responder — nunca invente o que ela não retornar.'
+  end
+
+  # PORTADO do Ai::PromptCompiler legado (identity_lines) — regressão achada ao vivo (13/08, ticket
+  # Maya v5.0): a migração pro Python NUNCA trouxe esta instrução. O mecanismo de split continuou
+  # 100% intacto no lado Ruby (Ai::ActionDispatcher#deliver/#split_parts, as_human: @agent.identify_as
+  # == 'human', ver Ai::Gateway#action_dispatcher) — mas sem isto, nada dizia ao MODELO para produzir
+  # "\n\n" em mensagem_para_cliente, então split_parts nunca tinha o que quebrar (devolve o texto
+  # original quando não há linha em branco). Bug latente desde que este arquivo existe (10/08); só
+  # ficou visível quando o department em questão migrou pro caminho Python (rollout de hoje, 13/08) —
+  # não é regressão da eliminação do motor legado em si, é uma lacuna que a eliminação expôs pra
+  # TODOS os departments de uma vez, em vez de só os que já tinham python_orchestrator opt-in.
+  def identify_as_instruction
+    if @agent.identify_as == 'ai'
+      'Você é um assistente virtual (IA) e pode assumir isso se perguntarem.'
+    else
+      'Aja como um atendente humano da equipe. Não diga que é uma inteligência artificial. Quando a ' \
+        'resposta tiver mais de uma ideia ou ficar longa, escreva como uma pessoa real digitando: separe ' \
+        'em mensagens curtas com uma LINHA EM BRANCO entre elas (dois \n) no campo "mensagem_para_cliente". ' \
+        'Se for algo curto, responda em uma mensagem só, sem quebrar à força.'
+    end
   end
 
   # Reforço explícito contra "médias de mercado": IA alucinava preço/regra plausível-mas-inventado
