@@ -232,6 +232,71 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Pedido do usuário: mesmo padrão achado no fluxo n8n Maya v4.0 — manda objetivo + texto da PRÓXIMA
+  # etapa junto no system_prompt, não só a atual. Reusa Ai::StateManager#next_step (já existia pro
+  # look-ahead de conhecimento do motor legado).
+  describe 'PRÓXIMA ETAPA no system_prompt (next_step_instructions)' do
+    it 'inclui a próxima etapa, DEPOIS da ETAPA ATUAL, quando existe uma' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Boas-vindas', 'objective' => 'Cumprimentar.' },
+        { 'name' => 'CPF', 'objective' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf' } },
+        { 'name' => 'Endereço', 'objective' => 'Peça o endereço.' }
+      ])
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 1))
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        atual_idx = prompt.index('ETAPA ATUAL')
+        proxima_idx = prompt.index('PRÓXIMA ETAPA')
+        prompt.include?('Peça o CPF.') && # etapa atual (índice 1)
+          prompt.include?('Peça o endereço.') && # próxima etapa (índice 2)
+          atual_idx.present? && proxima_idx.present? && atual_idx < proxima_idx
+      }
+    end
+
+    it 'NÃO trava o avanço nem a captura — o texto deixa claro que é só contexto' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'CPF', 'objective' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf' } },
+        { 'name' => 'Endereço', 'objective' => 'Peça o endereço.' }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('NÃO pule pra ela nem PEÇA o dado dela antes da hora') &&
+          prompt.include?('se o cliente ADIANTAR esse dado por conta própria, capture normalmente')
+      }
+    end
+
+    it 'não aparece na ÚLTIMA etapa (não há próxima)' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Única', 'objective' => 'Só isso.' }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('PRÓXIMA ETAPA')
+      }
+    end
+
+    it 'não aparece sem playbook nenhum' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('PRÓXIMA ETAPA')
+      }
+    end
+  end
+
   # Ponto do usuário: o admin só escreve Objetivo/Regras em linguagem natural na tela da etapa —
   # "JSON"/"dados_coletados" nunca deveriam vir da BOCA do admin. Esta regra é montada pelo Rails a
   # partir do "Dado que esta etapa coleta" (o mesmo Select/collect.attribute), nomeando a chave exata

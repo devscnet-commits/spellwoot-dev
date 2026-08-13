@@ -203,6 +203,11 @@ class Ai::PythonOrchestratorClient
     lines << kb if kb.present?
     lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
+    lines << "PRÓXIMA ETAPA (só contexto — NÃO é a atual; NÃO pule pra ela nem PEÇA o dado dela antes " \
+             "da hora, mas se o cliente ADIANTAR esse dado por conta própria, capture normalmente — " \
+             "ver REGRAS DE FOCO E VALIDAÇÃO DA COLETA abaixo; use isso só pra conduzir a conversa com " \
+             "continuidade, sem soar como se não soubesse o que vem a seguir):\n#{next_step_instructions}" \
+      if next_step_instructions.present?
     lines << step_extraction_instruction if step_extraction_instruction.present?
     lines << data_validation_instruction if data_validation_instruction.present?
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
@@ -323,6 +328,20 @@ class Ai::PythonOrchestratorClient
   # (Ai::PromptCompiler) não usa este método.
   def current_step_instructions
     sanitize_stale_tool_calls(Ai::StepInstructionText.render(current_step))
+  end
+
+  # Pedido do usuário (mesmo padrão achado no fluxo n8n Maya v4.0: manda objetivo + texto da PRÓXIMA
+  # etapa junto, não só a atual) — dá à IA visão de onde a conversa vai em seguida, sem mudar QUEM
+  # decide o avanço (isso continua sendo só avancar_etapa; ver ETAPA ATUAL acima, que segue a única
+  # âncora que trava o quê fazer AGORA). nil na última etapa ou sem playbook.
+  def next_step_instructions
+    sanitize_stale_tool_calls(Ai::StepInstructionText.render(next_step))
+  end
+
+  # Mesma fonte que #current_step usa (Ai::StateManager#next_step — já existia pro look-ahead de
+  # conhecimento do motor legado, reaproveitada aqui). Leitura PURA, não avança nada.
+  def next_step
+    @next_step ||= state_manager.next_step(@department)
   end
 
   # Bug URGENTE ao vivo: etapas escritas (ou geradas pelo Ai::PromptAssistant) ANTES da migração pra
