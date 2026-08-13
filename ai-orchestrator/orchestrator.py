@@ -62,10 +62,65 @@ ADVANCE_STEP_TOOL = "avancar_etapa"
 TRANSFER_TOOL = "conversation_transfer"
 RESOLVE_TOOL = "conversation_resolve"
 
+# json_schema ESTRITO (não json_object livre): a OpenAI VALIDA a resposta contra este schema antes de
+# devolver — "avancar_etapa": "sim" ou um "dados_coletados" com chave livre vira erro da API, não um
+# JSON mal-formado que a IA podia mandar antes. dados_coletados é LISTA (não objeto {chave: valor}
+# livre) porque json_schema estrito não aceita propriedades de nome arbitrário (additionalProperties
+# tem que ser false em TODO nível) — a lista continua aceitando vários dados no mesmo turno, só que
+# cada um é um item {chave, valor} tipado. Strict mode exige TODA propriedade em "required" (sem
+# opcional de verdade) e additionalProperties:false em cada objeto, inclusive dentro de "items".
+STRUCTURED_REPLY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        MENSAGEM_KEY: {"type": "string", "description": "O texto que será enviado ao cliente no WhatsApp."},
+        DADOS_KEY: {
+            "type": "array",
+            "description": (
+                "TODOS os dados que o cliente forneceu NESTA mensagem, um item por dado (nome, cidade, "
+                "CPF, telefone, e-mail, preferência etc.). OBRIGATÓRIO: se a mensagem_para_cliente "
+                "menciona ou reconhece um dado (ex.: 'Obrigado, Joana'), esse dado TEM que estar aqui — "
+                "nunca deixe a lista vazia quando você citou o dado no texto. Lista vazia [] SÓ quando o "
+                "cliente não informou nada novo neste turno."
+            ),
+            "items": {
+                "type": "object",
+                "properties": {
+                    "chave": {"type": "string", "description": "Nome descritivo do dado (ex.: 'nome_completo', 'cidade')."},
+                    "valor": {"type": "string", "description": "O valor exato que o cliente informou pra esse dado."},
+                },
+                "required": ["chave", "valor"],
+                "additionalProperties": False,
+            },
+        },
+        AVANCAR_KEY: {
+            "type": "boolean",
+            "description": "true quando a etapa atual estiver concluída (o dado dela já está em dados_coletados) ou o cliente recusou um dado opcional; false caso contrário.",
+        },
+        TRANSFERIR_KEY: {"type": "boolean", "description": "true SOMENTE quando precisar transferir para um atendente humano AGORA."},
+        ENCERRAR_KEY: {"type": "boolean", "description": "true SOMENTE quando as condições de encerramento configuradas foram atendidas."},
+        HANDOFF_SUMMARY_KEY: {
+            "type": "string",
+            "description": "Resumo do atendimento — obrigatório (não vazio) quando transferir_humano for true; string vazia nos outros casos.",
+        },
+    },
+    "required": [MENSAGEM_KEY, DADOS_KEY, AVANCAR_KEY, TRANSFERIR_KEY, ENCERRAR_KEY, HANDOFF_SUMMARY_KEY],
+    "additionalProperties": False,
+}
+
+_TEXT_FORMAT = {
+    "format": {
+        "type": "json_schema",
+        "name": "resposta_atendimento",
+        "schema": STRUCTURED_REPLY_SCHEMA,
+        "strict": True,
+    }
+}
+
 # No longer offered as OpenAI function tools: the model now expresses these via the JSON reply itself
 # (see the keys above), not a tool call. "registrar_*" (one synthesized tool per known attribute,
 # Ai::StepCaptureTool) is superseded the same way "salvar_memoria_ia" is — "dados_coletados" is a
-# free-form {chave: valor} bag, so a dedicated tool per attribute buys nothing extra. Rails
+# LIST of {chave, valor} items (ver STRUCTURED_REPLY_SCHEMA — json_schema estrito exige um shape fixo,
+# não aceita objeto de chave livre), so a dedicated tool per attribute buys nothing extra. Rails
 # (Ai::PythonOrchestratorClient#tools_schema) still computes and sends these — left alone there to
 # keep this a Python-side contract change — so they're filtered out here before ever reaching OpenAI.
 # Anything else in tools_schema (admin-configured webhooks/integrations, Ai::Tool rows) is a REAL
@@ -78,13 +133,15 @@ def _is_superseded_tool(name: str) -> bool:
     return name in _CONTROL_TOOL_NAMES or name.startswith(_CAPTURE_TOOL_PREFIX)
 
 
-# OpenAI's text.format=json_object requires the word "json" to appear in the INPUT messages
-# themselves — live 400 confirmed it: "Response input messages must contain the word 'json' in some
-# form to use 'text.format' of type 'json_object'." `instructions` (system_prompt) doesn't count,
-# no matter how much it talks about JSON — a plain "Oi" as the whole input 400s every time. Sent as
-# its OWN separate input item (not prefixed onto the customer's message) so user_input reaching the
-# model — and whatever OpenAI stores server-side for previous_response_id — stays byte-identical to
-# what the customer actually typed.
+# OpenAI's text.format=json_object EXIGIA a palavra "json" nas mensagens de INPUT — live 400
+# confirmado: "Response input messages must contain the word 'json' in some form to use 'text.format'
+# of type 'json_object'." `instructions` (system_prompt) não contava, não importa quanto falasse de
+# JSON — um "Oi" sozinho como input inteiro dava 400 sempre. Migrado pra json_schema estrito
+# (STRUCTURED_REPLY_SCHEMA) — não confirmado se a mesma exigência vale pra json_schema (o schema já
+# força o shape, então é plausível que não precise mais), mas mantido por segurança: não faz mal
+# incluir, e tirar sem confirmar reabriria o mesmo 400 se a exigência persistir. Item PRÓPRIO de
+# input (não prefixado na mensagem do cliente) pra user_input chegar ao modelo — e o que a OpenAI
+# guarda server-side pro previous_response_id — byte-idêntico ao que o cliente realmente digitou.
 _JSON_FORMAT_REMINDER = {
     "role": "user",
     "content": "Lembrete de formato: sua resposta final a este turno deve ser SEMPRE o objeto JSON "
@@ -145,8 +202,9 @@ def run_conversation(
     account_api_key: str | None = None,
 ) -> tuple[str, str, bool]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
-    (text.format=json_object) — control flow (save/advance/transfer/close) is decided by Python from
-    the parsed JSON and dispatched to Rails' webhook, never by which tool the model chose to call.
+    (text.format=json_schema, strict — STRUCTURED_REPLY_SCHEMA) — control flow (save/advance/transfer/
+    close) is decided by Python from the parsed JSON and dispatched to Rails' webhook, never by which
+    tool the model chose to call.
     Real (admin-configured) business tools are still offered as function tools for genuine external
     actions. Always returns (reply_text, response_id, byok_fallback) — including when parsing fails
     or MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to special-case a cut-off turn,
@@ -176,9 +234,9 @@ def run_conversation(
         "tools": openai_tools,
         # Responses API structured-output param — NOT "response_format" (that's the older Chat
         # Completions name; passing it here would raise a TypeError on this SDK/API instead of
-        # working). json_object (not a strict json_schema) because the contract only needs to be
-        # valid JSON with the documented keys, and system_prompt already spells the exact shape.
-        "text": {"format": {"type": "json_object"}},
+        # working). json_schema ESTRITO (STRUCTURED_REPLY_SCHEMA acima) — a OpenAI valida a resposta
+        # contra o schema antes de devolver, não é mais "confia que o texto do prompt basta".
+        "text": _TEXT_FORMAT,
     }
     # Omitted entirely (not sent as null) when absent, so OpenAI starts a fresh conversation
     # instead of trying to resume a previous_response_id that doesn't exist, and so temperature
@@ -227,7 +285,7 @@ def run_conversation(
             # tool_outputs alone (function_call_output items) has no guaranteed "json" text in it —
             # same 400 risk as the plain-text turn above, so the reminder rides along here too.
             "input": [_JSON_FORMAT_REMINDER, *tool_outputs],
-            "text": {"format": {"type": "json_object"}},
+            "text": _TEXT_FORMAT,
         }
         if temperature is not None:
             followup_kwargs["temperature"] = temperature
@@ -245,7 +303,7 @@ def run_conversation(
             previous_response_id=response.id,
             input="Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
                   "que você acabou de fazer.",
-            text={"format": {"type": "json_object"}},
+            text=_TEXT_FORMAT,
             **({"temperature": temperature} if temperature is not None else {}),
         )
         payload = _parse_structured_reply(response.output_text)
@@ -278,8 +336,8 @@ def _parse_structured_reply(text: str | None) -> dict | None:
 
 
 def _truthy(value) -> bool:
-    """Defensive: text.format=json_object guarantees valid JSON, not that the model picked the right
-    JSON *type* for a boolean field — tolerate a stray "true"/"false" string instead of treating it
+    """Defensive: mesmo com json_schema estrito ("type": "boolean" em STRUCTURED_REPLY_SCHEMA) validando
+    o tipo, mantido como segunda camada — tolerate a stray "true"/"false" string instead of treating it
     as Python's default (non-empty string) truthiness, which would misread "false" as true."""
     if isinstance(value, bool):
         return value
@@ -292,11 +350,18 @@ def _dispatch_structured_reply(payload: dict, *, ticket_id: int, ai_department_i
     """Turns the model's structured decision into the same Rails webhook calls the old control tools
     used to trigger (Api::Internal::AiExecuteToolController) — except now PYTHON decides to call them
     because the JSON says so, not because the model chose (or "forgot") to call a tool."""
+    # LISTA de {chave, valor} (STRUCTURED_REPLY_SCHEMA, json_schema estrito) — não mais o objeto de
+    # chave livre {chave: valor} do json_object solto; strict mode não aceita additionalProperties.
     dados = payload.get(DADOS_KEY)
-    if isinstance(dados, dict):
-        for chave, valor in dados.items():
+    if isinstance(dados, list):
+        for item in dados:
+            if not isinstance(item, dict):
+                continue
+            chave = item.get("chave")
+            if not chave:
+                continue
             _post_control_tool(
-                MEMORY_TOOL, {"chave": chave, "valor": valor},
+                MEMORY_TOOL, {"chave": chave, "valor": item.get("valor")},
                 ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
             )
 
@@ -331,3 +396,4 @@ def _post_control_tool(tool_name: str, arguments: dict, *, ticket_id: int, ai_de
         # Never let a Rails-side persistence hiccup swallow the reply already generated for the
         # customer — that's the exact silence bug this refactor exists to kill, from a new angle.
         logger.error("ticket_id=%s: control tool webhook failed for %s: %s", ticket_id, tool_name, e)
+

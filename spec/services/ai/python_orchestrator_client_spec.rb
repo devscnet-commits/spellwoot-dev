@@ -315,8 +315,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
         prompt.include?("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a 'cpf'") &&
-          prompt.include?('preencher o objeto "dados_coletados"') &&
-          prompt.include?('com a chave "cpf"')
+          prompt.include?('adicionar um item na lista "dados_coletados"') &&
+          prompt.include?('"chave": "cpf"')
       }
     end
 
@@ -413,7 +413,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt = JSON.parse(req.body)['system_prompt']
         prompt.include?('peça esclarecimento UMA vez') &&
           prompt.include?('campo OBRIGATÓRIO → defina "transferir_humano": true') &&
-          prompt.include?('mande "dados_coletados" vazio ({}) e defina "avancar_etapa": true')
+          prompt.include?('mande "dados_coletados" vazio ([]) e defina "avancar_etapa": true')
       }
     end
 
@@ -905,14 +905,14 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # Structured Outputs: a IA não escolhe mais entre "registrar_*" e "salvar_memoria_ia" — todo dado
     # (com ou sem tool dedicada no design antigo) vai pro mesmo lugar, "dados_coletados"; é o Python
     # (orchestrator.py#_dispatch_structured_reply) quem sempre chama o webhook salvar_memoria_ia por
-    # baixo, pra CADA chave do dicionário, sem a IA precisar saber que essa tool existe.
+    # baixo, pra CADA item da lista, sem a IA precisar saber que essa tool existe.
     it 'system_prompt instrui a IA a colocar QUALQUER dado em "dados_coletados", sem tool dedicada' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['system_prompt'].include?('coloque TODOS em "dados_coletados"')
+        JSON.parse(req.body)['system_prompt'].include?('adicione UM ITEM em "dados_coletados"')
       }
     end
   end
