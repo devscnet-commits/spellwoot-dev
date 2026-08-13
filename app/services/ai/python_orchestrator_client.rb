@@ -59,6 +59,14 @@ class Ai::PythonOrchestratorClient
   # em silêncio (já aconteceu neste projeto uma vez, com o modelo escrevendo "cidade_usuario" em vez
   # de "cidade"). Esta tool é só pro que SOBRA: contexto que o cliente deu e não tem "botão" nenhum.
   MEMORY_TOOL = 'salvar_memoria_ia'
+  # RAG agentic (substitui o bloco fixo #knowledge_block + o campo por-etapa "consultar conhecimento
+  # antes de responder", que nunca era lido pelo motor Python — só existia na tela e ficava morto no
+  # jsonb do step). Tool REAL de function-calling (não um control_tool de nome reservado): precisa do
+  # loop de tool-call de verdade (orchestrator.py) porque o resultado tem que voltar pro MESMO turno,
+  # antes da IA decidir a resposta final — diferente de avancar_etapa/salvar_memoria_ia, que Python
+  # decide e dispara DEPOIS de já ter o JSON pronto. Disponível em TODA etapa, sempre — a IA decide
+  # quando chamar (objetivo da etapa + o que o cliente perguntou), sem pré-configuração de query/kind.
+  KNOWLEDGE_TOOL = 'consultar_conhecimento'
 
   def self.process_message(conversation:, content:, agent:, department:, mode:, message: nil, force_handoff_notice: false)
     new(conversation: conversation, content: content, agent: agent, department: department, mode: mode,
@@ -110,8 +118,8 @@ class Ai::PythonOrchestratorClient
       tools_schema: tools_schema,
       # SEMPRE vazio hoje — nada neste projeto cria/sincroniza um vector store da OpenAI (auditado:
       # nenhuma tela, nenhum job). Mantido (lido corretamente de department.behavior) para quando essa
-      # sincronização existir; até lá, a base de conhecimento chega pelo #knowledge_block abaixo
-      # (Ai::KnowledgeRetriever — pgvector, já populado, mesmo mecanismo do caminho legado).
+      # sincronização existir; até lá, a base de conhecimento chega pela tool #knowledge_tool
+      # (consultar_conhecimento — Ai::KnowledgeRetriever, pgvector, já populado).
       vector_store_id: @department.behavior.to_h['vector_store_id'],
       user_input: @content.to_s,
       # RAW pixels the model reads NATIVELY (not text captions folded into @content upstream in
@@ -187,8 +195,6 @@ class Ai::PythonOrchestratorClient
     lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
-    kb = knowledge_block
-    lines << kb if kb.present?
     lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
     lines << step_extraction_instruction if step_extraction_instruction.present?
@@ -203,13 +209,14 @@ class Ai::PythonOrchestratorClient
 
   # Texto do pedido, com UM ajuste: a frase original citava "a ferramenta de busca (file_search)" —
   # mas não existe vector store nenhum aqui (ver comentário em #payload), então instruir a IA a chamar
-  # uma tool que não existe seria pior que o problema original. Aponta pro bloco de conhecimento que
-  # o Rails já injeta abaixo (#knowledge_block) em vez disso — mesma intenção, mecanismo real.
+  # uma tool que não existe seria pior que o problema original. Aponta pra tool real #knowledge_tool
+  # (consultar_conhecimento) em vez de um bloco fixo — a IA CHAMA a ferramenta antes de responder,
+  # não lê um texto que pode nem ter sido injetado.
   def identity_instruction
     'IDENTIDADE: Você é um atendente de IA DA PRÓPRIA EMPRESA. A empresa para quem você trabalha É a ' \
       'provedora do serviço. É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras empresas, ' \
-      'operadoras ou provedores. Se o cliente quiser preços, planos ou dúvidas, consulte o bloco ' \
-      '"CONHECIMENTO OFICIAL DA EMPRESA" abaixo antes de responder — nunca invente o que não estiver lá.'
+      'operadoras ou provedores. Se o cliente quiser preços, planos ou dúvidas, use a ferramenta ' \
+      '"consultar_conhecimento" antes de responder — nunca invente o que ela não retornar.'
   end
 
   # Reforço explícito contra "médias de mercado": IA alucinava preço/regra plausível-mas-inventado
@@ -217,7 +224,7 @@ class Ai::PythonOrchestratorClient
   # mesma proibição de #identity_instruction com outra frase, mirando especificamente esse padrão.
   def market_average_guardrail
     'Você é um atendente DA EMPRESA. Nunca cite concorrentes, médias de mercado ou valores que não ' \
-      'estejam no bloco de conhecimento abaixo.'
+      'venham da ferramenta "consultar_conhecimento".'
   end
 
   # Achado em teste ao vivo: a IA inventava situações plausíveis mas inexistentes ("instabilidade no
@@ -229,24 +236,36 @@ class Ai::PythonOrchestratorClient
   end
 
   # Achado em teste ao vivo: a IA transferia pra humano "achando" que devia, pulando o fluxo de etapas
-  # inteiro — o "5 mensagens" aqui é um limite NARRATIVO fixo pedido pelo usuário, independente do teto
-  # REAL enforçado no backend (Ai::Gateway#step_turns_exceeded?, transfer_rules['stuck_handoff_turns'],
-  # default 10 — ver force_handoff_instruction). Os dois números podem divergir; documentado, não
-  # unificado — o pedido foi por um texto fixo, não calculado a partir da config real.
+  # inteiro. Limite NARRATIVO unificado com #data_validation_instruction (1 tentativa de esclarecimento
+  # por dado, não mais um número fixo de mensagens independente) — antes este método dizia "5 mensagens"
+  # enquanto #data_validation_instruction já dizia "1 vez"; dois limiares divergentes pro MESMO gatilho
+  # de ação crítica. O teto REAL enforçado no backend (Ai::Gateway#step_turns_exceeded?,
+  # transfer_rules['stuck_handoff_turns'], default 10 — ver force_handoff_instruction) continua sendo um
+  # backstop separado de propósito (turnos totais da etapa, não tentativas por dado) — não precisa bater
+  # com este número.
   def transfer_discipline_instruction
-    'SÓ transfira para humano se: o cliente pedir explicitamente, demonstrar frustração clara, ou se ' \
-      'você já tentou cumprir a etapa atual por 5 mensagens sem sucesso. NUNCA transfira só porque ' \
-      '"achou" que deve. Siga o fluxo de etapas até o final.'
+    'Transfira para humano quando: o cliente pedir explicitamente para falar com uma pessoa; ' \
+      'demonstrar frustração clara (reclamar, repetir a mesma dúvida, pedir pra falar com pessoa) — ' \
+      'nesse caso transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes; ou o cliente não ' \
+      'conseguir fornecer um dado válido mesmo depois de 1 pedido de esclarecimento — não exija mais de ' \
+      '1 nova tentativa por dado antes de transferir, insistir além disso cansa o cliente. NUNCA ' \
+      'transfira só porque "achou" que deve. Siga o fluxo de etapas até o final.'
   end
 
   # Achado em teste ao vivo (esclarecido pelo usuário: NÃO é sobre várias mensagens por turno — isso é
   # o modo identify_as="human" funcionando como esperado): a IA perguntava várias etapas de uma vez
   # (nome + endereço + CPF + telefone na mesma mensagem) em vez de conduzir uma pergunta por vez, mesmo
   # com TODAS as tools "registrar_*" disponíveis simultaneamente (fluxo agentic, sem gate por etapa).
+  # EXCEÇÃO explícita (antes ausente — a regra era uma proibição absoluta, tom tratado com rigidez de
+  # ação): dado front-loaded pelo PRÓPRIO cliente tem que ser capturado, nunca ignorado só pra manter a
+  # cadência "uma pergunta por vez" — cadência é tom, captura de dado é fato, não podem competir.
   def gradual_conversation_instruction
-    'Peça os dados da etapa atual UM DE CADA VEZ, de forma natural e conversacional — mesmo que várias ' \
-      'ferramentas "registrar_*" estejam disponíveis ao mesmo tempo, não liste várias perguntas na mesma ' \
-      'mensagem. Espere a resposta do cliente antes de pedir o próximo dado.'
+    'Prefira pedir os dados da etapa atual UM DE CADA VEZ, de forma natural e conversacional — mesmo ' \
+      'que várias ferramentas "registrar_*" estejam disponíveis ao mesmo tempo, não liste várias ' \
+      'perguntas na mesma mensagem por iniciativa própria. EXCEÇÃO: se o cliente fornecer ' \
+      'espontaneamente mais de um dado na mesma mensagem — mesmo sem você ter perguntado — registre ' \
+      'TODOS os dados válidos fornecidos naquela mensagem; nunca finja que não viu um dado só para ' \
+      'manter o ritmo de "uma pergunta por vez".'
   end
 
   # Achado ao vivo: a IA leu uma CNH em PDF e alucinou o ano (1997 virou 1991), além de salvar dados
@@ -268,22 +287,6 @@ class Ai::PythonOrchestratorClient
       "\"Não consegui ler o [dado] com clareza na foto. Pode me confirmar qual é?\"\n" \
       '- Não invente nem infira dados que o documento não pediu explicitamente e a etapa não pede — ' \
       'extraia SÓ o que a etapa atual está pedindo, mesmo que o documento mostre outros campos.'
-  end
-
-  # Ai::KnowledgeRetriever: pgvector, o MESMO mecanismo (e a MESMA base já populada) que o caminho
-  # legado usa hoje — não o file_search/vector_store nativo da OpenAI (inexistente neste projeto).
-  # Query = mensagem atual do cliente; [] sem fonte cadastrada ou sem query, o bloco nem aparece.
-  # Cabeçalho agressivo/inegociável de propósito (## + maiúsculas): a versão anterior, mais suave
-  # ("use para responder... não invente"), não impediu a IA de alucinar "médias de mercado" — só
-  # se corrigia quando o cliente reclamava.
-  def knowledge_block
-    chunks = Ai::KnowledgeRetriever.retrieve(query: @content.to_s, account_id: @department.account_id,
-                                             department_id: @department.id)
-    return nil if chunks.blank?
-
-    '## CONHECIMENTO OFICIAL DA EMPRESA (Use APENAS este texto para responder sobre planos/preços/regras. ' \
-      'É PROIBIDO usar conhecimento externo, médias de mercado ou suposições. Se não estiver aqui, diga ' \
-      "que não sabe):\n#{chunks.map { |c| "- #{c}" }.join("\n")}"
   end
 
   # Bug real ao vivo: o Rails salvava certinho em ai_collected_facts (Ai::StateManager#persist_attributes,
@@ -399,7 +402,8 @@ class Ai::PythonOrchestratorClient
       "mínimo 8 dígitos numéricos; e-mail = contém @ e domínio válido; número = só dígitos; escolha = " \
       "valor dentro das opções listadas; anexo = só se um arquivo foi realmente enviado; texto = " \
       "qualquer valor com conteúdo semântico real (não vazio, não só pontuação).\n" \
-      "- Se o valor NÃO bater com o tipo: peça esclarecimento UMA vez. Se o cliente não corrigir: " \
+      "- Se o valor NÃO bater com o tipo: peça correção UMA vez, de forma isolada e direta — não repita " \
+      "a etapa inteira, só aponte o que falta corrigir. Se o cliente não corrigir: " \
       "campo OBRIGATÓRIO → defina \"transferir_humano\": true (preencha \"handoff_summary\"); campo " \
       "opcional → não grave nada nessa chave e siga em frente.\n" \
       "- Se o cliente simplesmente NÃO fornecer o dado pedido: campo OBRIGATÓRIO → peça UMA vez; se " \
@@ -491,7 +495,7 @@ class Ai::PythonOrchestratorClient
   # (department.tools.active + as 2 constantes de controle), não adivinhando "_" == ".".
   def tools_schema
     real_names = real_tools.map { |t| t[:name] }
-    synthesized = step_capture_tools + control_tools
+    synthesized = step_capture_tools + control_tools + [knowledge_tool]
     real_tools + synthesized.reject { |t| real_names.include?(t[:name]) }
   end
 
@@ -580,6 +584,33 @@ class Ai::PythonOrchestratorClient
           required: ['handoff_summary']
         } }
     ]
+  end
+
+  # DIFERENTE dos 5 tools acima: aquelas são "control_tools" — orchestrator.py FILTRA os nomes em
+  # _CONTROL_TOOL_NAMES antes de montar a lista pra OpenAI (Python decide dispará-las a partir do JSON
+  # já parseado, depois que o turno terminou). "consultar_conhecimento" tem que ser uma function tool
+  # DE VERDADE, oferecida à OpenAI e chamada NO MEIO do turno (mesmo loop de tool-call que já atende
+  # tools reais tipo consultar_periodos) — o resultado da busca precisa voltar pra IA ANTES dela montar
+  # a resposta final, não depois. Por isso este método fica separado de #control_tools, embora também
+  # seja "sempre disponível, não depende de configuração por department": não pode ser confundido com o
+  # grupo que orchestrator.py filtra. Sem query pré-configurada nem filtro de tipo — a IA formula a
+  # pergunta e decide quando chamar, a partir do objetivo da etapa + o que o cliente perguntou.
+  def knowledge_tool
+    { name: KNOWLEDGE_TOOL,
+      description: 'Busca na base de conhecimento oficial da empresa (planos, preços, regras, ' \
+                   'políticas). Use SEMPRE que o cliente perguntar algo que dependa de informação real ' \
+                   'da empresa e você não tiver certeza absoluta — mesmo que a etapa atual não seja ' \
+                   'sobre isso. Nunca responda sobre preço/plano/regra sem antes chamar esta ferramenta. ' \
+                   'Se ela não retornar nada relevante, diga que vai verificar ou transfira — nunca invente.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          'pergunta' => { type: 'string',
+                          description: 'A pergunta ou termo de busca, na linguagem do cliente (ex.: ' \
+                                       '"quanto custa o plano fibra 500mb").' }
+        },
+        required: ['pergunta']
+      } }
   end
 
   # Leitura PURA do índice server-tracked (Ai::StateManager#current_step) — não roda track_step, não

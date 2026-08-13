@@ -44,6 +44,8 @@ class Api::Internal::AiExecuteToolController < ActionController::API
 
     return render json: save_memory(conversation, department) if params[:tool_name] == Ai::PythonOrchestratorClient::MEMORY_TOOL
 
+    return render json: search_knowledge(department) if params[:tool_name] == Ai::PythonOrchestratorClient::KNOWLEDGE_TOOL
+
     tool = find_real_tool!(department, params[:tool_name])
 
     execution = Ai::ToolExecutor.new(
@@ -122,6 +124,22 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     persisted = gated.key?(key)
     { result: { key => value }, status: persisted ? 'executed' : 'skipped',
       error: persisted ? nil : 'valor vazio — nada foi registrado' }
+  end
+
+  # RAG agentic (Ai::PythonOrchestratorClient::KNOWLEDGE_TOOL): a IA chamou "consultar_conhecimento" NO
+  # MEIO do turno (function-calling de verdade, não um control tool disparado depois do JSON parseado —
+  # ver comentário de #knowledge_tool). Roda em QUALQUER modo, live OU shadow: é leitura pura, sem
+  # efeito colateral nenhum pra proteger — diferente de capture_attribute/save_memory/advance_step, que
+  # gateiam por live? porque ESCREVEM estado da conversa. Isto fecha o gap de "RAG vazio silencioso": o
+  # resultado da busca é sempre um function_call_output que a IA precisa processar, mesmo quando é
+  # "nada encontrado" — nunca mais um bloco de prompt que simplesmente não aparece sem avisar ninguém.
+  def search_knowledge(department)
+    query = arguments['pergunta'].to_s.strip
+    return { result: {}, status: 'skipped', error: 'pergunta vazia — nada foi buscado' } if query.blank?
+
+    chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: department.account_id, department_id: department.id)
+    conteudo = chunks.present? ? chunks.join("\n---\n") : 'Nada encontrado na base de conhecimento para essa pergunta.'
+    { result: { 'encontrado' => chunks.present?, 'conteudo' => conteudo }, status: 'executed', error: nil }
   end
 
   # "continuar_conversa" (Ai::PythonOrchestratorClient::CONTINUE_TOOL): pure no-op, NEVER touches the

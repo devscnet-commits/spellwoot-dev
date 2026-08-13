@@ -75,9 +75,11 @@ export const stepToApi = s => {
 //    hasSlot (buildStepPayload nem lê hasSlot). slot_required numa etapa SEM slot é inofensivo: o
 //    Ai::StepResolver retorna antes de consultar optional? quando Ai::StepSlot.attribute(step) é nil.
 //  - NÃO escreve complete_when (morto no backend pós-Gap 2; legado sobrevive pelo spread, intocado);
-//  - knowledge: EMITIDO quando knowledgeQuery está preenchida -> { query, kinds: [...] } (kinds separado
-//    por vírgula; vazio = todos). query vazia => a chave knowledge SAI do payload (não vira {query:""}).
-//    Input DIRETO do usuário — NÃO depende de estado assíncrono (não repetir o acoplamento do hasSlot/#306).
+//  - NÃO escreve mais `knowledge` (campo "consultar conhecimento antes de responder" + "filtrar por
+//    tipo"): substituído pela tool agentic consultar_conhecimento (Ai::PythonOrchestratorClient),
+//    sempre disponível em toda etapa — a IA decide quando buscar, sem pré-configuração de query/kind.
+//    O campo nunca chegou a ser lido pelo motor Python (só existia na tela); etapas antigas que ainda
+//    têm `knowledge` no jsonb mantêm o valor morto pelo spread — inofensivo, nada mais lê essa chave.
 //  - on_complete (desfecho declarado, (b)-core): action vazia => on_complete = null (LIMPA — como collect;
 //    NÃO omitir, senão o mergeStepEdit preservaria um backfill que o usuário acabou de apagar). action
 //    presente => { action[, team_id em handoff_human][, target em handoff_ai] } (reason fica com o default
@@ -86,7 +88,7 @@ export const stepToApi = s => {
 export const buildStepPayload = ({
   name,
   objective = '',
-  // Texto bruto do textarea, UMA regra por linha (a mesma convenção de collectOptions/knowledgeKinds) —
+  // Texto bruto do textarea, UMA regra por linha (a mesma convenção de collectOptions) —
   // dividido e limpo aqui, não no componente.
   rules = '',
   suggestedScript = '',
@@ -100,8 +102,6 @@ export const buildStepPayload = ({
   collectSource = 'fixed',
   collectDomainTool = '',
   slotRequired = true,
-  knowledgeQuery = '',
-  knowledgeKinds = '',
   onCompleteAction = '',
   onCompleteTeamId = '',
   onCompleteTarget = '',
@@ -139,18 +139,6 @@ export const buildStepPayload = ({
   } else {
     payload.collect = null;
   }
-  const query = (knowledgeQuery || '').trim();
-  if (query) {
-    payload.knowledge = {
-      query,
-      kinds: (knowledgeKinds || '')
-        .split(',')
-        .map(k => k.trim())
-        .filter(Boolean),
-    };
-  } else {
-    payload.knowledge = null; // LIMPA (mergeStepEdit sobrescreve o backfill anterior); não omitir
-  }
   const action = (onCompleteAction || '').trim();
   if (action) {
     const onComplete = { action };
@@ -176,7 +164,7 @@ export const buildStepPayload = ({
 // Merge do saveStep (AiDepartmentDetail): a etapa editada = a existente sobrescrita SÓ pelas chaves que o
 // payload emite. Chaves que buildStepPayload NÃO emite (campos legados/futuros do backend) sobrevivem pelo
 // spread. Extraído para testar essa preservação sem montar o route-view inteiro (a cobertura do PR 1, que
-// ficou verificada só por leitura). Agora que knowledge É emitido, isto protege as OUTRAS chaves ausentes.
+// ficou verificada só por leitura). Protege qualquer chave que buildStepPayload não emite (ex.: knowledge legado).
 export const mergeStepEdit = (existing, payload) => ({
   ...existing,
   ...payload,

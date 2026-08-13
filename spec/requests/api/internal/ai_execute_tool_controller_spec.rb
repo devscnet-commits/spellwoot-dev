@@ -259,6 +259,58 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    # RAG agentic: a IA chama esta tool NO MEIO do turno (function-calling de verdade, ver comentário de
+    # Ai::PythonOrchestratorClient#knowledge_tool) — o resultado tem que voltar como function_call_output
+    # pra ela ler ANTES de montar a resposta final. Sem gate por etapa, sem query/tipo pré-configurado.
+    context 'chamada de "consultar_conhecimento" (RAG agentic — tool real, sempre disponível)' do
+      it 'devolve os trechos encontrados, SEM criar Ai::CapabilityExecution' do
+        allow(Ai::KnowledgeRetriever).to receive(:retrieve)
+          .with(query: 'quanto custa o plano fibra?', account_id: account.id, department_id: department.id)
+          .and_return(['Plano Fibra 500MB: R$ 99,90/mês'])
+
+        expect { call_tool('consultar_conhecimento', arguments: { pergunta: 'quanto custa o plano fibra?' }) }
+          .not_to change(Ai::CapabilityExecution, :count)
+
+        expect(response).to have_http_status(:success)
+        json = response.parsed_body
+        expect(json['status']).to eq('executed')
+        expect(json['result']['encontrado']).to be true
+        expect(json['result']['conteudo']).to include('Plano Fibra 500MB: R$ 99,90/mês')
+      end
+
+      # Fecha o gap identificado: base vazia devolve uma RESPOSTA que a IA precisa processar (um
+      # function_call_output real), nunca um bloco de prompt silenciosamente ausente.
+      it 'sem resultado, devolve "encontrado: false" com uma mensagem explícita — nunca silêncio' do
+        allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
+
+        call_tool('consultar_conhecimento', arguments: { pergunta: 'algo que não existe na base' })
+
+        expect(response).to have_http_status(:success)
+        json = response.parsed_body
+        expect(json['status']).to eq('executed')
+        expect(json['result']['encontrado']).to be false
+        expect(json['result']['conteudo']).to eq('Nada encontrado na base de conhecimento para essa pergunta.')
+      end
+
+      it 'pergunta vazia/ausente não busca nada' do
+        call_tool('consultar_conhecimento', arguments: {})
+
+        expect(response.parsed_body['status']).to eq('skipped')
+      end
+
+      # Leitura pura, sem efeito colateral: diferente de registrar_*/avancar_etapa/conversation.transfer,
+      # roda IGUAL em shadow — shadow existe pra proteger contra ESCRITA vazando pra conversa real, não
+      # pra impedir a IA de ler a base de conhecimento durante uma avaliação/piloto.
+      it 'em modo shadow, ainda busca e devolve o resultado normalmente' do
+        allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return(['Plano X: R$ 50/mês'])
+
+        call_tool('consultar_conhecimento', arguments: { pergunta: 'plano x' }, mode: 'shadow')
+
+        expect(response.parsed_body['status']).to eq('executed')
+        expect(response.parsed_body['result']['conteudo']).to include('Plano X: R$ 50/mês')
+      end
+    end
+
     context 'validação de segurança do webhook' do
       it 'retorna 401 quando nenhum Bearer token é enviado' do
         call_webhook(headers: {})
