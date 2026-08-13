@@ -187,6 +187,20 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # texto do modelo era outra coisa — aqui NÃO é). Espelha Ai::Gateway#force_conclusion (motor legado)
   # nas 3 ações, sem reusar Ai::ActionDispatcher (não existe fora do Gateway) — usa Ai::CapabilityRegistry
   # direto, igual #run_capability já faz pras outras 2 control tools.
+  # Bug ticket 557 (achado 13/08): avançava por ÍNDICE puro (current_index + 1), sem checar se a etapa
+  # que estava sendo deixada tinha o dado obrigatório (step['collect']['attribute']) em
+  # ai_collected_facts — um dado adiantado pra QUALQUER etapa futura era tratado como "pode avançar",
+  # pulando etapas inteiras sem dado nenhum. Ai::StateManager#track_step faria essa validação (toda a
+  # máquina de recusa de slot, Gap 1-4) mas só é chamado pelo Ai::Gateway#run LEGADO, deletado na
+  # eliminação de hoje — o caminho Python nunca passou por ali. NÃO ressuscita StateManager/
+  # StepResolver/TurnCapture — checagem nova e isolada, só pra este caminho.
+  #
+  # "Varredura" (decisão confirmada): se o cliente adiantou dados de VÁRIAS etapas seguintes na mesma
+  # mensagem, uma ÚNICA chamada de avancar_etapa varre todas as etapas consecutivas já satisfeitas,
+  # parando exatamente na primeira com dado obrigatório faltando — não trava etapa por etapa esperando
+  # uma chamada por etapa. status 'blocked_missing_data' SÓ quando NENHUM avanço foi possível (a etapa
+  # de PARTIDA já está sem o dado); se a varredura moveu pelo menos 1 posição antes de parar, é
+  # 'executed' (progresso real aconteceu, só não foi até o fim).
   def advance_step(conversation, department)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
@@ -194,16 +208,43 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     return { result: {}, status: 'skipped', error: 'sem etapas configuradas' } if steps.empty?
 
     attrs = conversation.additional_attributes || {}
-    current_index = attrs['ai_step_index'].to_i.clamp(0, steps.size - 1)
-    current_step = steps[current_index]
-    on_complete = current_step.is_a?(Hash) ? (current_step['on_complete'] || current_step[:on_complete]) : nil
-    return execute_step_conclusion(conversation, department, on_complete) if on_complete.is_a?(Hash)
+    facts = attrs['ai_collected_facts'] || {}
+    start_index = attrs['ai_step_index'].to_i.clamp(0, steps.size - 1)
+    index = start_index
 
-    new_index = [current_index + 1, steps.size - 1].min
-    attrs['ai_step_index'] = new_index
+    loop do
+      break if missing_required_attributes(steps[index], facts).any?
+
+      current_step = steps[index]
+      on_complete = current_step.is_a?(Hash) ? (current_step['on_complete'] || current_step[:on_complete]) : nil
+      return execute_step_conclusion(conversation, department, on_complete) if on_complete.is_a?(Hash)
+
+      break if index == steps.size - 1
+
+      index += 1
+    end
+
+    if index == start_index && missing_required_attributes(steps[index], facts).any?
+      return { result: { 'ai_step_index' => index }, status: 'blocked_missing_data', error: nil }
+    end
+
+    attrs['ai_step_index'] = index
     attrs['ai_step_turns'] = 0
     conversation.update!(additional_attributes: attrs)
-    { result: { 'ai_step_index' => new_index }, status: 'executed', error: nil }
+    { result: { 'ai_step_index' => index }, status: 'executed', error: nil }
+  end
+
+  # collect.attribute aceita string (único formato real usado pela tela hoje) OU array — Array()
+  # normaliza os dois sem inventar campo novo (suporta múltiplos campos obrigatórios por etapa se o
+  # playbook algum dia vier a usar isso; hoje sempre 1 elemento). slot_required: false (NUNCA
+  # collect.required — ver AiStepForm/aiStepPayload) = campo opcional, nunca bloqueia avanço (default
+  # assumido, sem sinal novo do modelo pra "recusa" — ver item 5 da instrução).
+  def missing_required_attributes(step, facts)
+    return [] unless step.is_a?(Hash)
+    return [] if step['slot_required'] == false || step[:slot_required] == false
+
+    attrs = Array(step.dig('collect', 'attribute') || step.dig(:collect, :attribute)).compact_blank
+    attrs.reject { |attr| facts.to_h[attr.to_s].present? }
   end
 
   # As 3 ações do desfecho declarado — espelha Ai::Gateway#force_conclusion (motor legado) exatamente,

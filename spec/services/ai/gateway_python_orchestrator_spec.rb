@@ -77,14 +77,22 @@ RSpec.describe Ai::Gateway do
       expect(Ai::PythonOrchestratorClient).to have_received(:process_message).with(hash_including(force_handoff_notice: false))
     end
 
-    it 'true assim que ai_step_turns >= limite, verificado ANTES de chamar o Python' do
+    # Achado ao vivo (13/08, relacionado ao ticket 557): até este patch, atingir o teto só mandava
+    # force_handoff_notice:true pro Python — um empurrão de PROMPT que o modelo podia simplesmente
+    # ignorar e continuar enrolando (nada no backend impedia isso). Agora é bloqueio de verdade: o
+    # Python nem chega a ser chamado, o Gateway transfere direto (mesmo padrão de
+    # credit_exhausted?/max_replies_reached? — zero custo, sem depender do modelo "obedecer" nada).
+    it 'ai_step_turns >= limite: handoff FORÇADO pelo backend — Python nem é chamado, não é mais só um pedido no prompt' do
       convo = create(:conversation, account: account, inbox: inbox, status: 'open',
                                     additional_attributes: { 'ai_step_turns' => 2 })
       message = create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming', content: 'oi')
 
       described_class.new(message: message, agent_inbox: binding, mode: 'live').run
 
-      expect(Ai::PythonOrchestratorClient).to have_received(:process_message).with(hash_including(force_handoff_notice: true))
+      expect(Ai::PythonOrchestratorClient).not_to have_received(:process_message)
+      # ai_handoff é a MESMA flag que Ai::ReplyPolicy lê pra parar a IA de responder (ver o bug do
+      # transferir_humano corrigido antes) — setada de verdade, não só sugerida ao modelo.
+      expect(convo.reload.additional_attributes['ai_handoff']).to be true
     end
 
     it 'limite 0 desliga o teto (nunca força)' do

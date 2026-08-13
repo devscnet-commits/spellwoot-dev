@@ -94,6 +94,21 @@ class Ai::Gateway
       return finalize(run_record, 'max_replies')
     end
 
+    # stuck_handoff_turns (tela de Etapas — "Transferir para humano se travar em uma etapa por X
+    # mensagens"): achado ao vivo (13/08, relacionado ao ticket 557) — até aqui isso era só um empurrão
+    # de PROMPT (force_handoff_notice/force_handoff_instruction, mais abaixo) pedindo pro modelo
+    # transferir; nada IMPEDIA o modelo de ignorar e continuar enrolando. Vira bloqueio de verdade: ao
+    # atingir o teto, o Gateway transfere direto, mesmo padrão pré-chamada de credit_exhausted?/
+    # max_replies_reached? acima (zero custo LLM). O empurrão de prompt continua existindo (não foi
+    # tocado, sem refatorar) — na prática dá 1 turno de graça pro modelo se corrigir sozinho antes
+    # deste bloqueio pegar no turno seguinte, já que ai_step_turns só reflete o valor ATÉ o turno
+    # anterior aqui. NÃO ressuscita Ai::StateManager/StepResolver/TurnCapture (Gap 1-4) — checagem
+    # nova e isolada, reusando step_turns_exceeded? que já existia pro empurrão de prompt.
+    if @acts_live && step_turns_exceeded?(department)
+      force_stuck_step_handoff(run_record, department)
+      return finalize(run_record, 'stuck_handoff')
+    end
+
     # Fase 3 — circuit breaker por (conta, provider). Com o breaker ABERTO, PULA todo o caminho condenado
     # (RAG + montagem de contexto + chamada ao modelo) e vai direto ao handoff da Fase 1 — MESMO padrão
     # pré-chamada do credit_exhausted? acima, custo e latência ZERO. Só ao vivo (shadow nunca transfere nem
@@ -398,6 +413,21 @@ class Ai::Gateway
   def max_replies_reached?(department)
     max = department.behavior.to_h['max_replies'].to_i
     max.positive? && Ai::Event.where(conversation_id: @conversation.id, event_type: 'reply.sent').count >= max
+  end
+
+  # Transferência forçada ao atingir stuck_handoff_turns (achado ao vivo 13/08, ver comentário no
+  # #run). Espelha force_max_replies_handoff/force_credit_handoff: nota interna + transfer +
+  # assign_human, SEM mensagem ao cliente (o gate acima já impede o modelo de responder este turno).
+  def force_stuck_step_handoff(run_record, department)
+    action_dispatcher.internal_note('⚠️ A IA ficou travada na mesma etapa sem avançar — atendimento transferido para um humano.')
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'stuck_handoff_turns' })
+    handoff_coordinator.assign_human(team_id, reason: 'stuck_handoff_turns')
+    emit(run_record, 'handoff.stuck_step', { team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_stuck_step_handoff] #{e.class}: #{e.message}"
   end
 
   # Provider de IA indisponível (rate-limit/cota/billing, ou auth não recuperado pelo BYOK): a IA não
