@@ -154,6 +154,16 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # and calls this — Rails only clamps at the last step and resets ai_step_turns (Ai::Gateway's
   # stuck-turn ceiling counts turns SINCE the last genuine advance, mirroring the legacy path's
   # Gap 4 semantics without reusing its decision-shaped Ai::StepResolver machinery).
+  #
+  # on_complete (desfecho declarado NA ETAPA que está sendo concluída — "Encerrar o atendimento" no
+  # AiStepForm.vue): GAP real achado em auditoria (13/08) — nunca foi lido no caminho Python; a etapa
+  # só avançava o índice, o desfecho configurado nunca disparava. Mesmo padrão de leitura de campo da
+  # etapa que já existe pra transferir_humano/encerrar_atendimento (o Python NÃO injeta texto extra de
+  # despedida aqui — a "mensagem_para_cliente" do próprio turno do modelo já é o texto ao cliente,
+  # igual os outros dois campos; force_conclusion do motor legado injetava close_farewell porque ali o
+  # texto do modelo era outra coisa — aqui NÃO é). Espelha Ai::Gateway#force_conclusion (motor legado)
+  # nas 3 ações, sem reusar Ai::ActionDispatcher (não existe fora do Gateway) — usa Ai::CapabilityRegistry
+  # direto, igual #run_capability já faz pras outras 2 control tools.
   def advance_step(conversation, department)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
@@ -162,11 +172,54 @@ class Api::Internal::AiExecuteToolController < ActionController::API
 
     attrs = conversation.additional_attributes || {}
     current_index = attrs['ai_step_index'].to_i.clamp(0, steps.size - 1)
+    current_step = steps[current_index]
+    on_complete = current_step.is_a?(Hash) ? (current_step['on_complete'] || current_step[:on_complete]) : nil
+    return execute_step_conclusion(conversation, department, on_complete) if on_complete.is_a?(Hash)
+
     new_index = [current_index + 1, steps.size - 1].min
     attrs['ai_step_index'] = new_index
     attrs['ai_step_turns'] = 0
     conversation.update!(additional_attributes: attrs)
     { result: { 'ai_step_index' => new_index }, status: 'executed', error: nil }
+  end
+
+  # As 3 ações do desfecho declarado — espelha Ai::Gateway#force_conclusion (motor legado) exatamente,
+  # trocando action_dispatcher/handoff_coordinator memoizados do Gateway por instâncias locais (este
+  # controller não tem run_record nem @acts_live — roda direto, o gate live? já filtrou acima).
+  def execute_step_conclusion(conversation, department, info)
+    case info['action'].to_s
+    when 'close'
+      result = Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::RESOLVE_TOOL,
+                                              conversation: conversation, input: {})
+      { result: { 'conclusion' => 'close' }.merge(result[:output].is_a?(Hash) ? result[:output] : {}),
+        status: 'executed', error: nil }
+    when 'handoff_ai'
+      routed = step_handoff_coordinator(conversation, department).route_to_ai({ 'handoff_target' => info['target'].to_s })
+      { result: { 'conclusion' => 'handoff_ai', 'target' => info['target'], 'routed' => routed ? true : false },
+        status: 'executed', error: nil }
+    else # handoff_human (default) — mesma leitura de team que Ai::Gateway#force_conclusion
+      coordinator = step_handoff_coordinator(conversation, department)
+      team_id = coordinator.conclusion_team_id(info)
+      reason = info['reason'].presence || 'conclusao'
+      transfer_input = { 'unassign' => true }
+      transfer_input['team_id'] = team_id if team_id
+      Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL,
+                                     conversation: conversation, input: transfer_input)
+      coordinator.assign_human(team_id, reason: reason)
+      { result: { 'conclusion' => 'handoff_human', 'team_id' => team_id }, status: 'executed', error: nil }
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Api::Internal::AiExecuteToolController#execute_step_conclusion] #{e.class}: #{e.message}"
+    { result: {}, status: 'failed', error: e.message }
+  end
+
+  # Ai::HandoffCoordinator exige um `message` (route_to_ai usa .inbox_id/.id pra reenfileirar o
+  # GatewayRunJob) — este controller não recebe o message_id que disparou o turno (o payload Rails->
+  # Python nunca mandou), então usa a ÚLTIMA mensagem incoming da conversa como substituta razoável
+  # (mesma inbox, é o que dispararia o próximo turno de qualquer forma).
+  def step_handoff_coordinator(conversation, department)
+    Ai::HandoffCoordinator.new(conversation: conversation, account: department.account, agent: department.agent,
+                               message: conversation.messages.incoming.order(:id).last)
   end
 
   # conversation.resolve / conversation.transfer: direct Ai::CapabilityRegistry calls (same registry

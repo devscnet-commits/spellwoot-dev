@@ -136,6 +136,93 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    # Gap achado em auditoria (13/08): on_complete (desfecho declarado NA ETAPA — "Encerrar o
+    # atendimento") nunca era lido no caminho Python; avancar_etapa só incrementava o índice, o
+    # desfecho configurado nunca disparava. Espelha Ai::Gateway#force_conclusion (motor legado).
+    context 'chamada de "avancar_etapa" numa etapa com on_complete declarado (desfecho, não índice)' do
+      let!(:incoming_message) do
+        create(:message, account: account, inbox: conversation.inbox, conversation: conversation, message_type: 'incoming')
+      end
+
+      it 'action=close: resolve a conversa, SEM avançar o índice' do
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'close' } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        call_tool('avancar_etapa')
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.status).to eq('resolved')
+        expect(conversation.additional_attributes['ai_step_index']).to eq(0) # NÃO foi um avanço de índice normal
+        expect(response.parsed_body['result']['conclusion']).to eq('close')
+      end
+
+      it 'action=handoff_human (default): transfere e atribui, SEM avançar o índice' do
+        team = create(:team, account: account)
+        create(:team_member, team: team, user: create(:user, account: account))
+        agent.update!(handoff_team_ids: [team.id])
+        department.reload # limpa a associação :agent memoizada — a validação do Playbook precisa ver o update acima
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team.id } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        call_tool('avancar_etapa')
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.additional_attributes['ai_handoff']).to eq(true) # assign_human rodou
+        expect(conversation.team_id).to eq(team.id)
+        expect(conversation.additional_attributes['ai_step_index']).to eq(0)
+        expect(response.parsed_body['result']['conclusion']).to eq('handoff_human')
+      end
+
+      it 'action=handoff_ai: roteia pra outra IA (ai_routed_agent_id), SEM avançar o índice' do
+        target_agent = Ai::Agent.create!(account: account, name: 'Vendas', status: 'active',
+                                         ai_operation_profile_id: operation_profile.id)
+        Ai::AgentInbox.create!(ai_agent_id: target_agent.id, inbox_id: conversation.inbox_id, mode: 'live', active: true)
+        agent.update!(handoff_agent_ids: [target_agent.id])
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_ai', 'target' => 'Vendas' } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        call_tool('avancar_etapa')
+
+        expect(response).to have_http_status(:success)
+        expect(conversation.reload.additional_attributes['ai_routed_agent_id']).to eq(target_agent.id)
+        expect(conversation.additional_attributes['ai_step_index']).to eq(0)
+        json = response.parsed_body
+        expect(json['result']['conclusion']).to eq('handoff_ai')
+        expect(json['result']['routed']).to eq(true)
+      end
+
+      it 'em modo shadow, NÃO executa o desfecho (mesmo gate live? das outras control tools)' do
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'close' } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        call_tool('avancar_etapa', mode: 'shadow')
+
+        expect(conversation.reload.status).to eq('open')
+        expect(response.parsed_body['status']).to eq('skipped')
+      end
+
+      it 'etapa SEM on_complete continua avançando o índice normalmente (não regride o caminho comum)' do
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Boas-vindas' },
+          { 'name' => 'Fim' }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
+
+        call_tool('avancar_etapa')
+
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1)
+        expect(response.parsed_body['result']['conclusion']).to be_nil
+      end
+    end
+
     # Bug real ao vivo: a IA respondia só com texto e nunca chamava nenhuma tool, então o
     # ai_step_index nunca avançava. orchestrator.py passou a mandar tool_choice="required" — esta tool
     # é o escape-valve: um no-op puro pra quando a IA só quer falar (perguntar/cumprimentar/responder)

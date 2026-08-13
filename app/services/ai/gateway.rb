@@ -183,6 +183,14 @@ class Ai::Gateway
         message: @message, force_handoff_notice: force_handoff_notice
       )
       persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
+      # BYOK (billing Fase 3): o Python já fez o retry internamente (ver orchestrator.py) — aqui só
+      # espelha o que #maybe_byok_fallback fazia no caminho legado: tag de visibilidade + cobra 1
+      # crédito SCNET pela chamada que teve que usar a chave global. Só ao vivo (shadow não gasta).
+      if @acts_live && result[:byok_fallback]
+        apply_label('chave-propria-falhou')
+        emit(run_record, 'decision.byok_fallback', { provider: 'openai' })
+        consume_byok_fallback_credit
+      end
       # "avancar_etapa" (chamado mid-loop pelo Python, via Api::Internal::AiExecuteToolController) já
       # zerou ai_step_turns se a etapa avançou; senão este turno não produziu avanço -> soma 1.
       bump_step_turns_unless_advanced(step_index_before) if @acts_live

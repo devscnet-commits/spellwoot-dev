@@ -96,14 +96,14 @@ class Ai::PythonOrchestratorClient
 
     unless response.success?
       Rails.logger.error "[Ai::PythonOrchestratorClient] HTTP #{response.code}: #{response.body}"
-      return { reply: nil, response_id: nil }
+      return { reply: nil, response_id: nil, byok_fallback: false }
     end
 
     parsed = response.parsed_response
-    { reply: parsed['reply'], response_id: parsed['response_id'] }
+    { reply: parsed['reply'], response_id: parsed['response_id'], byok_fallback: parsed['byok_fallback'] == true }
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] #{e.class}: #{e.message}"
-    { reply: nil, response_id: nil }
+    { reply: nil, response_id: nil, byok_fallback: false }
   end
 
   private
@@ -137,8 +137,20 @@ class Ai::PythonOrchestratorClient
       # (orchestrator.py segue com _client = OpenAI(...) fixo); primeiro passo de habilitar troca de
       # provider sem mexer em código é confirmar que o valor certo está chegando.
       provider: operation_profile&.supervisor_provider,
-      temperature: temperature
+      temperature: temperature,
+      # BYOK (billing Fase 3): GAP achado em auditoria (13/08) — o orquestrador Python nunca recebia
+      # NENHUMA chave por request, sempre a global fixa do .env dele; uma conta com custom_llm_api_key
+      # ligado + chave própria configurada (ex.: conta #2) consumia a chave/cota da SCNET em silêncio
+      # desde que o primeiro department dela foi pro Python. nil quando a conta não tem BYOK — o
+      # orquestrador cai na chave global dele mesmo, comportamento IDÊNTICO a antes desta mudança.
+      account_api_key: account_api_key
     }
+  end
+
+  # Mesma resolução que Ai::Gateway#maybe_byok_fallback (motor legado) já usa: só existe quando a
+  # conta tem a feature custom_llm_api_key ligada E uma chave de verdade salva no Hub pro provider.
+  def account_api_key
+    Ai::ModelRouter.account_provider_key(@department.account_id, operation_profile&.supervisor_provider.presence || 'openai')
   end
 
   def image_url
@@ -197,6 +209,11 @@ class Ai::PythonOrchestratorClient
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
     lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
+    lines << "PRÓXIMA ETAPA (só contexto — NÃO é a atual; NÃO pule pra ela nem PEÇA o dado dela antes " \
+             "da hora, mas se o cliente ADIANTAR esse dado por conta própria, capture normalmente — " \
+             "ver REGRAS DE FOCO E VALIDAÇÃO DA COLETA abaixo; use isso só pra conduzir a conversa com " \
+             "continuidade, sem soar como se não soubesse o que vem a seguir):\n#{next_step_instructions}" \
+      if next_step_instructions.present?
     lines << step_extraction_instruction if step_extraction_instruction.present?
     lines << data_validation_instruction if data_validation_instruction.present?
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
@@ -316,6 +333,20 @@ class Ai::PythonOrchestratorClient
     sanitize_stale_tool_calls(Ai::StepInstructionText.render(current_step))
   end
 
+  # Pedido do usuário (mesmo padrão achado no fluxo n8n Maya v4.0: manda objetivo + texto da PRÓXIMA
+  # etapa junto, não só a atual) — dá à IA visão de onde a conversa vai em seguida, sem mudar QUEM
+  # decide o avanço (isso continua sendo só avancar_etapa; ver ETAPA ATUAL acima, que segue a única
+  # âncora que trava o quê fazer AGORA). nil na última etapa ou sem playbook.
+  def next_step_instructions
+    sanitize_stale_tool_calls(Ai::StepInstructionText.render(next_step))
+  end
+
+  # Mesma fonte que #current_step usa (Ai::StateManager#next_step — já existia pro look-ahead de
+  # conhecimento do motor legado, reaproveitada aqui). Leitura PURA, não avança nada.
+  def next_step
+    @next_step ||= state_manager.next_step(@department)
+  end
+
   # Bug URGENTE ao vivo: etapas escritas (ou geradas pelo Ai::PromptAssistant) ANTES da migração pra
   # Structured Outputs têm texto tipo "chame a ferramenta registrar_nome_cliente"/"chame a ferramenta
   # avancar_etapa" — tools que orchestrator.py não oferece MAIS à OpenAI (filtradas, ver
@@ -358,8 +389,8 @@ class Ai::PythonOrchestratorClient
     return nil if attribute.blank?
 
     "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}' " \
-      "(#{step_slot_metadata_text}). Assim que o cliente informar isso, você DEVE preencher o " \
-      "objeto \"dados_coletados\" no seu JSON de resposta com a chave \"#{attribute}\" e o valor " \
+      "(#{step_slot_metadata_text}). Assim que o cliente informar isso, você DEVE adicionar um item na " \
+      "lista \"dados_coletados\" no seu JSON de resposta com \"chave\": \"#{attribute}\" e o valor " \
       'extraído.'
   end
 
@@ -408,7 +439,7 @@ class Ai::PythonOrchestratorClient
       "opcional → não grave nada nessa chave e siga em frente.\n" \
       "- Se o cliente simplesmente NÃO fornecer o dado pedido: campo OBRIGATÓRIO → peça UMA vez; se " \
       "ele ignorar de novo, defina \"transferir_humano\": true; campo opcional → mande " \
-      '"dados_coletados" vazio ({}) e defina "avancar_etapa": true.'
+      '"dados_coletados" vazio ([]) e defina "avancar_etapa": true.'
   end
 
   # Mesma fonte e formatação que Ai::PromptCompiler#step_lines/compile já usa para transfer_when/
@@ -435,12 +466,17 @@ class Ai::PythonOrchestratorClient
   # está NO JSON — dizer que salvou sem preencher "dados_coletados" deixou de ser possível, porque
   # "dados_coletados" É o salvamento, não uma alegação em texto que dependia da IA lembrar de chamar
   # uma tool à parte.
+  # Contrato reforçado por json_schema ESTRITO no lado Python (STRUCTURED_REPLY_SCHEMA, orchestrator.py)
+  # — a OpenAI VALIDA a resposta contra o schema antes de devolver, não é mais só o texto aqui embaixo
+  # que garante a forma. dados_coletados virou LISTA de {chave, valor} (não objeto de chave livre) por
+  # exigência do strict mode (additionalProperties:false em todo nível não aceita chave arbitrária) —
+  # continua aceitando VÁRIOS dados no mesmo turno, um item por dado.
   def structured_output_instruction
     "FORMATO DE RESPOSTA OBRIGATÓRIO: Toda resposta sua DEVE ser um único objeto JSON válido, e SOMENTE " \
       "o JSON — sem texto antes ou depois, sem markdown, no formato exato:\n" \
       "{\n" \
       "  \"mensagem_para_cliente\": \"o texto que será enviado ao cliente no WhatsApp\",\n" \
-      "  \"dados_coletados\": {\"chave_do_dado\": \"valor_do_dado\"},\n" \
+      "  \"dados_coletados\": [{\"chave\": \"nome_do_dado\", \"valor\": \"valor_extraido\"}],\n" \
       "  \"avancar_etapa\": true ou false,\n" \
       "  \"transferir_humano\": true ou false,\n" \
       "  \"encerrar_atendimento\": true ou false,\n" \
@@ -448,9 +484,10 @@ class Ai::PythonOrchestratorClient
       "}\n" \
       "REGRAS:\n" \
       "- Se o cliente forneceu QUALQUER dado (nome, endereço, CPF, telefone, email, preferência, etc.), " \
-      "coloque TODOS em \"dados_coletados\", com uma chave descritiva por dado; chamar de novo com um " \
-      "valor diferente ATUALIZA o dado, não duplica. Se não forneceu nada novo neste turno, " \
-      "\"dados_coletados\" DEVE ser o objeto vazio {}.\n" \
+      "adicione UM ITEM em \"dados_coletados\" por dado — cada item é {\"chave\": nome descritivo do " \
+      "dado, \"valor\": o que o cliente disse}; pode mandar VÁRIOS itens no mesmo turno se o cliente deu " \
+      "vários dados de uma vez. Chamar de novo com um valor diferente pra MESMA chave ATUALIZA o dado, " \
+      "não duplica. Se não forneceu nada novo neste turno, \"dados_coletados\" DEVE ser a lista vazia [].\n" \
       "- É ESTRITAMENTE PROIBIDO dizer em \"mensagem_para_cliente\" que recebeu/anotou um dado sem, na " \
       "MESMA resposta, colocar esse dado em \"dados_coletados\" — o dado só existe no sistema se " \
       "estiver ali; se você disser que anotou sem preencher \"dados_coletados\", o dado será PERDIDO.\n" \
@@ -473,7 +510,7 @@ class Ai::PythonOrchestratorClient
       "\"atendimento encerrado\", \"até logo\", \"finalizando\" ou similar sem marcar " \
       "\"encerrar_atendimento\": true na MESMA resposta.\n" \
       'Nunca responda fora deste formato JSON, mesmo que só queira cumprimentar ou tirar uma dúvida — ' \
-      'nesse caso "dados_coletados" fica {} e os demais booleanos ficam false.'
+      'nesse caso "dados_coletados" fica [] e os demais booleanos ficam false.'
   end
 
   def force_handoff_instruction
