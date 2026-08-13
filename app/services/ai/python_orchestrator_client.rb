@@ -88,14 +88,14 @@ class Ai::PythonOrchestratorClient
 
     unless response.success?
       Rails.logger.error "[Ai::PythonOrchestratorClient] HTTP #{response.code}: #{response.body}"
-      return { reply: nil, response_id: nil }
+      return { reply: nil, response_id: nil, byok_fallback: false }
     end
 
     parsed = response.parsed_response
-    { reply: parsed['reply'], response_id: parsed['response_id'] }
+    { reply: parsed['reply'], response_id: parsed['response_id'], byok_fallback: parsed['byok_fallback'] == true }
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] #{e.class}: #{e.message}"
-    { reply: nil, response_id: nil }
+    { reply: nil, response_id: nil, byok_fallback: false }
   end
 
   private
@@ -129,8 +129,20 @@ class Ai::PythonOrchestratorClient
       # (orchestrator.py segue com _client = OpenAI(...) fixo); primeiro passo de habilitar troca de
       # provider sem mexer em código é confirmar que o valor certo está chegando.
       provider: operation_profile&.supervisor_provider,
-      temperature: temperature
+      temperature: temperature,
+      # BYOK (billing Fase 3): GAP achado em auditoria (13/08) — o orquestrador Python nunca recebia
+      # NENHUMA chave por request, sempre a global fixa do .env dele; uma conta com custom_llm_api_key
+      # ligado + chave própria configurada (ex.: conta #2) consumia a chave/cota da SCNET em silêncio
+      # desde que o primeiro department dela foi pro Python. nil quando a conta não tem BYOK — o
+      # orquestrador cai na chave global dele mesmo, comportamento IDÊNTICO a antes desta mudança.
+      account_api_key: account_api_key
     }
+  end
+
+  # Mesma resolução que Ai::Gateway#maybe_byok_fallback (motor legado) já usa: só existe quando a
+  # conta tem a feature custom_llm_api_key ligada E uma chave de verdade salva no Hub pro provider.
+  def account_api_key
+    Ai::ModelRouter.account_provider_key(@department.account_id, operation_profile&.supervisor_provider.presence || 'openai')
   end
 
   def image_url

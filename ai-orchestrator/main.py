@@ -39,12 +39,18 @@ class ProcessRequest(BaseModel):
     # a scanned-document PDF's rasterized pages (Ai::Workers::MediaProcessor.pending_vision_images —
     # CNH/RG/comprovante). Empty list when there's nothing to see this turn.
     image_urls: list[str] = []
+    # BYOK (billing Fase 3, Ai::ModelRouter.account_provider_key): chave OpenAI própria da conta,
+    # quando configurada. None = usa a chave global fixa (comportamento de sempre).
+    account_api_key: Optional[str] = None
 
 
 class ProcessResponse(BaseModel):
     ticket_id: int
     reply: str
     response_id: str
+    # True quando account_api_key foi passada mas falhou por auth e a chamada real caiu pra chave
+    # global — Rails usa isso pra cobrar 1 crédito (Ai::Gateway#consume_byok_fallback_credit).
+    byok_fallback: bool = False
 
 
 def _authenticate(authorization: Optional[str]) -> None:
@@ -67,7 +73,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     )
 
     try:
-        reply_text, response_id = orchestrator.run_conversation(
+        reply_text, response_id, byok_fallback = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
             ai_department_id=request.ai_department_id,
             mode=request.mode,
@@ -80,6 +86,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             provider=request.provider,
             temperature=request.temperature,
             image_urls=request.image_urls,
+            account_api_key=request.account_api_key,
         )
     except Exception:
         # Never leak internals (stack traces, prompts, API errors) to the Rails side.
@@ -91,4 +98,5 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     # (_force_text_reply), so this log is what confirms whether that guard is actually firing/working.
     logger.info(f"Reply enviada para Rails: {reply_text}")
 
-    return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, response_id=response_id)
+    return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, response_id=response_id,
+                            byok_fallback=byok_fallback)

@@ -49,7 +49,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'Quero saber o preço', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: 'Olá! Como posso ajudar?', response_id: 'resp_novo_456')
+      expect(result).to eq(reply: 'Olá! Como posso ajudar?', response_id: 'resp_novo_456', byok_fallback: false)
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
         .with(body: hash_including(
           'ticket_id' => conversation.id,
@@ -87,7 +87,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, response_id: nil)
+      expect(result).to eq(reply: nil, response_id: nil, byok_fallback: false)
       # Auditoria de confiança: sem isto, um erro ANTES do HTTParty.post (ex.: exceção montando o
       # payload) cairia no MESMO rescue e devolveria o MESMO {reply: nil, response_id: nil} — o teste
       # passaria "por acidente" sem nunca ter tentado a requisição real. have_requested prova que o
@@ -103,10 +103,52 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, response_id: nil)
+      expect(result).to eq(reply: nil, response_id: nil, byok_fallback: false)
       # Mesma auditoria: confirma que a requisição foi tentada (e o WebMock a interceptou para simular
       # o timeout), não que o código nunca chegou a discar.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+    end
+  end
+
+  # BYOK (billing Fase 3): GAP achado em auditoria (13/08) — o orquestrador Python nunca recebia
+  # NENHUMA chave por request antes desta mudança, sempre a global fixa; uma conta com BYOK ligado
+  # consumia a chave/cota da SCNET em silêncio. account_api_key só vai preenchido quando a conta tem a
+  # feature custom_llm_api_key ligada E uma chave de verdade salva no Hub (Ai::ModelRouter.account_provider_key).
+  describe 'BYOK (account_api_key no payload + byok_fallback na resposta)' do
+    it 'manda account_api_key quando a conta tem custom_llm_api_key ligado com chave openai configurada' do
+      account.enable_features!('custom_llm_api_key')
+      allow(Ai::ModelRouter).to receive(:account_provider_key).with(account.id, 'openai').and_return('sk-conta-propria')
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('account_api_key' => 'sk-conta-propria'))
+    end
+
+    it 'manda account_api_key nil quando a conta NÃO tem a feature ligada (comportamento de sempre)' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
+        .with(body: hash_including('account_api_key' => nil))
+    end
+
+    it 'devolve byok_fallback: true quando o Python avisa que a chave própria falhou e caiu pra global' do
+      stub_orchestrator(body: { reply: 'oi', response_id: 'resp_1', byok_fallback: true })
+
+      result = described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(result[:byok_fallback]).to be true
+    end
+
+    it 'devolve byok_fallback: false quando o Python não manda o campo (retrocompat)' do
+      stub_orchestrator(body: { reply: 'oi', response_id: 'resp_1' })
+
+      result = described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(result[:byok_fallback]).to be false
     end
   end
 
