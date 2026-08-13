@@ -338,6 +338,25 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(response.parsed_body['status']).to eq('skipped')
       end
 
+      # BUG achado ao vivo (13/08, conv 556): "transferir_humano": true no meio da conversa (não via
+      # on_complete) executava a capability (status executed, sem erro) mas NUNCA fazia o handoff de
+      # verdade — sem Ai::HandoffCoordinator#assign_human, additional_attributes['ai_handoff'] nunca
+      # era setado, e é essa flag que Ai::ReplyPolicy#effective_reply_state lê pra parar de responder
+      # (reply_policy.rb:45). Resultado real: a IA seguia respondendo normalmente nos turnos seguintes,
+      # como se a transferência nunca tivesse acontecido.
+      it 'marca ai_handoff (o que realmente para a IA de responder — Ai::ReplyPolicy) e desatribui a conversa' do
+        conversation.update!(assignee_id: create(:user, account: account).id)
+
+        call_tool('conversation_transfer', arguments: { handoff_summary: 'Cliente quer falar com atendente' })
+
+        expect(response.parsed_body['status']).to eq('executed')
+        conversation.reload
+        expect(conversation.additional_attributes['ai_handoff']).to be true
+        expect(conversation.assignee_id).to be_nil
+        expect(Ai::ReplyPolicy.effective_reply_state(mode: 'live', department: department, conversation: conversation))
+          .not_to eq(:live)
+      end
+
       it 'em modo shadow, nenhuma das duas muda a conversa' do
         call_tool('conversation_resolve', mode: 'shadow')
 
