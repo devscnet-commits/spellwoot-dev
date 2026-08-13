@@ -165,6 +165,26 @@ def _build_input(user_input: str, image_urls: list[str] | None):
     return [_JSON_FORMAT_REMINDER, {"role": "user", "content": content}]
 
 
+def _normalize_tool_result(result: dict) -> dict:
+    """Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed, ver
+    Api::Internal::AiExecuteToolController#search_knowledge) pra QUALQUER tool real: achado ao vivo
+    (conv 556) — quando uma ferramenta real falhava, o modelo não tinha nenhum sinal confiável de que
+    era um ERRO técnico (em vez de "a ferramenta rodou e não achou nada"), e travava enrolando o
+    cliente. Duas formas de falha chegam aqui com shapes DIFERENTES: (a) falha de transporte
+    (tools.ToolExecutionError, vira {"error": "<mensagem>"} sem "status"); (b) falha lógica que o
+    Rails devolve com HTTP 200 (Ai::ToolExecutor#build -> {"result":, "status":"failed", "error":}).
+    Normaliza as duas no MESMO envelope {"error": true, "message": "..."} — só quando é falha DE
+    VERDADE; "skipped" (shadow, missing_required_attributes, tool inativa) fica intocado, porque ali
+    "error" já é uma mensagem de dado faltando, não uma falha técnica — o modelo já sabe reagir a
+    isso pedindo o dado, não avisando "problema técnico"."""
+    status = result.get("status")
+    if status == "failed":
+        return {"error": True, "message": result.get("error") or "Falha ao executar a ferramenta."}
+    if status is None and result.get("error"):
+        return {"error": True, "message": result["error"]}
+    return result
+
+
 def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
     openai_tools = []
     if vector_store_id:
@@ -277,6 +297,8 @@ def run_conversation(
                 # Fed back to the model as the tool's own output (not raised) so a single failing
                 # tool degrades the turn instead of aborting it — the model can apologize/retry.
                 result = {"error": str(e)}
+
+            result = _normalize_tool_result(result)
 
             tool_outputs.append({
                 "type": "function_call_output",

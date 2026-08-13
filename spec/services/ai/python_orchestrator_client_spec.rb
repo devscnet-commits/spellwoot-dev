@@ -835,6 +835,25 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
+    # Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
+    # QUALQUER ferramenta real: achado ao vivo (conv 556, consultar_periodos) — falha real de
+    # ferramenta não tinha instrução nenhuma, a IA travava enrolando o cliente em vez de avisar ou
+    # transferir. orchestrator.py normaliza toda falha real em {"error": true, "message": "..."}.
+    it 'instrui a reagir a "error": true de qualquer ferramenta avisando problema técnico e oferecendo transferir' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('"error": true') &&
+          prompt.include?('falha TÉCNICA real da ferramenta') &&
+          prompt.include?('avise o cliente que teve um problema técnico') &&
+          prompt.include?('ofereça transferir para um atendente humano') &&
+          prompt.include?('NUNCA chame a mesma ferramenta de novo no mesmo turno')
+      }
+    end
+
     # Consolidação: antes #transfer_discipline_instruction dizia "5 mensagens" e
     # #data_validation_instruction dizia "1 vez" pro MESMO gatilho (tentativa antes de transferir) —
     # dois limiares divergentes pra ação crítica. Unificado em 1 tentativa; frustração transfere

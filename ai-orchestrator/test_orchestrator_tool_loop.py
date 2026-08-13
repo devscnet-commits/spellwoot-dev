@@ -66,3 +66,62 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
     assert reply_text == "Show, Joana! O plano custa R$ 99,90."
     assert response_id == "resp_3"
     assert byok_fallback is False
+
+
+# Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
+# QUALQUER tool real: achado ao vivo (conv 556, consultar_periodos) — sem isto, uma falha real de
+# ferramenta não tinha nenhum sinal confiável pro modelo, que travava enrolando o cliente.
+class TestNormalizeToolResult:
+    def test_falha_logica_do_rails_vira_envelope_de_erro(self):
+        rails_result = {"result": {}, "status": "failed", "error": "timeout no webhook externo"}
+
+        assert orchestrator._normalize_tool_result(rails_result) == {
+            "error": True,
+            "message": "timeout no webhook externo",
+        }
+
+    def test_falha_de_transporte_sem_status_tambem_vira_envelope_de_erro(self):
+        # shape que orchestrator.py monta no except tools.ToolExecutionError (sem "status" nenhum)
+        transport_failure = {"error": "Rails tool webhook failed for consultar_periodos: 404"}
+
+        assert orchestrator._normalize_tool_result(transport_failure) == {
+            "error": True,
+            "message": "Rails tool webhook failed for consultar_periodos: 404",
+        }
+
+    def test_sucesso_passa_intocado(self):
+        success = {"result": {"periodos": ["manhã", "tarde"]}, "status": "executed", "error": None}
+
+        assert orchestrator._normalize_tool_result(success) == success
+
+    # "skipped" (shadow, missing_required_attributes, tool inativa) NÃO é falha técnica — o "error"
+    # ali já é uma mensagem de dado faltando que o modelo deve usar pra pedir o dado, não pra avisar
+    # "problema técnico". Envelopar isso também confundiria o modelo do jeito oposto.
+    def test_skipped_com_mensagem_nao_vira_envelope_de_erro(self):
+        skipped = {"result": {}, "status": "skipped",
+                   "error": "Faltam os dados obrigatórios antes de usar esta ferramenta: cidade"}
+
+        assert orchestrator._normalize_tool_result(skipped) == skipped
+
+    def test_loop_real_normaliza_falha_antes_de_montar_o_function_call_output(self):
+        resp1 = _response("resp_1", [_function_call("consultar_periodos", {"cidade": "Maravilha"}, "call_1")])
+        final_payload = {
+            "mensagem_para_cliente": "Tive um problema técnico agora, já vou te transferir.",
+            "dados_coletados": [], "avancar_etapa": False, "transferir_humano": True,
+            "encerrar_atendimento": False, "handoff_summary": "Falha técnica em consultar_periodos.",
+        }
+        resp2 = _response("resp_2", [], output_text=json.dumps(final_payload))
+
+        with patch.object(orchestrator, "_client") as mock_client, \
+             patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            mock_client.responses.create.side_effect = [resp1, resp2]
+            mock_execute_tool.return_value = {"result": {}, "status": "failed", "error": "404 token not found"}
+
+            orchestrator.run_conversation(
+                ticket_id=1, ai_department_id=1, mode="live", system_prompt="system prompt de teste",
+                tools_schema=[], vector_store_id=None, user_input="quero agendar em Maravilha",
+                previous_response_id=None,
+            )
+
+        sent_output = json.loads(mock_client.responses.create.call_args_list[1].kwargs["input"][1]["output"])
+        assert sent_output == {"error": True, "message": "404 token not found"}
