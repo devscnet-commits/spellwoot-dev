@@ -139,8 +139,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # narrativo é ancorado na etapa atual, a captura de dado (tools) não é. Nomes SANITIZADOS
         # (Ai::ToolNameSanitizer): "conversation.add_label"/".resolve"/".transfer" viram "_" — a
         # OpenAI rejeita ponto no nome da function (achado ao vivo, ver spec do sanitizer).
-        expected = %w[avancar_etapa continuar_conversa conversation_add_label conversation_resolve
-                      conversation_transfer registrar_endereco registrar_telefone_extra]
+        expected = %w[avancar_etapa consultar_conhecimento continuar_conversa conversation_add_label
+                      conversation_resolve conversation_transfer registrar_endereco registrar_telefone_extra]
         expected.all? { |n| names.include?(n) } &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
           !body['system_prompt'].include?('Cumprimente com calor.')
@@ -183,8 +183,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # 'marcado_como_ganho_ou_perdido' vem do CustomAttributeDefinition seedado em TODA Account
         # (Account#create_default_custom_attributes) — known_slot_keys inclui mesmo sem playbook.
         # continuar_conversa: no-op que sustenta tool_choice="required" no orchestrator.py.
-        names.sort == %w[avancar_etapa continuar_conversa conversation_resolve conversation_transfer
-                          salvar_memoria_ia registrar_marcado_como_ganho_ou_perdido].sort &&
+        names.sort == %w[avancar_etapa consultar_conhecimento continuar_conversa conversation_resolve
+                          conversation_transfer salvar_memoria_ia registrar_marcado_como_ganho_ou_perdido].sort &&
           !body['system_prompt'].include?('Etapa atual')
       }
     end
@@ -304,7 +304,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('peça esclarecimento UMA vez') &&
+        prompt.include?('peça correção UMA vez, de forma isolada e direta') &&
           prompt.include?('campo OBRIGATÓRIO → defina "transferir_humano": true') &&
           prompt.include?('mande "dados_coletados" vazio ({}) e defina "avancar_etapa": true')
       }
@@ -486,8 +486,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # Fecha a lacuna de identidade (IA sugerindo concorrentes) + a base de conhecimento real deste
   # path (Ai::KnowledgeRetriever — pgvector já populado, NÃO o vector_store nativo da OpenAI, que
   # não existe: vector_store_id sempre vem vazio, auditado, sem tela/job que o preencha).
-  describe 'identidade + conhecimento (Ai::KnowledgeRetriever) no system_prompt' do
-    it 'a instrução de identidade é a PRIMEIRA linha, e o guardrail anti-"médias de mercado" é a SEGUNDA' do
+  describe 'identidade + conhecimento no system_prompt' do
+    it 'a instrução de identidade é a PRIMEIRA linha, e o guardrail anti-"médias de mercado" é a SEGUNDA — ambas referenciam a ferramenta, não um bloco fixo' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -496,36 +496,46 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt_lines = JSON.parse(req.body)['system_prompt'].lines
         prompt_lines.first.include?('IDENTIDADE') &&
           prompt_lines.first.include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras') &&
-          prompt_lines[1].include?('Nunca cite concorrentes, médias de mercado')
+          prompt_lines.first.include?('use a ferramenta "consultar_conhecimento"') &&
+          prompt_lines[1].include?('Nunca cite concorrentes, médias de mercado') &&
+          prompt_lines[1].include?('ferramenta "consultar_conhecimento"')
       }
     end
 
-    it 'injeta os trechos retornados por Ai::KnowledgeRetriever num bloco "CONHECIMENTO OFICIAL DA EMPRESA" agressivo/inegociável' do
+    # RAG agentic: nenhuma busca automática por turno mais — Ai::KnowledgeRetriever só roda quando a
+    # PRÓPRIA IA chama a tool consultar_conhecimento (ver ai_execute_tool_controller_spec.rb), nunca
+    # embutido cego no system_prompt a partir da mensagem crua do cliente (era o bloco antigo).
+    it 'NÃO chama Ai::KnowledgeRetriever ao montar o system_prompt (a busca só acontece via tool call)' do
       allow(Ai::KnowledgeRetriever).to receive(:retrieve)
-        .with(query: 'quanto custa o plano fibra?', account_id: account.id, department_id: department.id)
-        .and_return(['Plano Fibra 500MB: R$ 99,90/mês', 'Plano Fibra 1GB: R$ 129,90/mês'])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'quanto custa o plano fibra?',
+                                      agent: agent, department: department, mode: 'live')
+
+      expect(Ai::KnowledgeRetriever).not_to have_received(:retrieve)
+    end
+
+    it 'NÃO injeta mais o bloco fixo "## CONHECIMENTO OFICIAL DA EMPRESA" — a IA busca via tool' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'quanto custa o plano fibra?',
                                       agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('## CONHECIMENTO OFICIAL DA EMPRESA') &&
-          prompt.include?('É PROIBIDO usar conhecimento externo, médias de mercado ou suposições') &&
-          prompt.include?('Plano Fibra 500MB: R$ 99,90/mês') &&
-          prompt.include?('Plano Fibra 1GB: R$ 129,90/mês')
+        !JSON.parse(req.body)['system_prompt'].include?('## CONHECIMENTO OFICIAL DA EMPRESA')
       }
     end
 
-    it 'sem chunks (base vazia pra esse department), o bloco de conhecimento nem aparece' do
-      allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
+    it 'a tool "consultar_conhecimento" está SEMPRE em tools_schema, sem depender de fonte de conhecimento configurada, com "pergunta" obrigatória' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        !JSON.parse(req.body)['system_prompt'].include?('## CONHECIMENTO OFICIAL DA EMPRESA')
+        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'consultar_conhecimento' }
+        tool.present? &&
+          tool['input_schema']['required'] == ['pergunta'] &&
+          tool['input_schema']['properties']['pergunta']['type'] == 'string'
       }
     end
 
@@ -680,8 +690,42 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt = JSON.parse(req.body)['system_prompt']
         prompt.include?('FORMATO DE RESPOSTA OBRIGATÓRIO') &&
           prompt.include?('É PROIBIDO inventar situações, recursos ou funcionalidades que não existem') &&
-          prompt.include?('SÓ transfira para humano se') &&
-          prompt.include?('Peça os dados da etapa atual UM DE CADA VEZ')
+          prompt.include?('Transfira para humano quando') &&
+          prompt.include?('Prefira pedir os dados da etapa atual UM DE CADA VEZ')
+      }
+    end
+
+    # Consolidação: antes #transfer_discipline_instruction dizia "5 mensagens" e
+    # #data_validation_instruction dizia "1 vez" pro MESMO gatilho (tentativa antes de transferir) —
+    # dois limiares divergentes pra ação crítica. Unificado em 1 tentativa; frustração transfere
+    # IMEDIATO, sem exigir tentativa de esclarecimento antes.
+    it 'unifica o limiar de transferência em 1 tentativa e transfere imediato em caso de frustração' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('não conseguir fornecer um dado válido mesmo depois de 1 pedido de esclarecimento') &&
+          prompt.include?('não exija mais de 1 nova tentativa por dado antes de transferir') &&
+          prompt.include?('demonstrar frustração clara') &&
+          prompt.include?('transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes') &&
+          !prompt.include?('5 mensagens')
+      }
+    end
+
+    # Tom (cadência "uma pergunta por vez") não deve competir com fato (captura de dado front-loaded) —
+    # a regra agora tem exceção explícita em vez de proibição absoluta.
+    it 'a instrução de cadência tem exceção explícita pra dado front-loaded pelo cliente' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('EXCEÇÃO: se o cliente fornecer espontaneamente mais de um dado na mesma mensagem') &&
+          prompt.include?('registre TODOS os dados válidos fornecidos naquela mensagem') &&
+          prompt.include?('nunca finja que não viu um dado só para manter o ritmo')
       }
     end
 

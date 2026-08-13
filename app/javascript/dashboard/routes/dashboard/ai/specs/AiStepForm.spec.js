@@ -109,15 +109,17 @@ describe('AiStepForm.vue — Objetivo/Regras/Fala sugerida (3 campos estruturado
   });
 });
 
-describe('AiStepForm.vue — preservação de step.knowledge (semeadura do draft, PR 2)', () => {
+// RAG virou tool agentic (consultar_conhecimento, sempre disponível — Ai::PythonOrchestratorClient),
+// sem pré-configuração por etapa: os campos "Consultar no conhecimento antes de responder"/"Filtrar
+// por tipo" e o estado draft.knowledgeQuery/knowledgeKinds saíram da tela. buildStepPayload nunca mais
+// emite a chave `knowledge`, mesmo quando a etapa carregada do backend ainda tem o campo legado.
+describe('AiStepForm.vue — knowledge removido da tela (RAG agora é tool agentic)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
-  // Bug do #306 aplicado a knowledge: como buildStepPayload passou a EMITIR knowledge, se o draft NÃO for
-  // semeado de props.step.knowledge, editar a etapa clobba o backfill. Este teste trava a semeadura.
-  it('carregar etapa com knowledge e salvar SEM tocar no campo emite o MESMO knowledge (não clobba o backfill)', async () => {
+  it('etapa com knowledge legado no backend: salvar NÃO reemite a chave knowledge (não há mais campo pra editar)', async () => {
     const step = {
       name: 'Viabilidade',
       knowledge: { query: 'cidades atendidas', kinds: ['documento'] },
@@ -129,10 +131,7 @@ describe('AiStepForm.vue — preservação de step.knowledge (semeadura do draft
 
     const saved = wrapper.emitted('save');
     expect(saved).toBeTruthy();
-    expect(saved[0][0].knowledge).toEqual({
-      query: 'cidades atendidas',
-      kinds: ['documento'],
-    });
+    expect('knowledge' in saved[0][0]).toBe(false);
 
     wrapper.unmount();
   });

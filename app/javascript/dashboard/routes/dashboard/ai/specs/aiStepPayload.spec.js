@@ -194,9 +194,10 @@ describe('aiStepPayload', () => {
       expect(roundTripped.uid).toBeUndefined();
     });
 
-    // step.knowledge (declaração de conhecimento da etapa, backfill do backend) sobrevive ao round-trip
-    // mesmo SEM UI que o edite — o backend lê step['knowledge'] mas o formulário ainda não o conhece (PR 2).
-    it('preserva step.knowledge no round-trip (backend -> form -> backend), sem UI que o edite', () => {
+    // step.knowledge é um campo LEGADO/MORTO: nunca foi lido pelo motor Python (substituído pela tool
+    // agentic consultar_conhecimento) e a UI não o edita mais. Continua sobrevivendo ao round-trip só
+    // pelo spread genérico (mesma proteção que qualquer chave desconhecida ganha) — inofensivo.
+    it('preserva step.knowledge legado no round-trip (spread genérico, sem UI que o edite)', () => {
       const fromBackend = {
         name: 'Viabilidade',
         knowledge: { query: 'cidades atendidas', kinds: ['documento'] },
@@ -226,41 +227,15 @@ describe('aiStepPayload', () => {
       expect(merged.id).toBe('uuid-9');
     });
 
-    // PR 2 INVERTE a precondição do PR 1: agora que a tela edita o campo, buildStepPayload EMITE knowledge.
-    // A preservação ao editar deixa de vir da AUSÊNCIA da chave e passa a depender do draft ser semeado de
-    // props.step.knowledge (testado no AiStepForm.spec). E o merge do saveStep passa a proteger as OUTRAS
-    // chaves não emitidas (mergeStepEdit, abaixo).
-    it('EMITE knowledge quando knowledgeQuery está preenchida (query trim + kinds por vírgula)', () => {
-      const p = buildStepPayload({
-        name: 'Viabilidade',
-        knowledgeQuery: '  cidades atendidas  ',
-        knowledgeKinds: 'documento, faq',
-      });
-      expect(p.knowledge).toEqual({
-        query: 'cidades atendidas',
-        kinds: ['documento', 'faq'],
-      });
-    });
-
-    it('knowledgeQuery vazia OMITE a chave knowledge (não vira {query:""})', () => {
-      expect(
-        'knowledge' in buildStepPayload({ name: 'X', knowledgeQuery: '' })
-      ).toBe(false);
+    // RAG virou tool agentic (consultar_conhecimento, sempre disponível, sem pré-configuração) —
+    // buildStepPayload não conhece mais knowledgeQuery/knowledgeKinds e NUNCA emite a chave `knowledge`,
+    // preservada ou não em etapas antigas (mergeStepEdit protege o que não é emitido, teste abaixo).
+    it('NUNCA emite a chave knowledge (campo removido — RAG agora é tool, não config por etapa)', () => {
       expect('knowledge' in buildStepPayload({ name: 'X' })).toBe(false);
     });
 
-    it('kinds vazio -> knowledge com kinds: [] (o backend trata [] como todos)', () => {
-      expect(
-        buildStepPayload({
-          name: 'X',
-          knowledgeQuery: 'algo',
-          knowledgeKinds: '',
-        }).knowledge
-      ).toEqual({ query: 'algo', kinds: [] });
-    });
-
     // Cobertura do PR 1 que ficou por leitura (saveStep, linha 444): o merge preserva chaves AUSENTES no
-    // payload. Extraído p/ testar sem montar o route-view. Agora protege legado/futuro (knowledge já é emitido).
+    // payload. Extraído p/ testar sem montar o route-view. Protege legado/futuro (knowledge nunca é emitido).
     it('mergeStepEdit preserva chaves do step existente que o payload NÃO emite', () => {
       const existing = {
         name: 'V',
