@@ -487,7 +487,27 @@ class Ai::Gateway
     true
   end
 
-  # BYOK (billing Fase 3): a chave própria do cliente foi recusada por auth (401). Só age ao vivo e só
+  # BYOK (billing Fase 3): cobra 1 crédito SCNET da chamada que teve que cair pra chave global porque
+  # a chave própria da conta falhou por auth (Python já fez o retry — ver orchestrator.py). Achado no
+  # merge com a eliminação do motor legado (13/08): o #maybe_byok_fallback antigo (retry client-side,
+  # só do caminho legado) foi removido de propósito, mas esta cobrança e a tag de visibilidade abaixo
+  # são chamadas pelo NOVO bloco BYOK em #run — precisam sobreviver à eliminação, não são código morto.
+  def consume_byok_fallback_credit
+    balance = AiCreditBalance.find_or_create_by(account_id: @account.id)
+    balance.consume!(1)
+  rescue AiCreditBalance::InsufficientCredits => e
+    Rails.logger.info "[Ai::Gateway] fallback BYOK sem saldo SCNET: #{e.message}"
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#consume_byok_fallback_credit] #{e.class}: #{e.message}"
+  end
+
+  # Tag de visibilidade best-effort (mesmo handler direto do flag_unavailable_department_override).
+  def apply_label(label)
+    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation, input: { 'label' => label })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#apply_label] #{e.class}: #{e.message}"
+  end
+
   def finalize(run_record, status)
     run_record.update!(status: status)
     run_record
