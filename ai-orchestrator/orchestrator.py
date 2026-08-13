@@ -298,7 +298,18 @@ def run_conversation(
                 # tool degrades the turn instead of aborting it — the model can apologize/retry.
                 result = {"error": str(e)}
 
-            result = _normalize_tool_result(result)
+result = _normalize_tool_result(result)
+
+# Achado ao vivo (conv 556): o retrieve da OpenAI só devolve .output de cada response —
+# o function_call_output que REALMENTE foi mandado de volta pro modelo vive no INPUT da
+# chamada seguinte, que a API não expõe via retrieve nenhuma. Sem isto pendurada porque
+# o resultado veio vazio/erro/schema errado, sem reconstruir tudo via os logs do webhook Rails
+# (Ai::CapabilityExecution) cruzando por timestamp. Loga aqui, no ponto exato que decide
+# o que o modelo vai ler.
+logger.info(
+    "ticket_id=%s call_id=%s tool_name=%s function_call_output bruto: %s",
+    ticket_id, call.call_id, call.name, json.dumps(result, ensure_ascii=False),
+)
 
             tool_outputs.append({
                 "type": "function_call_output",

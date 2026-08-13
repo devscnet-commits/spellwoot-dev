@@ -37,7 +37,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     return render json: advance_step(conversation, department) if params[:tool_name] == Ai::PythonOrchestratorClient::ADVANCE_STEP_TOOL
 
     control_key = resolve_control_capability(params[:tool_name])
-    return render json: run_capability(conversation, control_key) if control_key
+    return render json: run_capability(conversation, department, control_key) if control_key
 
     attribute = Ai::StepCaptureTool.attribute_for(params[:tool_name])
     return render json: capture_attribute(conversation, department, attribute) if attribute
@@ -249,15 +249,38 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # Ai::ToolExecutor dispatches to for configured tools) — not routed through Ai::ToolExecutor because
   # these aren't admin-configured Ai::Tool rows, they're always-available control tools. No
   # Ai::CapabilityExecution audit row for the same reason "avancar_etapa"/"registrar_*" don't have one.
-  def run_capability(conversation, key)
+  def run_capability(conversation, department, key)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
-    save_handoff_summary(conversation) if key == Ai::PythonOrchestratorClient::TRANSFER_TOOL
+    return transfer_to_human(conversation, department) if key == Ai::PythonOrchestratorClient::TRANSFER_TOOL
+
     result = Ai::CapabilityRegistry.execute(key, conversation: conversation, input: arguments)
     { result: result[:output], status: 'executed', error: nil }
   rescue StandardError => e
     Rails.logger.error "[Api::Internal::AiExecuteToolController#run_capability] #{key}: #{e.class}: #{e.message}"
     { result: {}, status: 'failed', error: e.message }
+  end
+
+  # "transferir_humano": true — campo DIRETO do contrato estruturado (fora de on_complete, o modelo
+  # decide no meio da conversa). BUG achado ao vivo (13/08, conv 556): só chamar
+  # Ai::CapabilityRegistry.execute('conversation.transfer', ...) "funciona" (status executed, sem
+  # exceção) mas não faz o handoff de verdade — sem "unassign"/"team_id" no input o assignee nunca
+  # muda, e sem Ai::HandoffCoordinator#assign_human a flag additional_attributes['ai_handoff'] nunca é
+  # setada (Ai::ReplyPolicy#effective_reply_state é quem lê essa flag pra parar de responder — ver
+  # reply_policy.rb:45). Resultado: a IA seguia respondendo normalmente nos turnos seguintes, como se
+  # a transferência nunca tivesse acontecido. Mesmo padrão que #execute_step_conclusion (on_complete)
+  # já usa corretamente — só que ali o modelo declara um team_id via on_complete; aqui não há
+  # "handoff_target" no STRUCTURED_REPLY_SCHEMA (schema estrito não abre escolha de time nesse campo),
+  # então usa o MESMO time default que Ai::Gateway já usa pros outros handoffs forçados (crédito
+  # esgotado/limite de respostas/provedor indisponível): handoff_coordinator.human_team_id({}).
+  def transfer_to_human(conversation, department)
+    save_handoff_summary(conversation)
+    coordinator = step_handoff_coordinator(conversation, department)
+    team_id = coordinator.human_team_id({})
+    Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL, conversation: conversation,
+                                   input: { 'unassign' => true, 'team_id' => team_id })
+    coordinator.assign_human(team_id, reason: 'model_requested')
+    { result: { 'transferred' => true, 'team_id' => team_id }, status: 'executed', error: nil }
   end
 
   # A IA é instruída (Ai::PythonOrchestratorClient#tool_usage_instruction) a SEMPRE preencher
