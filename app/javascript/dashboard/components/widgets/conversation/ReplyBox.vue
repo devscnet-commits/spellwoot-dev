@@ -161,26 +161,13 @@ export default {
         !this.copilot.isActive.value
       );
     },
-    hasWhatsAppTemplates() {
+    showWhatsappTemplates() {
+      // We support templates for API channels if someone updates templates manually via API
+      // That's why we don't explicitly check for channel type here
       const templates = this.$store.getters['inboxes/getWhatsAppTemplates'](
         this.inboxId
       );
-      return !!(templates && templates.length);
-    },
-    showWhatsappTemplates() {
-      // We support templates for API channels if someone updates templates manually via API.
-      // Show the button for WhatsApp channels (Cloud/360dialog) EVEN with zero templates, so it can
-      // carry an explanatory tooltip + empty-state modal instead of silently vanishing (which read
-      // as a bug). API inboxes only show when they actually have templates — we can't otherwise tell.
-      const isWhatsAppTemplateInbox =
-        this.isAWhatsAppChannel && !this.isATwilioWhatsAppChannel;
-      return (
-        (isWhatsAppTemplateInbox || this.hasWhatsAppTemplates) &&
-        !this.isPrivate
-      );
-    },
-    whatsAppTemplatesEmpty() {
-      return !this.hasWhatsAppTemplates;
+      return !!(templates && templates.length) && !this.isPrivate;
     },
     showContentTemplates() {
       return this.isATwilioWhatsAppChannel && !this.isPrivate;
@@ -1394,7 +1381,6 @@ export default {
         :conversation-id="conversationId"
         :enable-multiple-file-upload="enableMultipleFileUpload"
         :enable-whats-app-templates="showWhatsappTemplates"
-        :whats-app-templates-empty="whatsAppTemplatesEmpty"
         :enable-content-templates="showContentTemplates"
         :inbox="inbox"
         :is-on-private-note="isOnPrivateNote"

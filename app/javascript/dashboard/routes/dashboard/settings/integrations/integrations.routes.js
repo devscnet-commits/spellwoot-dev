@@ -9,7 +9,6 @@ import Slack from './Slack.vue';
 import Linear from './Linear.vue';
 import Notion from './Notion.vue';
 import Shopify from './Shopify.vue';
-import AiIntegrations from '../../ai/AiIntegrations.vue';
 
 export default {
   routes: [
@@ -42,14 +41,6 @@ export default {
           name: 'settings_integrations_webhook',
           meta: {
             featureFlag: FEATURE_FLAGS.INTEGRATIONS,
-            permissions: ['administrator'],
-          },
-        },
-        {
-          path: 'ai_systems',
-          component: AiIntegrations,
-          name: 'settings_integrations_ai_systems',
-          meta: {
             permissions: ['administrator'],
           },
         },

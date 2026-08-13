@@ -1,11 +1,9 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
-  include PlanLimitEnforceable
   before_action :fetch_inbox_for_migrate, only: [:migrate]
   before_action :fetch_inbox, except: [:index, :create, :migrate, :uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
-  before_action :validate_plan_inboxes_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show, :health, :uazapi_status, :migrate]
   before_action :validate_whatsapp_cloud_channel, only: [:health]
@@ -357,11 +355,6 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   private
-
-  # Limite de caixas do plano atual (billing Fase 2). Sem plano/limite => não bloqueia.
-  def validate_plan_inboxes_limit
-    enforce_plan_limit('inboxes', Current.account.inboxes.count, 'Limite de caixas de entrada do seu plano atingido.')
-  end
 
   def fetch_inbox_without_auth
     @inbox = Current.account.inboxes.includes(:channel).find(params[:id])

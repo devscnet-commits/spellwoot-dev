@@ -3,7 +3,6 @@
 # Table name: team_members
 #
 #  id         :bigint           not null, primary key
-#  role       :integer          default("member"), not null
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
 #  team_id    :bigint           not null
@@ -11,7 +10,6 @@
 #
 # Indexes
 #
-#  index_team_members_on_role                 (role)
 #  index_team_members_on_team_id              (team_id)
 #  index_team_members_on_team_id_and_user_id  (team_id,user_id) UNIQUE
 #  index_team_members_on_user_id              (user_id)

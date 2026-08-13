@@ -46,7 +46,7 @@ class Whatsapp::OneoffCampaignService
   end
 
   def process_contact(contact)
-    Rails.logger.info "Processing contact: #{contact.name} (#{PiiMasking.mask_phone(contact.phone_number)})"
+    Rails.logger.info "Processing contact: #{contact.name} (#{contact.phone_number})"
 
     if contact.phone_number.blank?
       Rails.logger.info "Skipping contact #{contact.name} - no phone number"

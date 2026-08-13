@@ -1,29 +1,11 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-# Achado ao vivo (13/08): num commit de MERGE com conflito resolvido, lint-staged relata "could not
-# find any staged files" (bug de diffing dele durante merge — não é o --no-stash de baixo) e o hook
-# inteiro acaba abortando o merge (reflog: "reset: moving to HEAD", igual um `git merge --abort`),
-# destruindo a resolução do conflito já commitada no índice. Nem lint-staged nem o bloco de rubocop
-# abaixo são merge-aware, e não têm por que ser: cada commit que compõe o merge já passou por este
-# hook quando foi ORIGINALMENTE commitado — re-lintar o merge inteiro é redundante, não uma proteção
-# a mais. Pula os dois enquanto um merge está em andamento (.git/MERGE_HEAD existe).
-if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
-  echo "pre-commit: merge em andamento, pulando lint-staged/rubocop (não são merge-aware; ver comentário acima)."
-  exit 0
-fi
-
 # lint js and vue files
-# --no-stash: desliga o backup stash + recovery destrutivo do lint-staged (git checkout --force /
-# git reset --hard), que já reverteu trabalho staged neste projeto. Ver memória precommit-hook-switches-branch.
-npx --no-install lint-staged --no-stash
+npx --no-install lint-staged
 
-# lint only staged ruby files that still exist (not deleted); guarda a lista dos que processamos
-rb_list="$(mktemp)"
-git diff --name-only --cached | xargs -I {} sh -c 'test -f "{}" && echo "{}"' | grep '\.rb$' > "$rb_list" || true
-xargs -I {} bundle exec rubocop --force-exclusion -a "{}" < "$rb_list" || true
+# lint only staged ruby files that still exist (not deleted)
+git diff --name-only --cached | xargs -I {} sh -c 'test -f "{}" && echo "{}"' | grep '\.rb$' | xargs -I {} bundle exec rubocop --force-exclusion -a "{}" || true
 
-# stage ONLY os arquivos .rb que o rubocop pode ter alterado (não todo o cached — o re-add cego de
-# tudo que estava staged podia gravar conteúdo não intencional no commit)
-xargs -I {} git add "{}" < "$rb_list" || true
-rm -f "$rb_list"
+# stage rubocop changes to files
+git diff --name-only --cached | xargs -I {} sh -c 'test -f "{}" && git add "{}"' || true

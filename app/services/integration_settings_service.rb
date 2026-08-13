@@ -1,11 +1,5 @@
 class IntegrationSettingsService
-  PROVIDERS = %w[meta openai evolution_api uazapi bitrix n8n google anthropic gemini groq openrouter].freeze
-
-  # Providers de LLM que o cliente pode configurar com a PRÓPRIA chave (BYOK — billing Fase 3). Só
-  # ficam visíveis/editáveis para contas com a feature custom_llm_api_key; no runtime, o Ai::ModelRouter
-  # usa a chave da conta e cai na chave global da SCNET se ela falhar (auth). openai fica FORA desta
-  # lista porque já era editável no Hub antes do BYOK (comportamento legado preservado).
-  BYOK_PROVIDERS = %w[anthropic gemini groq openrouter].freeze
+  PROVIDERS = %w[meta openai evolution_api uazapi bitrix n8n google].freeze
 
   ENV_KEYS = {
     'meta' => {
@@ -39,20 +33,6 @@ class IntegrationSettingsService
       'clientId'     => 'GOOGLE_CLIENT_ID',
       'clientSecret' => 'GOOGLE_CLIENT_SECRET',
       'refreshToken' => 'GOOGLE_REFRESH_TOKEN'
-    },
-    # BYOK (billing Fase 3): campo único 'apiKey' apontando para as InstallationConfig AI_*_API_KEY que
-    # o Ai::ModelRouter#credential já lê como fallback global. Mesmo nome de ENV nos dois lados.
-    'anthropic' => {
-      'apiKey' => 'AI_ANTHROPIC_API_KEY'
-    },
-    'gemini' => {
-      'apiKey' => 'AI_GEMINI_API_KEY'
-    },
-    'groq' => {
-      'apiKey' => 'AI_GROQ_API_KEY'
-    },
-    'openrouter' => {
-      'apiKey' => 'AI_OPENROUTER_API_KEY'
     }
   }.freeze
 
@@ -107,14 +87,6 @@ class IntegrationSettingsService
       test_evolution_api(config)
     when 'openai'
       test_openai(config)
-    when 'anthropic'
-      test_anthropic(config)
-    when 'gemini'
-      test_gemini(config)
-    when 'groq'
-      test_groq(config)
-    when 'openrouter'
-      test_openrouter(config)
     else
       { ok: false, message: 'Teste de conexão não disponível para este provedor.' }
     end
@@ -205,59 +177,6 @@ class IntegrationSettingsService
     else
       { ok: false, message: "Erro #{response.code}: #{response.message}" }
     end
-  end
-
-  # BYOK (billing Fase 3): validação real da chave própria via GET no endpoint de listagem de modelos
-  # de cada provider. 401/403 = chave inválida/revogada; sucesso = chave aceita. Mesmo formato de
-  # retorno de test_openai ({ ok:, message: }) — o controller usa isso para o 422 no update.
-  def self.test_anthropic(config)
-    api_key = config['apiKey']
-    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
-
-    response = HTTParty.get('https://api.anthropic.com/v1/models',
-                            headers: { 'x-api-key' => api_key, 'anthropic-version' => '2023-06-01', 'Accept' => 'application/json' },
-                            timeout: 10)
-    llm_key_result(response, 'Anthropic')
-  end
-
-  def self.test_gemini(config)
-    api_key = config['apiKey']
-    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
-
-    # Gemini autentica pela query string (?key=), não por header. 400/403 = chave inválida.
-    response = HTTParty.get("https://generativelanguage.googleapis.com/v1beta/models?key=#{api_key}",
-                            headers: { 'Accept' => 'application/json' }, timeout: 10)
-    llm_key_result(response, 'Gemini')
-  end
-
-  def self.test_groq(config)
-    api_key = config['apiKey']
-    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
-
-    # Groq é OpenAI-compatible: mesmo endpoint /models com Bearer.
-    response = HTTParty.get('https://api.groq.com/openai/v1/models',
-                            headers: { 'Authorization' => "Bearer #{api_key}", 'Accept' => 'application/json' }, timeout: 10)
-    llm_key_result(response, 'Groq')
-  end
-
-  def self.test_openrouter(config)
-    api_key = config['apiKey']
-    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
-
-    # /models do OpenRouter é público; para VALIDAR a chave usa-se /key (retorna dados da chave; 401 se
-    # inválida).
-    response = HTTParty.get('https://openrouter.ai/api/v1/key',
-                            headers: { 'Authorization' => "Bearer #{api_key}", 'Accept' => 'application/json' }, timeout: 10)
-    llm_key_result(response, 'OpenRouter')
-  end
-
-  # Interpreta a resposta de um teste de chave de LLM: sucesso HTTP = chave válida; 400/401/403 =
-  # inválida/revogada; demais = erro genérico com o código. Centraliza o padrão dos 4 providers BYOK.
-  def self.llm_key_result(response, label)
-    return { ok: true, message: "Conexão bem-sucedida. Chave #{label} válida." } if response.success?
-    return { ok: false, message: "Chave #{label} inválida ou revogada (#{response.code})." } if [400, 401, 403].include?(response.code)
-
-    { ok: false, message: "Erro #{response.code}: #{response.message}" }
   end
 
   def self.test_uazapi(config)
