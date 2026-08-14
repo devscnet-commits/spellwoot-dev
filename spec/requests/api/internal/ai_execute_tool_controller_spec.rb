@@ -397,10 +397,12 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
     # Achado 14/08 (auditoria, item 2.3): nenhum teste cobria o que acontece se a IA chama
     # "avancar_etapa" DE NOVO depois que on_complete já disparou — ai_step_index nunca avança pra
     # além da etapa de desfecho (por design, ver os testes acima), então nada no código impede
-    # execute_step_conclusion de rodar uma SEGUNDA vez pro mesmo turno de conclusão. EXPLORATÓRIO:
-    # sem asserção de "certo/errado" fixada a priori — observa o resultado real (erro, duplicação de
-    # side effect, ou no-op) pra decidir DEPOIS se precisa de guard.
-    context 'EXPLORATÓRIO: chamar "avancar_etapa" DE NOVO depois que on_complete já disparou (achado 2.3)' do
+    # execute_step_conclusion de rodar uma SEGUNDA vez pro mesmo turno de conclusão. Investigação
+    # exploratória (sem asserção fixada a priori) achou: close e handoff_ai já eram seguros
+    # (idempotente / anti-loop existente); handoff_human NÃO era (Ai::HandoffSummaryJob duplicava) —
+    # corrigido com guard em Ai::HandoffCoordinator#assign_human. Os testes de handoff_human abaixo
+    # agora fixam a asserção (guard); close/handoff_ai continuam só observando (já eram seguros).
+    context 'chamar "avancar_etapa" DE NOVO depois que on_complete já disparou (achado 2.3)' do
       let!(:incoming_message) do
         create(:message, account: account, inbox: conversation.inbox, conversation: conversation, message_type: 'incoming')
       end
@@ -425,7 +427,11 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         puts "[EXPLORATÓRIO close] Ai::CapabilityExecution count: #{Ai::CapabilityExecution.where(conversation: conversation).count}"
       end
 
-      it 'action=handoff_human chamado duas vezes: observa se reatribui/reexecuta assign_human' do
+      # CONFIRMADO (não mais exploratório): antes do guard, a 2ª chamada enfileirava um SEGUNDO
+      # Ai::HandoffSummaryJob (1 -> 2, medido). Guard em Ai::HandoffCoordinator#assign_human
+      # (return se ai_handoff já true) corta a 2ª chamada inteira antes de mark_handed_off/
+      # enqueue_handoff_summary/perform_native_assignment.
+      it 'action=handoff_human chamado duas vezes: guard mantém o job em 1x e o assignee estável' do
         team = create(:team, account: account)
         create(:team_member, team: team, user: create(:user, account: account))
         agent.update!(handoff_team_ids: [team.id])
@@ -438,29 +444,23 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         handoff_summary_job_count = -> { enqueued_jobs.count { |j| j[:job] == Ai::HandoffSummaryJob } }
 
         call_tool('avancar_etapa')
-        first_status = response.status
-        first_body = response.parsed_body
         first_assignee_id = conversation.reload.assignee_id
         jobs_after_first = handoff_summary_job_count.call
 
         call_tool('avancar_etapa')
-        second_status = response.status
-        second_body = response.parsed_body
         jobs_after_second = handoff_summary_job_count.call
 
-        puts "\n[EXPLORATÓRIO handoff_human] 1ª chamada: HTTP #{first_status} #{first_body.inspect}"
-        puts "[EXPLORATÓRIO handoff_human] assignee após 1ª: #{first_assignee_id.inspect}"
-        puts "[EXPLORATÓRIO handoff_human] Ai::HandoffSummaryJob enfileirados após 1ª: #{jobs_after_first}"
-        puts "[EXPLORATÓRIO handoff_human] 2ª chamada: HTTP #{second_status} #{second_body.inspect}"
-        puts "[EXPLORATÓRIO handoff_human] assignee após 2ª: #{conversation.reload.assignee_id.inspect}"
-        puts "[EXPLORATÓRIO handoff_human] Ai::HandoffSummaryJob enfileirados após 2ª: #{jobs_after_second}"
-        puts "[EXPLORATÓRIO handoff_human] team_id final: #{conversation.reload.team_id.inspect}"
+        expect(jobs_after_first).to eq(1)
+        expect(jobs_after_second).to eq(1) # guard: NÃO duplicou
+        expect(conversation.reload.assignee_id).to eq(first_assignee_id)
+        expect(response.parsed_body['status']).to eq('executed') # 2ª chamada não erra, só é no-op
       end
 
-      # Segundo membro no time: se assign_human reassinala de verdade a cada chamada (em vez de ser
-      # no-op quando já atribuído), a 2ª chamada pode trocar o assignee mesmo sem nenhum gatilho novo —
-      # diferente do teste acima (1 membro só), onde "mesmo assignee" nas duas chamadas não prova nada.
-      it 'action=handoff_human com DOIS membros no time: observa se a 2ª chamada troca o assignee sem motivo' do
+      # Segundo membro no time: sem o guard, se assign_human reassinalasse de verdade a cada chamada, a
+      # 2ª chamada poderia trocar o assignee mesmo sem nenhum gatilho novo — diferente do teste acima (1
+      # membro só), onde "mesmo assignee" nas duas chamadas não provava nada por si. Com o guard, a 2ª
+      # chamada é cortada ANTES de perform_native_assignment — garantidamente estável, não só coincidência.
+      it 'action=handoff_human com DOIS membros no time: guard garante que a 2ª chamada não troca o assignee' do
         team = create(:team, account: account)
         member_a = create(:user, account: account)
         member_b = create(:user, account: account)
@@ -477,11 +477,8 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         first_assignee_id = conversation.reload.assignee_id
 
         call_tool('avancar_etapa')
-        second_assignee_id = conversation.reload.assignee_id
 
-        puts "\n[EXPLORATÓRIO handoff_human 2-membros] assignee após 1ª: #{first_assignee_id.inspect}"
-        puts "[EXPLORATÓRIO handoff_human 2-membros] assignee após 2ª: #{second_assignee_id.inspect}"
-        puts "[EXPLORATÓRIO handoff_human 2-membros] trocou? #{first_assignee_id != second_assignee_id}"
+        expect(conversation.reload.assignee_id).to eq(first_assignee_id)
       end
 
       it 'action=handoff_ai chamado duas vezes: observa se reroteia (ai_routed_agent_id) sem erro' do

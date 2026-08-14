@@ -269,10 +269,16 @@ class Api::Internal::AiExecuteToolController < ActionController::API
       coordinator = step_handoff_coordinator(conversation, department)
       team_id = coordinator.conclusion_team_id(info)
       reason = info['reason'].presence || 'conclusao'
-      transfer_input = { 'unassign' => true }
-      transfer_input['team_id'] = team_id if team_id
-      Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL,
-                                     conversation: conversation, input: transfer_input)
+      # Achado 2.3: handoff_human já entregue (ai_handoff true) — pula TAMBÉM o "unassign" da
+      # transferência. Sem isto, uma 2ª chamada (retry de webhook duplicado) desatribuía a conversa
+      # aqui e não reatribuía ninguém, porque o guard de Ai::HandoffCoordinator#assign_human (abaixo)
+      # já torna essa chamada um no-op — unassign sem reassign deixava a conversa sem dono.
+      unless conversation.additional_attributes.to_h['ai_handoff']
+        transfer_input = { 'unassign' => true }
+        transfer_input['team_id'] = team_id if team_id
+        Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL,
+                                       conversation: conversation, input: transfer_input)
+      end
       coordinator.assign_human(team_id, reason: reason)
       { result: { 'conclusion' => 'handoff_human', 'team_id' => team_id }, status: 'executed', error: nil }
     end
