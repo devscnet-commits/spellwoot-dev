@@ -758,9 +758,13 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # confiar cegamente numa leitura incerta E extrair mais do que foi pedido.
   describe 'REGRA DE EXTRAÇÃO DE DOCUMENTOS (document_extraction_instruction)' do
     it 'instrui a IA a extrair o que a etapa pede, sem chutar quando não tiver certeza visual' do
+      message = create(:message, conversation: conversation, account: account)
+      attachment = message.attachments.create!(account: account, file_type: :image)
+      allow(attachment).to receive(:download_url).and_return('https://cdn.example.com/foto.jpg')
       stub_orchestrator
 
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department,
+                                      mode: 'live', message: message)
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
@@ -773,13 +777,30 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
 
     it 'NÃO proíbe a leitura de documentos — o usuário foi explícito que a IA DEVE ler' do
+      message = create(:message, conversation: conversation, account: account)
+      attachment = message.attachments.create!(account: account, file_type: :image)
+      allow(attachment).to receive(:download_url).and_return('https://cdn.example.com/foto.jpg')
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department,
+                                      mode: 'live', message: message)
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        !prompt.include?('PROIBIDO extrair dados de imagens ou PDFs')
+      }
+    end
+
+    # Achado 14/08: o bloco (5 linhas) ia pro system_prompt em TODO turno, mesmo nos que são só texto
+    # puro — a maioria. Gate por #image_urls.present? (mesmo cálculo que já decide o payload).
+    it 'OMITE o bloco em turno de texto puro, sem anexo/imagem/documento' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        !prompt.include?('PROIBIDO extrair dados de imagens ou PDFs')
+        !prompt.include?('REGRA DE EXTRAÇÃO DE DOCUMENTOS')
       }
     end
   end
