@@ -190,6 +190,14 @@ class Ai::PythonOrchestratorClient
   # o que dizer agora) + como usar as tools de controle. Nunca a lista de etapas inteira como texto.
   def system_prompt
     lines = []
+    # ESTÁTICO — byte-idêntico turno a turno pro MESMO agente+departamento (não depende de
+    # ai_step_index, ai_collected_facts nem do conteúdo do turno atual). Tem que ficar TODO contíguo,
+    # sem nenhum bloco dinâmico intercalado, pra habilitar o Prompt Caching automático da OpenAI
+    # (documentado, sem custo de ativação): o cache é um match de PREFIXO — o primeiro byte que diverge
+    # do turno anterior invalida o cache dali pra frente, então um bloco dinâmico no MEIO do prompt
+    # (como estava antes) invalidava tudo que vinha depois dele, todo turno. Conteúdo de cada linha
+    # inalterado — só a ORDEM mudou (achado 14/08, ticket 563, Frente 2 da compactação de prompt).
+    #
     # Fixas e inegociáveis, ANTES de qualquer outra coisa: fecham lacunas achadas em teste ao vivo —
     # sugerir concorrentes, alucinar "médias de mercado" em vez do conhecimento real, "fingir" que
     # chamou registrar_* sem chamar de verdade, inventar situações que não existem, e transferir sem
@@ -203,13 +211,20 @@ class Ai::PythonOrchestratorClient
     lines << transfer_discipline_instruction
     lines << tool_error_instruction
     lines << gradual_conversation_instruction
-    lines << document_extraction_instruction if image_urls.present?
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
     lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
+    lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
+    lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
+    lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
+    lines << structured_output_instruction
+
+    # DINÂMICO — muda a cada turno (documento anexado neste turno, fatos acumulados, ai_step_index
+    # avança). Fica no FINAL, contíguo, nunca antes do bloco estático acima.
+    lines << document_extraction_instruction if image_urls.present?
     lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
     lines << "PRÓXIMA ETAPA (só contexto — NÃO é a atual; NÃO pule pra ela nem PEÇA o dado dela antes " \
@@ -219,10 +234,6 @@ class Ai::PythonOrchestratorClient
       if next_step_instructions.present?
     lines << step_extraction_instruction if step_extraction_instruction.present?
     lines << data_validation_instruction if data_validation_instruction.present?
-    lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
-    lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
-    lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
-    lines << structured_output_instruction
     lines << force_handoff_instruction if @force_handoff_notice
     lines.join("\n")
   end
