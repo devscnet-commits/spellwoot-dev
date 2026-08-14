@@ -100,6 +100,39 @@ RSpec.describe Ai::HandoffCoordinator do
     end
   end
 
+  # Achado 2.3 (auditoria ticket 563): sem guard, chamar assign_human duas vezes pro MESMO handoff
+  # (ex.: retry de webhook duplicado ANTES do ai_handoff=true da 1ª chamada commitar) enfileirava um
+  # SEGUNDO Ai::HandoffSummaryJob (custo de LLM duplicado) e reexecutava perform_native_assignment.
+  # Guard: assign_human vira no-op quando additional_attributes['ai_handoff'] já é true.
+  describe '#assign_human — chamada repetida pro mesmo handoff é NO-OP (guard, achado 2.3)' do
+    let(:team) { create(:team, account: account) }
+    let(:member) { create(:inbox_member, inbox: inbox) }
+
+    before do
+      create(:account_user, account: account, user: member.user)
+      create(:team_member, team: team, user: member.user)
+      allow(OnlineStatusTracker).to receive(:get_available_users).and_return({})
+    end
+
+    it 'só enfileira Ai::HandoffSummaryJob UMA vez mesmo com duas chamadas' do
+      expect do
+        coordinator.assign_human(team.id, reason: 'loop')
+        coordinator.assign_human(team.id, reason: 'loop')
+      end.to have_enqueued_job(Ai::HandoffSummaryJob).exactly(1).times
+    end
+
+    it 'não reexecuta a atribuição nativa na 2ª chamada' do
+      coordinator.assign_human(team.id, reason: 'loop')
+      assignee_after_first = conversation.reload.assignee_id
+
+      expect(AutoAssignment::AgentAssignmentService).not_to receive(:new)
+      expect(AutoAssignment::AssignmentService).not_to receive(:new)
+      coordinator.assign_human(team.id, reason: 'loop')
+
+      expect(conversation.reload.assignee_id).to eq(assignee_after_first)
+    end
+  end
+
   # === Mudanças 1 + 2: o roteamento passa a LER a lista handoff_team_ids ==========================
   describe '#human_team_id — ordem de resolução (nome[allowlist] -> lista -> nil; team_id é FILTRO)' do
     let(:t_comercial) { create(:team, account: account, name: 'Comerciais') }

@@ -243,7 +243,18 @@ class Ai::HandoffCoordinator
   # geração assíncrona do resumo para o atendente. Transferência manual de humano não passa por aqui, e
   # os call-sites sem reason (se houver) não geram resumo. Enfileirado ANTES da atribuição para não
   # depender do resultado dela.
+  # Achado 2.3 (auditoria ticket 563, confirmado com teste exploratório): nada impedia esta chamada de
+  # rodar DUAS vezes pro MESMO handoff — o caminho normal (ai_step_index nunca avança além da etapa de
+  # desfecho) não repete a chamada, mas um retry de webhook/mensagem duplicada concorrente, ANTES do
+  # ai_handoff=true desta primeira chamada commitar, conseguia. Efeito real medido: um SEGUNDO
+  # Ai::HandoffSummaryJob enfileirado (custo de LLM duplicado + corrida de escrita no resumo) e
+  # perform_native_assignment reexecutado (sem garantia de reatribuir a MESMA pessoa). ai_handoff só é
+  # setado por #mark_handed_off, aqui dentro — nenhum outro caminho no código o liga (auditado) — então
+  # "já true" só pode significar "assign_human já rodou pra esta conversa"; guard seguro, sem falso
+  # positivo. Mesma flag que Ai::ReplyPolicy já usa como fonte da verdade de "já entregue".
   def assign_human(team_id, reason: nil)
+    return if @conversation.additional_attributes.to_h['ai_handoff']
+
     mark_handed_off
 
     # Sem NENHUM time resolvido (nem "Time deste agente", nem allowlist, nem match) e com a caixa tendo
