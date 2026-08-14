@@ -185,6 +185,18 @@ def _normalize_tool_result(result: dict) -> dict:
     return result
 
 
+def _log_raw_response(ticket_id: int, response) -> None:
+    """Achado ao vivo (tickets 560/561/562): o log só mostrava o texto final já processado ("Reply
+    enviada para Rails: ...") — reconstruir um bug exigia remontar o turno a turno via print de
+    WhatsApp, em vez de ler direto do log. Loga a resposta CRUA da OpenAI (antes de qualquer parse),
+    em TODA chamada do turno — inicial, followup (loop de tool calls) e o retry de último recurso.
+    output_text sozinho pode não capturar tudo (ex.: parte da resposta em blocos separados tipo
+    function_call + message) — loga os dois. %s deixa o logging formatar só se o nível estiver
+    ativo (lazy), sem custo de serialização adiantada; str()/repr() dos objetos do SDK já é legível."""
+    logger.info("ticket_id=%s response_id=%s output_text_bruto=%s", ticket_id, response.id, response.output_text)
+    logger.info("ticket_id=%s response_id=%s output_bruto=%s", ticket_id, response.id, response.output)
+
+
 def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
     openai_tools = []
     if vector_store_id:
@@ -270,9 +282,14 @@ def run_conversation(
         ticket_id, provider, resolved_model,
         json.dumps({k: v for k, v in create_kwargs.items() if k != "input"}, ensure_ascii=False),
     )
+    # Achado ao vivo (tickets 560/561/562): o log acima pulava justamente o "input" (mensagem real do
+    # cliente) — reconstruir um bug exigia print de WhatsApp turno a turno em vez de ler do log. Dado
+    # é do próprio usuário, sem terceiros envolvidos — log completo autorizado, sem mascarar.
+    logger.info("ticket_id=%s input_enviado=%s", ticket_id, create_kwargs.get("input"))
 
     client, using_account_key = _resolve_client(account_api_key)
     response, client, byok_fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, create_kwargs)
+    _log_raw_response(ticket_id, response)
 
     # Real business tools only (control/capture tools are never in openai_tools anymore) — same
     # one-round shape as before: collect whatever the model called in parallel, feed the results
@@ -285,6 +302,11 @@ def run_conversation(
         tool_outputs = []
         for call in function_calls:
             arguments = json.loads(call.arguments or "{}")
+            # Achado ao vivo (tickets 560/561/562): o log só mostrava a chamada HTTP genérica
+            # ("POST .../ai_execute_tool HTTP/1.1 200 OK") depois do fato — não dava pra ver, sem
+            # reconstruir via print de WhatsApp, QUAL tool o modelo decidiu chamar e com quais
+            # argumentos, antes da execução em si.
+            logger.info("ticket_id=%s tool_chamada=%s arguments=%s", ticket_id, call.name, call.arguments)
             try:
                 result = tools.execute_tool(
                     ticket_id=ticket_id,
@@ -305,10 +327,11 @@ def run_conversation(
             # chamada seguinte, que a API não expõe via retrieve nenhum. Sem isto não dava pra saber
             # se uma tool call ficou "pendurada" porque o resultado veio vazio/erro/schema errado, sem
             # reconstruir tudo via os logs do webhook Rails (Ai::CapabilityExecution) cruzando por
-            # timestamp. Loga aqui, no ponto exato que decide o que o modelo vai ler.
+            # timestamp. Loga aqui, no ponto exato que decide o que o modelo vai ler. call_id incluso
+            # pra correlacionar chamadas paralelas do MESMO tool_name no mesmo turno.
             logger.info(
-                "ticket_id=%s call_id=%s tool_name=%s function_call_output bruto: %s",
-                ticket_id, call.call_id, call.name, json.dumps(result, ensure_ascii=False),
+                "ticket_id=%s tool_resultado=%s call_id=%s resultado_bruto=%s",
+                ticket_id, call.name, call.call_id, json.dumps(result, ensure_ascii=False),
             )
 
             tool_outputs.append({
@@ -329,6 +352,7 @@ def run_conversation(
             followup_kwargs["temperature"] = temperature
 
         response = client.responses.create(**followup_kwargs)
+        _log_raw_response(ticket_id, response)
 
     payload = _parse_structured_reply(response.output_text)
     if payload is None:
@@ -344,6 +368,7 @@ def run_conversation(
             text=_TEXT_FORMAT,
             **({"temperature": temperature} if temperature is not None else {}),
         )
+        _log_raw_response(ticket_id, response)  # mesma categoria do followup — outra chamada no MESMO turno
         payload = _parse_structured_reply(response.output_text)
 
     if payload is None:
