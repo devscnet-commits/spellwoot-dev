@@ -152,6 +152,53 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Achado 14/08 (ticket 563, Frente 2 da compactação de prompt): o bloco DINÂMICO (DADOS JÁ
+  # COLETADOS/ETAPA ATUAL/PRÓXIMA ETAPA) ficava NO MEIO do system_prompt, entre "Departamento: ..." e
+  # "Transfira para humano quando: ...". Prompt Caching da OpenAI é um match de PREFIXO — o primeiro
+  # byte que diverge do turno anterior invalida o cache dali pra frente, então aquele bloco dinâmico no
+  # meio invalidava TAMBÉM o texto estático que vinha depois dele (transfer_when/close_when/
+  # structured_output_instruction), turno a turno. Reordenado pra tudo estático ficar contíguo ANTES de
+  # tudo dinâmico, sem mudar o conteúdo de nenhuma linha — só a ordem.
+  describe 'ordem do system_prompt (prefixo estático cache-friendly, Frente 2)' do
+    let(:static_tail_marker) { 'nesse caso "dados_coletados" fica [] e os demais booleanos ficam false.' }
+
+    it 'o prefixo estático (tudo até o fim de structured_output_instruction) é byte-idêntico mesmo quando fatos/etapa/anexo mudam' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Boas-vindas', 'collect' => { 'attribute' => 'nome' } },
+        { 'name' => 'Cidade', 'collect' => { 'attribute' => 'cidade' } }
+      ])
+
+      captured_prompts = []
+      stub_request(:post, described_class::ORCHESTRATOR_URL).to_return do |request|
+        captured_prompts << JSON.parse(request.body)['system_prompt']
+        { status: 200, body: { reply: 'ok', response_id: 'resp_x' }.to_json,
+          headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      # Chamada 1: conversa "zerada" — sem fatos, etapa 0, sem anexo.
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      # Chamada 2: MESMA conversa, mas com fatos acumulados, etapa avançada e um anexo de imagem —
+      # tudo que é dinâmico, mudado de propósito.
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge(
+        'ai_collected_facts' => { 'nome' => 'Jaqueline' }, 'ai_step_index' => 1
+      ))
+      message = create(:message, account: account, inbox: conversation.inbox, conversation: conversation)
+      attachment = message.attachments.create!(account: account, file_type: :image)
+      allow(attachment).to receive(:download_url).and_return('https://cdn.example.com/foto.jpg')
+
+      described_class.process_message(conversation: conversation, content: 'Jaqueline', agent: agent, department: department,
+                                      mode: 'live', message: message)
+
+      prompt_1, prompt_2 = captured_prompts
+      marker_end_1 = prompt_1.index(static_tail_marker) + static_tail_marker.length
+      marker_end_2 = prompt_2.index(static_tail_marker) + static_tail_marker.length
+
+      expect(prompt_1[0...marker_end_1]).to eq(prompt_2[0...marker_end_2]) # prefixo estático idêntico
+      expect(prompt_2[marker_end_2..]).not_to eq(prompt_1[marker_end_1..]) # prova que o dinâmico REALMENTE divergiu depois
+    end
+  end
+
   # Fluxo agentic: TODAS as "registrar_*" (qualquer etapa do playbook) + as 3 tools de controle
   # (avancar_etapa/resolve/transfer) vão SEMPRE, sem gate por etapa ativa — a IA decide o que chamar.
   # A instrução no system_prompt continua ancorada só na etapa ATUAL (âncora narrativa, não trava nada).
