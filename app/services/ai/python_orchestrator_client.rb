@@ -203,7 +203,7 @@ class Ai::PythonOrchestratorClient
     lines << transfer_discipline_instruction
     lines << tool_error_instruction
     lines << gradual_conversation_instruction
-    lines << document_extraction_instruction
+    lines << document_extraction_instruction if image_urls.present?
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
@@ -330,6 +330,11 @@ class Ai::PythonOrchestratorClient
   # chegam como pixels crus NESTE MESMO turno agora (não mais uma legenda de uma chamada separada e
   # sem contexto) — a regra de "não chutar" vale exatamente porque é a IA MESMA, com o contexto da
   # etapa, quem está olhando a imagem.
+  #
+  # Chamado só quando #image_urls.present? (achado 14/08): este bloco ia pro system_prompt em TODO
+  # turno, mesmo nos que são só texto puro — a maioria. Gate determinístico em Ruby (mesmo cálculo que
+  # já decide o que entra em "image_urls" no payload) em vez de julgamento do modelo: sem tool nova,
+  # sem depender de decisão cruzada entre etapas.
   def document_extraction_instruction
     "REGRA DE EXTRAÇÃO DE DOCUMENTOS (PDFs e Imagens):\n" \
       "- Quando o cliente enviar um documento (CNH, RG, comprovante), analise a imagem cuidadosamente " \
