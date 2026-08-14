@@ -152,6 +152,60 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Achado 14/08 (ticket 563, Frente 1): a análise de compactação de prompt usou o playbook real do
+  # Department 5 (Maya v5.0, provedor de internet — etapas "VIABILIDADE", "PLANOS", atributos
+  # "cidade"/"documento_cpf"/etc.) como CASO DE TESTE, não como molde — o sistema é multi-cliente
+  # configurável. Este teste prova que o renderizador (Ai::StepInstructionText +
+  # #step_extraction_instruction/#data_validation_instruction/#current_step_instructions/
+  # #next_step_instructions) é 100% genérico: um playbook de domínio TOTALMENTE alheio (pedido de
+  # pizza — zero overlap de vocabulário com a Maya) produz a MESMA estrutura de blocos, sem nenhum
+  # hardcode de nome de etapa ou atributo escondido no meio do caminho.
+  describe 'renderização de etapa é 100% genérica (achado 14/08, validação da Frente 1)' do
+    it 'produz a mesma estrutura de blocos pra um playbook de domínio completamente diferente do da Maya' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'sabor', 'objective' => 'Descobrir o sabor da pizza que o cliente quer.',
+          'rules' => ['Se o cliente pedir "surpresa", sugira o sabor mais vendido do dia.'],
+          'suggested_script' => 'Qual sabor você quer hoje?',
+          'collect' => { 'attribute' => 'sabor_pizza', 'type' => 'text' } },
+        { 'name' => 'entrega', 'objective' => 'Confirmar o endereço de entrega.',
+          'collect' => { 'attribute' => 'endereco_entrega', 'type' => 'text' } }
+      ])
+      conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 0))
+
+      captured = []
+      stub_request(:post, described_class::ORCHESTRATOR_URL).to_return do |request|
+        captured << JSON.parse(request.body)['system_prompt']
+        { status: 200, body: { reply: 'ok', response_id: 'resp_pizza' }.to_json,
+          headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+      prompt = captured.first
+
+      # Mesma FORMA de blocos que qualquer playbook (Maya inclusa) produziria — objective/rules/
+      # suggested_script (Ai::StepInstructionText), extração JSON, validação de foco, próxima etapa.
+      expect(prompt).to include('ETAPA ATUAL:')
+      expect(prompt).to include('Objetivo: Descobrir o sabor da pizza que o cliente quer.')
+      expect(prompt).to include('Regras:')
+      expect(prompt).to include('- Se o cliente pedir "surpresa", sugira o sabor mais vendido do dia.')
+      expect(prompt).to include('Fala sugerida: "Qual sabor você quer hoje?"')
+      expect(prompt).to include("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a 'sabor_pizza'")
+      expect(prompt).to include('REGRAS DE FOCO E VALIDAÇÃO DA COLETA')
+      expect(prompt).to include('PRÓXIMA ETAPA')
+      expect(prompt).to include('Confirmar o endereço de entrega.')
+
+      # Nenhum vocabulário da Maya vaza pro prompt de um playbook que nunca o declarou -- prova de que
+      # não há fallback/hardcode escondido puxando texto de outro domínio. "cidade" sozinho fica de
+      # fora de propósito: aparece como exemplo ilustrativo genérico dentro de
+      # #structured_output_instruction (estático, IDÊNTICO pra qualquer department, não lido dos dados
+      # do playbook) — coincidência de vocabulário, não hardcode; os nomes compostos abaixo não têm
+      # esse risco de falso positivo.
+      %w[viabilidade plano_escolhido documento_cpf aparelhos_conectados tamanho_imovel].each do |maya_word|
+        expect(prompt).not_to include(maya_word)
+      end
+    end
+  end
+
   # Fluxo agentic: TODAS as "registrar_*" (qualquer etapa do playbook) + as 3 tools de controle
   # (avancar_etapa/resolve/transfer) vão SEMPRE, sem gate por etapa ativa — a IA decide o que chamar.
   # A instrução no system_prompt continua ancorada só na etapa ATUAL (âncora narrativa, não trava nada).
