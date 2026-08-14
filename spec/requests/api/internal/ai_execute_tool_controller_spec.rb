@@ -394,6 +394,120 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
     end
 
+    # Achado 14/08 (auditoria, item 2.3): nenhum teste cobria o que acontece se a IA chama
+    # "avancar_etapa" DE NOVO depois que on_complete já disparou — ai_step_index nunca avança pra
+    # além da etapa de desfecho (por design, ver os testes acima), então nada no código impede
+    # execute_step_conclusion de rodar uma SEGUNDA vez pro mesmo turno de conclusão. EXPLORATÓRIO:
+    # sem asserção de "certo/errado" fixada a priori — observa o resultado real (erro, duplicação de
+    # side effect, ou no-op) pra decidir DEPOIS se precisa de guard.
+    context 'EXPLORATÓRIO: chamar "avancar_etapa" DE NOVO depois que on_complete já disparou (achado 2.3)' do
+      let!(:incoming_message) do
+        create(:message, account: account, inbox: conversation.inbox, conversation: conversation, message_type: 'incoming')
+      end
+
+      it 'action=close chamado duas vezes: observa se a 2ª chamada erra, duplica ou é no-op' do
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'close' } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        call_tool('avancar_etapa')
+        first_status = response.status
+        first_body = response.parsed_body
+
+        call_tool('avancar_etapa')
+        second_status = response.status
+        second_body = response.parsed_body
+
+        puts "\n[EXPLORATÓRIO close] 1ª chamada: HTTP #{first_status} #{first_body.inspect}"
+        puts "[EXPLORATÓRIO close] 2ª chamada: HTTP #{second_status} #{second_body.inspect}"
+        puts "[EXPLORATÓRIO close] conversation.status final: #{conversation.reload.status.inspect}"
+        puts "[EXPLORATÓRIO close] Ai::CapabilityExecution count: #{Ai::CapabilityExecution.where(conversation: conversation).count}"
+      end
+
+      it 'action=handoff_human chamado duas vezes: observa se reatribui/reexecuta assign_human' do
+        team = create(:team, account: account)
+        create(:team_member, team: team, user: create(:user, account: account))
+        agent.update!(handoff_team_ids: [team.id])
+        department.reload
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team.id } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        handoff_summary_job_count = -> { enqueued_jobs.count { |j| j[:job] == Ai::HandoffSummaryJob } }
+
+        call_tool('avancar_etapa')
+        first_status = response.status
+        first_body = response.parsed_body
+        first_assignee_id = conversation.reload.assignee_id
+        jobs_after_first = handoff_summary_job_count.call
+
+        call_tool('avancar_etapa')
+        second_status = response.status
+        second_body = response.parsed_body
+        jobs_after_second = handoff_summary_job_count.call
+
+        puts "\n[EXPLORATÓRIO handoff_human] 1ª chamada: HTTP #{first_status} #{first_body.inspect}"
+        puts "[EXPLORATÓRIO handoff_human] assignee após 1ª: #{first_assignee_id.inspect}"
+        puts "[EXPLORATÓRIO handoff_human] Ai::HandoffSummaryJob enfileirados após 1ª: #{jobs_after_first}"
+        puts "[EXPLORATÓRIO handoff_human] 2ª chamada: HTTP #{second_status} #{second_body.inspect}"
+        puts "[EXPLORATÓRIO handoff_human] assignee após 2ª: #{conversation.reload.assignee_id.inspect}"
+        puts "[EXPLORATÓRIO handoff_human] Ai::HandoffSummaryJob enfileirados após 2ª: #{jobs_after_second}"
+        puts "[EXPLORATÓRIO handoff_human] team_id final: #{conversation.reload.team_id.inspect}"
+      end
+
+      # Segundo membro no time: se assign_human reassinala de verdade a cada chamada (em vez de ser
+      # no-op quando já atribuído), a 2ª chamada pode trocar o assignee mesmo sem nenhum gatilho novo —
+      # diferente do teste acima (1 membro só), onde "mesmo assignee" nas duas chamadas não prova nada.
+      it 'action=handoff_human com DOIS membros no time: observa se a 2ª chamada troca o assignee sem motivo' do
+        team = create(:team, account: account)
+        member_a = create(:user, account: account)
+        member_b = create(:user, account: account)
+        create(:team_member, team: team, user: member_a)
+        create(:team_member, team: team, user: member_b)
+        agent.update!(handoff_team_ids: [team.id])
+        department.reload
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team.id } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        call_tool('avancar_etapa')
+        first_assignee_id = conversation.reload.assignee_id
+
+        call_tool('avancar_etapa')
+        second_assignee_id = conversation.reload.assignee_id
+
+        puts "\n[EXPLORATÓRIO handoff_human 2-membros] assignee após 1ª: #{first_assignee_id.inspect}"
+        puts "[EXPLORATÓRIO handoff_human 2-membros] assignee após 2ª: #{second_assignee_id.inspect}"
+        puts "[EXPLORATÓRIO handoff_human 2-membros] trocou? #{first_assignee_id != second_assignee_id}"
+      end
+
+      it 'action=handoff_ai chamado duas vezes: observa se reroteia (ai_routed_agent_id) sem erro' do
+        target_agent = Ai::Agent.create!(account: account, name: 'Vendas', status: 'active',
+                                         ai_operation_profile_id: operation_profile.id)
+        Ai::AgentInbox.create!(ai_agent_id: target_agent.id, inbox_id: conversation.inbox_id, mode: 'live', active: true)
+        agent.update!(handoff_agent_ids: [target_agent.id])
+        Ai::Playbook.create!(department: department, steps: [
+          { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_ai', 'target' => 'Vendas' } }
+        ])
+        conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
+
+        call_tool('avancar_etapa')
+        first_status = response.status
+        first_body = response.parsed_body
+
+        call_tool('avancar_etapa')
+        second_status = response.status
+        second_body = response.parsed_body
+
+        puts "\n[EXPLORATÓRIO handoff_ai] 1ª chamada: HTTP #{first_status} #{first_body.inspect}"
+        puts "[EXPLORATÓRIO handoff_ai] 2ª chamada: HTTP #{second_status} #{second_body.inspect}"
+        puts "[EXPLORATÓRIO handoff_ai] ai_routed_agent_id final: #{conversation.reload.additional_attributes['ai_routed_agent_id'].inspect}"
+      end
+    end
+
     # Bug real ao vivo: a IA respondia só com texto e nunca chamava nenhuma tool, então o
     # ai_step_index nunca avançava. orchestrator.py passou a mandar tool_choice="required" — esta tool
     # é o escape-valve: um no-op puro pra quando a IA só quer falar (perguntar/cumprimentar/responder)
