@@ -185,6 +185,23 @@ def _normalize_tool_result(result: dict) -> dict:
     return result
 
 
+def _log_create_kwargs(ticket_id: int, kwargs: dict) -> None:
+    """Auditoria completa (achado ao vivo: a versão anterior deste log resumia DEMAIS — só
+    input_enviado/output_text_bruto, sem model/instructions/tools/text/previous_response_id/
+    temperature juntos, sem dar pra conferir de fora se strict:true continua valendo, por exemplo).
+    Loga o create_kwargs INTEIRO, sempre, pra CADA chamada real (inicial, followup, retry) — nunca
+    resumido. Único campo tratado diferente é "input": ele cresce turno a turno (function_call_output
+    acumulado no loop de tools) e o conteúdo do cliente já é auditável via #_dispatch_structured_reply
+    separadamente — aqui vira só tamanho + prévia, pra não estourar uma linha de log gigante.
+    "instructions" (system_prompt inteiro) e "tools" (lista completa) NUNCA são resumidos."""
+    to_log = dict(kwargs)
+    input_value = to_log.get("input")
+    if input_value is not None:
+        raw = json.dumps(input_value, ensure_ascii=False)
+        to_log["input"] = f"<{len(raw)} chars> {raw[:200]}"
+    logger.info("ticket_id=%s create_kwargs_completo=%s", ticket_id, json.dumps(to_log, ensure_ascii=False))
+
+
 def _log_raw_response(ticket_id: int, response) -> None:
     """Achado ao vivo (tickets 560/561/562): o log só mostrava o texto final já processado ("Reply
     enviada para Rails: ...") — reconstruir um bug exigia remontar o turno a turno via print de
@@ -192,9 +209,18 @@ def _log_raw_response(ticket_id: int, response) -> None:
     em TODA chamada do turno — inicial, followup (loop de tool calls) e o retry de último recurso.
     output_text sozinho pode não capturar tudo (ex.: parte da resposta em blocos separados tipo
     function_call + message) — loga os dois. %s deixa o logging formatar só se o nível estiver
-    ativo (lazy), sem custo de serialização adiantada; str()/repr() dos objetos do SDK já é legível."""
+    ativo (lazy), sem custo de serialização adiantada; str()/repr() dos objetos do SDK já é legível.
+    function_calls_bruto extraído à parte (não só dentro de output_bruto) — mais fácil de escanear
+    quais tools o modelo pediu nesta resposta específica, sem garimpar a lista inteira de output."""
     logger.info("ticket_id=%s response_id=%s output_text_bruto=%s", ticket_id, response.id, response.output_text)
     logger.info("ticket_id=%s response_id=%s output_bruto=%s", ticket_id, response.id, response.output)
+    function_calls = [item for item in response.output if item.type == "function_call"]
+    if function_calls:
+        logger.info(
+            "ticket_id=%s response_id=%s function_calls_bruto=%s", ticket_id, response.id,
+            json.dumps([{"name": c.name, "arguments": c.arguments, "call_id": c.call_id} for c in function_calls],
+                       ensure_ascii=False),
+        )
 
 
 def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
@@ -273,19 +299,8 @@ def run_conversation(
     if temperature is not None:
         create_kwargs["temperature"] = temperature
 
-    # "text" incluso de propósito (achado ao vivo 13/08 — ticket_id=556: sem isto, não dava pra
-    # confirmar de fora se um sandbox estava rodando json_schema estrito ou ainda json_object só
-    # olhando o log). Loga create_kwargs INTEIRO menos "input" (conteúdo do cliente/histórico —
-    # não precisa duplicar aqui, e cresce sem limite turno a turno).
-    logger.info(
-        "ticket_id=%s provider=%s model=%s create_kwargs (sem 'input'): %s",
-        ticket_id, provider, resolved_model,
-        json.dumps({k: v for k, v in create_kwargs.items() if k != "input"}, ensure_ascii=False),
-    )
-    # Achado ao vivo (tickets 560/561/562): o log acima pulava justamente o "input" (mensagem real do
-    # cliente) — reconstruir um bug exigia print de WhatsApp turno a turno em vez de ler do log. Dado
-    # é do próprio usuário, sem terceiros envolvidos — log completo autorizado, sem mascarar.
-    logger.info("ticket_id=%s input_enviado=%s", ticket_id, create_kwargs.get("input"))
+    logger.info("ticket_id=%s provider=%s model=%s primeira chamada do turno", ticket_id, provider, resolved_model)
+    _log_create_kwargs(ticket_id, create_kwargs)
 
     client, using_account_key = _resolve_client(account_api_key)
     response, client, byok_fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, create_kwargs)
@@ -351,6 +366,7 @@ def run_conversation(
         if temperature is not None:
             followup_kwargs["temperature"] = temperature
 
+        _log_create_kwargs(ticket_id, followup_kwargs)
         response = client.responses.create(**followup_kwargs)
         _log_raw_response(ticket_id, response)
 
@@ -360,14 +376,18 @@ def run_conversation(
         # function call, or the model somehow returned unparseable JSON. Chained via
         # previous_response_id (full turn history is already there) with NO tools — a function call
         # is off the table, so this call can't itself degrade into another empty/non-JSON turn.
-        response = client.responses.create(
-            model=resolved_model,
-            previous_response_id=response.id,
-            input="Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
-                  "que você acabou de fazer.",
-            text=_TEXT_FORMAT,
-            **({"temperature": temperature} if temperature is not None else {}),
-        )
+        retry_kwargs = {
+            "model": resolved_model,
+            "previous_response_id": response.id,
+            "input": "Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
+                     "que você acabou de fazer.",
+            "text": _TEXT_FORMAT,
+        }
+        if temperature is not None:
+            retry_kwargs["temperature"] = temperature
+
+        _log_create_kwargs(ticket_id, retry_kwargs)
+        response = client.responses.create(**retry_kwargs)
         _log_raw_response(ticket_id, response)  # mesma categoria do followup — outra chamada no MESMO turno
         payload = _parse_structured_reply(response.output_text)
 
