@@ -389,6 +389,7 @@ def run_conversation(
             "conversation": conversation_id,
             "instructions": instructions,
             "input": tool_outputs,
+            "parallel_tool_calls": False,
             "text": _TEXT_FORMAT,
         }
         if temperature is not None:
@@ -410,6 +411,7 @@ def run_conversation(
             "instructions": instructions,
             "input": "Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
                      "que você acabou de fazer.",
+            "parallel_tool_calls": False,
             "text": _TEXT_FORMAT,
         }
         if temperature is not None:

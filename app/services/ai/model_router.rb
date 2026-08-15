@@ -73,7 +73,8 @@ class Ai::ModelRouter
       instructions: system_prompt,
       temperature: temperature.to_f,
       input: [{ role: 'user', content: user_message }],
-      conversation: conversation_id
+      conversation: conversation_id,
+      parallel_tool_calls: false
     }
     if json && schema
       schema_instance  = schema.is_a?(Class) ? schema.new : schema
