@@ -7,10 +7,10 @@ import orchestrator
 # Primeiro teste automatizado deste microserviço (nenhum existia até aqui — a série "tool +
 # followup" removida de spec/services/ai/gateway_spec.rb testava o LOOP ANTIGO, do lado Ruby;
 # desde a eliminação do motor legado, o loop de function-calling vive inteiro aqui dentro
-# (run_conversation: MAX_TOOL_ITERATIONS + previous_response_id chaining), sem nenhuma rede de
+# (run_conversation: MAX_TOOL_ITERATIONS + OpenAI Conversations API), sem nenhuma rede de
 # segurança automatizada — só verificação manual ao vivo durante a sessão. Não exaustivo (não
 # cobre BYOK/erro/limite de iterações): só prova que o mecanismo central — 2 idas-e-voltas de
-# ferramenta encadeadas por previous_response_id dentro do MESMO turno — funciona de ponta a ponta.
+# ferramenta dentro da MESMA conversation, no MESMO turno — funciona de ponta a ponta.
 
 
 def _function_call(name, arguments, call_id):
@@ -36,10 +36,11 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
 
     with patch.object(orchestrator, "_client") as mock_client, \
          patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+        mock_client.conversations.create.return_value = SimpleNamespace(id="conv_abc")
         mock_client.responses.create.side_effect = [resp1, resp2, resp3]
         mock_execute_tool.return_value = {"result": "ok"}
 
-        reply_text, response_id, byok_fallback = orchestrator.run_conversation(
+        reply_text, conversation_id, byok_fallback = orchestrator.run_conversation(
             ticket_id=1,
             ai_department_id=1,
             mode="live",
@@ -47,15 +48,18 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
             tools_schema=[],
             vector_store_id=None,
             user_input="quanto custa e meu nome é Joana",
-            previous_response_id=None,
+            conversation_id=None,
         )
 
+    # conversation_id ausente => cria uma conversation nova antes da 1ª chamada.
+    assert mock_client.conversations.create.call_count == 1
     # 3 chamadas à Responses API: a inicial + 1 followup por rodada de ferramenta (2 rodadas).
     assert mock_client.responses.create.call_count == 3
-    # cada followup foi encadeado pelo previous_response_id da resposta ANTERIOR — é isso que faz
-    # da 2ª chamada de ferramenta parte do MESMO turno, não uma conversa nova.
-    assert mock_client.responses.create.call_args_list[1].kwargs["previous_response_id"] == "resp_1"
-    assert mock_client.responses.create.call_args_list[2].kwargs["previous_response_id"] == "resp_2"
+    # as 3 chamadas referenciam a MESMA conversation — é isso que faz da 2ª chamada de ferramenta
+    # parte do MESMO turno/atendimento, sem depender de encadear por ID de resposta.
+    assert mock_client.responses.create.call_args_list[0].kwargs["conversation"] == "conv_abc"
+    assert mock_client.responses.create.call_args_list[1].kwargs["conversation"] == "conv_abc"
+    assert mock_client.responses.create.call_args_list[2].kwargs["conversation"] == "conv_abc"
 
     # as 2 ferramentas foram de fato executadas (webhook Rails), na ordem certa, cada uma na sua rodada.
     assert mock_execute_tool.call_count == 2
@@ -64,7 +68,7 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
 
     # a resposta final só sai DEPOIS das 2 rodadas, com o texto estruturado corretamente despachado.
     assert reply_text == "Show, Joana! O plano custa R$ 99,90."
-    assert response_id == "resp_3"
+    assert conversation_id == "conv_abc"
     assert byok_fallback is False
 
 
@@ -114,16 +118,19 @@ class TestNormalizeToolResult:
 
         with patch.object(orchestrator, "_client") as mock_client, \
              patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            mock_client.conversations.create.return_value = SimpleNamespace(id="conv_abc")
             mock_client.responses.create.side_effect = [resp1, resp2]
             mock_execute_tool.return_value = {"result": {}, "status": "failed", "error": "404 token not found"}
 
             orchestrator.run_conversation(
                 ticket_id=1, ai_department_id=1, mode="live", system_prompt="system prompt de teste",
                 tools_schema=[], vector_store_id=None, user_input="quero agendar em Maravilha",
-                previous_response_id=None,
+                conversation_id=None,
             )
 
-        sent_output = json.loads(mock_client.responses.create.call_args_list[1].kwargs["input"][1]["output"])
+        # input não carrega mais o lembrete de formato (foi pra "instructions") — o único item é o
+        # function_call_output da ferramenta.
+        sent_output = json.loads(mock_client.responses.create.call_args_list[1].kwargs["input"][0]["output"])
         assert sent_output == {"error": True, "message": "404 token not found"}
 
 

@@ -44,13 +44,13 @@ RSpec.describe Ai::Gateway do
   end
 
   # Stuba o único ponto de chamada de LLM do Gateway (o cliente HTTP do orquestrador Python).
-  def stub_python(reply: 'ok', response_id: 'resp_1')
-    allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: reply, response_id: response_id)
+  def stub_python(reply: 'ok', conversation_id: 'conv_1')
+    allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: reply, conversation_id: conversation_id)
   end
 
   # Mesma forma que Ai::PythonOrchestratorClient#perform devolve em qualquer erro HTTP/timeout/exceção.
   def stub_python_error
-    allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: nil, response_id: nil)
+    allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: nil, conversation_id: nil)
   end
 
   # Cria a mensagem do cliente e roda o Gateway para o binding dado. Devolve a conversa recarregada.

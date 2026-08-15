@@ -104,11 +104,11 @@ RSpec.describe Ai::PythonOrchestratorDiagnostics do
 
       expect(Ai::PythonOrchestratorClient).to receive(:process_message)
         .with(hash_including(mode: 'shadow'))
-        .and_return(reply: 'Oi! Como posso ajudar?', response_id: 'resp_1')
+        .and_return(reply: 'Oi! Como posso ajudar?', conversation_id: 'conv_1')
 
       result = described_class.direct_call(conversation)
 
-      expect(result[:result]).to eq(reply: 'Oi! Como posso ajudar?', response_id: 'resp_1')
+      expect(result[:result]).to eq(reply: 'Oi! Como posso ajudar?', conversation_id: 'conv_1')
       expect(result[:department_id]).to eq(department.id)
     end
 

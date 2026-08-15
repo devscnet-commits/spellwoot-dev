@@ -178,7 +178,7 @@ class Ai::Gateway
       conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode,
       message: @message, force_handoff_notice: force_handoff_notice
     )
-    persist_openai_conversation_id(result[:response_id]) if result[:response_id].present?
+    persist_openai_conversation_id(result[:conversation_id]) if result[:conversation_id].present?
     # BYOK (billing Fase 3): o Python já fez o retry internamente (ver orchestrator.py) — aqui só
     # espelha o que #maybe_byok_fallback fazia no caminho legado: tag de visibilidade + cobra 1
     # crédito SCNET pela chamada que teve que usar a chave global. Só ao vivo (shadow não gasta).

@@ -24,7 +24,9 @@ class ProcessRequest(BaseModel):
     tools_schema: list = []
     vector_store_id: Optional[str] = None
     user_input: str
-    previous_response_id: Optional[str] = None
+    # OpenAI Conversations API id (conv_...), persistente e sem expiração — substitui o antigo
+    # previous_response_id. None no primeiro turno do atendimento (orchestrator.py cria a conversation).
+    conversation_id: Optional[str] = None
     ai_department_id: int
     mode: str
     # Multi-tenant: each Rails Account picks its own model/temperature via Ai::OperationProfile.
@@ -47,7 +49,7 @@ class ProcessRequest(BaseModel):
 class ProcessResponse(BaseModel):
     ticket_id: int
     reply: str
-    response_id: str
+    conversation_id: str
     # True quando account_api_key foi passada mas falhou por auth e a chamada real caiu pra chave
     # global — Rails usa isso pra cobrar 1 crédito (Ai::Gateway#consume_byok_fallback_credit).
     byok_fallback: bool = False
@@ -73,7 +75,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     )
 
     try:
-        reply_text, response_id, byok_fallback = orchestrator.run_conversation(
+        reply_text, conversation_id, byok_fallback = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
             ai_department_id=request.ai_department_id,
             mode=request.mode,
@@ -81,7 +83,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             tools_schema=request.tools_schema,
             vector_store_id=request.vector_store_id,
             user_input=request.user_input,
-            previous_response_id=request.previous_response_id,
+            conversation_id=request.conversation_id,
             model=request.model,
             provider=request.provider,
             temperature=request.temperature,
@@ -98,5 +100,5 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     # (_force_text_reply), so this log is what confirms whether that guard is actually firing/working.
     logger.info(f"Reply enviada para Rails: {reply_text}")
 
-    return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, response_id=response_id,
+    return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, conversation_id=conversation_id,
                             byok_fallback=byok_fallback)

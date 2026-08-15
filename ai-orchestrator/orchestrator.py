@@ -38,6 +38,26 @@ def _call_with_byok_fallback(client: OpenAI, using_account_key: bool, ticket_id:
         logger.warning("ticket_id=%s: chave própria da conta falhou por auth, caindo pra chave global", ticket_id)
         return _client.responses.create(**kwargs), _client, True
 
+
+def _ensure_conversation(client: OpenAI, using_account_key: bool, ticket_id: int, conversation_id: str | None):
+    """A OpenAI Conversations API exige que o objeto exista no servidor ANTES de ser referenciado num
+    /v1/responses (conversation=conv_id) — diferente do antigo previous_response_id, que só apontava
+    pra última resposta e nascia sozinho em toda chamada (e expirava em 30 dias, perdendo a cadeia).
+    conversation_id ausente => primeiro turno do atendimento: cria uma conversation nova (persistente,
+    sem expiração) e usa ela daqui em diante. Mesma semântica de fallback BYOK que
+    _call_with_byok_fallback usa pras respostas: tenta a chave da conta primeiro, cai pra global se
+    falhar por auth. Devolve (conversation_id, client_a_usar_dali_pra_frente, byok_fallback)."""
+    if conversation_id:
+        return conversation_id, client, False
+    try:
+        return client.conversations.create().id, client, False
+    except AuthenticationError:
+        if not using_account_key:
+            raise
+
+        logger.warning("ticket_id=%s: chave própria da conta falhou ao criar a conversation, caindo pra chave global", ticket_id)
+        return _client.conversations.create().id, _client, True
+
 # Structured-output contract every turn must return (Ai::PythonOrchestratorClient's system_prompt
 # spells this exact shape out to the model — see #structured_output_instruction). Replaces
 # function-calling for data collection and step/flow control: the old design let the model call a
@@ -135,34 +155,35 @@ def _is_superseded_tool(name: str) -> bool:
 
 # OpenAI's text.format=json_object EXIGIA a palavra "json" nas mensagens de INPUT — live 400
 # confirmado: "Response input messages must contain the word 'json' in some form to use 'text.format'
-# of type 'json_object'." `instructions` (system_prompt) não contava, não importa quanto falasse de
-# JSON — um "Oi" sozinho como input inteiro dava 400 sempre. Migrado pra json_schema estrito
-# (STRUCTURED_REPLY_SCHEMA) — não confirmado se a mesma exigência vale pra json_schema (o schema já
-# força o shape, então é plausível que não precise mais), mas mantido por segurança: não faz mal
-# incluir, e tirar sem confirmar reabriria o mesmo 400 se a exigência persistir. Item PRÓPRIO de
-# input (não prefixado na mensagem do cliente) pra user_input chegar ao modelo — e o que a OpenAI
-# guarda server-side pro previous_response_id — byte-idêntico ao que o cliente realmente digitou.
-_JSON_FORMAT_REMINDER = {
-    "role": "user",
-    "content": "Lembrete de formato: sua resposta final a este turno deve ser SEMPRE o objeto JSON "
-               "definido nas instructions — nunca texto livre.",
-}
+# of type 'json_object'." Migrado pra json_schema estrito (STRUCTURED_REPLY_SCHEMA) e pra
+# instructions reenviadas em TODA chamada do turno (ver _build_instructions/run_conversation) — o
+# lembrete agora vai em "instructions", nunca em "input" (input carrega só o turno real do cliente/
+# ferramenta, nunca um recado da infra pro modelo).
+_JSON_FORMAT_REMINDER_TEXT = (
+    "Lembrete de formato: sua resposta final a este turno deve ser SEMPRE o objeto JSON "
+    "definido nas instructions — nunca texto livre."
+)
+
+
+def _build_instructions(system_prompt: str) -> str:
+    """system_prompt (persona + etapa + contrato JSON, montado pelo Rails) + o lembrete de formato,
+    sempre juntos. Chamada em TODA requisição do turno (inicial, followup de tool, retry) — instrui a
+    Responses API a nunca perder o contexto/contrato entre chamadas do mesmo turno."""
+    return f"{system_prompt}\n\n{_JSON_FORMAT_REMINDER_TEXT}"
 
 
 def _build_input(user_input: str, image_urls: list[str] | None):
-    """Always a list (never a bare string, unlike before) — the json-format reminder item goes first,
-    then the customer's own turn: plain text, or a multimodal input_text/input_image(s) list when
-    there's something to see this turn — a WhatsApp photo, and/or a scanned document's rasterized
-    pages (base64 data URIs, Ai::Workers::MediaProcessor.pending_vision_images) — so the model's own
-    vision reads them directly in THIS SAME governed turn instead of relying on a separate,
-    context-blind captioning call folded into user_input as text (that's what previously let a CNH's
-    "1997" get misread as "1991" by a call that had no idea what data the step even needed)."""
+    """O turno atual do cliente: texto puro, ou uma lista multimodal input_text/input_image(s) quando
+    há algo pra ver neste turno — uma foto do WhatsApp, e/ou as páginas rasterizadas (base64 data
+    URIs) de um documento escaneado (Ai::Workers::MediaProcessor.pending_vision_images) — assim o
+    modelo lê nativamente na MESMA chamada, sem depender de uma legenda de uma chamada de visão
+    separada e sem contexto (era isso que deixava uma CNH's "1997" ser lida como "1991")."""
     if not image_urls:
-        return [_JSON_FORMAT_REMINDER, {"role": "user", "content": user_input}]
+        return [{"role": "user", "content": user_input}]
 
     content = [{"type": "input_text", "text": user_input}]
     content += [{"type": "input_image", "image_url": url} for url in image_urls]
-    return [_JSON_FORMAT_REMINDER, {"role": "user", "content": content}]
+    return [{"role": "user", "content": content}]
 
 
 def _normalize_tool_result(result: dict) -> dict:
@@ -187,8 +208,8 @@ def _normalize_tool_result(result: dict) -> dict:
 
 def _log_create_kwargs(ticket_id: int, kwargs: dict) -> None:
     """Auditoria completa (achado ao vivo: a versão anterior deste log resumia DEMAIS — só
-    input_enviado/output_text_bruto, sem model/instructions/tools/text/previous_response_id/
-    temperature juntos, sem dar pra conferir de fora se strict:true continua valendo, por exemplo).
+    input_enviado/output_text_bruto, sem model/instructions/tools/text/conversation/temperature
+    juntos, sem dar pra conferir de fora se strict:true continua valendo, por exemplo).
     Loga o create_kwargs INTEIRO, sempre, pra CADA chamada real (inicial, followup, retry) — nunca
     resumido. Único campo tratado diferente é "input": ele cresce turno a turno (function_call_output
     acumulado no loop de tools) e o conteúdo do cliente já é auditável via #_dispatch_structured_reply
@@ -252,7 +273,7 @@ def run_conversation(
     tools_schema: list,
     vector_store_id: str | None,
     user_input: str,
-    previous_response_id: str | None,
+    conversation_id: str | None,
     model: str | None = None,
     provider: str | None = None,
     temperature: float | None = None,
@@ -264,9 +285,9 @@ def run_conversation(
     close) is decided by Python from the parsed JSON and dispatched to Rails' webhook, never by which
     tool the model chose to call.
     Real (admin-configured) business tools are still offered as function tools for genuine external
-    actions. Always returns (reply_text, response_id, byok_fallback) — including when parsing fails
-    or MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to special-case a cut-off turn,
-    only real transport/API failures.
+    actions. Always returns (reply_text, conversation_id, byok_fallback) — including when parsing
+    fails or MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to special-case a cut-off
+    turn, only real transport/API failures.
 
     `provider` is accepted and logged ONLY — no dispatch yet: multi-provider routing doesn't exist,
     only multi-KEY (BYOK, same provider) via account_api_key.
@@ -279,31 +300,39 @@ def run_conversation(
     # Multi-tenant: Rails resolves this per Account (Ai::OperationProfile); config.OPENAI_MODEL is
     # only the fallback for a tenant with no profile, never a global override.
     resolved_model = model or config.OPENAI_MODEL
+    instructions = _build_instructions(system_prompt)
+
+    client, using_account_key = _resolve_client(account_api_key)
+    # A OpenAI Conversation precisa existir ANTES da primeira chamada (ver _ensure_conversation) —
+    # conversation_id ausente = primeiro turno do atendimento, cria uma conversation nova.
+    conversation_id, client, conv_byok_fallback = _ensure_conversation(client, using_account_key, ticket_id, conversation_id)
+    using_account_key = using_account_key and not conv_byok_fallback
 
     create_kwargs = {
         "model": resolved_model,
-        "instructions": system_prompt,
+        "conversation": conversation_id,
+        "instructions": instructions,
         "input": _build_input(user_input, image_urls),
         "tools": openai_tools,
+        # Um tool call por resposta — o modelo decide/salva/avança um passo de cada vez, nunca vários
+        # de uma vez na mesma resposta.
+        "parallel_tool_calls": False,
         # Responses API structured-output param — NOT "response_format" (that's the older Chat
         # Completions name; passing it here would raise a TypeError on this SDK/API instead of
         # working). json_schema ESTRITO (STRUCTURED_REPLY_SCHEMA acima) — a OpenAI valida a resposta
         # contra o schema antes de devolver, não é mais "confia que o texto do prompt basta".
         "text": _TEXT_FORMAT,
     }
-    # Omitted entirely (not sent as null) when absent, so OpenAI starts a fresh conversation
-    # instead of trying to resume a previous_response_id that doesn't exist, and so temperature
-    # falls back to OpenAI's own default instead of us hardcoding one.
-    if previous_response_id:
-        create_kwargs["previous_response_id"] = previous_response_id
+    # Omitted entirely (not sent as null) when absent, so temperature falls back to OpenAI's own
+    # default instead of us hardcoding one.
     if temperature is not None:
         create_kwargs["temperature"] = temperature
 
     logger.info("ticket_id=%s provider=%s model=%s primeira chamada do turno", ticket_id, provider, resolved_model)
     _log_create_kwargs(ticket_id, create_kwargs)
 
-    client, using_account_key = _resolve_client(account_api_key)
-    response, client, byok_fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, create_kwargs)
+    response, client, response_byok_fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, create_kwargs)
+    byok_fallback = conv_byok_fallback or response_byok_fallback
     _log_raw_response(ticket_id, response)
 
     # Real business tools only (control/capture tools are never in openai_tools anymore) — same
@@ -357,10 +386,9 @@ def run_conversation(
 
         followup_kwargs = {
             "model": resolved_model,
-            "previous_response_id": response.id,
-            # tool_outputs alone (function_call_output items) has no guaranteed "json" text in it —
-            # same 400 risk as the plain-text turn above, so the reminder rides along here too.
-            "input": [_JSON_FORMAT_REMINDER, *tool_outputs],
+            "conversation": conversation_id,
+            "instructions": instructions,
+            "input": tool_outputs,
             "text": _TEXT_FORMAT,
         }
         if temperature is not None:
@@ -373,12 +401,13 @@ def run_conversation(
     payload = _parse_structured_reply(response.output_text)
     if payload is None:
         # Last-resort guardrail: either the turn cut off (MAX_TOOL_ITERATIONS) still holding a
-        # function call, or the model somehow returned unparseable JSON. Chained via
-        # previous_response_id (full turn history is already there) with NO tools — a function call
-        # is off the table, so this call can't itself degrade into another empty/non-JSON turn.
+        # function call, or the model somehow returned unparseable JSON. Same conversation (full turn
+        # history is already there) with NO tools — a function call is off the table, so this call
+        # can't itself degrade into another empty/non-JSON turn.
         retry_kwargs = {
             "model": resolved_model,
-            "previous_response_id": response.id,
+            "conversation": conversation_id,
+            "instructions": instructions,
             "input": "Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
                      "que você acabou de fazer.",
             "text": _TEXT_FORMAT,
@@ -393,15 +422,15 @@ def run_conversation(
 
     if payload is None:
         logger.warning(
-            "response_id=%s: structured reply parsing failed twice; using the static fallback",
-            response.id,
+            "ticket_id=%s response_id=%s: structured reply parsing failed twice; using the static fallback",
+            ticket_id, response.id,
         )
         payload = {}
 
     reply_text = _dispatch_structured_reply(
         payload, ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
     )
-    return reply_text, response.id, byok_fallback
+    return reply_text, conversation_id, byok_fallback
 
 
 def _parse_structured_reply(text: str | None) -> dict | None:

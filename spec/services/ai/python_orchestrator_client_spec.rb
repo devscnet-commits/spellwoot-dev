@@ -18,10 +18,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
   end
 
   before do
-    conversation.update!(additional_attributes: { 'openai_conversation_id' => 'resp_previous_123' })
+    conversation.update!(additional_attributes: { 'openai_conversation_id' => 'conv_previous_123' })
   end
 
-  def stub_orchestrator(status: 200, body: { reply: 'Olá! Como posso ajudar?', response_id: 'resp_novo_456' })
+  def stub_orchestrator(status: 200, body: { reply: 'Olá! Como posso ajudar?', conversation_id: 'conv_novo_456' })
     stub_request(:post, described_class::ORCHESTRATOR_URL)
       .to_return(status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
   end
@@ -49,16 +49,16 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'Quero saber o preço', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: 'Olá! Como posso ajudar?', response_id: 'resp_novo_456', byok_fallback: false)
+      expect(result).to eq(reply: 'Olá! Como posso ajudar?', conversation_id: 'conv_novo_456', byok_fallback: false)
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
         .with(body: hash_including(
           'ticket_id' => conversation.id,
           'ai_department_id' => department.id,
           'mode' => 'live',
           'user_input' => 'Quero saber o preço',
-          # confirma que o histórico encadeia pelo previous_response_id já salvo — não reenvia um
+          # confirma que o histórico encadeia pela OpenAI Conversation já salva — não reenvia um
           # blob de mensagens (é exatamente isso que substitui o HISTORY_LIMIT do Ai::ContextBuilder).
-          'previous_response_id' => 'resp_previous_123',
+          'conversation_id' => 'conv_previous_123',
           # multi-tenant: modelo do Ai::OperationProfile da account, não um valor fixo no .env do Python.
           'model' => 'gpt-4o',
           # trafega desde já (Python só loga, ainda sem dispatch por provider — ver orchestrator.py).
@@ -87,9 +87,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, response_id: nil, byok_fallback: false)
+      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false)
       # Auditoria de confiança: sem isto, um erro ANTES do HTTParty.post (ex.: exceção montando o
-      # payload) cairia no MESMO rescue e devolveria o MESMO {reply: nil, response_id: nil} — o teste
+      # payload) cairia no MESMO rescue e devolveria o MESMO {reply: nil, conversation_id: nil} — o teste
       # passaria "por acidente" sem nunca ter tentado a requisição real. have_requested prova que o
       # POST aconteceu de verdade e que foi a resposta 500 do stub que produziu o resultado, não uma
       # exceção interna silenciosa.
@@ -103,7 +103,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, response_id: nil, byok_fallback: false)
+      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false)
       # Mesma auditoria: confirma que a requisição foi tentada (e o WebMock a interceptou para simular
       # o timeout), não que o código nunca chegou a discar.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)
@@ -136,7 +136,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
 
     it 'devolve byok_fallback: true quando o Python avisa que a chave própria falhou e caiu pra global' do
-      stub_orchestrator(body: { reply: 'oi', response_id: 'resp_1', byok_fallback: true })
+      stub_orchestrator(body: { reply: 'oi', conversation_id: 'conv_1', byok_fallback: true })
 
       result = described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
@@ -144,7 +144,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
 
     it 'devolve byok_fallback: false quando o Python não manda o campo (retrocompat)' do
-      stub_orchestrator(body: { reply: 'oi', response_id: 'resp_1' })
+      stub_orchestrator(body: { reply: 'oi', conversation_id: 'conv_1' })
 
       result = described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
@@ -175,7 +175,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
       captured = []
       stub_request(:post, described_class::ORCHESTRATOR_URL).to_return do |request|
         captured << JSON.parse(request.body)['system_prompt']
-        { status: 200, body: { reply: 'ok', response_id: 'resp_pizza' }.to_json,
+        { status: 200, body: { reply: 'ok', conversation_id: 'conv_pizza' }.to_json,
           headers: { 'Content-Type' => 'application/json' } }
       end
 
