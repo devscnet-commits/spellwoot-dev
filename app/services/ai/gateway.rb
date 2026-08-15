@@ -49,6 +49,12 @@ class Ai::Gateway
 
     run_record.update!(ai_department_id: department.id)
 
+    # Department resolvido MUDOU desde o último turno desta conversa (troca do agente vinculado à
+    # inbox, ou o classificador resolveu diferente) — reseta etapa/thread da OpenAI antes de QUALQUER
+    # leitura de ai_step_index abaixo (Camada 0 já lê current_step logo mais). Precisa rodar cedo, ANTES
+    # de #state_manager ser memoizado pela primeira vez.
+    reset_state_on_department_switch(department)
+
     # Invisible worker: turn media (audio/image/PDF escaneado) into text the supervisor can use. Passa
     # o profile do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']).
     # skip_vision SEMPRE true — a OpenAI já recebe os pixels crus (Ai::PythonOrchestratorClient#image_urls:
@@ -484,6 +490,39 @@ class Ai::Gateway
       .deliver_later
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#notify_admin_provider_error] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
+  end
+
+  # Achado ao vivo: quando o department resolvido pra uma conversa MUDA de um turno pro outro (troca
+  # do Ai::AgentInbox vinculado, ou o classificador resolve diferente), nada resetava ai_step_index
+  # nem openai_conversation_id — o índice antigo era reaproveitado cru contra o playbook do agente
+  # NOVO (etapa sem relação nenhuma), e a MESMA OpenAI Conversation (com todo o histórico sob a
+  # persona/instructions do agente ANTIGO) seguia sendo usada pro agente novo, arriscando o modelo
+  # "lembrar" de ter sido outra identidade. ai_collected_facts é mantido DE PROPÓSITO (pedido do
+  # usuário) — não repete pergunta que o cliente já respondeu, mesmo trocando de agente.
+  # ai_last_department_id: novo campo só pra rastrear "qual foi o último department que rodou aqui".
+  # Ausente (conversa nova, ou de antes desta mudança) => só grava, sem resetar nada.
+  def reset_state_on_department_switch(department)
+    last_department_id = (@conversation.additional_attributes || {})['ai_last_department_id']
+    switched = last_department_id.present? && last_department_id.to_i != department.id
+    return if last_department_id.present? && !switched
+
+    ::Conversation.transaction do
+      fresh = ::Conversation.lock.find_by(id: @conversation.id)
+      next unless fresh
+
+      attrs = (fresh.additional_attributes || {}).dup
+      if switched
+        attrs['ai_step_index'] = 0
+        attrs.delete('openai_conversation_id')
+      end
+      attrs['ai_last_department_id'] = department.id
+      fresh.update_columns(additional_attributes: attrs)
+      # Precisa refletir no objeto EM MEMÓRIA também — o resto deste turno (Camada 0, StateManager,
+      # Ai::PythonOrchestratorClient) lê @conversation.additional_attributes direto, não recarrega do banco.
+      @conversation.additional_attributes = attrs
+    end
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::Gateway#reset_state_on_department_switch] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Persiste o conversation_id da Responses API em additional_attributes da conversa.
