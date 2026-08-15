@@ -26,6 +26,15 @@ RSpec.describe Ai::PythonOrchestratorClient do
       .to_return(status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
   end
 
+  # Cadastra conhecimento pro department (fonte + chunk já indexado) — mesmo shape de
+  # spec/services/ai/knowledge_retriever_spec.rb. Sem isto, NENHUM teste deste arquivo tem
+  # #has_knowledge? true (a conta/department de teste não nasce com nenhum Ai::KnowledgeSource).
+  def add_knowledge!(content: 'Atendemos de segunda a sexta, das 9h às 18h.')
+    allow(Ai::KnowledgeIngestJob).to receive(:perform_later)
+    source = Ai::KnowledgeSource.create!(account: account, ai_department_id: department.id, kind: 'faq', title: 'FAQ')
+    Ai::KnowledgeChunk.create!(ai_knowledge_source_id: source.id, content: content, embedding: nil)
+  end
+
   describe '.build_orchestrator_url' do
     it 'acrescenta /process quando AI_ORCHESTRATOR_URL aponta só pra raiz do serviço (era o bug: POST em "/" -> 404)' do
       expect(described_class.build_orchestrator_url('http://ai-orchestrator:8000')).to eq('http://ai-orchestrator:8000/process')
@@ -235,7 +244,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # narrativo é ancorado na etapa atual, a captura de dado (tools) não é. Nomes SANITIZADOS
         # (Ai::ToolNameSanitizer): "conversation.add_label"/".resolve"/".transfer" viram "_" — a
         # OpenAI rejeita ponto no nome da function (achado ao vivo, ver spec do sanitizer).
-        expected = %w[avancar_etapa consultar_conhecimento continuar_conversa conversation_add_label
+        # consultar_conhecimento fica de fora daqui de propósito: é condicional a haver conhecimento
+        # cadastrado pro department (#has_knowledge?), coberto no describe próprio abaixo — esta conta
+        # de teste não cadastra nenhum Ai::KnowledgeSource.
+        expected = %w[avancar_etapa continuar_conversa conversation_add_label
                       conversation_resolve conversation_transfer registrar_endereco registrar_telefone_extra]
         expected.all? { |n| names.include?(n) } &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
@@ -279,7 +291,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # 'marcado_como_ganho_ou_perdido' vem do CustomAttributeDefinition seedado em TODA Account
         # (Account#create_default_custom_attributes) — known_slot_keys inclui mesmo sem playbook.
         # continuar_conversa: no-op que sustenta tool_choice="required" no orchestrator.py.
-        names.sort == %w[avancar_etapa consultar_conhecimento continuar_conversa conversation_resolve
+        # consultar_conhecimento fica de fora: esta conta não tem nenhum Ai::KnowledgeSource cadastrado
+        # (#has_knowledge? false) — ver describe próprio abaixo.
+        names.sort == %w[avancar_etapa continuar_conversa conversation_resolve
                           conversation_transfer salvar_memoria_ia registrar_marcado_como_ganho_ou_perdido].sort &&
           !body['system_prompt'].include?('Etapa atual')
       }
@@ -648,7 +662,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # path (Ai::KnowledgeRetriever — pgvector já populado, NÃO o vector_store nativo da OpenAI, que
   # não existe: vector_store_id sempre vem vazio, auditado, sem tela/job que o preencha).
   describe 'identidade + conhecimento no system_prompt' do
-    it 'a instrução de identidade é a PRIMEIRA linha, identify_as é a SEGUNDA, e o guardrail anti-"médias de mercado" é a TERCEIRA — as duas primeiras referenciam a ferramenta, não um bloco fixo' do
+    it 'com conhecimento cadastrado: identidade é a PRIMEIRA linha, identify_as a SEGUNDA, o guardrail anti-"médias de mercado" a TERCEIRA — as duas primeiras referenciam a ferramenta' do
+      add_knowledge!
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
@@ -660,6 +675,25 @@ RSpec.describe Ai::PythonOrchestratorClient do
           prompt_lines.first.include?('use a ferramenta "consultar_conhecimento"') &&
           prompt_lines[2].include?('Nunca cite concorrentes, médias de mercado') &&
           prompt_lines[2].include?('ferramenta "consultar_conhecimento"')
+      }
+    end
+
+    # Consequência direta de tornar #knowledge_tool condicional: sem NENHUM Ai::KnowledgeSource
+    # cadastrado, a ferramenta não está em tools_schema — citar o nome dela aqui instruiria a IA a
+    # chamar algo que não existe, então a frase se adapta (ver #identity_instruction/
+    # #market_average_guardrail).
+    it 'sem conhecimento cadastrado: identidade/guardrail não citam a ferramenta ausente' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt_lines = JSON.parse(req.body)['system_prompt'].lines
+        prompt_lines.first.include?('IDENTIDADE') &&
+          prompt_lines.first.include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras') &&
+          !prompt_lines.first.include?('consultar_conhecimento') &&
+          prompt_lines[2].include?('Nunca cite concorrentes, médias de mercado') &&
+          !prompt_lines[2].include?('consultar_conhecimento')
       }
     end
 
@@ -720,16 +754,64 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
-    it 'a tool "consultar_conhecimento" está SEMPRE em tools_schema, sem depender de fonte de conhecimento configurada, com "pergunta" obrigatória' do
+    it 'a tool "consultar_conhecimento" entra em tools_schema quando o department TEM conhecimento cadastrado, com "pergunta" obrigatória' do
+      add_knowledge!
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'consultar_conhecimento' }
+        # Descrição genérica: nenhum termo amarrado a um segmento específico (ex.: "fibra"/"internet"/
+        # "plano de dados") — qualquer negócio usa a mesma tool com o mesmo texto.
         tool.present? &&
           tool['input_schema']['required'] == ['pergunta'] &&
-          tool['input_schema']['properties']['pergunta']['type'] == 'string'
+          tool['input_schema']['properties']['pergunta']['type'] == 'string' &&
+          !tool['description'].downcase.include?('fibra') &&
+          !tool['description'].downcase.include?('internet')
+      }
+    end
+
+    # Pedido do usuário: sem NENHUM conhecimento cadastrado pro department, a tool nem entra no array
+    # — oferecer uma ferramenta que sempre volta vazia só ensina a IA a gastar uma rodada de tool-call
+    # à toa. Mesma conta/department de todos os outros testes deste arquivo (nenhum cadastra
+    # Ai::KnowledgeSource por padrão), então este teste também documenta o comportamento default.
+    it 'a tool "consultar_conhecimento" NÃO entra em tools_schema sem nenhum conhecimento cadastrado' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['tools_schema'].none? { |t| t['name'] == 'consultar_conhecimento' }
+      }
+    end
+
+    # Uma fonte cadastrada mas ainda sem chunk indexado (ingest ainda não rodou, ou raw vazio) conta
+    # como "sem conhecimento" — a ferramenta só ajuda quando há o que buscar de verdade.
+    it 'a tool "consultar_conhecimento" NÃO entra em tools_schema quando a fonte existe mas ainda não tem chunk indexado' do
+      allow(Ai::KnowledgeIngestJob).to receive(:perform_later)
+      Ai::KnowledgeSource.create!(account: account, ai_department_id: department.id, kind: 'faq', title: 'FAQ')
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['tools_schema'].none? { |t| t['name'] == 'consultar_conhecimento' }
+      }
+    end
+
+    # Conhecimento COMPARTILHADO da conta (ai_department_id nil) também conta — mesmo escopo que
+    # Ai::KnowledgeRetriever#source_ids_for usa pra buscar de verdade.
+    it 'a tool "consultar_conhecimento" entra em tools_schema quando o conhecimento é compartilhado da conta (sem department específico)' do
+      allow(Ai::KnowledgeIngestJob).to receive(:perform_later)
+      source = Ai::KnowledgeSource.create!(account: account, kind: 'faq', title: 'FAQ geral')
+      Ai::KnowledgeChunk.create!(ai_knowledge_source_id: source.id, content: 'Horário de atendimento: 9h às 18h.', embedding: nil)
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['tools_schema'].any? { |t| t['name'] == 'consultar_conhecimento' }
       }
     end
 

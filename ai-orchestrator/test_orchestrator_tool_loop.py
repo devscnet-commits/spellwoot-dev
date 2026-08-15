@@ -60,6 +60,10 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
     assert mock_client.responses.create.call_args_list[0].kwargs["conversation"] == "conv_abc"
     assert mock_client.responses.create.call_args_list[1].kwargs["conversation"] == "conv_abc"
     assert mock_client.responses.create.call_args_list[2].kwargs["conversation"] == "conv_abc"
+    # parallel_tool_calls=False em TODA chamada do turno — o modelo decide/salva/avança um passo de
+    # cada vez, nunca vários tool calls na mesma resposta.
+    for call in mock_client.responses.create.call_args_list:
+        assert call.kwargs["parallel_tool_calls"] is False
 
     # as 2 ferramentas foram de fato executadas (webhook Rails), na ordem certa, cada uma na sua rodada.
     assert mock_execute_tool.call_count == 2

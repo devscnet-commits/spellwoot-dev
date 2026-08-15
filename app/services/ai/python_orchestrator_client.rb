@@ -243,12 +243,20 @@ class Ai::PythonOrchestratorClient
   # mas não existe vector store nenhum aqui (ver comentário em #payload), então instruir a IA a chamar
   # uma tool que não existe seria pior que o problema original. Aponta pra tool real #knowledge_tool
   # (consultar_conhecimento) em vez de um bloco fixo — a IA CHAMA a ferramenta antes de responder,
-  # não lê um texto que pode nem ter sido injetado.
+  # não lê um texto que pode nem ter sido injetado. #knowledge_tool só entra em #tools_schema quando o
+  # department TEM conhecimento cadastrado (#has_knowledge?) — sem isso, citar a ferramenta aqui
+  # instruiria a IA a chamar algo que nem está na lista, então a frase se adapta ao mesmo booleano.
   def identity_instruction
-    'IDENTIDADE: Você é um atendente de IA DA PRÓPRIA EMPRESA. A empresa para quem você trabalha É a ' \
+    base = 'IDENTIDADE: Você é um atendente de IA DA PRÓPRIA EMPRESA. A empresa para quem você trabalha É a ' \
       'provedora do serviço. É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras empresas, ' \
-      'operadoras ou provedores. Se o cliente quiser preços, planos ou dúvidas, use a ferramenta ' \
-      '"consultar_conhecimento" antes de responder — nunca invente o que ela não retornar.'
+      'operadoras ou provedores. '
+    base + if has_knowledge?
+             'Se o cliente quiser preços, condições ou tiver dúvidas, use a ferramenta ' \
+               '"consultar_conhecimento" antes de responder — nunca invente o que ela não retornar.'
+           else
+             'Se o cliente quiser preços, condições ou tiver dúvidas que você não tenha certeza ' \
+               'absoluta, diga que vai verificar — nunca invente.'
+           end
   end
 
   # PORTADO do Ai::PromptCompiler legado (identity_lines) — regressão achada ao vivo (13/08, ticket
@@ -274,9 +282,14 @@ class Ai::PythonOrchestratorClient
   # Reforço explícito contra "médias de mercado": IA alucinava preço/regra plausível-mas-inventado
   # em vez de usar o conhecimento real, e só se corrigia quando o cliente reclamava — reforça a
   # mesma proibição de #identity_instruction com outra frase, mirando especificamente esse padrão.
+  # Mesmo ajuste condicional a #has_knowledge? que #identity_instruction — ver comentário lá.
   def market_average_guardrail
-    'Você é um atendente DA EMPRESA. Nunca cite concorrentes, médias de mercado ou valores que não ' \
-      'venham da ferramenta "consultar_conhecimento".'
+    base = 'Você é um atendente DA EMPRESA. Nunca cite concorrentes, médias de mercado ou valores '
+    base + if has_knowledge?
+             'que não venham da ferramenta "consultar_conhecimento".'
+           else
+             'que você não tenha certeza absoluta — nunca invente.'
+           end
   end
 
   # Achado em teste ao vivo: a IA inventava situações plausíveis mas inexistentes ("instabilidade no
@@ -587,7 +600,7 @@ class Ai::PythonOrchestratorClient
   # (department.tools.active + as 2 constantes de controle), não adivinhando "_" == ".".
   def tools_schema
     real_names = real_tools.map { |t| t[:name] }
-    synthesized = step_capture_tools + control_tools + [knowledge_tool]
+    synthesized = step_capture_tools + control_tools + knowledge_tools
     real_tools + synthesized.reject { |t| real_names.include?(t[:name]) }
   end
 
@@ -683,23 +696,43 @@ class Ai::PythonOrchestratorClient
   # já parseado, depois que o turno terminou). "consultar_conhecimento" tem que ser uma function tool
   # DE VERDADE, oferecida à OpenAI e chamada NO MEIO do turno (mesmo loop de tool-call que já atende
   # tools reais tipo consultar_periodos) — o resultado da busca precisa voltar pra IA ANTES dela montar
-  # a resposta final, não depois. Por isso este método fica separado de #control_tools, embora também
-  # seja "sempre disponível, não depende de configuração por department": não pode ser confundido com o
-  # grupo que orchestrator.py filtra. Sem query pré-configurada nem filtro de tipo — a IA formula a
-  # pergunta e decide quando chamar, a partir do objetivo da etapa + o que o cliente perguntou.
+  # a resposta final, não depois. Por isso este método fica separado de #control_tools. Sem query
+  # pré-configurada nem filtro de tipo — a IA formula a pergunta e decide quando chamar, a partir do
+  # objetivo da etapa + o que o cliente perguntou.
+  #
+  # Condicional a #has_knowledge? (diferente das control_tools, que são sempre oferecidas independente
+  # de configuração): oferecer a ferramenta sem NENHUM conhecimento cadastrado só ensina a IA a chamar
+  # algo que sempre volta vazio — gasta uma rodada de tool-call à toa e engorda tools_schema à toa.
+  # #identity_instruction/#market_average_guardrail usam o MESMO booleano pra não citar a ferramenta
+  # quando ela não está na lista.
+  def knowledge_tools
+    has_knowledge? ? [knowledge_tool] : []
+  end
+
+  # Existe pelo menos uma Ai::KnowledgeSource ativa (do department ou compartilhada da conta) com
+  # conteúdo já indexado (Ai::KnowledgeChunk) — mesmo escopo que Ai::KnowledgeRetriever usa pra
+  # buscar, reaproveitado aqui pra não divergir. Uma fonte cadastrada mas ainda sem chunks (ingest
+  # ainda não rodou) conta como "sem conhecimento" — a ferramenta só ajuda quando há o que buscar.
+  def has_knowledge?
+    return @has_knowledge if defined?(@has_knowledge)
+
+    source_ids = Ai::KnowledgeRetriever.source_ids_for(@department.account_id, @department.id, nil)
+    @has_knowledge = source_ids.present? && Ai::KnowledgeChunk.where(ai_knowledge_source_id: source_ids).exists?
+  end
+
+  # Descrição genérica (não amarrada a um segmento específico como internet/telecom) — qualquer
+  # negócio com uma base de conhecimento cadastrada usa a mesma ferramenta e o mesmo texto.
   def knowledge_tool
     { name: KNOWLEDGE_TOOL,
-      description: 'Busca na base de conhecimento oficial da empresa (planos, preços, regras, ' \
-                   'políticas). Use SEMPRE que o cliente perguntar algo que dependa de informação real ' \
-                   'da empresa e você não tiver certeza absoluta — mesmo que a etapa atual não seja ' \
-                   'sobre isso. Nunca responda sobre preço/plano/regra sem antes chamar esta ferramenta. ' \
-                   'Se ela não retornar nada relevante, diga que vai verificar ou transfira — nunca invente.',
+      description: 'Busca na base de conhecimento oficial da empresa (preços, condições, regras, ' \
+                   'políticas). Use sempre que a pergunta do cliente depender de informação real da ' \
+                   'empresa e você não tiver certeza absoluta. Se não retornar nada relevante, diga ' \
+                   'que vai verificar ou transfira — nunca invente.',
       input_schema: {
         type: 'object',
         properties: {
           'pergunta' => { type: 'string',
-                          description: 'A pergunta ou termo de busca, na linguagem do cliente (ex.: ' \
-                                       '"quanto custa o plano fibra 500mb").' }
+                          description: 'A pergunta ou termo de busca, na linguagem do cliente.' }
         },
         required: ['pergunta']
       } }
