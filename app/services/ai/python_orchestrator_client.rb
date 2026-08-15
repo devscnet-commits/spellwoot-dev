@@ -85,6 +85,11 @@ class Ai::PythonOrchestratorClient
   end
 
   def perform
+    # Marca de início/fim com ticket_id=<conversation.id> — mesma chave que o Python usa em TODA linha
+    # (ver orchestrator.py) — pra dar pra grepar "ticket_id=578" nos 3 serviços (Rails web, Sidekiq,
+    # Python) e ver a história inteira de um atendimento junto, mesmo no caminho feliz (antes só os
+    # logs de ERRO deste arquivo tinham alguma tag; sucesso não deixava rastro nenhum aqui).
+    Rails.logger.info "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation.id} POST #{ORCHESTRATOR_URL}"
     response = HTTParty.post(
       ORCHESTRATOR_URL,
       headers: {
@@ -96,14 +101,15 @@ class Ai::PythonOrchestratorClient
     )
 
     unless response.success?
-      Rails.logger.error "[Ai::PythonOrchestratorClient] HTTP #{response.code}: #{response.body}"
+      Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} HTTP #{response.code}: #{response.body}"
       return { reply: nil, conversation_id: nil, byok_fallback: false }
     end
 
     parsed = response.parsed_response
+    Rails.logger.info "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation.id} reply_present=#{parsed['reply'].present?} conversation_id=#{parsed['conversation_id'].inspect}"
     { reply: parsed['reply'], conversation_id: parsed['conversation_id'], byok_fallback: parsed['byok_fallback'] == true }
   rescue StandardError => e
-    Rails.logger.error "[Ai::PythonOrchestratorClient] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
     { reply: nil, conversation_id: nil, byok_fallback: false }
   end
 
