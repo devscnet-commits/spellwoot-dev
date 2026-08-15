@@ -201,6 +201,23 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # uma chamada por etapa. status 'blocked_missing_data' SÓ quando NENHUM avanço foi possível (a etapa
   # de PARTIDA já está sem o dado); se a varredura moveu pelo menos 1 posição antes de parar, é
   # 'executed' (progresso real aconteceu, só não foi até o fim).
+  # Achado ao vivo (investigação da transferência prematura "conclusao"): a varredura cruzava uma
+  # etapa INFORMATIVA (sem collect — ex.: "FINALIZAÇÃO", cujo desfecho configurado era "Transferir
+  # para um time humano") e disparava o on_complete dela na hora, porque #missing_required_attributes
+  # devolve [] pra etapa sem collect (nada a exigir) — nunca dava BREAK ali. O cliente nunca recebia a
+  # mensagem daquela etapa (resumo, despedida): o desfecho executava mudo, no MEIO do turno que só
+  # devia concluir a etapa ANTERIOR (comprovante de residência). Etapa informativa só pode concluir
+  # (on_complete OU automações) quando é a PRÓPRIA que recebeu este avancar_etapa (index ==
+  # start_index) — nunca de carona numa varredura vinda de etapa(s) anterior(es). Mesmo critério do
+  # manual interno: "etapa sem dado é informativa: ela conclui quando o modelo diz que terminou, não
+  # quando capturou algo" — motivo (index == start_index) É esse "o modelo disse que terminou ESTA".
+  #
+  # Segundo achado (mesma investigação): "Automações ao concluir etapa" (tag/webhook/mudar de
+  # time/mudar de department/preencher atributo — Ai::StepAutomationRunner) nunca disparava no
+  # caminho Python — só existia o disparo via Ai::StateManager#track_step, morto desde a eliminação
+  # do motor legado (zero call sites). Religado aqui, mesma idempotência por índice
+  # (ai_step_last_fired_index) que o caminho legado já usava — sobrevive a um retry de webhook
+  # duplicado do Python sem repetir a automação.
   def advance_step(conversation, department)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
@@ -216,6 +233,10 @@ class Api::Internal::AiExecuteToolController < ActionController::API
       break if missing_required_attributes(steps[index], facts).any?
 
       current_step = steps[index]
+      break if index != start_index && collect_attributes(current_step).empty?
+
+      fire_step_automations(conversation, current_step, index)
+
       on_complete = current_step.is_a?(Hash) ? (current_step['on_complete'] || current_step[:on_complete]) : nil
       return execute_step_conclusion(conversation, department, on_complete) if on_complete.is_a?(Hash)
 
@@ -234,6 +255,37 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     { result: { 'ai_step_index' => index }, status: 'executed', error: nil }
   end
 
+  # "Automações ao concluir etapa" (lista "+ Adicionar automação" — distinta do "Desfecho ao concluir
+  # o funil", que é #on_complete/#execute_step_conclusion). Idempotente por índice, mesma semântica de
+  # Ai::StateManager#already_fired?/#mark_fired (chave compartilhada — não importa qual caminho
+  # dispara primeiro, os dois respeitam a mesma marca). Sem dispatcher/run (este controller não tem
+  # run_record de Gateway) — Ai::StepAutomationRunner cai no caminho SEM auditoria de
+  # Ai::CapabilityExecution pras ações via CapabilityRegistry, mesmo padrão que #run_capability já usa
+  # pras control tools (avancar_etapa/registrar_* também não geram linha de auditoria).
+  def fire_step_automations(conversation, step, index)
+    automations = Array(step.is_a?(Hash) ? (step['automations'] || step[:automations]) : nil)
+    return if automations.empty?
+
+    attrs = conversation.additional_attributes || {}
+    last_fired = attrs['ai_step_last_fired_index']
+    return if last_fired.is_a?(Integer) && last_fired >= index
+
+    attrs['ai_step_last_fired_index'] = index
+    conversation.update!(additional_attributes: attrs)
+
+    Ai::StepAutomationRunner.new(conversation: conversation, account: conversation.account,
+                                 agent: department.agent, dispatcher: nil, run: nil).run(step)
+  end
+
+  # 'collect' => 'attribute' aceita string OU array (ver #missing_required_attributes) — extraído
+  # pra reuso: "etapa sem NENHUM attribute declarado" é a mesma definição de "etapa informativa" do
+  # manual interno, usada tanto pra validar dado obrigatório quanto pra travar a varredura acima.
+  def collect_attributes(step)
+    return [] unless step.is_a?(Hash)
+
+    Array(step.dig('collect', 'attribute') || step.dig(:collect, :attribute)).compact_blank
+  end
+
   # collect.attribute aceita string (único formato real usado pela tela hoje) OU array — Array()
   # normaliza os dois sem inventar campo novo (suporta múltiplos campos obrigatórios por etapa se o
   # playbook algum dia vier a usar isso; hoje sempre 1 elemento). slot_required: false (NUNCA
@@ -247,8 +299,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     return [] unless step.is_a?(Hash)
     return [] if step['slot_required'] == false || step[:slot_required] == false
 
-    attrs = Array(step.dig('collect', 'attribute') || step.dig(:collect, :attribute)).compact_blank
-    attrs.reject { |attr| facts.to_h[attr.to_s].present? }
+    collect_attributes(step).reject { |attr| facts.to_h[attr.to_s].present? }
   end
 
   # As 3 ações do desfecho declarado — espelha Ai::Gateway#force_conclusion (motor legado) exatamente,
