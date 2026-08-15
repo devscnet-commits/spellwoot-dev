@@ -4,7 +4,8 @@
 # Ai::ContextBuilder + Ai::ModelRouter for departments opted into this path — Gateway keeps billing,
 # department resolution and final delivery (Ai::ActionDispatcher) exactly as before.
 #
-# History: no flattened message blob is sent. previous_response_id (reused from the SAME
+# History: no flattened message blob is sent. conversation_id (an OpenAI Conversations API id,
+# conv_..., persistent and non-expiring — reused from the SAME
 # conversation.additional_attributes['openai_conversation_id'] field the existing decide()/
 # call_with_tools() paths already read/write) lets OpenAI keep the full turn history server-side.
 #
@@ -96,14 +97,14 @@ class Ai::PythonOrchestratorClient
 
     unless response.success?
       Rails.logger.error "[Ai::PythonOrchestratorClient] HTTP #{response.code}: #{response.body}"
-      return { reply: nil, response_id: nil, byok_fallback: false }
+      return { reply: nil, conversation_id: nil, byok_fallback: false }
     end
 
     parsed = response.parsed_response
-    { reply: parsed['reply'], response_id: parsed['response_id'], byok_fallback: parsed['byok_fallback'] == true }
+    { reply: parsed['reply'], conversation_id: parsed['conversation_id'], byok_fallback: parsed['byok_fallback'] == true }
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] #{e.class}: #{e.message}"
-    { reply: nil, response_id: nil, byok_fallback: false }
+    { reply: nil, conversation_id: nil, byok_fallback: false }
   end
 
   private
@@ -128,7 +129,7 @@ class Ai::PythonOrchestratorClient
       # — CNH/RG/comprovante), so the SAME governed turn reads them instead of a separate, context-blind
       # captioning call (that's what misread a CNH's "1997" as "1991" live — see #document_image_urls).
       image_urls: image_urls,
-      previous_response_id: @conversation.additional_attributes&.dig('openai_conversation_id'),
+      conversation_id: @conversation.additional_attributes&.dig('openai_conversation_id'),
       # Multi-tenant: cada Account escolhe seu próprio modelo/temperatura via Ai::OperationProfile
       # (tela de admin). nil quando o agente não tem perfil — o orquestrador cai no OPENAI_MODEL do
       # seu próprio .env e deixa a OpenAI usar o default de temperatura, não hardcodeia nada aqui.

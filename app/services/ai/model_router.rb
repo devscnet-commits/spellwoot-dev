@@ -29,15 +29,43 @@ class Ai::ModelRouter
   # mais consistentes/determinísticas, adequado a atendimento.
   DEFAULT_TEMPERATURE = 0.3
 
-  # Responses API (OpenAI /v1/responses): chamada com conversation_id server-side — o OpenAI armazena
-  # todo o histórico, sem reconstrução cliente-a-cliente. conversation_id nil = primeira mensagem (cria
-  # a conversa). Retorna o mesmo formato de hash que call_model + :openai_conversation_id.
-  # Usado pelo `decide` quando provider=openai e conversation_id foi passado pelo Gateway.
+  # Responses API (OpenAI /v1/responses): histórico via OpenAI Conversations (conversation=conv_...),
+  # objeto persistente e sem expiração — substitui o antigo encadeamento por previous_response_id
+  # (expirava em 30 dias e a cadeia se perdia). conversation_id nil = primeira mensagem: cria a
+  # conversation (create_openai_conversation) antes da primeira chamada. Retorna o mesmo formato de
+  # hash que call_model + :openai_conversation_id. Usado pelo `decide` quando provider=openai e
+  # conversation_id foi passado pelo Gateway.
   RESPONSES_API_URL = 'https://api.openai.com/v1/responses'.freeze
+  CONVERSATIONS_API_URL = 'https://api.openai.com/v1/conversations'.freeze
+
+  # Cria uma OpenAI Conversation (POST /v1/conversations). O objeto precisa existir no servidor ANTES
+  # de ser referenciado num /v1/responses (conversation: conv_id) — diferente do antigo
+  # previous_response_id, que nascia sozinho a cada chamada por só apontar pra última resposta.
+  def self.create_openai_conversation(api_key:)
+    require 'net/http'
+    uri = URI(CONVERSATIONS_API_URL)
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.read_timeout = 60
+    http.open_timeout = 10
+    req = Net::HTTP::Post.new(uri.path)
+    req['Content-Type'] = 'application/json'
+    req['Authorization'] = "Bearer #{api_key}"
+    req.body = '{}'
+    resp = http.request(req)
+    unless resp.is_a?(Net::HTTPSuccess)
+      parsed_err = JSON.parse(resp.body) rescue {}
+      err_msg = parsed_err.dig('error', 'message') || resp.body.to_s.first(200)
+      raise "OpenAI conversation create failed: HTTP #{resp.code}: #{err_msg}"
+    end
+
+    JSON.parse(resp.body)['id']
+  end
 
   def self.call_responses_api(api_key:, model:, system_prompt:, user_message:, temperature:,
                                json:, schema:, conversation_id: nil)
     require 'net/http'
+    conversation_id ||= create_openai_conversation(api_key: api_key)
     uri = URI(RESPONSES_API_URL)
 
     body = {
@@ -45,9 +73,8 @@ class Ai::ModelRouter
       instructions: system_prompt,
       temperature: temperature.to_f,
       input: [{ role: 'user', content: user_message }],
-      store: true
+      conversation: conversation_id
     }
-    body[:previous_response_id] = conversation_id if conversation_id.present?
     if json && schema
       schema_instance  = schema.is_a?(Class) ? schema.new : schema
       schema_output    = schema_instance.to_json_schema
@@ -70,7 +97,7 @@ class Ai::ModelRouter
     req.body = body.to_json
 
     debug_body = body.except(:instructions)
-    Rails.logger.info "[Ai::ModelRouter#call_responses_api] REQUEST model=#{model} format=#{body.dig(:text, :format, :type).inspect} prev_id=#{conversation_id.inspect} body_keys=#{debug_body.keys}"
+    Rails.logger.info "[Ai::ModelRouter#call_responses_api] REQUEST model=#{model} format=#{body.dig(:text, :format, :type).inspect} conversation_id=#{conversation_id.inspect} body_keys=#{debug_body.keys}"
     Rails.logger.debug "[Ai::ModelRouter#call_responses_api] TEXT_FORMAT #{body[:text].to_json}" if body[:text]
     Rails.logger.debug "[AI_DEBUG] INSTRUCTIONS ENVIADAS (decide): #{system_prompt}"
     Rails.logger.debug "[AI_DEBUG] INPUT ENVIADO (decide): #{body[:input].to_json}"
@@ -94,12 +121,11 @@ class Ai::ModelRouter
       (text = content['text'].to_s) && break if content
     end
     Rails.logger.info "[Ai::ModelRouter#call_responses_api] TEXT_EXTRACTED length=#{text.to_s.length} blank=#{text.blank?}"
-    conv_id = data['id']
     usage = data['usage'] || {}
     tokens_in_total = usage['input_tokens'].to_i
     tokens_out      = usage['output_tokens'].to_i
     cached          = usage.dig('input_tokens_details', 'cached_tokens').to_i
-    { text: text.to_s, openai_conversation_id: conv_id,
+    { text: text.to_s, openai_conversation_id: conversation_id,
       tokens_in: [tokens_in_total - cached, 0].max, tokens_out: tokens_out, cached_tokens: cached,
       status: 'recorded' }
   rescue Net::ReadTimeout => e
@@ -240,23 +266,18 @@ class Ai::ModelRouter
   end
 
   # Loop de ferramentas via Responses API (/v1/responses). Substitui o ruby_llm Chat Completions
-  # para departamentos com ferramentas quando provider=openai — o histórico fica server-side e o
-  # contexto nunca se perde entre turnos (sem HISTORY_LIMIT). Conversa continua pelo conversation_id.
-  # conversation_id nil = primeiro turno (cria a conversa). Retorna mesmo hash do decide() +
-  # :openai_conversation_id para o Gateway persistir.
+  # para departamentos com ferramentas quando provider=openai — o histórico fica na OpenAI Conversation
+  # (persistente, sem expiração) e o contexto nunca se perde entre turnos. conversation_id nil =
+  # primeiro turno (cria a conversation). Retorna mesmo hash do decide() + :openai_conversation_id
+  # para o Gateway persistir.
   #
   # Loop: chama /v1/responses → se output tem function_call → executa via adapter → envia
   # function_call_output → repete. Para ao receber resposta de texto (sem tool calls).
   # Teto de segurança: 6 iterações (cobre loops de encadeamento de ferramentas).
   MAX_TOOL_ITERATIONS = 6
 
-  # messages: array estruturado [{role:, content:}] do ContextBuilder#structured_messages.
-  # Quando presente, o histórico é enviado EXPLICITAMENTE no input da primeira iteração, sem depender
-  # de previous_response_id (abordagem n8n). Garante contexto completo ("JÁ TENHO", histórico real)
-  # mesmo quando a cadeia server-side é nova ou inexistente. Iterações seguintes (function_call_output)
-  # encadeiam normalmente via previous_response_id da iteração anterior.
   def self.call_with_tools_responses_api(api_key:, model:, system_prompt:, user_message:,
-                                          temperature:, adapters:, messages: nil, conversation_id: nil)
+                                          temperature:, adapters:, conversation_id: nil)
     require 'net/http'
     uri = URI(RESPONSES_API_URL)
     http = Net::HTTP.new(uri.host, uri.port)
@@ -275,18 +296,9 @@ class Ai::ModelRouter
     # chama ferramentas via native function calls e devolve JSON/linguagem natural no turno final.
     # build_tool_loop_decision trata ambos os casos tolerantemente.
 
-    # Abordagem n8n: quando há histórico explícito (messages), a PRIMEIRA iteração envia o histórico
-    # completo no input sem previous_response_id — o modelo vê todo o contexto diretamente.
-    # Sem histórico explícito, cai no fallback: mensagem atual + previous_response_id da cadeia salva.
-    # Em AMBOS os casos, as iterações seguintes (tool results) encadeiam pelo ID da resposta anterior.
-    initial_input = if messages.present?
-                      messages.map { |m| { role: m[:role].to_s, content: m[:content].to_s } }
-                    else
-                      [{ role: 'user', content: user_message }]
-                    end
-    current_conv_id = messages.present? ? nil : conversation_id
-    current_input   = initial_input
-    accumulated     = { tokens_in: 0, tokens_out: 0, cached_tokens: 0 }
+    conversation_id ||= create_openai_conversation(api_key: api_key)
+    current_input = [{ role: 'user', content: user_message }]
+    accumulated   = { tokens_in: 0, tokens_out: 0, cached_tokens: 0 }
 
     MAX_TOOL_ITERATIONS.times.with_index do |_, iteration|
       body = {
@@ -295,14 +307,13 @@ class Ai::ModelRouter
         input: current_input,
         tools: tools_payload,
         parallel_tool_calls: false,
-        store: true
+        conversation: conversation_id
       }
       # instructions em TODA iteração: na Responses API, omitir instructions nas iterações de
       # function_call_output faz o modelo perder o system prompt ("JÁ TENHO", âncora de etapa,
       # contrato JSON) e reroga dados já coletados. O provider usa o prompt mais recente para
       # cada turno; o histórico server-side não repõe instructions omitidas.
       body[:instructions] = system_prompt
-      body[:previous_response_id] = current_conv_id if current_conv_id.present?
 
       Rails.logger.debug "[AI_DEBUG] INSTRUCTIONS ENVIADAS (iter=#{iteration}): #{system_prompt}"
       Rails.logger.debug "[AI_DEBUG] INPUT ENVIADO (iter=#{iteration}): #{current_input.to_json}"
@@ -318,14 +329,13 @@ class Ai::ModelRouter
         parsed_err = JSON.parse(resp.body) rescue {}
         err_msg = parsed_err.dig('error', 'message') || resp.body.to_s.first(200)
         Rails.logger.error "[Ai::ModelRouter#call_with_tools_responses_api] HTTP #{resp.code}: #{err_msg}"
-        return { text: nil, openai_conversation_id: current_conv_id,
+        return { text: nil, openai_conversation_id: conversation_id,
                  tokens_in: 0, tokens_out: 0, cached_tokens: 0,
                  status: 'error', error_type: resp.code.to_s == '401' ? 'auth_error' : 'provider_error',
                  error: "HTTP #{resp.code}: #{err_msg}" }
       end
 
       data = JSON.parse(resp.body)
-      current_conv_id = data['id']
 
       usage = data['usage'] || {}
       tokens_in_total = usage['input_tokens'].to_i
@@ -337,7 +347,7 @@ class Ai::ModelRouter
 
       output     = data['output'] || []
       tool_calls = output.select { |item| item['type'] == 'function_call' }
-      Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] resp_id=#{current_conv_id.inspect} output_types=#{output.map { |o| o['type'] }.inspect} tool_calls=#{tool_calls.map { |t| t['name'] }.inspect}"
+      Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] resp_id=#{data['id'].inspect} output_types=#{output.map { |o| o['type'] }.inspect} tool_calls=#{tool_calls.map { |t| t['name'] }.inspect}"
 
       # Sem tool calls: resposta final de texto — encerra o loop.
       if tool_calls.empty?
@@ -348,7 +358,7 @@ class Ai::ModelRouter
           (text = c['text'].to_s) && break if c
         end
         Rails.logger.info "[Ai::ModelRouter#call_with_tools_responses_api] FINAL text_length=#{text.to_s.length}"
-        return { text: text.to_s, openai_conversation_id: current_conv_id,
+        return { text: text.to_s, openai_conversation_id: conversation_id,
                  **accumulated, status: 'recorded' }
       end
 
@@ -384,7 +394,7 @@ class Ai::ModelRouter
 
     # Teto excedido — devolve erro de segurança.
     Rails.logger.error '[Ai::ModelRouter#call_with_tools_responses_api] tool loop limit exceeded'
-    { text: nil, openai_conversation_id: current_conv_id, **accumulated,
+    { text: nil, openai_conversation_id: conversation_id, **accumulated,
       status: 'error', error_type: 'provider_error', error: 'tool loop limit exceeded' }
   rescue Net::ReadTimeout => e
     Rails.logger.error "[Ai::ModelRouter#call_with_tools_responses_api] Timeout: #{e.message}"
@@ -402,8 +412,11 @@ class Ai::ModelRouter
   # array — the gateway inspects these for event emission and auto-fill after this returns.
   # Returns the same hash structure as decide() so the gateway can treat both uniformly.
   # messages: array estruturado [{role:, content:}] do context_builder.structured_messages.
-  # Injetado via chat.add_message antes do ask para preservar contexto real entre turnos.
-  # conversation_id: ID da Responses API para continuar o histórico server-side (OpenAI only).
+  # Injetado via chat.add_message antes do ask para preservar contexto real entre turnos (caminho
+  # ruby_llm/não-openai). No caminho Responses API (openai), o histórico já vive na OpenAI
+  # Conversation — só a mensagem atual (última de "messages", se vier) é enviada, ver abaixo.
+  # conversation_id: ID da OpenAI Conversation (conv_...) para continuar o histórico server-side
+  # (OpenAI only) — persistente, sem expiração.
   def self.call_with_tools(profile:, system_prompt:, user_message:, tools:,
                             provider: nil, model: nil, account_id: nil,
                             temperature: nil, force_global_key: false, messages: nil, conversation_id: nil)
@@ -435,7 +448,7 @@ class Ai::ModelRouter
       raw = call_with_tools_responses_api(
         api_key: api_key, model: model, system_prompt: native_prompt,
         user_message: current_msg, temperature: temperature, adapters: tools,
-        messages: messages, conversation_id: conversation_id
+        conversation_id: conversation_id
       )
       latency_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
       decision   = build_tool_loop_decision(normalize_decision(coerce_decision(raw[:text])), raw[:text].to_s)

@@ -27,7 +27,7 @@ RSpec.describe Ai::Gateway do
     account.enable_features!('ai_core')
     allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
     allow(Ai::Workers::MediaProcessor).to receive(:process).and_return(nil)
-    allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: 'Olá!', response_id: 'resp_1')
+    allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: 'Olá!', conversation_id: 'conv_1')
   end
 
   def deliver(content = 'oi')
@@ -59,7 +59,7 @@ RSpec.describe Ai::Gateway do
     # o novo índice ANTES de devolver o resultado — o Gateway só vê o "depois".
     allow(Ai::PythonOrchestratorClient).to receive(:process_message) do |conversation:, **|
       conversation.update!(additional_attributes: (conversation.additional_attributes || {}).merge('ai_step_index' => 1, 'ai_step_turns' => 0))
-      { reply: 'Olá!', response_id: 'resp_1' }
+      { reply: 'Olá!', conversation_id: 'conv_1' }
     end
 
     convo = deliver
@@ -137,7 +137,7 @@ RSpec.describe Ai::Gateway do
     it 'ao vivo: aplica a tag "chave-propria-falhou" e cobra 1 crédito SCNET ALÉM do uso normal' do
       AiCreditBalance.create!(account_id: account.id, plan_credits: 5) # saldo suficiente pro consume! não engolir por InsufficientCredits
       allow(Ai::PythonOrchestratorClient).to receive(:process_message)
-        .and_return(reply: 'Olá!', response_id: 'resp_1', byok_fallback: true)
+        .and_return(reply: 'Olá!', conversation_id: 'conv_1', byok_fallback: true)
       allow(Ai::CapabilityRegistry).to receive(:execute)
 
       deliver
@@ -164,7 +164,7 @@ RSpec.describe Ai::Gateway do
       convo = create(:conversation, account: account, inbox: inbox, status: 'open')
       message = create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming', content: 'oi')
       allow(Ai::PythonOrchestratorClient).to receive(:process_message)
-        .and_return(reply: 'Olá!', response_id: 'resp_1', byok_fallback: true)
+        .and_return(reply: 'Olá!', conversation_id: 'conv_1', byok_fallback: true)
 
       described_class.new(message: message, agent_inbox: shadow_binding, mode: 'shadow').run
 
