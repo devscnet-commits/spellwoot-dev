@@ -336,8 +336,29 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('NÃO pule pra ela nem PEÇA o dado dela antes da hora') &&
-          prompt.include?('se o cliente ADIANTAR esse dado por conta própria, capture normalmente')
+        prompt.include?('NÃO pule pra ela, NÃO peça o dado dela') &&
+          prompt.include?('se o cliente ADIANTAR um DADO dela por conta própria, capture normalmente')
+      }
+    end
+
+    # Achado ao vivo: a IA recebeu o comprovante de residência (etapa N), viu que a PRÓXIMA etapa
+    # (só contexto) instruía "chame a ferramenta de transferência... motivo conclusao_do_processo" e
+    # executou essa ação AINDA na etapa N — o guardrail antigo só proibia pedir DADO da próxima etapa
+    # cedo, nunca proibiu executar uma AÇÃO/ferramenta que ela descreve.
+    it 'proíbe executar ação/ferramenta (ex.: transferir_humano) descrita na PRÓXIMA etapa antes da hora' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Comprovante', 'objective' => 'Peça o comprovante.', 'collect' => { 'attribute' => 'comprovante' } },
+        { 'name' => 'Finalização', 'objective' => 'Confirmar e transferir.',
+          'rules' => ["Chame a ferramenta de transferência para atendente com o motivo 'conclusao_do_processo'."] }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('NÃO execute nenhuma ação ou ferramenta que ela descreva') &&
+          prompt.include?('mesmo que você já tenha todos os dados que a próxima etapa pediria')
       }
     end
 

@@ -228,10 +228,13 @@ class Ai::PythonOrchestratorClient
     lines << document_extraction_instruction if image_urls.present?
     lines << collected_facts_block if collected_facts_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
-    lines << "PRÓXIMA ETAPA (só contexto — NÃO é a atual; NÃO pule pra ela nem PEÇA o dado dela antes " \
-             "da hora, mas se o cliente ADIANTAR esse dado por conta própria, capture normalmente — " \
-             "ver REGRAS DE FOCO E VALIDAÇÃO DA COLETA abaixo; use isso só pra conduzir a conversa com " \
-             "continuidade, sem soar como se não soubesse o que vem a seguir):\n#{next_step_instructions}" \
+    lines << "PRÓXIMA ETAPA (só contexto — NÃO é a atual; NÃO pule pra ela, NÃO peça o dado dela, e " \
+             "NÃO execute nenhuma ação ou ferramenta que ela descreva (ex.: transferir_humano, " \
+             "encerrar_atendimento) antes da hora — só a etapa ATUAL manda no que fazer AGORA, mesmo " \
+             "que você já tenha todos os dados que a próxima etapa pediria; mas se o cliente ADIANTAR " \
+             "um DADO dela por conta própria, capture normalmente — ver REGRAS DE FOCO E VALIDAÇÃO DA " \
+             "COLETA abaixo; use isso só pra conduzir a conversa com continuidade, sem soar como se não " \
+             "soubesse o que vem a seguir):\n#{next_step_instructions}" \
       if next_step_instructions.present?
     lines << step_extraction_instruction if step_extraction_instruction.present?
     lines << data_validation_instruction if data_validation_instruction.present?
