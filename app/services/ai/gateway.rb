@@ -230,7 +230,7 @@ class Ai::Gateway
   rescue StandardError => e
     error_type = classify_error(e)
     # Loga a etapa e a categoria junto do erro — o "porquê" fica no log; o "o quê" (agregável) na run.
-    Rails.logger.error "[Ai::Gateway] conv=#{@conversation&.id} stage=#{@stage} type=#{error_type} #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway] ticket_id=#{@conversation&.id} stage=#{@stage} type=#{error_type} #{e.class}: #{e.message}"
     run_record.update!(status: 'error', error_type: error_type) if defined?(run_record) && run_record&.persisted?
     nil
   end
@@ -265,7 +265,7 @@ class Ai::Gateway
     attrs['ai_step_turns'] = attrs['ai_step_turns'].to_i + 1
     @conversation.update!(additional_attributes: attrs)
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#bump_step_turns_unless_advanced] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#bump_step_turns_unless_advanced] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Escritas de estado derivado (atributos coletados, etapa atual, memória), extraído do Gateway
@@ -341,7 +341,7 @@ class Ai::Gateway
     Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation,
                                                              input: { 'label' => 'department-override-indisponivel' })
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#flag_unavailable_department_override] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#flag_unavailable_department_override] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Saldo de créditos de IA relevante para enforcement (billing Fase 2). nil = NÃO enforça (fail-open):
@@ -372,7 +372,7 @@ class Ai::Gateway
     balance.update!(low_balance_notified_at: Time.current)
     emit(run_record, 'credit.low_balance_notified', { remaining: balance.total, cap: cap })
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#maybe_notify_low_balance] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#maybe_notify_low_balance] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   def current_plan_credits_cap
@@ -391,7 +391,7 @@ class Ai::Gateway
     handoff_coordinator.assign_human(team_id, reason: 'credit_exhausted')
     emit(run_record, 'handoff.credit_exhausted', { team_id: team_id })
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#force_credit_handoff] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#force_credit_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Transferência silenciosa ao atingir o teto de respostas (max_replies). Espelha force_credit_handoff:
@@ -407,7 +407,7 @@ class Ai::Gateway
     handoff_coordinator.assign_human(team_id, reason: 'max_replies_reached')
     emit(run_record, 'handoff.max_replies_reached', { max: max, team_id: team_id })
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#force_max_replies_handoff] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#force_max_replies_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   def max_replies_reached?(department)
@@ -427,7 +427,7 @@ class Ai::Gateway
     handoff_coordinator.assign_human(team_id, reason: 'stuck_handoff_turns')
     emit(run_record, 'handoff.stuck_step', { team_id: team_id })
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#force_stuck_step_handoff] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#force_stuck_step_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Provider de IA indisponível (rate-limit/cota/billing, ou auth não recuperado pelo BYOK): a IA não
@@ -467,7 +467,7 @@ class Ai::Gateway
     # reenviar; o aviso já saiu na abertura (a 3ª falha, throttle de 1h). Ver #run e Ai::ProviderBreaker.
     notify_admin_provider_error(run_record.provider) if notify
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#force_provider_handoff] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#force_provider_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # E-mail aos admins da conta quando um provider_error resulta em handoff. Reusa o padrão do
@@ -483,7 +483,7 @@ class Ai::Gateway
       .provider_error_handoff(@account, provider.to_s)
       .deliver_later
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#notify_admin_provider_error] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#notify_admin_provider_error] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Persiste o conversation_id da Responses API em additional_attributes da conversa.
@@ -504,7 +504,7 @@ class Ai::Gateway
       fresh.update_columns(additional_attributes: attrs.merge('openai_conversation_id' => conv_id))
     end
   rescue StandardError => e
-    Rails.logger.warn "[Ai::Gateway#persist_openai_conversation_id] #{e.class}: #{e.message}"
+    Rails.logger.warn "[Ai::Gateway#persist_openai_conversation_id] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # notify_throttle_allows? do HandoffCoordinator (perder o estado = no máximo 1 e-mail extra), mas
@@ -526,16 +526,16 @@ class Ai::Gateway
     balance = AiCreditBalance.find_or_create_by(account_id: @account.id)
     balance.consume!(1)
   rescue AiCreditBalance::InsufficientCredits => e
-    Rails.logger.info "[Ai::Gateway] fallback BYOK sem saldo SCNET: #{e.message}"
+    Rails.logger.info "[Ai::Gateway] ticket_id=#{@conversation&.id} fallback BYOK sem saldo SCNET: #{e.message}"
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#consume_byok_fallback_credit] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#consume_byok_fallback_credit] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Tag de visibilidade best-effort (mesmo handler direto do flag_unavailable_department_override).
   def apply_label(label)
     Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation, input: { 'label' => label })
   rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#apply_label] #{e.class}: #{e.message}"
+    Rails.logger.error "[Ai::Gateway#apply_label] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   def finalize(run_record, status)
