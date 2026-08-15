@@ -51,7 +51,11 @@ class Ai::ActionDispatcher
   # Sends the AI reply to the customer — the only outward-facing action. Gated by the department
   # reply_scope (off by default): 'all' replies to every live conversation, 'canary' only when the
   # conversation carries the configured label. Shadow / off / missing label records intention only.
-  def reply(department, text)
+  #
+  # bypass_handoff: ver Ai::ReplyPolicy#allowed? — repassado pelo Gateway quando ESTE turno (não um
+  # anterior) é quem acabou de transferir/atribuir a conversa, pra a mensagem de encerramento do
+  # próprio modelo não ser engolida pelo handoff que ele mesmo decidiu neste turno.
+  def reply(department, text, bypass_handoff: false)
     return if text.blank?
 
     # Safety cap: stop replying after the department's max number of AI replies in this
@@ -62,7 +66,8 @@ class Ai::ActionDispatcher
       return
     end
 
-    state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation)
+    state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation,
+                                                   bypass_handoff: bypass_handoff)
     if state == :live
       deliver(text)
       # UMA ÚNICA vez por resposta, mesmo quando vira N mensagens: max_replies conta reply.sent e
@@ -70,7 +75,8 @@ class Ai::ActionDispatcher
       emit('reply.sent', { chars: text.length })
       consume_credit
     else
-      reason = Ai::ReplyPolicy.skip_reason(mode: @mode, department: department, conversation: @conversation)
+      reason = Ai::ReplyPolicy.skip_reason(mode: @mode, department: department, conversation: @conversation,
+                                            bypass_handoff: bypass_handoff)
       emit('reply.intended', { executed: false, reason: reason })
     end
   rescue StandardError => e

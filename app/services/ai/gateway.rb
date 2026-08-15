@@ -231,7 +231,14 @@ class Ai::Gateway
     # bloquear a eliminação por isso (ver conversa da eliminação do motor legado). Tarefa de fechamento
     # rastreada separadamente — ver memória do projeto (loopguard-python-parity-debt) — não implementar
     # aqui como parte deste commit.
-    action_dispatcher.reply(department, result[:reply])
+    # bypass_handoff: @acts_live foi decidido ANTES de chamar o Python (linha ~84), com o estado PRÉ-
+    # turno da conversa. Se já era live ali, um handoff/atribuição que ESTE MESMO turno acabou de fazer
+    # (transferir_humano/on_complete handoff_human, via a request HTTP separada do
+    # Api::Internal::AiExecuteToolController, cujo write o @conversation.reload acima de
+    # bump_step_turns_unless_advanced acabou de trazer) não pode engolir a mensagem que o próprio
+    # modelo compôs pra avisar da transferência. Achado ao vivo (15/08, ticket 583): "reply.intended"
+    # em vez de "reply.sent" — cliente nunca recebeu o aviso, apesar do handoff ter executado certinho.
+    action_dispatcher.reply(department, result[:reply], bypass_handoff: @acts_live)
     finalize(run_record, status)
   rescue StandardError => e
     error_type = classify_error(e)

@@ -7,13 +7,20 @@ class Ai::ReplyPolicy
     mode == 'live' && department.behavior.to_h['auto_attendance'] != false
   end
 
-  def self.allowed?(mode:, department:, conversation:)
+  # bypass_handoff: pula SÓ os dois checks de "já foi entregue a um humano" (assignee/ai_handoff) —
+  # usado pelo Gateway pra despachar a PRÓPRIA mensagem de encerramento do turno que acabou de decidir
+  # a transferência (transferir_humano/on_complete handoff_human executam via uma request HTTP separada
+  # — Api::Internal::AiExecuteToolController — e o @conversation.reload que o Gateway já precisa fazer
+  # pra ver ai_step_index acaba trazendo ai_handoff/assignee_id junto; sem o bypass, o modelo nunca
+  # entrega a mensagem que ele mesmo compôs avisando da transferência). NUNCA usado pra handoff que já
+  # existia ANTES deste turno começar — só o Gateway decide quando é seguro (ver @acts_live).
+  def self.allowed?(mode:, department:, conversation:, bypass_handoff: false)
     return false unless acts_live?(mode, department)
     # Convive com o roteamento humano: se um agente já assumiu (assignee), a IA observa mas
     # NÃO envia (resposta/ferramenta/handoff) — não fala por cima do humano. Shadow segue observando.
-    return false if conversation.assignee_id.present?
+    return false if !bypass_handoff && conversation.assignee_id.present?
     # Já entregue a um humano (handoff): a IA sai de cena mesmo antes de a atribuição concluir.
-    return false if conversation.additional_attributes.to_h['ai_handoff']
+    return false if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
 
     behavior = department.behavior.to_h
     scope = behavior['reply_scope']
@@ -31,18 +38,19 @@ class Ai::ReplyPolicy
   #   :live   -> may reply to the customer
   # A live-but-gated binding (reply_scope off, canary miss, off-hours, kill switch) still runs as
   # shadow: it records the decision without sending. Inert until the Gateway calls it (F1.1).
-  def self.effective_reply_state(mode:, department:, conversation:)
+  def self.effective_reply_state(mode:, department:, conversation:, bypass_handoff: false)
     return :off if mode.blank? || mode == 'none'
     return :shadow if mode == 'shadow'
 
-    allowed?(mode: mode, department: department, conversation: conversation) ? :live : :shadow
+    allowed?(mode: mode, department: department, conversation: conversation,
+             bypass_handoff: bypass_handoff) ? :live : :shadow
   end
 
-  def self.skip_reason(mode:, department:, conversation:)
+  def self.skip_reason(mode:, department:, conversation:, bypass_handoff: false)
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, department)
-    return 'human_assigned' if conversation.assignee_id.present?
-    return 'handed_off' if conversation.additional_attributes.to_h['ai_handoff']
+    return 'human_assigned' if !bypass_handoff && conversation.assignee_id.present?
+    return 'handed_off' if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
 
     behavior = department.behavior.to_h
     scope = behavior['reply_scope']
