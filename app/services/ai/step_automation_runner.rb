@@ -8,7 +8,12 @@
 # Webhook (external HTTP) and change_team (a plain team_id swap) run directly with their own isolated
 # rescue + ai_event. Fase 1: tag / webhook / change_team / update_attribute. change_ai_department = Fase 2.
 class Ai::StepAutomationRunner
-  def initialize(conversation:, account:, agent:, dispatcher:, run:)
+  # dispatcher/run: opcionais — ausentes quando chamado de
+  # Api::Internal::AiExecuteToolController#fire_step_automations (o caminho Python-only, sem
+  # run_record de Gateway). #apply_tag/#update_attribute caem pro Ai::CapabilityRegistry direto
+  # nesse caso — mesmo padrão sem auditoria de Ai::CapabilityExecution que as control tools
+  # (avancar_etapa/registrar_*) já usam nesse controller.
+  def initialize(conversation:, account:, agent:, dispatcher: nil, run: nil)
     @conversation = conversation
     @account = account
     @agent = agent
@@ -46,16 +51,26 @@ class Ai::StepAutomationRunner
     label = params[:label].to_s.strip
     raise 'label vazio' if label.blank?
 
-    @dispatcher.execute_action('conversation.add_label', { 'label' => label }, @run,
-                               'step_automation.tag', extra: { label: label })
+    if @dispatcher
+      @dispatcher.execute_action('conversation.add_label', { 'label' => label }, @run,
+                                 'step_automation.tag', extra: { label: label })
+    else
+      Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation, input: { 'label' => label })
+      emit('step_automation.tag.executed', { label: label })
+    end
   end
 
   def update_attribute(params)
     key = params[:key].to_s.strip
     raise 'key vazio' if key.blank?
 
-    @dispatcher.execute_action('conversation.update_attributes', { key => params[:value] }, @run,
-                               'step_automation.attribute', extra: { key: key })
+    if @dispatcher
+      @dispatcher.execute_action('conversation.update_attributes', { key => params[:value] }, @run,
+                                 'step_automation.attribute', extra: { key: key })
+    else
+      Ai::CapabilityRegistry.execute('conversation.update_attributes', conversation: @conversation, input: { key => params[:value] })
+      emit('step_automation.attribute.executed', { key: key })
+    end
   end
 
   # webhook: executor HTTP genérico, direto (não passa pelo tool-calling / Ai::Tool).
