@@ -176,14 +176,13 @@ class Ai::StateManager
     emit('attributes.updated', { keys: known.keys, model: 'contact' })
   end
 
-  # {'conversation_attribute' => [chaves...], 'contact_attribute' => [chaves...]} — mesmo filtro de
-  # desabilitadas (disabled_custom_attributes) aplicado aos DOIS conjuntos, pra #persist_attributes
-  # rotear cada chave pro modelo que a PRÓPRIA definição declara. Uma chave cadastrada nos DOIS tipos
-  # (raro, mas a uniqueness é scoped a [account_id, attribute_model] — pode acontecer) aparece nos DOIS
-  # conjuntos e espelha nos DOIS lugares; não é ambíguo porque não escolhemos "um vencedor".
-  def fillable_keys_by_model(department)
-    disabled = Array(department&.behavior.to_h['disabled_custom_attributes'])
-    scope = ::CustomAttributeDefinition.where(account_id: @conversation.account_id).where.not(attribute_key: disabled)
+  # {'conversation_attribute' => [chaves...], 'contact_attribute' => [chaves...]} — pra
+  # #persist_attributes rotear cada chave pro modelo que a PRÓPRIA definição declara. Uma chave
+  # cadastrada nos DOIS tipos (raro, mas a uniqueness é scoped a [account_id, attribute_model] — pode
+  # acontecer) aparece nos DOIS conjuntos e espelha nos DOIS lugares; não é ambíguo porque não
+  # escolhemos "um vencedor".
+  def fillable_keys_by_model(_department)
+    scope = ::CustomAttributeDefinition.where(account_id: @conversation.account_id)
     {
       'conversation_attribute' => scope.where(attribute_model: :conversation_attribute).pluck(:attribute_key).map(&:to_s),
       'contact_attribute' => scope.where(attribute_model: :contact_attribute).pluck(:attribute_key).map(&:to_s)

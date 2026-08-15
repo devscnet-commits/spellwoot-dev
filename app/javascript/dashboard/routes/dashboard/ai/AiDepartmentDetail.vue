@@ -106,7 +106,6 @@ const form = reactive({
   // não existir mensagem para disparar, o agente segue por estas decisões (ordem =
   // prioridade). Cada item é { uid (transitório), type }.
   no_followup_action: '',
-  disabled_custom_attributes: [],
   is_default: false,
   position: 0,
 });
@@ -120,8 +119,8 @@ const agentUrl = () =>
   `/api/v1/accounts/${route.params.accountId}/ai_agents/${route.params.agentId}`;
 const deptCollectionUrl = () => `${agentUrl()}/ai_departments`;
 
-// Custom attributes (account-level): the agent may use all of them by default; the user can
-// exclude specific ones per agent (opt-out). New attributes appear enabled automatically.
+// Custom attributes (account-level): source for the "Dado que esta etapa coleta" select in
+// AiStepForm (the agent may use all of them — no per-agent opt-out).
 const customAttributes = ref([]);
 const fetchCustomAttributes = async () => {
   try {
@@ -133,7 +132,6 @@ const fetchCustomAttributes = async () => {
     customAttributes.value = [];
   }
 };
-const attrEnabled = key => !form.disabled_custom_attributes.includes(key);
 
 // Variáveis INTERNAS do department (Ai::LeadVariable): fonte do Select da chave de slot no AiStepForm
 // (junto com customAttributes). O endpoint index já existia; ninguém o consumia. departmentId pode ser
@@ -249,12 +247,6 @@ const handoffAgents = computed(() => {
     .filter(Boolean)
     .map(a => ({ id: a.id, name: a.assistant_name || a.name }));
 });
-const toggleAttr = key => {
-  const i = form.disabled_custom_attributes.indexOf(key);
-  if (i >= 0) form.disabled_custom_attributes.splice(i, 1);
-  else form.disabled_custom_attributes.push(key);
-};
-
 const linesToArray = value =>
   (value || '')
     .split('\n')
@@ -369,11 +361,6 @@ const hydrate = dept => {
     close_message: close.message || '',
     inactivity_minutes: close.inactivity_minutes ?? 30,
     no_followup_action: parseNoFollowupAction(close.no_followup_actions),
-    disabled_custom_attributes: Array.isArray(
-      behavior.disabled_custom_attributes
-    )
-      ? [...behavior.disabled_custom_attributes]
-      : [],
     is_default: dept.is_default || false,
     position: dept.position ?? 0,
   });
@@ -444,7 +431,6 @@ const buildPayload = () => ({
       max_input_action: form.max_input_action || 'truncate',
       max_input_message: (form.max_input_message || '').trim(),
       reply_scope: 'all',
-      disabled_custom_attributes: form.disabled_custom_attributes,
     },
     follow_up: buildFollowUp(),
     close_rules: buildFinalization(),
@@ -897,83 +883,6 @@ onMounted(async () => {
           >
             {{ $t(`AI_DEPARTMENTS.DETAIL_TABS.${tab.toUpperCase()}`) }}
           </button>
-        </div>
-
-        <!-- INSTRUÇÕES -->
-        <div
-          v-if="visibleSections.has('instructions')"
-          class="flex flex-col gap-5"
-        >
-          <!-- Atributos personalizados (da conta): usar ou excluir por agente -->
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex flex-col gap-0.5">
-                <span class="text-sm font-medium text-n-slate-12">
-                  {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.TITLE') }}
-                </span>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.HINT') }}
-                </p>
-              </div>
-              <router-link
-                :to="{
-                  name: 'attributes_list',
-                  params: { accountId: route.params.accountId },
-                }"
-                target="_blank"
-                class="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-n-weak px-3 py-1.5 text-xs font-medium text-n-slate-12 hover:bg-n-alpha-1"
-              >
-                <span class="i-lucide-settings-2 size-3.5" />
-                {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MANAGE') }}
-                <span class="i-lucide-external-link size-3 text-n-slate-10" />
-              </router-link>
-            </div>
-            <p
-              v-if="!customAttributes.length"
-              class="text-sm text-n-slate-11 mb-0"
-            >
-              {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EMPTY') }}
-            </p>
-            <!-- Lista pode crescer conforme novos atributos da conta; limita a ~7 linhas e rola. -->
-            <div
-              v-else
-              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-[25rem] overflow-y-auto"
-            >
-              <div
-                v-for="attr in customAttributes"
-                :key="attr.attribute_key"
-                class="flex items-center justify-between gap-3 px-4 py-2.5"
-              >
-                <div class="min-w-0">
-                  <p class="text-sm text-n-slate-12 mb-0 truncate">
-                    {{ attr.attribute_display_name }}
-                  </p>
-                  <p class="text-xs text-n-slate-11 mb-0">
-                    {{
-                      attr.attribute_model === 'contact_attribute'
-                        ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MODEL_CONTACT')
-                        : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MODEL_CONVERSATION')
-                    }}
-                  </p>
-                </div>
-                <div class="shrink-0 flex items-center gap-2.5">
-                  <span class="text-xs text-n-slate-11">
-                    {{
-                      attrEnabled(attr.attribute_key)
-                        ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.USING')
-                        : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EXCLUDED')
-                    }}
-                  </span>
-                  <Switch
-                    :model-value="attrEnabled(attr.attribute_key)"
-                    @change="toggleAttr(attr.attribute_key)"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
         </div>
 
         <!-- ATENDIMENTO -->

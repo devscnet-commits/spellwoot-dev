@@ -1586,13 +1586,13 @@ RSpec.describe Ai::StateManager do
       expect(conversation.reload.custom_attributes['telefone']).to eq('4999998888')
     end
 
-    it 'respeita disabled_custom_attributes do department pra contact_attribute também' do
+    it 'ignora disabled_custom_attributes remanescente de configs antigas (tela removida — feature descontinuada)' do
       define_contact_attr('cpf')
       department.update!(behavior: department.behavior.merge('disabled_custom_attributes' => ['cpf']))
 
       manager.persist_attributes({ 'cpf' => '11122233344' }, department)
 
-      expect(conversation.contact.reload.custom_attributes).not_to have_key('cpf')
+      expect(conversation.contact.reload.custom_attributes['cpf']).to eq('11122233344')
     end
 
     it 'sempre grava em ai_collected_facts independente do modelo espelhado (comportamento existente preservado)' do
