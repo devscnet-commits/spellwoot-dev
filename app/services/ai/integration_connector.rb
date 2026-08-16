@@ -9,6 +9,12 @@ class Ai::IntegrationConnector
     attempt = 0
     begin
       response = request(link, body)
+      # Mesmo achado do Ai::WebhookRunner (ticket 583): sem este check, um 4xx/5xx completava a
+      # chamada sem erro nenhum e virava 'executed' — a IA nunca sabia que a integração falhou. Cai no
+      # rescue StandardError abaixo de propósito, então também passa a se BENEFICIAR do retry_count
+      # (uma falha 5xx temporária merece retry igual uma falha de rede).
+      raise "HTTP #{response.code}: #{response.body.to_s.first(200)}" unless (200..299).cover?(response.code)
+
       { 'status' => response.code, 'body' => safe_parse(response.body) }
     rescue Ai::SafeHttp::BlockedUrlError => e
       # Destino barrado pelo filtro SSRF: falha imediata (não faz sentido re-tentar uma URL proibida).

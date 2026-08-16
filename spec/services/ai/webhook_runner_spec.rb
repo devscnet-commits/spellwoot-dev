@@ -18,6 +18,15 @@ RSpec.describe Ai::WebhookRunner do
       expect(result['body']).to eq({ 'received' => true })
     end
 
+    it 'trata um status HTTP de erro (404/500...) como falha, mesmo sem exceção de rede' do
+      stub_request(:post, 'http://hook.example.com/notify')
+        .to_return(status: 404, body: '<html>Página não encontrada</html>')
+
+      expect do
+        described_class.call({ 'url' => 'http://hook.example.com/notify', 'method' => 'POST' }, input: {})
+      end.to raise_error(RuntimeError, /HTTP 404/)
+    end
+
     it 'REJEITA uma URL que aponta para o metadata endpoint (SSRF) com erro claro, sem stack trace' do
       expect do
         described_class.call({ 'url' => 'http://169.254.169.254/latest/meta-data/', 'method' => 'POST' },
