@@ -11,7 +11,6 @@ class Api::V1::Accounts::AiDepartmentsController < Api::V1::Accounts::BaseContro
     behavior.max_input_chars
     behavior.max_input_action
     behavior.max_input_message
-    behavior.disabled_custom_attributes
   ].freeze
 
   # Tipos válidos de automação ao concluir etapa. change_ai_department (Fase 2) fixa o department

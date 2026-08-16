@@ -23,6 +23,17 @@ RSpec.describe Ai::IntegrationConnector do
     expect(result['body']).to eq({ 'saldo' => 10 })
   end
 
+  it 'trata um status HTTP de erro (404/500...) como falha, e RE-TENTA como qualquer outra falha' do
+    stub_request(:post, 'http://erp.example.com/consulta')
+      .to_return(status: 500, body: 'internal error')
+
+    expect do
+      described_class.call(link(endpoint: 'http://erp.example.com/consulta', retry_count: 2), input: {})
+    end.to raise_error(RuntimeError, /falhou.*HTTP 500/)
+
+    expect(WebMock).to have_requested(:post, 'http://erp.example.com/consulta').times(3)
+  end
+
   it 'REJEITA um endpoint que aponta para o metadata endpoint (SSRF) com erro claro' do
     expect do
       described_class.call(link(endpoint: 'http://169.254.169.254/latest/meta-data/'), input: {})

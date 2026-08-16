@@ -19,7 +19,7 @@ RSpec.describe Ai::Version do
         'auto_attendance' => true, 'reply_scope' => 'all',
         'grouping' => { 'delay_seconds' => 10 }, 'max_replies' => 3,
         'max_input_chars' => 500, 'max_input_action' => 'truncate',
-        'max_input_message' => '', 'disabled_custom_attributes' => ['cpf']
+        'max_input_message' => ''
       }
     )
   end
@@ -39,8 +39,7 @@ RSpec.describe Ai::Version do
         'behavior.max_replies' => 3,
         'behavior.max_input_chars' => 500,
         'behavior.max_input_action' => 'truncate',
-        'behavior.max_input_message' => '',
-        'behavior.disabled_custom_attributes' => ['cpf']
+        'behavior.max_input_message' => ''
       )
     end
 
