@@ -149,9 +149,11 @@ class Ai::FollowupConversationJob < ApplicationJob
     if Ai::ReplyPolicy.allowed?(mode: binding.mode, department: department, conversation: conversation)
       Messages::MessageBuilder.new(nil, conversation, { content: message, private: false }).perform
       emit(account_id, conversation.id, 'followup.sent', { index: index + 1, chars: message.length })
+      Rails.logger.info "[Ai::FollowupConversationJob] conv=#{conversation.id} sent=true index=#{index + 1}"
     else
       reason = Ai::ReplyPolicy.skip_reason(mode: binding.mode, department: department, conversation: conversation)
       emit(account_id, conversation.id, 'followup.intended', { index: index + 1, executed: false, reason: reason })
+      log_skip(conversation.id, "reply_policy_#{reason}", mode: binding.mode, department_id: department.id)
     end
   end
 
