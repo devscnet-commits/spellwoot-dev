@@ -54,10 +54,26 @@ RSpec.describe Ai::FollowupSweepJob do
       expect { described_class.new.perform }.not_to have_enqueued_job(Ai::FollowupConversationJob)
     end
 
-    it 'ignores conversations that are not open' do
-      quiet_conversation.update!(status: :resolved)
+    it 'ignores conversations that are resolved/snoozed' do
+      convo_resolved = quiet_conversation
+      convo_resolved.update!(status: :resolved)
+      convo_snoozed = quiet_conversation
+      convo_snoozed.update!(status: :snoozed)
 
-      expect { described_class.new.perform }.not_to have_enqueued_job(Ai::FollowupConversationJob)
+      expect { described_class.new.perform }
+        .not_to have_enqueued_job(Ai::FollowupConversationJob).with(convo_resolved.id)
+      expect { described_class.new.perform }
+        .not_to have_enqueued_job(Ai::FollowupConversationJob).with(convo_snoozed.id)
+    end
+
+    # Achado ao vivo (17/08): só :open ficava de fora conversa em :pending, exatamente o caso de uso
+    # do follow-up (só a IA no controle, cliente aguardando resposta).
+    it 'inclui conversas :pending (não só :open) — é o caso de uso normal do follow-up' do
+      convo = quiet_conversation
+      convo.update!(status: :pending)
+
+      expect { described_class.new.perform }
+        .to have_enqueued_job(Ai::FollowupConversationJob).with(convo.id)
     end
 
     it 'ignores conversations still within the MIN_QUIET window (too hot)' do

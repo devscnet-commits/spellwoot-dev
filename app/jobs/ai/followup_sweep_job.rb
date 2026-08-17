@@ -38,15 +38,21 @@ class Ai::FollowupSweepJob < ApplicationJob
 
   private
 
-  # Query estreita e indexada: aberta + sem humano + parada há um tempo + em inbox com IA ativa.
-  # Os guards finos (aguardando cliente, ai_handoff, já agiu, comportamento configurado) ficam
+  # Query estreita e indexada: aberta OU pendente + sem humano + parada há um tempo + em inbox com IA
+  # ativa. Os guards finos (aguardando cliente, ai_handoff, já agiu, comportamento configurado) ficam
   # no job por-conversa — barato e isolado.
+  #
+  # Achado ao vivo (17/08): só :open ficava de fora conversa em :pending — que é exatamente o caso de
+  # uso do follow-up (só a IA no controle, cliente aguardando resposta, ninguém assumiu ainda). O
+  # próprio follow-up oferece "Passar para atendente humano" como ação de inatividade — não faria
+  # sentido essa ação só existir pra conversa :open. :resolved/:snoozed continuam de fora (encerrada,
+  # ou explicitamente adormecida por escolha humana — não é o follow-up que deve acordar essa).
   def candidate_conversations
     inbox_ids = eligible_inbox_ids
     return Conversation.none if inbox_ids.empty?
 
     Conversation
-      .where(status: :open, assignee_id: nil, inbox_id: inbox_ids)
+      .where(status: %i[open pending], assignee_id: nil, inbox_id: inbox_ids)
       .where('conversations.last_activity_at < ?', MIN_QUIET.ago)
       .select(:id)
   end

@@ -89,6 +89,27 @@ RSpec.describe Ai::FollowupSweepJob do
 
       expect(Ai::Event.where(conversation_id: convo.id, event_type: 'followup.sent')).not_to exist
     end
+
+    # Achado ao vivo (17/08): a conversa fica em :pending (não :open) depois da IA responder e o
+    # cliente ficar quieto — status real do caso de uso do follow-up (só a IA no controle, ninguém
+    # assumiu). Antes deste fix, a conversa em :pending nunca era nem selecionada pelo sweep, então o
+    # follow-up nunca disparava nesse cenário, silenciosamente (sem erro, sem evento).
+    it 'sends the first attempt on a :pending conversation, not just :open' do
+      create_department(follow_up: {
+                          'behaviors' => [{
+                            'context' => 'inbox_hours',
+                            'attempts' => [{ 'delay_minutes' => 10, 'message' => 'Ainda está por aí?' }],
+                            'no_response_action' => 'assign'
+                          }]
+                        })
+      convo = quiet_conversation(incoming_ago: 60.minutes.ago, outgoing_ago: 55.minutes.ago)
+      convo.update!(status: :pending)
+
+      run_sweep
+
+      expect(convo.messages.where(message_type: :outgoing, content: 'Ainda está por aí?')).to exist
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'followup.sent')).to exist
+    end
   end
 
   describe 'no-follow-up fallback (close_rules.no_followup_actions)' do
