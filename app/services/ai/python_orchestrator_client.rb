@@ -209,21 +209,24 @@ class Ai::PythonOrchestratorClient
     # (como estava antes) invalidava tudo que vinha depois dele, todo turno. Conteúdo de cada linha
     # inalterado — só a ORDEM mudou (achado 14/08, ticket 563, Frente 2 da compactação de prompt).
     #
-    # Fixas e inegociáveis, ANTES de qualquer outra coisa: fecham lacunas achadas em teste ao vivo —
-    # sugerir concorrentes, alucinar "médias de mercado" em vez do conhecimento real, "fingir" que
-    # chamou registrar_* sem chamar de verdade, inventar situações que não existem, e transferir sem
-    # motivo pulando o fluxo de etapas. Múltiplas mensagens por turno (modo identify_as="human") tem
-    # instrução PRÓPRIA logo abaixo (#identify_as_instruction) — achado ao vivo 13/08: por um tempo
-    # esteve ausente aqui (ver comentário do método), regressão já corrigida.
-    lines << identity_instruction
-    lines << identify_as_instruction
-    lines << market_average_guardrail
-    lines << no_fabrication_instruction
-    lines << transfer_discipline_instruction
+    # Removido (17/08, decisão de produto): as guardrails fixas contra invenção/concorrentes/
+    # transferência precoce/erro de ferramenta/perguntas em lote (identity_instruction,
+    # market_average_guardrail, no_fabrication_instruction, transfer_discipline_instruction,
+    # tool_error_instruction, gradual_conversation_instruction) saíram do código — apareciam por
+    # inteiro no log de toda chamada (visibilidade operacional indesejada) e o pedido do produto é que
+    # cada conta defina seu próprio comportamento via "Prompt base da empresa" em vez de um texto
+    # universal fixo. Ai::PromptAssistant::Prompts::BASE_PROMPT_SYSTEM foi ajustado pra instruir o
+    # assistente que ajuda a escrever o base_prompt a sempre embutir equivalentes adaptados ao
+    # segmento do cliente — a proteção não depende mais só do admin lembrar sozinho. Texto original
+    # arquivado fora do código (pedido do usuário) para eventual reversão.
+    # identify_as_instruction NÃO foi removida — não é uma guardrail de bug, é o mecanismo que o
+    # toggle "Como ele deve se identificar" (agent.identify_as) usa pra funcionar (inclusive o
+    # contrato de formatação \n\n que Ai::ActionDispatcher#split_parts lê pra quebrar em várias
+    # mensagens); por isso desceu pra perto do bloco de identidade/base_prompt, não ficou solta com
+    # as guardrails removidas.
     lines << handoff_target_instruction if handoff_target_instruction.present?
-    lines << tool_error_instruction
-    lines << gradual_conversation_instruction
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
+    lines << identify_as_instruction
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
     lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
@@ -254,26 +257,6 @@ class Ai::PythonOrchestratorClient
     lines.join("\n")
   end
 
-  # Texto do pedido, com UM ajuste: a frase original citava "a ferramenta de busca (file_search)" —
-  # mas não existe vector store nenhum aqui (ver comentário em #payload), então instruir a IA a chamar
-  # uma tool que não existe seria pior que o problema original. Aponta pra tool real #knowledge_tool
-  # (consultar_conhecimento) em vez de um bloco fixo — a IA CHAMA a ferramenta antes de responder,
-  # não lê um texto que pode nem ter sido injetado. #knowledge_tool só entra em #tools_schema quando o
-  # department TEM conhecimento cadastrado (#has_knowledge?) — sem isso, citar a ferramenta aqui
-  # instruiria a IA a chamar algo que nem está na lista, então a frase se adapta ao mesmo booleano.
-  def identity_instruction
-    base = 'IDENTIDADE: Você é um atendente de IA DA PRÓPRIA EMPRESA. A empresa para quem você trabalha É a ' \
-      'provedora do serviço. É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras empresas, ' \
-      'operadoras ou provedores. '
-    base + if has_knowledge?
-             'Se o cliente quiser preços, condições ou tiver dúvidas, use a ferramenta ' \
-               '"consultar_conhecimento" antes de responder — nunca invente o que ela não retornar.'
-           else
-             'Se o cliente quiser preços, condições ou tiver dúvidas que você não tenha certeza ' \
-               'absoluta, diga que vai verificar — nunca invente.'
-           end
-  end
-
   # PORTADO do Ai::PromptCompiler legado (identity_lines) — regressão achada ao vivo (13/08, ticket
   # Maya v5.0): a migração pro Python NUNCA trouxe esta instrução. O mecanismo de split continuou
   # 100% intacto no lado Ruby (Ai::ActionDispatcher#deliver/#split_parts, as_human: @agent.identify_as
@@ -292,51 +275,6 @@ class Ai::PythonOrchestratorClient
         'em mensagens curtas com uma LINHA EM BRANCO entre elas (dois \n) no campo "mensagem_para_cliente". ' \
         'Se for algo curto, responda em uma mensagem só, sem quebrar à força.'
     end
-  end
-
-  # Reforço explícito contra "médias de mercado": IA alucinava preço/regra plausível-mas-inventado
-  # em vez de usar o conhecimento real, e só se corrigia quando o cliente reclamava — reforça a
-  # mesma proibição de #identity_instruction com outra frase, mirando especificamente esse padrão.
-  # Mesmo ajuste condicional a #has_knowledge? que #identity_instruction — ver comentário lá.
-  def market_average_guardrail
-    base = 'Você é um atendente DA EMPRESA. Nunca cite concorrentes, médias de mercado ou valores '
-    base + if has_knowledge?
-             'que não venham da ferramenta "consultar_conhecimento".'
-           else
-             'que você não tenha certeza absoluta — nunca invente.'
-           end
-  end
-
-  # Achado em teste ao vivo: a IA inventava situações plausíveis mas inexistentes ("instabilidade no
-  # sistema", "link seguro", "formulário externo") pra preencher lacunas em vez de admitir que não sabe.
-  def no_fabrication_instruction
-    'É PROIBIDO inventar situações, recursos ou funcionalidades que não existem (ex: "instabilidade no ' \
-      'sistema", "link seguro", "formulário externo"). Se algo não estiver disponível, diga simplesmente ' \
-      'que vai encaminhar para um especialista.'
-  end
-
-  # Achado em teste ao vivo: a IA transferia pra humano "achando" que devia, pulando o fluxo de etapas
-  # inteiro.
-  #
-  # Achado ao vivo 2 (17/08, pelo usuário): a versão anterior deste método tinha um limiar PRÓPRIO
-  # ("não exija mais de 1 nova tentativa por dado antes de transferir") pra decidir quando desistir de
-  # um dado — só que isso CONTRADIZ o campo que o admin já configura na tela de Etapas ("Transferir para
-  # humano se travar em uma etapa por X mensagens", department.transfer_rules['stuck_handoff_turns'],
-  # enforçado em Ai::Gateway#step_turns_exceeded?/force_stuck_step_handoff). Se o admin configura X=5
-  # esperando 5 mensagens de tolerância, mas o MODELO já se auto-transfere na 1ª tentativa fracassada
-  # por causa desta instrução, o valor configurado nunca chega a valer — o modelo desiste antes do
-  # sistema. Removido o limiar por CONTAGEM daqui (e de #data_validation_instruction) — quem decide
-  # "quantas tentativas antes de desistir de um dado" agora é EXCLUSIVAMENTE o teto configurado no
-  # backend; o modelo só continua pedindo com paciência até esse teto agir sozinho. Os gatilhos por
-  # CONTEÚDO (pedido explícito, frustração) continuam do modelo — não dependem de contagem nenhuma.
-  def transfer_discipline_instruction
-    'Transfira para humano quando: o cliente pedir explicitamente para falar com uma pessoa; ' \
-      'demonstrar frustração clara (reclamar, repetir a mesma dúvida, pedir pra falar com pessoa) — ' \
-      'nesse caso transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes. Se o cliente não ' \
-      'conseguir fornecer um dado válido, continue esclarecendo e pedindo de novo com paciência — NÃO ' \
-      'transfira só pela QUANTIDADE de tentativas (o sistema tem seu próprio limite de segurança pra ' \
-      'isso, configurado à parte, e transfere sozinho se travar de verdade). NUNCA transfira só porque ' \
-      '"achou" que deve. Siga o fluxo de etapas até o final.'
   end
 
   # Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino do handoff
@@ -358,37 +296,6 @@ class Ai::PythonOrchestratorClient
       'EXATO do time de destino, copiado da lista abaixo (NUNCA invente nem use uma categoria genérica ' \
       "como \"suporte\" ou \"comercial\"). Se nenhum time da lista se encaixar, deixe \"handoff_target\" " \
       "vazio (\"\") e transfira mesmo assim. Times disponíveis:\n#{lines.join("\n")}"
-  end
-
-  # Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
-  # QUALQUER ferramenta real: achado ao vivo (conv 556, consultar_periodos) — quando uma ferramenta
-  # falhava de verdade (erro técnico, não falta de dado), o modelo não tinha NENHUMA instrução de como
-  # reagir e travava enrolando o cliente em 4 respostas vagas, sem nunca avisar do problema nem
-  # chamar de novo. orchestrator.py agora normaliza toda falha real de tool em {"error": true,
-  # "message": "..."} (ver _normalize_tool_result) — esta instrução ensina o modelo a reconhecer esse
-  # sinal específico e agir.
-  def tool_error_instruction
-    'Se o resultado de QUALQUER ferramenta vier com "error": true, isso é uma falha TÉCNICA real da ' \
-      'ferramenta (não falta de dado do cliente) — avise o cliente que teve um problema técnico agora ' \
-      'e ofereça transferir para um atendente humano. NUNCA invente uma resposta no lugar do resultado ' \
-      'que faltou, e NUNCA chame a mesma ferramenta de novo no mesmo turno esperando um resultado ' \
-      'diferente.'
-  end
-
-  # Achado em teste ao vivo (esclarecido pelo usuário: NÃO é sobre várias mensagens por turno — isso é
-  # o modo identify_as="human" funcionando como esperado): a IA perguntava várias etapas de uma vez
-  # (nome + endereço + CPF + telefone na mesma mensagem) em vez de conduzir uma pergunta por vez, mesmo
-  # com TODAS as tools "registrar_*" disponíveis simultaneamente (fluxo agentic, sem gate por etapa).
-  # EXCEÇÃO explícita (antes ausente — a regra era uma proibição absoluta, tom tratado com rigidez de
-  # ação): dado front-loaded pelo PRÓPRIO cliente tem que ser capturado, nunca ignorado só pra manter a
-  # cadência "uma pergunta por vez" — cadência é tom, captura de dado é fato, não podem competir.
-  def gradual_conversation_instruction
-    'Prefira pedir os dados da etapa atual UM DE CADA VEZ, de forma natural e conversacional — mesmo ' \
-      'que várias ferramentas "registrar_*" estejam disponíveis ao mesmo tempo, não liste várias ' \
-      'perguntas na mesma mensagem por iniciativa própria. EXCEÇÃO: se o cliente fornecer ' \
-      'espontaneamente mais de um dado na mesma mensagem — mesmo sem você ter perguntado — registre ' \
-      'TODOS os dados válidos fornecidos naquela mensagem; nunca finja que não viu um dado só para ' \
-      'manter o ritmo de "uma pergunta por vez".'
   end
 
   # Achado ao vivo: a IA leu uma CNH em PDF e alucinou o ano (1997 virou 1991), além de salvar dados
@@ -629,8 +536,8 @@ class Ai::PythonOrchestratorClient
   # Substitui a antiga instrução de function-calling (tool_usage_instruction/
   # must_call_capture_tools_instruction/no_confirmation_loop_instruction — removidas): orchestrator.py
   # não oferece mais "registrar_*"/"avancar_etapa"/"salvar_memoria_ia"/"continuar_conversa"/
-  # conversation.resolve/conversation.transfer como tools à OpenAI (Ai::PythonOrchestratorClient ainda
-  # os calcula em #tools_schema — inofensivo, o Python os filtra antes de montar a lista de tools).
+  # conversation.resolve/conversation.transfer como tools à OpenAI (Ai::PythonOrchestratorClient nem
+  # mais calcula essas tools em #tools_schema — removido por serem puro overhead, nunca usadas).
   # Structured Outputs (response.text.format=json_object, orchestrator.py) força CADA resposta a ser
   # este objeto JSON; o Python decide sozinho quando chamar os webhooks de controle, a partir do que
   # está NO JSON — dizer que salvou sem preencher "dados_coletados" deixou de ser possível, porque
@@ -694,22 +601,25 @@ class Ai::PythonOrchestratorClient
       '"handoff_summary" preenchido, mesmo que a etapa não tenha concluído.'
   end
 
-  # Tools reais do department (webhooks/capabilities/integrations) + UMA "registrar_*" por atributo
-  # declarado em QUALQUER etapa do playbook (Ai::StepCaptureTool, todas de uma vez — fluxo agentic,
-  # sem gate por etapa ativa) + as tools de controle (continuar/memória genérica/avançar/encerrar/
-  # transferir). Structured Outputs (orchestrator.py) substituiu o mecanismo de controle por
-  # function-calling — este método continua gerando o catálogo completo (histórico + o formato que
-  # Api::Internal::AiExecuteToolController já reconhece), mas orchestrator.py filtra "registrar_*" e as
-  # 5 tools de controle antes de montar a lista que vai pra OpenAI; só tools REAIS chegam lá. Nomes
-  # SANITIZADOS (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400
-  # "does not match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
+  # Só as tools que REALMENTE chegam à OpenAI: tools reais do department (webhooks/capabilities/
+  # integrations) + a busca de conhecimento (quando há base cadastrada). Nomes SANITIZADOS
+  # (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400 "does not
+  # match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
   # conversation.add_label, contact.update_attributes...) por convenção. Api::Internal::
-  # AiExecuteToolController reverte isso batendo o nome recebido contra este MESMO catálogo
-  # (department.tools.active + as 2 constantes de controle), não adivinhando "_" == ".".
+  # AiExecuteToolController reverte isso batendo o nome recebido contra o catálogo real do department,
+  # não adivinhando "_" == ".".
+  #
+  # ANTES este método também gerava "registrar_*" (uma por atributo conhecido do playbook/conta —
+  # Ai::StepCaptureTool) e as 5 tools de controle (continuar/memória genérica/avançar/encerrar/
+  # transferir): puro desperdício com o Structured Outputs (orchestrator.py) — o Python já FILTRAVA
+  # tudo isso antes de montar a lista pra OpenAI (nunca chegava lá), e o tipo/opções que só existia no
+  # input_schema dessas tools sintéticas já foi migrado pra #step_slot_metadata_text (lido direto de
+  # Ai::StepSlot). Removido (17/08): Rails parou de calcular e mandar esse catálogo morto a cada turno
+  # — menos CPU aqui, payload HTTP menor Rails->Python, menos filtro do lado Python. Confirmado seguro:
+  # Api::Internal::AiExecuteToolController#create resolve TODOS os nomes recebidos (inclusive os de
+  # controle) por constante fixa/DB, nunca reconsultando este catálogo enviado antes.
   def tools_schema
-    real_names = real_tools.map { |t| t[:name] }
-    synthesized = step_capture_tools + control_tools + knowledge_tools
-    real_tools + synthesized.reject { |t| real_names.include?(t[:name]) }
+    real_tools + knowledge_tools
   end
 
   def real_tools
@@ -718,104 +628,19 @@ class Ai::PythonOrchestratorClient
     end
   end
 
-  # Catálogo COMPLETO — não só o que a etapa atual (ou qualquer etapa) declara via collect. Achado ao
-  # vivo: uma etapa cuja instrução em texto livre pede "CPF, email e telefone" só tinha 1 desses no
-  # dropdown collect, então a IA recebia a instrução mas não tinha o "botão" (a tool) pros outros 2 —
-  # alucinava "problema técnico". known_slot_keys já é a união certa (Ai::StateManager: steps ∪
-  # lead_variables ∪ CustomAttributeDefinition da account) — mesma fonte que o caminho legado usa pro
-  # contrato de asked_slot, reaproveitada aqui em vez de duplicada.
-  def step_capture_tools
-    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook, known_attribute_keys)
-  end
-
-  def known_attribute_keys
-    state_manager.known_slot_keys(@department)
-  end
-
   def state_manager
     @state_manager ||= Ai::StateManager.new(conversation: @conversation, agent: @agent)
   end
 
-  def sanitized_resolve_tool
-    Ai::ToolNameSanitizer.sanitize(RESOLVE_TOOL)
-  end
-
-  def sanitized_transfer_tool
-    Ai::ToolNameSanitizer.sanitize(TRANSFER_TOOL)
-  end
-
-  def sanitized_continue_tool
-    Ai::ToolNameSanitizer.sanitize(CONTINUE_TOOL)
-  end
-
-  # Sempre disponíveis (não dependem de configuração por department) — o modelo controla o avanço da
-  # etapa e pode encerrar/transferir a qualquer momento, seguindo as regras do system_prompt acima.
-  # ADVANCE_STEP_TOOL já é seguro (sem pontuação) — sanitizar é no-op, mas passa pela MESMA função por
-  # uniformidade (nunca dois caminhos diferentes decidindo "isso já está seguro ou não").
-  def control_tools
-    [
-      { name: sanitized_continue_tool,
-        description: 'Use esta ferramenta APENAS quando você NÃO tem nenhum dado novo do cliente pra ' \
-                     'salvar — fazer uma pergunta, cumprimentar, responder uma dúvida. NUNCA use esta ' \
-                     'ferramenta se o cliente ACABOU de fornecer um dado (nome, CPF, endereço, etc.): ' \
-                     'nesse caso chame "registrar_*" ou "salvar_memoria_ia" primeiro. Chamar esta ' \
-                     'ferramenta e depois dizer "recebi"/"anotei" em texto, sem ter salvo nada, PERDE o ' \
-                     'dado do cliente.',
-        input_schema: { type: 'object', properties: {} } },
-      { name: Ai::ToolNameSanitizer.sanitize(MEMORY_TOOL),
-        description: 'Salva qualquer informação relevante que o cliente fornecer e que NÃO tenha uma ' \
-                     'ferramenta "registrar_*" específica — memória de contexto (não espelha para ' \
-                     'painel/CRM, só fica disponível para a própria IA não perguntar de novo). Substitua ' \
-                     '"chave" pelo nome do dado (ex: nome, cpf, plano) e "valor" pelo conteúdo informado.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            'chave' => { type: 'string', description: 'Nome do dado (ex.: "nome_do_animal_de_estimacao").' },
-            'valor' => { type: 'string', description: 'O que o cliente informou.' }
-          },
-          required: %w[chave valor]
-        } },
-      { name: Ai::ToolNameSanitizer.sanitize(ADVANCE_STEP_TOOL),
-        description: 'Avança para a próxima etapa do atendimento. Use quando a etapa atual estiver ' \
-                     'concluída, ou quando o cliente recusar um dado opcional — nunca force, avance com empatia.',
-        input_schema: { type: 'object', properties: {} } },
-      { name: sanitized_resolve_tool,
-        description: 'Encerra o atendimento (marca a conversa como resolvida) quando as condições de ' \
-                     'encerramento configuradas forem atendidas.',
-        input_schema: { type: 'object', properties: {} } },
-      { name: sanitized_transfer_tool,
-        description: 'Transfere o atendimento para um humano quando as condições de transferência ' \
-                     'configuradas forem atendidas, ou quando instruído a transferir imediatamente. ' \
-                     'SEMPRE preencha handoff_summary: um resumo do que já foi conseguido e o motivo da transferência.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            'handoff_summary' => { type: 'string',
-                                    description: 'Resumo do que já foi conseguido (ex.: "Cliente já forneceu ' \
-                                                 'nome e cidade, falta CPF") e o motivo da transferência.' },
-            'handoff_target' => { type: 'string',
-                                   description: 'Nome EXATO do time de destino (ver lista de times ' \
-                                                'disponíveis) — vazio se nenhum se encaixar.' }
-          },
-          required: ['handoff_summary']
-        } }
-    ]
-  end
-
-  # DIFERENTE dos 5 tools acima: aquelas são "control_tools" — orchestrator.py FILTRA os nomes em
-  # _CONTROL_TOOL_NAMES antes de montar a lista pra OpenAI (Python decide dispará-las a partir do JSON
-  # já parseado, depois que o turno terminou). "consultar_conhecimento" tem que ser uma function tool
-  # DE VERDADE, oferecida à OpenAI e chamada NO MEIO do turno (mesmo loop de tool-call que já atende
-  # tools reais tipo consultar_periodos) — o resultado da busca precisa voltar pra IA ANTES dela montar
-  # a resposta final, não depois. Por isso este método fica separado de #control_tools. Sem query
+  # "consultar_conhecimento" tem que ser uma function tool DE VERDADE, oferecida à OpenAI e chamada NO
+  # MEIO do turno (mesmo loop de tool-call que já atende tools reais tipo consultar_periodos) — o
+  # resultado da busca precisa voltar pra IA ANTES dela montar a resposta final, não depois. Sem query
   # pré-configurada nem filtro de tipo — a IA formula a pergunta e decide quando chamar, a partir do
   # objetivo da etapa + o que o cliente perguntou.
   #
-  # Condicional a #has_knowledge? (diferente das control_tools, que são sempre oferecidas independente
-  # de configuração): oferecer a ferramenta sem NENHUM conhecimento cadastrado só ensina a IA a chamar
-  # algo que sempre volta vazio — gasta uma rodada de tool-call à toa e engorda tools_schema à toa.
-  # #identity_instruction/#market_average_guardrail usam o MESMO booleano pra não citar a ferramenta
-  # quando ela não está na lista.
+  # Condicional a #has_knowledge?: oferecer a ferramenta sem NENHUM conhecimento cadastrado só ensina a
+  # IA a chamar algo que sempre volta vazio — gasta uma rodada de tool-call à toa e engorda
+  # tools_schema à toa.
   def knowledge_tools
     has_knowledge? ? [knowledge_tool] : []
   end

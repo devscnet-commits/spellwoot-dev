@@ -8,13 +8,6 @@ require 'rails_helper'
 # also run unrelated jobs from message callbacks) so the end-to-end side effects still assert.
 # Unit coverage: dispatcher in followup_sweep_job_spec.rb, decision helpers in
 # followup_conversation_job_spec.rb.
-#
-# Follow-up DESATIVADO TEMPORARIAMENTE (Ai::FollowupSweepJob#perform, `return` logo no início) —
-# pedido urgente do usuário: estava disparando em conversas ativas mesmo sem follow-up configurado,
-# interferindo nos testes ao vivo do Structured Outputs. Só os exemplos que ESPERAM uma ação (envio
-# de mensagem/finalize/transfer) ganharam `pending` abaixo — os que já esperavam "nada acontece"
-# continuam passando de verdade, coincidentemente, e não precisam da marca. Remover os `pending`
-# junto com o `return`.
 RSpec.describe Ai::FollowupSweepJob do
   let(:account) { create(:account) }
   let(:inbox) { create(:inbox, account: account) }
@@ -66,8 +59,7 @@ RSpec.describe Ai::FollowupSweepJob do
   end
 
   describe 'scheduled attempts (behaviors)' do
-    it 'sends the first attempt once its delay has elapsed',
-       pending: 'follow-up desativado temporariamente — ver o `return` em Ai::FollowupSweepJob#perform' do
+    it 'sends the first attempt once its delay has elapsed' do
       create_department(follow_up: {
                           'behaviors' => [{
                             'context' => 'inbox_hours',
@@ -100,8 +92,7 @@ RSpec.describe Ai::FollowupSweepJob do
   end
 
   describe 'no-follow-up fallback (close_rules.no_followup_actions)' do
-    it 'finalizes and sends the close message after the inactivity window',
-       pending: 'follow-up desativado temporariamente — ver o `return` em Ai::FollowupSweepJob#perform' do
+    it 'finalizes and sends the close message after the inactivity window' do
       create_department(close_rules: {
                           'message' => 'Encerrando por aqui. Até logo!',
                           'inactivity_minutes' => 30,
@@ -116,8 +107,7 @@ RSpec.describe Ai::FollowupSweepJob do
       expect(last_action(convo).payload).to include('action' => 'finalize', 'via' => 'no_followup')
     end
 
-    it 'runs the FIRST action of the list (order = priority)',
-       pending: 'follow-up desativado temporariamente — ver o `return` em Ai::FollowupSweepJob#perform' do
+    it 'runs the FIRST action of the list (order = priority)' do
       create_department(close_rules: {
                           'inactivity_minutes' => 30,
                           'no_followup_actions' => %w[transfer_human finalize]
@@ -131,8 +121,7 @@ RSpec.describe Ai::FollowupSweepJob do
       expect(last_action(convo).payload).to include('action' => 'transfer_human')
     end
 
-    it 'transfer_ai re-invokes the Gateway on the customer last message',
-       pending: 'follow-up desativado temporariamente — ver o `return` em Ai::FollowupSweepJob#perform' do
+    it 'transfer_ai re-invokes the Gateway on the customer last message' do
       create_department(close_rules: {
                           'inactivity_minutes' => 30, 'no_followup_actions' => ['transfer_ai']
                         })
@@ -158,8 +147,7 @@ RSpec.describe Ai::FollowupSweepJob do
       expect(last_action(convo)).to be_nil
     end
 
-    it 'is idempotent: a second sweep does not act twice in the same silence',
-       pending: 'follow-up desativado temporariamente — ver o `return` em Ai::FollowupSweepJob#perform' do
+    it 'is idempotent: a second sweep does not act twice in the same silence' do
       create_department(close_rules: {
                           'message' => 'Tchau', 'inactivity_minutes' => 30, 'no_followup_actions' => ['finalize']
                         })
