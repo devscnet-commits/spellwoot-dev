@@ -11,8 +11,11 @@ import orchestrator
 
 # uvicorn doesn't attach a handler to the root logger by default, so a plain getLogger(...).info()
 # would silently go nowhere — basicConfig gives it a stdout handler so `docker logs` actually shows
-# these (this file and orchestrator.py share the same logger name, one config covers both).
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+# these (this file and orchestrator.py share the same logger name, one config covers both). Level
+# comes from config.LOG_LEVEL (env var LOG_LEVEL, default INFO) — see config.py for what each level
+# shows; falls back to INFO if the env var holds something that isn't a real logging level name.
+logging.basicConfig(level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+                    format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("ai_orchestrator")
 
 app = FastAPI(title="AI Orchestrator")
@@ -72,10 +75,11 @@ def _authenticate(authorization: Optional[str]) -> None:
 def process(request: ProcessRequest, authorization: Optional[str] = Header(None)) -> ProcessResponse:
     _authenticate(authorization)
 
-    # DEBUG (temporary): dump exactly what Rails sent, to catch a payload that's building a
-    # generic/hallucinated flow instead of using the configured tools/knowledge — remove once
-    # the tools-not-firing issue is confirmed fixed.
-    logger.info(
+    # Full dump of exactly what Rails sent (system_prompt/tools_schema) — DEBUG-only (config.LOG_LEVEL):
+    # useful to catch a payload building a generic/hallucinated flow instead of the configured
+    # tools/knowledge, but too big to sit at INFO on every single turn (drowns the short per-turn
+    # signal a human is actually scanning for). Bump LOG_LEVEL=DEBUG to bring it back when debugging.
+    logger.debug(
         "ticket_id=%s ai_department_id=%s payload received:\nsystem_prompt=%s\ntools_schema=%s\nvector_store_id=%s",
         request.ticket_id, request.ai_department_id, request.system_prompt,
         json.dumps(request.tools_schema, ensure_ascii=False), request.vector_store_id,

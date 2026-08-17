@@ -245,17 +245,20 @@ def _log_create_kwargs(ticket_id: int, kwargs: dict) -> None:
     """Auditoria completa (achado ao vivo: a versão anterior deste log resumia DEMAIS — só
     input_enviado/output_text_bruto, sem model/instructions/tools/text/conversation/temperature
     juntos, sem dar pra conferir de fora se strict:true continua valendo, por exemplo).
-    Loga o create_kwargs INTEIRO, sempre, pra CADA chamada real (inicial, followup, retry) — nunca
-    resumido. Único campo tratado diferente é "input": ele cresce turno a turno (function_call_output
-    acumulado no loop de tools) e o conteúdo do cliente já é auditável via #_dispatch_structured_reply
+    Loga o create_kwargs INTEIRO, pra CADA chamada real (inicial, followup, retry) — nunca resumido.
+    Único campo tratado diferente é "input": ele cresce turno a turno (function_call_output acumulado
+    no loop de tools) e o conteúdo do cliente já é auditável via #_dispatch_structured_reply
     separadamente — aqui vira só tamanho + prévia, pra não estourar uma linha de log gigante.
-    "instructions" (system_prompt inteiro) e "tools" (lista completa) NUNCA são resumidos."""
+    "instructions" (system_prompt inteiro) e "tools" (lista completa) NUNCA são resumidos.
+    DEBUG (config.LOG_LEVEL), não INFO (achado ao vivo, 17/08): o prompt inteiro em toda chamada
+    enchia o log a ponto de esconder o sinal curto (qual tool rodou, o que foi respondido) que é o
+    que se escaneia no dia a dia — continua tudo aqui, só precisa de LOG_LEVEL=DEBUG pra aparecer."""
     to_log = dict(kwargs)
     input_value = to_log.get("input")
     if input_value is not None:
         raw = json.dumps(input_value, ensure_ascii=False)
         to_log["input"] = f"<{len(raw)} chars> {raw[:200]}"
-    logger.info("ticket_id=%s create_kwargs_completo=%s", ticket_id, json.dumps(to_log, ensure_ascii=False))
+    logger.debug("ticket_id=%s create_kwargs_completo=%s", ticket_id, json.dumps(to_log, ensure_ascii=False))
 
 
 def _log_raw_response(ticket_id: int, response) -> None:
@@ -267,12 +270,15 @@ def _log_raw_response(ticket_id: int, response) -> None:
     function_call + message) — loga os dois. %s deixa o logging formatar só se o nível estiver
     ativo (lazy), sem custo de serialização adiantada; str()/repr() dos objetos do SDK já é legível.
     function_calls_bruto extraído à parte (não só dentro de output_bruto) — mais fácil de escanear
-    quais tools o modelo pediu nesta resposta específica, sem garimpar a lista inteira de output."""
-    logger.info("ticket_id=%s response_id=%s output_text_bruto=%s", ticket_id, response.id, response.output_text)
-    logger.info("ticket_id=%s response_id=%s output_bruto=%s", ticket_id, response.id, response.output)
+    quais tools o modelo pediu nesta resposta específica, sem garimpar a lista inteira de output.
+    DEBUG (config.LOG_LEVEL), mesmo motivo de _log_create_kwargs acima — output_bruto sozinho já é um
+    objeto grande; tool_chamada/tool_resultado (mais abaixo neste arquivo) continuam em INFO porque são
+    o resumo curto que substitui isto no dia a dia."""
+    logger.debug("ticket_id=%s response_id=%s output_text_bruto=%s", ticket_id, response.id, response.output_text)
+    logger.debug("ticket_id=%s response_id=%s output_bruto=%s", ticket_id, response.id, response.output)
     function_calls = [item for item in response.output if item.type == "function_call"]
     if function_calls:
-        logger.info(
+        logger.debug(
             "ticket_id=%s response_id=%s function_calls_bruto=%s", ticket_id, response.id,
             json.dumps([{"name": c.name, "arguments": c.arguments, "call_id": c.call_id} for c in function_calls],
                        ensure_ascii=False),
