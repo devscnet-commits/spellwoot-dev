@@ -8,7 +8,7 @@ module Ai::LeadVariableOrphanFinder
   module_function
 
   def for_department(department)
-    used = Array(department.playbook&.steps).filter_map { |s| Ai::StepSlot.attribute(s) }.to_set
+    used = Array(department.playbook&.steps).flat_map { |s| Ai::StepSlot.declared_attributes(s) }.to_set
     department.lead_variables.reject { |v| used.include?(v.name) }
   end
 

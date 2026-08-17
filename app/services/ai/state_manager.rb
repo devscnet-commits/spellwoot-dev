@@ -439,7 +439,7 @@ class Ai::StateManager
   # fillable_attribute_keys) em vez de duplicar. Um asked_slot fora daqui é chave fantasma — o
   # Ai::TurnCapture o ignora (fallback pro slot da etapa) para não envenenar ai_collected_facts.
   def known_slot_keys(department)
-    step_slots = Array(department&.playbook&.steps).filter_map { |s| Ai::StepSlot.attribute(s) }
+    step_slots = Array(department&.playbook&.steps).flat_map { |s| Ai::StepSlot.declared_attributes(s) }
     (step_slots + lead_variable_keys(department) + fillable_attribute_keys(department)).map(&:to_s).uniq
   end
 

@@ -33,8 +33,7 @@ module Ai::StepCaptureTool
   # step ever declares) still gets a schema, just a generic string property.
   def schemas_for(playbook, attribute_keys)
     step_by_attribute = Array(playbook&.steps).each_with_object({}) do |step, acc|
-      attribute = Ai::StepSlot.attribute(step)
-      acc[attribute] ||= step if attribute.present?
+      Ai::StepSlot.declared_attributes(step).each { |attribute| acc[attribute] ||= step }
     end
 
     Array(attribute_keys).uniq.map { |attribute| build_schema(attribute, step_by_attribute[attribute]) }
@@ -57,8 +56,11 @@ module Ai::StepCaptureTool
     }
   end
 
+  # type/options (collect['type']/collect['options']) existem UMA vez por ETAPA, não por atributo —
+  # numa etapa de vários atributos, aplicar o mesmo enum/tipo a todos seria errado (ex.: um enum de
+  # cidades vazando pro atributo "viabilidade" da mesma etapa). String genérica pra cada um nesse caso.
   def property_schema(step)
-    return { type: 'string' } unless step
+    return { type: 'string' } if step.nil? || Ai::StepSlot.multi_attribute?(step)
 
     options = Ai::StepSlot.options(step)
     return { type: 'string', enum: options } if options.present?

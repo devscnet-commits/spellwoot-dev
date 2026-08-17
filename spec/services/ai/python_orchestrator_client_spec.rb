@@ -465,6 +465,30 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt.include?('tipo: text, opcional') && !prompt.include?('tipo: text, OBRIGATÓRIO')
       }
     end
+
+    # Achado ao vivo (16/08, ticket 586): collect.attribute = ['cidade', 'viabilidade'] (2 atributos
+    # numa etapa só) fazia o prompt nomear UMA chave colada '["cidade", "viabilidade"]' — a IA só tinha
+    # instrução pra escrever essa chave colada, nunca as duas reais que a validação de avanço
+    # (Api::Internal::AiExecuteToolController#collect_attributes) exigia separadas. A etapa nunca
+    # completava: avancar_etapa vinha true, mas o índice nunca avançava, e o teto de "travado"
+    # (stuck_handoff_turns) ia subindo turno a turno até estourar — sem nada de errado visível na
+    # conversa. Agora o prompt nomeia as DUAS chaves reais, cada uma como item próprio.
+    it 'etapa com MAIS de um atributo declarado: nomeia CADA atributo real, nunca uma chave colada' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Cidade', 'instructions' => 'Peça a cidade e verifique a viabilidade.',
+          'collect' => { 'attribute' => %w[cidade viabilidade], 'options' => %w[Chapecó Maravilha] } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os dados referentes a 'cidade', 'viabilidade'") &&
+          prompt.include?('CADA um vira um item PRÓPRIO em "dados_coletados", nunca uma') &&
+          !prompt.include?('["cidade", "viabilidade"]')
+      }
+    end
   end
 
   # Pedido do usuário: apertar o foco (só o dado da etapa, exceto front-loading válido) + validar
@@ -487,6 +511,22 @@ RSpec.describe Ai::PythonOrchestratorClient do
           prompt.include?('CPF = 11 dígitos numéricos') &&
           prompt.include?('telefone = mínimo 8 dígitos numéricos') &&
           prompt.include?('e-mail = contém @ e domínio válido')
+      }
+    end
+
+    it 'etapa com MAIS de um atributo: foco cita os dois, no plural' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Cidade', 'instructions' => 'Peça a cidade.',
+          'collect' => { 'attribute' => %w[cidade viabilidade] } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('Extraia para "dados_coletados" APENAS os dados que a etapa atual está pedindo ' \
+                         'explicitamente ("cidade" e "viabilidade"')
       }
     end
 
