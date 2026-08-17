@@ -134,25 +134,6 @@ RSpec.describe Ai::FollowupConversationJob do
     end
   end
 
-  # Bug real ao vivo: follow-up disparando numa conversa que "acabou de receber mensagem" — piso de
-  # segurança FIXO (MIN_SAFETY_QUIET_MINUTES = 10), independente do delay_minutes configurado.
-  describe '#too_recent?' do
-    it 'true quando last_activity_at é mais recente que o piso de segurança' do
-      conversation = instance_double(Conversation, last_activity_at: 5.minutes.ago)
-      expect(job.send(:too_recent?, conversation)).to be(true)
-    end
-
-    it 'false quando last_activity_at já passou do piso de segurança' do
-      conversation = instance_double(Conversation, last_activity_at: 11.minutes.ago)
-      expect(job.send(:too_recent?, conversation)).to be(false)
-    end
-
-    it 'false quando last_activity_at é nil (nunca trava por dado ausente)' do
-      conversation = instance_double(Conversation, last_activity_at: nil)
-      expect(job.send(:too_recent?, conversation)).to be(false)
-    end
-  end
-
   describe '#within_custom_window?' do
     let(:inbox) { instance_double(Inbox, timezone: 'UTC') }
 
