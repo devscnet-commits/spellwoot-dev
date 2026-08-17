@@ -11,13 +11,6 @@ class Ai::FollowupConversationJob < ApplicationJob
 
   DEFAULT_INACTIVITY = 30
   LOCK_TTL = 2.minutes
-  # Piso de segurança AGRESSIVO ao vivo: usuário relatou follow-up disparando em conversa que
-  # "acabou de receber mensagem" — INDEPENDENTE do delay_minutes de cada attempt (configurável pelo
-  # admin, que pode deixar curto demais sem perceber o efeito). Ai::FollowupSweepJob já filtra por
-  # MIN_QUIET (1 minuto) na hora de ENFILEIRAR, mas isso é uma FOTO de quando o sweep rodou — entre o
-  # enqueue e a execução deste job (queue: :low, pode atrasar) uma mensagem nova pode ter chegado.
-  # Reavaliado AQUI, na hora de EXECUTAR, contra o dado mais fresco possível.
-  MIN_SAFETY_QUIET_MINUTES = 10
 
   def perform(conversation_id)
     lock = Redis::LockManager.new
@@ -92,13 +85,19 @@ class Ai::FollowupConversationJob < ApplicationJob
   # DAQUI PARA BAIXO: MOVIDO VERBATIM DO Ai::FollowupSweepJob (sem editar a lógica)
   # ===================================================================================
 
+  # Achado ao vivo (17/08): tinha um piso de segurança FIXO aqui (MIN_SAFETY_QUIET_MINUTES = 10min),
+  # que ignorava silenciosamente qualquer delay_minutes configurado pelo admin abaixo de 10 — um
+  # admin que configurasse "1 minuto" nunca via o follow-up dessa etapa disparar antes de 10.
+  # Removido a pedido do usuário: o caso que esse piso defendia (mensagem nova do cliente chegando
+  # ENTRE o sweep enfileirar e este job rodar) já é coberto com precisão por #awaiting_customer? logo
+  # acima — se o cliente respondeu, a ÚLTIMA mensagem passa a ser dele, não nossa, e o guard já barra.
+  # O piso fixo era redundante com isso e só atrapalhava configurações curtas legítimas.
   def process(binding, department, behaviors, fallback, inbox, conversation, account_id)
     return unless awaiting_customer?(conversation)
     return if conversation.assignee_id.present? # a human already took over
     # Já entregue a um humano (handoff): a IA/follow-up saem de cena — não retomam nem finalizam.
     return if conversation.additional_attributes.to_h['ai_handoff']
     return if acted?(conversation) # terminal action already fired in this silence
-    return if too_recent?(conversation) # piso de segurança: conversa "parece" ativa demais ainda
 
     # No follow-up configured: skip straight to the no-follow-up decision (close_rules).
     if behaviors.empty?
@@ -302,14 +301,6 @@ class Ai::FollowupConversationJob < ApplicationJob
   def awaiting_customer?(conversation)
     last = conversation.messages.where(message_type: %i[incoming outgoing]).order(:created_at).last
     last&.outgoing?
-  end
-
-  # Bug real ao vivo: follow-up disparando numa conversa que "acabou de receber mensagem" — piso de
-  # segurança FIXO (MIN_SAFETY_QUIET_MINUTES), independente do delay_minutes que o admin configurou
-  # em cada attempt. last_activity_at é atualizado pelo Chatwoot em QUALQUER mensagem nova (dos dois
-  # lados), então é o sinal mais direto de "essa conversa ainda está viva".
-  def too_recent?(conversation)
-    conversation.last_activity_at.present? && conversation.last_activity_at > MIN_SAFETY_QUIET_MINUTES.minutes.ago
   end
 
   def last_incoming_at(conversation)
