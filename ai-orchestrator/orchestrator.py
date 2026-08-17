@@ -72,6 +72,14 @@ AVANCAR_KEY = "avancar_etapa"
 TRANSFERIR_KEY = "transferir_humano"
 ENCERRAR_KEY = "encerrar_atendimento"
 HANDOFF_SUMMARY_KEY = "handoff_summary"
+# Achado ao vivo (17/08): o motor Ruby legado tinha um campo handoff_target (nome do time, casado
+# contra uma whitelist — Ai::PromptCompiler#human_handoff_teams) que o Structured Outputs nunca
+# reproduziu — transferir_humano virou um boolean cego, SEMPRE caindo no time padrão/configurado,
+# nunca escolhido pela IA por intenção. Ai::PythonOrchestratorClient#handoff_target_instruction lista
+# os times permitidos no prompt (mesma whitelist agent.handoff_team_ids); este campo é onde a IA
+# devolve o nome escolhido — Api::Internal::AiExecuteToolController#transfer_to_human repassa pro
+# MESMO Ai::HandoffCoordinator#human_team_id/match_team_by_name que o motor legado já usava.
+HANDOFF_TARGET_KEY = "handoff_target"
 
 # Same tool_name strings Api::Internal::AiExecuteToolController already recognizes (and already
 # recognized before this refactor — see Ai::PythonOrchestratorClient::MEMORY_TOOL/ADVANCE_STEP_TOOL/
@@ -122,8 +130,17 @@ STRUCTURED_REPLY_SCHEMA = {
             "type": "string",
             "description": "Resumo do atendimento — obrigatório (não vazio) quando transferir_humano for true; string vazia nos outros casos.",
         },
+        HANDOFF_TARGET_KEY: {
+            "type": "string",
+            "description": (
+                "SÓ quando transferir_humano for true: nome EXATO do time/setor de destino, copiado da "
+                "lista de times disponíveis nas instructions — nunca invente nem use uma categoria "
+                "genérica. Deixe vazio (\"\") se nenhum time da lista se encaixar, ou se transferir_humano "
+                "for false."
+            ),
+        },
     },
-    "required": [MENSAGEM_KEY, DADOS_KEY, AVANCAR_KEY, TRANSFERIR_KEY, ENCERRAR_KEY, HANDOFF_SUMMARY_KEY],
+    "required": [MENSAGEM_KEY, DADOS_KEY, AVANCAR_KEY, TRANSFERIR_KEY, ENCERRAR_KEY, HANDOFF_SUMMARY_KEY, HANDOFF_TARGET_KEY],
     "additionalProperties": False,
 }
 
@@ -486,7 +503,8 @@ def _dispatch_structured_reply(payload: dict, *, ticket_id: int, ai_department_i
 
     if _truthy(payload.get(TRANSFERIR_KEY)):
         _post_control_tool(
-            TRANSFER_TOOL, {"handoff_summary": payload.get(HANDOFF_SUMMARY_KEY, "")},
+            TRANSFER_TOOL,
+            {"handoff_summary": payload.get(HANDOFF_SUMMARY_KEY, ""), "handoff_target": payload.get(HANDOFF_TARGET_KEY, "")},
             ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
         )
     elif _truthy(payload.get(ENCERRAR_KEY)):

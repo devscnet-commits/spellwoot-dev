@@ -371,14 +371,20 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # setada (Ai::ReplyPolicy#effective_reply_state é quem lê essa flag pra parar de responder — ver
   # reply_policy.rb:45). Resultado: a IA seguia respondendo normalmente nos turnos seguintes, como se
   # a transferência nunca tivesse acontecido. Mesmo padrão que #execute_step_conclusion (on_complete)
-  # já usa corretamente — só que ali o modelo declara um team_id via on_complete; aqui não há
-  # "handoff_target" no STRUCTURED_REPLY_SCHEMA (schema estrito não abre escolha de time nesse campo),
-  # então usa o MESMO time default que Ai::Gateway já usa pros outros handoffs forçados (crédito
-  # esgotado/limite de respostas/provedor indisponível): handoff_coordinator.human_team_id({}).
+  # já usa corretamente — só que ali o modelo declara um team_id via on_complete.
+  #
+  # handoff_target (achado ao vivo, 17/08): o motor Ruby legado tinha um campo pro modelo nomear o
+  # TIME de destino (whitelist Ai::PromptCompiler#human_handoff_teams) — o Structured Outputs nunca
+  # reproduziu isso (STRUCTURED_REPLY_SCHEMA só tinha handoff_summary), então TODA transferência direta
+  # caía sempre no mesmo time default/configurado, cega à intenção — mesmo com o admin escrevendo um
+  # guardrail tipo "nunca invente nomes de time, use só os da lista" (texto sem efeito nenhum, porque
+  # não existia ONDE a IA declarar um nome). orchestrator.py agora manda handoff_target de volta
+  # (Ai::PythonOrchestratorClient#handoff_target_instruction lista a MESMA whitelist no prompt); repassa
+  # pro MESMO Ai::HandoffCoordinator#human_team_id/match_team_by_name que #execute_step_conclusion já usa.
   def transfer_to_human(conversation, department)
     save_handoff_summary(conversation)
     coordinator = step_handoff_coordinator(conversation, department)
-    team_id = coordinator.human_team_id({})
+    team_id = coordinator.human_team_id({ 'handoff_target' => arguments['handoff_target'].to_s })
     Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL, conversation: conversation,
                                    input: { 'unassign' => true, 'team_id' => team_id })
     coordinator.assign_human(team_id, reason: 'model_requested')
