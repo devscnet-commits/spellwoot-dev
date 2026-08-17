@@ -1,8 +1,8 @@
 # Dev-time helper that suggests good prompts. Given a free-text brief from the user, generates a
-# suggestion for either an agent base_prompt (1 string) or a playbook step's instructions (4 SEPARATE
-# fields: objective/rules/suggested_script — mirrors Ai::StepForm.vue's 3 fields, not 1 textarea — plus
+# suggestion for either an agent base_prompt (1 string) or a playbook step's instructions (3 SEPARATE
+# fields: objective/rules — mirrors Ai::StepForm.vue's 2 fields, not 1 textarea — plus
 # admin_warnings, a side-channel for notes meant for the HUMAN admin, e.g. "create this variable
-# first". objective/rules/suggested_script go straight into the live AI's system_prompt
+# first". objective/rules go straight into the live AI's system_prompt
 # (Ai::StepInstructionText) — they must NEVER contain admin-facing text, or the AI reads "AVISO: CRIE
 # A VARIÁVEL..." as a behavior instruction and gets confused (real bug). admin_warnings is shown in
 # AiPromptAssistant.vue but never applied to the form/step — it only exists for the human to read).
@@ -39,8 +39,8 @@ class Ai::PromptAssistant
       provider: 'openai', model: MODEL,
       system_prompt: full_system_prompt, user_message: @brief, account_id: @account.id, json: true
     )
-    # base_prompt: {"suggestion":"<texto>"} (1 campo). step_instructions: {"objective","rules",
-    # "suggested_script"} (3 campos SEPARADOS — a tela tem 3 campos, não 1 textarea; ver Ai::StepForm.vue).
+    # base_prompt: {"suggestion":"<texto>"} (1 campo). step_instructions: {"objective","rules"}
+    # (2 campos SEPARADOS — a tela tem 2 campos, não 1 textarea; ver Ai::StepForm.vue).
     result = @kind == 'step_instructions' ? extract_step_fields(raw[:text]) : { 'suggestion' => extract_suggestion(raw[:text]) }
     record_run(run, raw, result, started)
 
@@ -78,14 +78,14 @@ class Ai::PromptAssistant
 
   # base_prompt (1 string, copy-paste): o aviso ainda entra NO TEXTO, em maiúsculas (regra 7 do
   # BASE_PROMPT_SYSTEM — inalterado). step_instructions (aplica direto via botão, sem copy-paste):
-  # o aviso vai SÓ em admin_warnings — nunca em objective/rules/suggested_script (senão a IA lê
+  # o aviso vai SÓ em admin_warnings — nunca em objective/rules (senão a IA lê
   # "AVISO:" como se fosse instrução de comportamento; bug real ao vivo).
   def unavailable_capabilities
     if @kind == 'step_instructions'
       'CONTEXTO INDISPONÍVEL: não recebi a lista de ferramentas/fontes/variáveis deste agente. NÃO afirme ' \
         'que uma consulta a fonte externa (faturas, pedidos, cobertura, estoque, status) existe. Se o pedido ' \
-        'envolver esse tipo de consulta, NÃO escreva a instrução de consulta em objective/rules/' \
-        'suggested_script — coloque o aviso SOMENTE em admin_warnings: "Verifique se existe ferramenta ' \
+        'envolver esse tipo de consulta, NÃO escreva a instrução de consulta em objective/rules ' \
+        '— coloque o aviso SOMENTE em admin_warnings: "Verifique se existe ferramenta ' \
         'cadastrada para esta consulta antes de publicar."'
     else
       'CONTEXTO INDISPONÍVEL: não recebi a lista de ferramentas/fontes/variáveis deste agente. NÃO afirme ' \
@@ -118,7 +118,7 @@ class Ai::PromptAssistant
     if lines.empty?
       return 'Variáveis já cadastradas: NENHUMA. Se a etapa precisar salvar um dado, AVISE em ' \
              'admin_warnings que é preciso criar a variável antes (o campo é um Select do que existe) — ' \
-             'não invente um nome de chave, e não escreva esse aviso em objective/rules/suggested_script.'
+             'não invente um nome de chave, e não escreva esse aviso em objective/rules.'
     end
 
     "Variáveis já cadastradas (referencie pelo nome EXATO; não invente novas):\n#{lines.join("\n")}"
@@ -165,10 +165,10 @@ class Ai::PromptAssistant
     str.strip
   end
 
-  # step_instructions: 4 campos SEPARADOS, não 1 string. Parser tolerante igual ao #extract_suggestion —
-  # se o modelo não devolver JSON (ou vier sem os campos), degrada jogando o texto cru em suggested_script
+  # step_instructions: 3 campos SEPARADOS, não 1 string. Parser tolerante igual ao #extract_suggestion —
+  # se o modelo não devolver JSON (ou vier sem os campos), degrada jogando o texto cru em objective
   # (nada se perde silenciosamente; o admin ainda vê algo pra revisar/editar). admin_warnings é o ÚNICO
-  # campo com texto dirigido ao admin — objective/rules/suggested_script vão direto pro system_prompt da
+  # campo com texto dirigido ao admin — objective/rules vão direto pro system_prompt da
   # IA (Ai::StepInstructionText), então nunca podem carregar avisos "AVISO:"/"CRIE A VARIÁVEL" (bug real:
   # a IA leu esse aviso como instrução de comportamento e ficou confusa).
   def extract_step_fields(text)
@@ -178,12 +178,11 @@ class Ai::PromptAssistant
     rescue JSON::ParserError
       nil
     end
-    return { 'objective' => '', 'rules' => [], 'suggested_script' => str.strip, 'admin_warnings' => [] } if data.blank?
+    return { 'objective' => str.strip, 'rules' => [], 'admin_warnings' => [] } if data.blank?
 
     {
       'objective' => data['objective'].to_s,
       'rules' => Array(data['rules']).map(&:to_s),
-      'suggested_script' => data['suggested_script'].to_s,
       'admin_warnings' => Array(data['admin_warnings']).map(&:to_s)
     }
   end

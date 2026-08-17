@@ -345,7 +345,7 @@ class Ai::PromptCompiler
     step.is_a?(Hash) ? (step['name'] || step[:name]).to_s.strip : step.to_s.strip
   end
 
-  # Steps may be the new object form ({name, objective/rules/suggested_script OR legacy instructions})
+  # Steps may be the new object form ({name, objective/rules OR legacy instructions})
   # or the legacy string form. Renders one bullet per step: "- Nome: instruções" (Ai::StepInstructionText
   # decide entre o formato estruturado novo e o fallback de texto livre).
   def self.step_lines(steps)

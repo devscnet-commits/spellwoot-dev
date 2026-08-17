@@ -1,19 +1,21 @@
 # Renderiza o texto de instrução de UMA etapa do playbook para o prompt/judge. Etapa NOVA (objective/
-# rules/suggested_script — o padrão estruturado pro motor Python/Agêntico) vira um bloco
-# "Objetivo: .../Regras:\n- .../Fala sugerida: \"...\"". Etapa ANTIGA (só step['instructions'], texto
+# rules — o padrão estruturado pro motor Python/Agêntico) vira um bloco
+# "Objetivo: .../Regras:\n- ...". Etapa ANTIGA (só step['instructions'], texto
 # livre) cai no fallback — texto ORIGINAL, sem reformatar (não inventa Objetivo/Regras que não existem).
 # Único lugar que conhece esse fallback — reaproveitado por TODOS os leitores de instrução de etapa:
 # Ai::PythonOrchestratorClient (motor novo), Ai::PromptCompiler (motor legado) e Ai::Workers::CaptureJudge.
+# Tom/abordagem de fala NÃO é campo de etapa (removido — dava a impressão de roteiro fixo pro modelo,
+# mesmo com ressalva de "é só exemplo"): quem quer tom consistente configura em Ai::Agent#base_prompt
+# (uma vez, vale pra toda a conversa), não repetido por etapa.
 module Ai::StepInstructionText
   def self.render(step)
     return nil unless step.is_a?(Hash)
 
     objective = field(step, 'objective')
     rules = rule_lines(step)
-    script = field(step, 'suggested_script')
-    return legacy_fallback(step) if objective.blank? && rules.empty? && script.blank?
+    return legacy_fallback(step) if objective.blank? && rules.empty?
 
-    build(objective, rules, script)
+    build(objective, rules)
   end
 
   def self.field(step, key)
@@ -28,11 +30,10 @@ module Ai::StepInstructionText
     field(step, 'instructions').presence
   end
 
-  def self.build(objective, rules, script)
+  def self.build(objective, rules)
     parts = []
     parts << "Objetivo: #{objective}" if objective.present?
     parts << "Regras:\n#{rules.map { |r| "- #{r}" }.join("\n")}" if rules.any?
-    parts << "Fala sugerida: \"#{script}\"" if script.present?
     parts.join("\n")
   end
 end

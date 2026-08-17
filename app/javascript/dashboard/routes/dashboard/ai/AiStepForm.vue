@@ -52,15 +52,16 @@ const WEBHOOK_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE'];
 
 const draft = reactive({
   name: props.step?.name || '',
-  // "Padrão ouro": 3 campos separados em vez de 1 textarea (Objetivo/Regras/Fala sugerida) — melhora a
+  // "Padrão ouro": 2 campos separados em vez de 1 textarea (Objetivo/Regras) — melhora a
   // atenção do modelo (texto estruturado > prosa longa). Migração: etapa ANTIGA (só instructions, sem
   // objective) semeia objective com o texto legado — nada se perde, o admin edita/divide dali.
+  // Tom/abordagem de fala NÃO é campo de etapa (removido — "Fala sugerida" dava a impressão de roteiro
+  // fixo pro modelo mesmo com ressalva de exemplo); tom consistente vai no "Prompt base" do agente.
   objective: props.step?.objective || props.step?.instructions || '',
   // rulesText é o textarea cru (uma regra por linha); buildStepPayload divide em array no save.
   rulesText: Array.isArray(props.step?.rules)
     ? props.step.rules.join('\n')
     : props.step?.rules || '',
-  suggestedScript: props.step?.suggested_script || '',
   group_delay_seconds: props.step?.group_delay_seconds ?? '',
   // Chave do slot que a etapa coleta (collect['attribute']). Escolhida no Select da união (LeadVariable ∪
   // CustomAttributeDefinition). Vazia => etapa informativa (buildStepPayload emite collect: null). NÃO há
@@ -379,7 +380,6 @@ const onSave = () => {
       name: draft.name,
       objective: draft.objective,
       rules: draft.rulesText,
-      suggestedScript: draft.suggestedScript,
       groupDelaySeconds: draft.group_delay_seconds,
       automations: draft.automations,
       collectAttribute: draft.collectAttribute,
@@ -395,14 +395,13 @@ const onSave = () => {
   );
 };
 
-// Aplica a sugestão do assistente (✨) nos 3 campos — o admin ainda revisa/edita antes de salvar a
+// Aplica a sugestão do assistente (✨) nos 2 campos — o admin ainda revisa/edita antes de salvar a
 // etapa (o "Salvar" continua sendo o único gesto que persiste). Não fecha campos existentes: SOBRESCREVE
 // (o usuário abriu o assistente para gerar; se já tinha texto, o preview do assistente já deixou claro
 // o que vai entrar).
-const applyAssistantSuggestion = ({ objective, rules, suggestedScript }) => {
+const applyAssistantSuggestion = ({ objective, rules }) => {
   draft.objective = objective || '';
   draft.rulesText = Array.isArray(rules) ? rules.join('\n') : rules || '';
-  draft.suggestedScript = suggestedScript || '';
 };
 </script>
 
@@ -483,27 +482,6 @@ const applyAssistantSuggestion = ({ objective, rules, suggestedScript }) => {
           data-testid="step-rules"
           :placeholder="$t('AI_DEPARTMENTS.FORM.STEP_RULES_PLACEHOLDER')"
           class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-2 resize-y min-h-[110px] leading-relaxed"
-        />
-      </label>
-
-      <!-- Fala sugerida -->
-      <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-        <span class="flex items-center gap-2">
-          <span class="font-medium">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_LABEL') }}
-          </span>
-          <span class="text-xs text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_MICROHINT') }}
-          </span>
-        </span>
-        <textarea
-          v-model="draft.suggestedScript"
-          rows="2"
-          data-testid="step-suggested-script"
-          :placeholder="
-            $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_PLACEHOLDER')
-          "
-          class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-2 resize-y leading-relaxed"
         />
       </label>
     </div>

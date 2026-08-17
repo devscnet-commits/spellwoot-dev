@@ -32,19 +32,20 @@ const mountForm = (step, extraProps = {}) => {
   });
 };
 
-// "Padrão ouro" (2026-08): instructions (1 textarea) virou objective/rules/suggested_script (3 campos).
-describe('AiStepForm.vue — Objetivo/Regras/Fala sugerida (3 campos estruturados)', () => {
+// "Padrão ouro" (2026-08): instructions (1 textarea) virou objective/rules (2 campos). suggested_script
+// ("Fala sugerida") foi removido de novo (2026-08): mesmo como exemplo, o modelo tratava o texto entre
+// aspas como script literal — tom consistente agora vai no "Prompt base" do agente, não por etapa.
+describe('AiStepForm.vue — Objetivo/Regras (2 campos estruturados)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
-  it('etapa NOVA: carrega objective/rules/suggested_script nos 3 campos e emite no save', async () => {
+  it('etapa NOVA: carrega objective/rules nos 2 campos e emite no save', async () => {
     const wrapper = mountForm({
       name: 'Qualificação',
       objective: 'Obter a cidade',
       rules: ['Regra 1', 'Regra 2'],
-      suggested_script: 'Oi! Me diz sua cidade?',
     });
 
     expect(wrapper.get('[data-testid="step-objective"]').element.value).toBe(
@@ -53,9 +54,6 @@ describe('AiStepForm.vue — Objetivo/Regras/Fala sugerida (3 campos estruturado
     expect(wrapper.get('[data-testid="step-rules"]').element.value).toBe(
       'Regra 1\nRegra 2'
     );
-    expect(
-      wrapper.get('[data-testid="step-suggested-script"]').element.value
-    ).toBe('Oi! Me diz sua cidade?');
 
     await wrapper.get('button.bg-n-brand').trigger('click');
     await flushPromises();
@@ -63,7 +61,6 @@ describe('AiStepForm.vue — Objetivo/Regras/Fala sugerida (3 campos estruturado
     const saved = wrapper.emitted('save')[0][0];
     expect(saved.objective).toBe('Obter a cidade');
     expect(saved.rules).toEqual(['Regra 1', 'Regra 2']);
-    expect(saved.suggested_script).toBe('Oi! Me diz sua cidade?');
     expect('instructions' in saved).toBe(false);
 
     wrapper.unmount();
@@ -83,15 +80,14 @@ describe('AiStepForm.vue — Objetivo/Regras/Fala sugerida (3 campos estruturado
     wrapper.unmount();
   });
 
-  // AiPromptAssistant emite 'apply' com { objective, rules, suggestedScript } — o form aplica direto
-  // nos 3 campos (o admin ainda revisa e clica Salvar).
-  it('aplica a sugestão do assistente (evento apply) nos 3 campos', async () => {
+  // AiPromptAssistant emite 'apply' com { objective, rules } — o form aplica direto
+  // nos 2 campos (o admin ainda revisa e clica Salvar).
+  it('aplica a sugestão do assistente (evento apply) nos 2 campos', async () => {
     const wrapper = mountForm({ name: 'Coleta' });
 
     await wrapper.findComponent(AiPromptAssistant).vm.$emit('apply', {
       objective: 'Objetivo sugerido',
       rules: ['Regra sugerida 1', 'Regra sugerida 2'],
-      suggestedScript: 'Fala sugerida',
     });
     await flushPromises();
 
@@ -101,9 +97,6 @@ describe('AiStepForm.vue — Objetivo/Regras/Fala sugerida (3 campos estruturado
     expect(wrapper.get('[data-testid="step-rules"]').element.value).toBe(
       'Regra sugerida 1\nRegra sugerida 2'
     );
-    expect(
-      wrapper.get('[data-testid="step-suggested-script"]').element.value
-    ).toBe('Fala sugerida');
 
     wrapper.unmount();
   });
