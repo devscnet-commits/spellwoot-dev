@@ -28,9 +28,15 @@ class Ai::FollowupSweepJob < ApplicationJob
     return unless lock.lock(LOCK_KEY, LOCK_TTL) # outro sweep já está rodando
 
     begin
-      candidate_conversations.find_each do |conversation|
-        Ai::FollowupConversationJob.perform_later(conversation.id)
-      end
+      ids = candidate_conversations.pluck(:id)
+      # Achado ao vivo (17/08): uma conversa em teste ao vivo, em silêncio, nunca aparecia NENHUMA
+      # linha de Ai::FollowupConversationJob pra ela — nem um skip= sequer. Sem log nenhum aqui, não
+      # dava pra distinguir "nem virou candidata neste sweep" (bug em #candidate_conversations/
+      # #eligible_inbox_ids: status errado, assignee preso, inbox sem binding live, ou
+      # last_activity_at ainda "quente") de "virou candidata mas o job por-conversa não rodou". Loga
+      # a lista inteira a cada tick — poucos ids, custo desprezível, grepável por "candidates=".
+      Rails.logger.info "[Ai::FollowupSweepJob] candidates=#{ids}"
+      ids.each { |id| Ai::FollowupConversationJob.perform_later(id) }
     ensure
       lock.unlock(LOCK_KEY)
     end
