@@ -406,19 +406,29 @@ class Ai::PythonOrchestratorClient
   # nestes 5 nomes reservados — Ai::StepCaptureTool::PREFIX ('registrar_') e as 4 constantes de
   # controle nunca colidem com o nome de um Ai::Tool admin-configurado, então não há risco de mexer
   # em instrução de tool real por engano.
+  #
+  # Achado ao vivo 2 (17/08, ticket 599 período de instalação): a regex só cobria o verbo "chame" —
+  # texto salvo como "...usando a ferramenta registrar_periodo_reservado..." (verbo "usando", não
+  # "chame") passava direto sem sanitizar. A IA leu, não achou a tool (não é mais oferecida), e
+  # simplesmente NUNCA escreveu o dado em "dados_coletados" — sem erro visível, a mensagem pro cliente
+  # ("vou reservar para X") saiu normal, só o dado morreu no meio do caminho (mesma classe do bug de
+  # "dizer que salvou sem preencher dados_coletados" que #structured_output_instruction proíbe, mas a
+  # regra geral não tem chance de agir se a instrução ESPECÍFICA da etapa manda usar uma tool que não
+  # existe). Ampliado pra cobrir os verbos comuns encontrados em texto de etapa pré-migração.
   def sanitize_stale_tool_calls(text)
     return text if text.blank?
 
+    verbos = 'chame|chamar|use|usando|utilize|utilizando'
     sanitized = text.dup
-    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?registrar_\w+['"]?\s*(?:correspondente)?/i,
+    sanitized.gsub!(/(?:#{verbos})\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?registrar_\w+['"]?\s*(?:correspondente)?/i,
                      'inclua esse dado em "dados_coletados" no seu JSON de resposta')
-    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?avancar_etapa['"]?/i,
+    sanitized.gsub!(/(?:#{verbos})\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?avancar_etapa['"]?/i,
                      'defina "avancar_etapa": true no seu JSON de resposta')
-    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?salvar_memoria_ia['"]?/i,
+    sanitized.gsub!(/(?:#{verbos})\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?salvar_memoria_ia['"]?/i,
                      'inclua esse dado em "dados_coletados" no seu JSON de resposta')
-    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?conversation[._]transfer['"]?/i,
+    sanitized.gsub!(/(?:#{verbos})\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?conversation[._]transfer['"]?/i,
                      'defina "transferir_humano": true no seu JSON de resposta')
-    sanitized.gsub!(/chame\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?conversation[._]resolve['"]?/i,
+    sanitized.gsub!(/(?:#{verbos})\s+(?:imediatamente\s+)?a\s+(?:ferramenta|tool)\s+['"]?conversation[._]resolve['"]?/i,
                      'defina "encerrar_atendimento": true no seu JSON de resposta')
     sanitized
   end

@@ -545,6 +545,28 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
+    # Achado ao vivo 2 (17/08, ticket 599 período de instalação): a regra da etapa dizia "...registre
+    # o período na variável periodo_reservado USANDO a ferramenta registrar_periodo_reservado..." — o
+    # verbo era "usando", não "chame", e a regex antiga só cobria "chame". A IA nunca escreveu o dado
+    # em "dados_coletados" (a tool não existe mais), mas a mensagem "vou reservar" saiu normal — sem
+    # erro visível, o dado só se perdia.
+    it 'reescreve "usando a ferramenta registrar_X" (verbo diferente de "chame") preservando o critério ao redor' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Período', 'objective' => 'Reservar o período.',
+          'rules' => ['Registre o período na variável periodo_reservado usando a ferramenta registrar_periodo_reservado.'],
+          'collect' => { 'attribute' => 'periodo_reservado' } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('Registre o período na variável periodo_reservado inclua esse dado em "dados_coletados" no seu JSON de resposta.') &&
+          !prompt.include?('registrar_periodo_reservado')
+      }
+    end
+
     it 'reescreve "chame a ferramenta avancar_etapa" preservando o critério ao redor' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Nome', 'objective' => 'Coletar o nome.',
