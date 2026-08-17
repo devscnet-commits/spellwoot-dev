@@ -536,8 +536,8 @@ class Ai::PythonOrchestratorClient
   # Substitui a antiga instrução de function-calling (tool_usage_instruction/
   # must_call_capture_tools_instruction/no_confirmation_loop_instruction — removidas): orchestrator.py
   # não oferece mais "registrar_*"/"avancar_etapa"/"salvar_memoria_ia"/"continuar_conversa"/
-  # conversation.resolve/conversation.transfer como tools à OpenAI (Ai::PythonOrchestratorClient ainda
-  # os calcula em #tools_schema — inofensivo, o Python os filtra antes de montar a lista de tools).
+  # conversation.resolve/conversation.transfer como tools à OpenAI (Ai::PythonOrchestratorClient nem
+  # mais calcula essas tools em #tools_schema — removido por serem puro overhead, nunca usadas).
   # Structured Outputs (response.text.format=json_object, orchestrator.py) força CADA resposta a ser
   # este objeto JSON; o Python decide sozinho quando chamar os webhooks de controle, a partir do que
   # está NO JSON — dizer que salvou sem preencher "dados_coletados" deixou de ser possível, porque
@@ -601,22 +601,25 @@ class Ai::PythonOrchestratorClient
       '"handoff_summary" preenchido, mesmo que a etapa não tenha concluído.'
   end
 
-  # Tools reais do department (webhooks/capabilities/integrations) + UMA "registrar_*" por atributo
-  # declarado em QUALQUER etapa do playbook (Ai::StepCaptureTool, todas de uma vez — fluxo agentic,
-  # sem gate por etapa ativa) + as tools de controle (continuar/memória genérica/avançar/encerrar/
-  # transferir). Structured Outputs (orchestrator.py) substituiu o mecanismo de controle por
-  # function-calling — este método continua gerando o catálogo completo (histórico + o formato que
-  # Api::Internal::AiExecuteToolController já reconhece), mas orchestrator.py filtra "registrar_*" e as
-  # 5 tools de controle antes de montar a lista que vai pra OpenAI; só tools REAIS chegam lá. Nomes
-  # SANITIZADOS (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400
-  # "does not match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
+  # Só as tools que REALMENTE chegam à OpenAI: tools reais do department (webhooks/capabilities/
+  # integrations) + a busca de conhecimento (quando há base cadastrada). Nomes SANITIZADOS
+  # (Ai::ToolNameSanitizer) — a OpenAI rejeita qualquer coisa fora de [a-zA-Z0-9_-] (400 "does not
+  # match pattern"), e as chaves do Ai::CapabilityRegistry são pontuadas (conversation.resolve,
   # conversation.add_label, contact.update_attributes...) por convenção. Api::Internal::
-  # AiExecuteToolController reverte isso batendo o nome recebido contra este MESMO catálogo
-  # (department.tools.active + as 2 constantes de controle), não adivinhando "_" == ".".
+  # AiExecuteToolController reverte isso batendo o nome recebido contra o catálogo real do department,
+  # não adivinhando "_" == ".".
+  #
+  # ANTES este método também gerava "registrar_*" (uma por atributo conhecido do playbook/conta —
+  # Ai::StepCaptureTool) e as 5 tools de controle (continuar/memória genérica/avançar/encerrar/
+  # transferir): puro desperdício com o Structured Outputs (orchestrator.py) — o Python já FILTRAVA
+  # tudo isso antes de montar a lista pra OpenAI (nunca chegava lá), e o tipo/opções que só existia no
+  # input_schema dessas tools sintéticas já foi migrado pra #step_slot_metadata_text (lido direto de
+  # Ai::StepSlot). Removido (17/08): Rails parou de calcular e mandar esse catálogo morto a cada turno
+  # — menos CPU aqui, payload HTTP menor Rails->Python, menos filtro do lado Python. Confirmado seguro:
+  # Api::Internal::AiExecuteToolController#create resolve TODOS os nomes recebidos (inclusive os de
+  # controle) por constante fixa/DB, nunca reconsultando este catálogo enviado antes.
   def tools_schema
-    real_names = real_tools.map { |t| t[:name] }
-    synthesized = step_capture_tools + control_tools + knowledge_tools
-    real_tools + synthesized.reject { |t| real_names.include?(t[:name]) }
+    real_tools + knowledge_tools
   end
 
   def real_tools
@@ -625,102 +628,19 @@ class Ai::PythonOrchestratorClient
     end
   end
 
-  # Catálogo COMPLETO — não só o que a etapa atual (ou qualquer etapa) declara via collect. Achado ao
-  # vivo: uma etapa cuja instrução em texto livre pede "CPF, email e telefone" só tinha 1 desses no
-  # dropdown collect, então a IA recebia a instrução mas não tinha o "botão" (a tool) pros outros 2 —
-  # alucinava "problema técnico". known_slot_keys já é a união certa (Ai::StateManager: steps ∪
-  # lead_variables ∪ CustomAttributeDefinition da account) — mesma fonte que o caminho legado usa pro
-  # contrato de asked_slot, reaproveitada aqui em vez de duplicada.
-  def step_capture_tools
-    @step_capture_tools ||= Ai::StepCaptureTool.schemas_for(@department.playbook, known_attribute_keys)
-  end
-
-  def known_attribute_keys
-    state_manager.known_slot_keys(@department)
-  end
-
   def state_manager
     @state_manager ||= Ai::StateManager.new(conversation: @conversation, agent: @agent)
   end
 
-  def sanitized_resolve_tool
-    Ai::ToolNameSanitizer.sanitize(RESOLVE_TOOL)
-  end
-
-  def sanitized_transfer_tool
-    Ai::ToolNameSanitizer.sanitize(TRANSFER_TOOL)
-  end
-
-  def sanitized_continue_tool
-    Ai::ToolNameSanitizer.sanitize(CONTINUE_TOOL)
-  end
-
-  # Sempre disponíveis (não dependem de configuração por department) — o modelo controla o avanço da
-  # etapa e pode encerrar/transferir a qualquer momento, seguindo as regras do system_prompt acima.
-  # ADVANCE_STEP_TOOL já é seguro (sem pontuação) — sanitizar é no-op, mas passa pela MESMA função por
-  # uniformidade (nunca dois caminhos diferentes decidindo "isso já está seguro ou não").
-  def control_tools
-    [
-      { name: sanitized_continue_tool,
-        description: 'Use esta ferramenta APENAS quando você NÃO tem nenhum dado novo do cliente pra ' \
-                     'salvar — fazer uma pergunta, cumprimentar, responder uma dúvida. NUNCA use esta ' \
-                     'ferramenta se o cliente ACABOU de fornecer um dado (nome, CPF, endereço, etc.): ' \
-                     'nesse caso chame "registrar_*" ou "salvar_memoria_ia" primeiro. Chamar esta ' \
-                     'ferramenta e depois dizer "recebi"/"anotei" em texto, sem ter salvo nada, PERDE o ' \
-                     'dado do cliente.',
-        input_schema: { type: 'object', properties: {} } },
-      { name: Ai::ToolNameSanitizer.sanitize(MEMORY_TOOL),
-        description: 'Salva qualquer informação relevante que o cliente fornecer e que NÃO tenha uma ' \
-                     'ferramenta "registrar_*" específica — memória de contexto (não espelha para ' \
-                     'painel/CRM, só fica disponível para a própria IA não perguntar de novo). Substitua ' \
-                     '"chave" pelo nome do dado (ex: nome, cpf, plano) e "valor" pelo conteúdo informado.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            'chave' => { type: 'string', description: 'Nome do dado (ex.: "nome_do_animal_de_estimacao").' },
-            'valor' => { type: 'string', description: 'O que o cliente informou.' }
-          },
-          required: %w[chave valor]
-        } },
-      { name: Ai::ToolNameSanitizer.sanitize(ADVANCE_STEP_TOOL),
-        description: 'Avança para a próxima etapa do atendimento. Use quando a etapa atual estiver ' \
-                     'concluída, ou quando o cliente recusar um dado opcional — nunca force, avance com empatia.',
-        input_schema: { type: 'object', properties: {} } },
-      { name: sanitized_resolve_tool,
-        description: 'Encerra o atendimento (marca a conversa como resolvida) quando as condições de ' \
-                     'encerramento configuradas forem atendidas.',
-        input_schema: { type: 'object', properties: {} } },
-      { name: sanitized_transfer_tool,
-        description: 'Transfere o atendimento para um humano quando as condições de transferência ' \
-                     'configuradas forem atendidas, ou quando instruído a transferir imediatamente. ' \
-                     'SEMPRE preencha handoff_summary: um resumo do que já foi conseguido e o motivo da transferência.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            'handoff_summary' => { type: 'string',
-                                    description: 'Resumo do que já foi conseguido (ex.: "Cliente já forneceu ' \
-                                                 'nome e cidade, falta CPF") e o motivo da transferência.' },
-            'handoff_target' => { type: 'string',
-                                   description: 'Nome EXATO do time de destino (ver lista de times ' \
-                                                'disponíveis) — vazio se nenhum se encaixar.' }
-          },
-          required: ['handoff_summary']
-        } }
-    ]
-  end
-
-  # DIFERENTE dos 5 tools acima: aquelas são "control_tools" — orchestrator.py FILTRA os nomes em
-  # _CONTROL_TOOL_NAMES antes de montar a lista pra OpenAI (Python decide dispará-las a partir do JSON
-  # já parseado, depois que o turno terminou). "consultar_conhecimento" tem que ser uma function tool
-  # DE VERDADE, oferecida à OpenAI e chamada NO MEIO do turno (mesmo loop de tool-call que já atende
-  # tools reais tipo consultar_periodos) — o resultado da busca precisa voltar pra IA ANTES dela montar
-  # a resposta final, não depois. Por isso este método fica separado de #control_tools. Sem query
+  # "consultar_conhecimento" tem que ser uma function tool DE VERDADE, oferecida à OpenAI e chamada NO
+  # MEIO do turno (mesmo loop de tool-call que já atende tools reais tipo consultar_periodos) — o
+  # resultado da busca precisa voltar pra IA ANTES dela montar a resposta final, não depois. Sem query
   # pré-configurada nem filtro de tipo — a IA formula a pergunta e decide quando chamar, a partir do
   # objetivo da etapa + o que o cliente perguntou.
   #
-  # Condicional a #has_knowledge? (diferente das control_tools, que são sempre oferecidas independente
-  # de configuração): oferecer a ferramenta sem NENHUM conhecimento cadastrado só ensina a IA a chamar
-  # algo que sempre volta vazio — gasta uma rodada de tool-call à toa e engorda tools_schema à toa.
+  # Condicional a #has_knowledge?: oferecer a ferramenta sem NENHUM conhecimento cadastrado só ensina a
+  # IA a chamar algo que sempre volta vazio — gasta uma rodada de tool-call à toa e engorda
+  # tools_schema à toa.
   def knowledge_tools
     has_knowledge? ? [knowledge_tool] : []
   end

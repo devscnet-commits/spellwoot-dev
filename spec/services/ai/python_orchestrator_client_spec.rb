@@ -213,16 +213,18 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # Fluxo agentic: TODAS as "registrar_*" (qualquer etapa do playbook) + as 3 tools de controle
-  # (avancar_etapa/resolve/transfer) vão SEMPRE, sem gate por etapa ativa — a IA decide o que chamar.
-  # A instrução no system_prompt continua ancorada só na etapa ATUAL (âncora narrativa, não trava nada).
-  describe 'fluxo agentic: tools_schema traz TODAS as registrar_* + tools de controle sempre' do
-    it 'inclui a tool real do department + TODAS as "registrar_<attribute>" do playbook + avancar_etapa/resolve/transfer' do
+  # tools_schema só manda o que REALMENTE chega à OpenAI (Structured Outputs, orchestrator.py): tools
+  # reais do department + consultar_conhecimento (condicional). "registrar_*"/as 5 tools de controle
+  # foram removidas (17/08) — eram calculadas e mandadas todo turno só pro Python descartar antes de
+  # montar a lista pra OpenAI (puro overhead Rails->Python, confirmado que nada no lado Rails
+  # dependia desse catálogo enviado — Api::Internal::AiExecuteToolController resolve tudo por
+  # constante/DB, não reconsultando isto).
+  describe 'tools_schema traz só as tools que realmente chegam à OpenAI' do
+    it 'inclui a tool real do department, mas nenhuma "registrar_*"/tool de controle' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente com calor.' },
         { 'name' => 'Endereço', 'instructions' => 'Peça o endereço completo.',
-          'collect' => { 'attribute' => 'endereco', 'type' => 'text' } },
-        { 'name' => 'Telefone extra', 'collect' => { 'attribute' => 'telefone_extra' } }
+          'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }
       ])
       conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 1))
       Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'conversation.add_label',
@@ -234,66 +236,22 @@ RSpec.describe Ai::PythonOrchestratorClient do
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
         names = body['tools_schema'].map { |t| t['name'] }
-        # Checagem por INCLUSÃO, não igualdade exata do conjunto: toda Account real ganha um
-        # CustomAttributeDefinition seedado automaticamente (Account#create_default_custom_attributes,
-        # 'marcado_como_ganho_ou_perdido' — feature de Deals), então known_slot_keys sempre traz pelo
-        # menos essa chave a mais — comportamento correto, não ruído a mascarar.
-        # a instrução da etapa ATIVA (índice 1) aparece; a de OUTRA etapa (índice 0), não — só o texto
-        # narrativo é ancorado na etapa atual, a captura de dado (tools) não é. Nomes SANITIZADOS
-        # (Ai::ToolNameSanitizer): "conversation.add_label"/".resolve"/".transfer" viram "_" — a
-        # OpenAI rejeita ponto no nome da function (achado ao vivo, ver spec do sanitizer).
-        # consultar_conhecimento fica de fora daqui de propósito: é condicional a haver conhecimento
-        # cadastrado pro department (#has_knowledge?), coberto no describe próprio abaixo — esta conta
-        # de teste não cadastra nenhum Ai::KnowledgeSource.
-        expected = %w[avancar_etapa continuar_conversa conversation_add_label
-                      conversation_resolve conversation_transfer registrar_endereco registrar_telefone_extra]
-        expected.all? { |n| names.include?(n) } &&
+        # Nome SANITIZADO (Ai::ToolNameSanitizer): "conversation.add_label" vira "_" — a OpenAI rejeita
+        # ponto no nome da function (ver spec do sanitizer). A instrução narrativa continua ancorada só
+        # na etapa ATIVA (índice 1) — isso não mudou, só o catálogo de tools.
+        names == ['conversation_add_label'] &&
           body['system_prompt'].include?('Peça o endereço completo.') &&
           !body['system_prompt'].include?('Cumprimente com calor.')
       }
     end
 
-    # ACHADO AO VIVO: etapa 1 "Apresente-se" (sem collect) — só ela existir já bastava pra alucinação
-    # se as demais etapas do playbook, mesmo declarando dado, não cobrissem tudo que a INSTRUÇÃO em
-    # texto livre pedia. Aqui uma etapa pede "CPF, email e telefone" mas collect só nomeia 'cpf' —
-    # email/telefone vêm de CustomAttributeDefinition (não de collect nenhum) e ainda assim precisam
-    # de tool, senão a IA tem a instrução mas não o "botão" pra usar.
-    it 'gera registrar_* pra atributo de CustomAttributeDefinition que NENHUMA etapa declara via collect' do
-      CustomAttributeDefinition.create!(account: account, attribute_key: 'email', attribute_display_name: 'Email',
-                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
-      CustomAttributeDefinition.create!(account: account, attribute_key: 'telefone', attribute_display_name: 'Telefone',
-                                        attribute_model: 'conversation_attribute', attribute_display_type: 'text')
-      Ai::Playbook.create!(department: department, steps: [
-        { 'name' => 'Apresente-se', 'instructions' => 'Cumprimente o cliente.' }, # sem collect (etapa 1 do achado ao vivo)
-        { 'name' => 'Coleta', 'instructions' => 'Colete CPF, email e telefone.',
-          'collect' => { 'attribute' => 'cpf' } } # só CPF está no dropdown
-      ])
+    it 'sem nenhuma tool real nem conhecimento cadastrado, tools_schema vai vazio' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        names = JSON.parse(req.body)['tools_schema'].map { |t| t['name'] }
-        %w[registrar_cpf registrar_email registrar_telefone].all? { |n| names.include?(n) }
-      }
-    end
-
-    it 'sem playbook, tools_schema ainda traz as 5 tools de controle + o registrar_* do CustomAttributeDefinition padrão da conta (Deals) — nenhuma tool de etapa' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        body = JSON.parse(req.body)
-        names = body['tools_schema'].map { |t| t['name'] }
-        # 'marcado_como_ganho_ou_perdido' vem do CustomAttributeDefinition seedado em TODA Account
-        # (Account#create_default_custom_attributes) — known_slot_keys inclui mesmo sem playbook.
-        # continuar_conversa: no-op que sustenta tool_choice="required" no orchestrator.py.
-        # consultar_conhecimento fica de fora: esta conta não tem nenhum Ai::KnowledgeSource cadastrado
-        # (#has_knowledge? false) — ver describe próprio abaixo.
-        names.sort == %w[avancar_etapa continuar_conversa conversation_resolve
-                          conversation_transfer salvar_memoria_ia registrar_marcado_como_ganho_ou_perdido].sort &&
-          !body['system_prompt'].include?('Etapa atual')
+        JSON.parse(req.body)['tools_schema'] == []
       }
     end
   end
@@ -1030,23 +988,6 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
-    # A descrição da PRÓPRIA tool "continuar_conversa" (Ai::PythonOrchestratorClient#control_tools)
-    # ainda existe em tools_schema — legado inofensivo, filtrado no lado Python antes de chegar à
-    # OpenAI (orchestrator.py, tool_choice="required" não existe mais) — mas o texto de aviso segue
-    # correto caso algum department antigo ainda leia esse catálogo por outro caminho.
-    it 'a descrição da tool continuar_conversa (tools_schema) avisa explicitamente pra não usar quando há dado novo' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'continuar_conversa' }
-        tool.present? &&
-          tool['description'].include?('NUNCA use esta ferramenta se o cliente ACABOU de fornecer um dado') &&
-          tool['description'].include?('PERDE o dado do cliente')
-      }
-    end
-
     # Bug real ao vivo (WhatsApp), 2 rodadas: cliente disse "vendas", a IA respondeu "Perfeito, é
     # vendas mesmo?" em loop, sem nunca registrar/avançar. A instrução original (function-calling) foi
     # substituída pela regra equivalente do contrato JSON: registrar em "dados_coletados" e marcar
@@ -1075,22 +1016,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # Resumo de transferência: a tool conversation_transfer ganha um parâmetro obrigatório
-  # handoff_summary — a IA preenche, o controller salva em additional_attributes['handoff_summary']
-  # (ver spec/requests/api/internal/ai_execute_tool_controller_spec.rb pro lado da gravação).
-  describe 'handoff_summary na tool conversation_transfer' do
-    it 'conversation_transfer exige handoff_summary (string) no input_schema' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        transfer_tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'conversation_transfer' }
-        transfer_tool['input_schema']['required'] == ['handoff_summary'] &&
-          transfer_tool['input_schema']['properties']['handoff_summary']['type'] == 'string'
-      }
-    end
-
+  # Resumo de transferência: a IA preenche "handoff_summary" no próprio JSON estruturado (campo do
+  # STRUCTURED_REPLY_SCHEMA em orchestrator.py, não mais input_schema de tool — conversation_transfer
+  # não é mais oferecida em tools_schema), e o controller salva em
+  # additional_attributes['handoff_summary'] (ver spec/requests/api/internal/ai_execute_tool_controller_spec.rb
+  # pro lado da gravação).
+  describe 'handoff_summary na transferência' do
     it 'system_prompt instrui a IA a SEMPRE preencher handoff_summary ao transferir' do
       stub_orchestrator
 
@@ -1166,25 +1097,11 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # Híbrido (achado ao vivo, discutido com o usuário): "registrar_*" continua sendo a via pra
-  # atributo JÁ conhecido (garante a chave exata pro espelhamento em custom_attributes);
-  # "salvar_memoria_ia" é um catch-all pra QUALQUER outra coisa que o cliente informar, pra nunca
-  # perder um dado só porque não existe uma tool dedicada pra ele.
-  describe 'tool genérica "salvar_memoria_ia" (catch-all de memória)' do
-    it 'sempre presente em tools_schema, com chave/valor string obrigatórios' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'salvar_memoria_ia' }
-        tool.present? &&
-          tool['input_schema']['required'].sort == %w[chave valor] &&
-          tool['input_schema']['properties']['chave']['type'] == 'string' &&
-          tool['input_schema']['properties']['valor']['type'] == 'string'
-      }
-    end
-
+  # "salvar_memoria_ia": webhook que orchestrator.py chama por baixo pra CADA item de
+  # "dados_coletados" sem tool dedicada — não é mais oferecida como tool à OpenAI (tools_schema não
+  # manda mais "registrar_*"/tools de controle, ver comentário em
+  # Ai::PythonOrchestratorClient#tools_schema), só a instrução de sempre usar "dados_coletados" importa.
+  describe 'catch-all de memória ("dados_coletados" -> salvar_memoria_ia no Python)' do
     # Structured Outputs: a IA não escolhe mais entre "registrar_*" e "salvar_memoria_ia" — todo dado
     # (com ou sem tool dedicada no design antigo) vai pro mesmo lugar, "dados_coletados"; é o Python
     # (orchestrator.py#_dispatch_structured_reply) quem sempre chama o webhook salvar_memoria_ia por
@@ -1200,22 +1117,4 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # Histórico: era o escape-valve pra tool_choice="required" (bug antigo — a IA respondia só com texto
-  # e nunca chamava nenhuma tool). orchestrator.py não força mais tool_choice nenhum (Structured
-  # Outputs substituiu essa mecânica inteira): "continuar_conversa" continua sendo GERADA aqui
-  # (Ai::PythonOrchestratorClient#control_tools) por ora, mas orchestrator.py a filtra antes de montar
-  # a lista de tools da OpenAI — leftover inofensivo, não usado pelo contrato JSON novo. O
-  # system_prompt não fala mais dela (ver #structured_output_instruction).
-  describe 'tool "continuar_conversa" (legado — filtrada no lado Python, nunca chega à OpenAI)' do
-    it 'ainda presente em tools_schema, sem parâmetros' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        tool = JSON.parse(req.body)['tools_schema'].find { |t| t['name'] == 'continuar_conversa' }
-        tool.present? && tool['input_schema'] == { 'type' => 'object', 'properties' => {} }
-      }
-    end
-  end
 end
