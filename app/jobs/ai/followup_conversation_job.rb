@@ -34,24 +34,37 @@ class Ai::FollowupConversationJob < ApplicationJob
   ELIGIBLE_STATUSES = %w[open pending].freeze
 
   # Resolve o contexto da conversa (binding live + departamento) e chama o `process` movido.
+  #
+  # Achado ao vivo (17/08): o job rodava a cada sweep (mesmas conversas reaparecendo turno a turno,
+  # confirmado no log do Sidekiq) mas nunca enviava nada, em ~20-30ms — rápido demais pra ter chegado
+  # perto de um envio real, e sem NENHUMA linha de log distinguindo qual guard estava barrando. Cego
+  # demais pra debugar ao vivo. Loga o motivo exato de cada saída (aqui e em #process) — infra
+  # permanente, não só pra este bug: sem isso, "o follow-up não disparou" sempre exigia adivinhar entre
+  # ~8 guards possíveis.
   def run(conversation_id)
     conversation = Conversation.find_by(id: conversation_id)
-    return if conversation.nil? || ELIGIBLE_STATUSES.exclude?(conversation.status)
-    return if conversation.assignee_id.present?
+    if conversation.nil? || ELIGIBLE_STATUSES.exclude?(conversation&.status)
+      return log_skip(conversation_id, 'not_eligible_status', status: conversation&.status)
+    end
+    return log_skip(conversation_id, 'human_assigned') if conversation.assignee_id.present?
 
     binding = Ai::AgentInbox.live.includes(agent: :account).find_by(inbox_id: conversation.inbox_id)
-    return if binding.nil?
-    return unless binding.agent.account&.feature_enabled?('ai_core')
+    return log_skip(conversation_id, 'no_live_binding') if binding.nil?
+    unless binding.agent.account&.feature_enabled?('ai_core')
+      return log_skip(conversation_id, 'ai_core_disabled', agent_id: binding.agent_id)
+    end
 
     department = resolved_department(conversation, binding)
-    return if department.nil?
+    return log_skip(conversation_id, 'no_department_resolved', agent_id: binding.agent_id) if department.nil?
 
     behaviors = Array(department.follow_up.to_h['behaviors'])
     fallback = fallback_actions(department)
-    return if behaviors.empty? && fallback.empty?
+    if behaviors.empty? && fallback.empty?
+      return log_skip(conversation_id, 'no_followup_or_fallback_configured', department_id: department.id)
+    end
 
     inbox = ::Inbox.find_by(id: binding.inbox_id)
-    return if inbox.nil?
+    return log_skip(conversation_id, 'inbox_not_found', inbox_id: binding.inbox_id) if inbox.nil?
 
     process(binding, department, behaviors, fallback, inbox, conversation, binding.agent.account_id)
   end
@@ -93,11 +106,13 @@ class Ai::FollowupConversationJob < ApplicationJob
   # acima — se o cliente respondeu, a ÚLTIMA mensagem passa a ser dele, não nossa, e o guard já barra.
   # O piso fixo era redundante com isso e só atrapalhava configurações curtas legítimas.
   def process(binding, department, behaviors, fallback, inbox, conversation, account_id)
-    return unless awaiting_customer?(conversation)
-    return if conversation.assignee_id.present? # a human already took over
+    unless awaiting_customer?(conversation)
+      return log_skip(conversation.id, 'last_message_is_customers', department_id: department.id)
+    end
+    return log_skip(conversation.id, 'human_assigned') if conversation.assignee_id.present? # a human already took over
     # Já entregue a um humano (handoff): a IA/follow-up saem de cena — não retomam nem finalizam.
-    return if conversation.additional_attributes.to_h['ai_handoff']
-    return if acted?(conversation) # terminal action already fired in this silence
+    return log_skip(conversation.id, 'ai_handoff') if conversation.additional_attributes.to_h['ai_handoff']
+    return log_skip(conversation.id, 'already_acted_this_silence') if acted?(conversation) # terminal action already fired
 
     # No follow-up configured: skip straight to the no-follow-up decision (close_rules).
     if behaviors.empty?
@@ -106,7 +121,7 @@ class Ai::FollowupConversationJob < ApplicationJob
     end
 
     behavior = active_behavior(behaviors, inbox)
-    return if behavior.nil? # no behavior applies at this time
+    return log_skip(conversation.id, 'no_matching_behavior_for_now', department_id: department.id) if behavior.nil?
 
     attempts = Array(behavior['attempts'])
     sent = followups_since_incoming(conversation)
@@ -124,10 +139,12 @@ class Ai::FollowupConversationJob < ApplicationJob
     index = sent.count
     delay = attempts[index]['delay_minutes'].to_i
     last_at = sent.maximum(:created_at) || last_incoming_at(conversation) || conversation.last_activity_at
-    return if last_at && last_at > delay.minutes.ago # not time yet
+    if last_at && last_at > delay.minutes.ago # not time yet
+      return log_skip(conversation.id, 'delay_not_elapsed', last_at: last_at, delay_minutes: delay)
+    end
 
     message = effective_message(attempts, index)
-    return if message.blank? # nothing to say (all messages empty up to here)
+    return log_skip(conversation.id, 'attempt_message_blank', index: index) if message.blank?
 
     if Ai::ReplyPolicy.allowed?(mode: binding.mode, department: department, conversation: conversation)
       Messages::MessageBuilder.new(nil, conversation, { content: message, private: false }).perform
@@ -330,5 +347,13 @@ class Ai::FollowupConversationJob < ApplicationJob
 
   def emit(account_id, conversation_id, type, payload)
     Ai::Event.create!(account_id: account_id, conversation_id: conversation_id, event_type: type, payload: payload)
+  end
+
+  # Motivo exato de cada `return` silencioso — grepável por "skip=" nos logs do Sidekiq. Retorna nil
+  # (mesmo valor que os `return` chamavam antes) pra poder ficar na mesma linha do `return`.
+  def log_skip(conversation_id, reason, **details)
+    extra = details.map { |k, v| "#{k}=#{v.inspect}" }.join(' ')
+    Rails.logger.info "[Ai::FollowupConversationJob] conv=#{conversation_id} skip=#{reason} #{extra}".strip
+    nil
   end
 end
