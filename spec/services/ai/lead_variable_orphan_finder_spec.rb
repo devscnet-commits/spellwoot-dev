@@ -47,6 +47,16 @@ RSpec.describe Ai::LeadVariableOrphanFinder do
 
       expect(described_class.for_department(department)).to eq([])
     end
+
+    it 'etapa com MAIS de um atributo: nenhum dos dois é órfão' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Cidade', 'collect' => { 'attribute' => %w[cidade viabilidade] } }
+      ])
+      create_variable('cidade')
+      create_variable('viabilidade')
+
+      expect(described_class.for_department(department)).to be_empty
+    end
   end
 
   describe '.for_account' do

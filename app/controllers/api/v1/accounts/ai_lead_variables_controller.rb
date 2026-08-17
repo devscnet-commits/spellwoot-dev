@@ -36,7 +36,7 @@ class Api::V1::Accounts::AiLeadVariablesController < Api::V1::Accounts::BaseCont
   # variável EM USO tiraria a chave do allowlist do gate e deixaria o collect.attribute da etapa pendurado.
   def using_step_name
     steps = @department.playbook&.steps || []
-    step = steps.find { |s| ::Ai::StepSlot.attribute(s).to_s == @variable.name }
+    step = steps.find { |s| ::Ai::StepSlot.declared_attributes(s).include?(@variable.name) }
     step && (step['name'] || step[:name]).to_s.presence
   end
 

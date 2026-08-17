@@ -30,6 +30,38 @@ RSpec.describe Ai::StepSlot do
     end
   end
 
+  # Achado ao vivo (16/08, ticket 586): collect.attribute aceita string OU array desde sempre
+  # (Api::Internal::AiExecuteToolController#collect_attributes já usava Array() puro pra validar
+  # avanço), mas #attribute fazia `.to_s` no valor bruto — um array virava UMA string colada
+  # ('["cidade", "viabilidade"]'), nunca as duas chaves reais que a validação de avanço exigia. A
+  # etapa nunca completava (ai_step_turns subia até estourar o teto de "travado" e transferir pra
+  # humano — sem nada de errado visível na conversa).
+  describe '.declared_attributes / .multi_attribute? — etapa com MAIS de um atributo' do
+    it 'devolve os dois atributos separados, na ordem declarada' do
+      step = { 'collect' => { 'attribute' => %w[cidade viabilidade] } }
+
+      expect(described_class.declared_attributes(step)).to eq(%w[cidade viabilidade])
+      expect(described_class.multi_attribute?(step)).to be(true)
+    end
+
+    it 'etapa de 1 atributo só: declared_attributes tem 1 elemento, multi_attribute? é false' do
+      step = { 'collect' => { 'attribute' => 'cidade' } }
+
+      expect(described_class.declared_attributes(step)).to eq(['cidade'])
+      expect(described_class.multi_attribute?(step)).to be(false)
+    end
+
+    it 'etapa sem collect: declared_attributes vazio' do
+      expect(described_class.declared_attributes({ 'name' => 'Boas-vindas' })).to eq([])
+    end
+
+    it '#attribute (singular, compat) devolve o PRIMEIRO de uma etapa multi-atributo' do
+      step = { 'collect' => { 'attribute' => %w[cidade viabilidade] } }
+
+      expect(described_class.attribute(step)).to eq('cidade')
+    end
+  end
+
   # optional? governa SÓ a regra de conclusão; a captura é sempre por #attribute. required é obrigatório por
   # default; opcional vem de collect['required']:false (compat) OU do step['slot_required'] (nível da etapa).
   describe '.optional? (precedência: collect explícito > slot_required da etapa > obrigatório)' do

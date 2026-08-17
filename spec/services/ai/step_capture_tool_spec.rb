@@ -57,6 +57,32 @@ RSpec.describe Ai::StepCaptureTool do
     it 'catálogo vazio devolve lista vazia' do
       expect(described_class.schemas_for(nil, [])).to eq([])
     end
+
+    # Achado ao vivo (16/08, ticket 586): etapa com collect.attribute = ['cidade', 'viabilidade'] tem
+    # que gerar UMA tool por atributo real (registrar_cidade, registrar_viabilidade) — nunca uma tool
+    # só pra chave colada ('registrar_["cidade", "viabilidade"]'), que a validação de avanço nunca
+    # reconhecia como satisfeita.
+    it 'etapa com MAIS de um atributo: uma tool por atributo real, nunca uma chave colada' do
+      playbook = instance_double(Ai::Playbook, steps: [
+                                    { 'collect' => { 'attribute' => %w[cidade viabilidade], 'options' => %w[Chapecó Maravilha] } }
+                                  ])
+
+      names = described_class.schemas_for(playbook, %w[cidade viabilidade]).map { |s| s[:name] }
+
+      expect(names).to contain_exactly('registrar_cidade', 'registrar_viabilidade')
+    end
+
+    it 'etapa com MAIS de um atributo: type/options do collect NÃO vazam pros atributos (ambíguo por natureza)' do
+      playbook = instance_double(Ai::Playbook, steps: [
+                                    { 'collect' => { 'attribute' => %w[cidade viabilidade], 'type' => 'choice',
+                                                     'options' => %w[Chapecó Maravilha] } }
+                                  ])
+
+      schemas = described_class.schemas_for(playbook, %w[cidade viabilidade]).index_by { |s| s[:name] }
+
+      expect(schemas['registrar_cidade'][:input_schema][:properties]['cidade']).to eq(type: 'string')
+      expect(schemas['registrar_viabilidade'][:input_schema][:properties]['viabilidade']).to eq(type: 'string')
+    end
   end
 
   describe '.build_schema' do

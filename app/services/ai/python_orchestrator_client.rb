@@ -456,19 +456,38 @@ class Ai::PythonOrchestratorClient
   # Achado pelo usuário: o admin escreve SÓ "Objetivo"/"Regras" em linguagem natural na tela da etapa
   # (AiStepForm.vue) — "JSON"/"dados_coletados" nunca deveriam aparecer ali. Esta regra é montada AQUI
   # pelo Rails, nunca digitada pelo admin, a partir do "Dado que esta etapa coleta" (o Select que grava
-  # collect.attribute — MESMA fonte, Ai::StepSlot.attribute, que o design antigo de function-calling
-  # usava pra nomear a tool "registrar_<attribute>", Ai::StepCaptureTool). Complementa (não substitui)
-  # #structured_output_instruction: aquela é a regra GERAL do contrato JSON; esta nomeia a chave exata
-  # que importa NESTA etapa, pra IA não "escolher" um nome de chave por conta própria. nil numa etapa
-  # informativa (sem collect) — não força a IA a inventar uma chave que não existe.
+  # collect.attribute — MESMA fonte, Ai::StepSlot.declared_attributes, que o design antigo de
+  # function-calling usava pra nomear a tool "registrar_<attribute>", Ai::StepCaptureTool). Complementa
+  # (não substitui) #structured_output_instruction: aquela é a regra GERAL do contrato JSON; esta nomeia
+  # a(s) chave(s) exata(s) que importa(m) NESTA etapa, pra IA não "escolher" um nome de chave por conta
+  # própria. nil numa etapa informativa (sem collect) — não força a IA a inventar uma chave que não existe.
+  #
+  # Etapa com MAIS de um atributo declarado (achado ao vivo 16/08, ticket 586): collect.attribute aceita
+  # string OU array desde sempre (Api::Internal::AiExecuteToolController#collect_attributes já usava
+  # Array() puro pra validar avanço), mas ESTE método fazia `Ai::StepSlot.attribute` (só o 1º/único) e
+  # colava um array de 2 atributos numa ÚNICA chave colada (ex.: '["cidade", "viabilidade"]') — a IA só
+  # tinha instrução/ferramenta pra escrever essa chave colada, nunca as duas chaves reais que a validação
+  # de avanço exigia separadas. A etapa nunca completava: o cliente respondia certo, avancar_etapa vinha
+  # true, mas o teto de "travado" (stuck_handoff_turns) ia subindo turno a turno até estourar e transferir
+  # pra humano — sem NADA de errado visível na conversa. Agora gera um item de "dados_coletados" por
+  # atributo declarado, sempre.
   def step_extraction_instruction
-    attribute = Ai::StepSlot.attribute(current_step)
-    return nil if attribute.blank?
+    attributes = Ai::StepSlot.declared_attributes(current_step)
+    return nil if attributes.empty?
 
-    "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}' " \
-      "(#{step_slot_metadata_text}). Assim que o cliente informar isso, você DEVE adicionar um item na " \
-      "lista \"dados_coletados\" no seu JSON de resposta com \"chave\": \"#{attribute}\" e o valor " \
-      'extraído.'
+    if attributes.one?
+      attribute = attributes.first
+      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}' " \
+        "(#{step_slot_metadata_text}). Assim que o cliente informar isso, você DEVE adicionar um item na " \
+        "lista \"dados_coletados\" no seu JSON de resposta com \"chave\": \"#{attribute}\" e o valor " \
+        'extraído.'
+    else
+      lista = attributes.map { |a| "'#{a}'" }.join(', ')
+      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os dados referentes a #{lista} " \
+        "(#{step_slot_metadata_text}) — CADA um vira um item PRÓPRIO em \"dados_coletados\", nunca uma " \
+        'única chave combinando os dois. Assim que o cliente informar cada um, adicione o item ' \
+        'correspondente com "chave" igual ao nome exato do atributo e o valor extraído.'
+    end
   end
 
   # Tipo/opções/obrigatoriedade do slot da etapa ATUAL, pro contexto de #data_validation_instruction
@@ -476,10 +495,17 @@ class Ai::PythonOrchestratorClient
   # telefone, uma lista fechada de opções, etc. tools_schema TINHA essa info (o input_schema de
   # "registrar_<attribute>"), mas essa tool é filtrada antes de chegar à OpenAI (orchestrator.py) — só
   # sobrava o nome da chave. Ai::StepSlot é a MESMA fonte que gerava aquele input_schema.
+  #
+  # type/options (collect['type']/collect['options']) existem UMA vez por ETAPA, não por atributo — numa
+  # etapa de vários atributos aplicar o mesmo tipo/enum a todos seria errado (ex.: enum de cidades
+  # vazando pro atributo "viabilidade" da mesma etapa), então esse caso cai pro genérico
+  # obrigatório/opcional, sem tipo/opções (mesmo critério de Ai::StepCaptureTool#property_schema).
   def step_slot_metadata_text
+    required = !Ai::StepSlot.optional?(current_step)
+    return required ? 'OBRIGATÓRIO' : 'opcional' if Ai::StepSlot.multi_attribute?(current_step)
+
     type = Ai::StepSlot.type(current_step)
     options = Ai::StepSlot.options(current_step)
-    required = !Ai::StepSlot.optional?(current_step)
 
     parts = ["tipo: #{type}"]
     parts << "opções válidas: #{options.join(', ')}" if options.present?
@@ -494,12 +520,15 @@ class Ai::PythonOrchestratorClient
   # valendo; esta é mais específica: QUAL dado follow essa etapa espera e QUANDO ele é válido pra
   # gravar). nil numa etapa informativa (sem collect) — nada pra validar sem um slot declarado.
   def data_validation_instruction
-    attribute = Ai::StepSlot.attribute(current_step)
-    return nil if attribute.blank?
+    attributes = Ai::StepSlot.declared_attributes(current_step)
+    return nil if attributes.empty?
+
+    foco = attributes.one? ? "\"#{attributes.first}\"" : attributes.map { |a| "\"#{a}\"" }.join(' e ')
+    dado = attributes.one? ? 'o dado' : 'os dados'
 
     "REGRAS DE FOCO E VALIDAÇÃO DA COLETA (além da regra geral de \"dados_coletados\" acima):\n" \
-      "- Extraia para \"dados_coletados\" APENAS o dado que a etapa atual está pedindo explicitamente " \
-      "(\"#{attribute}\", ver REGRA DE EXTRAÇÃO JSON). Se o cliente disser algo avulso, fora do foco " \
+      "- Extraia para \"dados_coletados\" APENAS #{dado} que a etapa atual está pedindo " \
+      "explicitamente (#{foco}, ver REGRA DE EXTRAÇÃO JSON). Se o cliente disser algo avulso, fora do foco " \
       "da etapa e que não é um dado real de nenhuma etapa, IGNORE — não crie uma chave pra isso.\n" \
       "- EXCEÇÃO: se o cliente adiantar espontaneamente um dado de uma etapa FUTURA, de forma clara e " \
       "válida, capture também em \"dados_coletados\" (mesma lógica: chave = nome do dado).\n" \
