@@ -74,7 +74,7 @@ describe('AiPromptAssistant.vue', () => {
   it('envia department_id no corpo quando a prop está preenchida', async () => {
     const post = vi.fn(() =>
       Promise.resolve({
-        data: { objective: 'x', rules: ['y'], suggested_script: 'z' },
+        data: { objective: 'x', rules: ['y'] },
       })
     );
     const wrapper = mountPanel(
@@ -99,16 +99,17 @@ describe('AiPromptAssistant.vue', () => {
     );
   });
 
-  // "Padrão ouro" (2026-08): step_instructions NÃO devolve mais {"suggestion"} — devolve 3 campos
-  // SEPARADOS (objective/rules/suggested_script), espelhando os 3 campos de AiStepForm.vue.
-  describe('kind=step_instructions — contrato de 3 campos separados', () => {
-    it('mostra o preview estruturado (objective/rules/suggested_script) em vez do <pre> de texto único', async () => {
+  // "Padrão ouro" (2026-08): step_instructions NÃO devolve mais {"suggestion"} — devolve campos
+  // SEPARADOS (objective/rules), espelhando os 2 campos de AiStepForm.vue. suggested_script ("Fala
+  // sugerida") foi removido de novo (2026-08): mesmo como exemplo, o modelo tratava o texto entre
+  // aspas como script literal.
+  describe('kind=step_instructions — contrato de campos separados', () => {
+    it('mostra o preview estruturado (objective/rules) em vez do <pre> de texto único', async () => {
       const post = vi.fn(() =>
         Promise.resolve({
           data: {
             objective: 'Obter a cidade',
             rules: ['Regra 1', 'Regra 2'],
-            suggested_script: 'Oi! Me diz sua cidade?',
           },
         })
       );
@@ -122,18 +123,16 @@ describe('AiPromptAssistant.vue', () => {
       expect(wrapper.text()).toContain('Obter a cidade');
       expect(wrapper.text()).toContain('Regra 1');
       expect(wrapper.text()).toContain('Regra 2');
-      expect(wrapper.text()).toContain('Oi! Me diz sua cidade?');
       expect(wrapper.find('pre').exists()).toBe(false); // não é mais 1 texto único copiável
     });
 
-    // O botão "Usar esta sugestão" emite 'apply' com os 3 campos — AiStepForm aplica direto no draft.
-    it('clicar em "Usar esta sugestão" emite apply com os 3 campos e fecha o painel', async () => {
+    // O botão "Usar esta sugestão" emite 'apply' com os campos — AiStepForm aplica direto no draft.
+    it('clicar em "Usar esta sugestão" emite apply com objective/rules e fecha o painel', async () => {
       const post = vi.fn(() =>
         Promise.resolve({
           data: {
             objective: 'Obter a cidade',
             rules: ['Regra 1'],
-            suggested_script: 'Oi!',
           },
         })
       );
@@ -151,19 +150,17 @@ describe('AiPromptAssistant.vue', () => {
       expect(wrapper.emitted('apply')[0][0]).toEqual({
         objective: 'Obter a cidade',
         rules: ['Regra 1'],
-        suggestedScript: 'Oi!',
       });
       expect(wrapper.emitted('update:open')[0]).toEqual([false]);
     });
 
-    it('resposta sem NENHUM dos 4 campos preenchidos mostra erro (não quebra)', async () => {
+    it('resposta sem NENHUM dos 3 campos preenchidos mostra erro (não quebra)', async () => {
       const useAlertModule = await import('dashboard/composables');
       const post = vi.fn(() =>
         Promise.resolve({
           data: {
             objective: '',
             rules: [],
-            suggested_script: '',
             admin_warnings: [],
           },
         })
@@ -182,9 +179,9 @@ describe('AiPromptAssistant.vue', () => {
 
   // Bug real ao vivo: a IA leu "AVISO: CRIE A VARIÁVEL..." dentro da instrução como se fosse
   // comportamento. admin_warnings existe pra isso nunca mais acontecer — mostrado num bloco À PARTE,
-  // NUNCA incluído no payload do apply() (que só carrega objective/rules/suggestedScript).
+  // NUNCA incluído no payload do apply() (que só carrega objective/rules).
   describe('kind=step_instructions — admin_warnings (aviso pro admin, nunca pra IA)', () => {
-    it('mostra admin_warnings num bloco separado do preview dos 3 campos de máquina', async () => {
+    it('mostra admin_warnings num bloco separado do preview dos campos de máquina', async () => {
       const post = vi.fn(() =>
         Promise.resolve({
           data: {
@@ -192,7 +189,6 @@ describe('AiPromptAssistant.vue', () => {
             rules: [
               'Assim que o cliente informar o setor, chame registrar_setor_cliente.',
             ],
-            suggested_script: 'Qual o seu setor?',
             admin_warnings: [
               'Crie a variável setor_cliente antes de publicar esta etapa.',
             ],
@@ -213,13 +209,12 @@ describe('AiPromptAssistant.vue', () => {
       );
     });
 
-    it('apply() NUNCA inclui admin_warnings — só objective/rules/suggestedScript vão pro form', async () => {
+    it('apply() NUNCA inclui admin_warnings — só objective/rules vão pro form', async () => {
       const post = vi.fn(() =>
         Promise.resolve({
           data: {
             objective: 'Obter o setor',
             rules: ['Regra 1'],
-            suggested_script: 'Oi!',
             admin_warnings: [
               'Crie a variável setor_cliente antes de publicar esta etapa.',
             ],
@@ -240,13 +235,12 @@ describe('AiPromptAssistant.vue', () => {
       expect(applied).toEqual({
         objective: 'Obter o setor',
         rules: ['Regra 1'],
-        suggestedScript: 'Oi!',
       });
       expect('adminWarnings' in applied).toBe(false);
       expect('admin_warnings' in applied).toBe(false);
     });
 
-    // Se SÓ vier admin_warnings (nada de objective/rules/suggested_script), ainda mostra o aviso —
+    // Se SÓ vier admin_warnings (nada de objective/rules), ainda mostra o aviso —
     // não trata como resposta vazia/erro.
     it('resposta só com admin_warnings (sem conteúdo de máquina) ainda mostra o aviso, sem erro', async () => {
       const useAlertModule = await import('dashboard/composables');
@@ -255,7 +249,6 @@ describe('AiPromptAssistant.vue', () => {
           data: {
             objective: '',
             rules: [],
-            suggested_script: '',
             admin_warnings: [
               'Você pediu consulta a faturas, mas não há ferramenta cadastrada.',
             ],
@@ -281,7 +274,6 @@ describe('AiPromptAssistant.vue', () => {
           data: {
             objective: 'x',
             rules: ['y'],
-            suggested_script: 'z',
             admin_warnings: [],
           },
         })

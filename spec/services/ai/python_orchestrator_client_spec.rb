@@ -174,7 +174,6 @@ RSpec.describe Ai::PythonOrchestratorClient do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'sabor', 'objective' => 'Descobrir o sabor da pizza que o cliente quer.',
           'rules' => ['Se o cliente pedir "surpresa", sugira o sabor mais vendido do dia.'],
-          'suggested_script' => 'Qual sabor você quer hoje?',
           'collect' => { 'attribute' => 'sabor_pizza', 'type' => 'text' } },
         { 'name' => 'entrega', 'objective' => 'Confirmar o endereço de entrega.',
           'collect' => { 'attribute' => 'endereco_entrega', 'type' => 'text' } }
@@ -191,13 +190,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
       prompt = captured.first
 
-      # Mesma FORMA de blocos que qualquer playbook (Maya inclusa) produziria — objective/rules/
-      # suggested_script (Ai::StepInstructionText), extração JSON, validação de foco, próxima etapa.
+      # Mesma FORMA de blocos que qualquer playbook (Maya inclusa) produziria — objective/rules
+      # (Ai::StepInstructionText), extração JSON, validação de foco, próxima etapa.
       expect(prompt).to include('ETAPA ATUAL:')
       expect(prompt).to include('Objetivo: Descobrir o sabor da pizza que o cliente quer.')
       expect(prompt).to include('Regras:')
       expect(prompt).to include('- Se o cliente pedir "surpresa", sugira o sabor mais vendido do dia.')
-      expect(prompt).to include('Fala sugerida: "Qual sabor você quer hoje?"')
       expect(prompt).to include("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a 'sabor_pizza'")
       expect(prompt).to include('REGRAS DE FOCO E VALIDAÇÃO DA COLETA')
       expect(prompt).to include('PRÓXIMA ETAPA')

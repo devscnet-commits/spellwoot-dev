@@ -2,17 +2,17 @@
 /* global axios */
 // Slide-over (painel lateral) que sugere um base_prompt ou instruções de etapa a partir de um brief do
 // usuário. base_prompt: single-shot, UMA sugestão em texto (não preenche o campo; o usuário copia) —
-// o base_prompt não tem "campos" pra aplicar direto. step_instructions: contrato de 3 campos SEPARADOS
-// (objective/rules/suggested_script, espelha AiStepForm.vue) — o admin revisa o preview e clica
-// "Usar esta sugestão" pra aplicar direto nos 3 campos do form (emit('apply')); nada é salvo sozinho,
+// o base_prompt não tem "campos" pra aplicar direto. step_instructions: contrato de 2 campos SEPARADOS
+// (objective/rules, espelha AiStepForm.vue) — o admin revisa o preview e clica
+// "Usar esta sugestão" pra aplicar direto nos 2 campos do form (emit('apply')); nada é salvo sozinho,
 // o Salvar da etapa continua sendo o único gesto que persiste. Usa o axios GLOBAL do Chatwoot
 // (autenticado) — nunca o import cru.
 //
-// admin_warnings (4º campo, só em step_instructions): avisos pro ADMIN humano (ex.: "crie a variável
+// admin_warnings (3º campo, só em step_instructions): avisos pro ADMIN humano (ex.: "crie a variável
 // X antes de publicar"), mostrados num bloco À PARTE (adminWarnings, abaixo) — NUNCA entram em
 // `structured` nem no payload do apply(). Bug real que isso corrige: o assistente costumava escrever
 // esse aviso DENTRO de objective/rules, a IA lia como se fosse instrução de comportamento e ficava
-// confusa (objective/rules/suggested_script vão direto pro system_prompt da IA).
+// confusa (objective/rules vão direto pro system_prompt da IA).
 import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -38,7 +38,7 @@ const isStepKind = computed(() => props.kind === 'step_instructions');
 
 const brief = ref('');
 const suggestion = ref(''); // base_prompt: texto único
-const structured = ref(null); // step_instructions: { objective, rules, suggestedScript } — SÓ isso vai pro apply()
+const structured = ref(null); // step_instructions: { objective, rules } — SÓ isso vai pro apply()
 const adminWarnings = ref([]); // step_instructions: avisos pro admin humano — NUNCA aplicados ao form
 const loading = ref(false);
 
@@ -79,15 +79,13 @@ const generate = async () => {
         data &&
         (data.objective ||
           (data.rules && data.rules.length) ||
-          data.suggested_script ||
           warnings.length);
       if (hasContent) {
-        // SEMPRE os 3 campos (mesmo vazios) — nunca null enquanto houver algo pra mostrar (evita
+        // SEMPRE os 2 campos (mesmo vazios) — nunca null enquanto houver algo pra mostrar (evita
         // template quebrar lendo structured.objective quando só veio admin_warnings).
         structured.value = {
           objective: data.objective || '',
           rules: Array.isArray(data.rules) ? data.rules : [],
-          suggestedScript: data.suggested_script || '',
         };
         adminWarnings.value = warnings;
       } else {
@@ -121,8 +119,8 @@ const copy = async () => {
   }
 };
 
-// step_instructions: aplica direto nos 3 campos do AiStepForm (o admin ainda revisa/edita e clica
-// Salvar) — em vez de copiar/colar manualmente 3 blocos separados.
+// step_instructions: aplica direto nos 2 campos do AiStepForm (o admin ainda revisa/edita e clica
+// Salvar) — em vez de copiar/colar manualmente blocos separados.
 const apply = () => {
   if (!structured.value) return;
   emit('apply', structured.value);
@@ -219,7 +217,7 @@ const apply = () => {
               >{{ suggestion }}</pre
             >
 
-            <!-- step_instructions: preview dos 3 campos SEPARADOS (o que vai ser aplicado no form) -->
+            <!-- step_instructions: preview dos 2 campos SEPARADOS (o que vai ser aplicado no form) -->
             <div v-else class="flex flex-col gap-3">
               <div class="flex flex-col gap-1">
                 <span class="text-xs font-medium text-n-slate-11">
@@ -242,16 +240,6 @@ const apply = () => {
                     {{ rule }}
                   </li>
                 </ul>
-              </div>
-              <div class="flex flex-col gap-1">
-                <span class="text-xs font-medium text-n-slate-11">
-                  {{ $t('AI_DEPARTMENTS.FORM.STEP_SUGGESTED_SCRIPT_LABEL') }}
-                </span>
-                <p
-                  class="text-sm text-n-slate-12 italic bg-n-solid-2 border border-n-weak rounded-lg p-3 mb-0"
-                >
-                  <q>{{ structured.suggestedScript }}</q>
-                </p>
               </div>
             </div>
 
