@@ -11,6 +11,7 @@
 #  input_schema        :jsonb            not null
 #  name                :string           not null
 #  output_schema       :jsonb            not null
+#  required_attributes :jsonb            not null
 #  status              :string           default("active"), not null
 #  webhook_config      :jsonb            not null
 #  created_at          :datetime         not null

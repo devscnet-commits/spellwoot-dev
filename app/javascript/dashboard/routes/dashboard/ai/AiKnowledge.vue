@@ -7,6 +7,11 @@ import { useI18n } from 'vue-i18n';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import KnowledgeSourceForm from './KnowledgeSourceForm.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
+import {
+  scopeOptionLabel,
+  sourceScope,
+  buildScopeOptions,
+} from './knowledgeScope';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -93,16 +98,35 @@ const importDepartmentOptions = computed(() => [
   { value: '', label: t('AI_KNOWLEDGE.FORM.DEPARTMENT_ALL') },
   ...departments.value.map(d => ({
     value: String(d.id),
-    label: d.agent ? `${d.name} · ${d.agent}` : d.name,
+    label: scopeOptionLabel(d),
   })),
 ]);
 const importDeptId = () =>
   importDepartmentId.value ? Number(importDepartmentId.value) : null;
 
-// Nome do departamento de uma source para o badge da listagem; null => "Compartilhado".
-const departmentName = source => {
-  const d = departments.value.find(x => x.id === source.ai_department_id);
-  return d ? d.name : null;
+// Badge de escopo do card: compartilhado (neutro), restrito a um agente (marca) ou órfão (aviso —
+// aponta para um department que não existe mais). Ver sourceScope em ./knowledgeScope.
+const scopeBadge = source => {
+  const scope = sourceScope(source, departments.value);
+  if (scope.status === 'scoped') {
+    return {
+      text: scope.label,
+      icon: 'i-lucide-layers',
+      class: 'bg-n-brand/10 text-n-brand',
+    };
+  }
+  if (scope.status === 'orphan') {
+    return {
+      text: t('AI_KNOWLEDGE.ORPHAN'),
+      icon: 'i-lucide-alert-triangle',
+      class: 'bg-n-amber-3 text-n-amber-11',
+    };
+  }
+  return {
+    text: t('AI_KNOWLEDGE.SHARED'),
+    icon: 'i-lucide-layers',
+    class: 'bg-n-alpha-2 text-n-slate-11',
+  };
 };
 
 // Documentos: drag-and-drop or click to upload a TXT/CSV file; the backend extracts its text.
@@ -322,6 +346,49 @@ const save = async () => {
   }
 };
 
+// Filtro client-side da listagem (escopo + tipo). Dataset pequeno → filtra o array já carregado,
+// sem ida ao backend. Escopo: 'all' | 'shared' | 'orphan' | '<deptId>'. Tipo: 'all' | kind.
+const scopeFilter = ref('all');
+const kindFilter = ref('all');
+
+const isOrphan = source =>
+  source.ai_department_id != null &&
+  !departments.value.some(d => d.id === source.ai_department_id);
+
+// Options do dropdown de escopo: Todos + Compartilhado + TODOS os agentes da conta (mesma lista do
+// dropdown de criação, não só os presentes nas fontes) + "Fonte órfã" quando houver. Cada option
+// traz a contagem no label (0 inclusive). Ver buildScopeOptions em ./knowledgeScope.
+const scopeOptions = computed(() =>
+  buildScopeOptions(departments.value, sources.value, {
+    all: t('AI_KNOWLEDGE.FILTER.SCOPE_ALL'),
+    shared: t('AI_KNOWLEDGE.SHARED'),
+    orphan: t('AI_KNOWLEDGE.ORPHAN'),
+  })
+);
+
+// Dropdown de tipo: Todos + tipos presentes nas fontes.
+const kindFilterOptions = computed(() => [
+  { value: 'all', label: t('AI_KNOWLEDGE.FILTER.KIND_ALL') },
+  ...[...new Set(sources.value.map(s => s.kind))].map(k => ({
+    value: k,
+    label: kindLabel(k),
+  })),
+]);
+
+const matchesScope = source => {
+  if (scopeFilter.value === 'all') return true;
+  if (scopeFilter.value === 'shared') return source.ai_department_id == null;
+  if (scopeFilter.value === 'orphan') return isOrphan(source);
+  return String(source.ai_department_id) === scopeFilter.value;
+};
+const filteredSources = computed(() =>
+  sources.value.filter(
+    s =>
+      matchesScope(s) &&
+      (kindFilter.value === 'all' || s.kind === kindFilter.value)
+  )
+);
+
 // Seleção em massa: marcar vários e excluir de uma vez (sem digitar o texto a cada item).
 const selectedIds = ref([]);
 const isSelected = id => selectedIds.value.includes(id);
@@ -335,11 +402,13 @@ const clearSelection = () => {
 };
 const allSelected = computed(
   () =>
-    sources.value.length > 0 &&
-    selectedIds.value.length === sources.value.length
+    filteredSources.value.length > 0 &&
+    filteredSources.value.every(s => selectedIds.value.includes(s.id))
 );
 const toggleSelectAll = () => {
-  selectedIds.value = allSelected.value ? [] : sources.value.map(s => s.id);
+  selectedIds.value = allSelected.value
+    ? []
+    : filteredSources.value.map(s => s.id);
 };
 
 // Exclusão padronizada (individual E lote) no MESMO modal simples — sem digitar o nome do item.
@@ -564,9 +633,33 @@ onMounted(() => {
           @cancel="closeForm"
         />
 
+        <!-- Filtro da biblioteca: escopo (dropdown, mesmo estilo do campo Agente) + tipo, lado a lado -->
+        <div v-if="sources.length" class="flex flex-wrap items-end gap-3">
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            <span class="text-xs font-medium text-n-slate-11">
+              {{ $t('AI_KNOWLEDGE.FILTER.SCOPE_LABEL') }}
+            </span>
+            <Select
+              v-model="scopeFilter"
+              :options="scopeOptions"
+              class="min-w-52"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+            <span class="text-xs font-medium text-n-slate-11">
+              {{ $t('AI_KNOWLEDGE.FILTER.KIND_LABEL') }}
+            </span>
+            <Select
+              v-model="kindFilter"
+              :options="kindFilterOptions"
+              class="min-w-36"
+            />
+          </label>
+        </div>
+
         <!-- Seleção em massa -->
         <div
-          v-if="sources.length"
+          v-if="filteredSources.length"
           class="flex items-center justify-between gap-3 flex-wrap"
         >
           <label
@@ -597,11 +690,19 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- Nenhuma fonte no filtro atual (mas existem fontes) -->
+        <p
+          v-if="sources.length && !filteredSources.length"
+          class="text-sm text-n-slate-11 text-center py-6 mb-0"
+        >
+          {{ $t('AI_KNOWLEDGE.FILTER.EMPTY') }}
+        </p>
+
         <div
-          v-if="sources.length"
+          v-if="filteredSources.length"
           class="grid grid-cols-1 sm:grid-cols-2 gap-3"
         >
-          <template v-for="source in sources" :key="source.id">
+          <template v-for="source in filteredSources" :key="source.id">
             <!-- Edição no próprio lugar do card -->
             <KnowledgeSourceForm
               v-if="editingId === source.id"
@@ -685,14 +786,10 @@ onMounted(() => {
                 </span>
                 <span
                   class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-                  :class="
-                    departmentName(source)
-                      ? 'bg-n-brand/10 text-n-brand'
-                      : 'bg-n-alpha-2 text-n-slate-11'
-                  "
+                  :class="scopeBadge(source).class"
                 >
-                  <span class="i-lucide-layers size-3" />
-                  {{ departmentName(source) || $t('AI_KNOWLEDGE.SHARED') }}
+                  <span :class="scopeBadge(source).icon" class="size-3" />
+                  {{ scopeBadge(source).text }}
                 </span>
               </div>
             </div>

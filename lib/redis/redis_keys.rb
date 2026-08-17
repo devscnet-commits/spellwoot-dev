@@ -49,6 +49,10 @@ module Redis::RedisKeys
   # Track conversation assignments to agents for rate limiting
   ASSIGNMENT_KEY = 'ASSIGNMENT::%<inbox_id>d::AGENT::%<agent_id>d::CONVERSATION::%<conversation_id>d'.freeze
   ASSIGNMENT_KEY_PATTERN = 'ASSIGNMENT::%<inbox_id>d::AGENT::%<agent_id>d::*'.freeze
+  # Serializes assignment decisions per inbox — closes the race between the periodic
+  # AutoAssignment::AssignmentJob and real-time handoffs both checking fair_distribution_limit
+  # before either has written its Redis tracking key (see AutoAssignment::AssignmentService).
+  ASSIGNMENT_MUTEX = 'ASSIGNMENT_LOCK::INBOX::%<inbox_id>d'.freeze
 
   ## Account Onboarding
   ACCOUNT_ONBOARDING_ENRICHMENT = 'ONBOARDING_ENRICHMENT::%<account_id>d'.freeze

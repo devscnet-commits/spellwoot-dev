@@ -127,6 +127,10 @@ class Conversation < ApplicationRecord
   # parent delete blocked by the constraint (the cleanup job runs after). Delete them in-line.
   has_many :result_events, class_name: 'ConversationResultEvent', dependent: :delete_all
   has_many :meta_conversion_events, dependent: :delete_all
+  # Idem: ai_handoff_summaries (resumo do handoff automático da IA) tem FK NOT NULL para conversations.
+  # Sem delete_all in-line, deletar a conversa — ou o contato em cascata — trava na constraint (a FK
+  # também é ON DELETE CASCADE no banco como defesa em profundidade). Corrige o bug de conversa órfã.
+  has_many :ai_handoff_summaries, class_name: 'Ai::HandoffSummary', dependent: :delete_all
   belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset

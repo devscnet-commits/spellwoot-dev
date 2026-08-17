@@ -9,10 +9,17 @@ import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import AiVersionHistory from './AiVersionHistory.vue';
+import AiPromptAssistant from './AiPromptAssistant.vue';
 import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
 import Logo from 'next/icon/Logo.vue';
 import AiDepartmentDetail from './AiDepartmentDetail.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
+import {
+  defaultAgentForm,
+  buildAgentPayload,
+  buildInboxBindings,
+} from './aiRoutingPayload';
 
 const route = useRoute();
 const router = useRouter();
@@ -66,24 +73,9 @@ const STAGE_BADGE = {
 const accountUrl = () => `/api/v1/accounts/${route.params.accountId}`;
 const agentUrl = () => `${accountUrl()}/ai_agents`;
 
-const agentForm = reactive({
-  name: '',
-  assistant_name: '',
-  company_name: '',
-  site: '',
-  identify_as: 'human',
-  assistant_avatar: '',
-  ai_operation_profile_id: '',
-  team_id: '',
-  handoff_team_ids: [],
-  handoff_agent_ids: [],
-  assistant_personality: '',
-  assistant_language: 'pt-BR',
-  base_prompt: '',
-  guardrails: '',
-  stage: 'experimental',
-  status: 'active',
-});
+// Default em aiRoutingPayload.defaultAgentForm() — SEM team_id de propósito (issue H1: o override some da
+// UI; ausente do payload = não zera a coluna no PATCH). Ver a nota no módulo.
+const agentForm = reactive(defaultAgentForm());
 const {
   isDirty: agentDirty,
   capture: captureAgent,
@@ -102,13 +94,9 @@ const profileOptions = computed(() => [
 // Teams power AI->AI routing: this agent serves its own team, and may hand off only to the
 // teams in its allowlist (handoff_team_ids).
 const teams = ref([]);
-const teamOptions = computed(() => [
-  { value: '', label: t('AI_AGENTS.SOBRE.TEAM_ANY') },
-  ...teams.value.map(tm => ({ value: tm.id, label: tm.name })),
-]);
-const handoffTeamOptions = computed(() =>
-  teams.value.filter(tm => tm.id !== agentForm.team_id)
-);
+// Whitelist de times humanos = todos os times da conta. (Antes excluía agentForm.team_id; o "time deste
+// agente" saiu da UI — issue H1 —, então não há mais o que excluir.)
+const handoffTeamOptions = computed(() => teams.value);
 const fetchTeams = async () => {
   try {
     const { data } = await axios.get(`${accountUrl()}/teams`);
@@ -119,9 +107,24 @@ const fetchTeams = async () => {
 };
 const toggleHandoffTeam = id => {
   const i = agentForm.handoff_team_ids.indexOf(id);
-  if (i >= 0) agentForm.handoff_team_ids.splice(i, 1);
-  else agentForm.handoff_team_ids.push(id);
+  if (i >= 0) {
+    agentForm.handoff_team_ids.splice(i, 1);
+    // não deixar o fallback órfão: se o time desmarcado era o destino padrão, limpa (o backend rejeitaria).
+    if (agentForm.fallback_handoff_team_id === id)
+      agentForm.fallback_handoff_team_id = '';
+  } else agentForm.handoff_team_ids.push(id);
 };
+// (3) Opções do destino padrão de give-up: só os times MARCADOS na whitelist (não pode acionar quem não
+// declarou). '' = padrão (1º da lista). Whitelist vazia -> só a opção padrão (a UI mostra o aviso).
+const fallbackTeamOptions = computed(() => {
+  const inList = new Set(agentForm.handoff_team_ids || []);
+  return [
+    { value: '', label: t('AI_AGENTS.HANDOFF.FALLBACK_DEFAULT') },
+    ...teams.value
+      .filter(tm => inList.has(tm.id))
+      .map(tm => ({ value: tm.id, label: tm.name })),
+  ];
+});
 
 // Outras IAs da conta como destino de transferência (allowlist por agente específico —
 // handoff_agent_ids). Lista as IAs ativas; o motor rotear por agente entra na etapa 2.
@@ -268,10 +271,8 @@ const onFilePick = e => {
 };
 const saveAgent = async () => {
   isSaving.value = true;
-  const payload = {
-    ...agentForm,
-    name: agentForm.name || agentForm.assistant_name,
-  };
+  // buildAgentPayload: spread-e-normaliza. Não emite team_id (o form não o tem) — não zera a coluna.
+  const payload = buildAgentPayload(agentForm);
   try {
     if (isNew.value) {
       const { data } = await axios.post(agentUrl(), { ai_agent: payload });
@@ -301,32 +302,11 @@ const saveAgent = async () => {
   }
 };
 
-// --- Histórico de versões ---
-const versions = ref([]);
-const showVersions = ref(false);
-const versionsUrl = () => `${agentUrl()}/${agentId.value}/ai_agent_versions`;
-const fetchVersions = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(versionsUrl());
-  versions.value = Array.isArray(data) ? data : [];
-};
-const restoreVersion = async v => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_AGENTS.VERSIONS.CONFIRM', { n: v.version_number })))
-    return;
-  try {
-    await axios.post(`${versionsUrl()}/${v.id}/restore`);
-    useAlert(t('AI_AGENTS.VERSIONS.RESTORED'));
-    await fetchAgent();
-    await fetchVersions();
-  } catch (error) {
-    useAlert(t('AI_AGENTS.ERROR'));
-  }
-};
-const formatVersionDate = iso => {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString();
-};
+// --- Histórico de versões (painel extraído em AiVersionHistory.vue) ---
+const versionsBaseUrl = computed(
+  () => `${agentUrl()}/${agentId.value}/ai_agent_versions`
+);
+const promptAssistantOpen = ref(false);
 
 const goBack = () => router.push({ name: 'ai_agents_index' });
 // Managing/creating custom levels is an advanced surface, off the main nav.
@@ -368,11 +348,9 @@ const filteredInboxes = computed(() => {
 });
 const saveInboxes = async () => {
   try {
+    // buildInboxBindings: priority só na linha que atende; "Não atende" destrói o binding no backend.
     await axios.put(inboxesUrl(), {
-      bindings: inboxes.value.map(i => ({
-        inbox_id: i.inbox_id,
-        mode: i.mode,
-      })),
+      bindings: buildInboxBindings(inboxes.value),
     });
     useAlert(t('AI_AGENTS.SAVED'));
     resetInboxes();
@@ -419,7 +397,7 @@ onMounted(async () => {
   fetchAgents();
   await fetchAgent();
   captureAgent();
-  await Promise.all([fetchDepartments(), fetchInboxes(), fetchVersions()]);
+  await Promise.all([fetchDepartments(), fetchInboxes()]);
   await ensureDefaultDepartment();
 });
 </script>
@@ -468,172 +446,177 @@ onMounted(async () => {
 
         <!-- SOBRE -->
         <div v-if="activeKey === 'about'" class="flex flex-col gap-5">
-          <!-- Row 1: avatar + image actions | identify cards -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="flex items-start gap-3">
-              <Avatar
-                :src="agentForm.assistant_avatar"
-                :name="agentForm.assistant_name || agentForm.name || 'IA'"
-                :size="80"
-              />
-              <div class="flex flex-col gap-2">
-                <input
-                  ref="fileInput"
-                  type="file"
-                  accept="image/*"
-                  class="hidden"
-                  @change="onFilePick"
+          <!-- Identidade do agente: embrulhada em card para padronizar com as demais abas -->
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-5"
+          >
+            <!-- Row 1: avatar + image actions | identify cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div class="flex items-start gap-3">
+                <Avatar
+                  :src="agentForm.assistant_avatar"
+                  :name="agentForm.assistant_name || agentForm.name || 'IA'"
+                  :size="80"
                 />
-                <Button
-                  variant="outline"
-                  color="slate"
-                  size="sm"
-                  icon="i-lucide-upload"
-                  :label="$t('AI_AGENTS.SOBRE.UPLOAD')"
-                  @click="triggerUpload"
-                />
+                <div class="flex flex-col gap-2">
+                  <input
+                    ref="fileInput"
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    @change="onFilePick"
+                  />
+                  <Button
+                    variant="outline"
+                    color="slate"
+                    size="sm"
+                    icon="i-lucide-upload"
+                    :label="$t('AI_AGENTS.SOBRE.UPLOAD')"
+                    @click="triggerUpload"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div class="lg:col-span-2 flex flex-col gap-2">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.IDENTIFY_AS.LABEL') }}
-              </span>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
-                  :class="
-                    agentForm.identify_as === 'human'
-                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
-                      : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
-                  "
-                  @click="agentForm.identify_as = 'human'"
-                >
-                  <span
-                    class="shrink-0 size-10 rounded-full flex items-center justify-center"
+              <div class="lg:col-span-2 flex flex-col gap-2">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_AGENTS.IDENTIFY_AS.LABEL') }}
+                </span>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
                     :class="
                       agentForm.identify_as === 'human'
-                        ? 'bg-n-brand text-white'
-                        : 'bg-n-alpha-2 text-n-slate-11'
+                        ? 'border-n-brand bg-n-brand/10 shadow-sm'
+                        : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
                     "
+                    @click="agentForm.identify_as = 'human'"
                   >
-                    <span class="i-lucide-user-round size-5" />
-                  </span>
-                  <span class="flex flex-col gap-0.5 min-w-0">
-                    <span class="text-base font-semibold text-n-slate-12">
-                      {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN') }}
+                    <span
+                      class="shrink-0 size-10 rounded-full flex items-center justify-center"
+                      :class="
+                        agentForm.identify_as === 'human'
+                          ? 'bg-n-brand text-white'
+                          : 'bg-n-alpha-2 text-n-slate-11'
+                      "
+                    >
+                      <span class="i-lucide-user-round size-5" />
                     </span>
-                    <span class="text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT') }}
+                    <span class="flex flex-col gap-0.5 min-w-0">
+                      <span class="text-base font-semibold text-n-slate-12">
+                        {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN') }}
+                      </span>
+                      <span class="text-xs text-n-slate-11">
+                        {{ $t('AI_AGENTS.IDENTIFY_AS.HUMAN_HINT') }}
+                      </span>
                     </span>
-                  </span>
-                  <span
-                    v-if="agentForm.identify_as === 'human'"
-                    class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
-                  />
-                </button>
-                <button
-                  type="button"
-                  class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
-                  :class="
-                    agentForm.identify_as === 'ai'
-                      ? 'border-n-brand bg-n-brand/10 shadow-sm'
-                      : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
-                  "
-                  @click="agentForm.identify_as = 'ai'"
-                >
-                  <span
-                    class="shrink-0 size-10 rounded-full flex items-center justify-center"
+                    <span
+                      v-if="agentForm.identify_as === 'human'"
+                      class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    class="relative flex items-start gap-3 text-left p-5 rounded-2xl border-2 transition-all"
                     :class="
                       agentForm.identify_as === 'ai'
-                        ? 'bg-n-brand text-white'
-                        : 'bg-n-alpha-2 text-n-slate-11'
+                        ? 'border-n-brand bg-n-brand/10 shadow-sm'
+                        : 'border-n-weak bg-n-solid-2 hover:border-n-slate-7'
                     "
+                    @click="agentForm.identify_as = 'ai'"
                   >
-                    <span class="i-lucide-bot size-5" />
-                  </span>
-                  <span class="flex flex-col gap-0.5 min-w-0">
-                    <span class="text-base font-semibold text-n-slate-12">
-                      {{ $t('AI_AGENTS.IDENTIFY_AS.AI') }}
+                    <span
+                      class="shrink-0 size-10 rounded-full flex items-center justify-center"
+                      :class="
+                        agentForm.identify_as === 'ai'
+                          ? 'bg-n-brand text-white'
+                          : 'bg-n-alpha-2 text-n-slate-11'
+                      "
+                    >
+                      <span class="i-lucide-bot size-5" />
                     </span>
-                    <span class="text-xs text-n-slate-11">
-                      {{ $t('AI_AGENTS.IDENTIFY_AS.AI_HINT') }}
+                    <span class="flex flex-col gap-0.5 min-w-0">
+                      <span class="text-base font-semibold text-n-slate-12">
+                        {{ $t('AI_AGENTS.IDENTIFY_AS.AI') }}
+                      </span>
+                      <span class="text-xs text-n-slate-11">
+                        {{ $t('AI_AGENTS.IDENTIFY_AS.AI_HINT') }}
+                      </span>
                     </span>
-                  </span>
-                  <span
-                    v-if="agentForm.identify_as === 'ai'"
-                    class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
-                  />
+                    <span
+                      v-if="agentForm.identify_as === 'ai'"
+                      class="i-lucide-check-circle-2 size-5 text-n-brand absolute top-3 right-3"
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Identidade essencial: nome + perfil operacional -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+              <Input
+                v-model="agentForm.assistant_name"
+                :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
+              />
+              <div class="flex flex-col gap-1.5">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.MODEL') }}
+                  <span class="text-n-ruby-9">*</span>
+                </span>
+                <Select
+                  v-model="agentForm.ai_operation_profile_id"
+                  :options="profileOptions"
+                />
+                <span
+                  v-if="!agentForm.ai_operation_profile_id"
+                  class="text-xs text-n-ruby-11"
+                >
+                  {{ $t('AI_AGENTS.SOBRE.MODEL_REQUIRED') }}
+                </span>
+                <button
+                  type="button"
+                  class="self-start text-xs text-n-slate-11 hover:text-n-brand"
+                  @click="goProfiles"
+                >
+                  {{ $t('AI_AGENTS.SOBRE.MANAGE_LEVELS') }}
                 </button>
               </div>
             </div>
-          </div>
 
-          <!-- Identidade essencial: nome + perfil operacional -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-            <Input
-              v-model="agentForm.assistant_name"
-              :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
+            <TextArea
+              v-model="agentForm.assistant_personality"
+              :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
+              :max-length="1000"
             />
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.SOBRE.MODEL') }}
-                <span class="text-n-ruby-9">*</span>
-              </span>
-              <Select
-                v-model="agentForm.ai_operation_profile_id"
-                :options="profileOptions"
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+              <Input
+                v-model="agentForm.company_name"
+                :label="$t('AI_AGENTS.SOBRE.COMPANY')"
               />
-              <span
-                v-if="!agentForm.ai_operation_profile_id"
-                class="text-xs text-n-ruby-11"
-              >
-                {{ $t('AI_AGENTS.SOBRE.MODEL_REQUIRED') }}
-              </span>
-              <button
-                type="button"
-                class="self-start text-xs text-n-slate-11 hover:text-n-brand"
-                @click="goProfiles"
-              >
-                {{ $t('AI_AGENTS.SOBRE.MANAGE_LEVELS') }}
-              </button>
-            </div>
-          </div>
-
-          <TextArea
-            v-model="agentForm.assistant_personality"
-            :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
-            :max-length="1000"
-          />
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-            <Input
-              v-model="agentForm.company_name"
-              :label="$t('AI_AGENTS.SOBRE.COMPANY')"
-            />
-            <Input
-              v-model="agentForm.site"
-              :label="$t('AI_AGENTS.SOBRE.SITE')"
-            />
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
-              </span>
-              <Select
-                v-model="agentForm.assistant_language"
-                :options="languageOptions"
+              <Input
+                v-model="agentForm.site"
+                :label="$t('AI_AGENTS.SOBRE.SITE')"
               />
             </div>
-            <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.FORM.STAGE') }}
-              </span>
-              <Select v-model="agentForm.stage" :options="stageOptions" />
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+              <div class="flex flex-col gap-1.5">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
+                </span>
+                <Select
+                  v-model="agentForm.assistant_language"
+                  :options="languageOptions"
+                />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_AGENTS.FORM.STAGE') }}
+                </span>
+                <Select v-model="agentForm.stage" :options="stageOptions" />
+              </div>
             </div>
-          </div>
+          </section>
 
           <div class="flex justify-end">
             <Button
@@ -649,89 +632,105 @@ onMounted(async () => {
           </div>
 
           <!-- Histórico de versões -->
-          <div
+          <AiVersionHistory
             v-if="!isNew"
-            class="border-t border-n-weak pt-4 flex flex-col gap-3"
-          >
-            <button
-              type="button"
-              class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
-              @click="showVersions = !showVersions"
-            >
-              <span
-                class="size-4 inline-block"
-                :class="
-                  showVersions
-                    ? 'i-lucide-chevron-down'
-                    : 'i-lucide-chevron-right'
-                "
-              />
-              {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
-              <span class="text-n-slate-11 font-normal">{{
-                `(${versions.length})`
-              }}</span>
-            </button>
-            <div
-              v-if="showVersions"
-              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-72 overflow-auto"
-            >
-              <p
-                v-if="!versions.length"
-                class="text-sm text-n-slate-11 px-4 py-3 mb-0"
-              >
-                {{ $t('AI_AGENTS.VERSIONS.EMPTY') }}
-              </p>
-              <div
-                v-for="v in versions"
-                :key="v.id"
-                class="flex items-center justify-between gap-3 px-4 py-2.5"
-              >
-                <div class="min-w-0">
-                  <p class="text-sm text-n-slate-12 mb-0">
-                    {{ `v${v.version_number}` }}
-                    <span v-if="v.note" class="text-n-slate-11">{{
-                      ` · ${v.note}`
-                    }}</span>
-                  </p>
-                  <p class="text-xs text-n-slate-11 mb-0">
-                    {{ formatVersionDate(v.created_at) }}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  color="slate"
-                  size="sm"
-                  :label="$t('AI_AGENTS.VERSIONS.RESTORE')"
-                  @click="restoreVersion(v)"
-                />
-              </div>
-            </div>
-          </div>
+            :base-url="versionsBaseUrl"
+            @restored="fetchAgent"
+          />
         </div>
 
-        <!-- CAIXAS -->
+        <!-- ATENDIMENTOS E TRANSFERÊNCIAS: dois cards por pergunta, na ordem entrada -> saída.
+             CARD 1 "Quando este agente atende" (caixas + prioridade) e CARD 2 "Para onde o agente
+             transfere" (times humanos, fallback, outras IAs). Hierarquia replicada da aba Finalização:
+             h2 de seção + subtítulo, rótulos text-sm font-medium, ajuda text-xs. -->
         <div v-else-if="activeKey === 'inboxes'" class="flex flex-col gap-4">
-          <!-- Roteamento e transferência entre agentes de IA -->
+          <!-- CARD 1 — Quando este agente atende (entrada) -->
+          <section
+            class="border border-n-weak rounded-xl p-5 flex flex-col gap-4 bg-n-solid-2"
+          >
+            <div class="flex flex-col gap-0.5">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                {{ $t('AI_AGENTS.INBOXES.TITLE') }}
+              </h2>
+              <p class="text-xs text-n-slate-11 mb-0">
+                {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
+              </p>
+            </div>
+            <p v-if="isNew" class="text-sm text-n-slate-11">
+              {{ $t('AI_AGENTS.SAVE_FIRST') }}
+            </p>
+            <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
+              {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
+            </p>
+            <template v-else>
+              <input
+                v-model="inboxSearch"
+                type="search"
+                :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
+                class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
+              />
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Linha única: nome + toggle. A PRIORIDADE (qual IA responde quando mais de uma atende a
+                     MESMA caixa) NÃO vive aqui — é decisão da caixa, editada em Configurações → Caixa →
+                     Atendimento por IA, onde os agentes concorrentes aparecem lado a lado. -->
+                <div
+                  v-for="inbox in filteredInboxes"
+                  :key="inbox.inbox_id"
+                  class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex items-center justify-between gap-3"
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span
+                      class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
+                    >
+                      <span class="i-lucide-inbox size-4 text-n-slate-11" />
+                    </span>
+                    <span class="text-sm font-medium text-n-slate-12 truncate">
+                      {{ inbox.name }}
+                    </span>
+                  </div>
+                  <div
+                    class="shrink-0 grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
+                  >
+                    <button
+                      v-for="m in INBOX_MODES"
+                      :key="m.value"
+                      type="button"
+                      class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+                      :class="
+                        inbox.mode === m.value
+                          ? m.active
+                          : 'text-n-slate-11 hover:text-n-slate-12'
+                      "
+                      @click="inbox.mode = m.value"
+                    >
+                      {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="flex justify-end">
+                <Button
+                  :label="$t('AI_AGENTS.INBOXES.SAVE')"
+                  :disabled="!inboxesDirty"
+                  @click="saveInboxes"
+                />
+              </div>
+            </template>
+          </section>
+
+          <!-- CARD 2 — Para onde o agente transfere (saída). NB: este "Salvar" persiste o agentForm
+               INTEIRO (nome, instruções, perfil...), não só os campos de transferência — é o saveAgent
+               global, distinto do "Salvar caixas" do CARD 1, que é escopado às caixas. Não é regressão. -->
           <div
             class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
           >
             <div class="flex flex-col gap-0.5">
-              <h3 class="text-sm font-semibold text-n-slate-12">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_AGENTS.HANDOFF.TITLE') }}
-              </h3>
+              </h2>
               <p class="text-xs text-n-slate-11 mb-0">
                 {{ $t('AI_AGENTS.HANDOFF.DESCRIPTION') }}
               </p>
-            </div>
-
-            <div class="flex flex-col gap-1.5 max-w-sm">
-              <span class="text-sm font-medium text-n-slate-12">
-                {{ $t('AI_AGENTS.HANDOFF.TEAM') }}
-              </span>
-              <Select v-model="agentForm.team_id" :options="teamOptions" />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_AGENTS.HANDOFF.TEAM_HINT') }}
-              </span>
             </div>
 
             <div class="flex flex-col gap-1.5">
@@ -760,6 +759,27 @@ onMounted(async () => {
               </div>
               <span class="text-xs text-n-slate-11">
                 {{ $t('AI_AGENTS.HANDOFF.ALLOWLIST_HINT') }}
+              </span>
+            </div>
+
+            <!-- (3) Destino PADRÃO quando a IA desiste (give-up sem destino declarado): um dos times marcados -->
+            <div class="flex flex-col gap-1.5">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('AI_AGENTS.HANDOFF.FALLBACK_LABEL') }}
+              </span>
+              <p
+                v-if="!agentForm.handoff_team_ids.length"
+                class="text-sm text-n-slate-11 mb-0"
+              >
+                {{ $t('AI_AGENTS.HANDOFF.FALLBACK_EMPTY') }}
+              </p>
+              <Select
+                v-else
+                v-model="agentForm.fallback_handoff_team_id"
+                :options="fallbackTeamOptions"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_AGENTS.HANDOFF.FALLBACK_HINT') }}
               </span>
             </div>
 
@@ -807,72 +827,6 @@ onMounted(async () => {
               />
             </div>
           </div>
-
-          <div class="flex flex-col gap-1">
-            <span class="text-sm font-medium text-n-slate-12">
-              {{ $t('AI_AGENTS.INBOXES.TITLE') }}
-            </span>
-            <p class="text-sm text-n-slate-11 mb-0">
-              {{ $t('AI_AGENTS.INBOXES.DESCRIPTION') }}
-            </p>
-          </div>
-          <p v-if="isNew" class="text-sm text-n-slate-11">
-            {{ $t('AI_AGENTS.SAVE_FIRST') }}
-          </p>
-          <p v-else-if="!inboxes.length" class="text-sm text-n-slate-11">
-            {{ $t('AI_AGENTS.INBOXES.EMPTY') }}
-          </p>
-          <template v-else>
-            <input
-              v-model="inboxSearch"
-              type="search"
-              :placeholder="$t('AI_AGENTS.INBOXES.SEARCH')"
-              class="w-full sm:w-64 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12"
-            />
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div
-                v-for="inbox in filteredInboxes"
-                :key="inbox.inbox_id"
-                class="rounded-xl border border-n-weak bg-n-solid-2 px-3 py-2.5 flex items-center justify-between gap-3"
-              >
-                <div class="flex items-center gap-2 min-w-0">
-                  <span
-                    class="shrink-0 size-8 rounded-lg bg-n-alpha-2 flex items-center justify-center"
-                  >
-                    <span class="i-lucide-inbox size-4 text-n-slate-11" />
-                  </span>
-                  <span class="text-sm font-medium text-n-slate-12 truncate">
-                    {{ inbox.name }}
-                  </span>
-                </div>
-                <div
-                  class="shrink-0 grid grid-cols-2 gap-1 rounded-lg bg-n-alpha-1 p-1"
-                >
-                  <button
-                    v-for="m in INBOX_MODES"
-                    :key="m.value"
-                    type="button"
-                    class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-                    :class="
-                      inbox.mode === m.value
-                        ? m.active
-                        : 'text-n-slate-11 hover:text-n-slate-12'
-                    "
-                    @click="inbox.mode = m.value"
-                  >
-                    {{ $t(`AI_AGENTS.INBOXES.${m.i18n}`) }}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="flex justify-end">
-              <Button
-                :label="$t('AI_AGENTS.INBOXES.SAVE')"
-                :disabled="!inboxesDirty"
-                @click="saveInboxes"
-              />
-            </div>
-          </template>
         </div>
 
         <!-- COMPORTAMENTO / CONHECIMENTO / ETAPAS / FERRAMENTAS (departamento padrão) -->
@@ -889,6 +843,14 @@ onMounted(async () => {
               class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
             >
               <div class="flex flex-col gap-1">
+                <div class="flex justify-end -mb-1">
+                  <button
+                    type="button"
+                    class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
+                    :title="$t('AI_AGENTS.PROMPT_ASSISTANT.OPEN')"
+                    @click="promptAssistantOpen = true"
+                  />
+                </div>
                 <TextArea
                   v-model="agentForm.base_prompt"
                   :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
@@ -900,6 +862,11 @@ onMounted(async () => {
                   {{ $t('AI_AGENTS.FORM.BASE_PROMPT_HINT') }}
                 </p>
               </div>
+              <AiPromptAssistant
+                v-model:open="promptAssistantOpen"
+                kind="base_prompt"
+                :department-id="defaultDeptId"
+              />
               <div class="flex flex-col gap-1">
                 <TextArea
                   v-model="agentForm.guardrails"
@@ -920,6 +887,16 @@ onMounted(async () => {
                   @click="saveAgent"
                 />
               </div>
+
+              <!-- Histórico do prompt do agente (base_prompt/guardrails via Ai::Version).
+                   Fica DENTRO desta seção, junto aos campos que restaura — distinto do
+                   "Histórico das Configurações" (ai_department_versions) que vem no AiDepartmentDetail. -->
+              <AiVersionHistory
+                v-if="!isNew"
+                :base-url="versionsBaseUrl"
+                title-key="AI_AGENTS.VERSIONS.TITLE_PROMPT"
+                @restored="fetchAgent"
+              />
             </section>
 
             <AiDepartmentDetail

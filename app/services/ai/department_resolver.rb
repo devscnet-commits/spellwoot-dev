@@ -1,7 +1,8 @@
 # Resolves which department handles a message within an already-resolved agent.
-# Order: single department -> explicit inbox->department mapping -> classifier (cheap LLM worker)
-# -> default department (is_default) -> first candidate. Departments are tried in `position` order.
-# Returns [department, method].
+# Order: single department -> explicit inbox->department mapping -> classifier (cheap LLM worker,
+# SKIPPED when message_content is blank — nothing to classify, e.g. Ai::FollowupConversationJob's
+# no-new-message context) -> default department (is_default) -> first candidate. Departments are
+# tried in `position` order. Returns [department, method].
 class Ai::DepartmentResolver
   # Cheapest model per provider for the routing decision — trivial task, don't burn the supervisor.
   # Keeps the supervisor's provider (so we reuse its configured key), only drops to the cheap model.
@@ -19,16 +20,34 @@ class Ai::DepartmentResolver
   }.freeze
   CLASSIFIER_TIMEOUT = 10 # seconds — routing is quick; cut hung calls (falls back to default).
 
-  def self.resolve(agent:, inbox_id:, message_content:)
+  def self.resolve(agent:, inbox_id:, message_content:, conversation: nil)
     departments = agent.departments.active.order(:position, :id).to_a
     return [nil, 'none'] if departments.empty?
+
+    # Passo 0 (Fase 2): override determinístico por conversa. Procura SÓ entre os departments do
+    # agente já carregados (active + escopo de conta) — isolamento multi-tenant e filtro de inativo
+    # de graça. Achou -> vence tudo (classificador/default). Não achou (deletado/inativo/outra conta)
+    # -> segue o fluxo normal SEM side-effect; o Gateway detecta o override não-honrado e sinaliza.
+    override = conversation && conversation.additional_attributes&.dig('ai_department_override')
+    if override.present?
+      forced = departments.find { |d| d.id == override.to_i }
+      return [forced, 'override'] if forced
+    end
+
     return [departments.first, 'single'] if departments.size == 1
 
     mapped = departments.select { |d| d.department_inboxes.any? { |di| di.inbox_id == inbox_id } }
     return [mapped.first, 'inbox_mapping'] if mapped.size == 1
 
     candidates = mapped.presence || departments
-    chosen = classify(candidates, message_content, agent)
+    # Bug real ao vivo: Ai::FollowupConversationJob chama .resolve com message_content: nil (não há
+    # mensagem nova no contexto de follow-up) — SEM este guard, .classify rodava mesmo assim, pedindo
+    # pro LLM classificar uma mensagem VAZIA. Resultado não-determinístico (o modelo "chuta" um índice
+    # 1..N sem sinal nenhum pra se basear), então o follow-up de uma conta multi-department podia cair
+    # no department ERRADO a cada ciclo do sweep (1x/minuto) — explicava tanto "disparou follow-up sem
+    # eu configurar nada" quanto "não respeitou as regras do department certo". Content em branco não
+    # tem NADA a classificar; pular direto pro default/first é estritamente melhor que adivinhar.
+    chosen = classify(candidates, message_content, agent) if message_content.present?
     return [chosen, 'classifier'] if chosen
 
     fallback = candidates.find(&:is_default) || departments.find(&:is_default)

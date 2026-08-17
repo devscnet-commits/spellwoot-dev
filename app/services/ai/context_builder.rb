@@ -26,12 +26,39 @@ class Ai::ContextBuilder
     history = @conversation.messages
                            .where(message_type: %i[incoming outgoing])
                            .where('messages.id <= ?', last_out_id)
+                           .includes(:attachments)
                            .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
-                           .map { |m| "#{m.incoming? ? 'Cliente' : 'Atendente'}: #{m.content.to_s.strip.first(500)}" }
+                           .map { |m| "#{m.incoming? ? 'Cliente' : 'Atendente'}: #{message_body(m)}" }
                            .reject { |line| line.end_with?(': ') }
     return current if history.empty?
 
     "Histórico recente da conversa:\n#{history.join("\n")}\n\nMensagem atual do cliente:\n#{current}"
+  end
+
+  # Retorna o histórico como mensagens ESTRUTURADAS para o chat object do ruby_llm — cada entrada da
+  # conversa vira um {role:, content:} separado, seguido da mensagem atual do cliente. Isso preserva
+  # a alternância user/assistant que as APIs esperam e evita colocar todo o contexto em um só blob.
+  # A mensagem atual (current) é sempre o ÚLTIMO elemento do array (role: :user).
+  def structured_messages(current)
+    quoted = quoted_message_content
+    current_text = quoted.present? ? "(O cliente está respondendo a: \"#{quoted}\")\n#{current}" : current
+
+    last_out_id = @conversation.messages.outgoing.maximum(:id) || 0
+    history = @conversation.messages
+                           .where(message_type: %i[incoming outgoing])
+                           .where('messages.id <= ?', last_out_id)
+                           .includes(:attachments)
+                           .order(created_at: :desc).limit(HISTORY_LIMIT).to_a.reverse
+
+    result = history.filter_map do |m|
+      body = message_body(m)
+      next if body.blank?
+
+      { role: m.incoming? ? :user : :assistant, content: body }
+    end
+
+    result << { role: :user, content: current_text }
+    result
   end
 
   # Atributos personalizados de conversa que a IA pode preencher: as definições da conta menos os
@@ -49,6 +76,34 @@ class Ai::ContextBuilder
   end
 
   private
+
+  # Corpo da mensagem no histórico: o texto; ou, se não houver texto MAS houver anexo (BUG 3), um
+  # placeholder pelo tipo do anexo — para a IA saber, nos turnos seguintes, que o anexo existiu (antes
+  # a linha virava "Cliente: " e era descartada -> a IA repergunta localização/comprovante já recebidos).
+  def message_body(message)
+    text = message.content.to_s.strip.first(500)
+    return text if text.present?
+
+    attachment_placeholder(message)
+  end
+
+  def attachment_placeholder(message)
+    att = message.attachments.to_a.first
+    return '' unless att
+
+    case att.file_type.to_s
+    when 'location' then '[enviou uma localização]'
+    when 'file' then "[enviou um documento: #{attachment_name(att)}]"
+    when 'image' then '[enviou uma imagem]'
+    when 'audio' then '[enviou um áudio]'
+    when 'video' then '[enviou um vídeo]'
+    else '[enviou um anexo]'
+    end
+  end
+
+  def attachment_name(att)
+    (att.file.attached? ? att.file.blob.filename.to_s : att.fallback_title.to_s).presence || 'arquivo'
+  end
 
   # Conteúdo da mensagem citada quando o cliente responde a uma mensagem específica (reply do canal).
   # O Chatwoot resolve a citação para o id da mensagem em content_attributes['in_reply_to'].

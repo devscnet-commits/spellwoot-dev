@@ -11,6 +11,13 @@ class Ai::FollowupConversationJob < ApplicationJob
 
   DEFAULT_INACTIVITY = 30
   LOCK_TTL = 2.minutes
+  # Piso de segurança AGRESSIVO ao vivo: usuário relatou follow-up disparando em conversa que
+  # "acabou de receber mensagem" — INDEPENDENTE do delay_minutes de cada attempt (configurável pelo
+  # admin, que pode deixar curto demais sem perceber o efeito). Ai::FollowupSweepJob já filtra por
+  # MIN_QUIET (1 minuto) na hora de ENFILEIRAR, mas isso é uma FOTO de quando o sweep rodou — entre o
+  # enqueue e a execução deste job (queue: :low, pode atrasar) uma mensagem nova pode ter chegado.
+  # Reavaliado AQUI, na hora de EXECUTAR, contra o dado mais fresco possível.
+  MIN_SAFETY_QUIET_MINUTES = 10
 
   def perform(conversation_id)
     lock = Redis::LockManager.new
@@ -38,7 +45,7 @@ class Ai::FollowupConversationJob < ApplicationJob
     return if binding.nil?
     return unless binding.agent.account&.feature_enabled?('ai_core')
 
-    department = binding.agent.departments.active.first
+    department = resolved_department(conversation, binding)
     return if department.nil?
 
     behaviors = Array(department.follow_up.to_h['behaviors'])
@@ -51,6 +58,31 @@ class Ai::FollowupConversationJob < ApplicationJob
     process(binding, department, behaviors, fallback, inbox, conversation, binding.agent.account_id)
   end
 
+  # Bug real ao vivo (isolamento): o follow-up "puxava a mensagem de OUTROS departamentos/agentes".
+  # Ai::DepartmentResolver.resolve com message_content: nil (não há mensagem nova no contexto de
+  # follow-up) SÓ é determinístico quando há override, mapeamento único de inbox, ou um único
+  # department ativo — pra agente MULTI-department sem nada disso, ele cai no is_default/primeiro por
+  # POSIÇÃO, que não tem NENHUMA relação com qual department de fato conduziu esta conversa. Fonte de
+  # verdade real: Ai::Run#ai_department_id, gravado a cada turno que o Gateway realmente processou
+  # (app/services/ai/gateway.rb) — o department que RESOLVEU esta conversa ao vivo, fato histórico, não
+  # uma re-classificação às cegas. DepartmentResolver só entra como fallback pra conversa que a IA
+  # nunca processou ainda (sem nenhum Ai::Run, ex.: logo após o binding ser criado).
+  def resolved_department(conversation, binding)
+    last_department_id = Ai::Run.where(conversation_id: conversation.id).where.not(ai_department_id: nil)
+                                .order(created_at: :desc).limit(1).pick(:ai_department_id)
+    if last_department_id
+      # Escopado ao agente/conta DESTE binding — mesma disciplina multi-tenant do override em
+      # Ai::DepartmentResolver (nunca confiar num id cru sem validar de quem ele é).
+      dept = binding.agent.departments.active.find_by(id: last_department_id)
+      return dept if dept
+    end
+
+    department, = Ai::DepartmentResolver.resolve(
+      agent: binding.agent, inbox_id: conversation.inbox_id, message_content: nil, conversation: conversation
+    )
+    department
+  end
+
   # ===================================================================================
   # DAQUI PARA BAIXO: MOVIDO VERBATIM DO Ai::FollowupSweepJob (sem editar a lógica)
   # ===================================================================================
@@ -61,6 +93,7 @@ class Ai::FollowupConversationJob < ApplicationJob
     # Já entregue a um humano (handoff): a IA/follow-up saem de cena — não retomam nem finalizam.
     return if conversation.additional_attributes.to_h['ai_handoff']
     return if acted?(conversation) # terminal action already fired in this silence
+    return if too_recent?(conversation) # piso de segurança: conversa "parece" ativa demais ainda
 
     # No follow-up configured: skip straight to the no-follow-up decision (close_rules).
     if behaviors.empty?
@@ -264,6 +297,14 @@ class Ai::FollowupConversationJob < ApplicationJob
   def awaiting_customer?(conversation)
     last = conversation.messages.where(message_type: %i[incoming outgoing]).order(:created_at).last
     last&.outgoing?
+  end
+
+  # Bug real ao vivo: follow-up disparando numa conversa que "acabou de receber mensagem" — piso de
+  # segurança FIXO (MIN_SAFETY_QUIET_MINUTES), independente do delay_minutes que o admin configurou
+  # em cada attempt. last_activity_at é atualizado pelo Chatwoot em QUALQUER mensagem nova (dos dois
+  # lados), então é o sinal mais direto de "essa conversa ainda está viva".
+  def too_recent?(conversation)
+    conversation.last_activity_at.present? && conversation.last_activity_at > MIN_SAFETY_QUIET_MINUTES.minutes.ago
   end
 
   def last_incoming_at(conversation)

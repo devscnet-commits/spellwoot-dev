@@ -18,11 +18,27 @@ class Api::V1::Accounts::AiLeadVariablesController < Api::V1::Accounts::BaseCont
   end
 
   def destroy
+    step = using_step_name
+    if step
+      return render(json: { errors: ["variável em uso na etapa \"#{step}\" — remova o uso antes de excluir"] },
+                    status: :unprocessable_entity)
+    end
+
+    # Só remove o METADADO: o valor já coletado permanece em ai_collected_facts/CustomerMemory.key_facts como
+    # chave órfã (histórico preservado). O front avisa isso antes de confirmar.
     @variable.destroy!
     head :no_content
   end
 
   private
+
+  # Nome da 1ª etapa do playbook ativo que coleta esta variável (collect.attribute), ou nil. Excluir uma
+  # variável EM USO tiraria a chave do allowlist do gate e deixaria o collect.attribute da etapa pendurado.
+  def using_step_name
+    steps = @department.playbook&.steps || []
+    step = steps.find { |s| ::Ai::StepSlot.declared_attributes(s).include?(@variable.name) }
+    step && (step['name'] || step[:name]).to_s.presence
+  end
 
   def set_department
     agent = ::Ai::Agent.find_by(id: params[:ai_agent_id], account_id: Current.account.id)

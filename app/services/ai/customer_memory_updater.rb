@@ -19,16 +19,34 @@ class Ai::CustomerMemoryUpdater
 
     memory = Ai::CustomerMemory.find_or_initialize_by(contact_id: @contact.id, account_id: @account.id)
     run = create_run
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-    result = Ai::ModelRouter.decide(
-      profile: nil, provider: 'openai', model: MODEL,
-      system_prompt: build_prompt(memory), user_message: lines, account_id: @account.id
+    # call_model (texto LIVRE, SEM schema) — como o handoff_summary/PromptAssistant. O `decide` anexa o
+    # DecisionSchema strict e a saída vira o ENVELOPE de decisão (decision/asked_slot/confidence/reply_text),
+    # NUNCA o {"summary","key_facts"} que o prompt pede. Mesmo bug do #302: quebrou em 3cc275025, quando o
+    # decide virou strict — o updater é anterior e funcionava com o decide frouxo. Sem cobertura, passou batido.
+    raw = Ai::ModelRouter.call_model(
+      provider: 'openai', model: MODEL,
+      system_prompt: build_prompt(memory), user_message: lines, account_id: @account.id, json: true
     )
-    record_run(run, result)
-    apply(memory, result[:decision] || {})
+    parsed = parse_memory(raw[:text])
+    record_run(run, raw, parsed, started)
+    apply(memory, parsed)
   end
 
   private
+
+  # call_model devolve TEXTO CRU (sem schema): extraímos o {"summary","key_facts"} nós mesmos (parser
+  # tolerante, como o handoff_summary/PromptAssistant#extract_suggestion). {} quando não vier JSON — o
+  # apply então PRESERVA a memória atual (summary não vira nil, key_facts não perde nada).
+  def parse_memory(text)
+    json = text.to_s[/\{.*\}/m]
+    return {} if json.blank?
+
+    JSON.parse(json)
+  rescue JSON::ParserError
+    {}
+  end
 
   # Merge the model's output into the stored memory. Summary is replaced (the model already merged
   # the old one in); key_facts are merged key-by-key so we only add/update, never drop known facts.
@@ -83,11 +101,16 @@ class Ai::CustomerMemoryUpdater
     )
   end
 
-  def record_run(run, result)
+  # call_model NÃO devolve cost/latency/decision (o decide devolvia) — computamos aqui, como o
+  # PromptAssistant, senão o ai:cost_report subconta a memória. `decision` guarda o {summary,key_facts} parseado.
+  def record_run(run, raw, parsed, started)
+    tin = raw[:tokens_in].to_i
+    tout = raw[:tokens_out].to_i
     run.update!(
-      provider: result[:provider], model: result[:model], tokens_in: result[:tokens_in],
-      tokens_out: result[:tokens_out], cost: result[:cost], latency_ms: result[:latency_ms],
-      decision: result[:decision] || {}, status: result[:status]
+      provider: raw[:provider] || 'openai', model: raw[:model] || MODEL, tokens_in: tin, tokens_out: tout,
+      cost: Ai::ModelRouter.estimate_cost(MODEL, tin, tout),
+      latency_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round,
+      decision: parsed, status: raw[:status]
     )
   end
 end

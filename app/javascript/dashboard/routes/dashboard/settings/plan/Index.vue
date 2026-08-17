@@ -5,6 +5,7 @@ import { useStore } from 'vuex';
 import SettingsLayout from '../SettingsLayout.vue';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
+import CreditRequestButton from './CreditRequestButton.vue';
 import { messageTimestamp } from 'shared/helpers/timeHelper';
 
 const { t } = useI18n();
@@ -190,6 +191,8 @@ onMounted(() => {
               </p>
             </div>
           </div>
+          <!-- Solicitar mais créditos (billing Fase 1): vira fila de aprovação da SCNET. -->
+          <CreditRequestButton />
         </div>
 
         <!-- Limits Card -->

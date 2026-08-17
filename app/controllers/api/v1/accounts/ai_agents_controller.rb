@@ -19,7 +19,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   def create
     agent = ::Ai::Agent.new(agent_params.merge(account_id: Current.account.id))
     if agent.save
-      ::Ai::AgentVersion.snapshot!(agent)
+      ::Ai::Version.snapshot!(agent, snapshot_fields: ::Ai::Agent::SNAPSHOT_FIELDS)
       render json: agent, status: :created
     else
       render json: { errors: agent.errors.full_messages }, status: :unprocessable_entity
@@ -28,7 +28,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
 
   def update
     if @agent.update(agent_params)
-      ::Ai::AgentVersion.snapshot!(@agent)
+      ::Ai::Version.snapshot!(@agent, snapshot_fields: ::Ai::Agent::SNAPSHOT_FIELDS)
       render json: @agent
     else
       render json: { errors: @agent.errors.full_messages }, status: :unprocessable_entity
@@ -63,6 +63,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
       :name, :stage, :status, :category, :assistant_name, :assistant_avatar, :assistant_description,
       :assistant_personality, :assistant_language, :assistant_voice, :base_prompt, :guardrails,
       :ai_operation_profile_id, :company_name, :site, :version, :identify_as, :team_id,
+      :fallback_handoff_team_id,
       handoff_team_ids: [], handoff_agent_ids: []
     )
   end

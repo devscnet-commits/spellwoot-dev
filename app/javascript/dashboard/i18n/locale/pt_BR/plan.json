@@ -31,6 +31,20 @@
     "OVERAGE_TOTAL": "Valor",
     "OVERAGE_STATUS": "Status",
     "STATUS_PENDING": "Pendente",
-    "STATUS_INVOICED": "Faturado"
+    "STATUS_INVOICED": "Faturado",
+    "CREDIT_REQUEST": {
+      "BUTTON": "Solicitar mais créditos",
+      "TITLE": "Solicitar mais créditos de IA",
+      "AMOUNT_LABEL": "Quantos créditos?",
+      "AMOUNT_PLACEHOLDER": "ex.: 1000",
+      "REASON_LABEL": "Motivo (opcional)",
+      "REASON_PLACEHOLDER": "Conte por que precisa de mais créditos",
+      "SUBMIT": "Enviar solicitação",
+      "CANCEL": "Cancelar",
+      "SENT": "Solicitação enviada. Nossa equipe vai analisar.",
+      "ERROR": "Não foi possível enviar a solicitação. Tente novamente.",
+      "INVALID_AMOUNT": "Informe uma quantidade maior que zero.",
+      "PENDING": "Você tem uma solicitação pendente de {amount} créditos — aguardando aprovação."
+    }
   }
 }

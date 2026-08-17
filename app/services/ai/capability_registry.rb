@@ -35,6 +35,12 @@ class Ai::CapabilityRegistry
     when 'conversation.resolve'
       conversation.update(status: (execution.rollback_data.dig('previous', 'status') || 'open'))
       true
+    when 'conversation.add_label'
+      conversation.update_labels(execution.rollback_data['previous'] || [])
+      true
+    when 'conversation.update_attributes'
+      conversation.update(custom_attributes: execution.rollback_data['custom_attributes'] || {})
+      true
     else
       false
     end
@@ -79,6 +85,24 @@ class Ai::CapabilityRegistry
     previous = { 'status' => conversation.status }
     conversation.update!(status: 'resolved')
     { output: { 'status' => 'resolved' }, rollback_data: { 'previous' => previous } }
+  end
+
+  # Adds one or more labels to the conversation (union, idempotent via Labelable#add_labels).
+  def self.conversation_add_label(conversation, input)
+    labels = Array(input['label'] || input['labels']).map { |l| l.to_s.strip }.reject(&:blank?)
+    raise 'label vazio' if labels.empty?
+
+    previous = conversation.label_list.to_a
+    conversation.add_labels(labels)
+    { output: { 'labels' => conversation.reload.label_list.to_a }, rollback_data: { 'previous' => previous } }
+  end
+
+  # Merges the given keys into conversation.custom_attributes (never overwrites the whole hash).
+  def self.conversation_update_attributes(conversation, input)
+    previous = conversation.custom_attributes || {}
+    merged = previous.merge(input.except('conversation_id').to_h)
+    conversation.update!(custom_attributes: merged)
+    { output: { 'custom_attributes' => merged }, rollback_data: { 'custom_attributes' => previous } }
   end
 
   def self.handler_name(key)

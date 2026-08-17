@@ -2,12 +2,13 @@
 #
 # Table name: ai_credit_balances
 #
-#  id            :bigint           not null, primary key
-#  extra_credits :integer          default(0), not null
-#  plan_credits  :integer          default(0), not null
-#  created_at    :datetime         not null
-#  updated_at    :datetime         not null
-#  account_id    :bigint           not null
+#  id                      :bigint           not null, primary key
+#  extra_credits           :integer          default(0), not null
+#  low_balance_notified_at :datetime
+#  plan_credits            :integer          default(0), not null
+#  created_at              :datetime         not null
+#  updated_at              :datetime         not null
+#  account_id              :bigint           not null
 #
 # Indexes
 #
@@ -41,6 +42,15 @@ class AiCreditBalance < ApplicationRecord
       update!(plan_credits: plan_credits - from_plan,
               extra_credits: extra_credits - (amount - from_plan))
     end
+    true
+  end
+
+  # Adiciona créditos avulsos (permanentes). Usado ao aprovar uma AiCreditRequest. Atômico (row lock).
+  def credit_extra!(amount)
+    amount = amount.to_i
+    raise ArgumentError, 'amount deve ser positivo' if amount <= 0
+
+    with_lock { update!(extra_credits: extra_credits + amount) }
     true
   end
 end

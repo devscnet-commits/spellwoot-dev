@@ -4,13 +4,22 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
+import AiVersionHistory from './AiVersionHistory.vue';
 import Logo from 'next/icon/Logo.vue';
-import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
+import { useUnsavedChangesGuard } from 'dashboard/composables/useUnsavedChangesGuard';
 import AiTools from './AiTools.vue';
 import AiStepForm from './AiStepForm.vue';
+// (De)serialização de etapa por SPREAD (preserva collect/slot_required/campos futuros) — ver aiStepPayload.
+import {
+  parseStep,
+  stepToApi,
+  nextStepUid,
+  mergeStepEdit,
+  reconcileSteps,
+} from './aiStepPayload';
 
 // When embedded inside the agent (the agent's single default department), ids come by prop
 // and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
@@ -49,17 +58,34 @@ const showSave = computed(() =>
   )
 );
 const isSaving = ref(false);
+// (1) Guardrail contra sobrescrita cega do array de steps. lock_version do playbook no load; o save o
+// reenvia e o backend responde 409 se estiver defasado (mudança out-of-band: console/outra aba/admin).
+// `loadedSteps` guarda o estado carregado (clone) para o reconcileSteps saber o que o usuário REALMENTE
+// mudou. `conflict.phase`: null | 'detected' (409, alterações preservadas) | 'reapplied' (juntou) |
+// 'ambiguous' (array mudou de tamanho — não dá para reaplicar por índice; Frente C resolve).
+const playbookLockVersion = ref(null);
+const loadedSteps = ref([]);
+const conflict = ref({ phase: null });
+const cloneSteps = arr =>
+  JSON.parse(JSON.stringify(Array.isArray(arr) ? arr : []));
 // Operational summary counts (read-only) served by the departments index serializer.
 const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 
 const form = reactive({
   name: '',
   objetivo: '',
-  instructions: '',
   status: 'active',
   steps: [],
   transfer_when_steps: '',
   close_when_steps: '',
+  // Transferência por confiança (department.transfer_rules.min_confidence): transfere se a confiança
+  // da IA for menor que o valor (0 = desligado). É o único gatilho determinístico — o match por
+  // palavra-chave foi removido (substring sem contexto gerava falso positivo). Diferente de
+  // transfer_when, que é só sugestão no prompt.
+  transfer_min_confidence: 0,
+  // Transferir para humano se a IA travar numa etapa de coleta por X mensagens
+  // (department.transfer_rules.stuck_handoff_turns). Default 3; 0 = desligado (nunca transfere por trava).
+  stuck_handoff_turns: 10,
   // Atendimento
   group_delay_seconds: '',
   max_replies: '',
@@ -68,7 +94,6 @@ const form = reactive({
   max_input_action: 'truncate',
   max_input_message: '',
   // Follow-up: SÓ retoma a conversa. Decisões de entrega ficam em Atribuição.
-  followup_instructions: '',
   // Lista de comportamentos de follow-up (1 por contexto de horário); cada um com
   // suas tentativas, carência e a ação se o cliente não responder.
   followup_behaviors: [],
@@ -80,7 +105,6 @@ const form = reactive({
   // não existir mensagem para disparar, o agente segue por estas decisões (ordem =
   // prioridade). Cada item é { uid (transitório), type }.
   no_followup_action: '',
-  disabled_custom_attributes: [],
   is_default: false,
   position: 0,
 });
@@ -94,8 +118,8 @@ const agentUrl = () =>
   `/api/v1/accounts/${route.params.accountId}/ai_agents/${route.params.agentId}`;
 const deptCollectionUrl = () => `${agentUrl()}/ai_departments`;
 
-// Custom attributes (account-level): the agent may use all of them by default; the user can
-// exclude specific ones per agent (opt-out). New attributes appear enabled automatically.
+// Custom attributes (account-level): source for the "Dado que esta etapa coleta" select in
+// AiStepForm (the agent may use all of them — no per-agent opt-out).
 const customAttributes = ref([]);
 const fetchCustomAttributes = async () => {
   try {
@@ -107,13 +131,121 @@ const fetchCustomAttributes = async () => {
     customAttributes.value = [];
   }
 };
-const attrEnabled = key => !form.disabled_custom_attributes.includes(key);
-const toggleAttr = key => {
-  const i = form.disabled_custom_attributes.indexOf(key);
-  if (i >= 0) form.disabled_custom_attributes.splice(i, 1);
-  else form.disabled_custom_attributes.push(key);
+
+// Variáveis INTERNAS do department (Ai::LeadVariable): fonte do Select da chave de slot no AiStepForm
+// (junto com customAttributes). O endpoint index já existia; ninguém o consumia. departmentId pode ser
+// nulo em "novo" -> mantém [] (o inline-create depende do department já salvo).
+const leadVariables = ref([]);
+const fetchLeadVariables = async () => {
+  if (!departmentId.value) return;
+  try {
+    const { data } = await axios.get(
+      `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`
+    );
+    leadVariables.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    leadVariables.value = [];
+  }
+};
+// (B2) Ferramentas do department: fonte do Select "opções vêm de: ferramenta" num slot choice do AiStepForm.
+// Mesmo endpoint que a aba Ferramentas (AiTools) consome; buscado aqui para passar como prop às etapas. Falha
+// ou "novo" (sem departmentId) => [] (o modo ferramenta do form avisa que não há ferramenta).
+const deptTools = ref([]);
+const fetchDeptTools = async () => {
+  if (!departmentId.value) return;
+  try {
+    const { data } = await axios.get(
+      `${deptCollectionUrl()}/${departmentId.value}/ai_tools`
+    );
+    deptTools.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    deptTools.value = [];
+  }
+};
+// AiStepForm criou uma LeadVariable inline: empilha para a opção aparecer no Select (evita refetch).
+const onVariableCreated = variable => {
+  if (variable?.name) leadVariables.value.push(variable);
+};
+// AiStepForm excluiu uma LeadVariable: remove da lista (a opção some do select de todas as etapas).
+const onVariableDeleted = id => {
+  leadVariables.value = leadVariables.value.filter(v => v.id !== id);
 };
 
+// Fontes para os seletores das automações de etapa (tag/time). Falha → lista vazia (não quebra a tela).
+const labels = ref([]);
+const fetchLabels = async () => {
+  try {
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/labels`
+    );
+    labels.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    labels.value = [];
+  }
+};
+const teams = ref([]);
+const fetchTeams = async () => {
+  try {
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/teams`
+    );
+    teams.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    teams.value = [];
+  }
+};
+// Departamentos irmãos do agente (destino da automação change_ai_department).
+const departmentsList = ref([]);
+const fetchDepartmentsList = async () => {
+  try {
+    const { data } = await axios.get(deptCollectionUrl());
+    departmentsList.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    departmentsList.value = [];
+  }
+};
+// Agente dono, para a WHITELIST do desfecho (on_complete): handoff_team_ids / handoff_agent_ids.
+const agent = ref(null);
+const fetchAgent = async () => {
+  try {
+    const { data } = await axios.get(agentUrl());
+    agent.value = data || null;
+  } catch (error) {
+    agent.value = null;
+  }
+};
+// IAs da conta, para resolver o NOME do alvo de handoff_ai (o backend casa por assistant_name || name).
+const agentsList = ref([]);
+const fetchAgents = async () => {
+  try {
+    const { data } = await axios.get(
+      `/api/v1/accounts/${route.params.accountId}/ai_agents`
+    );
+    agentsList.value = Array.isArray(data) ? data : data?.payload || [];
+  } catch (error) {
+    agentsList.value = [];
+  }
+};
+// Times da WHITELIST do agente (handoff_team_ids), na ordem marcada — a lista que a resolução do (b)-core
+// aceita, NÃO todos os times da conta. Vazia => o select do desfecho fica vazio (com aviso na tela).
+const handoffTeams = computed(() => {
+  const ids = Array.isArray(agent.value?.handoff_team_ids)
+    ? agent.value.handoff_team_ids
+    : [];
+  const byId = new Map(teams.value.map(tm => [tm.id, tm]));
+  return ids.map(id => byId.get(id)).filter(Boolean);
+});
+// IAs de destino (handoff_agent_ids) com o NOME que o backend casa (assistant_name || name).
+const handoffAgents = computed(() => {
+  const ids = Array.isArray(agent.value?.handoff_agent_ids)
+    ? agent.value.handoff_agent_ids
+    : [];
+  const byId = new Map(agentsList.value.map(a => [a.id, a]));
+  return ids
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .map(a => ({ id: a.id, name: a.assistant_name || a.name }));
+});
 const linesToArray = value =>
   (value || '')
     .split('\n')
@@ -121,32 +253,10 @@ const linesToArray = value =>
     .filter(Boolean);
 const arrayToLines = value => (Array.isArray(value) ? value.join('\n') : '');
 
-// Etapas viram cards arrastáveis: cada etapa é um objeto {name, objective, automation_on_complete}.
-// _uid é uma chave transitória só para o draggable/keys (removida no buildPayload).
-let stepUid = 0;
-const nextStepUid = () => {
-  stepUid += 1;
-  return stepUid;
-};
-// Aceita o formato legado (array de strings) e o novo (array de objetos).
-const parseSteps = arr =>
-  (Array.isArray(arr) ? arr : []).map(s =>
-    typeof s === 'string'
-      ? {
-          uid: nextStepUid(),
-          name: s,
-          instructions: '',
-          automation_on_complete: false,
-          group_delay_seconds: '',
-        }
-      : {
-          uid: nextStepUid(),
-          name: s.name || '',
-          instructions: s.instructions || s.objective || '',
-          automation_on_complete: !!s.automation_on_complete,
-          group_delay_seconds: s.group_delay_seconds ?? '',
-        }
-  );
+// Etapas viram cards arrastáveis. O uid é transitório (só draggable/keys; removido no stepToApi).
+// parseStep/stepToApi (aiStepPayload) usam SPREAD: preservam collect, slot_required e campos novos do
+// backend, em vez de reconstruir a etapa com chaves fixas (era a classe de bug que comia dado no save).
+const parseSteps = arr => (Array.isArray(arr) ? arr : []).map(parseStep);
 
 // --- Follow-up: tentativas como lista (valor + unidade) ---
 let fuUid = 0;
@@ -222,32 +332,34 @@ const parseNoFollowupAction = list =>
 
 const hydrate = dept => {
   const playbook = dept.playbook || {};
+  // (1) token de concorrência + snapshot do estado carregado (para o reconcileSteps diferenciar o que o
+  // usuário mudou). lock_version pode não existir em playbook novo/legado -> 0.
+  playbookLockVersion.value = playbook.lock_version ?? 0;
+  loadedSteps.value = cloneSteps(parseSteps(playbook.steps));
+  conflict.value = { phase: null };
   const behavior = dept.behavior || {};
   const followUp = dept.follow_up || {};
   const close = dept.close_rules || {};
+  const transferRules = dept.transfer_rules || {};
   Object.assign(form, {
     name: dept.name || '',
     objetivo: dept.objetivo || '',
-    instructions: dept.instructions || behavior.instructions || '',
     status: dept.status || 'active',
     steps: parseSteps(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
+    transfer_min_confidence: Number(transferRules.min_confidence) || 0,
+    // ?? 3: chave ausente (department antigo) => default 3; valor 0 explícito é preservado.
+    stuck_handoff_turns: Number(transferRules.stuck_handoff_turns ?? 10),
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
     max_input_action: behavior.max_input_action || 'truncate',
     max_input_message: behavior.max_input_message || '',
-    followup_instructions: followUp.instructions || '',
     followup_behaviors: hydrateBehaviors(followUp),
     close_message: close.message || '',
     inactivity_minutes: close.inactivity_minutes ?? 30,
     no_followup_action: parseNoFollowupAction(close.no_followup_actions),
-    disabled_custom_attributes: Array.isArray(
-      behavior.disabled_custom_attributes
-    )
-      ? [...behavior.disabled_custom_attributes]
-      : [],
     is_default: dept.is_default || false,
     position: dept.position ?? 0,
   });
@@ -289,12 +401,13 @@ const buildFollowUp = () => {
   }));
   return {
     enabled: behaviors.length > 0,
-    instructions: (form.followup_instructions || '').trim(),
     behaviors,
   };
 };
 
-// Finalização (close_rules) — scaffold; motor depois.
+// Finalização (close_rules). O motor roda em Ai::FollowupConversationJob
+// (run_action/run_fallback_action 'finalize'): envia a mensagem de encerramento
+// e resolve a conversa após a janela de inatividade.
 const buildFinalization = () => ({
   message: (form.close_message || '').trim(),
   inactivity_minutes: Number(form.inactivity_minutes) || 30,
@@ -306,7 +419,6 @@ const buildPayload = () => ({
   ai_department: {
     name: form.name,
     objetivo: form.objetivo,
-    instructions: form.instructions,
     status: form.status,
     is_default: true,
     position: form.position,
@@ -318,23 +430,21 @@ const buildPayload = () => ({
       max_input_action: form.max_input_action || 'truncate',
       max_input_message: (form.max_input_message || '').trim(),
       reply_scope: 'all',
-      disabled_custom_attributes: form.disabled_custom_attributes,
     },
     follow_up: buildFollowUp(),
     close_rules: buildFinalization(),
+    // Transferência determinística (HandoffEvaluator): min_confidence 0 = desligado. Aceito pelo
+    // jsonb_params do controller (sem mudança de backend). Keywords foi removido (falso positivo).
+    transfer_rules: {
+      min_confidence: Number(form.transfer_min_confidence) || 0,
+      // 0 = desligado; senão transfere para humano após X mensagens travado numa etapa de coleta.
+      stuck_handoff_turns: Number(form.stuck_handoff_turns) || 0,
+    },
     playbook: {
       objetivo: form.objetivo,
-      steps: form.steps
-        .filter(s => (s.name || '').trim())
-        .map(s => ({
-          name: s.name.trim(),
-          instructions: (s.instructions || '').trim(),
-          automation_on_complete: !!s.automation_on_complete,
-          group_delay_seconds:
-            s.group_delay_seconds === '' || s.group_delay_seconds == null
-              ? null
-              : Number(s.group_delay_seconds),
-        })),
+      // (1) token de concorrência: o backend rejeita com 409 se o playbook mudou desde o load.
+      lock_version: playbookLockVersion.value,
+      steps: form.steps.filter(s => (s.name || '').trim()).map(stepToApi),
       transfer_when: linesToArray(form.transfer_when_steps),
       close_when: linesToArray(form.close_when_steps),
     },
@@ -355,24 +465,86 @@ const save = async () => {
     if (isNew.value) {
       const { data } = await axios.post(deptCollectionUrl(), buildPayload());
       departmentId.value = data.id;
+      // (Q6) Também no create: o router.replace REUSA o componente (não recarrega), então sem re-hidratar,
+      // um save-de-etapa seguinte (agora PATCH) mandaria a versão velha -> 409. Fresca da resposta do POST.
+      playbookLockVersion.value = data?.playbook?.lock_version ?? 0;
       useAlert(t('AI_DEPARTMENTS.SAVED'));
       router.replace({
         name: 'ai_department_detail',
         params: { agentId: route.params.agentId, departmentId: data.id },
       });
     } else {
-      await axios.patch(
+      const { data } = await axios.patch(
         `${deptCollectionUrl()}/${departmentId.value}`,
         buildPayload()
       );
+      // (Q6) Re-hidrata o lock_version com a versão FRESCA da resposta. Com (B) o save dispara por etapa; sem
+      // isto, o 2º save da sequência mandaria a versão velha e levaria 409 SEMPRE. O serialize devolve
+      // playbook.as_json (inclui lock_version), a mesma forma que o load lê. Fallback: preserva o atual.
+      playbookLockVersion.value =
+        data?.playbook?.lock_version ?? playbookLockVersion.value;
       useAlert(t('AI_DEPARTMENTS.SAVED'));
     }
+    conflict.value = { phase: null };
     resetDept();
+  } catch (error) {
+    // (1) 409 = o playbook mudou no servidor desde o load. NÃO sobrescreve nem descarta: mostra a tarja de
+    // conflito com as alterações do usuário PRESERVADAS na tela; ele clica em "Recarregar e reaplicar".
+    if (error?.response?.status === 409) {
+      conflict.value = { phase: 'detected' };
+    } else {
+      useAlert(t('AI_DEPARTMENTS.ERROR'));
+    }
+  } finally {
+    isSaving.value = false;
+  }
+};
+
+// (1) "Recarregar e reaplicar": rebusca o playbook fresco (com a mudança out-of-band) e junta com as
+// alterações do usuário via reconcileSteps. 'merged' -> aplica e o usuário revisa/salva; 'ambiguous' (array
+// mudou de tamanho) -> mantém tudo na tela e oferece copiar/recarregar. NUNCA descarta o trabalho do usuário.
+const reapplyConflict = async () => {
+  isSaving.value = true;
+  try {
+    const { data } = await axios.get(deptCollectionUrl());
+    const dept = (Array.isArray(data) ? data : []).find(
+      d => String(d.id) === String(departmentId.value)
+    );
+    const freshPlaybook = dept?.playbook || {};
+    const freshSteps = parseSteps(freshPlaybook.steps);
+    const result = reconcileSteps(freshSteps, form.steps, loadedSteps.value);
+    if (result.status === 'merged') {
+      form.steps = result.steps;
+      loadedSteps.value = cloneSteps(result.steps);
+      playbookLockVersion.value = freshPlaybook.lock_version ?? 0;
+      conflict.value = { phase: 'reapplied' };
+    } else {
+      conflict.value = { phase: 'ambiguous' };
+    }
   } catch (error) {
     useAlert(t('AI_DEPARTMENTS.ERROR'));
   } finally {
     isSaving.value = false;
   }
+};
+
+// Fallback do caso ambíguo: copia as etapas do usuário (para reaplicar à mão depois de recarregar). Nunca
+// perde o trabalho digitado.
+const copyPendingSteps = async () => {
+  try {
+    await navigator.clipboard.writeText(
+      JSON.stringify(form.steps.map(stepToApi), null, 2)
+    );
+    useAlert(t('AI_DEPARTMENTS.CONFLICT.COPIED'));
+  } catch (error) {
+    useAlert(t('AI_DEPARTMENTS.ERROR'));
+  }
+};
+
+// Recarregar descartando (só no caso ambíguo, escolha EXPLÍCITA do usuário após copiar).
+const discardAndReload = async () => {
+  conflict.value = { phase: null };
+  await fetchDepartment();
 };
 
 const goBack = () =>
@@ -383,8 +555,10 @@ const goBack = () =>
 
 // Operational readiness (%): a checklist over data already loaded — no backend.
 const readinessChecks = computed(() => [
+  // 'INSTRUCTIONS' removido: era um ✓ enganoso para uma coluna legada sem editor na UI
+  // (ai_departments.instructions). O % é dinâmico (divide por checks.length), então some sem
+  // desalinhar a conta.
   { key: 'OBJETIVO', ok: !!form.objetivo?.trim() },
-  { key: 'INSTRUCTIONS', ok: !!form.instructions?.trim() },
   { key: 'STEPS', ok: summary.value.steps > 0 },
   { key: 'KNOWLEDGE', ok: summary.value.knowledge > 0 },
   { key: 'TOOLS', ok: summary.value.tools > 0 },
@@ -396,59 +570,41 @@ const readinessPct = computed(() => {
     : 0;
 });
 
-// --- Histórico de versões da configuração do agente (Comportamento + follow-up + etapas) ---
-const versions = ref([]);
-const showVersions = ref(false);
-const versionsUrl = () =>
-  `${deptCollectionUrl()}/${departmentId.value}/ai_department_versions`;
-const fetchVersions = async () => {
-  if (isNew.value) return;
-  try {
-    const { data } = await axios.get(versionsUrl());
-    versions.value = Array.isArray(data) ? data : [];
-  } catch (error) {
-    // Endpoint ai_department_versions ainda não existe (fase backend): mantém a lista vazia.
-    versions.value = [];
-  }
-};
-const restoreVersion = async v => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('AI_AGENTS.VERSIONS.CONFIRM', { n: v.version_number })))
-    return;
-  try {
-    await axios.post(`${versionsUrl()}/${v.id}/restore`);
-    useAlert(t('AI_AGENTS.VERSIONS.RESTORED'));
-    await fetchDepartment();
-    await fetchVersions();
-  } catch (error) {
-    useAlert(t('AI_DEPARTMENTS.ERROR'));
-  }
-};
-const formatVersionDate = iso => (iso ? new Date(iso).toLocaleString() : '');
+// --- Histórico de versões (painel extraído em AiVersionHistory.vue) ---
+const versionsBaseUrl = computed(
+  () => `${deptCollectionUrl()}/${departmentId.value}/ai_department_versions`
+);
 
 // --- Etapas (cards arrastáveis; edição inline no próprio card) ---
-const MAX_STEPS = 10;
-const remainingSteps = computed(() =>
-  Math.max(0, MAX_STEPS - form.steps.length)
-);
 // Em edição: número (editar aquele card), 'new' (adicionar) ou null (nada).
 const editingStepIndex = ref(null);
 
+// (A) Aviso ao sair com pendência. Rede de segurança MESMO com (B): o form sujo (deptDirty) OU um editor
+// de etapa ABERTO (editingStepIndex != null) — o rascunho digitado sem clicar em Salvar é o caso que se
+// perdia. Reusa o composable existente (onBeforeRouteLeave + confirm).
+useUnsavedChangesGuard(
+  () => deptDirty.value || editingStepIndex.value !== null,
+  'AI_DEPARTMENTS.FORM.UNSAVED_LEAVE_CONFIRM'
+);
+
 const openNewStep = () => {
-  if (form.steps.length >= MAX_STEPS) return;
   editingStepIndex.value = 'new';
 };
 const openEditStep = index => {
   editingStepIndex.value = index;
 };
-const saveStep = payload => {
+const saveStep = async payload => {
   if (editingStepIndex.value === 'new') {
     form.steps.push({ uid: nextStepUid(), ...payload });
   } else if (typeof editingStepIndex.value === 'number') {
     const i = editingStepIndex.value;
-    form.steps.splice(i, 1, { ...form.steps[i], ...payload });
+    form.steps.splice(i, 1, mergeStepEdit(form.steps[i], payload));
   }
   editingStepIndex.value = null;
+  // (B) O Salvar da etapa PERSISTE na hora — não só fecha o editor. Reusa o save() do rodapé (mesma PATCH do
+  // departamento inteiro; não há rota por etapa). O lock_version #324 é re-hidratado no save() (ver Q6), então
+  // salvar várias etapas em sequência não dá 409. Fecha a armadilha do "Salvar que só fechava o editor".
+  await save();
 };
 const cancelStep = () => {
   editingStepIndex.value = null;
@@ -501,6 +657,25 @@ const fuNoResponseOptions = computed(() => [
     label: t('AI_DEPARTMENTS.FOLLOWUP.NR_WAIT_HOURS'),
   },
 ]);
+// O label do contador de tentativas reflete a ação escolhida em "Se o cliente não responder"
+// (bhv.no_response_action — o VALUE não muda, só o texto). Fallback para COUNT_LABEL se vier
+// vazio/inválido. Chaves estáticas por caso (evita o dynamic-key do intlify e reage em tempo real).
+const followupCountLabel = action => {
+  switch (action) {
+    case 'assign':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_ASSIGN');
+    case 'finalize':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_FINALIZE');
+    case 'discard':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_DISCARD');
+    case 'wait':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_WAIT');
+    case 'wait_business_hours':
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL_WAIT_BUSINESS_HOURS');
+    default:
+      return t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL');
+  }
+};
 const addBehavior = () => {
   const used = new Set(form.followup_behaviors.map(b => b.context));
   const next =
@@ -551,7 +726,16 @@ const nfActionOptions = computed(() => [
 onMounted(async () => {
   await fetchDepartment();
   captureDept();
-  await Promise.all([fetchVersions(), fetchCustomAttributes()]);
+  await Promise.all([
+    fetchCustomAttributes(),
+    fetchLeadVariables(),
+    fetchDeptTools(),
+    fetchLabels(),
+    fetchTeams(),
+    fetchDepartmentsList(),
+    fetchAgent(),
+    fetchAgents(),
+  ]);
 });
 </script>
 
@@ -700,83 +884,6 @@ onMounted(async () => {
           </button>
         </div>
 
-        <!-- INSTRUÇÕES -->
-        <div
-          v-if="visibleSections.has('instructions')"
-          class="flex flex-col gap-5"
-        >
-          <!-- Atributos personalizados (da conta): usar ou excluir por agente -->
-          <section
-            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex flex-col gap-0.5">
-                <span class="text-sm font-medium text-n-slate-12">
-                  {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.TITLE') }}
-                </span>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.HINT') }}
-                </p>
-              </div>
-              <router-link
-                :to="{
-                  name: 'attributes_list',
-                  params: { accountId: route.params.accountId },
-                }"
-                target="_blank"
-                class="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-n-weak px-3 py-1.5 text-xs font-medium text-n-slate-12 hover:bg-n-alpha-1"
-              >
-                <span class="i-lucide-settings-2 size-3.5" />
-                {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MANAGE') }}
-                <span class="i-lucide-external-link size-3 text-n-slate-10" />
-              </router-link>
-            </div>
-            <p
-              v-if="!customAttributes.length"
-              class="text-sm text-n-slate-11 mb-0"
-            >
-              {{ $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EMPTY') }}
-            </p>
-            <!-- Lista pode crescer conforme novos atributos da conta; limita a ~7 linhas e rola. -->
-            <div
-              v-else
-              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-[25rem] overflow-y-auto"
-            >
-              <div
-                v-for="attr in customAttributes"
-                :key="attr.attribute_key"
-                class="flex items-center justify-between gap-3 px-4 py-2.5"
-              >
-                <div class="min-w-0">
-                  <p class="text-sm text-n-slate-12 mb-0 truncate">
-                    {{ attr.attribute_display_name }}
-                  </p>
-                  <p class="text-xs text-n-slate-11 mb-0">
-                    {{
-                      attr.attribute_model === 'contact_attribute'
-                        ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MODEL_CONTACT')
-                        : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.MODEL_CONVERSATION')
-                    }}
-                  </p>
-                </div>
-                <div class="shrink-0 flex items-center gap-2.5">
-                  <span class="text-xs text-n-slate-11">
-                    {{
-                      attrEnabled(attr.attribute_key)
-                        ? $t('AI_DEPARTMENTS.CUSTOM_ATTRS.USING')
-                        : $t('AI_DEPARTMENTS.CUSTOM_ATTRS.EXCLUDED')
-                    }}
-                  </span>
-                  <Switch
-                    :model-value="attrEnabled(attr.attribute_key)"
-                    @change="toggleAttr(attr.attribute_key)"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-
         <!-- ATENDIMENTO -->
         <div
           v-if="visibleSections.has('attendance')"
@@ -866,64 +973,17 @@ onMounted(async () => {
           </section>
 
           <!-- Histórico de versões da configuração (Comportamento + follow-up + etapas) -->
-          <div
+          <AiVersionHistory
             v-if="!isNew"
-            class="border-t border-n-weak pt-4 flex flex-col gap-3"
-          >
-            <button
-              type="button"
-              class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
-              @click="showVersions = !showVersions"
-            >
-              <span
-                class="size-4 inline-block"
-                :class="
-                  showVersions
-                    ? 'i-lucide-chevron-down'
-                    : 'i-lucide-chevron-right'
-                "
-              />
-              {{ $t('AI_AGENTS.VERSIONS.TITLE') }}
-              <span class="text-n-slate-11 font-normal">{{
-                `(${versions.length})`
-              }}</span>
-            </button>
-            <div
-              v-if="showVersions"
-              class="border border-n-weak rounded-xl divide-y divide-n-weak max-h-72 overflow-auto"
-            >
-              <p
-                v-if="!versions.length"
-                class="text-sm text-n-slate-11 px-4 py-3 mb-0"
-              >
-                {{ $t('AI_AGENTS.VERSIONS.EMPTY') }}
-              </p>
-              <div
-                v-for="v in versions"
-                :key="v.id"
-                class="flex items-center justify-between gap-3 px-4 py-2.5"
-              >
-                <div class="min-w-0">
-                  <p class="text-sm text-n-slate-12 mb-0">
-                    {{ `v${v.version_number}` }}
-                    <span v-if="v.note" class="text-n-slate-11">{{
-                      ` · ${v.note}`
-                    }}</span>
-                  </p>
-                  <p class="text-xs text-n-slate-11 mb-0">
-                    {{ formatVersionDate(v.created_at) }}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="shrink-0 text-sm text-n-brand hover:underline"
-                  @click="restoreVersion(v)"
-                >
-                  {{ $t('AI_AGENTS.VERSIONS.RESTORE') }}
-                </button>
-              </div>
-            </div>
-          </div>
+            :base-url="versionsBaseUrl"
+            :title-key="
+              embedded
+                ? 'AI_AGENTS.VERSIONS.TITLE_SETTINGS'
+                : 'AI_AGENTS.VERSIONS.TITLE'
+            "
+            error-key="AI_DEPARTMENTS.ERROR"
+            @restored="fetchDepartment"
+          />
         </div>
 
         <!-- FOLLOW-UP -->
@@ -939,18 +999,6 @@ onMounted(async () => {
                 {{ $t('AI_DEPARTMENTS.FOLLOWUP.HINT') }}
               </p>
             </div>
-
-            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
-              {{ $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS') }}
-              <textarea
-                v-model="form.followup_instructions"
-                rows="3"
-                :placeholder="
-                  $t('AI_DEPARTMENTS.FOLLOWUP.INSTRUCTIONS_PLACEHOLDER')
-                "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
-              />
-            </label>
 
             <div class="flex flex-col gap-0.5">
               <span class="text-sm font-medium text-n-slate-12">
@@ -1050,7 +1098,7 @@ onMounted(async () => {
                 <label
                   class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
                 >
-                  {{ $t('AI_DEPARTMENTS.FOLLOWUP.COUNT_LABEL') }}
+                  {{ followupCountLabel(bhv.no_response_action) }}
                   <input
                     :value="bhv.attempts.length"
                     type="number"
@@ -1102,7 +1150,7 @@ onMounted(async () => {
                           'AI_DEPARTMENTS.FOLLOWUP.ATTEMPT_MESSAGE_PLACEHOLDER'
                         )
                       "
-                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                      class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
                     />
                   </label>
                 </div>
@@ -1158,8 +1206,22 @@ onMounted(async () => {
                 :placeholder="
                   $t('AI_DEPARTMENTS.FINALIZATION.MESSAGE_PLACEHOLDER')
                 "
-                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem]"
               />
+            </label>
+
+            <!-- Encerrar quando (close_when): mora em ai_playbooks.close_when; aqui é só a posição
+                 visual, perto da mensagem de encerramento que é enviada quando o gatilho dispara. -->
+            <label class="flex flex-col gap-1 text-sm text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
+              <textarea
+                v-model="form.close_when_steps"
+                rows="4"
+                class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem] leading-relaxed"
+              />
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
+              </span>
             </label>
 
             <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
@@ -1211,10 +1273,6 @@ onMounted(async () => {
                 {{ $t('AI_DEPARTMENTS.FINALIZATION.NF_FINALIZE_BADGE') }}
               </p>
             </div>
-
-            <p class="text-xs text-n-slate-11 mb-0">
-              {{ $t('AI_DEPARTMENTS.FINALIZATION.SCAFFOLD_NOTE') }}
-            </p>
           </section>
         </div>
 
@@ -1249,15 +1307,31 @@ onMounted(async () => {
               class="flex flex-col gap-2"
             >
               <template #item="{ element, index }">
-                <div class="rounded-xl border border-n-weak bg-n-solid-1">
+                <div
+                  :key="element.uid"
+                  class="rounded-xl border border-n-weak bg-n-solid-1"
+                >
                   <!-- Edição inline (abre no próprio card) -->
                   <AiStepForm
                     v-if="editingStepIndex === index"
                     :step="element"
                     :is-new="false"
+                    :index="index"
+                    :labels="labels"
+                    :teams="teams"
+                    :custom-attributes="customAttributes"
+                    :lead-variables="leadVariables"
+                    :tools="deptTools"
+                    :agent-id="route.params.agentId"
+                    :department-id="departmentId"
+                    :departments="departmentsList"
+                    :handoff-teams="handoffTeams"
+                    :handoff-agents="handoffAgents"
                     class="p-4"
                     @save="saveStep"
                     @cancel="cancelStep"
+                    @variable-created="onVariableCreated"
+                    @variable-deleted="onVariableDeleted"
                   />
                   <!-- Linha colapsada -->
                   <div v-else class="flex items-center gap-3 px-3 py-2.5">
@@ -1277,10 +1351,10 @@ onMounted(async () => {
                         {{ element.name }}
                       </p>
                       <p
-                        v-if="element.instructions"
+                        v-if="element.objective"
                         class="text-xs text-n-slate-11 mb-0 truncate"
                       >
-                        {{ element.instructions }}
+                        {{ element.objective }}
                       </p>
                     </div>
                     <span
@@ -1317,49 +1391,79 @@ onMounted(async () => {
               <AiStepForm
                 :step="null"
                 is-new
+                :index="form.steps.length"
+                :labels="labels"
+                :teams="teams"
+                :custom-attributes="customAttributes"
+                :lead-variables="leadVariables"
+                :tools="deptTools"
+                :agent-id="route.params.agentId"
+                :department-id="departmentId"
+                :departments="departmentsList"
+                :handoff-teams="handoffTeams"
+                :handoff-agents="handoffAgents"
                 @save="saveStep"
                 @cancel="cancelStep"
+                @variable-created="onVariableCreated"
+                @variable-deleted="onVariableDeleted"
               />
             </div>
 
-            <!-- Adicionar etapa + contador (máx. 10) -->
-            <div
-              v-if="editingStepIndex === null"
-              class="flex items-center justify-between gap-3"
-            >
-              <span class="text-xs text-n-slate-11">
-                {{
-                  $t('AI_DEPARTMENTS.FORM.STEP_REMAINING', {
-                    count: remainingSteps,
-                  })
-                }}
-              </span>
+            <!-- Adicionar etapa (sem limite) -->
+            <div v-if="editingStepIndex === null" class="flex justify-end">
               <button
                 type="button"
-                :disabled="form.steps.length >= MAX_STEPS"
-                class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                class="shrink-0 text-sm font-medium px-4 py-1.5 rounded-full bg-n-brand text-white"
                 @click="openNewStep"
               >
                 + {{ $t('AI_DEPARTMENTS.FORM.STEP_ADD') }}
               </button>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
-                <textarea
-                  v-model="form.transfer_when_steps"
-                  rows="6"
-                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
-                />
-              </label>
-              <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
-                <textarea
-                  v-model="form.close_when_steps"
-                  rows="6"
-                  class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
-                />
-              </label>
+            <!-- Quando transferir para um humano: transfer_when (orienta a IA) + min_confidence
+                 (gatilho determinístico). UMA explicação no topo do bloco, não uma por campo. -->
+            <div class="flex flex-col gap-3 pt-1 border-t border-n-weak">
+              <div class="flex flex-col gap-0.5 pt-3">
+                <span class="text-sm font-medium text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_TITLE') }}
+                </span>
+                <p class="text-xs text-n-slate-11 mb-0">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_INTRO') }}
+                </p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_WHEN') }}
+                  <textarea
+                    v-model="form.transfer_when_steps"
+                    rows="6"
+                    class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-28 leading-relaxed"
+                  />
+                </label>
+                <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_MIN_CONFIDENCE') }}
+                  <input
+                    v-model="form.transfer_min_confidence"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    class="w-32 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                  />
+                </label>
+                <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
+                  {{ $t('AI_DEPARTMENTS.FORM.STUCK_HANDOFF_TURNS') }}
+                  <input
+                    v-model="form.stuck_handoff_turns"
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="w-32 px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 text-sm"
+                  />
+                  <span class="text-xs text-n-slate-11">
+                    {{ $t('AI_DEPARTMENTS.FORM.STUCK_HANDOFF_TURNS_HINT') }}
+                  </span>
+                </label>
+              </div>
             </div>
           </section>
         </div>
@@ -1371,27 +1475,86 @@ onMounted(async () => {
           :department-id="departmentId"
         />
 
+        <!-- (1) Tarja de conflito (save defasado / 409). Diz o que FAZER, não só o que houve. As alterações
+             do usuário ficam PRESERVADAS na tela em todos os estados. -->
+        <div
+          v-if="conflict.phase"
+          class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-amber-3 text-n-amber-11"
+        >
+          <div class="flex items-start gap-2">
+            <span class="mt-0.5 shrink-0 size-4 i-lucide-alert-triangle" />
+            <span class="flex-1 min-w-0 text-sm">
+              <template v-if="conflict.phase === 'detected'">
+                {{ $t('AI_DEPARTMENTS.CONFLICT.DETECTED') }}
+              </template>
+              <template v-else-if="conflict.phase === 'reapplied'">
+                {{ $t('AI_DEPARTMENTS.CONFLICT.REAPPLIED') }}
+              </template>
+              <template v-else>
+                {{ $t('AI_DEPARTMENTS.CONFLICT.AMBIGUOUS') }}
+              </template>
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-2 pl-6">
+            <button
+              v-if="conflict.phase === 'detected'"
+              type="button"
+              class="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-n-amber-9 text-white disabled:opacity-50"
+              :disabled="isSaving"
+              @click="reapplyConflict"
+            >
+              {{ $t('AI_DEPARTMENTS.CONFLICT.REAPPLY_ACTION') }}
+            </button>
+            <template v-if="conflict.phase === 'ambiguous'">
+              <button
+                type="button"
+                class="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-n-amber-9 text-white"
+                @click="copyPendingSteps"
+              >
+                {{ $t('AI_DEPARTMENTS.CONFLICT.COPY_ACTION') }}
+              </button>
+              <button
+                type="button"
+                class="text-xs px-2.5 py-1.5 rounded-lg bg-n-alpha-2 text-n-slate-12"
+                @click="discardAndReload"
+              >
+                {{ $t('AI_DEPARTMENTS.CONFLICT.RELOAD_ACTION') }}
+              </button>
+            </template>
+          </div>
+        </div>
+
         <!-- Save bar (config tabs only) -->
         <div
           v-if="showSave"
-          class="flex justify-end gap-2 border-t border-n-weak pt-4"
+          class="flex items-center justify-between gap-2 border-t border-n-weak pt-4 flex-wrap"
         >
-          <button
-            v-if="!embedded"
-            type="button"
-            class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
-            @click="goBack"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
-          </button>
-          <button
-            type="button"
-            class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="isSaving || !deptDirty"
-            @click="save"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
-          </button>
+          <!-- (C) Com (B), salvar a etapa já persistiu tudo — o rodapé fica sem pendência. O botão já
+               desabilita (:disabled=!deptDirty), e este rótulo torna explícito o "nada a salvar", para o
+               usuário não clicar por precaução. Some assim que houver qualquer edição (deptDirty). -->
+          <span class="text-xs text-n-slate-11">
+            <template v-if="!deptDirty && !isSaving">
+              {{ $t('AI_DEPARTMENTS.FORM.ALL_SAVED') }}
+            </template>
+          </span>
+          <div class="flex gap-2">
+            <button
+              v-if="!embedded"
+              type="button"
+              class="text-sm px-3 py-2 rounded-lg bg-n-alpha-2 text-n-slate-12"
+              @click="goBack"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
+            </button>
+            <button
+              type="button"
+              class="text-sm font-medium px-4 py-2 rounded-lg bg-n-brand text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isSaving || !deptDirty"
+              @click="save"
+            >
+              {{ $t('AI_DEPARTMENTS.FORM.SAVE') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>

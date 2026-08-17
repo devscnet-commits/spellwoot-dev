@@ -48,4 +48,43 @@ RSpec.describe Ai::ToolExecutor do
     expect(execution.output['reason']).to eq('tool_inactive')
     expect(conversation.reload.status).to eq('open')
   end
+
+  # Backend guardrail da arquitetura "flexível" (Ai::PythonOrchestratorClient expõe TODAS as tools de
+  # uma vez, sem gate por etapa): required_attributes bloqueia execução até os dados existirem, com
+  # um erro LEGÍVEL PELA IA (não uma exceção) — o modelo lê e pede o dado faltante ao cliente.
+  it 'bloqueia a execução quando falta um required_attribute (não muda nada, erro legível pela IA)' do
+    gated = tool('conversation.resolve')
+    gated.update!(required_attributes: ['endereco'])
+
+    execution = described_class.new(tool: gated, input: {}, conversation: conversation, mode: 'live').perform
+
+    expect(execution.status).to eq('skipped')
+    expect(execution.output['reason']).to eq('missing_required_attributes')
+    expect(execution.error).to match(/endereco/)
+    expect(conversation.reload.status).to eq('open')
+  end
+
+  it 'executa normalmente assim que o required_attribute existe em ai_collected_facts' do
+    gated = tool('conversation.resolve')
+    gated.update!(required_attributes: ['endereco'])
+    conversation.update!(additional_attributes: { 'ai_collected_facts' => { 'endereco' => 'Rua X, 123' } })
+
+    execution = described_class.new(tool: gated, input: {}, conversation: conversation, mode: 'live').perform
+
+    expect(execution.status).to eq('executed')
+  end
+
+  # Uma Ferramenta do tipo webhook herda o guard SSRF do Ai::WebhookRunner → Ai::SafeHttp: uma URL
+  # apontando para rede interna/metadados é rejeitada e auditada como 'failed', sem derrubar o run.
+  it 'records a webhook tool with a private/metadata URL as failed (SSRF blocked, no crash)' do
+    webhook_tool = Ai::Tool.create!(account: account, name: 'meta', implementation_type: 'webhook',
+                                    status: 'active',
+                                    webhook_config: { 'url' => 'http://169.254.169.254/latest/meta-data/',
+                                                      'method' => 'POST' })
+    execution = described_class.new(tool: webhook_tool, input: {}, conversation: conversation,
+                                    mode: 'live').perform
+
+    expect(execution.status).to eq('failed')
+    expect(execution.error).to match(/bloqueado por segurança/)
+  end
 end

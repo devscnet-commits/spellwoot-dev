@@ -14,6 +14,15 @@ class Ai::FollowupSweepJob < ApplicationJob
   # Só conversas paradas há pelo menos isso — não mexe em conversa "quente".
   MIN_QUIET = 1.minute
 
+  # Reativado (17/08): estava DESATIVADO desde um corte de emergência (follow-up disparando em
+  # conversas ativas, interferindo em teste ao vivo) que cortou aqui, o único ponto de entrada, em
+  # vez de corrigir a causa raiz — deixado assim (comentário antigo dizia explicitamente "NÃO é o
+  # fix"). A causa raiz JÁ FOI corrigida desde então, em
+  # Ai::FollowupConversationJob#resolved_department: usa Ai::Run#ai_department_id (o department que
+  # REALMENTE conduziu esta conversa, fato histórico) em vez de re-classificar às cegas via
+  # DepartmentResolver — DepartmentResolver só entra como fallback pra conversa que a IA nunca
+  # processou ainda (sem Ai::Run nenhum, logo sem "instrução de agente antigo" pra vazar). Reativando
+  # o sweep agora que o fix downstream já existe.
   def perform
     lock = Redis::LockManager.new
     return unless lock.lock(LOCK_KEY, LOCK_TTL) # outro sweep já está rodando

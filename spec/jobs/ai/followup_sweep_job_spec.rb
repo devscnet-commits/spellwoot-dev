@@ -1,87 +1,76 @@
 require 'rails_helper'
 
-# Unit coverage for the follow-up engine's decision helpers (no DB / HTTP).
-# The full sweep is integration-tested separately on the server.
+# Unit coverage for the DISPATCHER role of the sweep. After the refactor the sweep does not
+# run the follow-up work inline anymore: it selects candidate conversations (open, unassigned,
+# quiet for a while, in an inbox with a live AI binding whose account has ai_core) and enqueues
+# one Ai::FollowupConversationJob per conversation. The decision helpers moved to the
+# per-conversation job (see followup_conversation_job_spec.rb); the end-to-end side effects are
+# in followup_sweep_job_integration_spec.rb.
 RSpec.describe Ai::FollowupSweepJob do
-  let(:job) { described_class.new }
-
-  describe '#effective_message' do
-    it 'reuses the previous non-empty message when the current is blank' do
-      attempts = [{ 'message' => 'oi' }, { 'message' => '' }, { 'message' => 'voltei' }]
-      expect(job.send(:effective_message, attempts, 1)).to eq('oi')
-      expect(job.send(:effective_message, attempts, 2)).to eq('voltei')
-    end
-
-    it 'is blank when no message exists up to the index' do
-      expect(job.send(:effective_message, [{ 'message' => '' }], 0)).to eq('')
-    end
+  let(:account) { create(:account) }
+  let(:inbox) { create(:inbox, account: account) }
+  let(:profile) do
+    Ai::OperationProfile.create!(account_id: account.id, name: 'balanceado',
+                                 supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
+  end
+  let(:agent) do
+    Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
+  end
+  let!(:binding_row) do
+    Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
   end
 
-  describe '#active_behavior' do
-    let(:behaviors) do
-      [{ 'context' => 'inbox_hours' }, { 'context' => 'outside_hours' }]
-    end
+  before { account.enable_features!('ai_core') }
 
-    it 'picks inbox_hours when the inbox is open' do
-      inbox = instance_double(Inbox, available_now?: true)
-      expect(job.send(:active_behavior, behaviors, inbox)).to eq(behaviors[0])
-    end
-
-    it 'picks outside_hours when the inbox is closed' do
-      inbox = instance_double(Inbox, available_now?: false)
-      expect(job.send(:active_behavior, behaviors, inbox)).to eq(behaviors[1])
-    end
-
-    it 'returns nil when no context matches' do
-      inbox = instance_double(Inbox, available_now?: true)
-      custom = [{ 'context' => 'outside_hours' }]
-      expect(job.send(:active_behavior, custom, inbox)).to be_nil
-    end
+  # A quiet, unassigned, open conversation old enough to clear MIN_QUIET.
+  def quiet_conversation(quiet_ago: 5.minutes.ago)
+    create(:conversation, account: account, inbox: inbox, status: 'open',
+                          assignee: nil, last_activity_at: quiet_ago)
   end
 
-  describe '#within_custom_window?' do
-    let(:inbox) { instance_double(Inbox, timezone: 'UTC') }
+  describe '#perform (dispatcher)' do
+    # Reativado (17/08) — ver comentário em Ai::FollowupSweepJob#perform: a causa raiz (department
+    # errado sem Ai::Run) já foi corrigida em Ai::FollowupConversationJob#resolved_department antes
+    # deste kill-switch ser removido.
+    it 'enqueues one FollowupConversationJob per eligible quiet conversation' do
+      convo_a = quiet_conversation
+      convo_b = quiet_conversation
 
-    it 'matches a normal daytime window' do
-      travel_to(Time.utc(2026, 1, 1, 10, 0)) do
-        expect(job.send(:within_custom_window?, [{ 'start' => '08:00', 'end' => '18:00' }], inbox)).to be(true)
-        expect(job.send(:within_custom_window?, [{ 'start' => '12:00', 'end' => '18:00' }], inbox)).to be(false)
-      end
+      expect { described_class.new.perform }
+        .to have_enqueued_job(Ai::FollowupConversationJob).with(convo_a.id)
+        .and have_enqueued_job(Ai::FollowupConversationJob).with(convo_b.id)
     end
 
-    it 'matches an overnight window' do
-      travel_to(Time.utc(2026, 1, 1, 23, 0)) do
-        expect(job.send(:within_custom_window?, [{ 'start' => '20:00', 'end' => '07:00' }], inbox)).to be(true)
-      end
+    it 'does not enqueue anything for inboxes without ai_core' do
+      account.disable_features!('ai_core')
+      quiet_conversation
+
+      expect { described_class.new.perform }.not_to have_enqueued_job(Ai::FollowupConversationJob)
     end
 
-    it 'is false when there are no windows' do
-      expect(job.send(:within_custom_window?, [], inbox)).to be(false)
-    end
-  end
+    it 'ignores conversations a human already took over (assignee present)' do
+      quiet_conversation.update!(assignee: create(:user, account: account, role: :agent))
 
-  describe '#inactivity_minutes' do
-    it 'falls back to the default when unset' do
-      expect(job.send(:inactivity_minutes, instance_double(Ai::Department, close_rules: {}))).to eq(30)
+      expect { described_class.new.perform }.not_to have_enqueued_job(Ai::FollowupConversationJob)
     end
 
-    it 'uses the configured value' do
-      dept = instance_double(Ai::Department, close_rules: { 'inactivity_minutes' => 15 })
-      expect(job.send(:inactivity_minutes, dept)).to eq(15)
-    end
-  end
+    it 'ignores conversations that are not open' do
+      quiet_conversation.update!(status: :resolved)
 
-  describe '#fallback_actions' do
-    it 'reads the ordered no_followup_actions list (order = priority)' do
-      dept = instance_double(Ai::Department,
-                             close_rules: { 'no_followup_actions' => ['transfer_human', 'finalize'] })
-      expect(job.send(:fallback_actions, dept)).to eq(%w[transfer_human finalize])
+      expect { described_class.new.perform }.not_to have_enqueued_job(Ai::FollowupConversationJob)
     end
 
-    it 'drops blanks and is empty when unset' do
-      dept = instance_double(Ai::Department, close_rules: { 'no_followup_actions' => ['', 'wait'] })
-      expect(job.send(:fallback_actions, dept)).to eq(['wait'])
-      expect(job.send(:fallback_actions, instance_double(Ai::Department, close_rules: {}))).to eq([])
+    it 'ignores conversations still within the MIN_QUIET window (too hot)' do
+      quiet_conversation(quiet_ago: 10.seconds.ago)
+
+      expect { described_class.new.perform }.not_to have_enqueued_job(Ai::FollowupConversationJob)
+    end
+
+    it 'does nothing and does not raise when another sweep holds the lock' do
+      quiet_conversation
+      allow_any_instance_of(Redis::LockManager).to receive(:lock).and_return(false)
+
+      expect { described_class.new.perform }.not_to have_enqueued_job(Ai::FollowupConversationJob)
     end
   end
 end

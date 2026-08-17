@@ -395,6 +395,7 @@ onMounted(() => {
           <input
             v-model="form.name"
             type="text"
+            :placeholder="$t('AI_TOOLS.FORM.NAME_PLACEHOLDER')"
             class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
           />
         </label>
@@ -464,7 +465,7 @@ onMounted(() => {
               v-model="form.webhook_headers"
               rows="2"
               :placeholder="$t('AI_TOOLS.FORM.WEBHOOK_HEADERS_PLACEHOLDER')"
-              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-none font-mono text-xs"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16 font-mono text-xs"
             />
           </label>
         </div>
@@ -474,8 +475,12 @@ onMounted(() => {
         <input
           v-model="form.description"
           type="text"
+          :placeholder="$t('AI_TOOLS.FORM.DESCRIPTION_PLACEHOLDER')"
           class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
         />
+        <span class="text-xs text-n-slate-11">
+          {{ $t('AI_TOOLS.FORM.DESCRIPTION_HINT') }}
+        </span>
       </label>
       <!-- Argumentos da ação: construtor visual + JSON avançado opcional -->
       <div class="flex flex-col gap-2">

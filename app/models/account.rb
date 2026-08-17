@@ -105,6 +105,8 @@ class Account < ApplicationRecord
   # Overage pago (Fase 2): snapshots diários do excedente + cobranças por ciclo (média × preço).
   has_many :overage_snapshots, dependent: :destroy_async
   has_many :overage_charges, dependent: :destroy_async
+  # Solicitações de mais créditos de IA (billing Fase 1): fila de aprovação manual da SCNET.
+  has_many :ai_credit_requests, dependent: :destroy_async
 
   has_one_attached :contacts_export
 

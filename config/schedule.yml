@@ -107,3 +107,10 @@ billing_overage_snapshot_job:
   cron: '30 4 * * *'
   class: 'Billing::OverageSnapshotJob'
   queue: scheduled_jobs
+
+# executed every 15 min — auto-cura de embeddings: reenfileira o ingest de knowledge sources cujos
+# chunks ficaram sem vetor (queda transitória da API/chave). Ver Ai::EmbeddingBackfillJob.
+ai_embedding_backfill_job:
+  cron: '*/15 * * * *'
+  class: 'Ai::EmbeddingBackfillJob'
+  queue: scheduled_jobs

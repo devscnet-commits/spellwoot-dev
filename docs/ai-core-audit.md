@@ -24,7 +24,7 @@ Conta (Account)
     ├── Caixas do agente (ai_agent_inboxes)          ← onde atende + modo (live/shadow)
     └── Departamento (ai_departments)                ← mini processo operacional
         ├── Playbook (ai_playbooks)                  ← objetivo, etapas, condições
-        │   └── Versões (ai_playbook_versions)
+        │   └── Versões (ai_versions, versionable=Ai::Playbook)
         ├── Caixas do departamento (ai_department_inboxes)
         ├── Conhecimento (ai_knowledge_sources → ai_knowledge_chunks + embeddings)
         ├── Ferramentas (ai_tools → ai_integration_links)
@@ -60,7 +60,7 @@ Esta separação está **correta e não será refatorada.** A fase funcional con
 | Tela | Rota | Entidade principal | Tabelas |
 |---|---|---|---|
 | Agentes (lista) | `ai_agents_index` | Agente | `ai_agents` |
-| Agente → Sobre | `ai_agent_detail` | Agente | `ai_agents`, `ai_agent_versions` |
+| Agente → Sobre | `ai_agent_detail` | Agente | `ai_agents`, `ai_versions` |
 | Agente → Caixas | `ai_agent_detail` | Vínculo agente↔caixa | `ai_agent_inboxes` |
 | Agente → Departamentos | `ai_agent_detail` | Departamento (lista) | `ai_departments` |
 | Agente → Teste | `ai_agent_detail` | Simulação | `ai_runs` (efêmero no teste) |
@@ -105,8 +105,9 @@ Esta separação está **correta e não será refatorada.** A fase funcional con
 - **Memória por conversa** — `ai_agent_memory` (state + summary) sustenta coleta de slots.
 - **RAG real cabeado** — `pgvector` + gem `neighbor`, embeddings 1536-dim, índice IVFFLAT
   por distância de cosseno em `ai_knowledge_chunks`.
-- **Versionamento com snapshot imutável** — `ai_agent_versions` e `ai_playbook_versions`,
-  com `snapshot!` idempotente (só versiona em mudança real) e rollback de um clique.
+- **Versionamento com snapshot imutável** — `ai_versions` polimórfico (versionable = agente,
+  playbook ou department), com `snapshot!` idempotente (só versiona em mudança real) e rollback de
+  um clique.
 - **Multitenancy** — todo registro `ai_*` carrega `account_id`; rotas exigem `administrator`.
 - **Perfis operacionais** — supervisor + workers + roteamento + orçamento, com presets
   Econômico/Balanceado/Premium. Conceito vendável e correto.

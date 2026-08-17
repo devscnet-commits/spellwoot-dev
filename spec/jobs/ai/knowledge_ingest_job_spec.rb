@@ -20,4 +20,93 @@ RSpec.describe Ai::KnowledgeIngestJob do
       expect(job.send(:chunkify, '   ')).to eq([])
     end
   end
+
+  describe '#source_text (preço entra no chunk)' do
+    it 'inclui "Preço: <valor>" quando price está preenchido' do
+      src = double(title: 'Internet Fibra 1 Giga', raw: 'Plano residencial', price: 'R$ 169,90/mês')
+
+      text = job.send(:source_text, src)
+
+      expect(text).to include('Internet Fibra 1 Giga')
+      expect(text).to include('Plano residencial')
+      expect(text).to include('Preço: R$ 169,90/mês')
+    end
+
+    it 'NÃO adiciona linha de preço quando price está vazio/nil (comportamento atual)' do
+      src = double(title: 'FAQ', raw: 'Pergunta e resposta', price: nil)
+
+      text = job.send(:source_text, src)
+
+      expect(text).not_to include('Preço:')
+      expect(text).to eq("FAQ\nPergunta e resposta")
+    end
+  end
+
+  describe '#perform — embedding robusto' do
+    let(:account) { create(:account) }
+    let(:vector) { Array.new(1536, 0.01) }
+
+    def source(raw: 'Pergunta e resposta.', status: 'active')
+      Ai::KnowledgeSource.create!(account: account, kind: 'faq', title: 'FAQ', raw: raw, status: status)
+    end
+
+    def stub_embedder(enabled: true, vector: nil, error: nil)
+      emb = instance_double(Ai::Embedder, enabled?: enabled)
+      if error
+        allow(emb).to receive(:embed).and_raise(error)
+      else
+        allow(emb).to receive(:embed).and_return(vector)
+      end
+      allow(Ai::Embedder).to receive(:new).and_return(emb)
+      emb
+    end
+
+    it 'cria chunks COM vetor quando o embedder funciona' do
+      stub_embedder(vector: vector)
+      src = source
+
+      described_class.new.perform(src.id)
+
+      chunks = src.reload.chunks
+      expect(chunks).to be_present
+      expect(chunks.where.not(embedding: nil).count).to eq(chunks.count)
+    end
+
+    it 'grava chunks SEM vetor quando não há chave (embedder desligado), sem erro' do
+      stub_embedder(enabled: false)
+      src = source
+
+      expect { described_class.new.perform(src.id) }.not_to raise_error
+      expect(src.reload.chunks.where(embedding: nil).count).to eq(src.chunks.count)
+      expect(src.chunks).to be_present
+    end
+
+    it 'degrada (grava sem vetor) e NÃO propaga quando a chave é inválida (AuthError)' do
+      stub_embedder(error: Ai::Embedder::AuthError.new('invalid key'))
+      src = source
+
+      expect { described_class.new.perform(src.id) }.not_to raise_error
+      expect(src.reload.chunks.where(embedding: nil).count).to eq(src.chunks.count)
+    end
+
+    it 'PROPAGA TransientError (para o Sidekiq re-tentar) e NÃO apaga os chunks existentes' do
+      src = source
+      src.chunks.create!(content: 'antigo', embedding: nil)
+      old_ids = src.chunks.pluck(:id)
+      stub_embedder(error: Ai::Embedder::TransientError.new('429'))
+
+      expect { described_class.new.perform(src.id) }.to raise_error(Ai::Embedder::TransientError)
+      expect(src.reload.chunks.pluck(:id)).to eq(old_ids) # nada apagado/recriado (troca atômica)
+    end
+
+    it 'no caminho de exaustão (force_degrade) grava tudo sem vetor, sem chamar o embedder' do
+      expect(Ai::Embedder).not_to receive(:new)
+      src = source
+
+      described_class.new.send(:ingest, src.id, force_degrade: true)
+
+      expect(src.reload.chunks).to be_present
+      expect(src.chunks.where(embedding: nil).count).to eq(src.chunks.count)
+    end
+  end
 end

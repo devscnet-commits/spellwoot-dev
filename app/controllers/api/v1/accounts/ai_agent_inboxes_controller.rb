@@ -14,6 +14,9 @@ class Api::V1::Accounts::AiAgentInboxesController < Api::V1::Accounts::BaseContr
   end
 
   # Body: { bindings: [{ inbox_id:, mode: 'live'|'shadow'|'none' }, ...] } — replaces the set.
+  # priority NÃO é responsabilidade desta tela (é decisão POR CAIXA entre agentes — ver
+  # AiInboxAgentPrioritiesController). sync_binding PRESERVA a priority existente para não zerar o que a
+  # tela da caixa gravou.
   def update
     Array(params[:bindings]).each do |raw|
       sync_binding(raw[:inbox_id].to_i, raw[:mode].to_s)
@@ -33,7 +36,11 @@ class Api::V1::Accounts::AiAgentInboxesController < Api::V1::Accounts::BaseContr
 
     binding = @agent.agent_inboxes.find_or_initialize_by(inbox_id: inbox_id)
     if ::Ai::AgentInbox::MODES.include?(mode)
-      binding.update!(mode: mode, active: true)
+      # NÃO toca priority: binding existente mantém o valor gravado pela tela da caixa; binding novo herda
+      # o default 1 da coluna (NOT NULL default 1).
+      binding.mode = mode
+      binding.active = true
+      binding.save!
     else
       binding.destroy! if binding.persisted?
     end

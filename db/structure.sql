@@ -1,11 +1,12 @@
-\restrict tY0ddQN8rGQLGOJpqNPsdxJ3ZtVDuoqOspVAJlty6GjiEjFlPy9rR4vi6gNzMSu
+\restrict pgAN0aRoj3lrJZGkNR6H5UseDWKjNST7nLWzX4all0BfLXCQeLb5ernv6jITIn9
 
 -- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
--- Dumped by pg_dump version 16.14
+-- Dumped by pg_dump version 17.10
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -628,41 +629,6 @@ ALTER SEQUENCE public.ai_agent_memory_id_seq OWNED BY public.ai_agent_memory.id;
 
 
 --
--- Name: ai_agent_versions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.ai_agent_versions (
-    id bigint NOT NULL,
-    account_id bigint NOT NULL,
-    ai_agent_id bigint NOT NULL,
-    version_number integer DEFAULT 1 NOT NULL,
-    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
-    note character varying,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: ai_agent_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.ai_agent_versions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: ai_agent_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.ai_agent_versions_id_seq OWNED BY public.ai_agent_versions.id;
-
-
---
 -- Name: ai_agents; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -691,7 +657,8 @@ CREATE TABLE public.ai_agents (
     category character varying,
     team_id bigint,
     handoff_team_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
-    handoff_agent_ids jsonb DEFAULT '[]'::jsonb NOT NULL
+    handoff_agent_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    fallback_handoff_team_id bigint
 );
 
 
@@ -768,7 +735,8 @@ CREATE TABLE public.ai_credit_balances (
     plan_credits integer DEFAULT 0 NOT NULL,
     extra_credits integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    low_balance_notified_at timestamp(6) without time zone
 );
 
 
@@ -789,6 +757,44 @@ CREATE SEQUENCE public.ai_credit_balances_id_seq
 --
 
 ALTER SEQUENCE public.ai_credit_balances_id_seq OWNED BY public.ai_credit_balances.id;
+
+
+--
+-- Name: ai_credit_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_credit_requests (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    requested_by_id bigint NOT NULL,
+    approved_by_id bigint,
+    amount_requested integer NOT NULL,
+    status integer DEFAULT 0 NOT NULL,
+    reason text,
+    review_note text,
+    reviewed_at timestamp(6) without time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_credit_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_credit_requests_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_credit_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_credit_requests_id_seq OWNED BY public.ai_credit_requests.id;
 
 
 --
@@ -974,6 +980,41 @@ ALTER SEQUENCE public.ai_events_id_seq OWNED BY public.ai_events.id;
 
 
 --
+-- Name: ai_handoff_summaries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_handoff_summaries (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    conversation_id bigint NOT NULL,
+    ai_run_id bigint,
+    reason character varying NOT NULL,
+    content text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_handoff_summaries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_handoff_summaries_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_handoff_summaries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_handoff_summaries_id_seq OWNED BY public.ai_handoff_summaries.id;
+
+
+--
 -- Name: ai_integration_links; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1139,7 +1180,8 @@ CREATE TABLE public.ai_operation_profiles (
     updated_at timestamp(6) without time zone NOT NULL,
     routing_strategy jsonb DEFAULT '{}'::jsonb NOT NULL,
     tier character varying DEFAULT 'customizado'::character varying NOT NULL,
-    supervisor_temperature numeric(3,2) DEFAULT 0.3 NOT NULL
+    supervisor_temperature numeric(3,2) DEFAULT 0.3 NOT NULL,
+    temperature_position integer DEFAULT 20 NOT NULL
 );
 
 
@@ -1163,42 +1205,6 @@ ALTER SEQUENCE public.ai_operation_profiles_id_seq OWNED BY public.ai_operation_
 
 
 --
--- Name: ai_playbook_versions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.ai_playbook_versions (
-    id bigint NOT NULL,
-    account_id bigint NOT NULL,
-    ai_department_id bigint NOT NULL,
-    ai_playbook_id bigint,
-    version_number integer DEFAULT 1 NOT NULL,
-    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
-    note character varying,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: ai_playbook_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.ai_playbook_versions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: ai_playbook_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.ai_playbook_versions_id_seq OWNED BY public.ai_playbook_versions.id;
-
-
---
 -- Name: ai_playbooks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1213,7 +1219,8 @@ CREATE TABLE public.ai_playbooks (
     version integer DEFAULT 1 NOT NULL,
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    lock_version integer DEFAULT 0 NOT NULL
 );
 
 
@@ -1262,7 +1269,8 @@ CREATE TABLE public.ai_runs (
     routing_band character varying,
     worker character varying,
     error_type character varying,
-    knowledge_count integer DEFAULT 0 NOT NULL
+    knowledge_count integer DEFAULT 0 NOT NULL,
+    cached_tokens integer
 );
 
 
@@ -1371,7 +1379,8 @@ CREATE TABLE public.ai_tools (
     status character varying DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    webhook_config jsonb DEFAULT '{}'::jsonb NOT NULL
+    webhook_config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    required_attributes jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 
@@ -1392,6 +1401,42 @@ CREATE SEQUENCE public.ai_tools_id_seq
 --
 
 ALTER SEQUENCE public.ai_tools_id_seq OWNED BY public.ai_tools.id;
+
+
+--
+-- Name: ai_versions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_versions (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    versionable_type character varying NOT NULL,
+    versionable_id bigint NOT NULL,
+    version_number integer DEFAULT 1 NOT NULL,
+    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
+    note character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ai_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_versions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_versions_id_seq OWNED BY public.ai_versions.id;
 
 
 --
@@ -1718,6 +1763,30 @@ CREATE SEQUENCE public.calls_id_seq
 --
 
 ALTER SEQUENCE public.calls_id_seq OWNED BY public.calls.id;
+
+
+--
+-- Name: camp_dpid_seq_10483; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_10483
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_9766; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_9766
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
 
 --
@@ -2699,6 +2768,30 @@ CREATE SEQUENCE public.contacts_id_seq
 --
 
 ALTER SEQUENCE public.contacts_id_seq OWNED BY public.contacts.id;
+
+
+--
+-- Name: conv_dpid_seq_10483; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_10483
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_9766; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_9766
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
 
 --
@@ -3973,6 +4066,79 @@ ALTER SEQUENCE public.operational_flows_id_seq OWNED BY public.operational_flows
 
 
 --
+-- Name: overage_charges; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.overage_charges (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    subscription_id bigint NOT NULL,
+    plan_limit_key character varying NOT NULL,
+    cycle_start timestamp(6) without time zone,
+    cycle_end timestamp(6) without time zone,
+    average_excess numeric(10,2),
+    unit_price_cents integer,
+    total_cents integer,
+    status integer DEFAULT 0 NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: overage_charges_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.overage_charges_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: overage_charges_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.overage_charges_id_seq OWNED BY public.overage_charges.id;
+
+
+--
+-- Name: overage_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.overage_snapshots (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    plan_limit_key character varying NOT NULL,
+    excess_count integer DEFAULT 0 NOT NULL,
+    snapshot_date date NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: overage_snapshots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.overage_snapshots_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: overage_snapshots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.overage_snapshots_id_seq OWNED BY public.overage_snapshots.id;
+
+
+--
 -- Name: plan_features; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4973,13 +5139,6 @@ ALTER TABLE ONLY public.ai_agent_memory ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- Name: ai_agent_versions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_agent_versions ALTER COLUMN id SET DEFAULT nextval('public.ai_agent_versions_id_seq'::regclass);
-
-
---
 -- Name: ai_agents id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4998,6 +5157,13 @@ ALTER TABLE ONLY public.ai_capability_executions ALTER COLUMN id SET DEFAULT nex
 --
 
 ALTER TABLE ONLY public.ai_credit_balances ALTER COLUMN id SET DEFAULT nextval('public.ai_credit_balances_id_seq'::regclass);
+
+
+--
+-- Name: ai_credit_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests ALTER COLUMN id SET DEFAULT nextval('public.ai_credit_requests_id_seq'::regclass);
 
 
 --
@@ -5036,6 +5202,13 @@ ALTER TABLE ONLY public.ai_events ALTER COLUMN id SET DEFAULT nextval('public.ai
 
 
 --
+-- Name: ai_handoff_summaries id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries ALTER COLUMN id SET DEFAULT nextval('public.ai_handoff_summaries_id_seq'::regclass);
+
+
+--
 -- Name: ai_integration_links id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5071,13 +5244,6 @@ ALTER TABLE ONLY public.ai_operation_profiles ALTER COLUMN id SET DEFAULT nextva
 
 
 --
--- Name: ai_playbook_versions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_playbook_versions ALTER COLUMN id SET DEFAULT nextval('public.ai_playbook_versions_id_seq'::regclass);
-
-
---
 -- Name: ai_playbooks id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5110,6 +5276,13 @@ ALTER TABLE ONLY public.ai_shadows ALTER COLUMN id SET DEFAULT nextval('public.a
 --
 
 ALTER TABLE ONLY public.ai_tools ALTER COLUMN id SET DEFAULT nextval('public.ai_tools_id_seq'::regclass);
+
+
+--
+-- Name: ai_versions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_versions ALTER COLUMN id SET DEFAULT nextval('public.ai_versions_id_seq'::regclass);
 
 
 --
@@ -5589,6 +5762,20 @@ ALTER TABLE ONLY public.operational_flows ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
+-- Name: overage_charges id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges ALTER COLUMN id SET DEFAULT nextval('public.overage_charges_id_seq'::regclass);
+
+
+--
+-- Name: overage_snapshots id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_snapshots ALTER COLUMN id SET DEFAULT nextval('public.overage_snapshots_id_seq'::regclass);
+
+
+--
 -- Name: plan_features id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5869,14 +6056,6 @@ ALTER TABLE ONLY public.ai_agent_memory
 
 
 --
--- Name: ai_agent_versions ai_agent_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_agent_versions
-    ADD CONSTRAINT ai_agent_versions_pkey PRIMARY KEY (id);
-
-
---
 -- Name: ai_agents ai_agents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5898,6 +6077,14 @@ ALTER TABLE ONLY public.ai_capability_executions
 
 ALTER TABLE ONLY public.ai_credit_balances
     ADD CONSTRAINT ai_credit_balances_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_credit_requests ai_credit_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT ai_credit_requests_pkey PRIMARY KEY (id);
 
 
 --
@@ -5941,6 +6128,14 @@ ALTER TABLE ONLY public.ai_events
 
 
 --
+-- Name: ai_handoff_summaries ai_handoff_summaries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT ai_handoff_summaries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: ai_integration_links ai_integration_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5981,14 +6176,6 @@ ALTER TABLE ONLY public.ai_operation_profiles
 
 
 --
--- Name: ai_playbook_versions ai_playbook_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_playbook_versions
-    ADD CONSTRAINT ai_playbook_versions_pkey PRIMARY KEY (id);
-
-
---
 -- Name: ai_playbooks ai_playbooks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6026,6 +6213,14 @@ ALTER TABLE ONLY public.ai_shadows
 
 ALTER TABLE ONLY public.ai_tools
     ADD CONSTRAINT ai_tools_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_versions ai_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_versions
+    ADD CONSTRAINT ai_versions_pkey PRIMARY KEY (id);
 
 
 --
@@ -6581,6 +6776,22 @@ ALTER TABLE ONLY public.operational_flows
 
 
 --
+-- Name: overage_charges overage_charges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges
+    ADD CONSTRAINT overage_charges_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: overage_snapshots overage_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_snapshots
+    ADD CONSTRAINT overage_snapshots_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: plan_features plan_features_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6893,13 +7104,6 @@ CREATE UNIQUE INDEX idx_on_agent_capacity_policy_id_inbox_id_71c7ec4caf ON publi
 
 
 --
--- Name: idx_on_ai_department_id_version_number_5c61c735ff; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_on_ai_department_id_version_number_5c61c735ff ON public.ai_playbook_versions USING btree (ai_department_id, version_number);
-
-
---
 -- Name: idx_provider_instances_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7082,13 +7286,6 @@ CREATE UNIQUE INDEX index_ai_agent_memory_on_conversation_id_and_ai_agent_id ON 
 
 
 --
--- Name: index_ai_agent_versions_on_ai_agent_id_and_version_number; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_ai_agent_versions_on_ai_agent_id_and_version_number ON public.ai_agent_versions USING btree (ai_agent_id, version_number);
-
-
---
 -- Name: index_ai_agents_on_account_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7128,6 +7325,27 @@ CREATE INDEX index_ai_capability_executions_on_status ON public.ai_capability_ex
 --
 
 CREATE UNIQUE INDEX index_ai_credit_balances_on_account_id ON public.ai_credit_balances USING btree (account_id);
+
+
+--
+-- Name: index_ai_credit_requests_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_credit_requests_on_account_id ON public.ai_credit_requests USING btree (account_id);
+
+
+--
+-- Name: index_ai_credit_requests_on_approved_by_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_credit_requests_on_approved_by_id ON public.ai_credit_requests USING btree (approved_by_id);
+
+
+--
+-- Name: index_ai_credit_requests_on_requested_by_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_credit_requests_on_requested_by_id ON public.ai_credit_requests USING btree (requested_by_id);
 
 
 --
@@ -7177,6 +7395,27 @@ CREATE INDEX index_ai_events_on_conversation_id ON public.ai_events USING btree 
 --
 
 CREATE INDEX index_ai_events_on_created_at ON public.ai_events USING btree (created_at);
+
+
+--
+-- Name: index_ai_handoff_summaries_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_handoff_summaries_on_account_id ON public.ai_handoff_summaries USING btree (account_id);
+
+
+--
+-- Name: index_ai_handoff_summaries_on_ai_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_handoff_summaries_on_ai_run_id ON public.ai_handoff_summaries USING btree (ai_run_id);
+
+
+--
+-- Name: index_ai_handoff_summaries_on_conversation_id_and_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_handoff_summaries_on_conversation_id_and_created_at ON public.ai_handoff_summaries USING btree (conversation_id, created_at);
 
 
 --
@@ -7275,6 +7514,13 @@ CREATE INDEX index_ai_shadows_on_account_id ON public.ai_shadows USING btree (ac
 --
 
 CREATE INDEX index_ai_tools_on_ai_department_id ON public.ai_tools USING btree (ai_department_id);
+
+
+--
+-- Name: index_ai_versions_on_versionable_type_and_versionable_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_versions_on_versionable_type_and_versionable_id ON public.ai_versions USING btree (versionable_type, versionable_id);
 
 
 --
@@ -8580,6 +8826,34 @@ CREATE UNIQUE INDEX index_operational_flows_on_account_id_and_name ON public.ope
 
 
 --
+-- Name: index_overage_charges_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_overage_charges_on_account_id ON public.overage_charges USING btree (account_id);
+
+
+--
+-- Name: index_overage_charges_on_subscription_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_overage_charges_on_subscription_id ON public.overage_charges USING btree (subscription_id);
+
+
+--
+-- Name: index_overage_snapshots_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_overage_snapshots_on_account_id ON public.overage_snapshots USING btree (account_id);
+
+
+--
+-- Name: index_overage_snapshots_unique_daily; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_overage_snapshots_unique_daily ON public.overage_snapshots USING btree (account_id, plan_limit_key, snapshot_date);
+
+
+--
 -- Name: index_plan_features_on_plan_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9182,6 +9456,14 @@ CREATE TRIGGER conversations_before_insert_row_tr BEFORE INSERT ON public.conver
 
 
 --
+-- Name: ai_handoff_summaries fk_rails_0861b82b8d; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT fk_rails_0861b82b8d FOREIGN KEY (ai_run_id) REFERENCES public.ai_runs(id);
+
+
+--
 -- Name: working_periods fk_rails_1206a1c65d; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9195,6 +9477,14 @@ ALTER TABLE ONLY public.working_periods
 
 ALTER TABLE ONLY public.operational_flow_reasons
     ADD CONSTRAINT fk_rails_1359821d16 FOREIGN KEY (resolution_state_id) REFERENCES public.resolution_states(id);
+
+
+--
+-- Name: ai_credit_requests fk_rails_17bf5d7955; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT fk_rails_17bf5d7955 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
 
 
 --
@@ -9214,11 +9504,27 @@ ALTER TABLE ONLY public.agent_schedules
 
 
 --
+-- Name: ai_credit_requests fk_rails_2e635b4b99; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT fk_rails_2e635b4b99 FOREIGN KEY (approved_by_id) REFERENCES public.users(id);
+
+
+--
 -- Name: inbox_exceptions fk_rails_38c5e693b5; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.inbox_exceptions
     ADD CONSTRAINT fk_rails_38c5e693b5 FOREIGN KEY (inbox_id) REFERENCES public.inboxes(id);
+
+
+--
+-- Name: ai_handoff_summaries fk_rails_3e8aa93908; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT fk_rails_3e8aa93908 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
 
 
 --
@@ -9238,6 +9544,14 @@ ALTER TABLE ONLY public.integration_settings
 
 
 --
+-- Name: ai_credit_requests fk_rails_4cbb02d7de; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_credit_requests
+    ADD CONSTRAINT fk_rails_4cbb02d7de FOREIGN KEY (requested_by_id) REFERENCES public.users(id);
+
+
+--
 -- Name: inbox_holidays fk_rails_4d59a722a4; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9251,6 +9565,14 @@ ALTER TABLE ONLY public.inbox_holidays
 
 ALTER TABLE ONLY public.resolution_states
     ADD CONSTRAINT fk_rails_50eb07eef8 FOREIGN KEY (operational_flow_id) REFERENCES public.operational_flows(id);
+
+
+--
+-- Name: overage_snapshots fk_rails_5b8dd58073; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_snapshots
+    ADD CONSTRAINT fk_rails_5b8dd58073 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
 
 
 --
@@ -9270,6 +9592,14 @@ ALTER TABLE ONLY public.plan_limits
 
 
 --
+-- Name: overage_charges fk_rails_6e8847b20f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges
+    ADD CONSTRAINT fk_rails_6e8847b20f FOREIGN KEY (subscription_id) REFERENCES public.subscriptions(id);
+
+
+--
 -- Name: team_inboxes fk_rails_7f2a0b2bdc; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9278,11 +9608,27 @@ ALTER TABLE ONLY public.team_inboxes
 
 
 --
+-- Name: ai_handoff_summaries fk_rails_854731489d; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_handoff_summaries
+    ADD CONSTRAINT fk_rails_854731489d FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+
+
+--
 -- Name: provider_instances fk_rails_854bec9570; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.provider_instances
     ADD CONSTRAINT fk_rails_854bec9570 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
+-- Name: overage_charges fk_rails_917b0d439c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.overage_charges
+    ADD CONSTRAINT fk_rails_917b0d439c FOREIGN KEY (account_id) REFERENCES public.accounts(id);
 
 
 --
@@ -9385,11 +9731,26 @@ ALTER TABLE ONLY public.subscriptions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tY0ddQN8rGQLGOJpqNPsdxJ3ZtVDuoqOspVAJlty6GjiEjFlPy9rR4vi6gNzMSu
+\unrestrict pgAN0aRoj3lrJZGkNR6H5UseDWKjNST7nLWzX4all0BfLXCQeLb5ernv6jITIn9
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260810150000'),
+('20260731120000'),
+('20260730130000'),
+('20260730120000'),
+('20260724120000'),
+('20260719120000'),
+('20260718120000'),
+('20260717120000'),
+('20260716120000'),
+('20260715120000'),
+('20260714120000'),
+('20260713120000'),
+('20260712120000'),
+('20260711120001'),
+('20260711120000'),
 ('20260710120000'),
 ('20260709120001'),
 ('20260709120000'),

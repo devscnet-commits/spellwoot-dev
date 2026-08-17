@@ -82,6 +82,9 @@ Rails.application.routes.draw do
               resources :ai_playbook_versions, only: [:index] do
                 member { post :restore }
               end
+              resources :ai_department_versions, only: [:index] do
+                member { post :restore }
+              end
             end
           end
           resources :ai_knowledge_sources, only: %i[index create update destroy] do
@@ -93,6 +96,7 @@ Rails.application.routes.draw do
           end
           resources :ai_costs, only: [:index]
           post 'conversations/:conversation_id/ai_copilot', to: 'ai_copilot#create'
+          post 'ai_prompt_assistant', to: 'ai_prompt_assistant#create'
           namespace :captain do
             resource :preferences, only: [:show, :update]
             resources :assistants do
@@ -138,6 +142,7 @@ Rails.application.routes.draw do
           resource :plan, only: [] do
             get :limits
           end
+          resources :credit_requests, only: [:index, :create]
           resources :callbacks, only: [] do
             collection do
               post :register_facebook_page
@@ -203,6 +208,7 @@ Rails.application.routes.draw do
               get :closing_flow
               get :attachments
               get :inbox_assistant
+              get :ai_handoff_summary
               get :reporting_events if ChatwootApp.enterprise?
             end
           end
@@ -271,6 +277,10 @@ Rails.application.routes.draw do
           end
           resources :provider_instances, only: [:index]
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do
+            # Prioridade das IAs NESTA caixa (por-caixa, entre agentes): a decisão de qual IA responde é
+            # da caixa. show lista os agentes atendentes + priority; update grava o priority de cada um.
+            resource :ai_agent_priorities, only: %i[show update],
+                                           controller: 'ai_inbox_agent_priorities'
             get :assignable_agents, on: :member
             get :campaigns, on: :member
             get :agent_bot, on: :member
@@ -553,6 +563,14 @@ Rails.application.routes.draw do
     end
   end
 
+  # Internal, machine-to-machine API (Bearer token via INTERNAL_AI_TOKEN, not devise) — used by the
+  # Python AI orchestrator to execute Rails-side tools mid function-calling loop.
+  namespace :api, defaults: { format: 'json' } do
+    namespace :internal do
+      post 'ai_execute_tool', to: 'ai_execute_tool#create'
+    end
+  end
+
   if ChatwootApp.enterprise?
     namespace :enterprise, defaults: { format: 'json' } do
       namespace :api do
@@ -712,6 +730,10 @@ Rails.application.routes.draw do
       resources :accounts, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         post :seed, on: :member
         post :reset_cache, on: :member
+      end
+      resources :credit_requests, only: [:index, :show] do
+        post :approve, on: :member
+        post :reject, on: :member
       end
       resources :users, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         delete :avatar, on: :member, action: :destroy_avatar
