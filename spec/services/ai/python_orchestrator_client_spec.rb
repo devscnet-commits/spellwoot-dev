@@ -1065,6 +1065,32 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
+  # Achado ao vivo (17/08, ticket 595): a IA perguntou "cidade" (assunto de tool real, não de nenhuma
+  # etapa alcançada) por conta própria — tools reais ficam sempre disponíveis, sem gate por etapa.
+  describe 'DISCIPLINA DE FERRAMENTAS (tool_discipline_instruction)' do
+    it 'com tool real configurada, instrui a só usá-la quando a etapa atual pedir' do
+      Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'Consultar_Viabilidade',
+                       implementation_type: 'capability', capability_key: 'conversation.add_label', status: 'active')
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['system_prompt'].include?('DISCIPLINA DE FERRAMENTAS')
+      }
+    end
+
+    it 'sem NENHUMA tool real configurada, não aparece (nada pra disciplinar)' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('DISCIPLINA DE FERRAMENTAS')
+      }
+    end
+  end
+
   # Achado ao vivo (17/08): Ai::StateManager#mirror_contact_facts já grava em Ai::CustomerMemory a cada
   # turno (cross-conversa/cross-agente), mas nada no caminho Python lia essa memória de volta — o motor
   # Ruby legado tinha isso (Ai::PromptCompiler#customer_memory_lines). Write-only até este fix.

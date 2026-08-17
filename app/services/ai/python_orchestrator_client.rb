@@ -253,6 +253,7 @@ class Ai::PythonOrchestratorClient
       if next_step_instructions.present?
     lines << step_extraction_instruction if step_extraction_instruction.present?
     lines << data_validation_instruction if data_validation_instruction.present?
+    lines << tool_discipline_instruction if tool_discipline_instruction.present?
     lines << force_handoff_instruction if @force_handoff_notice
     lines.join("\n")
   end
@@ -517,6 +518,29 @@ class Ai::PythonOrchestratorClient
       "opcional: se ele não responder, mande \"dados_coletados\" vazio ([]) e defina " \
       '"avancar_etapa": true. Campo OBRIGATÓRIO: continue pedindo — mesma regra acima, não transfira ' \
       'só pela contagem de tentativas.'
+  end
+
+  # Achado ao vivo (17/08, ticket 595): a IA perguntou "qual cidade..." (assunto de uma etapa
+  # SEGUINTE) logo na etapa 1, quando nem ETAPA ATUAL nem PRÓXIMA ETAPA mencionavam cidade em lugar
+  # nenhum — a instrução de "PRÓXIMA ETAPA... NÃO execute ação/ferramenta antes da hora" (acima) só
+  # cobre a ÚNICA etapa de preview, não as tools REAIS do department (Ai::Tool, #real_tools), que
+  # ficam SEMPRE disponíveis pra qualquer etapa (agentic, sem gate por índice — ver comentário no topo
+  # do arquivo) e continuam listadas em tools_schema o turno inteiro, seja qual for a etapa atual.
+  # Hipótese confirmada por log real: 2 das tools reais deste department pedem "cidade" como parâmetro
+  # (Consultar_Viabilidade/consultar_periodos) — a IA provavelmente "puxou" o assunto delas por conta
+  # própria, sem nenhuma etapa ainda pedir isso. Esta regra fecha essa lacuna: mesmo com a tool sempre
+  # visível, só pode ser chamada (ou o dado que ela pede, só perguntado) quando ETAPA ATUAL realmente
+  # tratar desse assunto. nil quando o department não tem nenhuma tool real configurada — nada a
+  # disciplinar.
+  def tool_discipline_instruction
+    return nil if real_tools.empty?
+
+    'DISCIPLINA DE FERRAMENTAS: as ferramentas reais listadas acima ficam SEMPRE disponíveis durante ' \
+      'toda a conversa, independente da etapa atual — isso NÃO significa que você deve usá-las (ou ' \
+      'pedir o dado que elas pedem, tipo cidade/CPF/endereço) fora de hora. Só chame uma ferramenta, ' \
+      'ou peça o dado que ela precisa, quando ETAPA ATUAL pedir esse assunto explicitamente. Se o ' \
+      'cliente adiantar esse dado por conta própria, tudo bem capturar/usar a ferramenta; mas NUNCA ' \
+      'puxe o assunto de uma ferramenta por iniciativa própria só porque ela está disponível.'
   end
 
   # Mesma fonte e formatação que Ai::PromptCompiler#step_lines/compile já usa para transfer_when/
