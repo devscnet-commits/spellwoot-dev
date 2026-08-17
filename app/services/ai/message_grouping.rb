@@ -7,10 +7,11 @@ module Ai
 
     # Grouping delay (seconds). Uses the conversation's CURRENT step delay when set (tracked by the
     # Gateway in additional_attributes['ai_step']); otherwise the department's general delay.
-    # 0 = no grouping (respond immediately).
+    # nil (unset) = falls back to the general delay. 0 (explicit) = no grouping on THIS step, even
+    # when the department has a general delay — so a step can opt out of grouping on purpose.
     def delay_seconds(inbox_id, conversation: nil)
-      per_step = conversation&.additional_attributes&.dig('ai_step', 'grouping_delay_seconds').to_i
-      return per_step if per_step.positive?
+      per_step = conversation&.additional_attributes&.dig('ai_step', 'grouping_delay_seconds')
+      return per_step.to_i unless per_step.nil?
 
       general_delay(inbox_id)
     end
