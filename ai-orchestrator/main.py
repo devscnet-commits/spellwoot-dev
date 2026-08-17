@@ -53,6 +53,13 @@ class ProcessResponse(BaseModel):
     # True quando account_api_key foi passada mas falhou por auth e a chamada real caiu pra chave
     # global — Rails usa isso pra cobrar 1 crédito (Ai::Gateway#consume_byok_fallback_credit).
     byok_fallback: bool = False
+    # Auto-relato do modelo (0.0-1.0, orchestrator.CONFIANCA_KEY) — None quando o parse do JSON
+    # falhou. Rails (Ai::HandoffEvaluator/Ai::Gateway) decide se transfere por baixa confiança;
+    # Python só reporta.
+    confidence: Optional[float] = None
+    # true quando ESTE turno já disparou TRANSFER_TOOL (o modelo pediu transferir_humano) — Rails usa
+    # isso pra não tentar transferir de novo por baixa confiança em cima de um handoff que já rodou.
+    transferred: bool = False
 
 
 def _authenticate(authorization: Optional[str]) -> None:
@@ -75,7 +82,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     )
 
     try:
-        reply_text, conversation_id, byok_fallback = orchestrator.run_conversation(
+        reply_text, conversation_id, byok_fallback, confidence, transferred = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
             ai_department_id=request.ai_department_id,
             mode=request.mode,
@@ -101,4 +108,4 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     logger.info(f"Reply enviada para Rails: {reply_text}")
 
     return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, conversation_id=conversation_id,
-                            byok_fallback=byok_fallback)
+                            byok_fallback=byok_fallback, confidence=confidence, transferred=transferred)

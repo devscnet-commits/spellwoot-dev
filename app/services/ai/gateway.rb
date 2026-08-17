@@ -231,6 +231,21 @@ class Ai::Gateway
     # bloquear a eliminação por isso (ver conversa da eliminação do motor legado). Tarefa de fechamento
     # rastreada separadamente — ver memória do projeto (loopguard-python-parity-debt) — não implementar
     # aqui como parte deste commit.
+    # Confiança baixa (Ai::HandoffEvaluator, department.transfer_rules['min_confidence']) — migrado pro
+    # motor Python (orchestrator.CONFIANCA_KEY, 17/08): o campo existia na tela desde o motor legado mas
+    # nunca teve efeito nenhum no caminho Python (achado nesta mesma investigação). O modelo AUTO-RELATA
+    # confiança 0.0-1.0 a cada turno, DEPOIS de já ter rodado tools/salvado dados/decidido reply vs
+    # handoff — só verifica quando o PRÓPRIO modelo não decidiu transferir (result[:transferred]); se já
+    # decidiu, o handoff já rodou via o webhook TRANSFER_TOOL que o Python disparou mid-turn, e chamar
+    # de novo aqui duplicaria a transferência. Silencioso, mesmo padrão de force_max_replies_handoff/
+    # force_stuck_step_handoff: NÃO manda result[:reply] ao cliente (pode ser a própria resposta de
+    # baixa confiança, ex.: o bug real do Pinhalzinho — "Atendemos sua cidade!" sem fonte nenhuma) — um
+    # humano assume a partir daqui.
+    if @acts_live && !result[:transferred] && low_confidence?(result[:confidence], department)
+      force_low_confidence_handoff(run_record, department, result[:confidence])
+      return finalize(run_record, 'low_confidence')
+    end
+
     # bypass_handoff: @acts_live foi decidido ANTES de chamar o Python (linha ~84), com o estado PRÉ-
     # turno da conversa. Se já era live ali, um handoff/atribuição que ESTE MESMO turno acabou de fazer
     # (transferir_humano/on_complete handoff_human, via a request HTTP separada do
@@ -426,6 +441,31 @@ class Ai::Gateway
   def max_replies_reached?(department)
     max = department.behavior.to_h['max_replies'].to_i
     max.positive? && Ai::Event.where(conversation_id: @conversation.id, event_type: 'reply.sent').count >= max
+  end
+
+  # true quando o auto-relato de confiança do modelo (result[:confidence], já vindo do Python) está
+  # abaixo do teto configurado (department.transfer_rules['min_confidence'], tela "Transferir se a IA
+  # estiver insegura"). 0/ausente = desligado (Ai::HandoffEvaluator::DEFAULT_MIN_CONFIDENCE). Reusa o
+  # MESMO evaluator do motor legado — só o decision hash muda de forma (aqui é sempre 'reply', já que
+  # 'handoff' já teria sido tratado via result[:transferred] antes de chegar aqui).
+  def low_confidence?(confidence, department)
+    Ai::HandoffEvaluator.evaluate(decision: { 'decision' => 'reply', 'confidence' => confidence }, department: department)[:handoff]
+  end
+
+  # Transferência silenciosa quando a IA reporta baixa confiança na resposta deste turno. Espelha
+  # force_max_replies_handoff/force_stuck_step_handoff: nota interna + transfer + assign_human, SEM
+  # mandar a resposta incerta ao cliente.
+  def force_low_confidence_handoff(run_record, department, confidence)
+    action_dispatcher.internal_note("⚠️ A IA reportou baixa confiança (#{confidence.inspect}) na resposta deste " \
+                                    'turno — atendimento transferido para um humano.')
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'low_confidence' })
+    handoff_coordinator.assign_human(team_id, reason: 'low_confidence')
+    emit(run_record, 'handoff.low_confidence', { confidence: confidence, team_id: team_id })
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_low_confidence_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Transferência forçada ao atingir stuck_handoff_turns (achado ao vivo 13/08, ver comentário no
