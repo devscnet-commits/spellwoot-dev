@@ -17,9 +17,10 @@ class Ai::WebhookRunner
     response = Ai::SafeHttp.request(method, url, **request_args(cfg, method, input))
     # Achado ao vivo (ticket 583): sem este check, uma URL configurada errada (ou fora do ar) devolvia
     # 404/500 e Ai::ToolExecutor gravava 'executed'/error: nil do mesmo jeito — a IA nunca via o sinal
-    # "error": true que ela mesma foi instruída a reconhecer (tool_error_instruction), então nem avisava
-    # o cliente nem parava de fingir sucesso. Só erro de CONEXÃO levantava exceção antes; status HTTP de
-    # falha completava a chamada normalmente. 2xx é a única faixa tratada como sucesso.
+    # "error": true (que orchestrator.py normaliza pra toda falha real de tool — ver
+    # _normalize_tool_result), então nem avisava o cliente nem parava de fingir sucesso. Só erro de
+    # CONEXÃO levantava exceção antes; status HTTP de falha completava a chamada normalmente. 2xx é a
+    # única faixa tratada como sucesso.
     raise "HTTP #{response.code}: #{response.body.to_s.first(200)}" unless (200..299).cover?(response.code)
 
     { 'status' => response.code, 'body' => safe_parse(response.body) }

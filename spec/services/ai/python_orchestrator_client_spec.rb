@@ -722,50 +722,19 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # Fecha a lacuna de identidade (IA sugerindo concorrentes) + a base de conhecimento real deste
-  # path (Ai::KnowledgeRetriever — pgvector já populado, NÃO o vector_store nativo da OpenAI, que
-  # não existe: vector_store_id sempre vem vazio, auditado, sem tela/job que o preencha).
+  # Removido (17/08, decisão de produto): identity_instruction/market_average_guardrail (as guardrails
+  # fixas de identidade/anti-concorrente) saíram do código — ver comentário em
+  # Ai::PythonOrchestratorClient#system_prompt. Os 2 testes que verificavam sua posição/redação (1ª e
+  # 3ª linha, condicional a has_knowledge?) saíram junto — testavam comportamento que não existe mais.
   describe 'identidade + conhecimento no system_prompt' do
-    it 'com conhecimento cadastrado: identidade é a PRIMEIRA linha, identify_as a SEGUNDA, o guardrail anti-"médias de mercado" a TERCEIRA — as duas primeiras referenciam a ferramenta' do
-      add_knowledge!
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt_lines = JSON.parse(req.body)['system_prompt'].lines
-        prompt_lines.first.include?('IDENTIDADE') &&
-          prompt_lines.first.include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras') &&
-          prompt_lines.first.include?('use a ferramenta "consultar_conhecimento"') &&
-          prompt_lines[2].include?('Nunca cite concorrentes, médias de mercado') &&
-          prompt_lines[2].include?('ferramenta "consultar_conhecimento"')
-      }
-    end
-
-    # Consequência direta de tornar #knowledge_tool condicional: sem NENHUM Ai::KnowledgeSource
-    # cadastrado, a ferramenta não está em tools_schema — citar o nome dela aqui instruiria a IA a
-    # chamar algo que não existe, então a frase se adapta (ver #identity_instruction/
-    # #market_average_guardrail).
-    it 'sem conhecimento cadastrado: identidade/guardrail não citam a ferramenta ausente' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt_lines = JSON.parse(req.body)['system_prompt'].lines
-        prompt_lines.first.include?('IDENTIDADE') &&
-          prompt_lines.first.include?('É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras') &&
-          !prompt_lines.first.include?('consultar_conhecimento') &&
-          prompt_lines[2].include?('Nunca cite concorrentes, médias de mercado') &&
-          !prompt_lines[2].include?('consultar_conhecimento')
-      }
-    end
-
     # Regressão achada ao vivo 13/08 (Maya v5.0, identify_as='human'): esta instrução existia no
     # Ai::PromptCompiler legado (identity_lines) e nunca foi portada pro Python — o split em várias
     # mensagens (Ai::ActionDispatcher#split_parts) continuava funcionando no código, mas o modelo
     # nunca era instruído a produzir "\n\n" em mensagem_para_cliente, então não tinha o que quebrar.
-    describe 'identify_as_instruction (segunda linha do system_prompt)' do
+    # Reposicionada (17/08) pra perto de "Você é <nome>." — deixou de estar junto das guardrails
+    # removidas; segunda linha aqui porque este department não tem handoff_team_ids (senão
+    # handoff_target_instruction entraria antes — ver describe 'Times disponíveis' mais abaixo).
+    describe 'identify_as_instruction (segunda linha do system_prompt, sem handoff_team_ids)' do
       it 'identify_as="human" (default do agent): instrui a quebrar em mensagens curtas com linha em branco' do
         agent.update!(identify_as: 'human')
         stub_orchestrator
@@ -1036,80 +1005,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  # 4 falhas de comportamento achadas em teste ao vivo: IA "fingindo" ter salvo um dado sem salvar de
-  # verdade, inventando situações/recursos que não existem, transferindo sem motivo (pulando o fluxo
-  # de etapas), e empilhando várias perguntas de etapas diferentes na mesma mensagem. As duas primeiras
-  # agora são cobertas pelo contrato Structured Outputs (#structured_output_instruction) em vez de
-  # instruções de function-calling — ver describe abaixo.
-  describe 'guardrails de comportamento (achados em teste ao vivo)' do
-    it 'inclui as 4 instruções — contrato JSON estruturado, não inventar, disciplina de transferência, uma pergunta por vez' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('FORMATO DE RESPOSTA OBRIGATÓRIO') &&
-          prompt.include?('É PROIBIDO inventar situações, recursos ou funcionalidades que não existem') &&
-          prompt.include?('Transfira para humano quando') &&
-          prompt.include?('Prefira pedir os dados da etapa atual UM DE CADA VEZ')
-      }
-    end
-
-    # Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
-    # QUALQUER ferramenta real: achado ao vivo (conv 556, consultar_periodos) — falha real de
-    # ferramenta não tinha instrução nenhuma, a IA travava enrolando o cliente em vez de avisar ou
-    # transferir. orchestrator.py normaliza toda falha real em {"error": true, "message": "..."}.
-    it 'instrui a reagir a "error": true de qualquer ferramenta avisando problema técnico e oferecendo transferir' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('"error": true') &&
-          prompt.include?('falha TÉCNICA real da ferramenta') &&
-          prompt.include?('avise o cliente que teve um problema técnico') &&
-          prompt.include?('ofereça transferir para um atendente humano') &&
-          prompt.include?('NUNCA chame a mesma ferramenta de novo no mesmo turno')
-      }
-    end
-
-    # Achado ao vivo (17/08): "não exija mais de 1 nova tentativa por dado antes de transferir" era um
-    # limiar POR CONTAGEM que a IA aplicava sozinha — contradizia o teto configurável na tela de Etapas
-    # (stuck_handoff_turns): se o admin configura X mensagens de tolerância, a IA não pode desistir bem
-    # antes disso por conta própria. Removido — só os gatilhos por CONTEÚDO (pedido explícito,
-    # frustração) continuam levando a transferência IMEDIATA; contagem de tentativas é só do backend.
-    it 'transfere imediato por pedido/frustração, mas NÃO se auto-transfere por contagem de tentativas' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('demonstrar frustração clara') &&
-          prompt.include?('transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes') &&
-          prompt.include?('NÃO transfira só pela QUANTIDADE de tentativas') &&
-          !prompt.include?('não exija mais de 1 nova tentativa por dado antes de transferir') &&
-          !prompt.include?('5 mensagens')
-      }
-    end
-
-    # Tom (cadência "uma pergunta por vez") não deve competir com fato (captura de dado front-loaded) —
-    # a regra agora tem exceção explícita em vez de proibição absoluta.
-    it 'a instrução de cadência tem exceção explícita pra dado front-loaded pelo cliente' do
-      stub_orchestrator
-
-      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-
-      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('EXCEÇÃO: se o cliente fornecer espontaneamente mais de um dado na mesma mensagem') &&
-          prompt.include?('registre TODOS os dados válidos fornecidos naquela mensagem') &&
-          prompt.include?('nunca finja que não viu um dado só para manter o ritmo')
-      }
-    end
-
+  # Removido (17/08, decisão de produto): as guardrails fixas de não-inventar/disciplina de
+  # transferência/erro de ferramenta/cadência de pergunta saíram do código (ver comentário em
+  # Ai::PythonOrchestratorClient#system_prompt) — os 4 testes que verificavam sua redação saíram
+  # junto. O que sobra aqui é só a regra do contrato Structured Outputs (não fingir que salvou sem
+  # preencher "dados_coletados"), que não foi tocada.
+  describe 'contrato JSON estruturado (achados em teste ao vivo)' do
     # Bug real ao vivo, round 2 (era do design de tool-calling): a IA chamava "continuar_conversa" (o
     # no-op que sustentava tool_choice="required") e dizia em texto "Recebi seu CPF!" sem NUNCA chamar
     # registrar_*/salvar_memoria_ia — nada persistia, a etapa seguinte repetia a pergunta (loop de

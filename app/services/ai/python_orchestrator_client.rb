@@ -209,21 +209,24 @@ class Ai::PythonOrchestratorClient
     # (como estava antes) invalidava tudo que vinha depois dele, todo turno. Conteúdo de cada linha
     # inalterado — só a ORDEM mudou (achado 14/08, ticket 563, Frente 2 da compactação de prompt).
     #
-    # Fixas e inegociáveis, ANTES de qualquer outra coisa: fecham lacunas achadas em teste ao vivo —
-    # sugerir concorrentes, alucinar "médias de mercado" em vez do conhecimento real, "fingir" que
-    # chamou registrar_* sem chamar de verdade, inventar situações que não existem, e transferir sem
-    # motivo pulando o fluxo de etapas. Múltiplas mensagens por turno (modo identify_as="human") tem
-    # instrução PRÓPRIA logo abaixo (#identify_as_instruction) — achado ao vivo 13/08: por um tempo
-    # esteve ausente aqui (ver comentário do método), regressão já corrigida.
-    lines << identity_instruction
-    lines << identify_as_instruction
-    lines << market_average_guardrail
-    lines << no_fabrication_instruction
-    lines << transfer_discipline_instruction
+    # Removido (17/08, decisão de produto): as guardrails fixas contra invenção/concorrentes/
+    # transferência precoce/erro de ferramenta/perguntas em lote (identity_instruction,
+    # market_average_guardrail, no_fabrication_instruction, transfer_discipline_instruction,
+    # tool_error_instruction, gradual_conversation_instruction) saíram do código — apareciam por
+    # inteiro no log de toda chamada (visibilidade operacional indesejada) e o pedido do produto é que
+    # cada conta defina seu próprio comportamento via "Prompt base da empresa" em vez de um texto
+    # universal fixo. Ai::PromptAssistant::Prompts::BASE_PROMPT_SYSTEM foi ajustado pra instruir o
+    # assistente que ajuda a escrever o base_prompt a sempre embutir equivalentes adaptados ao
+    # segmento do cliente — a proteção não depende mais só do admin lembrar sozinho. Texto original
+    # arquivado fora do código (pedido do usuário) para eventual reversão.
+    # identify_as_instruction NÃO foi removida — não é uma guardrail de bug, é o mecanismo que o
+    # toggle "Como ele deve se identificar" (agent.identify_as) usa pra funcionar (inclusive o
+    # contrato de formatação \n\n que Ai::ActionDispatcher#split_parts lê pra quebrar em várias
+    # mensagens); por isso desceu pra perto do bloco de identidade/base_prompt, não ficou solta com
+    # as guardrails removidas.
     lines << handoff_target_instruction if handoff_target_instruction.present?
-    lines << tool_error_instruction
-    lines << gradual_conversation_instruction
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
+    lines << identify_as_instruction
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
     lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
@@ -254,26 +257,6 @@ class Ai::PythonOrchestratorClient
     lines.join("\n")
   end
 
-  # Texto do pedido, com UM ajuste: a frase original citava "a ferramenta de busca (file_search)" —
-  # mas não existe vector store nenhum aqui (ver comentário em #payload), então instruir a IA a chamar
-  # uma tool que não existe seria pior que o problema original. Aponta pra tool real #knowledge_tool
-  # (consultar_conhecimento) em vez de um bloco fixo — a IA CHAMA a ferramenta antes de responder,
-  # não lê um texto que pode nem ter sido injetado. #knowledge_tool só entra em #tools_schema quando o
-  # department TEM conhecimento cadastrado (#has_knowledge?) — sem isso, citar a ferramenta aqui
-  # instruiria a IA a chamar algo que nem está na lista, então a frase se adapta ao mesmo booleano.
-  def identity_instruction
-    base = 'IDENTIDADE: Você é um atendente de IA DA PRÓPRIA EMPRESA. A empresa para quem você trabalha É a ' \
-      'provedora do serviço. É ESTRITAMENTE PROIBIDO sugerir que o cliente procure outras empresas, ' \
-      'operadoras ou provedores. '
-    base + if has_knowledge?
-             'Se o cliente quiser preços, condições ou tiver dúvidas, use a ferramenta ' \
-               '"consultar_conhecimento" antes de responder — nunca invente o que ela não retornar.'
-           else
-             'Se o cliente quiser preços, condições ou tiver dúvidas que você não tenha certeza ' \
-               'absoluta, diga que vai verificar — nunca invente.'
-           end
-  end
-
   # PORTADO do Ai::PromptCompiler legado (identity_lines) — regressão achada ao vivo (13/08, ticket
   # Maya v5.0): a migração pro Python NUNCA trouxe esta instrução. O mecanismo de split continuou
   # 100% intacto no lado Ruby (Ai::ActionDispatcher#deliver/#split_parts, as_human: @agent.identify_as
@@ -292,51 +275,6 @@ class Ai::PythonOrchestratorClient
         'em mensagens curtas com uma LINHA EM BRANCO entre elas (dois \n) no campo "mensagem_para_cliente". ' \
         'Se for algo curto, responda em uma mensagem só, sem quebrar à força.'
     end
-  end
-
-  # Reforço explícito contra "médias de mercado": IA alucinava preço/regra plausível-mas-inventado
-  # em vez de usar o conhecimento real, e só se corrigia quando o cliente reclamava — reforça a
-  # mesma proibição de #identity_instruction com outra frase, mirando especificamente esse padrão.
-  # Mesmo ajuste condicional a #has_knowledge? que #identity_instruction — ver comentário lá.
-  def market_average_guardrail
-    base = 'Você é um atendente DA EMPRESA. Nunca cite concorrentes, médias de mercado ou valores '
-    base + if has_knowledge?
-             'que não venham da ferramenta "consultar_conhecimento".'
-           else
-             'que você não tenha certeza absoluta — nunca invente.'
-           end
-  end
-
-  # Achado em teste ao vivo: a IA inventava situações plausíveis mas inexistentes ("instabilidade no
-  # sistema", "link seguro", "formulário externo") pra preencher lacunas em vez de admitir que não sabe.
-  def no_fabrication_instruction
-    'É PROIBIDO inventar situações, recursos ou funcionalidades que não existem (ex: "instabilidade no ' \
-      'sistema", "link seguro", "formulário externo"). Se algo não estiver disponível, diga simplesmente ' \
-      'que vai encaminhar para um especialista.'
-  end
-
-  # Achado em teste ao vivo: a IA transferia pra humano "achando" que devia, pulando o fluxo de etapas
-  # inteiro.
-  #
-  # Achado ao vivo 2 (17/08, pelo usuário): a versão anterior deste método tinha um limiar PRÓPRIO
-  # ("não exija mais de 1 nova tentativa por dado antes de transferir") pra decidir quando desistir de
-  # um dado — só que isso CONTRADIZ o campo que o admin já configura na tela de Etapas ("Transferir para
-  # humano se travar em uma etapa por X mensagens", department.transfer_rules['stuck_handoff_turns'],
-  # enforçado em Ai::Gateway#step_turns_exceeded?/force_stuck_step_handoff). Se o admin configura X=5
-  # esperando 5 mensagens de tolerância, mas o MODELO já se auto-transfere na 1ª tentativa fracassada
-  # por causa desta instrução, o valor configurado nunca chega a valer — o modelo desiste antes do
-  # sistema. Removido o limiar por CONTAGEM daqui (e de #data_validation_instruction) — quem decide
-  # "quantas tentativas antes de desistir de um dado" agora é EXCLUSIVAMENTE o teto configurado no
-  # backend; o modelo só continua pedindo com paciência até esse teto agir sozinho. Os gatilhos por
-  # CONTEÚDO (pedido explícito, frustração) continuam do modelo — não dependem de contagem nenhuma.
-  def transfer_discipline_instruction
-    'Transfira para humano quando: o cliente pedir explicitamente para falar com uma pessoa; ' \
-      'demonstrar frustração clara (reclamar, repetir a mesma dúvida, pedir pra falar com pessoa) — ' \
-      'nesse caso transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes. Se o cliente não ' \
-      'conseguir fornecer um dado válido, continue esclarecendo e pedindo de novo com paciência — NÃO ' \
-      'transfira só pela QUANTIDADE de tentativas (o sistema tem seu próprio limite de segurança pra ' \
-      'isso, configurado à parte, e transfere sozinho se travar de verdade). NUNCA transfira só porque ' \
-      '"achou" que deve. Siga o fluxo de etapas até o final.'
   end
 
   # Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino do handoff
@@ -358,37 +296,6 @@ class Ai::PythonOrchestratorClient
       'EXATO do time de destino, copiado da lista abaixo (NUNCA invente nem use uma categoria genérica ' \
       "como \"suporte\" ou \"comercial\"). Se nenhum time da lista se encaixar, deixe \"handoff_target\" " \
       "vazio (\"\") e transfira mesmo assim. Times disponíveis:\n#{lines.join("\n")}"
-  end
-
-  # Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
-  # QUALQUER ferramenta real: achado ao vivo (conv 556, consultar_periodos) — quando uma ferramenta
-  # falhava de verdade (erro técnico, não falta de dado), o modelo não tinha NENHUMA instrução de como
-  # reagir e travava enrolando o cliente em 4 respostas vagas, sem nunca avisar do problema nem
-  # chamar de novo. orchestrator.py agora normaliza toda falha real de tool em {"error": true,
-  # "message": "..."} (ver _normalize_tool_result) — esta instrução ensina o modelo a reconhecer esse
-  # sinal específico e agir.
-  def tool_error_instruction
-    'Se o resultado de QUALQUER ferramenta vier com "error": true, isso é uma falha TÉCNICA real da ' \
-      'ferramenta (não falta de dado do cliente) — avise o cliente que teve um problema técnico agora ' \
-      'e ofereça transferir para um atendente humano. NUNCA invente uma resposta no lugar do resultado ' \
-      'que faltou, e NUNCA chame a mesma ferramenta de novo no mesmo turno esperando um resultado ' \
-      'diferente.'
-  end
-
-  # Achado em teste ao vivo (esclarecido pelo usuário: NÃO é sobre várias mensagens por turno — isso é
-  # o modo identify_as="human" funcionando como esperado): a IA perguntava várias etapas de uma vez
-  # (nome + endereço + CPF + telefone na mesma mensagem) em vez de conduzir uma pergunta por vez, mesmo
-  # com TODAS as tools "registrar_*" disponíveis simultaneamente (fluxo agentic, sem gate por etapa).
-  # EXCEÇÃO explícita (antes ausente — a regra era uma proibição absoluta, tom tratado com rigidez de
-  # ação): dado front-loaded pelo PRÓPRIO cliente tem que ser capturado, nunca ignorado só pra manter a
-  # cadência "uma pergunta por vez" — cadência é tom, captura de dado é fato, não podem competir.
-  def gradual_conversation_instruction
-    'Prefira pedir os dados da etapa atual UM DE CADA VEZ, de forma natural e conversacional — mesmo ' \
-      'que várias ferramentas "registrar_*" estejam disponíveis ao mesmo tempo, não liste várias ' \
-      'perguntas na mesma mensagem por iniciativa própria. EXCEÇÃO: se o cliente fornecer ' \
-      'espontaneamente mais de um dado na mesma mensagem — mesmo sem você ter perguntado — registre ' \
-      'TODOS os dados válidos fornecidos naquela mensagem; nunca finja que não viu um dado só para ' \
-      'manter o ritmo de "uma pergunta por vez".'
   end
 
   # Achado ao vivo: a IA leu uma CNH em PDF e alucinou o ano (1997 virou 1991), além de salvar dados
@@ -814,8 +721,6 @@ class Ai::PythonOrchestratorClient
   # Condicional a #has_knowledge? (diferente das control_tools, que são sempre oferecidas independente
   # de configuração): oferecer a ferramenta sem NENHUM conhecimento cadastrado só ensina a IA a chamar
   # algo que sempre volta vazio — gasta uma rodada de tool-call à toa e engorda tools_schema à toa.
-  # #identity_instruction/#market_average_guardrail usam o MESMO booleano pra não citar a ferramenta
-  # quando ela não está na lista.
   def knowledge_tools
     has_knowledge? ? [knowledge_tool] : []
   end

@@ -20,7 +20,15 @@
 # mais texto de "chame a ferramenta X" nenhum. Removido de novo (2026-08): suggested_script ("Fala
 # sugerida") saiu — mesmo rotulado como exemplo, o modelo tratava o texto entre aspas como script
 # literal. Tom/abordagem consistente agora só se configura em Ai::Agent#base_prompt (global, uma
-# vez), não mais por etapa.
+# vez), não mais por etapa. Reescrito de novo (17/08, decisão de produto): as guardrails FIXAS que
+# viviam hardcoded em Ai::PythonOrchestratorClient (anti-invenção de recursos, anti-concorrente,
+# disciplina de transferência, erro de ferramenta) foram removidas do código — apareciam por inteiro
+# no log de toda chamada e o produto quer que cada conta defina seu PRÓPRIO comportamento via
+# base_prompt, em vez de um texto universal. Sem equivalente em lugar nenhum, essas proteções
+# desapareceriam de vez pra quem não soubesse escrevê-las sozinho — por isso os itens 8-11 abaixo
+# instruem o assistente a SEMPRE embutir o equivalente no base_prompt que gera, adaptado ao tom/
+# segmento do negócio do usuário (mesmo espírito do item 3, anti-repetição: não precisa copiar a
+# frase exata, mas a REGRA tem que sobreviver na versão final).
 module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- só constantes de texto (os system prompts); a métrica é p/ módulos de lógica
   # base_prompt de um agente (aba Comportamento).
   BASE_PROMPT_SYSTEM = <<~PROMPT.freeze
@@ -68,6 +76,36 @@ module Ai::PromptAssistant::Prompts # rubocop:disable Metrics/ModuleLength -- s�
        escreva no texto um AVISO em maiúsculas: "AVISO: você pediu consulta a <X>, mas não há
        ferramenta nem fonte de conhecimento cadastrada para isso — cadastre a fonte antes ou
        remova essa promessa, senão o agente vai inventar a resposta."
+
+    8. NÃO INVENTAR RECURSOS/SITUAÇÕES — inclua SEMPRE (adapte a redação ao tom/segmento do
+       negócio, não precisa copiar a frase) uma instrução proibindo o agente de inventar situações,
+       recursos ou funcionalidades que não existem (ex.: "instabilidade no sistema", "link seguro",
+       "formulário externo", "vou te mandar um cupom") só para preencher uma lacuna — se algo não
+       estiver disponível, a instrução deve mandar simplesmente dizer que vai encaminhar para um
+       especialista, nunca inventar uma saída.
+
+    9. NUNCA COMPARAR COM CONCORRENTE/MERCADO — inclua SEMPRE uma instrução proibindo o agente de
+       citar concorrentes, "médias de mercado" ou valores que não venham de uma fonte real do
+       negócio (a mesma lógica do item 7, mas cobrindo o caso de o agente tentar "ajudar"
+       comparando com o mercado em vez de usar só o que a empresa realmente oferece).
+
+    10. DISCIPLINA DE TRANSFERÊNCIA — inclua SEMPRE uma instrução de quando transferir para humano:
+        por PEDIDO EXPLÍCITO do cliente, ou FRUSTRAÇÃO CLARA (reclamar, repetir a mesma dúvida,
+        pedir pra falar com pessoa) — nesses casos, IMEDIATO. Mas é PROIBIDO instruir a transferir
+        só porque o agente "achou" que devia, ou por CONTAGEM de tentativas malsucedidas — isso já
+        tem um limite de segurança configurado à parte no sistema (a tela de Etapas), que transfere
+        sozinho se travar de verdade; a instrução deve dizer pra continuar tentando com paciência
+        até esse limite agir, nunca desistir por conta própria antes.
+
+    11. ERRO TÉCNICO DE FERRAMENTA — quando o pedido do usuário envolver alguma ferramenta/
+        integração real (ver "CAPACIDADES REAIS DESTE AGENTE" abaixo), inclua uma instrução de que,
+        se essa ferramenta falhar tecnicamente, o agente deve avisar o cliente do problema técnico e
+        oferecer transferência para um humano — nunca inventar o resultado que faltou, nunca chamar
+        a mesma ferramenta de novo no mesmo turno esperando um resultado diferente.
+
+    Os itens 8-11 são a ÚNICA rede de segurança contra esses padrões hoje (não existe mais nada fixo
+    no código cobrindo isso) — NUNCA os omita do base_prompt gerado, mesmo que o pedido do usuário
+    não peça por eles explicitamente.
 
     Retorne ESTRITAMENTE um JSON válido, sem nenhum texto fora dele:
     {"suggestion":"<o base_prompt completo, com quebras de linha reais>"}
