@@ -6,7 +6,6 @@ import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import AiVersionHistory from './AiVersionHistory.vue';
 import Logo from 'next/icon/Logo.vue';
-import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Select from 'dashboard/components-next/select/Select.vue';
 import Draggable from 'vuedraggable';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
@@ -1308,7 +1307,10 @@ onMounted(async () => {
               class="flex flex-col gap-2"
             >
               <template #item="{ element, index }">
-                <div class="rounded-xl border border-n-weak bg-n-solid-1">
+                <div
+                  :key="element.uid"
+                  class="rounded-xl border border-n-weak bg-n-solid-1"
+                >
                   <!-- Edição inline (abre no próprio card) -->
                   <AiStepForm
                     v-if="editingStepIndex === index"
