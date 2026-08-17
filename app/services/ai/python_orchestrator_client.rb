@@ -557,6 +557,28 @@ class Ai::PythonOrchestratorClient
     @department.close_rules.to_h['message'].presence
   end
 
+  # Achado ao vivo (17/08): a regra antiga ("encerrar_atendimento: true SOMENTE quando as condições de
+  # encerramento configuradas ABAIXO forem atendidas") referencia uma lista que só existe no prompt
+  # quando #close_when_text está presente (linha "Encerre quando: ..." logo acima, ver #system_prompt).
+  # Pra department SEM close_when configurado (comum — o desfecho normal vem do on_complete de uma
+  # etapa, não de uma condição solta), a IA ficava com "as condições configuradas abaixo" apontando pra
+  # NADA — e mesmo assim, um cliente respondendo algo tão simples quanto "ta bem obrigada" foi
+  # suficiente pra ela marcar encerrar_atendimento:true, pulando etapas restantes inteiras (incluindo a
+  # etapa de Finalização, cujo desfecho configurado era TRANSFERIR pra um time humano, não resolver).
+  # Provavelmente puxada pela "Mensagem de encerramento sugerida" (#close_message) sempre presente no
+  # prompt mesmo sem gatilho — ter uma despedida pronta parece ter bastado. Fecha a ambiguidade: sem
+  # close_when, a regra vira uma proibição explícita, sem "abaixo" nenhum pra apontar pro vazio.
+  def encerrar_atendimento_rule
+    return '- "encerrar_atendimento": true SOMENTE quando as condições de encerramento configuradas ' \
+           'abaixo forem atendidas.' if close_when_text.present?
+
+    '- "encerrar_atendimento": mantenha SEMPRE false — não existe nenhuma condição de encerramento ' \
+      'configurada pra este departamento. NUNCA marque true por conta própria, mesmo que o cliente ' \
+      'agradeça, se despeça ou pareça satisfeito — isso NÃO é sinal de que o atendimento deve terminar. ' \
+      'A única forma correta de concluir é a etapa atual alcançar o desfecho configurado dela (isso é ' \
+      'automático quando você segue o fluxo normal das etapas; você não precisa fazer nada a mais pra isso).'
+  end
+
   # Substitui a antiga instrução de function-calling (tool_usage_instruction/
   # must_call_capture_tools_instruction/no_confirmation_loop_instruction — removidas): orchestrator.py
   # não oferece mais "registrar_*"/"avancar_etapa"/"salvar_memoria_ia"/"continuar_conversa"/
@@ -611,8 +633,7 @@ class Ai::PythonOrchestratorClient
       "resposta, marcar \"transferir_humano\": true e preencher \"handoff_summary\" — se você disser " \
       "que vai transferir sem marcar o campo, a transferência NÃO acontece e o cliente fica sem " \
       "atendimento.\n" \
-      "- \"encerrar_atendimento\": true SOMENTE quando as condições de encerramento configuradas abaixo " \
-      "forem atendidas.\n" \
+      "#{encerrar_atendimento_rule}\n" \
       "- É ESTRITAMENTE PROIBIDO escrever em \"mensagem_para_cliente\" qualquer variação de " \
       "\"atendimento encerrado\", \"até logo\", \"finalizando\" ou similar sem marcar " \
       "\"encerrar_atendimento\": true na MESMA resposta.\n" \
