@@ -216,6 +216,7 @@ class Ai::PythonOrchestratorClient
     lines << market_average_guardrail
     lines << no_fabrication_instruction
     lines << transfer_discipline_instruction
+    lines << handoff_target_instruction if handoff_target_instruction.present?
     lines << tool_error_instruction
     lines << gradual_conversation_instruction
     lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
@@ -233,6 +234,7 @@ class Ai::PythonOrchestratorClient
     # avança). Fica no FINAL, contíguo, nunca antes do bloco estático acima.
     lines << document_extraction_instruction if image_urls.present?
     lines << collected_facts_block if collected_facts_block.present?
+    lines << customer_memory_block if customer_memory_block.present?
     lines << "ETAPA ATUAL:\n#{current_step_instructions}" if current_step_instructions.present?
     lines << "PRÓXIMA ETAPA (só contexto — NÃO é a atual; NÃO pule pra ela, NÃO peça o dado dela, e " \
              "NÃO execute nenhuma ação ou ferramenta que ela descreva (ex.: transferir_humano, " \
@@ -310,20 +312,48 @@ class Ai::PythonOrchestratorClient
   end
 
   # Achado em teste ao vivo: a IA transferia pra humano "achando" que devia, pulando o fluxo de etapas
-  # inteiro. Limite NARRATIVO unificado com #data_validation_instruction (1 tentativa de esclarecimento
-  # por dado, não mais um número fixo de mensagens independente) — antes este método dizia "5 mensagens"
-  # enquanto #data_validation_instruction já dizia "1 vez"; dois limiares divergentes pro MESMO gatilho
-  # de ação crítica. O teto REAL enforçado no backend (Ai::Gateway#step_turns_exceeded?,
-  # transfer_rules['stuck_handoff_turns'], default 10 — ver force_handoff_instruction) continua sendo um
-  # backstop separado de propósito (turnos totais da etapa, não tentativas por dado) — não precisa bater
-  # com este número.
+  # inteiro.
+  #
+  # Achado ao vivo 2 (17/08, pelo usuário): a versão anterior deste método tinha um limiar PRÓPRIO
+  # ("não exija mais de 1 nova tentativa por dado antes de transferir") pra decidir quando desistir de
+  # um dado — só que isso CONTRADIZ o campo que o admin já configura na tela de Etapas ("Transferir para
+  # humano se travar em uma etapa por X mensagens", department.transfer_rules['stuck_handoff_turns'],
+  # enforçado em Ai::Gateway#step_turns_exceeded?/force_stuck_step_handoff). Se o admin configura X=5
+  # esperando 5 mensagens de tolerância, mas o MODELO já se auto-transfere na 1ª tentativa fracassada
+  # por causa desta instrução, o valor configurado nunca chega a valer — o modelo desiste antes do
+  # sistema. Removido o limiar por CONTAGEM daqui (e de #data_validation_instruction) — quem decide
+  # "quantas tentativas antes de desistir de um dado" agora é EXCLUSIVAMENTE o teto configurado no
+  # backend; o modelo só continua pedindo com paciência até esse teto agir sozinho. Os gatilhos por
+  # CONTEÚDO (pedido explícito, frustração) continuam do modelo — não dependem de contagem nenhuma.
   def transfer_discipline_instruction
     'Transfira para humano quando: o cliente pedir explicitamente para falar com uma pessoa; ' \
       'demonstrar frustração clara (reclamar, repetir a mesma dúvida, pedir pra falar com pessoa) — ' \
-      'nesse caso transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes; ou o cliente não ' \
-      'conseguir fornecer um dado válido mesmo depois de 1 pedido de esclarecimento — não exija mais de ' \
-      '1 nova tentativa por dado antes de transferir, insistir além disso cansa o cliente. NUNCA ' \
-      'transfira só porque "achou" que deve. Siga o fluxo de etapas até o final.'
+      'nesse caso transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes. Se o cliente não ' \
+      'conseguir fornecer um dado válido, continue esclarecendo e pedindo de novo com paciência — NÃO ' \
+      'transfira só pela QUANTIDADE de tentativas (o sistema tem seu próprio limite de segurança pra ' \
+      'isso, configurado à parte, e transfere sozinho se travar de verdade). NUNCA transfira só porque ' \
+      '"achou" que deve. Siga o fluxo de etapas até o final.'
+  end
+
+  # Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino do handoff
+  # (handoff_target — Ai::PromptCompiler#human_handoff_teams listava a whitelist e instruía "copie o
+  # nome EXATO"), casado contra agent.handoff_team_ids via Ai::HandoffCoordinator#match_team_by_name.
+  # O contrato JSON novo nunca reproduziu isso — "transferir_humano" virou um boolean cego, e TODA
+  # transferência direta caía sempre no mesmo time default/configurado (Ai::HandoffCoordinator
+  # #human_team_id({}), sem handoff_target nenhum) — mesmo com o admin escrevendo um guardrail tipo
+  # "nunca invente nomes de time, use só os da lista" (Regras de segurança do agente): esse texto não
+  # tinha mais NENHUM campo pra IA realmente usar. Reusa Ai::PromptCompiler.human_handoff_teams (função
+  # pura, já lida com whitelist vazia + fallback + log) em vez de duplicar a lógica. nil sem NENHUM time
+  # na conta — não força a IA a escolher entre nada.
+  def handoff_target_instruction
+    teams = Ai::PromptCompiler.human_handoff_teams(@agent)
+    return nil if teams.blank?
+
+    lines = teams.map { |t| "- #{t.name}" }
+    "Ao transferir para humano (\"transferir_humano\": true), preencha \"handoff_target\" com o nome " \
+      'EXATO do time de destino, copiado da lista abaixo (NUNCA invente nem use uma categoria genérica ' \
+      "como \"suporte\" ou \"comercial\"). Se nenhum time da lista se encaixar, deixe \"handoff_target\" " \
+      "vazio (\"\") e transfira mesmo assim. Times disponíveis:\n#{lines.join("\n")}"
   end
 
   # Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
@@ -399,6 +429,34 @@ class Ai::PythonOrchestratorClient
     # gravado pelo motor legado (department pode ter alternado o flag python_orchestrator no meio do
     # atendimento — ai_collected_facts vive na conversation, não é exclusivo de um motor).
     facts.each { |key, value| lines << "- #{key}: #{Ai::StepSlot.display(value)}" }
+    lines.join("\n")
+  end
+
+  # Achado ao vivo (17/08): Ai::StateManager#mirror_contact_facts já grava em Ai::CustomerMemory (dados
+  # do CONTATO, cross-conversa/cross-agente) a cada turno — mas até aqui nada no caminho Python lia essa
+  # memória de volta. O motor Ruby legado tinha isso (Ai::PromptCompiler#customer_memory_lines +
+  # #memory_prefill_line — "DADO LEMBRADO DE ATENDIMENTO ANTERIOR, proponha e peça confirmação"); a
+  # migração deixou a ESCRITA viva mas a LEITURA nunca acompanhou — um cliente que já deu CPF/cidade
+  # numa conversa ANTERIOR era perguntado do zero de novo, com o dado dormindo no banco sem uso. Só
+  # APRESENTA (dynamic — muda por contato, não por turno): o QUE FAZER com o dado (usar direto vs propor
+  # e confirmar) fica pra instrução da etapa, igual o motor legado já decidia. nil sem contato ou sem
+  # memória registrada ainda.
+  def customer_memory_block
+    return nil if @conversation.contact_id.blank?
+
+    memory = Ai::CustomerMemory.find_by(contact_id: @conversation.contact_id, account_id: @department.account_id)
+    return nil if memory.nil?
+
+    facts = memory.key_facts.to_h.reject { |_k, v| v.to_s.strip.blank? }
+    return nil if memory.summary.blank? && facts.blank?
+
+    lines = ['MEMÓRIA DESTE CLIENTE (de atendimentos ANTERIORES, não desta conversa — pode citar; ' \
+             'proponha e peça confirmação antes de tratar como definitivo, não afirme como certeza absoluta):']
+    lines << "Resumo: #{memory.summary}" if memory.summary.present?
+    if facts.present?
+      lines << 'Dados lembrados:'
+      facts.each { |key, value| lines << "- #{key}: #{value}" }
+    end
     lines.join("\n")
   end
 
@@ -539,13 +597,15 @@ class Ai::PythonOrchestratorClient
       "mínimo 8 dígitos numéricos; e-mail = contém @ e domínio válido; número = só dígitos; escolha = " \
       "valor dentro das opções listadas; anexo = só se um arquivo foi realmente enviado; texto = " \
       "qualquer valor com conteúdo semântico real (não vazio, não só pontuação).\n" \
-      "- Se o valor NÃO bater com o tipo: peça correção UMA vez, de forma isolada e direta — não repita " \
-      "a etapa inteira, só aponte o que falta corrigir. Se o cliente não corrigir: " \
-      "campo OBRIGATÓRIO → defina \"transferir_humano\": true (preencha \"handoff_summary\"); campo " \
-      "opcional → não grave nada nessa chave e siga em frente.\n" \
-      "- Se o cliente simplesmente NÃO fornecer o dado pedido: campo OBRIGATÓRIO → peça UMA vez; se " \
-      "ele ignorar de novo, defina \"transferir_humano\": true; campo opcional → mande " \
-      '"dados_coletados" vazio ([]) e defina "avancar_etapa": true.'
+      "- Se o valor NÃO bater com o tipo: explique o problema de forma isolada e direta — não repita " \
+      "a etapa inteira, só aponte o que falta corrigir — e peça de novo. Campo opcional: se o cliente " \
+      "não corrigir, não grave nada nessa chave e siga em frente. Campo OBRIGATÓRIO: continue pedindo " \
+      "com paciência — NÃO marque \"transferir_humano\" só pela quantidade de tentativas (o sistema " \
+      "tem seu próprio limite de segurança pra isso, configurado à parte).\n" \
+      "- Se o cliente simplesmente NÃO fornecer o dado pedido: peça de novo, com paciência. Campo " \
+      "opcional: se ele não responder, mande \"dados_coletados\" vazio ([]) e defina " \
+      '"avancar_etapa": true. Campo OBRIGATÓRIO: continue pedindo — mesma regra acima, não transfira ' \
+      'só pela contagem de tentativas.'
   end
 
   # Mesma fonte e formatação que Ai::PromptCompiler#step_lines/compile já usa para transfer_when/
@@ -722,7 +782,10 @@ class Ai::PythonOrchestratorClient
           properties: {
             'handoff_summary' => { type: 'string',
                                     description: 'Resumo do que já foi conseguido (ex.: "Cliente já forneceu ' \
-                                                 'nome e cidade, falta CPF") e o motivo da transferência.' }
+                                                 'nome e cidade, falta CPF") e o motivo da transferência.' },
+            'handoff_target' => { type: 'string',
+                                   description: 'Nome EXATO do time de destino (ver lista de times ' \
+                                                'disponíveis) — vazio se nenhum se encaixar.' }
           },
           required: ['handoff_summary']
         } }

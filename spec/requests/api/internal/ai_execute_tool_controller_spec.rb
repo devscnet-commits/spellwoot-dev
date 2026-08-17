@@ -639,6 +639,35 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
           .not_to eq(:live)
       end
 
+      # Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino
+      # (handoff_target) — o Structured Outputs nunca reproduziu isso, então "transferir_humano" sempre
+      # caía no time default/configurado, cego à intenção. handoff_target volta a existir e precisa
+      # rotear pro time certo via o MESMO Ai::HandoffCoordinator#human_team_id/match_team_by_name que
+      # #execute_step_conclusion (on_complete) já usava corretamente.
+      it 'conversation.transfer com handoff_target casa o time pelo NOME (whitelist agent.handoff_team_ids)' do
+        team = create(:team, account: account)
+        create(:team_member, team: team, user: create(:user, account: account))
+        agent.update!(handoff_team_ids: [team.id])
+
+        call_tool('conversation_transfer', arguments: { handoff_summary: 'Cliente quer negociar dívida',
+                                                          handoff_target: team.name })
+
+        expect(response.parsed_body['status']).to eq('executed')
+        expect(conversation.reload.team_id).to eq(team.id)
+      end
+
+      it 'conversation.transfer com handoff_target que não casa nenhum time cai no default configurado' do
+        team = create(:team, account: account)
+        create(:team_member, team: team, user: create(:user, account: account))
+        agent.update!(handoff_team_ids: [team.id])
+
+        call_tool('conversation_transfer', arguments: { handoff_summary: 'motivo',
+                                                          handoff_target: 'Time Que Não Existe' })
+
+        expect(response.parsed_body['status']).to eq('executed')
+        expect(conversation.reload.team_id).to eq(team.id) # cai no configured_handoff_team_id (1º da whitelist)
+      end
+
       it 'em modo shadow, nenhuma das duas muda a conversa' do
         call_tool('conversation_resolve', mode: 'shadow')
 

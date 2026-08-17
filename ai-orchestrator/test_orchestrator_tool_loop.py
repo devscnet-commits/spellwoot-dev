@@ -166,3 +166,46 @@ class TestAvancarEtapaSempreRepassado:
             arguments={}, mode="live",
         )
         assert reply_text == "Perfeito!"
+
+
+# Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino do handoff
+# (handoff_target, casado contra whitelist) — o Structured Outputs nunca reproduziu isso, então
+# transferir_humano sempre caía no time padrão, cego à intenção. handoff_target volta a existir no
+# contrato JSON e precisa chegar ao control tool TRANSFER_TOOL igual ao handoff_summary.
+class TestHandoffTarget:
+    def test_transferir_humano_repassa_handoff_target_pro_control_tool(self):
+        payload = {
+            "mensagem_para_cliente": "Já vou te transferir para o Financeiro.",
+            "dados_coletados": [], "avancar_etapa": False, "transferir_humano": True,
+            "encerrar_atendimento": False, "handoff_summary": "Cliente quer negociar dívida.",
+            "handoff_target": "Financeiro",
+        }
+
+        with patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            mock_execute_tool.return_value = {"result": {}, "status": "executed", "error": None}
+
+            orchestrator._dispatch_structured_reply(payload, ticket_id=1, ai_department_id=1, mode="live")
+
+        mock_execute_tool.assert_any_call(
+            ticket_id=1, ai_department_id=1, tool_name=orchestrator.TRANSFER_TOOL,
+            arguments={"handoff_summary": "Cliente quer negociar dívida.", "handoff_target": "Financeiro"},
+            mode="live",
+        )
+
+    def test_handoff_target_ausente_vira_string_vazia_nunca_quebra(self):
+        payload = {
+            "mensagem_para_cliente": "Vou te transferir.",
+            "dados_coletados": [], "avancar_etapa": False, "transferir_humano": True,
+            "encerrar_atendimento": False, "handoff_summary": "Motivo.",
+        }
+
+        with patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            mock_execute_tool.return_value = {"result": {}, "status": "executed", "error": None}
+
+            orchestrator._dispatch_structured_reply(payload, ticket_id=1, ai_department_id=1, mode="live")
+
+        mock_execute_tool.assert_any_call(
+            ticket_id=1, ai_department_id=1, tool_name=orchestrator.TRANSFER_TOOL,
+            arguments={"handoff_summary": "Motivo.", "handoff_target": ""},
+            mode="live",
+        )

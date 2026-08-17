@@ -530,7 +530,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
-    it 'inclui a escalada: esclarecer 1x, depois transferir (obrigatório) ou aceitar vazio (opcional)' do
+    # Achado ao vivo (17/08): a versão anterior desta regra mandava a IA marcar "transferir_humano": true
+    # depois de só 1 tentativa fracassada — um limiar PRÓPRIO que contradizia o teto configurável na tela
+    # de Etapas (stuck_handoff_turns). Removido: "quantas tentativas antes de desistir" agora é
+    # EXCLUSIVAMENTE do backend (Ai::Gateway#step_turns_exceeded?); o texto só instrui a IA a continuar
+    # pedindo com paciência, sem se auto-transferir pela contagem.
+    it 'campo opcional aceita vazio e avança; campo obrigatório NÃO se auto-transfere pela contagem' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'CPF', 'instructions' => 'Peça o CPF.', 'collect' => { 'attribute' => 'cpf', 'type' => 'text' } }
       ])
@@ -540,9 +545,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('peça correção UMA vez, de forma isolada e direta') &&
-          prompt.include?('campo OBRIGATÓRIO → defina "transferir_humano": true') &&
-          prompt.include?('mande "dados_coletados" vazio ([]) e defina "avancar_etapa": true')
+        prompt.include?('NÃO marque "transferir_humano" só pela quantidade de tentativas') &&
+          prompt.include?('mande "dados_coletados" vazio ([]) e defina "avancar_etapa": true') &&
+          !prompt.include?('campo OBRIGATÓRIO → defina "transferir_humano": true')
       }
     end
 
@@ -1072,21 +1077,22 @@ RSpec.describe Ai::PythonOrchestratorClient do
       }
     end
 
-    # Consolidação: antes #transfer_discipline_instruction dizia "5 mensagens" e
-    # #data_validation_instruction dizia "1 vez" pro MESMO gatilho (tentativa antes de transferir) —
-    # dois limiares divergentes pra ação crítica. Unificado em 1 tentativa; frustração transfere
-    # IMEDIATO, sem exigir tentativa de esclarecimento antes.
-    it 'unifica o limiar de transferência em 1 tentativa e transfere imediato em caso de frustração' do
+    # Achado ao vivo (17/08): "não exija mais de 1 nova tentativa por dado antes de transferir" era um
+    # limiar POR CONTAGEM que a IA aplicava sozinha — contradizia o teto configurável na tela de Etapas
+    # (stuck_handoff_turns): se o admin configura X mensagens de tolerância, a IA não pode desistir bem
+    # antes disso por conta própria. Removido — só os gatilhos por CONTEÚDO (pedido explícito,
+    # frustração) continuam levando a transferência IMEDIATA; contagem de tentativas é só do backend.
+    it 'transfere imediato por pedido/frustração, mas NÃO se auto-transfere por contagem de tentativas' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('não conseguir fornecer um dado válido mesmo depois de 1 pedido de esclarecimento') &&
-          prompt.include?('não exija mais de 1 nova tentativa por dado antes de transferir') &&
-          prompt.include?('demonstrar frustração clara') &&
+        prompt.include?('demonstrar frustração clara') &&
           prompt.include?('transfira IMEDIATAMENTE, mesmo sem ter tentado esclarecer antes') &&
+          prompt.include?('NÃO transfira só pela QUANTIDADE de tentativas') &&
+          !prompt.include?('não exija mais de 1 nova tentativa por dado antes de transferir') &&
           !prompt.include?('5 mensagens')
       }
     end
@@ -1193,6 +1199,70 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         JSON.parse(req.body)['system_prompt'].include?('preencha "handoff_summary" com o que já foi conseguido')
+      }
+    end
+  end
+
+  # Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino do handoff
+  # (handoff_target, casado contra a whitelist agent.handoff_team_ids — Ai::PromptCompiler
+  # #human_handoff_teams) — o Structured Outputs nunca reproduziu isso, então toda transferência direta
+  # caía sempre no mesmo time default, cega à intenção. Reusa a MESMA função pura do motor legado.
+  describe 'Times disponíveis (handoff_target_instruction)' do
+    it 'lista os times da whitelist do agente e instrui a copiar o nome EXATO' do
+      team_a = create(:team, account: account, name: 'Suporte Técnico')
+      team_b = create(:team, account: account, name: 'Financeiro')
+      agent.update!(handoff_team_ids: [team_a.id, team_b.id])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('preencha "handoff_target" com o nome') &&
+          prompt.include?('- Suporte Técnico') &&
+          prompt.include?('- Financeiro')
+      }
+    end
+
+    it 'sem NENHUM time na conta, não aparece (nada pra IA escolher)' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('handoff_target')
+      }
+    end
+  end
+
+  # Achado ao vivo (17/08): Ai::StateManager#mirror_contact_facts já grava em Ai::CustomerMemory a cada
+  # turno (cross-conversa/cross-agente), mas nada no caminho Python lia essa memória de volta — o motor
+  # Ruby legado tinha isso (Ai::PromptCompiler#customer_memory_lines). Write-only até este fix.
+  describe 'MEMÓRIA DESTE CLIENTE (customer_memory_block)' do
+    it 'apresenta resumo e dados lembrados de atendimentos ANTERIORES deste contato' do
+      Ai::CustomerMemory.create!(account: account, contact_id: conversation.contact_id,
+                                 summary: 'Cliente recorrente, já é assinante do Plano 450.',
+                                 key_facts: { 'cidade' => 'Maravilha', 'documento_cpf' => '11033636975' })
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('MEMÓRIA DESTE CLIENTE (de atendimentos ANTERIORES, não desta conversa') &&
+          prompt.include?('Cliente recorrente, já é assinante do Plano 450.') &&
+          prompt.include?('- cidade: Maravilha') &&
+          prompt.include?('- documento_cpf: 11033636975')
+      }
+    end
+
+    it 'sem NENHUM registro de memória pra este contato, não aparece' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        !JSON.parse(req.body)['system_prompt'].include?('MEMÓRIA DESTE CLIENTE')
       }
     end
   end
