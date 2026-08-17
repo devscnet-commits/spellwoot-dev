@@ -102,15 +102,19 @@ class Ai::PythonOrchestratorClient
 
     unless response.success?
       Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} HTTP #{response.code}: #{response.body}"
-      return { reply: nil, conversation_id: nil, byok_fallback: false }
+      return { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false }
     end
 
     parsed = response.parsed_response
     Rails.logger.info "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation.id} reply_present=#{parsed['reply'].present?} conversation_id=#{parsed['conversation_id'].inspect}"
-    { reply: parsed['reply'], conversation_id: parsed['conversation_id'], byok_fallback: parsed['byok_fallback'] == true }
+    { reply: parsed['reply'], conversation_id: parsed['conversation_id'], byok_fallback: parsed['byok_fallback'] == true,
+      # Auto-relato do modelo (0.0-1.0, orchestrator.CONFIANCA_KEY) — nil quando o Python não conseguiu
+      # parsear o JSON do turno. Ai::Gateway usa isto pra decidir handoff por baixa confiança
+      # (Ai::HandoffEvaluator); este client só repassa o que o Python mandou.
+      confidence: parsed['confidence'], transferred: parsed['transferred'] == true }
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
-    { reply: nil, conversation_id: nil, byok_fallback: false }
+    { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false }
   end
 
   private
@@ -646,9 +650,15 @@ class Ai::PythonOrchestratorClient
       "  \"avancar_etapa\": true ou false,\n" \
       "  \"transferir_humano\": true ou false,\n" \
       "  \"encerrar_atendimento\": true ou false,\n" \
-      "  \"handoff_summary\": \"resumo do atendimento — obrigatório quando transferir_humano for true\"\n" \
+      "  \"handoff_summary\": \"resumo do atendimento — obrigatório quando transferir_humano for true\",\n" \
+      "  \"confianca\": 0.0 a 1.0\n" \
       "}\n" \
       "REGRAS:\n" \
+      "- \"confianca\": sua confiança de 0.0 (nada confiante) a 1.0 (totalmente confiante) na resposta " \
+      "que está dando NESTE turno — considere se tem certeza da informação, se entendeu bem o pedido " \
+      "do cliente, e se a ação escolhida é a certa. Seja honesto: um valor baixo pode acionar uma " \
+      "transferência automática para um humano — é melhor admitir incerteza do que arriscar uma " \
+      "resposta errada ou inventada.\n" \
       "- Se o cliente forneceu QUALQUER dado (nome, endereço, CPF, telefone, email, preferência, etc.), " \
       "adicione UM ITEM em \"dados_coletados\" por dado — cada item é {\"chave\": nome descritivo do " \
       "dado, \"valor\": o que o cliente disse}; pode mandar VÁRIOS itens no mesmo turno se o cliente deu " \

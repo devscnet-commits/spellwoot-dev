@@ -31,6 +31,7 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
         "transferir_humano": False,
         "encerrar_atendimento": False,
         "handoff_summary": "",
+        "confianca": 0.9,
     }
     resp3 = _response("resp_3", [], output_text=json.dumps(final_payload))
 
@@ -40,7 +41,7 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
         mock_client.responses.create.side_effect = [resp1, resp2, resp3]
         mock_execute_tool.return_value = {"result": "ok"}
 
-        reply_text, conversation_id, byok_fallback = orchestrator.run_conversation(
+        reply_text, conversation_id, byok_fallback, confidence, transferred = orchestrator.run_conversation(
             ticket_id=1,
             ai_department_id=1,
             mode="live",
@@ -74,6 +75,8 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
     assert reply_text == "Show, Joana! O plano custa R$ 99,90."
     assert conversation_id == "conv_abc"
     assert byok_fallback is False
+    assert confidence == 0.9
+    assert transferred is False
 
 
 # Generalização do fix de consultar_conhecimento (knowledge_timeout/knowledge_search_failed) pra
@@ -157,7 +160,7 @@ class TestAvancarEtapaSempreRepassado:
             # inspeciona esse retorno pra decidir mais nada — só dispara e segue.
             mock_execute_tool.return_value = {"result": {}, "status": "blocked_missing_data", "error": None}
 
-            reply_text = orchestrator._dispatch_structured_reply(
+            reply_text, confidence, transferred = orchestrator._dispatch_structured_reply(
                 payload, ticket_id=1, ai_department_id=1, mode="live",
             )
 
@@ -166,6 +169,8 @@ class TestAvancarEtapaSempreRepassado:
             arguments={}, mode="live",
         )
         assert reply_text == "Perfeito!"
+        assert confidence is None
+        assert transferred is False
 
 
 # Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino do handoff
@@ -209,3 +214,58 @@ class TestHandoffTarget:
             arguments={"handoff_summary": "Motivo.", "handoff_target": ""},
             mode="live",
         )
+
+
+# Migração da confiança pro motor Python (Ai::HandoffEvaluator/department.transfer_rules
+# ['min_confidence'] nunca tinha equivalente no Structured Outputs — o campo existia na tela e não
+# fazia nada). Python só REPORTA "confianca"; quem decide transferir por baixa confiança é o Rails
+# (Ai::Gateway), depois deste turno já ter rodado — ver orchestrator.CONFIANCA_KEY.
+class TestConfianca:
+    def _payload(self, **overrides):
+        base = {
+            "mensagem_para_cliente": "Ok!",
+            "dados_coletados": [], "avancar_etapa": False, "transferir_humano": False,
+            "encerrar_atendimento": False, "handoff_summary": "",
+        }
+        base.update(overrides)
+        return base
+
+    def test_confianca_numerica_e_repassada_ao_caller(self):
+        with patch.object(orchestrator.tools, "execute_tool"):
+            _, confidence, _ = orchestrator._dispatch_structured_reply(
+                self._payload(confianca=0.35), ticket_id=1, ai_department_id=1, mode="live",
+            )
+
+        assert confidence == 0.35
+
+    def test_confianca_ausente_vira_none_nunca_quebra(self):
+        with patch.object(orchestrator.tools, "execute_tool"):
+            _, confidence, _ = orchestrator._dispatch_structured_reply(
+                self._payload(), ticket_id=1, ai_department_id=1, mode="live",
+            )
+
+        assert confidence is None
+
+    # bool é subclasse de int em Python — sem esta exclusão explícita, um "confianca": true perdido
+    # (bug do modelo/parse) viraria confidence=1 (True == 1) em vez de None, escapando do gate de
+    # baixa confiança do lado Rails por acidente.
+    def test_confianca_booleana_e_tratada_como_ausente(self):
+        with patch.object(orchestrator.tools, "execute_tool"):
+            _, confidence, _ = orchestrator._dispatch_structured_reply(
+                self._payload(confianca=True), ticket_id=1, ai_department_id=1, mode="live",
+            )
+
+        assert confidence is None
+
+    def test_transferred_reflete_transferir_humano(self):
+        with patch.object(orchestrator.tools, "execute_tool"):
+            _, _, transferred_true = orchestrator._dispatch_structured_reply(
+                self._payload(transferir_humano=True, handoff_summary="motivo"),
+                ticket_id=1, ai_department_id=1, mode="live",
+            )
+            _, _, transferred_false = orchestrator._dispatch_structured_reply(
+                self._payload(), ticket_id=1, ai_department_id=1, mode="live",
+            )
+
+        assert transferred_true is True
+        assert transferred_false is False

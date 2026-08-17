@@ -109,6 +109,63 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # Migração pro motor Python (17/08) — transfer_rules['min_confidence'] existia na tela desde o motor
+  # legado (Ai::HandoffEvaluator) mas nunca teve efeito nenhum no caminho Python (achado ao vivo: o
+  # bug real do Pinhalzinho, a IA dizendo "Atendemos sua cidade!" sem NENHUMA fonte real). O Python
+  # agora auto-relata "confianca" 0.0-1.0 a cada turno; o Gateway decide o handoff DEPOIS do turno.
+  describe 'low_confidence (transfer_rules.min_confidence)' do
+    let(:transfer_rules) { { 'min_confidence' => 0.5 } }
+
+    it 'confidence abaixo do mínimo e o modelo NÃO transferiu: handoff forçado, reply NÃO chega ao cliente' do
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Atendemos sua cidade!', conversation_id: 'conv_1', confidence: 0.2, transferred: false)
+
+      convo = deliver
+
+      expect(convo.additional_attributes['ai_handoff']).to be true
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'handoff.low_confidence')).to exist
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'reply.sent')).not_to exist
+    end
+
+    it 'confidence abaixo do mínimo mas o PRÓPRIO modelo já transferiu (transferred: true): não duplica o handoff' do
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Já vou te transferir.', conversation_id: 'conv_1', confidence: 0.1, transferred: true)
+
+      convo = deliver
+
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'handoff.low_confidence')).not_to exist
+    end
+
+    it 'confidence ACIMA do mínimo: segue o fluxo normal, sem handoff por confiança' do
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Olá!', conversation_id: 'conv_1', confidence: 0.9, transferred: false)
+
+      convo = deliver
+
+      expect(convo.additional_attributes['ai_handoff']).not_to be true
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'reply.sent')).to exist
+    end
+
+    it 'min_confidence 0 (desligado, default): nunca transfere por confiança, mesmo com confidence baixa' do
+      department.update!(transfer_rules: { 'min_confidence' => 0 })
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Olá!', conversation_id: 'conv_1', confidence: 0.01, transferred: false)
+
+      convo = deliver
+
+      expect(convo.additional_attributes['ai_handoff']).not_to be true
+    end
+
+    it 'confidence ausente (Python não conseguiu parsear o turno): não quebra, não transfere por confiança' do
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Só um instante, já te retorno!', conversation_id: 'conv_1', confidence: nil, transferred: false)
+
+      convo = deliver
+
+      expect(convo.additional_attributes['ai_handoff']).not_to be true
+    end
+  end
+
   # Python é o motor ÚNICO — não existe mais department "sem python_orchestrator" nem checagem de
   # flag (truthy/string) pra testar; skip_vision é incondicionalmente true pra QUALQUER department,
   # já que a OpenAI sempre recebe os pixels crus no mesmo turno (ver Ai::PythonOrchestratorClient).

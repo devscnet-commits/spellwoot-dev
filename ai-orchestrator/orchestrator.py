@@ -80,6 +80,13 @@ HANDOFF_SUMMARY_KEY = "handoff_summary"
 # devolve o nome escolhido — Api::Internal::AiExecuteToolController#transfer_to_human repassa pro
 # MESMO Ai::HandoffCoordinator#human_team_id/match_team_by_name que o motor legado já usava.
 HANDOFF_TARGET_KEY = "handoff_target"
+# Rails-side (Ai::HandoffEvaluator, department.transfer_rules['min_confidence']) transfers to a
+# human when this drops below the configured threshold — same mechanism the legacy decide() engine
+# had, never ported to Structured Outputs until now. Self-reported by the model every turn (free —
+# same JSON call, no extra request), read but not enforced here: Python only reports it, Rails
+# (Ai::Gateway, AFTER this turn's reply/tools already ran) decides whether to override the reply
+# with a silent handoff.
+CONFIANCA_KEY = "confianca"
 
 # Same tool_name strings Api::Internal::AiExecuteToolController already recognizes (and already
 # recognized before this refactor — see Ai::PythonOrchestratorClient::MEMORY_TOOL/ADVANCE_STEP_TOOL/
@@ -139,8 +146,19 @@ STRUCTURED_REPLY_SCHEMA = {
                 "for false."
             ),
         },
+        CONFIANCA_KEY: {
+            "type": "number",
+            "description": (
+                "Sua confiança de 0.0 (nada confiante) a 1.0 (totalmente confiante) na resposta que você "
+                "está dando NESTE turno — considere se você tem certeza da informação que está passando, "
+                "se entendeu bem o que o cliente pediu, e se a ação escolhida é a certa. Seja honesto: um "
+                "valor baixo aqui pode acionar uma transferência automática para um humano — é melhor "
+                "admitir incerteza do que arriscar uma resposta errada ou inventada."
+            ),
+        },
     },
-    "required": [MENSAGEM_KEY, DADOS_KEY, AVANCAR_KEY, TRANSFERIR_KEY, ENCERRAR_KEY, HANDOFF_SUMMARY_KEY, HANDOFF_TARGET_KEY],
+    "required": [MENSAGEM_KEY, DADOS_KEY, AVANCAR_KEY, TRANSFERIR_KEY, ENCERRAR_KEY, HANDOFF_SUMMARY_KEY,
+                 HANDOFF_TARGET_KEY, CONFIANCA_KEY],
     "additionalProperties": False,
 }
 
@@ -296,15 +314,18 @@ def run_conversation(
     temperature: float | None = None,
     image_urls: list[str] | None = None,
     account_api_key: str | None = None,
-) -> tuple[str, str, bool]:
+) -> tuple[str, str, bool, float | None, bool]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
     (text.format=json_schema, strict — STRUCTURED_REPLY_SCHEMA) — control flow (save/advance/transfer/
     close) is decided by Python from the parsed JSON and dispatched to Rails' webhook, never by which
     tool the model chose to call.
     Real (admin-configured) business tools are still offered as function tools for genuine external
-    actions. Always returns (reply_text, conversation_id, byok_fallback) — including when parsing
-    fails or MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to special-case a cut-off
-    turn, only real transport/API failures.
+    actions. Always returns (reply_text, conversation_id, byok_fallback, confidence, transferred) —
+    including when parsing fails or MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to
+    special-case a cut-off turn, only real transport/API failures. confidence is the model's own
+    0.0-1.0 self-report (None when the payload didn't parse); transferred is whether THIS turn already
+    dispatched TRANSFER_TOOL — Rails uses it to skip its own confidence-based handoff when the model
+    already decided to transfer on its own.
 
     `provider` is accepted and logged ONLY — no dispatch yet: multi-provider routing doesn't exist,
     only multi-KEY (BYOK, same provider) via account_api_key.
@@ -446,10 +467,10 @@ def run_conversation(
         )
         payload = {}
 
-    reply_text = _dispatch_structured_reply(
+    reply_text, confidence, transferred = _dispatch_structured_reply(
         payload, ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
     )
-    return reply_text, conversation_id, byok_fallback
+    return reply_text, conversation_id, byok_fallback, confidence, transferred
 
 
 def _parse_structured_reply(text: str | None) -> dict | None:
@@ -477,10 +498,15 @@ def _truthy(value) -> bool:
     return bool(value)
 
 
-def _dispatch_structured_reply(payload: dict, *, ticket_id: int, ai_department_id: int, mode: str) -> str:
+def _dispatch_structured_reply(
+    payload: dict, *, ticket_id: int, ai_department_id: int, mode: str,
+) -> tuple[str, float | None, bool]:
     """Turns the model's structured decision into the same Rails webhook calls the old control tools
     used to trigger (Api::Internal::AiExecuteToolController) — except now PYTHON decides to call them
-    because the JSON says so, not because the model chose (or "forgot") to call a tool."""
+    because the JSON says so, not because the model chose (or "forgot") to call a tool.
+    Returns (reply_text, confidence, transferred) — confidence is the model's raw self-report (None
+    if missing/non-numeric, defensive same as _truthy above even though the strict schema requires
+    it); transferred tells the caller TRANSFER_TOOL already fired for this turn."""
     # LISTA de {chave, valor} (STRUCTURED_REPLY_SCHEMA, json_schema estrito) — não mais o objeto de
     # chave livre {chave: valor} do json_object solto; strict mode não aceita additionalProperties.
     dados = payload.get(DADOS_KEY)
@@ -501,7 +527,8 @@ def _dispatch_structured_reply(payload: dict, *, ticket_id: int, ai_department_i
             ADVANCE_STEP_TOOL, {}, ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
         )
 
-    if _truthy(payload.get(TRANSFERIR_KEY)):
+    transferred = _truthy(payload.get(TRANSFERIR_KEY))
+    if transferred:
         _post_control_tool(
             TRANSFER_TOOL,
             {"handoff_summary": payload.get(HANDOFF_SUMMARY_KEY, ""), "handoff_target": payload.get(HANDOFF_TARGET_KEY, "")},
@@ -513,9 +540,12 @@ def _dispatch_structured_reply(payload: dict, *, ticket_id: int, ai_department_i
         )
 
     reply_text = str(payload.get(MENSAGEM_KEY) or "").strip()
+    confidence = payload.get(CONFIANCA_KEY)
+    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+        confidence = None
     # Same guardrail the old _force_text_reply protected: Ai::ActionDispatcher#reply no-ops on a
     # blank reply (never sends anything) — never send literal silence to the customer.
-    return reply_text or "Só um instante, já te retorno!"
+    return (reply_text or "Só um instante, já te retorno!"), confidence, transferred
 
 
 def _post_control_tool(tool_name: str, arguments: dict, *, ticket_id: int, ai_department_id: int, mode: str) -> None:
