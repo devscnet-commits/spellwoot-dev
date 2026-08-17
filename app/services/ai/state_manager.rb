@@ -486,7 +486,7 @@ class Ai::StateManager
     attrs['ai_step_index'] = new_index
     attrs['ai_step'] = {
       'name' => step_name(current),
-      'grouping_delay_seconds' => (delay.positive? ? delay : nil),
+      'grouping_delay_seconds' => delay,
       'reported_name' => decision['current_step'].to_s.strip.presence # só log; não é fonte de verdade
     }
     # Contrato pergunta↔etapa: guarda o slot que a reply_text DESTE turno pediu, para o PRÓXIMO turno
@@ -743,10 +743,14 @@ class Ai::StateManager
     (step['name'] || step[:name]).to_s.strip
   end
 
+  # nil = etapa sem delay configurado (MessageGrouping cai no delay geral do departamento). 0 = delay
+  # EXPLÍCITO da etapa (sem agrupar, mesmo que o departamento tenha um delay geral) — precisa sobreviver
+  # distinto de nil até o MessageGrouping, senão "0" e "não configurado" ficam indistinguíveis.
   def step_delay(step)
-    return 0 unless step.is_a?(Hash)
+    return nil unless step.is_a?(Hash)
 
-    (step['group_delay_seconds'] || step[:group_delay_seconds]).to_i
+    value = step['group_delay_seconds'] || step[:group_delay_seconds]
+    value.nil? ? nil : value.to_i
   end
 
   # GATE anti-contaminação da memória de fatos (fonte :supervisor). O campo `attributes` do modelo é
