@@ -599,6 +599,25 @@ RSpec.describe Ai::PythonOrchestratorClient do
           prompt.include?('"encerrar_atendimento": true ou false')
       }
     end
+
+    # Achado ao vivo (17/08, ticket 599): sem close_when configurado, a IA marcou
+    # "encerrar_atendimento": true sozinha só porque o cliente disse "ta bem obrigada" — pulou etapas
+    # inteiras (incluindo a de Finalização, cujo desfecho configurado era TRANSFERIR pra um humano, não
+    # resolver). A regra antiga dizia "SOMENTE quando as condições configuradas ABAIXO forem atendidas",
+    # mas sem close_when não existe nada "abaixo" — a IA ficou sem gatilho nenhum e mesmo assim marcou.
+    it 'sem NENHUM close_when configurado, proíbe explicitamente marcar encerrar_atendimento por conta própria' do
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        !prompt.include?('Encerre quando:') &&
+          prompt.include?('"encerrar_atendimento": mantenha SEMPRE false') &&
+          prompt.include?('não existe nenhuma condição de encerramento configurada') &&
+          !prompt.include?('SOMENTE quando as condições de encerramento configuradas abaixo')
+      }
+    end
   end
 
   describe 'force_handoff_notice (teto de segurança por etapa, decidido pelo Ai::Gateway)' do
