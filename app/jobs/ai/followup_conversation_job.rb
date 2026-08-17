@@ -35,10 +35,15 @@ class Ai::FollowupConversationJob < ApplicationJob
 
   private
 
+  # Status elegível pro follow-up: aberta OU pendente — ver comentário de
+  # Ai::FollowupSweepJob#candidate_conversations (mesmo critério, duplicado aqui porque este job
+  # também pode ser enfileirado fora do sweep/com estado defasado entre o enqueue e a execução).
+  ELIGIBLE_STATUSES = %w[open pending].freeze
+
   # Resolve o contexto da conversa (binding live + departamento) e chama o `process` movido.
   def run(conversation_id)
     conversation = Conversation.find_by(id: conversation_id)
-    return if conversation.nil? || conversation.status != 'open'
+    return if conversation.nil? || ELIGIBLE_STATUSES.exclude?(conversation.status)
     return if conversation.assignee_id.present?
 
     binding = Ai::AgentInbox.live.includes(agent: :account).find_by(inbox_id: conversation.inbox_id)
