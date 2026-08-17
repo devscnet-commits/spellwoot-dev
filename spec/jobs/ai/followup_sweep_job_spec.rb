@@ -29,13 +29,10 @@ RSpec.describe Ai::FollowupSweepJob do
   end
 
   describe '#perform (dispatcher)' do
-    # Follow-up DESATIVADO TEMPORARIAMENTE (Ai::FollowupSweepJob#perform, `return` logo no início) —
-    # pedido urgente do usuário: estava disparando em conversas ativas mesmo sem follow-up configurado,
-    # interferindo nos testes ao vivo do Structured Outputs. pending (não skip/delete): o teste
-    # continua documentando o comportamento REAL do dispatcher quando o kill-switch for revertido —
-    # apagar essa marca junto com o `return`.
-    it 'enqueues one FollowupConversationJob per eligible quiet conversation',
-       pending: 'follow-up desativado temporariamente — ver o `return` em Ai::FollowupSweepJob#perform' do
+    # Reativado (17/08) — ver comentário em Ai::FollowupSweepJob#perform: a causa raiz (department
+    # errado sem Ai::Run) já foi corrigida em Ai::FollowupConversationJob#resolved_department antes
+    # deste kill-switch ser removido.
+    it 'enqueues one FollowupConversationJob per eligible quiet conversation' do
       convo_a = quiet_conversation
       convo_b = quiet_conversation
 
