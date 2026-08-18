@@ -37,4 +37,53 @@ RSpec.describe Ai::OperationProfile do
       expect(described_class::GROQ_APPROVED_MODELS).to include('openai/gpt-oss-120b')
     end
   end
+
+  # Achado ao vivo (18/08): budget.monthly_usd/on_limit eram salvos mas nunca lidos por ninguém — o
+  # campo "Orçamento" da tela era decorativo. Ver Ai::Gateway#run (ponto de uso real).
+  describe 'orçamento (teto mensal, somado entre TODOS os agentes que reusam o perfil)' do
+    let(:profile) do
+      described_class.create!(account: account, name: 'perfil', supervisor_provider: 'openai',
+                              supervisor_model: 'gpt-4.1-mini', temperature_position: 20)
+    end
+    let(:agent_a) { Ai::Agent.create!(account: account, name: 'A', status: 'active', ai_operation_profile_id: profile.id) }
+    let(:agent_b) { Ai::Agent.create!(account: account, name: 'B', status: 'active', ai_operation_profile_id: profile.id) }
+
+    it 'soma o custo do mês corrente entre TODOS os agentes que usam este perfil' do
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent_a.id, cost: 3, status: 'recorded')
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent_b.id, cost: 4, status: 'recorded')
+
+      expect(profile.month_to_date_cost).to eq(7.0)
+    end
+
+    it 'ignora Ai::Run de MESES anteriores' do
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent_a.id, cost: 99, status: 'recorded',
+                      created_at: 2.months.ago)
+
+      expect(profile.month_to_date_cost).to eq(0.0)
+    end
+
+    it 'budget_exceeded? é false sem teto configurado (budget vazio), mesmo com gasto alto' do
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent_a.id, cost: 999, status: 'recorded')
+
+      expect(profile.budget_exceeded?).to be(false)
+    end
+
+    it 'budget_exceeded? é true quando o gasto do mês bate ou passa o teto' do
+      profile.update!(budget: { 'monthly_usd' => 10 })
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent_a.id, cost: 10, status: 'recorded')
+
+      expect(profile.budget_exceeded?).to be(true)
+    end
+
+    it 'budget_exceeded? é false quando o gasto do mês ainda não bateu o teto' do
+      profile.update!(budget: { 'monthly_usd' => 10 })
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent_a.id, cost: 9.99, status: 'recorded')
+
+      expect(profile.budget_exceeded?).to be(false)
+    end
+
+    it 'budget_on_limit cai em "downgrade" (ainda não implementado -> tratado como alert) quando ausente' do
+      expect(profile.budget_on_limit).to eq('downgrade')
+    end
+  end
 end

@@ -53,6 +53,29 @@ class Ai::OperationProfile < ApplicationRecord
     worker_overrides&.dig(key.to_s) || {}
   end
 
+  # Pedido do usuário (18/08): o campo "Orçamento" (budget.monthly_usd/on_limit) era só decorativo —
+  # nada no backend lia. O teto é do PERFIL, não de um agente isolado — um perfil pode ser reaproveitado
+  # por vários agentes (has_many :agents acima) — então soma o gasto de TODOS eles. Usa Ai::Run#cost (o
+  # valor GRAVADO por Ai::ModelRouter.estimate_cost no momento da chamada), não um recálculo pelo preço
+  # atual — isso é o que a tela "Custo de IA" já faz (Ai::ModelRouter.price_for); aqui só decide se
+  # estourou o teto ou não, com o mesmo custo que o próprio Ai::Run já registrou.
+  def month_to_date_cost
+    Ai::Run.where(ai_agent_id: agents.select(:id), created_at: Time.current.beginning_of_month..).sum(:cost).to_f
+  end
+
+  def budget_monthly_usd
+    budget.to_h['monthly_usd'].to_f
+  end
+
+  def budget_on_limit
+    budget.to_h['on_limit'].presence || 'downgrade'
+  end
+
+  # Sem teto configurado (0/ausente) => nunca estourado. Ver Ai::Gateway#budget_exceeded? (ponto de uso).
+  def budget_exceeded?
+    budget_monthly_usd.positive? && month_to_date_cost >= budget_monthly_usd
+  end
+
   private
 
   # Bloqueia salvar um modelo Groq FORA da allowlist (só o supervisor — o modelo que responde o

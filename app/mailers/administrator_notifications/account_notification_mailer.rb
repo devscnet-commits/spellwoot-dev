@@ -90,6 +90,29 @@ class AdministratorNotifications::AccountNotificationMailer < AdministratorNotif
     send_notification(subject, action_url: action_url, meta: meta)
   end
 
+  # Pedido do usuário (18/08): o "Orçamento" (budget.monthly_usd/on_limit) de um Ai::OperationProfile
+  # virou de verdade um teto — ver Ai::OperationProfile#budget_exceeded? e Ai::Gateway#run (o ponto que
+  # checa isso ANTES de cada chamada). Disparado (throttled, 1x/dia por perfil) tanto no modo "alert"
+  # (a IA CONTINUA respondendo, só avisa) quanto no "stop" (a IA já parou — este e-mail é o aviso de
+  # por quê). Linguagem de dono, não de log — o admin decide se sobe o teto ou deixa como está.
+  def budget_exceeded(account, profile_name, spent, budget_usd, stopped)
+    subject = if stopped
+                "IA pausada: o perfil \"#{profile_name}\" estourou o orçamento mensal (US$ #{spent} de US$ #{budget_usd})"
+              else
+                "Orçamento estourado: o perfil \"#{profile_name}\" já gastou US$ #{spent} de US$ #{budget_usd} este mês"
+              end
+    action_url = "#{ENV.fetch('FRONTEND_URL', nil)}/app/accounts/#{account.id}/ai/costs"
+    meta = {
+      'profile_name' => profile_name,
+      'spent' => spent,
+      'budget_usd' => budget_usd,
+      'account_name' => account.name,
+      'action' => stopped ? 'A IA parou de responder com este perfil até o próximo mês.' : 'A IA continua respondendo normalmente.'
+    }
+
+    send_notification(subject, action_url: action_url, meta: meta)
+  end
+
   private
 
   def format_deletion_date(deletion_date_str)
