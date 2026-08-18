@@ -124,9 +124,23 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     runs
   end
 
+  # Nomes de controle RESERVADOS (avancar_etapa/registrar_*/salvar_memoria_ia/continuar_conversa/
+  # conversation.resolve/conversation.transfer) — nunca foram, e nunca serão, uma Ai::Tool
+  # configurável pelo admin (Api::Internal::AiExecuteToolController os reconhece por nome fixo, não
+  # por cadastro). Só podem aparecer aqui em Ai::Run de ANTES da migração pro Structured Outputs
+  # (17/08), quando o motor Ruby legado oferecia alguns deles como function-calling de verdade — ver
+  # docs/ai-shadow-analysis-module-assessment.md §3. Marcá-los como "ferramenta ausente" pede pro
+  # admin configurar algo que não é configurável; exclui sempre, independente da data do run.
+  RESERVED_TOOL_NAMES = [
+    Ai::PythonOrchestratorClient::ADVANCE_STEP_TOOL, Ai::PythonOrchestratorClient::RESOLVE_TOOL,
+    Ai::PythonOrchestratorClient::TRANSFER_TOOL, Ai::PythonOrchestratorClient::CONTINUE_TOOL,
+    Ai::PythonOrchestratorClient::MEMORY_TOOL
+  ].freeze
+
   def row(run, dept_names, dept_tools, methods, questions)
     tool = tool_name(run)
-    missing = tool.present? && !dept_tools[run.ai_department_id].to_a.include?(tool.downcase)
+    missing = tool.present? && RESERVED_TOOL_NAMES.exclude?(tool) &&
+              !dept_tools[run.ai_department_id].to_a.include?(tool.downcase)
     {
       id: run.id,
       conversation_id: run.conversation_id,
