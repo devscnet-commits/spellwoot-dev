@@ -217,7 +217,20 @@ class Ai::Gateway
     # zerou ai_step_turns se a etapa avançou; senão este turno não produziu avanço -> soma 1.
     bump_step_turns_unless_advanced(step_index_before) if @acts_live
     status = result[:reply].present? ? 'recorded' : 'error'
-    run_record.update!(provider: 'openai', decision: { 'kind' => 'reply', 'text' => result[:reply] },
+    # Achado ao vivo (18/08): a tela "Análises com IA" (Api::V1::Accounts::AiShadowRunsController) lê
+    # decision['decision']/['reply_text']/['confidence'] — chaves do CONTRATO ANTIGO
+    # (Ai::ModelRouter.decide, motor Ruby legado). Este branch (Python, único motor hoje) gravava
+    # 'kind'/'text', que NENHUM consumidor lê (confirmado por grep) — resultado: 100% dos turnos reais
+    # caíam no fallback 'unanswered' do classify() da tela, mesmo turnos respondidos/com confiança
+    # normal, e "Lacunas de conhecimento" ficava inflado (não dá pra distinguir "respondeu" de "não
+    # respondeu" quando os dois viram a mesma string). decision => 'handoff' quando o PRÓPRIO modelo
+    # decidiu transferir neste turno (result[:transferred], TRANSFER_TOOL já disparou mid-turn antes
+    # daqui) — sem isso esses turnos TAMBÉM cairiam em 'unanswered'. 'tool'/knowledge_count continuam
+    # sem sinal (orchestrator.py não devolve isso pro Rails hoje — ver
+    # docs/ai-shadow-analysis-module-assessment.md §5, fora do escopo deste fix).
+    run_record.update!(provider: 'openai',
+                        decision: { 'decision' => (result[:transferred] ? 'handoff' : 'reply'),
+                                    'reply_text' => result[:reply], 'confidence' => result[:confidence] },
                         status: status, error_type: (status == 'error' ? 'provider_error' : nil))
     emit(run_record, 'decision.made', { decision: { 'kind' => 'reply' }, source: 'python_orchestrator' }, run_id: run_record.id)
 
