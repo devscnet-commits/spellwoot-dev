@@ -190,12 +190,12 @@ class Ai::FollowupConversationJob < ApplicationJob
     when 'wait_business_hours'
       # Hold until business hours, then assign to a human.
       if business_hours_open?(inbox)
-        assign_to_human(conversation)
-        record_action(conversation, account_id, 'assign', via: 'wait_business_hours')
+        assigned = assign_to_human(conversation, department)
+        record_action(conversation, account_id, 'assign', via: 'wait_business_hours', assigned: assigned)
       end
     else # 'assign' (default)
-      assign_to_human(conversation)
-      record_action(conversation, account_id, 'assign')
+      assigned = assign_to_human(conversation, department)
+      record_action(conversation, account_id, 'assign', assigned: assigned)
     end
   end
 
@@ -225,8 +225,8 @@ class Ai::FollowupConversationJob < ApplicationJob
       conversation.update!(status: :resolved)
       record_action(conversation, account_id, 'finalize', via: 'no_followup')
     when 'transfer_human'
-      assign_to_human(conversation)
-      record_action(conversation, account_id, 'transfer_human', via: 'no_followup')
+      assigned = assign_to_human(conversation, department)
+      record_action(conversation, account_id, 'transfer_human', via: 'no_followup', assigned: assigned)
     when 'transfer_ai'
       # Re-engage the AI proactively: re-run the Gateway anchored on the customer's last
       # message so the AI takes another turn (reply/tool/handoff per its own decision).
@@ -239,8 +239,33 @@ class Ai::FollowupConversationJob < ApplicationJob
     end
   end
 
-  def assign_to_human(conversation)
-    conversation.update!(assignee_id: nil) if conversation.assignee_id.present?
+  # Handoff REAL, pelo MESMO caminho do motor principal (Ai::HandoffCoordinator).
+  #
+  # O que existia aqui era um no-op duplo:
+  #   conversation.update!(assignee_id: nil) if conversation.assignee_id.present?
+  # (a) a condição NUNCA era verdadeira — este job só roda com assignee_id nil, checado em #run e de
+  # novo em #process; (b) mesmo se fosse, `assignee_id = nil` DESATRIBUI, o oposto de atribuir. Ou
+  # seja: "Passar para atendente humano" (o no_response_action PADRÃO da tela, ver
+  # AiDepartmentDetail.vue) não atribuía ninguém, não apontava time, não marcava ai_handoff — só
+  # gravava um followup.action dizendo 'assign'. A partir daí #acted? barrava tudo com
+  # already_acted_this_silence e a conversa ficava congelada: aberta, sem humano e sem IA, até o
+  # cliente escrever por conta própria. A telemetria afirmava que tinha transferido.
+  #
+  # human_team_id({}) é o caminho de "a IA não conseguiu rotear" que o coordinator já implementa:
+  # target vazio => fallback_handoff_team_id declarado no agente, senão o 1º da whitelist — mesmo
+  # destino que loop/stuck/crédito/baixa confiança já usam. Sem time configurado, assign_human alerta
+  # (#alert_no_team_configured) em vez de atribuir ninguém em silêncio, que é exatamente a
+  # observabilidade que faltava aqui. Vem de brinde o mark_handed_off (impede a IA de voltar a falar
+  # por cima do humano) e o resumo de handoff, que este caminho nunca gerou.
+  #
+  # Devolve se um humano ficou de fato atribuído — quem chama grava isso no evento, pra que
+  # followup.action nunca mais afirme uma transferência que não aconteceu.
+  def assign_to_human(conversation, department)
+    coordinator = Ai::HandoffCoordinator.new(
+      conversation: conversation, account: conversation.account, agent: department.agent, message: nil
+    )
+    coordinator.assign_human(coordinator.human_team_id({}), reason: 'followup_timeout')
+    conversation.reload.assignee_id.present?
   end
 
   # Proactively hand the turn back to the AI by re-running the Gateway on the customer's
@@ -259,8 +284,12 @@ class Ai::FollowupConversationJob < ApplicationJob
     Messages::MessageBuilder.new(nil, conversation, { content: message, private: false }).perform
   end
 
-  def record_action(conversation, account_id, action, via: nil)
-    emit(account_id, conversation.id, 'followup.action', { action: action, via: via }.compact)
+  # assigned: só nas ações que transferem — false grava explicitamente que a transferência NÃO pegou
+  # ninguém (compact remove só nil, não false), pra distinguir "transferiu" de "tentou e não achou
+  # agente". Era essa distinção que faltava quando #assign_to_human era um no-op silencioso.
+  def record_action(conversation, account_id, action, via: nil, assigned: nil)
+    emit(account_id, conversation.id, 'followup.action',
+         { action: action, via: via, assigned: assigned }.compact)
   end
 
   # --- Context / business hours ------------------------------------------------
