@@ -14,7 +14,20 @@ const route = useRoute();
 const { t } = useI18n();
 
 const PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter', 'groq'];
-const providerOptions = PROVIDERS.map(p => ({ value: p, label: p }));
+// Pedido do usuário (18/08): só a OpenAI funciona de verdade hoje — o motor Python (orchestrator.py)
+// tem um client hardcoded (_client = OpenAI(...)), então escolher qualquer outro provider aqui quebra
+// a conversa inteira do department que usa este perfil, sem aviso nenhum (achado no levantamento,
+// docs/ai-operation-profiles-screen-assessment.md §3). Trava o dropdown: os outros ficam visíveis mas
+// desabilitados com "(em breve)" — não precisa desligar mais nada em outro lugar, eles simplesmente
+// não são selecionáveis por aqui.
+const AVAILABLE_PROVIDERS = ['openai'];
+const providerOptions = PROVIDERS.map(p => ({
+  value: p,
+  label: AVAILABLE_PROVIDERS.includes(p)
+    ? p
+    : `${p} (${t('AI_PROFILES.FORM.PROVIDER_SOON')})`,
+  disabled: !AVAILABLE_PROVIDERS.includes(p),
+}));
 // Groq é RESTRITO: só modelos APROVADOS no smoke test. Motivo de SEGURANÇA (não só qualidade): um
 // modelo Groq (llama-3.1-8b-instant) recomendou concorrentes da empresa numa resposta de teste. Para
 // groq, o campo de modelo vira um dropdown fechado com esta lista (os outros providers seguem texto
