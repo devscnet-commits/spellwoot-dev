@@ -48,7 +48,7 @@ class Ai::FollowupConversationJob < ApplicationJob
     end
     return log_skip(conversation_id, 'human_assigned') if conversation.assignee_id.present?
 
-    binding = Ai::AgentInbox.live.includes(agent: :account).find_by(inbox_id: conversation.inbox_id)
+    binding = resolved_binding(conversation)
     return log_skip(conversation_id, 'no_live_binding') if binding.nil?
     unless binding.agent.account&.feature_enabled?('ai_core')
       return log_skip(conversation_id, 'ai_core_disabled', agent_id: binding.agent_id)
@@ -67,6 +67,40 @@ class Ai::FollowupConversationJob < ApplicationJob
     return log_skip(conversation_id, 'inbox_not_found', inbox_id: binding.inbox_id) if inbox.nil?
 
     process(binding, department, behaviors, fallback, inbox, conversation, binding.agent.account_id)
+  end
+
+  # Achado ao vivo (18/08): com MAIS de um agente "live" na MESMA inbox (ex.: duas versões da Maya em
+  # produção simultaneamente pra teste), o antigo `Ai::AgentInbox.live.find_by(inbox_id:)` — sem
+  # NENHUM critério de ordem — devolvia sempre a MESMA linha pra essa inbox, não importa de qual
+  # agente fosse a conversa de verdade. Efeito: o follow-up do agente configurado nunca disparava
+  # (o job achava que estava lidando com o OUTRO agente, sem follow-up nenhum), e o agente errado
+  # nunca via a config certa aplicada à conversa certa. Ai::GatewayRunJob (resposta ao vivo) já
+  # resolve isso com um desempate determinístico ([priority, id] entre os elegíveis pela posse de
+  # time — ver #select_winner/#eligible_live? lá) — o follow-up não usava nada disso.
+  #
+  # Corrigido no mesmo espírito de #resolved_department: para uma conversa que a IA já atendeu,
+  # Ai::Run#ai_agent_id é o FATO histórico de qual agente respondeu de verdade — usa ele direto, sem
+  # eleição nenhuma. Só cai na eleição por [priority, id] (mesma regra do Gateway, replicada aqui)
+  # quando não há Ai::Run ainda (conversa nova, binding acabou de ser criado).
+  def resolved_binding(conversation)
+    last_agent_id = Ai::Run.where(conversation_id: conversation.id).where.not(ai_agent_id: nil)
+                           .order(created_at: :desc).limit(1).pick(:ai_agent_id)
+    if last_agent_id
+      binding = Ai::AgentInbox.live.includes(agent: :account)
+                              .find_by(inbox_id: conversation.inbox_id, ai_agent_id: last_agent_id)
+      return binding if binding
+    end
+
+    candidates = Ai::AgentInbox.live.includes(agent: :account).where(inbox_id: conversation.inbox_id)
+    eligible = candidates.select { |b| team_eligible?(b, conversation.team_id) }
+    eligible.min_by { |b| [b.priority.to_i, b.id] }
+  end
+
+  # Mesmo critério de posse-de-time que Ai::GatewayRunJob#eligible_live? usa: agente sem time atende
+  # qualquer conversa; agente COM time só atende conversa do mesmo time.
+  def team_eligible?(binding, conversation_team_id)
+    agent_team_id = binding.agent.team_id
+    agent_team_id.nil? || (conversation_team_id.present? && conversation_team_id == agent_team_id)
   end
 
   # Bug real ao vivo (isolamento): o follow-up "puxava a mensagem de OUTROS departamentos/agentes".

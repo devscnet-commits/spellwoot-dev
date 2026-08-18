@@ -100,6 +100,78 @@ RSpec.describe Ai::FollowupConversationJob do
     end
   end
 
+  # Bug real ao vivo (18/08): duas versões do MESMO bot (ex.: "Maya v5.0" e "Maya v6.0") vinculadas
+  # "live" na MESMA inbox pra teste — find_by(inbox_id:) sem ordem sempre devolvia a MESMA linha,
+  # não importa de qual agente fosse a conversa. O follow-up do agente configurado nunca disparava
+  # (o job achava que era sempre o OUTRO agente, sem follow-up nenhum).
+  describe '#run — resolução de binding com MÚLTIPLOS agentes live na mesma inbox' do
+    let(:account) { create(:account) }
+    let(:inbox)   { create(:inbox, account: account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'balanceado',
+                                   supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:conversation) { create(:conversation, account: account, inbox: inbox, status: 'open', assignee_id: nil) }
+
+    before { account.enable_features!('ai_core') }
+
+    it 'conversa JÁ atendida: usa o agente REAL do Ai::Run, não o outro agente também live na inbox' do
+      agent_com_config = Ai::Agent.create!(account: account, name: 'Maya v5.0', status: 'active',
+                                           ai_operation_profile_id: profile.id)
+      agent_sem_config = Ai::Agent.create!(account: account, name: 'Maya v6.0', status: 'active',
+                                           ai_operation_profile_id: profile.id)
+      dept_com_config = Ai::Department.create!(
+        account: account, ai_agent_id: agent_com_config.id, name: 'Maya v5.0', status: 'active', is_default: true,
+        behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' },
+        follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours', 'attempts' => [{ 'message' => 'vamos seguir?', 'delay_minutes' => 1 }] }] }
+      )
+      Ai::Department.create!(account: account, ai_agent_id: agent_sem_config.id, name: 'Maya v6.0',
+                             status: 'active', is_default: true, behavior: {}, follow_up: {})
+      # Os DOIS vínculos são "live" na MESMA inbox — cenário real relatado (duas versões em produção
+      # simultânea pra teste). id do agente sem config MENOR que o do agente configurado, pra provar
+      # que a ordem natural do find_by (que tenderia a favorecer o id menor) NÃO é o que decide mais.
+      Ai::AgentInbox.create!(ai_agent_id: agent_sem_config.id, inbox_id: inbox.id, mode: 'live', active: true)
+      Ai::AgentInbox.create!(ai_agent_id: agent_com_config.id, inbox_id: inbox.id, mode: 'live', active: true)
+      allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
+      # Fato histórico: esta conversa foi respondida pelo agente COM follow-up configurado.
+      Ai::Run.create!(account_id: account.id, conversation_id: conversation.id, ai_agent_id: agent_com_config.id,
+                      ai_department_id: dept_com_config.id, status: 'recorded')
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'incoming',
+                       content: 'oi', created_at: 20.minutes.ago)
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                       content: 'como posso ajudar?', created_at: 15.minutes.ago)
+      conversation.update!(last_activity_at: 15.minutes.ago)
+
+      expect { job.perform(conversation.id) }.to change { conversation.messages.count }.by(1)
+      expect(conversation.messages.last.content).to eq('vamos seguir?')
+    end
+
+    it 'conversa NOVA (sem Ai::Run ainda): elege por [priority, id] entre os live elegíveis, igual ao Gateway' do
+      agent_priority_2 = Ai::Agent.create!(account: account, name: 'Prioridade 2', status: 'active',
+                                           ai_operation_profile_id: profile.id)
+      agent_priority_1 = Ai::Agent.create!(account: account, name: 'Prioridade 1', status: 'active',
+                                           ai_operation_profile_id: profile.id)
+      Ai::Department.create!(account: account, ai_agent_id: agent_priority_2.id, name: 'Dept', status: 'active',
+                             is_default: true, behavior: {}, follow_up: {})
+      Ai::Department.create!(
+        account: account, ai_agent_id: agent_priority_1.id, name: 'Dept', status: 'active', is_default: true,
+        behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' },
+        follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours', 'attempts' => [{ 'message' => 'vamos seguir?', 'delay_minutes' => 1 }] }] }
+      )
+      Ai::AgentInbox.create!(ai_agent_id: agent_priority_2.id, inbox_id: inbox.id, mode: 'live', active: true, priority: 2)
+      Ai::AgentInbox.create!(ai_agent_id: agent_priority_1.id, inbox_id: inbox.id, mode: 'live', active: true, priority: 1)
+      allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'incoming',
+                       content: 'oi', created_at: 20.minutes.ago)
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                       content: 'como posso ajudar?', created_at: 15.minutes.ago)
+      conversation.update!(last_activity_at: 15.minutes.ago)
+
+      expect { job.perform(conversation.id) }.to change { conversation.messages.count }.by(1)
+      expect(conversation.messages.last.content).to eq('vamos seguir?')
+    end
+  end
+
   describe '#effective_message' do
     it 'reuses the previous non-empty message when the current is blank' do
       attempts = [{ 'message' => 'oi' }, { 'message' => '' }, { 'message' => 'voltei' }]
