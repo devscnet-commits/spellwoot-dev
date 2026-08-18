@@ -836,6 +836,7 @@
     "FORM": {
       "NAME": "Nome do perfil",
       "PROVIDER": "Provedor",
+      "PROVIDER_SOON": "em breve",
       "MODEL": "Modelo",
       "BUDGET": "Orçamento mensal (USD)",
       "SAVE": "Salvar",
