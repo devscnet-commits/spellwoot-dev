@@ -145,6 +145,7 @@
     },
     "FORM": {
       "NAME": "Nome",
+      "NAME_REQUIRED": "Dê um nome pra esse analista antes de salvar.",
       "INSTRUCTIONS": "Instruções de avaliação",
       "INSTRUCTIONS_PLACEHOLDER": "O que o analista deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
       "INBOXES": "Caixas observadas",

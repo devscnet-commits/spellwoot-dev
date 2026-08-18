@@ -34,6 +34,13 @@ class Ai::OperationProfile < ApplicationRecord
   has_many :agents, class_name: 'Ai::Agent', foreign_key: :ai_operation_profile_id
 
   validates :name, :supervisor_provider, :supervisor_model, presence: true
+  # Achado ao vivo (18/08): sem isso, clicar "Novo nível" -> "Máxima Qualidade" -> Salvar repetidas
+  # vezes (sem editar o nome, que o preset já preenche com "Premium") criava vários perfis IDÊNTICOS
+  # no nome, sem nenhum aviso — indistinguíveis na hora de escolher qual usar num agente. Sem índice
+  # único no banco (tela de admin, baixa concorrência — o risco de corrida é aceitável aqui).
+  validates :name, uniqueness: {
+    scope: :account_id, case_sensitive: false, message: 'já está em uso — escolha um nome diferente'
+  }
   validate :groq_supervisor_model_approved
   # Posição abstrata do slider (0-100). O Ai::TemperatureMapper traduz para a temperatura real de
   # cada provider — é este o valor de fato usado no fluxo hoje.

@@ -222,7 +222,12 @@ const save = async () => {
     showForm.value = false;
     fetchProfiles();
   } catch (error) {
-    useAlert(t('AI_PROFILES.ERROR'));
+    // Achado ao vivo (18/08): "erro genérico" sem detalhe nenhum (ex.: nome duplicado) deixava o
+    // usuário sem saber o que corrigir. Mesmo padrão já usado em AiKnowledge.vue/AiStepForm.vue —
+    // mostra a mensagem REAL de validação do backend quando existe.
+    useAlert(
+      error.response?.data?.errors?.join('. ') || t('AI_PROFILES.ERROR')
+    );
   }
 };
 

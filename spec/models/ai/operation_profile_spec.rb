@@ -8,6 +8,34 @@ RSpec.describe Ai::OperationProfile do
                           supervisor_model: 'gpt-4.1-mini', temperature_position: 20 }.merge(attrs))
   end
 
+  # Achado ao vivo (18/08): clicar "Novo nível" -> "Máxima Qualidade" -> Salvar repetidas vezes, sem
+  # editar o nome (o preset já preenche "Premium"), criava vários perfis IDÊNTICOS sem aviso nenhum.
+  describe 'nome único por conta' do
+    it 'REJEITA nome duplicado (mesma conta, mesmo texto)' do
+      build_profile(name: 'Premium').save!
+      dup = build_profile(name: 'Premium')
+
+      expect(dup).not_to be_valid
+      expect(dup.errors[:name].join).to match(/já está em uso/)
+    end
+
+    it 'REJEITA duplicado ignorando maiúsculas/minúsculas' do
+      build_profile(name: 'Premium').save!
+      dup = build_profile(name: 'PREMIUM')
+
+      expect(dup).not_to be_valid
+    end
+
+    it 'aceita o MESMO nome em contas DIFERENTES' do
+      build_profile(name: 'Premium').save!
+      other_account = create(:account)
+      other = described_class.new(account: other_account, name: 'Premium', supervisor_provider: 'openai',
+                                  supervisor_model: 'gpt-4.1-mini', temperature_position: 20)
+
+      expect(other).to be_valid
+    end
+  end
+
   # Restrição de SEGURANÇA: Groq só com modelos aprovados (um llama recomendou concorrentes no smoke).
   describe 'validação de modelo Groq aprovado (defesa em profundidade)' do
     it 'aceita groq com o modelo APROVADO (openai/gpt-oss-120b)' do
