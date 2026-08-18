@@ -66,7 +66,10 @@ class ProcessResponse(BaseModel):
 
 
 def _authenticate(authorization: Optional[str]) -> None:
-    token = (authorization or "").removeprefix("Bearer ").strip()
+    # O esquema do header Authorization é case-insensitive (RFC 7235): "bearer <token>" é tão válido
+    # quanto "Bearer <token>", e o removeprefix anterior rejeitava o primeiro como não-autenticado.
+    raw = (authorization or "").strip()
+    token = raw[7:].strip() if raw[:7].lower() == "bearer " else raw
     if not token or not secrets.compare_digest(token, config.RAILS_INTERNAL_API_TOKEN):
         raise HTTPException(status_code=401, detail="unauthorized")
 
@@ -101,15 +104,23 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             image_urls=request.image_urls,
             account_api_key=request.account_api_key,
         )
+    except orchestrator.TurnFailed as e:
+        # Never leak internals (stack traces, prompts, API errors) to the Rails side — só o
+        # conversation_id, que o Rails PRECISA persistir mesmo no erro: sem ele o turno seguinte
+        # abriria uma conversation nova e perderia o histórico inteiro do atendimento por causa de
+        # uma única chamada com falha (ver orchestrator.TurnFailed / Ai::PythonOrchestratorClient).
+        logger.exception("ticket_id=%s ai_department_id=%s: AI processing failed", request.ticket_id, request.ai_department_id)
+        raise HTTPException(status_code=502,
+                            detail={"error": "AI processing failed", "conversation_id": e.conversation_id})
     except Exception:
-        # Never leak internals (stack traces, prompts, API errors) to the Rails side.
+        # Falha ANTES de existir uma conversation (ou fora do turno): não há id a preservar.
         logger.exception("ticket_id=%s ai_department_id=%s: AI processing failed", request.ticket_id, request.ai_department_id)
         raise HTTPException(status_code=502, detail="AI processing failed")
 
     # DEBUG (temporary): a blank reply here means Ai::ActionDispatcher#reply on the Rails side no-ops
     # (never sends anything) — the customer got silence. orchestrator.py now guards against this
     # (_force_text_reply), so this log is what confirms whether that guard is actually firing/working.
-    logger.info(f"Reply enviada para Rails: {reply_text}")
+    logger.info("ticket_id=%s reply enviada para Rails: %s", request.ticket_id, reply_text)
 
     return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, conversation_id=conversation_id,
                             byok_fallback=byok_fallback, confidence=confidence, transferred=transferred)

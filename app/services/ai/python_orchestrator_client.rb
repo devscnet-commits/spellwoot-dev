@@ -40,7 +40,12 @@ class Ai::PythonOrchestratorClient
   end
 
   ORCHESTRATOR_URL = build_orchestrator_url(ENV.fetch('AI_ORCHESTRATOR_URL', 'http://localhost:8000'))
-  TIMEOUT = 60
+  # Tem que ser MAIOR que o TURN_BUDGET_SECONDS do orquestrador (default 90s lá), senão o Rails
+  # desiste do POST enquanto o Python ainda está trabalhando: o turno segue rodando do outro lado —
+  # salvando dado, avançando etapa, até transferindo sozinho — num turno que, para o cliente, nunca
+  # existiu, e o conversation_id daquele atendimento se perde junto (o próximo turno começa uma
+  # conversation nova). Configurável para quem ajustar o orçamento do lado Python.
+  TIMEOUT = ENV.fetch('AI_ORCHESTRATOR_TIMEOUT', 120).to_i
 
   # control tool names — shared with Api::Internal::AiExecuteToolController, which recognizes these
   # by name (not backed by an Ai::Tool row) exactly like Ai::StepCaptureTool's "registrar_*".
@@ -102,7 +107,11 @@ class Ai::PythonOrchestratorClient
 
     unless response.success?
       Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} HTTP #{response.code}: #{response.body}"
-      return { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false }
+      # conversation_id vem no corpo do erro quando a conversation da OpenAI já existia (ver
+      # orchestrator.TurnFailed): repassado para o Ai::Gateway persistir mesmo assim, senão uma única
+      # chamada com falha fazia o turno seguinte abrir uma conversation nova e perder o histórico.
+      return { reply: nil, conversation_id: failed_conversation_id(response), byok_fallback: false,
+               confidence: nil, transferred: false }
     end
 
     parsed = response.parsed_response
@@ -118,6 +127,15 @@ class Ai::PythonOrchestratorClient
   end
 
   private
+
+  # detail do HTTPException que o orquestrador levanta quando o turno falha DEPOIS de a conversation
+  # existir. Corpo não-JSON (502 de proxy, timeout do gateway) simplesmente não tem id — devolve nil.
+  def failed_conversation_id(response)
+    parsed = response.parsed_response
+    parsed.is_a?(Hash) ? parsed.dig('detail', 'conversation_id') : nil
+  rescue StandardError
+    nil
+  end
 
   def payload
     {

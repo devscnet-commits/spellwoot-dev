@@ -238,7 +238,14 @@ class Api::Internal::AiExecuteToolController < ActionController::API
       fire_step_automations(conversation, current_step, index)
 
       on_complete = current_step.is_a?(Hash) ? (current_step['on_complete'] || current_step[:on_complete]) : nil
-      return execute_step_conclusion(conversation, department, on_complete) if on_complete.is_a?(Hash)
+      if on_complete.is_a?(Hash)
+        # Persiste o índice ANTES do desfecho: este `return` pulava a gravação do fim do método, então
+        # a etapa que acabou de ser concluída continuava sendo a "atual" no turno seguinte e
+        # ai_step_turns seguia subindo até o stuck_handoff_turns — sempre que o desfecho configurado
+        # NÃO encerrava a conversa (transferir, preencher atributo, mudar de time).
+        persist_step_index(conversation, index)
+        return execute_step_conclusion(conversation, department, on_complete)
+      end
 
       break if index == steps.size - 1
 
@@ -249,10 +256,16 @@ class Api::Internal::AiExecuteToolController < ActionController::API
       return { result: { 'ai_step_index' => index }, status: 'blocked_missing_data', error: nil }
     end
 
-    attrs['ai_step_index'] = index
-    attrs['ai_step_turns'] = 0
-    conversation.update!(additional_attributes: attrs)
+    persist_step_index(conversation, index)
     { result: { 'ai_step_index' => index }, status: 'executed', error: nil }
+  end
+
+  # Relê os atributos do banco em vez de reusar o Hash lido no início de #advance_step: a varredura
+  # passa por #fire_step_automations, que roda Ai::StepAutomationRunner (uma automação "preencher
+  # atributo" escreve no MESMO additional_attributes) — gravar por cima do Hash antigo desfaria isso.
+  def persist_step_index(conversation, index)
+    attrs = (conversation.reload.additional_attributes || {}).merge('ai_step_index' => index, 'ai_step_turns' => 0)
+    conversation.update!(additional_attributes: attrs)
   end
 
   # "Automações ao concluir etapa" (lista "+ Adicionar automação" — distinta do "Desfecho ao concluir

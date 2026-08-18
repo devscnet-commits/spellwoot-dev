@@ -96,7 +96,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false)
+      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false)
       # Auditoria de confiança: sem isto, um erro ANTES do HTTParty.post (ex.: exceção montando o
       # payload) cairia no MESMO rescue e devolveria o MESMO {reply: nil, conversation_id: nil} — o teste
       # passaria "por acidente" sem nunca ter tentado a requisição real. have_requested prova que o
@@ -112,7 +112,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false)
+      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false)
       # Mesma auditoria: confirma que a requisição foi tentada (e o WebMock a interceptou para simular
       # o timeout), não que o código nunca chegou a discar.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)

@@ -21,6 +21,14 @@ def _response(response_id, output, output_text=""):
     return SimpleNamespace(id=response_id, output=output, output_text=output_text)
 
 
+# Tool REAL (não filtrada por _is_superseded_tool), pra provar que ela sobrevive a cada rodada.
+KNOWLEDGE_TOOL_SCHEMA = {
+    "name": "consultar_conhecimento",
+    "description": "Busca na base de conhecimento.",
+    "input_schema": {"type": "object", "properties": {"pergunta": {"type": "string"}}, "required": ["pergunta"]},
+}
+
+
 def test_run_conversation_loops_through_two_sequential_tool_calls_before_replying():
     resp1 = _response("resp_1", [_function_call("consultar_conhecimento", {"pergunta": "qual o preço?"}, "call_1")])
     resp2 = _response("resp_2", [_function_call("registrar_nome", {"valor": "Joana"}, "call_2")])
@@ -46,7 +54,7 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
             ai_department_id=1,
             mode="live",
             system_prompt="system prompt de teste",
-            tools_schema=[],
+            tools_schema=[KNOWLEDGE_TOOL_SCHEMA],
             vector_store_id=None,
             user_input="quanto custa e meu nome é Joana",
             conversation_id=None,
@@ -65,6 +73,14 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
     # cada vez, nunca vários tool calls na mesma resposta.
     for call in mock_client.responses.create.call_args_list:
         assert call.kwargs["parallel_tool_calls"] is False
+        # A Responses API não guarda tools na Conversation: elas valem só para a requisição em que são
+        # enviadas. Este assert é o que faltava — o followup não as reenviava, então da 2ª rodada em
+        # diante o modelo ficava sem ferramenta alguma e MAX_TOOL_ITERATIONS nunca passava de uma
+        # volta (o teste antigo mockava a 2ª tool call e não percebia).
+        assert [t["name"] for t in call.kwargs["tools"]] == ["consultar_conhecimento"]
+        # Conversation persistente e sem expiração: sem truncation, um atendimento longo estoura a
+        # janela de contexto e o ticket passa a devolver 400 permanente.
+        assert call.kwargs["truncation"] == "auto"
 
     # as 2 ferramentas foram de fato executadas (webhook Rails), na ordem certa, cada uma na sua rodada.
     assert mock_execute_tool.call_count == 2
@@ -269,3 +285,84 @@ class TestConfianca:
 
         assert transferred_true is True
         assert transferred_false is False
+
+
+# Corte do loop (limite de rodadas ou orçamento de tempo) — o caso que o retry de último recurso
+# existe pra cobrir e que, até esta correção, era justamente o que o fazia estourar: a Conversation
+# guarda cada function_call, e a chamada seguinte é recusada com 400 ("No tool output found for
+# function call ...") enquanto a saída dela não chegar. Nenhuma cobertura automatizada existia aqui.
+class TestCorteDoLoopFechaChamadaPendente:
+    def _payload(self):
+        return {
+            "mensagem_para_cliente": "Vou verificar e já te retorno.",
+            "dados_coletados": [], "avancar_etapa": False, "transferir_humano": False,
+            "encerrar_atendimento": False, "handoff_summary": "", "handoff_target": "", "confianca": 0.4,
+        }
+
+    def test_limite_de_iteracoes_fecha_a_call_pendente_antes_de_pedir_a_resposta(self):
+        pendentes = [_response(f"resp_{i}", [_function_call("consultar_conhecimento", {"pergunta": "x"}, f"call_{i}")])
+                     for i in range(3)]
+        final = _response("resp_final", [], output_text=json.dumps(self._payload()))
+
+        with patch.object(orchestrator.config, "MAX_TOOL_ITERATIONS", 2), \
+             patch.object(orchestrator, "_client") as mock_client, \
+             patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            mock_client.conversations.create.return_value = SimpleNamespace(id="conv_corte")
+            mock_client.responses.create.side_effect = pendentes + [final]
+            mock_execute_tool.return_value = {"result": "ok"}
+
+            reply_text, _, _, _, _ = orchestrator.run_conversation(
+                ticket_id=1, ai_department_id=1, mode="live", system_prompt="p",
+                tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None,
+                user_input="oi", conversation_id=None,
+            )
+
+        ultima = mock_client.responses.create.call_args_list[-1].kwargs
+        # a call que sobrou pendurada é respondida com um resultado sintético...
+        assert ultima["input"][0]["type"] == "function_call_output"
+        assert ultima["input"][0]["call_id"] == "call_2"
+        # ...e SEM tools, pra que a resposta a esta chamada só possa ser o JSON do contrato.
+        assert "tools" not in ultima
+        assert reply_text == "Vou verificar e já te retorno."
+
+    def test_orcamento_de_tempo_estourado_nao_abre_rodada_nova(self):
+        # O Rails abandona o POST em AI_ORCHESTRATOR_TIMEOUT e força handoff; sem este corte o Python
+        # seguia executando tools (salvando dado, avançando etapa) num turno que o cliente nunca viu.
+        final = _response("resp_final", [], output_text=json.dumps(self._payload()))
+
+        with patch.object(orchestrator.config, "TURN_BUDGET", -1.0), \
+             patch.object(orchestrator, "_client") as mock_client, \
+             patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            mock_client.conversations.create.return_value = SimpleNamespace(id="conv_budget")
+            mock_client.responses.create.side_effect = [
+                _response("resp_1", [_function_call("consultar_conhecimento", {"pergunta": "x"}, "call_1")]),
+                final,
+            ]
+
+            orchestrator.run_conversation(
+                ticket_id=1, ai_department_id=1, mode="live", system_prompt="p",
+                tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None,
+                user_input="oi", conversation_id=None,
+            )
+
+        assert mock_execute_tool.call_count == 0
+
+
+class TestFalhaPreservaAConversation:
+    # Ai::Gateway#persist_openai_conversation_id só grava o que vem na resposta: sem o id junto do
+    # erro, uma única chamada com falha fazia o turno SEGUINTE abrir uma conversation nova e perder o
+    # histórico inteiro do atendimento (main.py devolve este id no detail do 502).
+    def test_turn_failed_carrega_o_conversation_id_ja_criado(self):
+        with patch.object(orchestrator, "_client") as mock_client:
+            mock_client.conversations.create.return_value = SimpleNamespace(id="conv_perdida")
+            mock_client.responses.create.side_effect = RuntimeError("boom")
+
+            try:
+                orchestrator.run_conversation(
+                    ticket_id=1, ai_department_id=1, mode="live", system_prompt="p", tools_schema=[],
+                    vector_store_id=None, user_input="oi", conversation_id=None,
+                )
+            except orchestrator.TurnFailed as e:
+                assert e.conversation_id == "conv_perdida"
+            else:
+                raise AssertionError("run_conversation deveria ter levantado TurnFailed")
