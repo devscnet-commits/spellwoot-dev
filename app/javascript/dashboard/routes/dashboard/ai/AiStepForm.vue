@@ -105,36 +105,54 @@ const cadOptionsFor = key => {
     : [];
 };
 
-// O CAD tipo "lista" que este atributo coletado referencia, ou null (LeadVariable interna, ou CAD que
-// não é lista). Usado tanto pro auto-preenchimento quanto pra travar os campos abaixo (ver slotLocked).
-const cadListFor = key => {
+// O CAD (qualquer tipo) que este atributo coletado referencia, ou null (LeadVariable interna — aí sim
+// o tipo/opções ficam livres pro usuário decidir, não há definição real pra espelhar).
+const cadFor = key => {
   if (!key) return null;
   return (
-    (props.customAttributes || []).find(
-      a => a.attribute_key === key && a.attribute_display_type === 'list'
-    ) || null
+    (props.customAttributes || []).find(a => a.attribute_key === key) || null
   );
 };
 
-// Pedido do usuário (18/08): quando o dado coletado É um atributo personalizado do tipo "lista", tipo
-// e opções aqui têm que ser SEMPRE um espelho do CAD — nunca um valor digitado à parte que pode
-// divergir (o cliente vendo uma opção que a IA valida diferente do que o resto do sistema aceita pra
-// esse atributo). slotLocked trava os campos correspondentes no template abaixo.
-const slotLocked = computed(() => !!cadListFor(draft.collectAttribute));
+// O CAD tipo "lista" especificamente — só esse tem attribute_values pra mirar em "Opções".
+const cadListFor = key => {
+  const cad = cadFor(key);
+  return cad && cad.attribute_display_type === 'list' ? cad : null;
+};
 
-// Sincroniza tipo=choice + opções com o CAD sempre que o atributo referenciar uma lista — na TROCA E
-// também ao ABRIR a etapa (immediate). Antes só disparava na troca (comentário antigo: "respeita a
-// regra de não mutar ao só abrir a tela") — mas agora que o campo fica TRAVADO pra este caso, mostrar
-// um valor desatualizado (ex.: a etapa foi salva antes de alguém editar as opções do CAD) seria pior
-// que sincronizar: o usuário não tem mais como corrigir manualmente um valor travado errado.
+// Achado ao vivo (18/08, ampliado): o pedido original travava só CAD tipo "lista" — mas um CAD tipo
+// "link" (ex.: chave_1_2_3_) deixava a etapa oferecer "Escolha (opções)" com valores digitados à mão
+// (ex.: "coisa 1/coisa2/coisa3") sem relação NENHUMA com o atributo real. Qualquer CAD (lista, texto,
+// número, link, etc.) tem um tipo definido em Configurações → Atributos personalizados — a etapa não
+// deveria poder divergir disso pra NENHUM tipo, não só lista. slotLocked agora trava sempre que a
+// chave é um CAD, seja qual for o tipo; o mapeamento abaixo decide qual "Tipo do dado" da etapa
+// corresponde a cada attribute_display_type do CAD.
+const CAD_TYPE_TO_STEP_TYPE = {
+  text: 'text',
+  number: 'number',
+  currency: 'number',
+  percent: 'number',
+  link: 'text',
+  date: 'text',
+  checkbox: 'text',
+  list: 'choice',
+};
+const slotLocked = computed(() => !!cadFor(draft.collectAttribute));
+
+// Sincroniza o Tipo do dado (e, quando lista, as opções) com o CAD sempre que a chave referenciar um —
+// na TROCA E também ao ABRIR a etapa (immediate), porque o campo fica TRAVADO: o usuário não tem mais
+// como corrigir manualmente um valor desatualizado.
 watch(
   () => [draft.collectAttribute, props.customAttributes],
   () => {
-    const values = cadOptionsFor(draft.collectAttribute);
-    if (!cadListFor(draft.collectAttribute) || !values.length) return;
-    draft.collectType = 'choice';
-    draft.collectSource = 'fixed';
-    draft.collectOptions = values.join('\n');
+    const cad = cadFor(draft.collectAttribute);
+    if (!cad) return;
+    draft.collectType =
+      CAD_TYPE_TO_STEP_TYPE[cad.attribute_display_type] || 'text';
+    if (draft.collectType === 'choice') {
+      draft.collectSource = 'fixed';
+      draft.collectOptions = cadOptionsFor(draft.collectAttribute).join('\n');
+    }
   },
   { immediate: true }
 );
@@ -639,7 +657,10 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
           <span class="i-lucide-lock size-3.5 shrink-0 mt-0.5" />
           {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_LOCKED_HINT') }}
         </p>
-        <label v-if="slotLocked" class="flex flex-col gap-1 text-xs">
+        <label
+          v-if="slotLocked && cadListFor(draft.collectAttribute)"
+          class="flex flex-col gap-1 text-xs"
+        >
           {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
           <textarea
             :value="draft.collectOptions"
@@ -649,10 +670,11 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
             class="px-2 py-1 rounded border border-n-weak bg-n-slate-2 text-n-slate-11 resize-y cursor-not-allowed"
           />
         </label>
-        <!-- choice (não travado): as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio
-             dinâmico). Um modo por vez — o campo do outro some (dois campos visíveis convida a preencher os dois). -->
+        <!-- choice (não travado — chave sem CAD, ou CAD que a etapa ainda não referencia): as opções vêm de
+             uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio dinâmico). Um modo por vez — o campo
+             do outro some (dois campos visíveis convida a preencher os dois). -->
         <div
-          v-else-if="draft.collectType === 'choice'"
+          v-else-if="!slotLocked && draft.collectType === 'choice'"
           class="flex flex-col gap-2 text-xs"
         >
           <span class="text-n-slate-11">

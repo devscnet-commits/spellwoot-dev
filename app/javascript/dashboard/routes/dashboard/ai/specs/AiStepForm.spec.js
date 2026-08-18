@@ -438,6 +438,59 @@ describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', ()
     wrapper.unmount();
   });
 
+  // Achado ao vivo (18/08, ampliado): um CAD tipo "link" (chave_1_2_3_) deixava a etapa mostrar
+  // "Escolha (opções)" com valores digitados à mão, sem relação com o atributo real (que nem é lista).
+  // Qualquer CAD trava o Tipo do dado (mapeado do attribute_display_type); só CAD tipo lista mostra
+  // a caixa de opções (travada) — os demais tipos não têm "opções" pra mostrar.
+  it('atributo de CAD tipo "link" (não-lista): trava o Select de tipo (mapeado pra texto) e NÃO mostra nenhuma caixa de opções', () => {
+    const linkCad = {
+      attribute_key: 'chave_1_2_3_',
+      attribute_display_type: 'link',
+    };
+    const wrapper = mountForm(
+      {
+        name: 'Etapa',
+        collect: {
+          attribute: 'chave_1_2_3_',
+          type: 'choice',
+          options: ['coisa 1', 'coisa2'],
+        },
+      },
+      { customAttributes: [linkCad] }
+    );
+
+    const typeSelect = wrapper.findComponent(
+      '[data-testid="step-collect-type"]'
+    );
+    expect(typeSelect.props('disabled')).toBe(true);
+    expect(typeSelect.props('modelValue')).toBe('text');
+    expect(
+      wrapper.find('[data-testid="step-collect-options-locked"]').exists()
+    ).toBe(false);
+    expect(
+      wrapper.find('[data-testid="step-collect-options-free"]').exists()
+    ).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('atributo de CAD tipo "número": trava o Select de tipo mapeado pra "number"', () => {
+    const numeroCad = {
+      attribute_key: 'idade',
+      attribute_display_type: 'number',
+    };
+    const wrapper = mountForm(
+      { name: 'Etapa', collect: { attribute: 'idade', type: 'text' } },
+      { customAttributes: [numeroCad] }
+    );
+
+    const typeSelect = wrapper.findComponent(
+      '[data-testid="step-collect-type"]'
+    );
+    expect(typeSelect.props('disabled')).toBe(true);
+    expect(typeSelect.props('modelValue')).toBe('number');
+    wrapper.unmount();
+  });
+
   it('atributo SEM CAD lista correspondente: tipo/opções continuam livres pra editar', () => {
     const wrapper = mountForm(
       {
