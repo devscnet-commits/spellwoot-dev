@@ -244,7 +244,9 @@ class Ai::PythonOrchestratorClient
     # mensagens); por isso desceu pra perto do bloco de identidade/base_prompt, não ficou solta com
     # as guardrails removidas.
     lines << handoff_target_instruction if handoff_target_instruction.present?
-    lines << "Você é #{@agent.assistant_name.presence || @agent.name}."
+    # "Você é #{nome}." removido (18/08, pedido do dono da conta — redução de prompt): não estava
+    # marcado pra ficar, e o nome do agente é texto livre digitado pelo admin — poderia expor qualquer
+    # coisa verbatim no prompt (ex.: um nome tipo "agente de suporte da turma do fundão").
     lines << identify_as_instruction
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?

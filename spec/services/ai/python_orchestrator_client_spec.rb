@@ -731,10 +731,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # Ai::PromptCompiler legado (identity_lines) e nunca foi portada pro Python — o split em várias
     # mensagens (Ai::ActionDispatcher#split_parts) continuava funcionando no código, mas o modelo
     # nunca era instruído a produzir "\n\n" em mensagem_para_cliente, então não tinha o que quebrar.
-    # Reposicionada (17/08) pra perto de "Você é <nome>." — deixou de estar junto das guardrails
-    # removidas; segunda linha aqui porque este department não tem handoff_team_ids (senão
-    # handoff_target_instruction entraria antes — ver describe 'Times disponíveis' mais abaixo).
-    describe 'identify_as_instruction (segunda linha do system_prompt, sem handoff_team_ids)' do
+    # Reposicionada (17/08) pra perto do topo do system_prompt. "Você é <nome>." saiu de vez (18/08,
+    # pedido de redução de prompt — texto livre do admin não estava marcado pra ficar, ver comentário em
+    # Ai::PythonOrchestratorClient#system_prompt), então identify_as_instruction virou a PRIMEIRA linha
+    # aqui (department sem handoff_team_ids — senão handoff_target_instruction entraria antes, ver
+    # describe 'Times disponíveis' mais abaixo).
+    describe 'identify_as_instruction (primeira linha do system_prompt, sem handoff_team_ids)' do
       it 'identify_as="human" (default do agent): instrui a quebrar em mensagens curtas com linha em branco' do
         agent.update!(identify_as: 'human')
         stub_orchestrator
@@ -744,7 +746,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # "Não diga que é uma inteligência artificial" saiu (18/08, pedido de redução de prompt) — ver
         # comentário em Ai::PythonOrchestratorClient#identify_as_instruction (risco assumido).
         expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-          line = JSON.parse(req.body)['system_prompt'].lines[1]
+          line = JSON.parse(req.body)['system_prompt'].lines[0]
           line.include?('Aja como um atendente humano da equipe') &&
             line.include?('LINHA EM BRANCO entre elas (dois \n)') &&
             line.include?('"mensagem_para_cliente"')
@@ -758,7 +760,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
         expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-          line = JSON.parse(req.body)['system_prompt'].lines[1]
+          line = JSON.parse(req.body)['system_prompt'].lines[0]
           line.include?('assistente virtual (IA)') && !line.include?('LINHA EM BRANCO')
         }
       end
