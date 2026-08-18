@@ -31,6 +31,10 @@ const shadows = ref([]);
 const inboxes = ref([]);
 const isLoading = ref(false);
 const showForm = ref(false);
+// Pedido do usuário (18/08): o botão Salvar ficava desabilitado, sem NENHUM aviso do motivo (nome em
+// branco) — o usuário só descobria olhando com atenção. Agora o botão sempre reage ao clique: se
+// faltar o nome, marca saveAttempted (revela a mensagem inline no Input) e não chama a API à toa.
+const saveAttempted = ref(false);
 
 const blank = () => ({
   id: null,
@@ -74,6 +78,7 @@ const toggleInbox = id => {
 
 const openNew = () => {
   Object.assign(form, blank());
+  saveAttempted.value = false;
   showForm.value = true;
   capture();
 };
@@ -89,6 +94,7 @@ const openEdit = shadow => {
     observe_human: scope.observe_human !== false,
     inbox_ids: Array.isArray(shadow.inbox_ids) ? [...shadow.inbox_ids] : [],
   });
+  saveAttempted.value = false;
   showForm.value = true;
   capture();
 };
@@ -102,6 +108,9 @@ const addSuggestion = key => {
 };
 
 const save = async () => {
+  saveAttempted.value = true;
+  if (!form.name.trim()) return; // aborta cedo; a mensagem inline no Input já avisa o motivo
+
   const payload = {
     ai_shadow: {
       name: form.name,
@@ -121,7 +130,9 @@ const save = async () => {
     showForm.value = false;
     fetchShadows();
   } catch (error) {
-    useAlert(t('AI_SHADOWS.ERROR'));
+    // Mesmo padrão de AiKnowledge.vue/AiStepForm.vue — mostra a mensagem REAL de validação do
+    // backend (ex.: "Nome já em uso") em vez de um "deu erro" genérico sem detalhe nenhum.
+    useAlert(error.response?.data?.errors?.join('. ') || t('AI_SHADOWS.ERROR'));
   }
 };
 
@@ -245,7 +256,16 @@ onMounted(() => {
           v-if="showForm && activeTab === 'shadows'"
           class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
         >
-          <Input v-model="form.name" :label="$t('AI_SHADOWS.FORM.NAME')" />
+          <Input
+            v-model="form.name"
+            :label="$t('AI_SHADOWS.FORM.NAME')"
+            :message="
+              saveAttempted && !form.name.trim()
+                ? $t('AI_SHADOWS.FORM.NAME_REQUIRED')
+                : ''
+            "
+            message-type="error"
+          />
 
           <div class="flex flex-col gap-1.5">
             <span class="text-heading-3 text-n-slate-12">
@@ -355,7 +375,7 @@ onMounted(() => {
             />
             <Button
               :label="$t('AI_SHADOWS.FORM.SAVE')"
-              :disabled="!isDirty || !form.name.trim()"
+              :disabled="!isDirty"
               @click="save"
             />
           </div>
