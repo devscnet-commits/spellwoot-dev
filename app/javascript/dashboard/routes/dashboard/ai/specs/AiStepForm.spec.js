@@ -402,3 +402,66 @@ describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)'
     wrapper.unmount();
   });
 });
+
+// Pedido do usuário (18/08): quando o dado coletado é um atributo personalizado do tipo "lista", tipo
+// e opções têm que ser SEMPRE espelho do atributo — travados, não digitáveis à parte (evita a IA
+// validando opções diferentes das que o resto do sistema aceita pra esse atributo).
+describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  const cidadeCad = {
+    attribute_key: 'cidade',
+    attribute_display_type: 'list',
+    attribute_values: ['Chapecó', 'Maravilha'],
+  };
+
+  it('etapa com atributo de CAD lista: trava o Select de tipo e mostra as opções como somente-leitura, espelhando o CAD', () => {
+    const wrapper = mountForm(
+      { name: 'Cidade', collect: { attribute: 'cidade', type: 'text' } },
+      { customAttributes: [cidadeCad] }
+    );
+
+    expect(
+      wrapper
+        .findComponent('[data-testid="step-collect-type"]')
+        .props('disabled')
+    ).toBe(true);
+    const locked = wrapper.get('[data-testid="step-collect-options-locked"]');
+    expect(locked.element.disabled).toBe(true);
+    expect(locked.element.value).toBe('Chapecó\nMaravilha');
+    expect(
+      wrapper.find('[data-testid="step-collect-options-free"]').exists()
+    ).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('atributo SEM CAD lista correspondente: tipo/opções continuam livres pra editar', () => {
+    const wrapper = mountForm(
+      {
+        name: 'Nome',
+        collect: {
+          attribute: 'nome_cliente',
+          type: 'choice',
+          options: ['A', 'B'],
+        },
+      },
+      { customAttributes: [cidadeCad] }
+    );
+
+    expect(
+      wrapper
+        .findComponent('[data-testid="step-collect-type"]')
+        .props('disabled')
+    ).toBe(false);
+    expect(
+      wrapper.find('[data-testid="step-collect-options-locked"]').exists()
+    ).toBe(false);
+    expect(
+      wrapper.get('[data-testid="step-collect-options-free"]').element.value
+    ).toBe('A\nB');
+    wrapper.unmount();
+  });
+});

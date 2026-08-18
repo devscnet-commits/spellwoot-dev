@@ -105,22 +105,38 @@ const cadOptionsFor = key => {
     : [];
 };
 
-// Ao trocar o atributo coletado: se o CAD for do tipo "lista", auto-preenche tipo=choice e as opções.
-// Só dispara na MUDANÇA (não em mount) — respeita a regra de não mutar ao só abrir a tela.
+// O CAD tipo "lista" que este atributo coletado referencia, ou null (LeadVariable interna, ou CAD que
+// não é lista). Usado tanto pro auto-preenchimento quanto pra travar os campos abaixo (ver slotLocked).
+const cadListFor = key => {
+  if (!key) return null;
+  return (
+    (props.customAttributes || []).find(
+      a => a.attribute_key === key && a.attribute_display_type === 'list'
+    ) || null
+  );
+};
+
+// Pedido do usuário (18/08): quando o dado coletado É um atributo personalizado do tipo "lista", tipo
+// e opções aqui têm que ser SEMPRE um espelho do CAD — nunca um valor digitado à parte que pode
+// divergir (o cliente vendo uma opção que a IA valida diferente do que o resto do sistema aceita pra
+// esse atributo). slotLocked trava os campos correspondentes no template abaixo.
+const slotLocked = computed(() => !!cadListFor(draft.collectAttribute));
+
+// Sincroniza tipo=choice + opções com o CAD sempre que o atributo referenciar uma lista — na TROCA E
+// também ao ABRIR a etapa (immediate). Antes só disparava na troca (comentário antigo: "respeita a
+// regra de não mutar ao só abrir a tela") — mas agora que o campo fica TRAVADO pra este caso, mostrar
+// um valor desatualizado (ex.: a etapa foi salva antes de alguém editar as opções do CAD) seria pior
+// que sincronizar: o usuário não tem mais como corrigir manualmente um valor travado errado.
 watch(
-  () => draft.collectAttribute,
-  newKey => {
-    if (!newKey) return;
-    const cad = (props.customAttributes || []).find(
-      a => a.attribute_key === newKey && a.attribute_display_type === 'list'
-    );
-    if (!cad) return;
-    const values = cadOptionsFor(newKey);
-    if (!values.length) return;
+  () => [draft.collectAttribute, props.customAttributes],
+  () => {
+    const values = cadOptionsFor(draft.collectAttribute);
+    if (!cadListFor(draft.collectAttribute) || !values.length) return;
     draft.collectType = 'choice';
     draft.collectSource = 'fixed';
     draft.collectOptions = values.join('\n');
-  }
+  },
+  { immediate: true }
 );
 
 // Fallback: ao mudar manualmente para tipo "choice", preenche as opções do CAD se ainda estiverem vazias.
@@ -606,12 +622,37 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
       <template v-if="hasSlot">
         <label class="flex flex-col gap-1 text-xs">
           {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
-          <Select v-model="draft.collectType" :options="slotTypeOptions" />
+          <Select
+            v-model="draft.collectType"
+            :options="slotTypeOptions"
+            :disabled="slotLocked"
+            data-testid="step-collect-type"
+          />
         </label>
-        <!-- choice: as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio dinâmico). Um
-             modo por vez — o campo do outro some (dois campos de opções visíveis convida a preencher os dois). -->
+        <!-- Travado: o dado coletado É um atributo personalizado do tipo lista — tipo e opções têm que
+             ser SEMPRE espelho do atributo (pedido do usuário 18/08), sem editar por aqui. Nem mostra o
+             escolhe-a-fonte (fixa/ferramenta): travado, a fonte É o atributo, sempre. -->
+        <p
+          v-if="slotLocked"
+          class="text-xs text-n-slate-11 flex items-start gap-1"
+        >
+          <span class="i-lucide-lock size-3.5 shrink-0 mt-0.5" />
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_LOCKED_HINT') }}
+        </p>
+        <label v-if="slotLocked" class="flex flex-col gap-1 text-xs">
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
+          <textarea
+            :value="draft.collectOptions"
+            rows="2"
+            disabled
+            data-testid="step-collect-options-locked"
+            class="px-2 py-1 rounded border border-n-weak bg-n-slate-2 text-n-slate-11 resize-y cursor-not-allowed"
+          />
+        </label>
+        <!-- choice (não travado): as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio
+             dinâmico). Um modo por vez — o campo do outro some (dois campos visíveis convida a preencher os dois). -->
         <div
-          v-if="draft.collectType === 'choice'"
+          v-else-if="draft.collectType === 'choice'"
           class="flex flex-col gap-2 text-xs"
         >
           <span class="text-n-slate-11">
@@ -654,6 +695,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
               :placeholder="
                 $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
               "
+              data-testid="step-collect-options-free"
               class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 resize-y"
             />
           </label>
