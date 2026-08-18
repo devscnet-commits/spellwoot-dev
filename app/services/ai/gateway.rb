@@ -8,6 +8,11 @@ class Ai::Gateway
   # maior que os 15 min do handoff-sem-agente de propósito: cota estourada é condição sustentada, o admin
   # quer UM aviso e não dezenas. Ver #notify_admin_provider_error.
   PROVIDER_ERROR_NOTIFY_TTL = 1.hour
+  # Achado ao vivo (18/08): o campo "Orçamento" (Perfis de Operação) salvava monthly_usd/on_limit mas
+  # nada no backend lia — um admin configurava um teto que não fazia NADA. 1 aviso/dia por perfil (não
+  # por chamada): estourar o orçamento é condição SUSTENTADA o mês inteiro, não um evento pontual — ver
+  # #notify_admin_budget_exceeded.
+  BUDGET_NOTIFY_TTL = 1.day
 
   def initialize(message:, agent_inbox:, mode: nil, content_override: nil)
     @message = message
@@ -90,6 +95,21 @@ class Ai::Gateway
     if @acts_live && credit_exhausted?
       force_credit_handoff(run_record)
       return finalize(run_record, 'credit_exhausted')
+    end
+
+    # Orçamento do PERFIL (Ai::OperationProfile#budget_exceeded?, teto mensal somado entre todos os
+    # agentes que reusam o mesmo perfil — ver o model). "stop": mesmo padrão pré-chamada de
+    # credit_exhausted? acima, zero custo LLM, handoff pra humano. "alert": só avisa e SEGUE normal —
+    # a IA continua respondendo, o teto é só visibilidade. "downgrade": ainda não existe um modelo
+    # mais barato definido pra trocar — tratado como "alert" por ora (ver comentário em
+    # Ai::OperationProfile#budget_on_limit); documentado, não escondido.
+    if @acts_live && @agent.operation_profile&.budget_exceeded?
+      if @agent.operation_profile.budget_on_limit == 'stop'
+        force_budget_handoff(run_record)
+        return finalize(run_record, 'budget_exceeded')
+      else
+        notify_admin_budget_exceeded(stopped: false)
+      end
     end
 
     # Teto de respostas da IA (max_replies): ao atingir o limite configurado no departamento, a IA
@@ -420,6 +440,47 @@ class Ai::Gateway
     emit(run_record, 'handoff.credit_exhausted', { team_id: team_id })
   rescue StandardError => e
     Rails.logger.error "[Ai::Gateway#force_credit_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
+  end
+
+  # Handoff forçado quando o PERFIL estoura o orçamento mensal configurado com on_limit: 'stop'.
+  # Espelha force_credit_handoff (mesmo padrão: nota interna + transfer + assign, sem texto ao
+  # cliente) — a diferença é o motivo (orçamento do perfil, não saldo da conta) e que aqui sempre
+  # avisa o admin por e-mail (não é opcional feito o :notify de force_provider_handoff), porque um
+  # "stop" silencioso deixaria o dono sem saber por que a IA parou.
+  def force_budget_handoff(run_record)
+    profile = @agent.operation_profile
+    action_dispatcher.internal_note("⚠️ Orçamento do perfil \"#{profile.name}\" esgotado — atendimento transferido para um humano.")
+    team_id = handoff_coordinator.human_team_id({})
+    input = { 'unassign' => true }
+    input['team_id'] = team_id if team_id
+    action_dispatcher.execute_action('conversation.transfer', input, run_record, 'handoff', extra: { reason: 'budget_exceeded' })
+    handoff_coordinator.assign_human(team_id, reason: 'budget_exceeded')
+    emit(run_record, 'handoff.budget_exceeded', { team_id: team_id, profile_id: profile.id })
+    notify_admin_budget_exceeded(stopped: true)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#force_budget_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
+  end
+
+  # E-mail aos admins quando o orçamento do perfil estoura — throttled 1x/dia por perfil (BUDGET_NOTIFY_TTL).
+  # Best-effort: qualquer falha aqui só loga; nunca derruba o handoff/turno que já ocorreu.
+  def notify_admin_budget_exceeded(stopped:)
+    profile = @agent.operation_profile
+    return unless budget_notify_allows?(profile.id)
+
+    AdministratorNotifications::AccountNotificationMailer
+      .with(account: @account)
+      .budget_exceeded(@account, profile.name, profile.month_to_date_cost.round(2), profile.budget_monthly_usd.round(2), stopped)
+      .deliver_later
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#notify_admin_budget_exceeded] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
+  end
+
+  def budget_notify_allows?(profile_id)
+    key = "ai:budget_notify:#{profile_id}"
+    return false if Rails.cache.read(key)
+
+    Rails.cache.write(key, true, expires_in: BUDGET_NOTIFY_TTL)
+    true
   end
 
   # Transferência silenciosa ao atingir o teto de respostas (max_replies). Espelha force_credit_handoff:
