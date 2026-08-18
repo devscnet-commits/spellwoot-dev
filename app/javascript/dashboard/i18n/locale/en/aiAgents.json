@@ -376,7 +376,7 @@
       "STEP_COLLECT_TYPE_CHOICE": "Escolha (opções)",
       "STEP_COLLECT_TYPE_ATTACHMENT": "Anexo (documento/foto)",
       "STEP_COLLECT_REQUIRED": "Obrigatório para avançar (recomendado)",
-      "STEP_COLLECT_LOCKED_HINT": "Tipo e opções vêm do atributo personalizado e não podem ser editados aqui — para mudar, edite o atributo personalizado diretamente (Configurações → Atributos personalizados).",
+      "STEP_COLLECT_LOCKED_HINT": "Tipo e opções vêm do atributo personalizado. Para alterações, edite diretamente no atributo personalizado (Configurações → Atributos personalizados).",
       "STEP_COLLECT_OPTIONS": "Opções (uma por linha)",
       "STEP_COLLECT_OPTIONS_PLACEHOLDER": "Manhã\nTarde\nNoite",
       "STEP_COLLECT_OPTIONS_SOURCE": "As opções vêm de:",
