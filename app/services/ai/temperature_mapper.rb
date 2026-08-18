@@ -16,15 +16,25 @@ module Ai
     }.freeze
     DEFAULT_PROVIDER = 'openai'
 
-    # (Futuro) Alguns modelos REJEITAM o parâmetro `temperature` (ex.: certos Anthropic mais novos
-    # retornam erro se você envia temperatura customizada). Quando isso surgir, listar os modelos aqui
-    # e fazer `resolve` retornar nil para eles — o ModelRouter já pula `with_temperature` quando a
-    # temperatura é nil, então a chamada não quebra. Vazio hoje (não detectamos nenhum caso); deixado
-    # preparado. Espelha o padrão JSON_FORMAT_PROVIDERS do ModelRouter.
-    # TEMPERATURE_UNSUPPORTED_MODELS = [].freeze
+    # Achado ao vivo (18/08): modelos de RACIOCÍNIO (o1/o3/o4-mini/gpt-5...) REJEITAM qualquer
+    # `temperature` diferente de 1 — a tela de Perfis de Operação deixa digitar o nome do modelo em
+    # texto livre (Ai::OperationProfile#supervisor_model), então nada impedia um perfil válido gerar
+    # HTTP 400 na primeira conversa real. Prefixo por família (case-insensitive): "o" + dígito
+    # (o1, o3, o3-mini, o4-mini...) e "gpt-5" (gpt-5, gpt-5-mini, gpt-5-thinking...). `resolve` devolve
+    # nil pra esses — `Ai::ModelRouter`/`Ai::PythonOrchestratorClient` já tratam nil como "omitir o
+    # parâmetro", igual já faziam pra provider sem perfil configurado.
+    REASONING_MODEL_PATTERN = /\A(o\d|gpt-5)/i
+
+    def self.reasoning_model?(model)
+      model.to_s.match?(REASONING_MODEL_PATTERN)
+    end
 
     # Posição (0-100) -> temperatura real do provider. Posição fora da faixa é clampeada a [0, 100].
-    def self.resolve(provider, position)
+    # model: quando é um modelo de raciocínio (ver REASONING_MODEL_PATTERN), devolve nil — o parâmetro
+    # deve ser OMITIDO da chamada, nunca enviado como 0.0/1.0/etc.
+    def self.resolve(provider, position, model: nil)
+      return nil if reasoning_model?(model)
+
       anchors = anchors_for(provider)
       interpolate(anchors, clamp_position(position))
     end

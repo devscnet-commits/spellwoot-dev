@@ -71,11 +71,13 @@ class Ai::ModelRouter
     body = {
       model: model,
       instructions: system_prompt,
-      temperature: temperature.to_f,
       input: [{ role: 'user', content: user_message }],
       conversation: conversation_id,
       parallel_tool_calls: false
     }
+    # nil (modelo de raciocínio, ver Ai::TemperatureMapper) => OMITE o parâmetro, nunca manda 0.0/1.0 —
+    # o1/o3/gpt-5 rejeitam QUALQUER valor de temperature, mesmo 1.0 explícito em alguns casos.
+    body[:temperature] = temperature.to_f unless temperature.nil?
     if json && schema
       schema_instance  = schema.is_a?(Class) ? schema.new : schema
       schema_output    = schema_instance.to_json_schema
@@ -162,7 +164,7 @@ class Ai::ModelRouter
     temperature = if !temperature.nil?
                     temperature
                   elsif profile
-                    Ai::TemperatureMapper.resolve(provider, profile.temperature_position)
+                    Ai::TemperatureMapper.resolve(provider, profile.temperature_position, model: model)
                   else
                     DEFAULT_TEMPERATURE
                   end
@@ -304,12 +306,13 @@ class Ai::ModelRouter
     MAX_TOOL_ITERATIONS.times.with_index do |_, iteration|
       body = {
         model: model,
-        temperature: temperature.to_f,
         input: current_input,
         tools: tools_payload,
         parallel_tool_calls: false,
         conversation: conversation_id
       }
+      # nil (modelo de raciocínio) => OMITE, mesma regra de #call_responses_api — ver Ai::TemperatureMapper.
+      body[:temperature] = temperature.to_f unless temperature.nil?
       # instructions em TODA iteração: na Responses API, omitir instructions nas iterações de
       # function_call_output faz o modelo perder o system prompt ("JÁ TENHO", âncora de etapa,
       # contrato JSON) e reroga dados já coletados. O provider usa o prompt mais recente para
@@ -428,7 +431,7 @@ class Ai::ModelRouter
     temperature = if !temperature.nil?
                     temperature
                   elsif profile
-                    Ai::TemperatureMapper.resolve(provider, profile.temperature_position)
+                    Ai::TemperatureMapper.resolve(provider, profile.temperature_position, model: model)
                   else
                     DEFAULT_TEMPERATURE
                   end
