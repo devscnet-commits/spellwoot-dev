@@ -843,17 +843,6 @@
       "EDIT": "Editar",
       "DELETE": "Excluir"
     },
-    "ROUTING": {
-      "TITLE": "Estratégia de roteamento (confiança do RAG)",
-      "DESCRIPTION": "Define como o sistema decide entre cache, IA econômica e IA premium pela confiança da busca vetorial.",
-      "HIGH": "Confiança alta — score ≥ (serve do cache, sem IA)",
-      "LOW": "Confiança baixa — score < (IA premium gera resposta nova)",
-      "CHEAP_PROVIDER": "Provedor da IA econômica (zona cinzenta)",
-      "CHEAP_MODEL": "Modelo da IA econômica",
-      "PREMIUM_PROVIDER": "Provedor da IA premium (confiança baixa)",
-      "PREMIUM_MODEL": "Modelo da IA premium",
-      "EXPLAINER": "Score ≥ confiança alta → serve do cache, instantâneo e sem custo. Entre as duas faixas → a IA econômica julga (serve ou escala). Abaixo da confiança baixa → a IA premium gera uma resposta nova."
-    },
     "SAVED": "Perfil salvo.",
     "DELETED": "Perfil excluído.",
     "ERROR": "Algo deu errado ao salvar.",

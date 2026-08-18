@@ -61,12 +61,6 @@ const blank = () => ({
   supervisor_provider: 'openai',
   supervisor_model: '',
   temperature_position: 20,
-  route_high: 0.95,
-  route_low: 0.85,
-  cheap_provider: 'openai',
-  cheap_model: '',
-  premium_provider: 'openai',
-  premium_model: '',
   budget_usd: '',
   on_limit: 'downgrade',
 });
@@ -114,9 +108,6 @@ const applyPreset = key => {
   if (!preset) return;
   form.name = form.name || preset.name;
   [form.supervisor_provider, form.supervisor_model] = preset.model;
-  // One model per level: cheap/premium mirror the single model (no routing).
-  [form.cheap_provider, form.cheap_model] = preset.model;
-  [form.premium_provider, form.premium_model] = preset.model;
   form.budget_usd = preset.budget;
   form.on_limit = preset.on_limit;
 };
@@ -153,7 +144,10 @@ const openNew = () => {
 };
 
 const openEdit = profile => {
-  const routing = profile.routing_strategy || {};
+  // profile.routing_strategy É preservado no banco (o backend só toca a coluna quando a chave vem no
+  // payload — ver #save abaixo) mas esta tela não lê nem edita mais nenhum campo dele: não existe UI
+  // pra roteamento por confiança hoje, só o preset "um modelo por nível" (ver Ai::PythonMigrationAuditor
+  // pra contexto de por que o roteamento ao vivo ainda não existe no motor Python).
   const budget = profile.budget || {};
   Object.assign(form, blank(), {
     id: profile.id,
@@ -162,12 +156,6 @@ const openEdit = profile => {
     supervisor_provider: profile.supervisor_provider,
     supervisor_model: profile.supervisor_model,
     temperature_position: profile.temperature_position ?? 20,
-    route_high: routing.high_threshold ?? 0.95,
-    route_low: routing.low_threshold ?? 0.85,
-    cheap_provider: routing.cheap_provider || 'openai',
-    cheap_model: routing.cheap_model || '',
-    premium_provider: routing.premium_provider || 'openai',
-    premium_model: routing.premium_model || '',
     budget_usd: budget.monthly_usd ?? '',
     on_limit: budget.on_limit || 'downgrade',
   });
@@ -191,20 +179,14 @@ const save = async () => {
       supervisor_provider: form.supervisor_provider,
       supervisor_model: form.supervisor_model,
       temperature_position: clampPosition(form.temperature_position),
-      // worker_overrides NÃO entra no payload de propósito (nem {} nem um valor parcial): esta tela
-      // não edita mais nenhuma chave de worker (OCR/Summary/Tradução/RAG/Juiz de captura removidos —
-      // a OpenAI faz Visão e Memória nativamente no path novo). O controller só toca a coluna
-      // worker_overrides quando a chave está PRESENTE no payload (Api::V1::Accounts::
+      // worker_overrides E routing_strategy NÃO entram no payload de propósito (nem {} nem um valor
+      // parcial): esta tela não edita mais nenhuma chave de worker (OCR/Summary/Tradução/RAG/Juiz de
+      // captura removidos — a OpenAI faz Visão e Memória nativamente no path novo) nem de roteamento
+      // por confiança (nunca teve UI real — ver docs/ai-operation-profiles-screen-assessment.md §2). O
+      // controller só toca essas colunas quando a chave está PRESENTE no payload (Api::V1::Accounts::
       // AiOperationProfilesController#jsonb_params) — omitir preserva o que já está salvo (inclusive
-      // chaves sem UI nenhuma, como trivial_gate/native_tools) em vez de sobrescrever com um hash vazio.
-      routing_strategy: {
-        high_threshold: Number(form.route_high),
-        low_threshold: Number(form.route_low),
-        cheap_provider: form.cheap_provider,
-        cheap_model: form.cheap_model,
-        premium_provider: form.premium_provider,
-        premium_model: form.premium_model,
-      },
+      // chaves sem UI nenhuma, como trivial_gate/native_tools, ou um routing_strategy antigo que uma
+      // conta já tinha) em vez de sobrescrever com um hash vazio.
       budget: {
         monthly_usd: Number(form.budget_usd) || 0,
         on_limit: form.on_limit,
