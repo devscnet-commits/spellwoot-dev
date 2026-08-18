@@ -1,5 +1,7 @@
 import json
 import logging
+import time
+from functools import lru_cache
 
 from openai import AuthenticationError, OpenAI
 
@@ -8,7 +10,23 @@ import tools
 
 logger = logging.getLogger("ai_orchestrator")
 
-_client = OpenAI(api_key=config.OPENAI_API_KEY)
+
+def _build_client(api_key: str) -> OpenAI:
+    """Timeout/retries EXPLÍCITOS: o default do SDK é 600s por chamada, dez vezes o que o Rails espera
+    pelo turno inteiro (AI_ORCHESTRATOR_TIMEOUT) — uma chamada travada segurava uma thread do pool do
+    uvicorn muito depois de o turno já ter sido dado como perdido do outro lado."""
+    return OpenAI(api_key=api_key, timeout=config.OPENAI_TIMEOUT, max_retries=config.OPENAI_MAX_RETRIES)
+
+
+_client = _build_client(config.OPENAI_API_KEY)
+
+
+@lru_cache(maxsize=64)
+def _account_client(account_api_key: str) -> OpenAI:
+    """Cacheado por chave: antes um OpenAI(...) novo nascia a CADA request BYOK e nunca era fechado —
+    cada um com seu próprio pool httpx, acumulando sockets até esgotar os file descriptors do
+    processo. O SDK é seguro para reuso concorrente; é justamente assim que ele deve ser usado."""
+    return _build_client(account_api_key)
 
 
 def _resolve_client(account_api_key: str | None) -> tuple[OpenAI, bool]:
@@ -19,16 +37,29 @@ def _resolve_client(account_api_key: str | None) -> tuple[OpenAI, bool]:
     validação de fato só acontece na PRIMEIRA chamada real (ver _call_with_byok_fallback) — uma
     OpenAI(api_key=...) não bate na rede até o primeiro request."""
     if account_api_key:
-        return OpenAI(api_key=account_api_key), True
+        return _account_client(account_api_key), True
     return _client, False
 
 
+class TurnFailed(Exception):
+    """Falha de uma chamada DEPOIS que a conversation da OpenAI já existe. Carrega o conversation_id
+    para que main.py o devolva ao Rails mesmo no erro: Ai::Gateway#persist_openai_conversation_id só
+    grava o que vem na resposta, então sem isto uma única chamada com erro fazia o turno SEGUINTE
+    começar uma conversation nova — o histórico inteiro do atendimento se perdia junto."""
+
+    def __init__(self, conversation_id: str | None):
+        super().__init__("AI processing failed")
+        self.conversation_id = conversation_id
+
+
 def _call_with_byok_fallback(client: OpenAI, using_account_key: bool, ticket_id: int, kwargs: dict):
-    """1ª chamada real da conversa: tenta a chave da CONTA se veio uma; se falhar por auth, cai pra
-    chave global da SCNET (mesma semântica do antigo Ai::Gateway#maybe_byok_fallback do caminho
-    legado — chave própria falhou por auth -> retry na global -> Rails cobra 1 crédito). Devolve
-    (response, client_a_usar_dali_pra_frente, byok_fallback) — chamadas SEGUINTES do MESMO turno
-    (loop de tools, re-ask) devem usar o client retornado aqui, nunca voltar a tentar a chave ruim."""
+    """Usada em TODA chamada real do turno (antes só na primeira — uma chave de conta revogada no meio
+    do turno virava 502 sem fallback nenhum e sem o crédito que o Rails cobra por ele): tenta a chave
+    da CONTA se veio uma; se falhar por auth, cai pra chave global da SCNET (mesma semântica do antigo
+    Ai::Gateway#maybe_byok_fallback do caminho legado — chave própria falhou por auth -> retry na
+    global -> Rails cobra 1 crédito). Devolve (response, client_a_usar_dali_pra_frente, byok_fallback)
+    — chamadas SEGUINTES do MESMO turno devem usar o client retornado aqui, nunca voltar a tentar a
+    chave ruim."""
     try:
         return client.responses.create(**kwargs), client, False
     except AuthenticationError:
@@ -299,10 +330,47 @@ def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
             "description": tool.get("description", ""),
             # OpenAI's function-calling schema requires "parameters" — tools_schema arrives from
             # Rails keyed as "input_schema" (Ai::Tool's own field name), so this is the one place
-            # that translation happens.
-            "parameters": tool["input_schema"],
+            # that translation happens. Ai::Tool#input_schema é nullable e não tem validação de
+            # formato: sem o fallback, uma tool salva sem schema virava "parameters": null e a OpenAI
+            # 400ava a chamada inteira — o turno todo morria por causa de uma tool mal cadastrada.
+            "parameters": tool.get("input_schema") or {"type": "object", "properties": {}},
         })
     return openai_tools
+
+
+def _turn_kwargs(*, model: str, conversation_id: str, instructions: str, input_value,
+                 temperature: float | None, tools_list: list | None = None) -> dict:
+    """Base de TODA chamada do turno (inicial, followup do loop, fechamento de pendência, retry).
+    `tools_list` omitido significa "esta chamada não oferece ferramenta nenhuma", NUNCA "mantém as de
+    antes": a Responses API não guarda tools na Conversation, elas valem só para a requisição em que
+    são enviadas. Era exatamente esse o bug do followup — ele não as reenviava, então a partir da 2ª
+    rodada o modelo ficava sem ferramenta alguma e MAX_TOOL_ITERATIONS nunca passava de uma volta."""
+    kwargs = {
+        "model": model,
+        "conversation": conversation_id,
+        "instructions": instructions,
+        "input": input_value,
+        # Um tool call por resposta — o modelo decide/salva/avança um passo de cada vez, nunca vários
+        # de uma vez na mesma resposta.
+        "parallel_tool_calls": False,
+        # Responses API structured-output param — NOT "response_format" (that's the older Chat
+        # Completions name; passing it here would raise a TypeError on this SDK/API instead of
+        # working). json_schema ESTRITO (STRUCTURED_REPLY_SCHEMA acima) — a OpenAI valida a resposta
+        # contra o schema antes de devolver, não é mais "confia que o texto do prompt basta".
+        "text": _TEXT_FORMAT,
+        # A Conversation é persistente e não expira (ver _ensure_conversation): sem truncation, um
+        # atendimento longo cresce até estourar a janela de contexto e o ticket passa a devolver 400
+        # PERMANENTE — o conversation_id já está gravado no Rails, não há como "recomeçar". "auto"
+        # deixa a própria OpenAI descartar o meio da conversa em vez de recusar a chamada.
+        "truncation": "auto",
+    }
+    if tools_list is not None:
+        kwargs["tools"] = tools_list
+    # Omitted entirely (not sent as null) when absent, so temperature falls back to OpenAI's own
+    # default instead of us hardcoding one.
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return kwargs
 
 
 def run_conversation(
@@ -352,39 +420,72 @@ def run_conversation(
     conversation_id, client, conv_byok_fallback = _ensure_conversation(client, using_account_key, ticket_id, conversation_id)
     using_account_key = using_account_key and not conv_byok_fallback
 
-    create_kwargs = {
-        "model": resolved_model,
-        "conversation": conversation_id,
-        "instructions": instructions,
-        "input": _build_input(user_input, image_urls),
-        "tools": openai_tools,
-        # Um tool call por resposta — o modelo decide/salva/avança um passo de cada vez, nunca vários
-        # de uma vez na mesma resposta.
-        "parallel_tool_calls": False,
-        # Responses API structured-output param — NOT "response_format" (that's the older Chat
-        # Completions name; passing it here would raise a TypeError on this SDK/API instead of
-        # working). json_schema ESTRITO (STRUCTURED_REPLY_SCHEMA acima) — a OpenAI valida a resposta
-        # contra o schema antes de devolver, não é mais "confia que o texto do prompt basta".
-        "text": _TEXT_FORMAT,
-    }
-    # Omitted entirely (not sent as null) when absent, so temperature falls back to OpenAI's own
-    # default instead of us hardcoding one.
-    if temperature is not None:
-        create_kwargs["temperature"] = temperature
+    try:
+        reply_text, turn_byok_fallback, confidence, transferred = _run_turn(
+            client=client, using_account_key=using_account_key, ticket_id=ticket_id,
+            ai_department_id=ai_department_id, mode=mode, conversation_id=conversation_id,
+            instructions=instructions, resolved_model=resolved_model, openai_tools=openai_tools,
+            user_input=user_input, image_urls=image_urls, temperature=temperature, provider=provider,
+        )
+    except Exception as e:
+        # A conversation JÁ existe do lado da OpenAI daqui pra frente — ver TurnFailed: sem levar o id
+        # junto do erro, o Rails não persistia nada e o turno seguinte recomeçava do zero.
+        raise TurnFailed(conversation_id) from e
+
+    return reply_text, conversation_id, conv_byok_fallback or turn_byok_fallback, confidence, transferred
+
+
+def _run_turn(
+    *, client: OpenAI, using_account_key: bool, ticket_id: int, ai_department_id: int, mode: str,
+    conversation_id: str, instructions: str, resolved_model: str, openai_tools: list,
+    user_input: str, image_urls: list[str] | None, temperature: float | None, provider: str | None,
+) -> tuple[str, bool, float | None, bool]:
+    """O turno em si, com a conversation já garantida. Separado de run_conversation só para que
+    QUALQUER falha daqui pra frente ainda saiba qual conversation_id devolver ao Rails (TurnFailed).
+    Devolve (reply_text, byok_fallback, confidence, transferred)."""
+    byok_fallback = False
+
+    def _create(kwargs: dict):
+        """Ponto único por onde passa toda chamada real: log completo, fallback BYOK e propagação do
+        client/flag resultantes — as chamadas seguintes do MESMO turno nunca voltam à chave ruim."""
+        nonlocal client, using_account_key, byok_fallback
+        _log_create_kwargs(ticket_id, kwargs)
+        response, client, fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, kwargs)
+        using_account_key = using_account_key and not fallback
+        byok_fallback = byok_fallback or fallback
+        _log_raw_response(ticket_id, response)
+        return response
 
     logger.info("ticket_id=%s provider=%s model=%s primeira chamada do turno", ticket_id, provider, resolved_model)
-    _log_create_kwargs(ticket_id, create_kwargs)
+    response = _create(_turn_kwargs(
+        model=resolved_model, conversation_id=conversation_id, instructions=instructions,
+        input_value=_build_input(user_input, image_urls), temperature=temperature, tools_list=openai_tools,
+    ))
 
-    response, client, response_byok_fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, create_kwargs)
-    byok_fallback = conv_byok_fallback or response_byok_fallback
-    _log_raw_response(ticket_id, response)
+    # Real business tools only (control/capture tools are never in openai_tools anymore): executa o que
+    # o modelo pediu, devolve os resultados e a resposta seguinte deve trazer o JSON final — as tools
+    # são reenviadas em cada rodada (ver _turn_kwargs) porque a Responses API não as guarda.
+    deadline = time.monotonic() + config.TURN_BUDGET
+    fallback_payload = None
 
-    # Real business tools only (control/capture tools are never in openai_tools anymore) — same
-    # one-round shape as before: collect whatever the model called in parallel, feed the results
-    # back, and the followup is expected to carry the final structured JSON reply.
     for _ in range(config.MAX_TOOL_ITERATIONS):
         function_calls = [item for item in response.output if item.type == "function_call"]
         if not function_calls:
+            break
+
+        # Uma MESMA resposta pode trazer message + function_call juntos, e só o output_text da resposta
+        # FINAL é parseado lá embaixo — o JSON estruturado dessa seria descartado em silêncio. Guarda
+        # como rede de segurança: se o parse final falhar duas vezes, a decisão real do modelo vale
+        # mais que o texto estático de último recurso.
+        fallback_payload = _parse_structured_reply(response.output_text) or fallback_payload
+
+        # Orçamento de parede do turno (config.TURN_BUDGET): o Rails abandona o POST em
+        # AI_ORCHESTRATOR_TIMEOUT e força handoff, mas o Python seguia rodando — salvando dado,
+        # avançando etapa e até transferindo sozinho num turno que, para o cliente, nunca existiu.
+        # Para de abrir rodada NOVA e vai fechar a resposta com o que já tem.
+        if time.monotonic() > deadline:
+            logger.warning("ticket_id=%s orçamento do turno (%ss) estourado com %s tool call(s) pendente(s)",
+                           ticket_id, config.TURN_BUDGET, len(function_calls))
             break
 
         tool_outputs = []
@@ -425,46 +526,53 @@ def run_conversation(
             tool_outputs.append({
                 "type": "function_call_output",
                 "call_id": call.call_id,
-                "output": json.dumps(result),
+                # ensure_ascii=False igual aos logs acima: sem isso o modelo lê "Jo\u00e3o" em vez de
+                # "João" — mais tokens e pior compreensão num fluxo inteiramente em pt-BR.
+                "output": json.dumps(result, ensure_ascii=False),
             })
 
-        followup_kwargs = {
-            "model": resolved_model,
-            "conversation": conversation_id,
-            "instructions": instructions,
-            "input": tool_outputs,
-            "parallel_tool_calls": False,
-            "text": _TEXT_FORMAT,
-        }
-        if temperature is not None:
-            followup_kwargs["temperature"] = temperature
+        response = _create(_turn_kwargs(
+            model=resolved_model, conversation_id=conversation_id, instructions=instructions,
+            input_value=tool_outputs, temperature=temperature, tools_list=openai_tools,
+        ))
 
-        _log_create_kwargs(ticket_id, followup_kwargs)
-        response = client.responses.create(**followup_kwargs)
-        _log_raw_response(ticket_id, response)
+    # Loop encerrado (limite de rodadas ou orçamento de tempo) com function call ainda pendente: a
+    # Conversation guarda cada function_call, e a chamada SEGUINTE é recusada com 400 ("No tool output
+    # found for function call ...") enquanto a saída dela não chegar — era isso que fazia o retry de
+    # último recurso abaixo estourar 502 justamente no caso que ele existe para cobrir. Fecha cada
+    # pendência com um resultado sintético e sem oferecer tools, então a resposta só pode ser o JSON.
+    pending_calls = [item for item in response.output if item.type == "function_call"]
+    if pending_calls:
+        logger.warning("ticket_id=%s fechando %s tool call(s) pendente(s) sem executar: %s",
+                       ticket_id, len(pending_calls), [call.name for call in pending_calls])
+        response = _create(_turn_kwargs(
+            model=resolved_model, conversation_id=conversation_id, instructions=instructions,
+            input_value=[{
+                "type": "function_call_output",
+                "call_id": call.call_id,
+                "output": json.dumps({"error": True, "message": "Limite de ferramentas deste turno atingido."},
+                                     ensure_ascii=False),
+            } for call in pending_calls],
+            temperature=temperature,
+        ))
 
     payload = _parse_structured_reply(response.output_text)
     if payload is None:
-        # Last-resort guardrail: either the turn cut off (MAX_TOOL_ITERATIONS) still holding a
-        # function call, or the model somehow returned unparseable JSON. Same conversation (full turn
-        # history is already there) with NO tools — a function call is off the table, so this call
-        # can't itself degrade into another empty/non-JSON turn.
-        retry_kwargs = {
-            "model": resolved_model,
-            "conversation": conversation_id,
-            "instructions": instructions,
-            "input": "Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
-                     "que você acabou de fazer.",
-            "parallel_tool_calls": False,
-            "text": _TEXT_FORMAT,
-        }
-        if temperature is not None:
-            retry_kwargs["temperature"] = temperature
-
-        _log_create_kwargs(ticket_id, retry_kwargs)
-        response = client.responses.create(**retry_kwargs)
-        _log_raw_response(ticket_id, response)  # mesma categoria do followup — outra chamada no MESMO turno
+        # Last-resort guardrail: o modelo devolveu algo que não é o JSON do contrato. Mesma conversation
+        # (o turno inteiro já está lá) e SEM tools — uma function call está fora de questão, então esta
+        # chamada não pode degenerar noutro turno vazio/não-JSON.
+        response = _create(_turn_kwargs(
+            model=resolved_model, conversation_id=conversation_id, instructions=instructions,
+            input_value="Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
+                        "que você acabou de fazer.",
+            temperature=temperature,
+        ))
         payload = _parse_structured_reply(response.output_text)
+
+    if payload is None and fallback_payload is not None:
+        logger.warning("ticket_id=%s response_id=%s: parse falhou duas vezes; usando o JSON de uma resposta "
+                       "intermediária deste mesmo turno", ticket_id, response.id)
+        payload = fallback_payload
 
     if payload is None:
         logger.warning(
@@ -476,7 +584,7 @@ def run_conversation(
     reply_text, confidence, transferred = _dispatch_structured_reply(
         payload, ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
     )
-    return reply_text, conversation_id, byok_fallback, confidence, transferred
+    return reply_text, byok_fallback, confidence, transferred
 
 
 def _parse_structured_reply(text: str | None) -> dict | None:
