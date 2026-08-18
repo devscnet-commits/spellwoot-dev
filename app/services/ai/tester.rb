@@ -8,13 +8,19 @@ class Ai::Tester
     retrieval = Ai::KnowledgeRetriever.retrieve_scored(query: message, account_id: agent.account_id)
     knowledge = retrieval[:chunks]
     score = retrieval[:top_score]
-    routing = Ai::RoutingStrategy.decide(score: score, profile: agent.operation_profile)
+    # Pedido do usuário (18/08): a tela de Perfis de Operação parou de ter QUALQUER UI para
+    # cheap_provider/cheap_model/premium_provider/premium_model (nunca teve, na prática — ver
+    # docs/ai-operation-profiles-screen-assessment.md §2), então Ai::RoutingStrategy.decide sempre
+    # caía no MESMO modelo do perfil pros dois tiers — não fazia roteamento real nenhum, só rotulava
+    # a faixa de confiança. Comentado (não apagado) a pedido: preservado pra quando o roteamento por
+    # confiança for refeito de verdade pro motor Python, em vez de reimplementar do zero.
+    # routing = Ai::RoutingStrategy.decide(score: score, profile: agent.operation_profile)
 
     tools = department.tools.active.to_a
     system_prompt = Ai::PromptCompiler.compile(
       agent: agent, department: department, knowledge: knowledge, memory: nil, tools: tools
     )
-    result = execute_routing(routing, agent, system_prompt, message, knowledge)
+    result = execute_routing(agent, system_prompt, message)
     decision = result[:decision] || {}
 
     {
@@ -29,9 +35,9 @@ class Ai::Tester
       'knowledge_used' => knowledge.size,
       'knowledge_preview' => knowledge.first(3).map { |k| k.to_s.first(160) },
       'vector_score' => score,
-      'routing_band' => routing['band'],
-      'routing_action' => routing['action'],
-      'worker' => routing['worker'],
+      # 'routing_band' => routing['band'],
+      # 'routing_action' => routing['action'],
+      # 'worker' => routing['worker'],
       'provider' => result[:provider],
       'model' => result[:model],
       'tokens_in' => result[:tokens_in],
@@ -46,17 +52,12 @@ class Ai::Tester
     { 'error' => "#{e.class}: #{e.message}" }
   end
 
-  # High-confidence band serves the best knowledge chunk with no LLM (instant, free); otherwise
-  # the chosen tier (cheap/premium) model generates. Mirrors the approved confidence routing.
-  def self.execute_routing(routing, agent, system_prompt, message, knowledge)
-    if routing['action'] == 'cache' && knowledge.any?
-      return { provider: 'cache', model: 'cache', tokens_in: 0, tokens_out: 0, cost: 0.0,
-               latency_ms: 0, status: 'success', decision: { 'reply_text' => knowledge.first } }
-    end
-
+  # Roda direto no provider/modelo do próprio perfil (sem tiering por confiança — ver comentário em
+  # #run sobre Ai::RoutingStrategy comentado). Mantido como método próprio (não inline em #run) pra
+  # facilitar reativar o roteamento por confiança depois, se/quando decidirem refazer isso pro Python.
+  def self.execute_routing(agent, system_prompt, message)
     Ai::ModelRouter.decide(profile: agent.operation_profile, system_prompt: system_prompt,
-                           user_message: message, provider: routing['provider'], model: routing['model'],
-                           account_id: agent.account_id)
+                           user_message: message, account_id: agent.account_id)
   end
 
   # Returns [department, method] so the Lab can show WHY this department was chosen.

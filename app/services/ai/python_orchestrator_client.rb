@@ -211,7 +211,8 @@ class Ai::PythonOrchestratorClient
   def temperature
     return nil unless operation_profile
 
-    Ai::TemperatureMapper.resolve(operation_profile.supervisor_provider, operation_profile.temperature_position)
+    Ai::TemperatureMapper.resolve(operation_profile.supervisor_provider, operation_profile.temperature_position,
+                                  model: operation_profile.supervisor_model)
   end
 
   # Persona geral do agente + as regras de segurança/encerramento/transferência configuradas na conta
