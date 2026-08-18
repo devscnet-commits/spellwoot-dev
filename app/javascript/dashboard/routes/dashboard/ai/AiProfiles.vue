@@ -56,7 +56,13 @@ const PRESETS = {
   },
   premium: {
     name: 'Premium',
-    model: ['anthropic', 'claude-3-5-sonnet-latest'],
+    // Pedido do usuário (18/08): Anthropic nunca funcionou de verdade (motor Python só fala com
+    // OpenAI — ver AVAILABLE_PROVIDERS acima). GPT-5.6 Terra (lançado 07/2026): "o padrão
+    // equilibrado... performance competitiva ao GPT-5.5, 2x mais barato" — o Sol (flagship) mira em
+    // codificação/agentic longo, não em atendimento ao cliente; Terra entrega qualidade premium sem
+    // pagar o preço do Sol por uma capacidade que este produto não usa. Cai automaticamente na
+    // proteção de temperature pra modelo de raciocínio (Ai::TemperatureMapper, mesmo "gpt-5" prefix).
+    model: ['openai', 'gpt-5.6-terra'],
     budget: 500,
     on_limit: 'alert',
   },
