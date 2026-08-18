@@ -617,8 +617,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
         prompt.include?('Transfira para humano quando: cliente pede humano.') &&
           prompt.include?('Encerre quando: cliente confirma que não quer mais nada.') &&
           prompt.include?('Foi um prazer te atender!') &&
-          prompt.include?('"transferir_humano": true ou false') &&
-          prompt.include?('"encerrar_atendimento": true ou false')
+          prompt.include?('"transferir_humano": true SOMENTE quando precisar transferir') &&
+          prompt.include?('"encerrar_atendimento": true SOMENTE quando as condições de encerramento configuradas')
       }
     end
 
@@ -632,11 +632,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
+      # Texto do meio/fim cortado (18/08, pedido de redução de prompt) — ver comentário em
+      # Ai::PythonOrchestratorClient#encerrar_atendimento_rule (risco de reincidência assumido).
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
         !prompt.include?('Encerre quando:') &&
           prompt.include?('"encerrar_atendimento": mantenha SEMPRE false') &&
-          prompt.include?('não existe nenhuma condição de encerramento configurada') &&
           !prompt.include?('SOMENTE quando as condições de encerramento configuradas abaixo')
       }
     end
@@ -740,10 +741,11 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
         described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
+        # "Não diga que é uma inteligência artificial" saiu (18/08, pedido de redução de prompt) — ver
+        # comentário em Ai::PythonOrchestratorClient#identify_as_instruction (risco assumido).
         expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
           line = JSON.parse(req.body)['system_prompt'].lines[1]
           line.include?('Aja como um atendente humano da equipe') &&
-            line.include?('Não diga que é uma inteligência artificial') &&
             line.include?('LINHA EM BRANCO entre elas (dois \n)') &&
             line.include?('"mensagem_para_cliente"')
         }
@@ -977,29 +979,31 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # campos transferir_humano/encerrar_atendimento: nada impedia o modelo de escrever "vou te
   # transferir"/"atendimento encerrado" em mensagem_para_cliente sem marcar o booleano correspondente.
   # O cliente recebia a promessa; a ação (handoff real / resolver a conversa) nunca acontecia.
-  describe 'PROIBIÇÃO de "fake-transfer"/"fake-close" (dizer sem marcar o campo)' do
-    it 'proíbe alegar transferência sem marcar transferir_humano+handoff_summary' do
+  #
+  # Pedido do dono da conta (18/08, redução de prompt): as 2 regras abaixo foram REMOVIDAS do prompt —
+  # ver comentário em Ai::PythonOrchestratorClient#structured_output_instruction. Risco assumido:
+  # exatamente a classe de bug descrita acima pode voltar. Testes viram guarda de que o corte foi o
+  # pretendido (não um esquecimento futuro) — se a regra voltar, troque de volta pra "prompt.include?".
+  describe 'PROIBIÇÃO de "fake-transfer"/"fake-close" (dizer sem marcar o campo) — REMOVIDA (18/08)' do
+    it 'NÃO proíbe mais alegar transferência sem marcar transferir_humano+handoff_summary' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('É ESTRITAMENTE PROIBIDO escrever em "mensagem_para_cliente" qualquer variação de "vou transferir"') &&
-          prompt.include?('marcar "transferir_humano": true e preencher "handoff_summary"') &&
-          prompt.include?('a transferência NÃO acontece e o cliente fica sem atendimento')
+        !prompt.include?('É ESTRITAMENTE PROIBIDO escrever em "mensagem_para_cliente" qualquer variação de "vou transferir"')
       }
     end
 
-    it 'proíbe alegar encerramento sem marcar encerrar_atendimento' do
+    it 'NÃO proíbe mais alegar encerramento sem marcar encerrar_atendimento' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('É ESTRITAMENTE PROIBIDO escrever em "mensagem_para_cliente" qualquer variação de "atendimento encerrado"') &&
-          prompt.include?('sem marcar "encerrar_atendimento": true na MESMA resposta')
+        !prompt.include?('É ESTRITAMENTE PROIBIDO escrever em "mensagem_para_cliente" qualquer variação de "atendimento encerrado"')
       }
     end
   end
@@ -1007,25 +1011,26 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # Removido (17/08, decisão de produto): as guardrails fixas de não-inventar/disciplina de
   # transferência/erro de ferramenta/cadência de pergunta saíram do código (ver comentário em
   # Ai::PythonOrchestratorClient#system_prompt) — os 4 testes que verificavam sua redação saíram
-  # junto. O que sobra aqui é só a regra do contrato Structured Outputs (não fingir que salvou sem
-  # preencher "dados_coletados"), que não foi tocada.
+  # junto.
+  #
+  # Pedido do dono da conta (18/08, redução de prompt): a regra de "fake-save" abaixo (não fingir que
+  # salvou sem preencher "dados_coletados") TAMBÉM foi removida — ver comentário em
+  # Ai::PythonOrchestratorClient#structured_output_instruction. Risco assumido: o bug real que essa
+  # regra corrigia (dado perdido silenciosamente) pode voltar.
   describe 'contrato JSON estruturado (achados em teste ao vivo)' do
     # Bug real ao vivo, round 2 (era do design de tool-calling): a IA chamava "continuar_conversa" (o
     # no-op que sustentava tool_choice="required") e dizia em texto "Recebi seu CPF!" sem NUNCA chamar
     # registrar_*/salvar_memoria_ia — nada persistia, a etapa seguinte repetia a pergunta (loop de
-    # dados). Sob Structured Outputs isso deixou de ser possível por construção: não há mais tool
-    # nenhuma pra "fingir" chamar, só o campo "dados_coletados" do JSON — guarda contra REMOVER a
-    # regra que proíbe alegar salvamento sem preencher esse campo.
-    it 'proíbe alegar que salvou sem preencher "dados_coletados", e diz que o dado se perde se isso acontecer' do
+    # dados). Guarda de que a remoção foi intencional — se a regra voltar, troque de volta pra
+    # "prompt.include?".
+    it 'NÃO proíbe mais alegar que salvou sem preencher "dados_coletados" (regra removida, 18/08)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'meu cpf é 123', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('É ESTRITAMENTE PROIBIDO dizer em "mensagem_para_cliente" que recebeu/anotou um dado') &&
-          prompt.include?('colocar esse dado em "dados_coletados"') &&
-          prompt.include?('o dado será PERDIDO')
+        !prompt.include?('É ESTRITAMENTE PROIBIDO dizer em "mensagem_para_cliente" que recebeu/anotou um dado')
       }
     end
 
@@ -1167,19 +1172,21 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # "salvar_memoria_ia": webhook que orchestrator.py chama por baixo pra CADA item de
   # "dados_coletados" sem tool dedicada — não é mais oferecida como tool à OpenAI (tools_schema não
   # manda mais "registrar_*"/tools de controle, ver comentário em
-  # Ai::PythonOrchestratorClient#tools_schema), só a instrução de sempre usar "dados_coletados" importa.
+  # Ai::PythonOrchestratorClient#tools_schema). O MECANISMO continua (o campo "dados_coletados" segue
+  # obrigatório no json_schema estrito do lado Python) — só a frase explicando chave/valor/atualiza-não-
+  # duplica saiu do prompt (18/08, pedido de redução — ver #structured_output_instruction).
   describe 'catch-all de memória ("dados_coletados" -> salvar_memoria_ia no Python)' do
     # Structured Outputs: a IA não escolhe mais entre "registrar_*" e "salvar_memoria_ia" — todo dado
     # (com ou sem tool dedicada no design antigo) vai pro mesmo lugar, "dados_coletados"; é o Python
     # (orchestrator.py#_dispatch_structured_reply) quem sempre chama o webhook salvar_memoria_ia por
     # baixo, pra CADA item da lista, sem a IA precisar saber que essa tool existe.
-    it 'system_prompt instrui a IA a colocar QUALQUER dado em "dados_coletados", sem tool dedicada' do
+    it 'NÃO explica mais em detalhe como preencher "dados_coletados" (frase removida, 18/08)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['system_prompt'].include?('adicione UM ITEM em "dados_coletados"')
+        !JSON.parse(req.body)['system_prompt'].include?('adicione UM ITEM em "dados_coletados"')
       }
     end
   end

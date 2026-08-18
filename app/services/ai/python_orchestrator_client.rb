@@ -248,7 +248,7 @@ class Ai::PythonOrchestratorClient
     lines << identify_as_instruction
     lines << @agent.base_prompt if @agent.base_prompt.present?
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
-    lines << "Responda no idioma #{@agent.assistant_language}." if @agent.assistant_language.present?
+    # "Responda no idioma X" removido (18/08, pedido do dono da conta — redução de prompt).
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
     lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
@@ -286,14 +286,18 @@ class Ai::PythonOrchestratorClient
   # ficou visível quando o department em questão migrou pro caminho Python (rollout de hoje, 13/08) —
   # não é regressão da eliminação do motor legado em si, é uma lacuna que a eliminação expôs pra
   # TODOS os departments de uma vez, em vez de só os que já tinham python_orchestrator opt-in.
+  # Pedido do dono da conta (18/08, redução de prompt): tirado "Não diga que é uma inteligência
+  # artificial" — o pedido foi cortar texto/regra em geral. Risco assumido: sem essa frase explícita,
+  # "Aja como um atendente humano" sozinho pode não bastar se o cliente perguntar direto "você é um
+  # robô?" — a IA pode acabar admitindo. Reversível revertendo este commit.
   def identify_as_instruction
     if @agent.identify_as == 'ai'
       'Você é um assistente virtual (IA) e pode assumir isso se perguntarem.'
     else
-      'Aja como um atendente humano da equipe. Não diga que é uma inteligência artificial. Quando a ' \
-        'resposta tiver mais de uma ideia ou ficar longa, escreva como uma pessoa real digitando: separe ' \
-        'em mensagens curtas com uma LINHA EM BRANCO entre elas (dois \n) no campo "mensagem_para_cliente". ' \
-        'Se for algo curto, responda em uma mensagem só, sem quebrar à força.'
+      'Aja como um atendente humano da equipe. Quando a resposta tiver mais de uma ideia ou ficar ' \
+        'longa, escreva como uma pessoa real digitando: separe em mensagens curtas com uma LINHA EM ' \
+        'BRANCO entre elas (dois \n) no campo "mensagem_para_cliente". Se for algo curto, responda em ' \
+        'uma mensagem só, sem quebrar à força.'
     end
   end
 
@@ -597,15 +601,18 @@ class Ai::PythonOrchestratorClient
   # Provavelmente puxada pela "Mensagem de encerramento sugerida" (#close_message) sempre presente no
   # prompt mesmo sem gatilho — ter uma despedida pronta parece ter bastado. Fecha a ambiguidade: sem
   # close_when, a regra vira uma proibição explícita, sem "abaixo" nenhum pra apontar pro vazio.
+  # Pedido do dono da conta (18/08, redução de prompt): cortado o meio ("não existe nenhuma condição...
+  # NUNCA marque true por conta própria") e o final ("isso é automático... você não precisa fazer nada a
+  # mais") do ramo sem close_when — mantido só o essencial marcado por ele. Risco assumido: é justamente
+  # esse texto cortado que travou o bug original (17/08) de a IA encerrar um atendimento sozinha ao ouvir
+  # "ta bem obrigada" — com a regra mais curta, a chance de reincidência é maior.
   def encerrar_atendimento_rule
     return '- "encerrar_atendimento": true SOMENTE quando as condições de encerramento configuradas ' \
            'abaixo forem atendidas.' if close_when_text.present?
 
-    '- "encerrar_atendimento": mantenha SEMPRE false — não existe nenhuma condição de encerramento ' \
-      'configurada pra este departamento. NUNCA marque true por conta própria, mesmo que o cliente ' \
-      'agradeça, se despeça ou pareça satisfeito — isso NÃO é sinal de que o atendimento deve terminar. ' \
-      'A única forma correta de concluir é a etapa atual alcançar o desfecho configurado dela (isso é ' \
-      'automático quando você segue o fluxo normal das etapas; você não precisa fazer nada a mais pra isso).'
+    '- "encerrar_atendimento": mantenha SEMPRE false — mesmo que o cliente agradeça, se despeça ou ' \
+      'pareça satisfeito — isso NÃO é sinal de que o atendimento deve terminar. A única forma correta ' \
+      'de concluir é a etapa atual alcançar o desfecho configurado dela.'
   end
 
   # Substitui a antiga instrução de function-calling (tool_usage_instruction/
@@ -623,32 +630,21 @@ class Ai::PythonOrchestratorClient
   # que garante a forma. dados_coletados virou LISTA de {chave, valor} (não objeto de chave livre) por
   # exigência do strict mode (additionalProperties:false em todo nível não aceita chave arbitrária) —
   # continua aceitando VÁRIOS dados no mesmo turno, um item por dado.
+  # Pedido do dono da conta (18/08, redução de prompt): ele viu o texto completo indo pra OpenAI (log)
+  # e pediu corte agressivo, marcando à mão só o que devia sobreviver. Cortado:
+  #  - todo o bloco "FORMATO DE RESPOSTA OBRIGATÓRIO" com o JSON por extenso — é REDUNDANTE (o mesmo
+  #    formato já vai separado em response.text.format=json_schema, orchestrator.py, e a OpenAI valida a
+  #    resposta contra ele antes de devolver); cortar isso é seguro, não muda comportamento.
+  #  - a regra de "confiança" (o campo "confianca" continua OBRIGATÓRIO pelo json_schema — só perdeu a
+  #    explicação de como calcular; risco: a pontuação pode ficar menos criteriosa, o campo não some).
+  #  - a regra de "adicione UM ITEM em dados_coletados por dado" (idem — "dados_coletados" continua no
+  #    schema; só perdeu a explicação de chave/valor/atualiza-não-duplica; risco: extração mais solta).
+  #  - as 2 regras "É ESTRITAMENTE PROIBIDO" de fake-transfer/fake-close E a de "fake-save" de dado —
+  #    RISCO REAL: são as 3 regras que corrigiram bugs ao vivo documentados (dado perdido silenciosamente,
+  #    IA dizendo "vou transferir" sem transferir, IA encerrando sem marcar o campo). Sem elas, esses 3
+  #    bugs podem voltar. Decisão do dono da conta, ciente do risco (revertível: branch isolada).
   def structured_output_instruction
-    "FORMATO DE RESPOSTA OBRIGATÓRIO: Toda resposta sua DEVE ser um único objeto JSON válido, e SOMENTE " \
-      "o JSON — sem texto antes ou depois, sem markdown, no formato exato:\n" \
-      "{\n" \
-      "  \"mensagem_para_cliente\": \"o texto que será enviado ao cliente no WhatsApp\",\n" \
-      "  \"dados_coletados\": [{\"chave\": \"nome_do_dado\", \"valor\": \"valor_extraido\"}],\n" \
-      "  \"avancar_etapa\": true ou false,\n" \
-      "  \"transferir_humano\": true ou false,\n" \
-      "  \"encerrar_atendimento\": true ou false,\n" \
-      "  \"handoff_summary\": \"resumo do atendimento — obrigatório quando transferir_humano for true\",\n" \
-      "  \"confianca\": 0.0 a 1.0\n" \
-      "}\n" \
-      "REGRAS:\n" \
-      "- \"confianca\": sua confiança de 0.0 (nada confiante) a 1.0 (totalmente confiante) na resposta " \
-      "que está dando NESTE turno — considere se tem certeza da informação, se entendeu bem o pedido " \
-      "do cliente, e se a ação escolhida é a certa. Seja honesto: um valor baixo pode acionar uma " \
-      "transferência automática para um humano — é melhor admitir incerteza do que arriscar uma " \
-      "resposta errada ou inventada.\n" \
-      "- Se o cliente forneceu QUALQUER dado (nome, endereço, CPF, telefone, email, preferência, etc.), " \
-      "adicione UM ITEM em \"dados_coletados\" por dado — cada item é {\"chave\": nome descritivo do " \
-      "dado, \"valor\": o que o cliente disse}; pode mandar VÁRIOS itens no mesmo turno se o cliente deu " \
-      "vários dados de uma vez. Chamar de novo com um valor diferente pra MESMA chave ATUALIZA o dado, " \
-      "não duplica. Se não forneceu nada novo neste turno, \"dados_coletados\" DEVE ser a lista vazia [].\n" \
-      "- É ESTRITAMENTE PROIBIDO dizer em \"mensagem_para_cliente\" que recebeu/anotou um dado sem, na " \
-      "MESMA resposta, colocar esse dado em \"dados_coletados\" — o dado só existe no sistema se " \
-      "estiver ali; se você disser que anotou sem preencher \"dados_coletados\", o dado será PERDIDO.\n" \
+    "REGRAS:\n" \
       "- Assim que o cliente responder o que a etapa atual pede, NÃO peça confirmação ('é isso mesmo?', " \
       "'posso confirmar?') — registre o dado em \"dados_coletados\" E marque \"avancar_etapa\": true na " \
       "MESMA resposta, sem inserir um turno extra de confirmação.\n" \
@@ -657,17 +653,7 @@ class Ai::PythonOrchestratorClient
       "- \"transferir_humano\": true SOMENTE quando precisar transferir para um atendente humano; nesse " \
       "caso preencha \"handoff_summary\" com o que já foi conseguido (ex: \"Cliente já forneceu nome e " \
       "cidade, falta CPF\") e o motivo da transferência.\n" \
-      "- É ESTRITAMENTE PROIBIDO escrever em \"mensagem_para_cliente\" qualquer variação de \"vou " \
-      "transferir\", \"chamar um especialista\", \"encaminhar para atendente\" ou similar sem, na MESMA " \
-      "resposta, marcar \"transferir_humano\": true e preencher \"handoff_summary\" — se você disser " \
-      "que vai transferir sem marcar o campo, a transferência NÃO acontece e o cliente fica sem " \
-      "atendimento.\n" \
-      "#{encerrar_atendimento_rule}\n" \
-      "- É ESTRITAMENTE PROIBIDO escrever em \"mensagem_para_cliente\" qualquer variação de " \
-      "\"atendimento encerrado\", \"até logo\", \"finalizando\" ou similar sem marcar " \
-      "\"encerrar_atendimento\": true na MESMA resposta.\n" \
-      'Nunca responda fora deste formato JSON, mesmo que só queira cumprimentar ou tirar uma dúvida — ' \
-      'nesse caso "dados_coletados" fica [] e os demais booleanos ficam false.'
+      "#{encerrar_atendimento_rule}"
   end
 
   def force_handoff_instruction
