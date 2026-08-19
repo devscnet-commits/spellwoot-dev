@@ -115,7 +115,8 @@ class Ai::PythonOrchestratorClient
     end
 
     parsed = response.parsed_response
-    Rails.logger.info "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation.id} reply_present=#{parsed['reply'].present?} conversation_id=#{parsed['conversation_id'].inspect}"
+    Rails.logger.info "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation.id} " \
+                       "reply_present=#{parsed['reply'].present?} conversation_id=#{parsed['conversation_id'].inspect}"
     { reply: parsed['reply'], conversation_id: parsed['conversation_id'], byok_fallback: parsed['byok_fallback'] == true,
       # Auto-relato do modelo (0.0-1.0, orchestrator.CONFIANCA_KEY) — nil quando o Python não conseguiu
       # parsear o JSON do turno. Ai::Gateway usa isto pra decidir handoff por baixa confiança
