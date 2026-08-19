@@ -255,145 +255,191 @@ describe('aiStepPayload', () => {
     });
   });
 
-  describe('buildStepPayload — slot_required no topo, nunca collect.required', () => {
-    const base = { name: 'Email', instructions: 'grave o email_cliente' };
+  // "DADOS PARA COLETA NA ETAPA": collectItems é uma LISTA agora, cada item com seu PRÓPRIO required —
+  // slot_required (nível da etapa) não é mais emitido, cada dado carrega o seu (ver Ai::StepSlot.items
+  // no backend, que já normaliza os dois formatos).
+  describe('buildStepPayload — collectItems (um required por dado, não mais 1 por etapa)', () => {
+    const base = { name: 'Dados do cliente' };
 
-    it('Opcional -> slot_required=false; collect.required AUSENTE', () => {
+    it('um item obrigatório -> collect.items[0].required=true', () => {
       const p = buildStepPayload({
         ...base,
-        hasSlot: true,
-        slotRequired: false,
-        collectAttribute: 'email_cliente',
+        collectItems: [
+          { attribute: 'email_cliente', type: 'text', required: true },
+        ],
       });
-      expect(p.slot_required).toBe(false);
-      expect(p.collect).toEqual({ attribute: 'email_cliente', type: 'text' });
-      expect(p.collect.required).toBeUndefined();
+      expect(p.collect).toEqual({
+        items: [{ attribute: 'email_cliente', type: 'text', required: true }],
+      });
     });
 
-    it('Obrigatório -> slot_required=true', () => {
-      expect(
-        buildStepPayload({ ...base, hasSlot: true, slotRequired: true })
-          .slot_required
-      ).toBe(true);
-    });
-
-    it('editar a chave grava collect.attribute SEM collect.required', () => {
+    it('CPF obrigatório + e-mail opcional NA MESMA etapa: cada item com seu próprio required', () => {
       const p = buildStepPayload({
         ...base,
-        hasSlot: true,
-        slotRequired: true,
-        collectAttribute: 'cpf_cliente',
+        collectItems: [
+          { attribute: 'cpf_cliente', type: 'cpf', required: true },
+          { attribute: 'email_cliente', type: 'email', required: false },
+        ],
       });
-      expect(p.collect.attribute).toBe('cpf_cliente');
-      expect(p.collect.required).toBeUndefined();
+      expect(p.collect.items[0]).toEqual({
+        attribute: 'cpf_cliente',
+        type: 'cpf',
+        required: true,
+      });
+      expect(p.collect.items[1]).toEqual({
+        attribute: 'email_cliente',
+        type: 'email',
+        required: false,
+      });
     });
 
-    it('slot inferido (sem chave manual) mantém collect null e grava slot_required do toggle', () => {
+    it('item com dica de extração -> collect.items[].hint; sem dica, chave ausente (não vazia)', () => {
       const p = buildStepPayload({
         ...base,
-        hasSlot: true,
-        slotRequired: false,
-        collectAttribute: '',
+        collectItems: [
+          {
+            attribute: 'cidade',
+            type: 'text',
+            required: true,
+            hint: 'Cidade para instalar a internet',
+          },
+          { attribute: 'nome', type: 'text', required: true, hint: '' },
+        ],
       });
-      expect(p.collect).toBe(null);
-      expect(p.slot_required).toBe(false);
+      expect(p.collect.items[0].hint).toBe('Cidade para instalar a internet');
+      expect('hint' in p.collect.items[1]).toBe(false);
     });
 
-    // slot_required DESACOPLADO do hasSlot: buildStepPayload emite slot_required SEMPRE (não lê hasSlot),
-    // então sem chave escolhida (collectAttribute vazio => collect null) a escolha do radio (semeada do
-    // banco) é preservada em vez de nulificar em silêncio. Guarda de regressão do desacoplamento.
-    it('detectedSlot ausente + manualSlot vazio preserva slot_required TRUE (falha se voltar a depender de hasSlot)', () => {
+    it('item sem attribute (chave vazia) é descartado, não vira item quebrado no payload', () => {
       const p = buildStepPayload({
         ...base,
-        hasSlot: false,
-        slotRequired: true,
-        collectAttribute: '',
+        collectItems: [
+          { attribute: '  ', type: 'text', required: true },
+          { attribute: 'nome', type: 'text', required: true },
+        ],
       });
-      expect(p.collect).toBe(null);
-      expect(p.slot_required).toBe(true);
+      expect(p.collect.items).toEqual([
+        { attribute: 'nome', type: 'text', required: true },
+      ]);
     });
 
-    it('detectedSlot ausente + manualSlot vazio preserva slot_required FALSE (falha se voltar a depender de hasSlot)', () => {
+    it('nenhum item -> collect: null (etapa informativa)', () => {
+      expect(buildStepPayload({ ...base, collectItems: [] }).collect).toBe(
+        null
+      );
+    });
+
+    it('não emite slot_required (obsoleto — cada item carrega o seu required)', () => {
       const p = buildStepPayload({
         ...base,
-        hasSlot: false,
-        slotRequired: false,
-        collectAttribute: '',
+        collectItems: [{ attribute: 'nome', type: 'text', required: true }],
       });
-      expect(p.collect).toBe(null);
-      expect(p.slot_required).toBe(false);
+      expect('slot_required' in p).toBe(false);
     });
 
     it('NÃO escreve complete_when', () => {
-      expect(
-        'complete_when' in buildStepPayload({ ...base, hasSlot: true })
-      ).toBe(false);
+      expect('complete_when' in buildStepPayload(base)).toBe(false);
     });
   });
 
-  // (B2) choice: as opções vêm de uma lista fixa OU do resultado de uma ferramenta (domínio dinâmico).
-  describe('buildStepPayload — choice: fonte das opções (lista fixa vs ferramenta)', () => {
-    const base = {
-      name: 'Período',
-      collectAttribute: 'periodo_reservado',
-      collectType: 'choice',
-    };
+  // (B2) choice: as opções vêm de uma lista fixa OU do resultado de uma ferramenta (domínio dinâmico) —
+  // agora configurável POR ITEM, não mais uma vez pra etapa inteira.
+  describe('buildStepPayload — choice: fonte das opções (lista fixa vs ferramenta), por item', () => {
+    const item = (overrides = {}) => ({
+      attribute: 'periodo_reservado',
+      type: 'choice',
+      required: true,
+      ...overrides,
+    });
 
     it('fonte "fixed" grava options da lista digitada, SEM domain_from_tool', () => {
       const p = buildStepPayload({
-        ...base,
-        collectSource: 'fixed',
-        collectOptions: 'Manhã\nTarde',
+        name: 'Período',
+        collectItems: [item({ source: 'fixed', options: 'Manhã\nTarde' })],
       });
-      expect(p.collect.options).toEqual(['Manhã', 'Tarde']);
-      expect('domain_from_tool' in p.collect).toBe(false);
+      expect(p.collect.items[0].options).toEqual(['Manhã', 'Tarde']);
+      expect('domain_from_tool' in p.collect.items[0]).toBe(false);
     });
 
     it('fonte "tool" grava domain_from_tool (o NOME) e LIMPA options (=[])', () => {
       const p = buildStepPayload({
-        ...base,
-        collectSource: 'tool',
-        collectDomainTool: 'consultar_periodos',
-        // lista fixa antiga presente no draft: deve ser descartada, não vazar
-        collectOptions: 'Manhã\nTarde',
+        name: 'Período',
+        collectItems: [
+          item({
+            source: 'tool',
+            domainTool: 'consultar_periodos',
+            // lista fixa antiga presente no draft: deve ser descartada, não vazar
+            options: 'Manhã\nTarde',
+          }),
+        ],
       });
-      expect(p.collect.domain_from_tool).toBe('consultar_periodos');
-      expect(p.collect.options).toEqual([]);
+      expect(p.collect.items[0].domain_from_tool).toBe('consultar_periodos');
+      expect(p.collect.items[0].options).toEqual([]);
     });
 
     it('fonte "tool" sem ferramenta escolhida cai na lista fixa (não grava domain_from_tool vazio)', () => {
       const p = buildStepPayload({
-        ...base,
-        collectSource: 'tool',
-        collectDomainTool: '',
-        collectOptions: 'Manhã',
+        name: 'Período',
+        collectItems: [
+          item({ source: 'tool', domainTool: '', options: 'Manhã' }),
+        ],
       });
-      expect('domain_from_tool' in p.collect).toBe(false);
-      expect(p.collect.options).toEqual(['Manhã']);
+      expect('domain_from_tool' in p.collect.items[0]).toBe(false);
+      expect(p.collect.items[0].options).toEqual(['Manhã']);
     });
 
-    it('voltar de "tool" para "fixed" NÃO deixa domain_from_tool no payload (limpo pela reconstrução do collect)', () => {
+    it('voltar de "tool" para "fixed" NÃO deixa domain_from_tool no payload (limpo pela reconstrução do item)', () => {
       const p = buildStepPayload({
-        ...base,
-        collectSource: 'fixed',
-        collectDomainTool: 'consultar_periodos', // resquício do draft; ignorado no modo fixed
-        collectOptions: 'Manhã',
+        name: 'Período',
+        collectItems: [
+          item({
+            source: 'fixed',
+            domainTool: 'consultar_periodos',
+            options: 'Manhã',
+          }), // resquício ignorado
+        ],
       });
-      expect('domain_from_tool' in p.collect).toBe(false);
+      expect('domain_from_tool' in p.collect.items[0]).toBe(false);
     });
 
-    it('domain_from_tool só existe em type=choice (type=text nunca emite)', () => {
+    it('domain_from_tool só existe em type=choice (type=text nunca emite, mesmo com source=tool)', () => {
       const p = buildStepPayload({
         name: 'X',
-        collectAttribute: 'periodo_reservado',
-        collectType: 'text',
-        collectSource: 'tool',
-        collectDomainTool: 'consultar_periodos',
+        collectItems: [
+          {
+            attribute: 'periodo_reservado',
+            type: 'text',
+            required: true,
+            source: 'tool',
+            domainTool: 'consultar_periodos',
+          },
+        ],
       });
-      expect(p.collect).toEqual({
+      expect(p.collect.items[0]).toEqual({
         attribute: 'periodo_reservado',
         type: 'text',
+        required: true,
       });
+    });
+
+    it('dois itens choice INDEPENDENTES na mesma etapa: cada um com sua própria fonte de opções', () => {
+      const p = buildStepPayload({
+        name: 'Dois selects',
+        collectItems: [
+          item({
+            attribute: 'periodo',
+            source: 'fixed',
+            options: 'Manhã\nTarde',
+          }),
+          item({
+            attribute: 'plano',
+            source: 'tool',
+            domainTool: 'consultar_planos',
+          }),
+        ],
+      });
+      expect(p.collect.items[0].options).toEqual(['Manhã', 'Tarde']);
+      expect(p.collect.items[1].domain_from_tool).toBe('consultar_planos');
     });
   });
 

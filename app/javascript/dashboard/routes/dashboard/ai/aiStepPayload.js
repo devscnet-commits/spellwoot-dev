@@ -66,14 +66,12 @@ export const stepToApi = s => {
 };
 
 // Payload que o AiStepForm devolve no save. Regras (Gaps 1–3 no backend):
-//  - objective/rules SEMPRE emitidos (mesma convenção de name/slot_required — trim,
-//    array normalizado); `instructions` NUNCA é emitido (etapa antiga preserva o texto legado via
-//    mergeStepEdit — buildStepPayload não conhece mais esse campo);
-//  - slot_required SEMPRE no nível da etapa, NUNCA collect.required (o Gap 2 desacoplou; não reacoplar);
-//  - chave escolhida no Select -> collect = { attribute, type[, options] } SEM required; vazia => collect null;
-//  - slot_required reflete SEMPRE a escolha do radio (draft.slotRequired, semeado do banco), DESACOPLADO de
-//    hasSlot (buildStepPayload nem lê hasSlot). slot_required numa etapa SEM slot é inofensivo: o
-//    Ai::StepResolver retorna antes de consultar optional? quando Ai::StepSlot.attribute(step) é nil.
+//  - objective/rules SEMPRE emitidos (mesma convenção de name — trim, array normalizado);
+//    `instructions` NUNCA é emitido (etapa antiga preserva o texto legado via mergeStepEdit —
+//    buildStepPayload não conhece mais esse campo);
+//  - collect = { items: [...] } — um item por dado (ver #buildCollectItem), CADA um com seu PRÓPRIO
+//    required; [] => collect: null. slot_required (nível da etapa, formato ANTIGO) não é mais emitido —
+//    substituído pelo required por item;
 //  - NÃO escreve complete_when (morto no backend pós-Gap 2; legado sobrevive pelo spread, intocado);
 //  - NÃO escreve mais `knowledge` (campo "consultar conhecimento antes de responder" + "filtrar por
 //    tipo"): substituído pela tool agentic consultar_conhecimento (Ai::PythonOrchestratorClient),
@@ -85,6 +83,42 @@ export const stepToApi = s => {
 //    presente => { action[, team_id em handoff_human][, target em handoff_ai] } (reason fica com o default
 //    'conclusao' do backend). SEMEADO de props.step.on_complete no form — editar sem tocar preserva o valor
 //    (a mesma armadilha de #306/knowledge: emitir sem semear apagaria o backfill em silêncio).
+// Um item de "DADOS PARA COLETA NA ETAPA" (Ai::StepSlot.items no backend): CADA dado com SEU PRÓPRIO
+// type/options/required/hint, em vez de 1 collect por etapa inteira compartilhado entre todos os dados
+// (o que forçava CPF/e-mail/nome na mesma etapa a cair no mesmo tipo, ou a virar 3 etapas separadas).
+// item: {attribute, type, options (textarea cru, 1 por linha — mesma convenção de sempre), source
+// ('fixed'|'tool'), domainTool, required (bool), hint}. attribute vazio descarta o item (a UI não deixa
+// isso acontecer — o botão de adicionar já exige a chave — mas não é papel do payload validar UI).
+const buildCollectItem = item => {
+  const attribute = (item?.attribute || '').trim();
+  if (!attribute) return null;
+
+  const built = {
+    attribute,
+    type: item.type || 'text',
+    required: !!item.required,
+  };
+  const hint = (item.hint || '').trim();
+  if (hint) built.hint = hint;
+
+  if (built.type === 'choice') {
+    const tool = (item.domainTool || '').trim();
+    if (item.source === 'tool' && tool) {
+      // Domínio dinâmico: a ferramenta é o validador ÚNICO. options=[] LIMPA qualquer lista fixa antiga
+      // (senão o spread de collect a preservaria) — o backend ignora options quando domain_from_tool está
+      // presente, mas deixar lista morta confunde a próxima edição.
+      built.options = [];
+      built.domain_from_tool = tool;
+    } else {
+      built.options = (item.options || '')
+        .split('\n')
+        .map(o => o.trim())
+        .filter(Boolean);
+    }
+  }
+  return built;
+};
+
 export const buildStepPayload = ({
   name,
   objective = '',
@@ -93,19 +127,16 @@ export const buildStepPayload = ({
   rules = '',
   groupDelaySeconds,
   automations = [],
-  collectAttribute = '',
-  collectType = 'text',
-  collectOptions = '',
-  // (B2) De onde vem o conjunto de valores de um slot choice: 'fixed' (lista digitada em collectOptions) ou
-  // 'tool' (o RESULTADO da ferramenta collectDomainTool é o domínio dinâmico). Ver Ai::StepSlot.domain_from_tool.
-  collectSource = 'fixed',
-  collectDomainTool = '',
-  slotRequired = true,
+  // Lista de dados que a etapa coleta (ver #buildCollectItem) — [] => etapa informativa, collect: null.
+  // slot_required (nível da etapa) NÃO é mais emitido: era o único "obrigatório" pra 1 dado por etapa;
+  // cada item agora carrega o SEU PRÓPRIO `required` (Gap 2, formato novo — ver Ai::StepSlot no backend).
+  // Etapa antiga salva antes desta mudança mantém slot_required por spread (mergeStepEdit); é lido só
+  // pelo formato ANTIGO de collect (Ai::StepSlot.legacy_required) — inofensivo, nunca mais escrito daqui.
+  collectItems = [],
   onCompleteAction = '',
   onCompleteTeamId = '',
   onCompleteTarget = '',
 }) => {
-  const attribute = (collectAttribute || '').trim();
   const payload = {
     name: (name || '').trim(),
     objective: (objective || '').trim(),
@@ -115,28 +146,10 @@ export const buildStepPayload = ({
       .filter(Boolean),
     group_delay_seconds: groupDelaySeconds,
     automations: automations.map(a => ({ type: a.type, params: a.params })),
-    slot_required: !!slotRequired,
   };
-  if (attribute) {
-    payload.collect = { attribute, type: collectType || 'text' };
-    if (collectType === 'choice') {
-      const tool = (collectDomainTool || '').trim();
-      if (collectSource === 'tool' && tool) {
-        // Domínio dinâmico: a ferramenta é o validador ÚNICO. options=[] LIMPA qualquer lista fixa antiga
-        // (senão o spread de collect a preservaria) — o backend ignora options quando domain_from_tool está
-        // presente (supervisor_fact_reason -> tool_domain_reason), mas deixar lista morta confunde a próxima edição.
-        payload.collect.options = [];
-        payload.collect.domain_from_tool = tool;
-      } else {
-        payload.collect.options = (collectOptions || '')
-          .split('\n')
-          .map(o => o.trim())
-          .filter(Boolean);
-      }
-    }
-  } else {
-    payload.collect = null;
-  }
+  const items = (collectItems || []).map(buildCollectItem).filter(Boolean);
+  payload.collect = items.length ? { items } : null;
+
   const action = (onCompleteAction || '').trim();
   if (action) {
     const onComplete = { action };

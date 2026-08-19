@@ -50,6 +50,58 @@ const advancedOpen = ref(false);
 
 const WEBHOOK_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE'];
 
+// ==== "DADOS PARA COLETA NA ETAPA" — um item por dado, cada um com type/options/required/hint próprios
+// (Ai::StepSlot.items no backend). uid é CLIENT-ONLY (v-for), nunca vai ao backend. ====
+let collectItemUid = 0;
+const nextCollectItemUid = () => {
+  collectItemUid += 1;
+  return collectItemUid;
+};
+
+// Formato ANTIGO (1 collect pra etapa inteira; attribute string OU array — ticket 586): todos os
+// atributos COMPARTILHAVAM o mesmo type/options/domain_from_tool, e o required seguia a precedência do
+// backend (Gap 2: collect.required explícito > step.slot_required > obrigatório por default). Replicada
+// aqui só pra abrir uma etapa antiga com os valores certos — o PRÓXIMO save já grava items[], migrando
+// a etapa sem exigir migração de banco nenhuma (Ai::StepSlot lê os dois formatos).
+const legacyCollectAsRawItems = (collect, step) => {
+  const attrs = Array.isArray(collect.attribute)
+    ? collect.attribute
+    : [collect.attribute].filter(Boolean);
+  const required = collect.required ?? step?.slot_required ?? true;
+  return attrs
+    .map(a => (a || '').toString().trim())
+    .filter(Boolean)
+    .map(attribute => ({
+      attribute,
+      type: collect.type,
+      options: collect.options,
+      domain_from_tool: collect.domain_from_tool,
+      required,
+    }));
+};
+
+const rawItemToDraft = raw => ({
+  uid: nextCollectItemUid(),
+  attribute: raw.attribute || '',
+  type: raw.type || 'text',
+  options: Array.isArray(raw.options) ? raw.options.join('\n') : '',
+  source: raw.domain_from_tool ? 'tool' : 'fixed',
+  domainTool: raw.domain_from_tool || '',
+  required: raw.required ?? true,
+  hint: raw.hint || '',
+  // Carregado do banco = já configurado -> começa RECOLHIDO (senão toda etapa com 3 dados abriria com
+  // 3 cards abertos, ilegível). Só nasce expandido quando ADICIONADO nesta sessão de edição.
+  expanded: false,
+});
+
+const seedCollectItems = (collect, step) => {
+  if (!collect) return [];
+  const rawItems = Array.isArray(collect.items)
+    ? collect.items
+    : legacyCollectAsRawItems(collect, step);
+  return rawItems.map(rawItemToDraft);
+};
+
 const draft = reactive({
   name: props.step?.name || '',
   // "Padrão ouro": 2 campos separados em vez de 1 textarea (Objetivo/Regras) — melhora a
@@ -63,22 +115,12 @@ const draft = reactive({
     ? props.step.rules.join('\n')
     : props.step?.rules || '',
   group_delay_seconds: props.step?.group_delay_seconds ?? '',
-  // Chave do slot que a etapa coleta (collect['attribute']). Escolhida no Select da união (LeadVariable ∪
-  // CustomAttributeDefinition). Vazia => etapa informativa (buildStepPayload emite collect: null). NÃO há
-  // mais inferência da instrução — a etapa DECLARA a variável.
-  collectAttribute: props.step?.collect?.attribute || '',
-  collectType: props.step?.collect?.type || 'text',
-  collectOptions: Array.isArray(props.step?.collect?.options)
-    ? props.step.collect.options.join('\n')
-    : '',
-  // (B2) Fonte das opções de um slot choice: 'fixed' (lista digitada) ou 'tool' (domínio dinâmico = resultado
-  // da ferramenta). Semeado do banco: collect.domain_from_tool presente => 'tool'. collectDomainTool guarda o
-  // NOME da ferramenta (é o que Ai::StepSlot.domain_from_tool lê e resolve por department.tools.find_by(name:)).
-  collectSource: props.step?.collect?.domain_from_tool ? 'tool' : 'fixed',
-  collectDomainTool: props.step?.collect?.domain_from_tool || '',
-  // Obrigatório? SEMPRE no nível da etapa (slot_required), NUNCA collect.required (Gap 2 desacoplou).
-  // Default obrigatório; null/undefined legado => obrigatório.
-  slotRequired: props.step?.slot_required ?? true,
+  // "DADOS PARA COLETA NA ETAPA": um item por dado (Ai::StepSlot.items no backend), cada um com SEU
+  // PRÓPRIO type/options/required/hint — CPF obrigatório e e-mail opcional na MESMA etapa, cada um
+  // validado com o formato certo. Seedado de step.collect.items[] (formato novo) OU do step.collect
+  // ANTIGO (1 collect pra etapa inteira, attribute string ou array — ticket 586), tratado como items de
+  // 1+ elemento — ver #seedCollectItems. [] => etapa informativa (nenhum dado configurado ainda).
+  collectItems: seedCollectItems(props.step?.collect, props.step),
   // Desfecho declarado AO concluir a etapa (step['on_complete'], (b)-core). SEMEADO do banco — editar sem
   // tocar preserva o valor (a armadilha de #306/knowledge: emitir sem semear apagaria o backfill). action
   // vazia => a etapa não declara desfecho (buildStepPayload emite on_complete: null).
@@ -105,61 +147,84 @@ const cadOptionsFor = key => {
     : [];
 };
 
-// Ao trocar o atributo coletado: se o CAD for do tipo "lista", auto-preenche tipo=choice e as opções.
-// Só dispara na MUDANÇA (não em mount) — respeita a regra de não mutar ao só abrir a tela.
-watch(
-  () => draft.collectAttribute,
-  newKey => {
-    if (!newKey) return;
-    const cad = (props.customAttributes || []).find(
-      a => a.attribute_key === newKey && a.attribute_display_type === 'list'
-    );
-    if (!cad) return;
-    const values = cadOptionsFor(newKey);
-    if (!values.length) return;
-    draft.collectType = 'choice';
-    draft.collectSource = 'fixed';
-    draft.collectOptions = values.join('\n');
-  }
+// --- "+ Selecionar dado do sistema para coletar...": união LeadVariable ∪ CustomAttributeDefinition,
+// filtrada pro que AINDA NÃO foi adicionado nesta etapa (evita coletar o mesmo dado duas vezes). Ao
+// contrário do Select antigo (uma escolha SUBSTITUÍA a anterior), aqui escolher AGREGA um item novo —
+// não existe mais "a" chave da etapa, existem VÁRIAS, cada uma seu próprio card. -----------------------
+const usedAttributes = computed(
+  () => new Set(draft.collectItems.map(i => i.attribute).filter(Boolean))
 );
 
-// Fallback: ao mudar manualmente para tipo "choice", preenche as opções do CAD se ainda estiverem vazias.
-// Cobre o caso em que o CAD não é do tipo "lista" no sistema (não dispara o watch acima), mas o usuário
-// sabe que o atributo tem valores possíveis e quer o atalho.
-watch(
-  () => draft.collectType,
-  newType => {
-    if (newType !== 'choice') return;
-    if ((draft.collectOptions || '').trim()) return; // já tem opções — não sobrescreve
-    const values = cadOptionsFor(draft.collectAttribute);
-    if (!values.length) return;
-    draft.collectSource = 'fixed';
-    draft.collectOptions = values.join('\n');
-  }
+const addExistingKey = ref('');
+const addExistingOptions = computed(() =>
+  buildSlotKeyOptions(props.leadVariables, props.customAttributes)
+    .filter(o => !usedAttributes.value.has(o.value))
+    .map(o => ({
+      value: o.value,
+      label:
+        o.source === 'panel'
+          ? t('AI_DEPARTMENTS.FORM.SLOT_KEY_PANEL', { key: o.value })
+          : t('AI_DEPARTMENTS.FORM.SLOT_KEY_INTERNAL', { key: o.value }),
+    }))
 );
 
-// --- Chave do slot: Select da união (LeadVariable ∪ CustomAttributeDefinition), com a ORIGEM marcada
-// (interna = memória da IA; painel = espelha na lateral). Empty = etapa informativa. ------------------
-const hasSlot = computed(() => !!(draft.collectAttribute || '').trim());
+// Origem (system = CustomAttributeDefinition, aparece no painel · memory = LeadVariable, interna) pro
+// badge do card — mesma fonte que addExistingOptions, mas por atributo já ADICIONADO.
+const originOf = attribute =>
+  (props.customAttributes || []).some(a => a.attribute_key === attribute)
+    ? 'system'
+    : 'memory';
 
-const slotKeyOptions = computed(() => {
-  const none = { value: '', label: t('AI_DEPARTMENTS.FORM.SLOT_KEY_NONE') };
-  const opts = buildSlotKeyOptions(
-    props.leadVariables,
-    props.customAttributes
-  ).map(o => ({
-    value: o.value,
-    label:
-      o.source === 'panel'
-        ? t('AI_DEPARTMENTS.FORM.SLOT_KEY_PANEL', { key: o.value })
-        : t('AI_DEPARTMENTS.FORM.SLOT_KEY_INTERNAL', { key: o.value }),
-  }));
-  return [none, ...opts];
+// Ao adicionar um dado que já é um CustomAttributeDefinition tipo "lista": auto-preenche type=choice e
+// as opções — mesmo atalho que existia antes como watch contínuo; agora roda UMA vez, no momento de
+// adicionar (com vários itens, reagir a "qual mudou" não faz mais sentido como watch global).
+const newItemFromAttribute = attribute => {
+  const item = {
+    uid: nextCollectItemUid(),
+    attribute,
+    type: 'text',
+    options: '',
+    source: 'fixed',
+    domainTool: '',
+    required: true,
+    hint: '',
+    expanded: true, // recém-adicionado -> abre pra configurar tipo/obrigatório/dica na hora
+  };
+  const isListCad = (props.customAttributes || []).some(
+    a => a.attribute_key === attribute && a.attribute_display_type === 'list'
+  );
+  const values = cadOptionsFor(attribute);
+  if (isListCad && values.length) {
+    item.type = 'choice';
+    item.options = values.join('\n');
+  }
+  return item;
+};
+
+watch(addExistingKey, key => {
+  if (!key) return;
+  draft.collectItems.push(newItemFromAttribute(key));
+  addExistingKey.value = ''; // reseta o combo — cada escolha é uma AGREGAÇÃO, não uma seleção persistente
 });
+
+const removeItem = uid => {
+  draft.collectItems = draft.collectItems.filter(i => i.uid !== uid);
+};
+
+// Fallback: ao mudar manualmente o tipo de um item pra "choice", preenche as opções do CAD se ainda
+// estiverem vazias (cobre o CAD que não é tipo "lista" no sistema, mas tem valores possíveis mesmo assim).
+const onItemTypeChange = item => {
+  if (item.type !== 'choice') return;
+  if ((item.options || '').trim()) return;
+  const values = cadOptionsFor(item.attribute);
+  if (!values.length) return;
+  item.source = 'fixed';
+  item.options = values.join('\n');
+};
 
 // Inline-create: cria uma Ai::LeadVariable (variável INTERNA), NÃO um CustomAttributeDefinition — dado da
 // IA é memória de trabalho, não campo editável na lateral. O pai empilha o resultado em leadVariables (para
-// a opção aparecer no Select) e aqui já selecionamos a chave recém-criada.
+// a opção aparecer no Select) e aqui já a adicionamos como item, expandida pra configurar tipo/obrigatório.
 const creatingVariable = ref(false);
 const newVariableName = ref('');
 const createError = ref('');
@@ -174,7 +239,7 @@ const createVariable = async () => {
       { ai_lead_variable: { name } }
     );
     emit('variableCreated', data); // pai empilha em leadVariables => a opção aparece
-    draft.collectAttribute = data.name; // seleciona a recém-criada
+    draft.collectItems.push(newItemFromAttribute(data.name)); // adiciona como item, já expandida
     newVariableName.value = '';
     creatingVariable.value = false;
   } catch (error) {
@@ -225,7 +290,9 @@ const deleteVariable = async v => {
       `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}` +
         `/ai_departments/${props.departmentId}/ai_lead_variables/${v.id}`
     );
-    if (draft.collectAttribute === v.name) draft.collectAttribute = ''; // era a selecionada -> limpa
+    // era usada por algum item desta etapa -> remove (a variável em si já sumiu do backend; deixar o
+    // item pendurado gravaria uma chave órfã no próximo save).
+    draft.collectItems = draft.collectItems.filter(i => i.attribute !== v.name);
     emit('variableDeleted', v.id); // pai remove de leadVariables
   } catch (error) {
     deleteError.value =
@@ -276,14 +343,28 @@ const toolOptions = computed(() =>
     .map(name => ({ value: name, label: name }))
 );
 
-// Aviso anti-degradação-silenciosa: o slot está em modo ferramenta e o NOME salvo não existe (mais) na lista
-// do department (ferramenta removida/renomeada). O runtime já faz fail-open + emite tool_domain.unextractable,
-// mas quem edita a etapa precisa VER que o slot voltou a aceitar qualquer valor. Só alerta quando há nome salvo.
-const toolDomainMissing = computed(() => {
-  if (draft.collectSource !== 'tool') return false;
-  const chosen = (draft.collectDomainTool || '').trim();
+// Aviso anti-degradação-silenciosa: um item está em modo ferramenta e o NOME salvo não existe (mais) na
+// lista do department (ferramenta removida/renomeada). O runtime já faz fail-open + emite
+// tool_domain.unextractable, mas quem edita a etapa precisa VER que o slot voltou a aceitar qualquer
+// valor. Função (não computed) — agora é POR ITEM, chamada no v-for.
+const isToolDomainMissing = item => {
+  if (item.source !== 'tool') return false;
+  const chosen = (item.domainTool || '').trim();
   if (!chosen) return false;
   return !toolOptions.value.some(o => o.value === chosen);
+};
+
+// Rótulo do "Tipo do dado" pro badge do card recolhido (reaproveita slotTypeOptions — mesma fonte que o
+// Select de edição usa, então o rótulo nunca diverge entre os dois estados do card).
+const typeLabel = type =>
+  slotTypeOptions.value.find(o => o.value === type)?.label || type;
+
+// Resumo "N campos configurados" no cabeçalho da seção (mesmo padrão de advancedSummary acima).
+const collectCountLabel = computed(() => {
+  const n = draft.collectItems.length;
+  if (n === 0) return t('AI_DEPARTMENTS.FORM.COLLECT_SECTION_COUNT_NONE');
+  if (n === 1) return t('AI_DEPARTMENTS.FORM.COLLECT_SECTION_COUNT_ONE');
+  return t('AI_DEPARTMENTS.FORM.COLLECT_SECTION_COUNT_MANY', { count: n });
 });
 
 const typeOptions = computed(() => [
@@ -366,9 +447,9 @@ const removeOnComplete = () => {
 const nameTouched = ref(false);
 const nameError = computed(() => nameTouched.value && !draft.name.trim());
 
-// Payload montado em aiStepPayload.buildStepPayload: slot_required no nível da etapa (nunca
-// collect.required), collect só com a chave DECLARADA (collectAttribute; vazio => collect null), sem
-// complete_when. Sem flush de inferência — a etapa declara a variável, não há estado assíncrono.
+// Payload montado em aiStepPayload.buildStepPayload: um item de collect.items[] por dado declarado
+// (nunca mais 1 collect pra etapa inteira), sem complete_when. Sem flush de inferência — a etapa
+// declara as variáveis, não há estado assíncrono no save em si (o inline-create já resolveu antes).
 const onSave = () => {
   if (!draft.name.trim()) {
     nameTouched.value = true;
@@ -382,12 +463,15 @@ const onSave = () => {
       rules: draft.rulesText,
       groupDelaySeconds: draft.group_delay_seconds,
       automations: draft.automations,
-      collectAttribute: draft.collectAttribute,
-      collectType: draft.collectType,
-      collectOptions: draft.collectOptions,
-      collectSource: draft.collectSource,
-      collectDomainTool: draft.collectDomainTool,
-      slotRequired: draft.slotRequired,
+      collectItems: draft.collectItems.map(i => ({
+        attribute: i.attribute,
+        type: i.type,
+        options: i.options,
+        source: i.source,
+        domainTool: i.domainTool,
+        required: i.required,
+        hint: i.hint,
+      })),
       onCompleteAction: draft.onCompleteAction,
       onCompleteTeamId: draft.onCompleteTeamId,
       onCompleteTarget: draft.onCompleteTarget,
@@ -486,40 +570,44 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
       </label>
     </div>
 
-    <!-- c) Chave do slot: a etapa DECLARA a variável que coleta (Select da união LeadVariable ∪
-         CustomAttributeDefinition, origem marcada). Empty = etapa informativa (escolha explícita, não
-         acidente). Inline-create grava LeadVariable interna. NÃO há mais inferência da instrução. -->
-    <div
-      class="flex flex-col gap-2 px-3 py-2.5 rounded-lg"
-      :class="
-        hasSlot ? 'bg-n-teal-3 text-n-teal-11' : 'bg-n-alpha-2 text-n-slate-11'
-      "
-    >
-      <span class="text-sm font-medium">
-        {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_LABEL') }}
-      </span>
+    <!-- c) DADOS PARA COLETA NA ETAPA: um card por dado (Ai::StepSlot.items no backend), cada um com
+         SEU PRÓPRIO type/options/required/hint — CPF obrigatório e e-mail opcional na MESMA etapa,
+         cada um validado com o formato certo. "+ Selecionar..." AGREGA um dado já cadastrado
+         (LeadVariable ∪ CustomAttributeDefinition, origem marcada); "+ Adicionar variável
+         personalizada" cria uma nova (LeadVariable interna) e já a adiciona como item. Lista vazia =
+         etapa informativa (escolha implícita — não existe mais um "modo etapa informativa" à parte). -->
+    <div class="flex flex-col gap-3">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-sm font-medium text-n-slate-12">
+          {{ $t('AI_DEPARTMENTS.FORM.COLLECT_SECTION_TITLE') }}
+        </span>
+        <span class="text-xs text-n-slate-11">{{ collectCountLabel }}</span>
+      </div>
 
-      <!-- modo normal: ComboBox COM BUSCA da chave + atalho "criar/gerenciar variável". A busca é o que faz
-           o usuário VER "documento_cpf" antes de criar "numero_conta" — mata a duplicata na apresentação. -->
-      <template v-if="!creatingVariable">
-        <ComboBox
-          v-model="draft.collectAttribute"
-          :options="slotKeyOptions"
-          :search-placeholder="$t('AI_DEPARTMENTS.FORM.SLOT_KEY_SEARCH')"
-          data-testid="slot-key-select"
-        />
-        <button
-          type="button"
-          class="self-start inline-flex items-center gap-1 text-xs underline hover:no-underline"
-          @click="creatingVariable = true"
-        >
-          <span class="i-lucide-plus size-3.5" />
-          {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_CREATE') }}
-        </button>
-      </template>
+      <ComboBox
+        v-model="addExistingKey"
+        :options="addExistingOptions"
+        :placeholder="$t('AI_DEPARTMENTS.FORM.COLLECT_ADD_EXISTING_SEARCH')"
+        :search-placeholder="$t('AI_DEPARTMENTS.FORM.SLOT_KEY_SEARCH')"
+        data-testid="collect-add-existing"
+      />
 
-      <!-- inline-create: cria uma variável INTERNA (Ai::LeadVariable), não um atributo de painel -->
-      <template v-else>
+      <button
+        v-if="!creatingVariable"
+        type="button"
+        class="text-left text-sm px-3 py-2 rounded-lg border border-dashed border-n-weak text-n-slate-11 hover:text-n-slate-12 hover:border-n-slate-8"
+        data-testid="collect-add-custom"
+        @click="creatingVariable = true"
+      >
+        {{ $t('AI_DEPARTMENTS.FORM.COLLECT_ADD_CUSTOM') }}
+      </button>
+
+      <!-- inline-create: cria uma variável INTERNA (Ai::LeadVariable); ao criar, já vira um item (ver
+           #createVariable) — não é mais um Select a preencher depois. -->
+      <div
+        v-else
+        class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-alpha-2 text-n-slate-11"
+      >
         <div class="flex items-center gap-2">
           <input
             v-model="newVariableName"
@@ -540,12 +628,13 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
           <button
             type="button"
             class="shrink-0 text-xs underline hover:no-underline"
+            data-testid="collect-cancel-create"
             @click="cancelCreate"
           >
             {{ $t('AI_DEPARTMENTS.FORM.CANCEL') }}
           </button>
         </div>
-        <!-- item 1: preview da normalização — o usuário vê a chave que vai nascer, sem surpresa -->
+        <!-- preview da normalização — o usuário vê a chave que vai nascer, sem surpresa -->
         <span
           v-if="newVariableName.trim()"
           class="text-xs"
@@ -566,7 +655,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
           {{ createError }}
         </span>
 
-        <!-- item 4: gerenciar/excluir variáveis internas existentes. O backend BLOQUEIA se estiver em uso. -->
+        <!-- gerenciar/excluir variáveis internas existentes. O backend BLOQUEIA se estiver em uso. -->
         <div v-if="internalVariables.length" class="mt-1 flex flex-col gap-1">
           <span class="text-xs font-medium">
             {{ $t('AI_DEPARTMENTS.FORM.SLOT_KEY_MANAGE_LABEL') }}
@@ -595,122 +684,180 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
             {{ deleteError }}
           </span>
         </div>
-      </template>
+      </div>
 
-      <!-- confirmação de etapa informativa (empty): afirmativo, NÃO erro. Etapa sem coleta é legítima. -->
-      <span v-if="!hasSlot && !creatingVariable" class="text-xs">
-        {{ $t('AI_DEPARTMENTS.FORM.SLOT_NONE_CONFIRM') }}
-      </span>
+      <!-- confirmação de etapa informativa (empty): afirmativo, NÃO erro. -->
+      <p v-if="!draft.collectItems.length" class="text-xs text-n-slate-11 mb-0">
+        {{ $t('AI_DEPARTMENTS.FORM.COLLECT_EMPTY') }}
+      </p>
 
-      <!-- tipo + opções + obrigatório: só quando HÁ chave escolhida -->
-      <template v-if="hasSlot">
-        <label class="flex flex-col gap-1 text-xs">
-          {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
-          <Select v-model="draft.collectType" :options="slotTypeOptions" />
-        </label>
-        <!-- choice: as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio dinâmico). Um
-             modo por vez — o campo do outro some (dois campos de opções visíveis convida a preencher os dois). -->
-        <div
-          v-if="draft.collectType === 'choice'"
-          class="flex flex-col gap-2 text-xs"
-        >
-          <span class="text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE') }}
-          </span>
-          <div class="flex flex-col gap-1">
-            <label class="flex items-start gap-2 text-sm cursor-pointer">
-              <input
-                v-model="draft.collectSource"
-                type="radio"
-                value="fixed"
-                class="mt-0.5"
+      <!-- um card por dado configurado -->
+      <div
+        v-for="item in draft.collectItems"
+        :key="item.uid"
+        class="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-n-teal-3 text-n-teal-11"
+      >
+        <!-- cabeçalho: sempre visível, colapsado ou expandido -->
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <span class="font-mono text-xs truncate">{{ item.attribute }}</span>
+            <span class="text-xs text-n-slate-11">
+              {{ typeLabel(item.type) }} ·
+              {{
+                originOf(item.attribute) === 'system'
+                  ? $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_ORIGIN_SYSTEM')
+                  : $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_ORIGIN_MEMORY')
+              }}
+              ·
+              {{
+                item.required
+                  ? $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_REQUIRED_BADGE')
+                  : $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_OPTIONAL_BADGE')
+              }}
+            </span>
+            <span
+              v-if="item.hint"
+              class="text-xs text-n-slate-11 flex items-center gap-1"
+            >
+              <span class="i-lucide-info size-3 shrink-0" />
+              {{ item.hint }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              class="i-lucide-pencil size-3.5 text-n-slate-10 hover:text-n-slate-12"
+              :data-testid="`collect-item-edit-${item.attribute}`"
+              :title="$t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_EDIT')"
+              @click="item.expanded = !item.expanded"
+            />
+            <button
+              type="button"
+              class="i-lucide-trash-2 size-3.5 text-n-ruby-11 hover:opacity-70"
+              :data-testid="`collect-item-remove-${item.attribute}`"
+              :title="$t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_REMOVE')"
+              @click="removeItem(item.uid)"
+            />
+          </div>
+        </div>
+
+        <!-- expandido: tipo + opções + dica + obrigatório -->
+        <template v-if="item.expanded">
+          <label class="flex flex-col gap-1 text-xs">
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TYPE') }}
+            <Select
+              v-model="item.type"
+              :options="slotTypeOptions"
+              @update:model-value="onItemTypeChange(item)"
+            />
+          </label>
+
+          <!-- choice: as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio
+               dinâmico). Um modo por vez, POR ITEM — cada dado choice desta etapa escolhe a sua fonte. -->
+          <div
+            v-if="item.type === 'choice'"
+            class="flex flex-col gap-2 text-xs"
+          >
+            <span class="text-n-slate-11">
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE') }}
+            </span>
+            <div class="flex flex-col gap-1">
+              <label class="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  v-model="item.source"
+                  type="radio"
+                  value="fixed"
+                  class="mt-0.5"
+                />
+                <span>{{
+                  $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE_FIXED')
+                }}</span>
+              </label>
+              <label class="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  v-model="item.source"
+                  type="radio"
+                  value="tool"
+                  class="mt-0.5"
+                />
+                <span>{{
+                  $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE_TOOL')
+                }}</span>
+              </label>
+            </div>
+
+            <label v-if="item.source !== 'tool'" class="flex flex-col gap-1">
+              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
+              <textarea
+                v-model="item.options"
+                rows="2"
+                :placeholder="
+                  $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
+                "
+                class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 resize-y"
               />
-              <span>{{
-                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE_FIXED')
-              }}</span>
             </label>
-            <label class="flex items-start gap-2 text-sm cursor-pointer">
-              <input
-                v-model="draft.collectSource"
-                type="radio"
-                value="tool"
-                class="mt-0.5"
-              />
-              <span>{{
-                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_SOURCE_TOOL')
-              }}</span>
-            </label>
+
+            <template v-else>
+              <label class="flex flex-col gap-1">
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL') }}
+                <Select
+                  v-if="toolOptions.length"
+                  v-model="item.domainTool"
+                  :options="toolOptions"
+                />
+                <span v-else class="text-n-slate-11">
+                  {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_EMPTY') }}
+                </span>
+              </label>
+              <p class="text-n-slate-10">
+                {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_HINT') }}
+              </p>
+              <p
+                v-if="isToolDomainMissing(item)"
+                data-testid="tool-domain-missing"
+                class="flex items-start gap-1.5 text-n-ruby-11"
+              >
+                <span
+                  class="i-lucide-alert-triangle size-3.5 mt-0.5 shrink-0"
+                />
+                <span>{{
+                  $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_MISSING', {
+                    tool: item.domainTool,
+                  })
+                }}</span>
+              </p>
+            </template>
           </div>
 
-          <!-- lista fixa -->
-          <label
-            v-if="draft.collectSource !== 'tool'"
-            class="flex flex-col gap-1"
-          >
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
-            <textarea
-              v-model="draft.collectOptions"
-              rows="2"
+          <label class="flex flex-col gap-1 text-xs">
+            {{ $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_HINT_LABEL') }}
+            <input
+              v-model="item.hint"
+              type="text"
               :placeholder="
-                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
+                $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_HINT_PLACEHOLDER')
               "
-              class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 resize-y"
+              class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 text-sm"
             />
           </label>
 
-          <!-- domínio dinâmico: o resultado da ferramenta é o conjunto de valores aceitos -->
-          <template v-else>
-            <label class="flex flex-col gap-1">
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL') }}
-              <Select
-                v-if="toolOptions.length"
-                v-model="draft.collectDomainTool"
-                :options="toolOptions"
-              />
-              <span v-else class="text-n-slate-11">
-                {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_EMPTY') }}
-              </span>
-            </label>
-            <p class="text-n-slate-10">
-              {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_HINT') }}
-            </p>
-            <!-- ferramenta salva não existe mais (removida/renomeada): avisa que o slot voltou a aceitar tudo -->
-            <p
-              v-if="toolDomainMissing"
-              data-testid="tool-domain-missing"
-              class="flex items-start gap-1.5 text-n-ruby-11"
-            >
-              <span class="i-lucide-alert-triangle size-3.5 mt-0.5 shrink-0" />
-              <span>{{
-                $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_TOOL_MISSING', {
-                  tool: draft.collectDomainTool,
-                })
-              }}</span>
-            </p>
-          </template>
-        </div>
+          <label
+            class="flex items-center gap-2 text-sm cursor-pointer pt-1.5 border-t border-n-teal-5"
+          >
+            <input v-model="item.required" type="checkbox" />
+            <span>{{ $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_REQUIRED') }}</span>
+          </label>
 
-        <div class="flex flex-col gap-1 pt-1.5 border-t border-n-teal-5">
-          <label class="flex items-start gap-2 text-sm cursor-pointer">
-            <input
-              v-model="draft.slotRequired"
-              type="radio"
-              :value="true"
-              class="mt-0.5"
-            />
-            <span>{{ $t('AI_DEPARTMENTS.FORM.SLOT_REQUIRED_YES') }}</span>
-          </label>
-          <label class="flex items-start gap-2 text-sm cursor-pointer">
-            <input
-              v-model="draft.slotRequired"
-              type="radio"
-              :value="false"
-              class="mt-0.5"
-            />
-            <span>{{ $t('AI_DEPARTMENTS.FORM.SLOT_REQUIRED_NO') }}</span>
-          </label>
-        </div>
-      </template>
+          <button
+            type="button"
+            class="self-start text-xs font-medium underline hover:no-underline"
+            @click="item.expanded = false"
+          >
+            {{ $t('AI_DEPARTMENTS.FORM.COLLECT_ITEM_SAVE_MINIMIZE') }}
+          </button>
+        </template>
+      </div>
     </div>
 
     <!-- d) Ajustes avançados (recolhidos por padrão) -->
