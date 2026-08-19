@@ -23,14 +23,13 @@
 #  updated_at       :datetime         not null
 #  account_id       :bigint           not null
 #  ai_agent_id      :bigint
-#  ai_department_id :bigint
 #  conversation_id  :bigint
 #  inbox_id         :bigint
 #
 # Indexes
 #
 #  index_ai_runs_on_account_id        (account_id)
-#  index_ai_runs_on_ai_department_id  (ai_department_id)
+#  index_ai_runs_on_ai_agent_id       (ai_agent_id)
 #  index_ai_runs_on_conversation_id   (conversation_id)
 #  index_ai_runs_on_inbox_id          (inbox_id)
 #
@@ -43,7 +42,7 @@ class Ai::Run < ApplicationRecord
 
   belongs_to :account, class_name: '::Account'
   belongs_to :conversation, class_name: '::Conversation', optional: true
-  belongs_to :department, class_name: 'Ai::Department', foreign_key: :ai_department_id, optional: true
+  belongs_to :agent, class_name: 'Ai::Agent', foreign_key: :ai_agent_id, optional: true
   belongs_to :inbox, class_name: '::Inbox', optional: true
   has_many :events, class_name: 'Ai::Event', foreign_key: :ai_run_id, dependent: :nullify
 

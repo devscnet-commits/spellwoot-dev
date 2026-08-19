@@ -2,7 +2,7 @@
 # "registrar_viabilidade" — pares onde uma variável/atributo nasceu com o prefixo reservado
 # "registrar_" (Ai::StepCaptureTool::PREFIX, do design ANTIGO de function-calling) grudado no nome,
 # como se o prefixo fosse parte do DADO em vez do nome da tool — duplicando o que já existia sem o
-# prefixo. Varre Ai::LeadVariable (escopo: department) e CustomAttributeDefinition (escopo: conta +
+# prefixo. Varre Ai::LeadVariable (escopo: agent) e CustomAttributeDefinition (escopo: conta +
 # attribute_model) separadamente — são dois "espaços de nome" diferentes, uma duplicata não cruza os
 # dois. Só identifica — nenhum destes métodos apaga nada.
 module Ai::VariableDuplicateFinder
@@ -10,9 +10,9 @@ module Ai::VariableDuplicateFinder
 
   module_function
 
-  # [{ department_id:, base: <name>, base_id:, duplicate: <name>, duplicate_id: }]
+  # [{ agent_id:, base: <name>, base_id:, duplicate: <name>, duplicate_id: }]
   def lead_variable_duplicates
-    Ai::LeadVariable.all.group_by(&:ai_department_id).flat_map do |department_id, vars|
+    Ai::LeadVariable.all.group_by(&:ai_agent_id).flat_map do |agent_id, vars|
       by_name = vars.index_by(&:name)
       vars.filter_map do |v|
         next unless v.name.start_with?(REGISTRAR_PREFIX)
@@ -20,7 +20,7 @@ module Ai::VariableDuplicateFinder
         base = by_name[v.name.delete_prefix(REGISTRAR_PREFIX)]
         next unless base
 
-        { department_id: department_id, base: base.name, base_id: base.id, duplicate: v.name, duplicate_id: v.id }
+        { agent_id: agent_id, base: base.name, base_id: base.id, duplicate: v.name, duplicate_id: v.id }
       end
     end
   end

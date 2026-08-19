@@ -1,10 +1,7 @@
 # Powers the agent "Teste" tab: runs a one-off decision for a message and returns the breakdown
-# (department, knowledge, suggested tool, model, tokens, cost, latency, reply). Pure dry-run.
+# (knowledge, suggested tool, model, tokens, cost, latency, reply). Pure dry-run.
 class Ai::Tester
-  def self.run(agent:, message:, department_id: nil)
-    department, department_method = resolve_department(agent, message, department_id)
-    return { 'error' => 'nenhum departamento ativo' } if department.nil?
-
+  def self.run(agent:, message:)
     retrieval = Ai::KnowledgeRetriever.retrieve_scored(query: message, account_id: agent.account_id)
     knowledge = retrieval[:chunks]
     score = retrieval[:top_score]
@@ -16,16 +13,14 @@ class Ai::Tester
     # confiança for refeito de verdade pro motor Python, em vez de reimplementar do zero.
     # routing = Ai::RoutingStrategy.decide(score: score, profile: agent.operation_profile)
 
-    tools = department.tools.active.to_a
+    tools = agent.tools.active.to_a
     system_prompt = Ai::PromptCompiler.compile(
-      agent: agent, department: department, knowledge: knowledge, memory: nil, tools: tools
+      agent: agent, department: agent, knowledge: knowledge, memory: nil, tools: tools
     )
     result = execute_routing(agent, system_prompt, message)
     decision = result[:decision] || {}
 
     {
-      'department' => department.name,
-      'department_method' => department_method,
       'reply' => decision['reply_text'],
       'decision' => decision['decision'],
       'confidence' => decision['confidence'],
@@ -58,12 +53,5 @@ class Ai::Tester
   def self.execute_routing(agent, system_prompt, message)
     Ai::ModelRouter.decide(profile: agent.operation_profile, system_prompt: system_prompt,
                            user_message: message, account_id: agent.account_id)
-  end
-
-  # Returns [department, method] so the Lab can show WHY this department was chosen.
-  def self.resolve_department(agent, message, department_id)
-    return [agent.departments.find_by(id: department_id), 'manual'] if department_id.present?
-
-    Ai::DepartmentResolver.resolve(agent: agent, inbox_id: nil, message_content: message)
   end
 end

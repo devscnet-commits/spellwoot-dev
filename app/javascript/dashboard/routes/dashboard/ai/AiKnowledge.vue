@@ -40,7 +40,7 @@ const CREATABLE = [
 ];
 
 const sources = ref([]);
-const departments = ref([]); // opções do seletor de escopo (departamentos da conta)
+const agents = ref([]); // opções do seletor de escopo (agentes da conta)
 const isLoading = ref(false);
 const showForm = ref(false); // formulário de criação (acima da lista)
 const editingId = ref(null); // id da fonte em edição inline (no próprio card)
@@ -52,7 +52,7 @@ const blank = () => ({
   raw: '',
   price: '',
   status: 'active',
-  ai_department_id: null,
+  ai_agent_id: null,
 });
 const form = reactive(blank());
 const { isDirty, capture } = useFormDirty(() => ({ ...form }));
@@ -83,31 +83,31 @@ const fetchSources = async () => {
   }
 };
 
-const fetchDepartments = async () => {
+const fetchAgents = async () => {
   try {
-    const { data } = await axios.get(`${baseUrl()}/departments`);
-    departments.value = Array.isArray(data) ? data : [];
+    const { data } = await axios.get(`${baseUrl()}/agents`);
+    agents.value = Array.isArray(data) ? data : [];
   } catch (error) {
-    departments.value = [];
+    agents.value = [];
   }
 };
 
-// Escopo do PRÓXIMO import (CSV/website/documento). '' = compartilhado (ai_department_id nil).
-const importDepartmentId = ref('');
-const importDepartmentOptions = computed(() => [
+// Escopo do PRÓXIMO import (CSV/website/documento). '' = compartilhado (ai_agent_id nil).
+const importAgentId = ref('');
+const importAgentOptions = computed(() => [
   { value: '', label: t('AI_KNOWLEDGE.FORM.DEPARTMENT_ALL') },
-  ...departments.value.map(d => ({
+  ...agents.value.map(d => ({
     value: String(d.id),
     label: scopeOptionLabel(d),
   })),
 ]);
 const importDeptId = () =>
-  importDepartmentId.value ? Number(importDepartmentId.value) : null;
+  importAgentId.value ? Number(importAgentId.value) : null;
 
 // Badge de escopo do card: compartilhado (neutro), restrito a um agente (marca) ou órfão (aviso —
-// aponta para um department que não existe mais). Ver sourceScope em ./knowledgeScope.
+// aponta para um agente que não existe mais). Ver sourceScope em ./knowledgeScope.
 const scopeBadge = source => {
-  const scope = sourceScope(source, departments.value);
+  const scope = sourceScope(source, agents.value);
   if (scope.status === 'scoped') {
     return {
       text: scope.label,
@@ -137,7 +137,7 @@ const uploadFile = async file => {
   if (!file) return;
   const fd = new FormData();
   fd.append('file', file);
-  if (importDeptId() != null) fd.append('ai_department_id', importDeptId());
+  if (importDeptId() != null) fd.append('ai_agent_id', importDeptId());
   try {
     await axios.post(baseUrl(), fd);
     useAlert(t('AI_KNOWLEDGE.SAVED'));
@@ -202,7 +202,7 @@ const rowsToSources = (rows, kind) => {
         title,
         raw: (r[1] || '').trim(),
         status: 'active',
-        ai_department_id: importDeptId(),
+        ai_agent_id: importDeptId(),
       };
       if (kind === 'produto') src.price = (r[2] || '').trim();
       return src;
@@ -291,7 +291,7 @@ const addWebsite = async () => {
         title: url,
         raw: url,
         status: 'active',
-        ai_department_id: importDeptId(),
+        ai_agent_id: importDeptId(),
       },
     });
     useAlert(t('AI_KNOWLEDGE.SAVED'));
@@ -329,7 +329,7 @@ const save = async () => {
       raw: form.raw,
       price: form.kind === 'produto' ? form.price : '',
       status: form.status,
-      ai_department_id: form.ai_department_id || null,
+      ai_agent_id: form.ai_agent_id || null,
     },
   };
   try {
@@ -352,14 +352,14 @@ const scopeFilter = ref('all');
 const kindFilter = ref('all');
 
 const isOrphan = source =>
-  source.ai_department_id != null &&
-  !departments.value.some(d => d.id === source.ai_department_id);
+  source.ai_agent_id != null &&
+  !agents.value.some(d => d.id === source.ai_agent_id);
 
 // Options do dropdown de escopo: Todos + Compartilhado + TODOS os agentes da conta (mesma lista do
 // dropdown de criação, não só os presentes nas fontes) + "Fonte órfã" quando houver. Cada option
 // traz a contagem no label (0 inclusive). Ver buildScopeOptions em ./knowledgeScope.
 const scopeOptions = computed(() =>
-  buildScopeOptions(departments.value, sources.value, {
+  buildScopeOptions(agents.value, sources.value, {
     all: t('AI_KNOWLEDGE.FILTER.SCOPE_ALL'),
     shared: t('AI_KNOWLEDGE.SHARED'),
     orphan: t('AI_KNOWLEDGE.ORPHAN'),
@@ -377,9 +377,9 @@ const kindFilterOptions = computed(() => [
 
 const matchesScope = source => {
   if (scopeFilter.value === 'all') return true;
-  if (scopeFilter.value === 'shared') return source.ai_department_id == null;
+  if (scopeFilter.value === 'shared') return source.ai_agent_id == null;
   if (scopeFilter.value === 'orphan') return isOrphan(source);
-  return String(source.ai_department_id) === scopeFilter.value;
+  return String(source.ai_agent_id) === scopeFilter.value;
 };
 const filteredSources = computed(() =>
   sources.value.filter(
@@ -467,7 +467,7 @@ const confirmDelete = async () => {
 
 onMounted(() => {
   fetchSources();
-  fetchDepartments();
+  fetchAgents();
 });
 </script>
 
@@ -519,10 +519,7 @@ onMounted(() => {
           <span class="text-xs font-medium text-n-slate-11">
             {{ $t('AI_KNOWLEDGE.FORM.DEPARTMENT') }}
           </span>
-          <Select
-            v-model="importDepartmentId"
-            :options="importDepartmentOptions"
-          />
+          <Select v-model="importAgentId" :options="importAgentOptions" />
           <span class="text-xs text-n-slate-10">
             {{ $t('AI_KNOWLEDGE.FORM.DEPARTMENT_HINT') }}
           </span>
@@ -628,7 +625,7 @@ onMounted(() => {
           :heading-label="kindLabel(form.kind)"
           :heading-icon="kindIcon(form.kind)"
           :disable-save="!isDirty"
-          :departments="departments"
+          :agents="agents"
           @save="save"
           @cancel="closeForm"
         />
@@ -713,7 +710,7 @@ onMounted(() => {
               :heading-label="kindLabel(form.kind)"
               :heading-icon="kindIcon(form.kind)"
               :disable-save="!isDirty"
-              :departments="departments"
+              :agents="agents"
               @save="save"
               @cancel="closeForm"
             />

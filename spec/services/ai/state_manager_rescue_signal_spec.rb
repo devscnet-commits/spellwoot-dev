@@ -11,15 +11,15 @@ RSpec.describe 'Ai::StateManager#rescue_signal (erro de código vira sinal visí
   let(:profile) do
     Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
   end
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let(:dept) do
-    d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Reserva', status: 'active', behavior: {})
-    d.create_playbook!(active: true, steps: [
+  let(:agent) do
+    a = Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id,
+                          behavior: {})
+    a.create_playbook!(active: true, steps: [
                          { 'name' => 'AGENDAMENTO',
                            'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice',
                                           'options' => %w[manhã tarde], 'domain_from_tool' => 'consultar_periodos' } }
                        ])
-    d
+    a
   end
   let(:manager) { Ai::StateManager.new(conversation: conversation, agent: agent) }
 
@@ -29,7 +29,7 @@ RSpec.describe 'Ai::StateManager#rescue_signal (erro de código vira sinal visí
 
   # dispara o caminho gated_facts -> tool_domain -> Ai::StepSlot.domain_from_tool (o ponto do NoMethodError da 436)
   def persist_supervisor
-    manager.persist_attributes({ 'periodo_reservado' => 'manhã' }, dept, source: :supervisor, expected_step: dept.playbook.steps[0])
+    manager.persist_attributes({ 'periodo_reservado' => 'manhã' }, agent, source: :supervisor, expected_step: agent.playbook.steps[0])
   end
 
   it 'NoMethodError no tool_domain -> emite internal.code_error com a classe e o escopo (não engole em silêncio)' do

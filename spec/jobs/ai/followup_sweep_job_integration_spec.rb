@@ -29,9 +29,8 @@ RSpec.describe Ai::FollowupSweepJob do
     allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
   end
 
-  def create_department(follow_up: {}, close_rules: {})
-    Ai::Department.create!(
-      account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
+  def configure_agent(follow_up: {}, close_rules: {})
+    agent.update!(
       behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' },
       follow_up: follow_up, close_rules: close_rules
     )
@@ -60,7 +59,7 @@ RSpec.describe Ai::FollowupSweepJob do
 
   describe 'scheduled attempts (behaviors)' do
     it 'sends the first attempt once its delay has elapsed' do
-      create_department(follow_up: {
+      configure_agent(follow_up: {
                           'behaviors' => [{
                             'context' => 'inbox_hours',
                             'attempts' => [{ 'delay_minutes' => 10, 'message' => 'Ainda está por aí?' }],
@@ -76,7 +75,7 @@ RSpec.describe Ai::FollowupSweepJob do
     end
 
     it 'does not send before the delay has elapsed' do
-      create_department(follow_up: {
+      configure_agent(follow_up: {
                           'behaviors' => [{
                             'context' => 'inbox_hours',
                             'attempts' => [{ 'delay_minutes' => 120, 'message' => 'cedo demais' }],
@@ -95,7 +94,7 @@ RSpec.describe Ai::FollowupSweepJob do
     # assumiu). Antes deste fix, a conversa em :pending nunca era nem selecionada pelo sweep, então o
     # follow-up nunca disparava nesse cenário, silenciosamente (sem erro, sem evento).
     it 'sends the first attempt on a :pending conversation, not just :open' do
-      create_department(follow_up: {
+      configure_agent(follow_up: {
                           'behaviors' => [{
                             'context' => 'inbox_hours',
                             'attempts' => [{ 'delay_minutes' => 10, 'message' => 'Ainda está por aí?' }],
@@ -114,7 +113,7 @@ RSpec.describe Ai::FollowupSweepJob do
 
   describe 'no-follow-up fallback (close_rules.no_followup_actions)' do
     it 'finalizes and sends the close message after the inactivity window' do
-      create_department(close_rules: {
+      configure_agent(close_rules: {
                           'message' => 'Encerrando por aqui. Até logo!',
                           'inactivity_minutes' => 30,
                           'no_followup_actions' => ['finalize']
@@ -129,7 +128,7 @@ RSpec.describe Ai::FollowupSweepJob do
     end
 
     it 'runs the FIRST action of the list (order = priority)' do
-      create_department(close_rules: {
+      configure_agent(close_rules: {
                           'inactivity_minutes' => 30,
                           'no_followup_actions' => %w[transfer_human finalize]
                         })
@@ -143,7 +142,7 @@ RSpec.describe Ai::FollowupSweepJob do
     end
 
     it 'transfer_ai re-invokes the Gateway on the customer last message' do
-      create_department(close_rules: {
+      configure_agent(close_rules: {
                           'inactivity_minutes' => 30, 'no_followup_actions' => ['transfer_ai']
                         })
       convo = quiet_conversation(incoming_ago: 120.minutes.ago, outgoing_ago: 90.minutes.ago)
@@ -157,7 +156,7 @@ RSpec.describe Ai::FollowupSweepJob do
     end
 
     it 'does not act while still inside the inactivity window' do
-      create_department(close_rules: {
+      configure_agent(close_rules: {
                           'inactivity_minutes' => 60, 'no_followup_actions' => ['finalize']
                         })
       convo = quiet_conversation(incoming_ago: 30.minutes.ago, outgoing_ago: 20.minutes.ago)
@@ -169,7 +168,7 @@ RSpec.describe Ai::FollowupSweepJob do
     end
 
     it 'is idempotent: a second sweep does not act twice in the same silence' do
-      create_department(close_rules: {
+      configure_agent(close_rules: {
                           'message' => 'Tchau', 'inactivity_minutes' => 30, 'no_followup_actions' => ['finalize']
                         })
       convo = quiet_conversation(incoming_ago: 120.minutes.ago, outgoing_ago: 90.minutes.ago)
@@ -183,7 +182,7 @@ RSpec.describe Ai::FollowupSweepJob do
 
   describe 'guards' do
     it 'skips a conversation a human already took over' do
-      create_department(close_rules: { 'inactivity_minutes' => 1, 'no_followup_actions' => ['finalize'] })
+      configure_agent(close_rules: { 'inactivity_minutes' => 1, 'no_followup_actions' => ['finalize'] })
       convo = quiet_conversation(incoming_ago: 120.minutes.ago, outgoing_ago: 90.minutes.ago)
       convo.update!(assignee: create(:user, account: account, role: :agent))
 

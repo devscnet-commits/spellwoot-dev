@@ -112,7 +112,7 @@ HANDOFF_SUMMARY_KEY = "handoff_summary"
 # devolve o nome escolhido — Api::Internal::AiExecuteToolController#transfer_to_human repassa pro
 # MESMO Ai::HandoffCoordinator#human_team_id/match_team_by_name que o motor legado já usava.
 HANDOFF_TARGET_KEY = "handoff_target"
-# Rails-side (Ai::HandoffEvaluator, department.transfer_rules['min_confidence']) transfers to a
+# Rails-side (Ai::HandoffEvaluator, agent.transfer_rules['min_confidence']) transfers to a
 # human when this drops below the configured threshold — same mechanism the legacy decide() engine
 # had, never ported to Structured Outputs until now. Self-reported by the model every turn (free —
 # same JSON call, no extra request), read but not enforced here: Python only reports it, Rails
@@ -445,7 +445,7 @@ def _turn_kwargs(*, model: str, conversation_id: str, instructions: str, input_v
 def run_conversation(
     *,
     ticket_id: int,
-    ai_department_id: int,
+    ai_agent_id: int,
     mode: str,
     system_prompt: str,
     tools_schema: list,
@@ -503,7 +503,7 @@ def run_conversation(
     try:
         reply_text, turn_byok_fallback, confidence, transferred = _run_turn(
             client=client, using_account_key=using_account_key, ticket_id=ticket_id,
-            ai_department_id=ai_department_id, mode=mode, conversation_id=conversation_id,
+            ai_agent_id=ai_agent_id, mode=mode, conversation_id=conversation_id,
             instructions=instructions, resolved_model=resolved_model, openai_tools=openai_tools,
             user_input=user_input, image_urls=image_urls, temperature=temperature, provider=provider,
             reply_schema=reply_schema,
@@ -517,7 +517,7 @@ def run_conversation(
 
 
 def _run_turn(
-    *, client: OpenAI, using_account_key: bool, ticket_id: int, ai_department_id: int, mode: str,
+    *, client: OpenAI, using_account_key: bool, ticket_id: int, ai_agent_id: int, mode: str,
     conversation_id: str, instructions: str, resolved_model: str, openai_tools: list,
     user_input: str, image_urls: list[str] | None, temperature: float | None, provider: str | None,
     reply_schema: dict,
@@ -582,7 +582,7 @@ def _run_turn(
             try:
                 result = tools.execute_tool(
                     ticket_id=ticket_id,
-                    ai_department_id=ai_department_id,
+                    ai_agent_id=ai_agent_id,
                     tool_name=call.name,
                     arguments=arguments,
                     mode=mode,
@@ -666,7 +666,7 @@ def _run_turn(
         payload = {}
 
     reply_text, confidence, transferred = _dispatch_structured_reply(
-        payload, ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
+        payload, ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
     )
     return reply_text, byok_fallback, confidence, transferred
 
@@ -697,7 +697,7 @@ def _truthy(value) -> bool:
 
 
 def _dispatch_structured_reply(
-    payload: dict, *, ticket_id: int, ai_department_id: int, mode: str,
+    payload: dict, *, ticket_id: int, ai_agent_id: int, mode: str,
 ) -> tuple[str, float | None, bool]:
     """Turns the model's structured decision into the same Rails webhook calls the old control tools
     used to trigger (Api::Internal::AiExecuteToolController) — except now PYTHON decides to call them
@@ -717,12 +717,12 @@ def _dispatch_structured_reply(
                 continue
             _post_control_tool(
                 MEMORY_TOOL, {"chave": chave, "valor": item.get("valor")},
-                ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
+                ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
             )
 
     if _truthy(payload.get(AVANCAR_KEY)):
         _post_control_tool(
-            ADVANCE_STEP_TOOL, {}, ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
+            ADVANCE_STEP_TOOL, {}, ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
         )
 
     transferred = _truthy(payload.get(TRANSFERIR_KEY))
@@ -730,11 +730,11 @@ def _dispatch_structured_reply(
         _post_control_tool(
             TRANSFER_TOOL,
             {"handoff_summary": payload.get(HANDOFF_SUMMARY_KEY, ""), "handoff_target": payload.get(HANDOFF_TARGET_KEY, "")},
-            ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
+            ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
         )
     elif _truthy(payload.get(ENCERRAR_KEY)):
         _post_control_tool(
-            RESOLVE_TOOL, {}, ticket_id=ticket_id, ai_department_id=ai_department_id, mode=mode,
+            RESOLVE_TOOL, {}, ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
         )
 
     reply_text = str(payload.get(MENSAGEM_KEY) or "").strip()
@@ -746,10 +746,10 @@ def _dispatch_structured_reply(
     return (reply_text or "Só um instante, já te retorno!"), confidence, transferred
 
 
-def _post_control_tool(tool_name: str, arguments: dict, *, ticket_id: int, ai_department_id: int, mode: str) -> None:
+def _post_control_tool(tool_name: str, arguments: dict, *, ticket_id: int, ai_agent_id: int, mode: str) -> None:
     try:
         tools.execute_tool(
-            ticket_id=ticket_id, ai_department_id=ai_department_id,
+            ticket_id=ticket_id, ai_agent_id=ai_agent_id,
             tool_name=tool_name, arguments=arguments, mode=mode,
         )
     except tools.ToolExecutionError as e:

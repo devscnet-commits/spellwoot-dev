@@ -1,7 +1,9 @@
 # Polymorphic, immutable snapshot of a versionable record's configuration — the single versioning
-# substrate for agents, playbooks and departments. Instead of a fixed SNAPSHOT_FIELDS + a dedicated
-# table per scope, the caller passes `snapshot_fields` and the `versionable` association points at
-# any record (Ai::Agent, Ai::Playbook, Ai::Department).
+# substrate for agents and playbooks. Instead of a fixed SNAPSHOT_FIELDS + a dedicated table per
+# scope, the caller passes `snapshot_fields` and the `versionable` association points at any record
+# (Ai::Agent, Ai::Playbook). Old rows with versionable_type 'Ai::Department' (pre-19/08 fusão
+# Departamento -> Agente) are historical-only now — that class no longer exists, so #versionable on
+# those raises; harmless (nothing reads them), just can't be restored.
 #
 # `snapshot_fields` may be plain column names ("objetivo") OR dotted paths into a jsonb column
 # ("behavior.max_replies", "behavior.grouping.delay_seconds"). The stored snapshot is a FLAT map
@@ -46,7 +48,7 @@ class Ai::Version < ApplicationRecord
   # Re-applies the snapshotted fields onto the versionable record.
   #
   # A field given as a DOTTED path ("behavior.max_replies") targets a sub-key of a jsonb column and is
-  # DEEP-MERGED into the current column so sibling keys outside the scope are preserved (department
+  # DEEP-MERGED into the current column so sibling keys outside the scope are preserved (agent
   # versioning relies on this). A field given as a PLAIN column name ("default_messages", "steps")
   # SUBSTITUTES the whole column value — even when that value is itself a Hash/Array — matching the
   # old slice+update! behavior of Ai::AgentVersion/Ai::PlaybookVersion (restoring a playbook's steps

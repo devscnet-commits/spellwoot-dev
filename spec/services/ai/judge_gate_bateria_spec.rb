@@ -38,15 +38,14 @@ RSpec.describe 'Juiz pelo gate + asked_slot limpo na ausência — bateria' do #
     Ai::Event.where(conversation_id: conversation.id, event_type: type)
   end
 
-  # dept com N slots (array de {attr, required}) + Fim. Tipo derivado do NOME (email_cliente->email etc.).
+  # agente com N slots (array de {attr, required}) + Fim. Tipo derivado do NOME (email_cliente->email etc.).
   def dept_with(*slots)
     steps = slots.map do |s|
       { 'name' => s[:attr], 'collect' => { 'attribute' => s[:attr], 'required' => s.fetch(:required, true) } }
     end
-    dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "D#{SecureRandom.hex(3)}",
-                                  status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
-    dept.create_playbook!(active: true, steps: steps + [{ 'name' => 'Fim' }])
-    dept
+    agent.update!(transfer_rules: { 'stuck_handoff_turns' => 3 })
+    agent.create_playbook!(active: true, steps: steps + [{ 'name' => 'Fim' }])
+    agent
   end
 
   def set_asked(slot)

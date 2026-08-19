@@ -71,27 +71,6 @@ RSpec.describe Ai::StepAutomationRunner do
     end
   end
 
-  describe 'change_ai_department' do
-    let(:other_department) do
-      Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Vendas', status: 'active', behavior: {})
-    end
-
-    it 'writes the department override into additional_attributes (latest wins)' do
-      runner.run(step_with({ 'type' => 'change_ai_department', 'params' => { 'department_id' => other_department.id } }))
-
-      expect(conversation.reload.additional_attributes['ai_department_override']).to eq(other_department.id)
-      expect(Ai::Event.where(conversation_id: conversation.id,
-                             event_type: 'step_automation.change_ai_department')).to exist
-    end
-
-    it 'emits failed (isolated) when department_id is missing, without writing an override' do
-      runner.run(step_with({ 'type' => 'change_ai_department', 'params' => {} }))
-
-      expect(conversation.reload.additional_attributes['ai_department_override']).to be_nil
-      expect(Ai::Event.where(conversation_id: conversation.id, event_type: 'step_automation.failed')).to exist
-    end
-  end
-
   describe 'webhook' do
     it 'calls Ai::WebhookRunner directly and emits an event' do
       allow(Ai::WebhookRunner).to receive(:call).and_return({ 'status' => 200 })

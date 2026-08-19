@@ -18,28 +18,26 @@ RSpec.describe 'ai:agent_features_audit', type: :task do
 
   # Agente COM recursos configurados (RAG + tool + automação + follow-up + handoff + lead var).
   def agent_with_features
-    agent = Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id,
-                              base_prompt: 'Você é a assistente da SCNET.', guardrails: 'Nunca invente preços.',
-                              handoff_agent_ids: [999])
-    dept = Ai::Department.create!(account: account, agent: agent, name: 'Comercial', is_default: true,
-                                  status: 'active', follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours' }] })
-    Ai::Playbook.create!(ai_department_id: dept.id, active: true, objetivo: 'Converter leads',
+    agent = Ai::Agent.create!(
+      account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id,
+      base_prompt: 'Você é a assistente da SCNET.', guardrails: 'Nunca invente preços.',
+      handoff_agent_ids: [999], follow_up: { 'behaviors' => [{ 'context' => 'inbox_hours' }] }
+    )
+    Ai::Playbook.create!(ai_agent_id: agent.id, active: true, objetivo: 'Converter leads',
                          steps: [{ 'name' => 'Qualificação', 'instructions' => 'x',
                                    'automations' => [{ 'type' => 'tag' }, { 'type' => 'webhook' }] }])
-    ks = Ai::KnowledgeSource.create!(account: account, ai_department_id: dept.id, kind: 'faq', status: 'active',
+    ks = Ai::KnowledgeSource.create!(account: account, ai_agent_id: agent.id, kind: 'faq', status: 'active',
                                      title: 'Planos', raw: 'conteudo')
     Ai::KnowledgeChunk.create!(ai_knowledge_source_id: ks.id, content: 'Fibra 300 Mega R$ 89,90')
-    Ai::Tool.create!(account: account, ai_department_id: dept.id, name: 'buscar_plano', status: 'active',
+    Ai::Tool.create!(account: account, ai_agent_id: agent.id, name: 'buscar_plano', status: 'active',
                      implementation_type: 'capability')
-    Ai::LeadVariable.create!(account: account, ai_department_id: dept.id, name: 'cidade', var_type: 'texto')
+    Ai::LeadVariable.create!(account: account, ai_agent_id: agent.id, name: 'cidade', var_type: 'texto')
     agent
   end
 
-  # Agente SEM recursos: bare + department default vazio.
+  # Agente SEM recursos: bare, sem playbook/tools/knowledge/lead vars.
   def agent_without_features
-    agent = Ai::Agent.create!(account: account, name: 'Vazio', status: 'active', ai_operation_profile_id: profile.id)
-    Ai::Department.create!(account: account, agent: agent, name: 'Default', is_default: true, status: 'active')
-    agent
+    Ai::Agent.create!(account: account, name: 'Vazio', status: 'active', ai_operation_profile_id: profile.id)
   end
 
   it 'roda sem erro e mostra recursos EM USO para um agente configurado' do
@@ -49,7 +47,7 @@ RSpec.describe 'ai:agent_features_audit', type: :task do
       a_string_including("AGENTE ##{agent.id}")
         .and(a_string_including('RAG/Conhecimento'))
         .and(a_string_including('sim'))
-        .and(a_string_including('ROLLUP'))
+        .and(a_string_including('TRANSVERSAIS'))
     ).to_stdout
   end
 
@@ -69,7 +67,7 @@ RSpec.describe 'ai:agent_features_audit', type: :task do
     agent = agent_with_features
 
     expect { task.invoke }.to output(
-      a_string_including("##{agent.id}").and(a_string_including('departments='))
+      a_string_including("##{agent.id}").and(a_string_including('RAG:'))
     ).to_stdout
   end
 

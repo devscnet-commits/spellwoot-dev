@@ -30,7 +30,7 @@ class ProcessRequest(BaseModel):
     # OpenAI Conversations API id (conv_...), persistente e sem expiração — substitui o antigo
     # previous_response_id. None no primeiro turno do atendimento (orchestrator.py cria a conversation).
     conversation_id: Optional[str] = None
-    ai_department_id: int
+    ai_agent_id: int
     mode: str
     # Multi-tenant: each Rails Account picks its own model/temperature via Ai::OperationProfile.
     # Falls back to config.OPENAI_MODEL / the OpenAI default when the tenant has no profile.
@@ -92,15 +92,15 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     # tools/knowledge, but too big to sit at INFO on every single turn (drowns the short per-turn
     # signal a human is actually scanning for). Bump LOG_LEVEL=DEBUG to bring it back when debugging.
     logger.debug(
-        "ticket_id=%s ai_department_id=%s payload received:\nsystem_prompt=%s\ntools_schema=%s\nvector_store_id=%s",
-        request.ticket_id, request.ai_department_id, request.system_prompt,
+        "ticket_id=%s ai_agent_id=%s payload received:\nsystem_prompt=%s\ntools_schema=%s\nvector_store_id=%s",
+        request.ticket_id, request.ai_agent_id, request.system_prompt,
         json.dumps(request.tools_schema, ensure_ascii=False), request.vector_store_id,
     )
 
     try:
         reply_text, conversation_id, byok_fallback, confidence, transferred = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
-            ai_department_id=request.ai_department_id,
+            ai_agent_id=request.ai_agent_id,
             mode=request.mode,
             system_prompt=request.system_prompt,
             tools_schema=request.tools_schema,
@@ -122,12 +122,12 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
         # conversation_id, que o Rails PRECISA persistir mesmo no erro: sem ele o turno seguinte
         # abriria uma conversation nova e perderia o histórico inteiro do atendimento por causa de
         # uma única chamada com falha (ver orchestrator.TurnFailed / Ai::PythonOrchestratorClient).
-        logger.exception("ticket_id=%s ai_department_id=%s: AI processing failed", request.ticket_id, request.ai_department_id)
+        logger.exception("ticket_id=%s ai_agent_id=%s: AI processing failed", request.ticket_id, request.ai_agent_id)
         raise HTTPException(status_code=502,
                             detail={"error": "AI processing failed", "conversation_id": e.conversation_id})
     except Exception:
         # Falha ANTES de existir uma conversation (ou fora do turno): não há id a preservar.
-        logger.exception("ticket_id=%s ai_department_id=%s: AI processing failed", request.ticket_id, request.ai_department_id)
+        logger.exception("ticket_id=%s ai_agent_id=%s: AI processing failed", request.ticket_id, request.ai_agent_id)
         raise HTTPException(status_code=502, detail="AI processing failed")
 
     # DEBUG (temporary): a blank reply here means Ai::ActionDispatcher#reply on the Rails side no-ops

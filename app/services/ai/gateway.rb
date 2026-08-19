@@ -1,6 +1,6 @@
-# The AI Gateway. Pipeline: message.received -> resolve_department -> gates (billing/breaker/
-# trivial) -> Ai::PythonOrchestratorClient (o único motor — vê knowledge/tools/decisão por conta
-# própria) -> record ai_runs + ai_events -> reply.
+# The AI Gateway. Pipeline: message.received -> gates (billing/breaker/trivial) ->
+# Ai::PythonOrchestratorClient (o único motor — vê knowledge/tools/decisão por conta própria) ->
+# record ai_runs + ai_events -> reply.
 # In shadow it NEVER replies, NEVER executes a tool, NEVER writes operational changes — it only
 # records intention, runs and events.
 class Ai::Gateway
@@ -37,29 +37,7 @@ class Ai::Gateway
 
     base_content = @content_override.presence || @message.content
 
-    @stage = :department
-    department, resolution = Ai::DepartmentResolver.resolve(
-      agent: @agent, inbox_id: @message.inbox_id, message_content: base_content, conversation: @conversation
-    )
-
-    # A partir daqui NÃO é mais classificação de departamento: gravar o resultado e o estado é
-    # infra/DB. Uma exceção aqui deve virar 'internal_error', não 'classification_failed' (ver
-    # classify_error). Por isso o :department cobre SÓ a chamada de resolve acima.
     @stage = :persist
-    # Fase 2: override de department pedido mas NÃO honrado (deletado/inativo/outra conta) -> tag de
-    # visibilidade + segue normal (o department já veio do fluxo padrão). Nunca interrompe o run.
-    flag_unavailable_department_override(resolution)
-    emit(run_record, 'department.resolved', { department_id: department&.id, name: department&.name, method: resolution })
-    return finalize(run_record, 'no_department') unless department
-
-    run_record.update!(ai_department_id: department.id)
-
-    # Department resolvido MUDOU desde o último turno desta conversa (troca do agente vinculado à
-    # inbox, ou o classificador resolveu diferente) — reseta etapa/thread da OpenAI antes de QUALQUER
-    # leitura de ai_step_index abaixo (Camada 0 já lê current_step logo mais). Precisa rodar cedo, ANTES
-    # de #state_manager ser memoizado pela primeira vez.
-    reset_state_on_department_switch(department)
-
     # Invisible worker: turn media (audio/image/PDF escaneado) into text the supervisor can use. Passa
     # o profile do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']).
     # skip_vision SEMPRE true — a OpenAI já recebe os pixels crus (Ai::PythonOrchestratorClient#image_urls:
@@ -70,14 +48,14 @@ class Ai::Gateway
     emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
     effective_content = [base_content, media_text].compact.join("\n").strip
 
-    # Config do departamento + gate de política (reply state) + caminho ask_resume — nada disso é
+    # Config do agente + gate de política (reply state) + caminho ask_resume — nada disso é
     # classificação; erro aqui é 'internal_error', não 'classification_failed'.
     @stage = :policy
     # Limite de caracteres da mensagem do cliente (anti-abuso/tokens). Ação configurável:
     # 'truncate' (padrão: corta nos N primeiros) ou 'ask_resume' (pede pro cliente resumir e
     # NÃO processa o texto gigante). Tratado abaixo, após o gate de resposta.
-    max_input = department.behavior.to_h['max_input_chars'].to_i
-    input_action = department.behavior.to_h['max_input_action'].presence || 'truncate'
+    max_input = @agent.behavior.to_h['max_input_chars'].to_i
+    input_action = @agent.behavior.to_h['max_input_action'].presence || 'truncate'
     input_exceeded = max_input.positive? && effective_content.length > max_input
     effective_content = effective_content.first(max_input) if input_exceeded && input_action != 'ask_resume'
 
@@ -86,7 +64,7 @@ class Ai::Gateway
     # + reply_scope all/canary-match. Otherwise it observes (records intention) only, so a live
     # binding piloted "behind canary" never touches non-canary conversations.
     @acts_live =
-      Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation) == :live
+      Ai::ReplyPolicy.effective_reply_state(mode: @mode, agent: @agent, conversation: @conversation) == :live
 
     # Billing Fase 2: aviso proativo de saldo baixo (90% usado) + bloqueio ao ESGOTAR. Só ao vivo p/
     # o bloqueio; conta sem balance/plano ou com chave própria (custom_llm_api_key) = LIBERA
@@ -112,11 +90,11 @@ class Ai::Gateway
       end
     end
 
-    # Teto de respostas da IA (max_replies): ao atingir o limite configurado no departamento, a IA
+    # Teto de respostas da IA (max_replies): ao atingir o limite configurado no agente, a IA
     # para de responder e TRANSFERE para humano — mesmo fluxo do force_credit_handoff (nota interna +
     # transfer + assign, sem mensagem ao cliente). Verifica antes de rodar o modelo (zero custo LLM).
-    if @acts_live && max_replies_reached?(department)
-      force_max_replies_handoff(run_record, department)
+    if @acts_live && max_replies_reached?
+      force_max_replies_handoff(run_record)
       return finalize(run_record, 'max_replies')
     end
 
@@ -130,8 +108,8 @@ class Ai::Gateway
     # deste bloqueio pegar no turno seguinte, já que ai_step_turns só reflete o valor ATÉ o turno
     # anterior aqui. NÃO ressuscita Ai::StateManager/StepResolver/TurnCapture (Gap 1-4) — checagem
     # nova e isolada, reusando step_turns_exceeded? que já existia pro empurrão de prompt.
-    if @acts_live && step_turns_exceeded?(department)
-      force_stuck_step_handoff(run_record, department)
+    if @acts_live && step_turns_exceeded?
+      force_stuck_step_handoff(run_record)
       return finalize(run_record, 'stuck_handoff')
     end
 
@@ -156,17 +134,17 @@ class Ai::Gateway
     # Mensagem acima do limite + ação "pedir resumo": avisa o cliente e encerra a execução
     # (não roda o modelo no texto gigante). 'truncate' segue normal (já cortado acima).
     if input_exceeded && input_action == 'ask_resume'
-      message = department.behavior.to_h['max_input_message'].presence ||
+      message = @agent.behavior.to_h['max_input_message'].presence ||
                 'Sua mensagem ficou longa demais para eu entender bem. Pode resumir em poucas linhas, por favor? 🙂'
       emit(run_record, 'input.too_long', { chars: effective_content.length, max: max_input })
-      action_dispatcher.reply(department, message)
+      action_dispatcher.reply(message)
       return finalize(run_record, 'input_too_long')
     end
 
     # active_step ainda alimenta a Camada 0 (triagem de turno trivial) abaixo — o resto do que dependia
     # dele (conhecimento sob demanda, resolve_knowledge/next_step) saiu junto do motor legado; o Python
     # busca conhecimento por conta própria (Ai::PythonOrchestratorClient).
-    active_step = @acts_live ? state_manager.current_step(department) : nil
+    active_step = @acts_live ? state_manager.current_step(@agent) : nil
 
     # Camada 0 — triagem de turno trivial (opt-in, default OFF). ANTES de qualquer chamada ao modelo:
     # um turno trivial ("ok"/"obrigada"/emoji solto em reação à nossa última msg) NÃO acorda o supervisor.
@@ -177,8 +155,8 @@ class Ai::Gateway
     # dois modos (na dúvida, NÃO pula). Ver Ai::TrivialTurnGate.
     if trivial_gate_on?
       gate = Ai::TrivialTurnGate.skip?(text: effective_content, conversation: @conversation,
-                                       step: active_step || state_manager.current_step(department),
-                                       conclude_ready: state_manager.conclude_ready_for_current?(department))
+                                       step: active_step || state_manager.current_step(@agent),
+                                       conclude_ready: state_manager.conclude_ready_for_current?(@agent))
       if gate[:skip]
         run_record.update!(run_type: 'trivial_skip', tokens_in: 0, tokens_out: 0, cost: 0)
         emit(run_record, 'turn.trivial_skipped', { reason: gate[:reason] })
@@ -198,10 +176,10 @@ class Ai::Gateway
     # (transfer_rules['stuck_handoff_turns'], mesma chave do caminho legado), o client injeta uma
     # instrução forçada no turno para a IA transferir AGORA via a tool conversation.transfer.
     step_index_before = (@conversation.additional_attributes || {})['ai_step_index'].to_i
-    force_handoff_notice = step_turns_exceeded?(department)
+    force_handoff_notice = step_turns_exceeded?
 
     result = Ai::PythonOrchestratorClient.process_message(
-      conversation: @conversation, content: effective_content, agent: @agent, department: department, mode: @mode,
+      conversation: @conversation, content: effective_content, agent: @agent, mode: @mode,
       message: @message, force_handoff_notice: force_handoff_notice
     )
     persist_openai_conversation_id(result[:conversation_id]) if result[:conversation_id].present?
@@ -248,7 +226,7 @@ class Ai::Gateway
     end
 
     # Provider indisponível (HTTP/timeout/exceção no client, ou reply vazio): sem esta guarda,
-    # Ai::PythonOrchestratorClient#perform já devolve reply: nil e action_dispatcher.reply(department, nil)
+    # Ai::PythonOrchestratorClient#perform já devolve reply: nil e action_dispatcher.reply(nil)
     # é um no-op silencioso (text.blank? => return) — o cliente ficava sem resposta E sem handoff. Espelha
     # o force_provider_handoff do antigo caminho decide(). Só ao vivo; em shadow apenas registra o erro.
     if @acts_live && status == 'error'
@@ -264,7 +242,7 @@ class Ai::Gateway
     # bloquear a eliminação por isso (ver conversa da eliminação do motor legado). Tarefa de fechamento
     # rastreada separadamente — ver memória do projeto (loopguard-python-parity-debt) — não implementar
     # aqui como parte deste commit.
-    # Confiança baixa (Ai::HandoffEvaluator, department.transfer_rules['min_confidence']) — migrado pro
+    # Confiança baixa (Ai::HandoffEvaluator, agent.transfer_rules['min_confidence']) — migrado pro
     # motor Python (orchestrator.CONFIANCA_KEY, 17/08): o campo existia na tela desde o motor legado mas
     # nunca teve efeito nenhum no caminho Python (achado nesta mesma investigação). O modelo AUTO-RELATA
     # confiança 0.0-1.0 a cada turno, DEPOIS de já ter rodado tools/salvado dados/decidido reply vs
@@ -274,8 +252,8 @@ class Ai::Gateway
     # force_stuck_step_handoff: NÃO manda result[:reply] ao cliente (pode ser a própria resposta de
     # baixa confiança, ex.: o bug real do Pinhalzinho — "Atendemos sua cidade!" sem fonte nenhuma) — um
     # humano assume a partir daqui.
-    if @acts_live && !result[:transferred] && low_confidence?(result[:confidence], department)
-      force_low_confidence_handoff(run_record, department, result[:confidence])
+    if @acts_live && !result[:transferred] && low_confidence?(result[:confidence])
+      force_low_confidence_handoff(run_record, result[:confidence])
       return finalize(run_record, 'low_confidence')
     end
 
@@ -286,7 +264,7 @@ class Ai::Gateway
     # bump_step_turns_unless_advanced acabou de trazer) não pode engolir a mensagem que o próprio
     # modelo compôs pra avisar da transferência. Achado ao vivo (15/08, ticket 583): "reply.intended"
     # em vez de "reply.sent" — cliente nunca recebeu o aviso, apesar do handoff ter executado certinho.
-    action_dispatcher.reply(department, result[:reply], bypass_handoff: @acts_live)
+    action_dispatcher.reply(result[:reply], bypass_handoff: @acts_live)
     finalize(run_record, status)
   rescue StandardError => e
     error_type = classify_error(e)
@@ -307,8 +285,8 @@ class Ai::Gateway
 
   # Mesma chave/default do caminho legado (Ai::StateManager#stuck_handoff_limit) — teto ausente =>
   # DEFAULT_STUCK_HANDOFF_TURNS (rede ligada por padrão); 0 = desligado.
-  def step_turns_exceeded?(department)
-    limit = department.transfer_rules.to_h.key?('stuck_handoff_turns') ? department.transfer_rules['stuck_handoff_turns'].to_i : Ai::StateManager::DEFAULT_STUCK_HANDOFF_TURNS
+  def step_turns_exceeded?
+    limit = @agent.transfer_rules.to_h.key?('stuck_handoff_turns') ? @agent.transfer_rules['stuck_handoff_turns'].to_i : Ai::StateManager::DEFAULT_STUCK_HANDOFF_TURNS
     return false unless limit.positive?
 
     (@conversation.additional_attributes || {})['ai_step_turns'].to_i >= limit
@@ -341,7 +319,7 @@ class Ai::Gateway
     # as_human é constante por run (o agente é fixo), então injetamos na construção em vez de repetir
     # nos 4 call-sites de reply. No modo humano o dispatcher quebra a resposta em várias mensagens.
     @action_dispatcher ||= Ai::ActionDispatcher.new(
-      conversation: @conversation, account: @account, mode: @mode, acts_live: @acts_live,
+      conversation: @conversation, account: @account, agent: @agent, mode: @mode, acts_live: @acts_live,
       as_human: @agent.identify_as == 'human'
     )
   end
@@ -358,16 +336,13 @@ class Ai::Gateway
   # cruzando a ETAPA onde estourou (@stage) com a CLASSE da exceção (timeout tem classe
   # reconhecível). Retorna SEMPRE um valor válido de ERROR_TYPES; 'unknown' é o piso honesto.
   #
-  # CORTE HISTÓRICO (refactor dos stages, jul/2026): antes, a janela :department cobria também
-  # persistência/política/ask_resume, então erros de DB/policy caíam em 'classification_failed'.
-  # Agora :persist/:policy têm rótulo próprio ('internal_error'). Logo, a partir do deploy deste
-  # commit, a queda de 'classification_failed' e a subida de 'internal_error' é RECLASSIFICAÇÃO —
-  # não mudança de comportamento. O projeto está em sandbox/sem prod, então não há degrau real hoje;
-  # este registro fica pronto para quando a série histórica passar a importar.
+  # A etapa :department (classificação de departamento) foi eliminada por completo (19/08, fusão
+  # Departamento -> Agente — o agente já vem resolvido antes do Gateway rodar, não há mais nada pra
+  # classificar). 'classification_failed' fica sem produtor a partir daqui; mantido em
+  # Ai::Run::ERROR_TYPES só pelo histórico de runs antigos.
   def classify_error(exception)
     timed_out = timeout_error?(exception)
     case @stage
-    when :department       then 'classification_failed'         # SÓ a resolução do departamento
     when :persist, :policy then 'internal_error'               # write de estado / gate de política (não é classificação)
     when :decision         then timed_out ? 'provider_timeout' : 'provider_error'
     else                        timed_out ? 'provider_timeout' : 'unknown'
@@ -389,20 +364,6 @@ class Ai::Gateway
     @handoff_coordinator ||= Ai::HandoffCoordinator.new(
       conversation: @conversation, account: @account, agent: @agent, message: @message
     )
-  end
-
-  # Aplica a tag de visibilidade quando um override de department foi pedido mas não pôde ser honrado
-  # (department deletado/inativo/de outra conta). Best-effort: NUNCA interrompe o run. Reusa o handler
-  # conversation_add_label direto (sem auditoria/gate live-shadow) porque roda no stage :department,
-  # antes do action_dispatcher existir — e é um sinal operacional que deve aparecer mesmo em shadow.
-  def flag_unavailable_department_override(resolution)
-    return if resolution == 'override'
-    return if @conversation.additional_attributes&.dig('ai_department_override').blank?
-
-    Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation,
-                                                             input: { 'label' => 'department-override-indisponivel' })
-  rescue StandardError => e
-    Rails.logger.error "[Ai::Gateway#flag_unavailable_department_override] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
   # Saldo de créditos de IA relevante para enforcement (billing Fase 2). nil = NÃO enforça (fail-open):
@@ -499,8 +460,8 @@ class Ai::Gateway
   # Transferência silenciosa ao atingir o teto de respostas (max_replies). Espelha force_credit_handoff:
   # nota interna ao atendente + transfer + assign_human, SEM mensagem ao cliente. Não usa reply() para
   # o aviso porque o próprio gate de max_replies bloquearia a mensagem — o humano recebe e responde ele mesmo.
-  def force_max_replies_handoff(run_record, department)
-    max = department.behavior.to_h['max_replies'].to_i
+  def force_max_replies_handoff(run_record)
+    max = @agent.behavior.to_h['max_replies'].to_i
     action_dispatcher.internal_note("⚠️ Limite de #{max} respostas da IA atingido — atendimento transferido para um humano.")
     team_id = handoff_coordinator.human_team_id({})
     input = { 'unassign' => true }
@@ -512,24 +473,24 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#force_max_replies_handoff] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
-  def max_replies_reached?(department)
-    max = department.behavior.to_h['max_replies'].to_i
+  def max_replies_reached?
+    max = @agent.behavior.to_h['max_replies'].to_i
     max.positive? && Ai::Event.where(conversation_id: @conversation.id, event_type: 'reply.sent').count >= max
   end
 
   # true quando o auto-relato de confiança do modelo (result[:confidence], já vindo do Python) está
-  # abaixo do teto configurado (department.transfer_rules['min_confidence'], tela "Transferir se a IA
+  # abaixo do teto configurado (agent.transfer_rules['min_confidence'], tela "Transferir se a IA
   # estiver insegura"). 0/ausente = desligado (Ai::HandoffEvaluator::DEFAULT_MIN_CONFIDENCE). Reusa o
   # MESMO evaluator do motor legado — só o decision hash muda de forma (aqui é sempre 'reply', já que
   # 'handoff' já teria sido tratado via result[:transferred] antes de chegar aqui).
-  def low_confidence?(confidence, department)
-    Ai::HandoffEvaluator.evaluate(decision: { 'decision' => 'reply', 'confidence' => confidence }, department: department)[:handoff]
+  def low_confidence?(confidence)
+    Ai::HandoffEvaluator.evaluate(decision: { 'decision' => 'reply', 'confidence' => confidence }, agent: @agent)[:handoff]
   end
 
   # Transferência silenciosa quando a IA reporta baixa confiança na resposta deste turno. Espelha
   # force_max_replies_handoff/force_stuck_step_handoff: nota interna + transfer + assign_human, SEM
   # mandar a resposta incerta ao cliente.
-  def force_low_confidence_handoff(run_record, department, confidence)
+  def force_low_confidence_handoff(run_record, confidence)
     action_dispatcher.internal_note("⚠️ A IA reportou baixa confiança (#{confidence.inspect}) na resposta deste " \
                                     'turno — atendimento transferido para um humano.')
     team_id = handoff_coordinator.human_team_id({})
@@ -545,7 +506,7 @@ class Ai::Gateway
   # Transferência forçada ao atingir stuck_handoff_turns (achado ao vivo 13/08, ver comentário no
   # #run). Espelha force_max_replies_handoff/force_credit_handoff: nota interna + transfer +
   # assign_human, SEM mensagem ao cliente (o gate acima já impede o modelo de responder este turno).
-  def force_stuck_step_handoff(run_record, department)
+  def force_stuck_step_handoff(run_record)
     action_dispatcher.internal_note('⚠️ A IA ficou travada na mesma etapa sem avançar — atendimento transferido para um humano.')
     team_id = handoff_coordinator.human_team_id({})
     input = { 'unassign' => true }
@@ -613,39 +574,6 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#notify_admin_provider_error] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
-  # Achado ao vivo: quando o department resolvido pra uma conversa MUDA de um turno pro outro (troca
-  # do Ai::AgentInbox vinculado, ou o classificador resolve diferente), nada resetava ai_step_index
-  # nem openai_conversation_id — o índice antigo era reaproveitado cru contra o playbook do agente
-  # NOVO (etapa sem relação nenhuma), e a MESMA OpenAI Conversation (com todo o histórico sob a
-  # persona/instructions do agente ANTIGO) seguia sendo usada pro agente novo, arriscando o modelo
-  # "lembrar" de ter sido outra identidade. ai_collected_facts é mantido DE PROPÓSITO (pedido do
-  # usuário) — não repete pergunta que o cliente já respondeu, mesmo trocando de agente.
-  # ai_last_department_id: novo campo só pra rastrear "qual foi o último department que rodou aqui".
-  # Ausente (conversa nova, ou de antes desta mudança) => só grava, sem resetar nada.
-  def reset_state_on_department_switch(department)
-    last_department_id = (@conversation.additional_attributes || {})['ai_last_department_id']
-    switched = last_department_id.present? && last_department_id.to_i != department.id
-    return if last_department_id.present? && !switched
-
-    ::Conversation.transaction do
-      fresh = ::Conversation.lock.find_by(id: @conversation.id)
-      next unless fresh
-
-      attrs = (fresh.additional_attributes || {}).dup
-      if switched
-        attrs['ai_step_index'] = 0
-        attrs.delete('openai_conversation_id')
-      end
-      attrs['ai_last_department_id'] = department.id
-      fresh.update_columns(additional_attributes: attrs)
-      # Precisa refletir no objeto EM MEMÓRIA também — o resto deste turno (Camada 0, StateManager,
-      # Ai::PythonOrchestratorClient) lê @conversation.additional_attributes direto, não recarrega do banco.
-      @conversation.additional_attributes = attrs
-    end
-  rescue StandardError => e
-    Rails.logger.warn "[Ai::Gateway#reset_state_on_department_switch] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
-  end
-
   # Persiste o conversation_id da Responses API em additional_attributes da conversa.
   # NÃO usa @conversation.lock! — lock! lança RuntimeError quando o objeto tem mudanças em memória
   # não persistidas (dirty object, frequente no fim do run quando StateManager/ActionDispatcher
@@ -691,7 +619,7 @@ class Ai::Gateway
     Rails.logger.error "[Ai::Gateway#consume_byok_fallback_credit] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
   end
 
-  # Tag de visibilidade best-effort (mesmo handler direto do flag_unavailable_department_override).
+  # Tag de visibilidade best-effort.
   def apply_label(label)
     Ai::CapabilityRegistry.execute('conversation.add_label', conversation: @conversation, input: { 'label' => label })
   rescue StandardError => e

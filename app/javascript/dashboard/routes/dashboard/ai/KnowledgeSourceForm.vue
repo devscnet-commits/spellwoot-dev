@@ -10,7 +10,7 @@ const props = defineProps({
   headingLabel: { type: String, default: '' },
   headingIcon: { type: String, default: '' },
   disableSave: { type: Boolean, default: false },
-  departments: { type: Array, default: () => [] },
+  agents: { type: Array, default: () => [] },
 });
 defineEmits(['save', 'cancel']);
 // Editor de uma fonte de conhecimento. Reutilizado para criar (acima da lista) e para
@@ -19,20 +19,19 @@ defineEmits(['save', 'cancel']);
 const form = defineModel('form', { type: Object, required: true });
 const { t } = useI18n();
 
-// "Todos / Compartilhado" (valor '') = fonte account-wide (ai_department_id nil); ou escopar num
-// departamento. Valores como String p/ o Select; a conversão de volta ('' -> null) é no save do pai.
-const departmentOptions = computed(() => [
+// "Todos / Compartilhado" (valor '') = fonte account-wide (ai_agent_id nil); ou escopar num
+// agente. Valores como String p/ o Select; a conversão de volta ('' -> null) é no save do pai.
+const agentOptions = computed(() => [
   { value: '', label: t('AI_KNOWLEDGE.FORM.DEPARTMENT_ALL') },
-  ...props.departments.map(d => ({
+  ...props.agents.map(d => ({
     value: String(d.id),
     label: scopeOptionLabel(d),
   })),
 ]);
-const selectedDepartment = computed({
-  get: () =>
-    form.value.ai_department_id ? String(form.value.ai_department_id) : '',
+const selectedAgent = computed({
+  get: () => (form.value.ai_agent_id ? String(form.value.ai_agent_id) : ''),
   set: value => {
-    form.value.ai_department_id = value === '' ? null : Number(value);
+    form.value.ai_agent_id = value === '' ? null : Number(value);
   },
 });
 </script>
@@ -65,7 +64,7 @@ const selectedDepartment = computed({
     </label>
     <div class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
       <span>{{ t('AI_KNOWLEDGE.FORM.DEPARTMENT') }}</span>
-      <Select v-model="selectedDepartment" :options="departmentOptions" />
+      <Select v-model="selectedAgent" :options="agentOptions" />
       <span class="text-xs text-n-slate-11">
         {{ t('AI_KNOWLEDGE.FORM.DEPARTMENT_HINT') }}
       </span>

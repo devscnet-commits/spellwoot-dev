@@ -121,10 +121,8 @@ RSpec.describe Ai::LocationNormalizer do
     let(:agent) do
       Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
     end
-    let(:department) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Loc', status: 'active', behavior: {})
-      dept.create_playbook!(active: true, steps: [{ 'name' => 'Localização' }, { 'name' => 'Fim' }])
-      dept
+    before do
+      agent.create_playbook!(active: true, steps: [{ 'name' => 'Localização' }, { 'name' => 'Fim' }])
     end
 
     it 'grava localizacao_recebida / localizacao_coordenadas / localizacao_link' do
@@ -132,7 +130,7 @@ RSpec.describe Ai::LocationNormalizer do
       described_class.normalize(msg)
 
       Ai::StateManager.new(conversation: conversation, agent: agent)
-                      .track_step(department, { 'step_completed' => false }, message_text: '', message: msg)
+                      .track_step(agent, { 'step_completed' => false }, message_text: '', message: msg)
 
       facts = conversation.reload.additional_attributes['ai_collected_facts']
       expect(facts['localizacao_recebida']).to be(true)

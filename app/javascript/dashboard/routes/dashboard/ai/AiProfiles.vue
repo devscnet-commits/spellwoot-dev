@@ -16,7 +16,7 @@ const { t } = useI18n();
 const PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter', 'groq'];
 // Pedido do usuário (18/08): só a OpenAI funciona de verdade hoje — o motor Python (orchestrator.py)
 // tem um client hardcoded (_client = OpenAI(...)), então escolher qualquer outro provider aqui quebra
-// a conversa inteira do department que usa este perfil, sem aviso nenhum (achado no levantamento,
+// a conversa inteira do agente que usa este perfil, sem aviso nenhum (achado no levantamento,
 // docs/ai-operation-profiles-screen-assessment.md §3). Trava o dropdown: os outros ficam visíveis mas
 // desabilitados com "(em breve)" — não precisa desligar mais nada em outro lugar, eles simplesmente
 // não são selecionáveis por aqui.
