@@ -18,6 +18,7 @@ def _descriptions(schema):
 def test_sem_nenhum_valor_dinamico_usa_so_a_description_generica():
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None,
     )
     desc = _descriptions(schema)
 
@@ -29,7 +30,7 @@ def test_sem_nenhum_valor_dinamico_usa_so_a_description_generica():
 def test_transfer_when_configurado_entra_na_description_de_transferir_humano():
     schema = orchestrator._build_reply_schema(
         transfer_when="cliente pede humano; assunto fora do escopo", close_when=None,
-        close_message=None, collect_hint=None,
+        close_message=None, collect_hint=None, known_attribute_keys=None,
     )
     desc = _descriptions(schema)
 
@@ -42,6 +43,7 @@ def test_transfer_when_configurado_entra_na_description_de_transferir_humano():
 def test_sem_close_when_vira_proibicao_explicita_nao_a_description_generica_ambigua():
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None,
     )
     desc = _descriptions(schema)["encerrar_atendimento"]
 
@@ -52,7 +54,7 @@ def test_sem_close_when_vira_proibicao_explicita_nao_a_description_generica_ambi
 def test_com_close_when_usa_a_condicao_configurada():
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when="cliente confirma que não quer mais nada",
-        close_message=None, collect_hint=None,
+        close_message=None, collect_hint=None, known_attribute_keys=None,
     )
     desc = _descriptions(schema)["encerrar_atendimento"]
 
@@ -65,7 +67,7 @@ def test_com_close_when_usa_a_condicao_configurada():
 def test_close_message_e_anexada_na_description_de_encerrar_atendimento():
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when="cliente confirma", close_message="Foi um prazer te atender!",
-        collect_hint=None,
+        collect_hint=None, known_attribute_keys=None,
     )
     desc = _descriptions(schema)["encerrar_atendimento"]
 
@@ -75,6 +77,7 @@ def test_close_message_e_anexada_na_description_de_encerrar_atendimento():
 def test_collect_hint_ausente_nao_mexe_na_description_de_dados_coletados():
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None,
     )
     desc = _descriptions(schema)["dados_coletados"]
 
@@ -82,10 +85,11 @@ def test_collect_hint_ausente_nao_mexe_na_description_de_dados_coletados():
 
 
 def test_collect_hint_um_atributo_com_tipo_e_opcoes():
-    hint = {"attributes": ["ja_cliente"], "type": "choice",
-            "options": ["Já é cliente", "Nova contratação"], "required": True}
+    hint = {"items": [{"attribute": "ja_cliente", "type": "choice",
+                       "options": ["Já é cliente", "Nova contratação"], "required": True, "hint": None}]}
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=hint,
+        known_attribute_keys=None,
     )
     desc = _descriptions(schema)["dados_coletados"]
 
@@ -96,9 +100,10 @@ def test_collect_hint_um_atributo_com_tipo_e_opcoes():
 
 
 def test_collect_hint_opcional_sem_tipo_nem_opcoes():
-    hint = {"attributes": ["observacao"], "type": None, "options": [], "required": False}
+    hint = {"items": [{"attribute": "observacao", "type": None, "options": [], "required": False, "hint": None}]}
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=hint,
+        known_attribute_keys=None,
     )
     desc = _descriptions(schema)["dados_coletados"]
 
@@ -109,19 +114,25 @@ def test_collect_hint_opcional_sem_tipo_nem_opcoes():
 
 
 def test_collect_hint_multi_atributo():
-    hint = {"attributes": ["cidade", "viabilidade"], "type": None, "options": [], "required": True}
+    hint = {"items": [
+        {"attribute": "cidade", "type": None, "options": [], "required": True, "hint": None},
+        {"attribute": "viabilidade", "type": None, "options": [], "required": True, "hint": None},
+    ]}
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=hint,
+        known_attribute_keys=None,
     )
     desc = _descriptions(schema)["dados_coletados"]
 
-    assert "'cidade', 'viabilidade'" in desc
-    assert "CADA um vira um item PRÓPRIO" in desc
+    assert '"cidade"' in desc
+    assert '"viabilidade"' in desc
+    assert "CADA um como um item PRÓPRIO" in desc
 
 
 def test_collect_hint_sem_atributos_declarados_e_tratado_como_ausente():
     schema = orchestrator._build_reply_schema(
-        transfer_when=None, close_when=None, close_message=None, collect_hint={"attributes": []},
+        transfer_when=None, close_when=None, close_message=None, collect_hint={"items": []},
+        known_attribute_keys=None,
     )
     desc = _descriptions(schema)["dados_coletados"]
 
@@ -134,9 +145,11 @@ def test_collect_hint_sem_atributos_declarados_e_tratado_como_ausente():
 def test_cada_chamada_devolve_uma_copia_independente_nao_mutua_o_template():
     orchestrator._build_reply_schema(
         transfer_when="condição da conta A", close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None,
     )
     schema_b = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None,
     )
 
     assert "condição da conta A" not in _descriptions(schema_b)["transferir_humano"]
@@ -146,6 +159,7 @@ def test_cada_chamada_devolve_uma_copia_independente_nao_mutua_o_template():
 def test_handoff_target_nao_referencia_mais_lista_nas_instructions():
     schema = orchestrator._build_reply_schema(
         transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None,
     )
     desc = schema["properties"][orchestrator.HANDOFF_TARGET_KEY]["description"]
 

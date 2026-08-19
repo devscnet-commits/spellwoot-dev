@@ -366,3 +366,95 @@ class TestFalhaPreservaAConversation:
                 assert e.conversation_id == "conv_perdida"
             else:
                 raise AssertionError("run_conversation deveria ter levantado TurnFailed")
+
+
+# known_attribute_keys (Ai::StateManager#known_slot_keys, mandado pelo Rails): restringe
+# "dados_coletados[].chave" a um enum FECHADO — a OpenAI passa a rejeitar estruturalmente qualquer
+# chave fora do catálogo do department, em vez de só confiar no texto do prompt (fecha a classe de
+# bug já vista ao vivo: "cidade_usuario" em vez de "cidade"). Decisão de produto aceita junto: fecha
+# a porta do salvar_memoria_ia como catch-all pra contexto avulso sem catálogo nenhum.
+class TestTextFormatEnumDeChaves:
+    def _schema(self, known_attribute_keys):
+        return orchestrator._build_reply_schema(
+            transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+            known_attribute_keys=known_attribute_keys,
+        )
+
+    def _chave_property(self, schema):
+        return schema["properties"]["dados_coletados"]["items"]["properties"]["chave"]
+
+    def test_sem_known_attribute_keys_chave_continua_string_livre_sem_enum(self):
+        schema = self._schema(None)
+        assert "enum" not in self._chave_property(schema)
+
+    def test_lista_vazia_tambem_nao_restringe_travaria_a_primeira_captura_de_conta_nova(self):
+        schema = self._schema([])
+        assert "enum" not in self._chave_property(schema)
+
+    def test_com_known_attribute_keys_chave_vira_enum_fechado(self):
+        schema = self._schema(["cpf_cliente", "nome_cliente", "email_cliente"])
+        assert self._chave_property(schema)["enum"] == ["cpf_cliente", "nome_cliente", "email_cliente"]
+
+    def test_resto_do_schema_intacto_so_a_chave_muda(self):
+        # Prova de não-regressão: _build_reply_schema não é uma reescrita paralela do schema, é o
+        # MESMO _BASE_REPLY_SCHEMA com um único campo aninhado trocado — todo o resto (mensagem,
+        # avancar_etapa, confianca, etc.) tem que sobreviver idêntico.
+        sem_enum = self._schema(None)
+        com_enum = self._schema(["cidade"])
+        sem_enum["properties"]["dados_coletados"]["items"]["properties"].pop("chave")
+        com_enum["properties"]["dados_coletados"]["items"]["properties"].pop("chave")
+        assert sem_enum == com_enum
+
+    def test_deepcopy_uma_chamada_nunca_vaza_enum_pra_outra(self):
+        # Duplo cuidado: _BASE_REPLY_SCHEMA é reusado por TODAS as contas — se _build_reply_schema
+        # mutasse o dict compartilhado em vez de copiar, o enum de uma conta vazaria pro schema
+        # "sem restrição" da próxima chamada (de outra conta, sem known_attribute_keys nenhum).
+        self._schema(["vazou_isso"])
+        schema_depois = self._schema(None)
+        assert "enum" not in self._chave_property(schema_depois)
+        assert "enum" not in orchestrator._BASE_REPLY_SCHEMA["properties"]["dados_coletados"]["items"]["properties"]["chave"]
+
+
+class TestKnownAttributeKeysDePontaAPonta:
+    def _payload(self):
+        return {
+            "mensagem_para_cliente": "ok", "dados_coletados": [], "avancar_etapa": False,
+            "transferir_humano": False, "encerrar_atendimento": False, "handoff_summary": "",
+            "handoff_target": "", "confianca": 0.5,
+        }
+
+    def test_run_conversation_propaga_known_attribute_keys_pro_enum_em_TODAS_as_chamadas_do_turno(self):
+        # 2 rodadas de ferramenta + a resposta final: o enum tem que estar presente nas 3 chamadas,
+        # não só na primeira (mesma classe de bug do followup esquecendo de reenviar `tools`).
+        resp1 = _response("r1", [_function_call("consultar_conhecimento", {"pergunta": "x"}, "call_1")])
+        resp2 = _response("r2", [], output_text=json.dumps(self._payload()))
+
+        with patch.object(orchestrator, "_client") as mock_client, \
+             patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+            mock_client.conversations.create.return_value = SimpleNamespace(id="conv_enum")
+            mock_client.responses.create.side_effect = [resp1, resp2]
+            mock_execute_tool.return_value = {"result": "ok"}
+
+            orchestrator.run_conversation(
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p",
+                tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None, user_input="oi",
+                conversation_id=None, known_attribute_keys=["cpf_cliente", "nome_cliente"],
+            )
+
+        for call in mock_client.responses.create.call_args_list:
+            chave = call.kwargs["text"]["format"]["schema"]["properties"]["dados_coletados"]["items"]["properties"]["chave"]
+            assert chave["enum"] == ["cpf_cliente", "nome_cliente"]
+
+    def test_sem_known_attribute_keys_comportamento_byte_identico_ao_de_antes(self):
+        with patch.object(orchestrator, "_client") as mock_client:
+            mock_client.conversations.create.return_value = SimpleNamespace(id="conv_sem_enum")
+            mock_client.responses.create.return_value = _response("r1", [], output_text=json.dumps(self._payload()))
+
+            orchestrator.run_conversation(
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p", tools_schema=[],
+                vector_store_id=None, user_input="oi", conversation_id=None,
+            )
+
+        sent = mock_client.responses.create.call_args.kwargs["text"]
+        chave = sent["format"]["schema"]["properties"]["dados_coletados"]["items"]["properties"]["chave"]
+        assert "enum" not in chave

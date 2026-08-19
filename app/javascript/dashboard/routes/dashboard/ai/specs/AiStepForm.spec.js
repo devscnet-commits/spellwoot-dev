@@ -180,18 +180,18 @@ describe('AiStepForm.vue — preservação de step.on_complete (semeadura do dra
   });
 });
 
-describe('AiStepForm.vue — Select da chave (união LeadVariable ∪ CustomAttributeDefinition, origem marcada)', () => {
+// "DADOS PARA COLETA NA ETAPA": lista de itens (Ai::StepSlot.items no backend), cada um com seu próprio
+// type/options/required/hint — substitui o Select único de antes (1 collect.attribute por etapa).
+describe('AiStepForm.vue — "+ Selecionar dado do sistema" (união LeadVariable ∪ CustomAttributeDefinition, origem marcada)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
-  // findComponent: o <Select> é um stub (shallowMount) — precisamos do wrapper de COMPONENTE (props/$emit),
-  // não do DOMWrapper que find() devolve.
-  const keySelect = wrapper =>
-    wrapper.findComponent('[data-testid="slot-key-select"]');
+  const addExistingCombo = wrapper =>
+    wrapper.findComponent('[data-testid="collect-add-existing"]');
 
-  it('popula o Select da UNIÃO com a origem marcada (interna vs painel) + opção vazia', () => {
+  it('popula o ComboBox da UNIÃO com a origem marcada (interna vs painel), sem opção vazia', () => {
     const wrapper = mountForm(
       { name: 'Coleta' },
       {
@@ -201,31 +201,30 @@ describe('AiStepForm.vue — Select da chave (união LeadVariable ∪ CustomAttr
             attribute_model: 'conversation_attribute',
             attribute_key: 'cidade',
           },
-          { attribute_model: 'contact_attribute', attribute_key: 'ignorado' },
+          {
+            attribute_model: 'contact_attribute',
+            attribute_key: 'telefone_contato',
+          },
         ],
       }
     );
 
-    const options = keySelect(wrapper).props('options');
-    // opção vazia (etapa informativa) primeiro
-    expect(options[0].value).toBe('');
+    const options = addExistingCombo(wrapper).props('options');
+    // não existe mais opção vazia: uma etapa informativa é só uma lista de itens vazia, não uma escolha
+    // dentro do combo.
+    expect(options.some(o => o.value === '')).toBe(false);
     const byValue = Object.fromEntries(options.map(o => [o.value, o.label]));
-    // LeadVariable => interna; CAD conversation_attribute => painel; contact_attribute NÃO entra
+    // LeadVariable => interna; CAD conversation_attribute OU contact_attribute => painel (805d2b6: um
+    // CAD de contato tem que aparecer aqui também, senão o dado nunca chega pro atendente humano).
     expect(byValue.periodo_reservado).toContain('interna');
     expect(byValue.cidade).toContain('painel');
-    expect('ignorado' in byValue).toBe(false);
+    expect(byValue.telefone_contato).toContain('painel');
 
     wrapper.unmount();
   });
 
-  it('opção vazia salva collect: null (etapa informativa é escolha explícita)', async () => {
-    // etapa com collect declarado -> seleciona a opção vazia -> collect null no save
-    const wrapper = mountForm({
-      name: 'Coleta',
-      collect: { attribute: 'cidade' },
-    });
-    await keySelect(wrapper).vm.$emit('update:modelValue', '');
-    await flushPromises();
+  it('nenhum item -> collect: null (etapa informativa é a lista vazia, não uma escolha à parte)', async () => {
+    const wrapper = mountForm({ name: 'Coleta' });
 
     await wrapper.get('button.bg-n-brand').trigger('click');
     await flushPromises();
@@ -234,38 +233,170 @@ describe('AiStepForm.vue — Select da chave (união LeadVariable ∪ CustomAttr
     wrapper.unmount();
   });
 
-  it('chave declarada salva collect com a chave e o tipo', async () => {
-    const wrapper = mountForm({
-      name: 'Coleta',
-      collect: { attribute: 'cidade', type: 'text' },
-    });
+  it('escolher um dado no ComboBox AGREGA um item novo, expandido, com type=text/required=true por default', async () => {
+    const wrapper = mountForm(
+      { name: 'Coleta' },
+      { leadVariables: [{ name: 'cidade' }] }
+    );
+
+    await addExistingCombo(wrapper).vm.$emit('update:modelValue', 'cidade');
+    await flushPromises();
 
     await wrapper.get('button.bg-n-brand').trigger('click');
     await flushPromises();
     expect(wrapper.emitted('save')[0][0].collect).toEqual({
-      attribute: 'cidade',
-      type: 'text',
+      items: [{ attribute: 'cidade', type: 'text', required: true }],
     });
+
+    wrapper.unmount();
+  });
+
+  it('escolher o MESMO dado duas vezes não duplica: já adicionado some das opções do ComboBox', async () => {
+    const wrapper = mountForm(
+      {
+        name: 'Coleta',
+        collect: {
+          items: [{ attribute: 'cidade', type: 'text', required: true }],
+        },
+      },
+      { leadVariables: [{ name: 'cidade' }] }
+    );
+
+    const options = addExistingCombo(wrapper).props('options');
+    expect(options.some(o => o.value === 'cidade')).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('CPF obrigatório + e-mail opcional na MESMA etapa: cada item guarda seu próprio required', async () => {
+    const step = {
+      name: 'Dados do cliente',
+      collect: {
+        items: [
+          { attribute: 'cpf_cliente', type: 'cpf', required: true },
+          { attribute: 'email_cliente', type: 'email', required: false },
+        ],
+      },
+    };
+    const wrapper = mountForm(step);
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+    const items = wrapper.emitted('save')[0][0].collect.items;
+    expect(items[0]).toEqual({
+      attribute: 'cpf_cliente',
+      type: 'cpf',
+      required: true,
+    });
+    expect(items[1]).toEqual({
+      attribute: 'email_cliente',
+      type: 'email',
+      required: false,
+    });
+
+    wrapper.unmount();
+  });
+
+  it('remover um item tira ele do payload (os outros permanecem)', async () => {
+    const step = {
+      name: 'Dados do cliente',
+      collect: {
+        items: [
+          { attribute: 'cpf_cliente', type: 'cpf', required: true },
+          { attribute: 'email_cliente', type: 'email', required: false },
+        ],
+      },
+    };
+    const wrapper = mountForm(step);
+
+    await wrapper
+      .get('[data-testid="collect-item-remove-cpf_cliente"]')
+      .trigger('click');
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+
+    const items = wrapper.emitted('save')[0][0].collect.items;
+    expect(items).toEqual([
+      { attribute: 'email_cliente', type: 'email', required: false },
+    ]);
+
+    wrapper.unmount();
+  });
+
+  it('etapa antiga (1 collect, attribute em array — ticket 586) abre como items[] separados', async () => {
+    const wrapper = mountForm({
+      name: 'Cidade',
+      collect: {
+        attribute: ['cidade', 'viabilidade'],
+        type: 'text',
+        options: ['A', 'B'],
+      },
+    });
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+    const items = wrapper.emitted('save')[0][0].collect.items;
+    expect(items.map(i => i.attribute)).toEqual(['cidade', 'viabilidade']);
+
+    wrapper.unmount();
+  });
+
+  it('etapa antiga com slot_required:false (nível da etapa) migra pro required do item', async () => {
+    const wrapper = mountForm({
+      name: 'Indicação',
+      slot_required: false,
+      collect: { attribute: 'indicacao', type: 'text' },
+    });
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+    expect(wrapper.emitted('save')[0][0].collect.items[0].required).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('dica de extração (hint): carregada do banco e reemitida no save', async () => {
+    const wrapper = mountForm({
+      name: 'Cidade',
+      collect: {
+        items: [
+          {
+            attribute: 'cidade',
+            type: 'text',
+            required: true,
+            hint: 'Cidade para instalar a internet',
+          },
+        ],
+      },
+    });
+
+    expect(wrapper.text()).toContain('Cidade para instalar a internet');
+
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+    expect(wrapper.emitted('save')[0][0].collect.items[0].hint).toBe(
+      'Cidade para instalar a internet'
+    );
 
     wrapper.unmount();
   });
 });
 
-describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO CustomAttributeDefinition', () => {
+describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO CustomAttributeDefinition, e já vira item', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
-  it('cria a variável via endpoint ai_lead_variables, seleciona a chave e emite variable-created', async () => {
+  it('cria a variável via endpoint ai_lead_variables, adiciona como item e emite variable-created', async () => {
     const wrapper = mountForm({ name: 'Coleta' });
     stubAxios('bairro'); // o POST devolve { name: 'bairro' }
 
     // abre o inline-create, digita e confirma
-    await wrapper.get('button.underline').trigger('click'); // "criar variável interna"
+    await wrapper.get('[data-testid="collect-add-custom"]').trigger('click');
     const nameInput = wrapper.get('[data-testid="new-variable-name"]');
     await nameInput.setValue('bairro');
-    // botão "Criar" (bg-n-brand dentro do inline-create)
+    // botão "Criar" (bg-n-brand dentro do inline-create — único bg-n-brand na tela enquanto criatingVariable é true)
     const createBtn = wrapper
       .findAll('button')
       .find(b => b.classes().includes('bg-n-brand'));
@@ -278,7 +409,7 @@ describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO Cus
     expect(url).not.toContain('custom_attribute_definitions');
     expect(body).toEqual({ ai_lead_variable: { name: 'bairro' } });
 
-    // pai é avisado para empilhar na lista; a chave criada fica selecionada
+    // pai é avisado para empilhar na lista
     expect(wrapper.emitted('variableCreated')[0][0]).toEqual({
       id: 99,
       name: 'bairro',
@@ -287,31 +418,35 @@ describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO Cus
     await wrapper.get('button.bg-n-brand').trigger('click'); // salvar a etapa
     await flushPromises();
     expect(wrapper.emitted('save').at(-1)[0].collect).toEqual({
-      attribute: 'bairro',
-      type: 'text',
+      items: [{ attribute: 'bairro', type: 'text', required: true }],
     });
 
     wrapper.unmount();
   });
 });
 
-// (B2) choice: opções vêm de lista fixa OU do resultado de uma ferramenta (domínio dinâmico).
-describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferramenta)', () => {
+// (B2) choice: opções vêm de lista fixa OU do resultado de uma ferramenta (domínio dinâmico), por item.
+describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferramenta), por item', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
-  // Mesma armadilha #306/knowledge: buildStepPayload emite domain_from_tool, então sem semear o draft de
-  // collect.domain_from_tool, editar a etapa apagaria o vínculo. Trava a semeadura de collectSource/tool.
+  // Mesma armadilha #306/knowledge: buildStepPayload emite domain_from_tool, então sem semear o item de
+  // domain_from_tool, editar a etapa apagaria o vínculo.
   it('carregar choice com domain_from_tool e salvar SEM tocar preserva o vínculo (options limpa)', async () => {
     const wrapper = mountForm(
       {
         name: 'Período',
         collect: {
-          attribute: 'periodo_reservado',
-          type: 'choice',
-          domain_from_tool: 'consultar_periodos',
+          items: [
+            {
+              attribute: 'periodo_reservado',
+              type: 'choice',
+              required: true,
+              domain_from_tool: 'consultar_periodos',
+            },
+          ],
         },
       },
       { tools: [{ name: 'consultar_periodos' }] }
@@ -320,26 +455,36 @@ describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferrament
     await wrapper.get('button.bg-n-brand').trigger('click');
     await flushPromises();
 
-    const collect = wrapper.emitted('save')[0][0].collect;
-    expect(collect.domain_from_tool).toBe('consultar_periodos');
-    expect(collect.options).toEqual([]);
+    const item = wrapper.emitted('save')[0][0].collect.items[0];
+    expect(item.domain_from_tool).toBe('consultar_periodos');
+    expect(item.options).toEqual([]);
 
     wrapper.unmount();
   });
 
   // Anti-degradação-silenciosa: a ferramenta salva não existe mais na lista do agente -> avisa na tela
-  // (o runtime já faz fail-open + tool_domain.unextractable, mas quem edita precisa VER).
-  it('ferramenta salva ausente da lista -> mostra o aviso; presente -> não mostra', () => {
+  // (o runtime já faz fail-open + tool_domain.unextractable, mas quem edita precisa VER). O item precisa
+  // estar EXPANDIDO pro aviso aparecer (é dentro do editor) — etapa carregada do banco abre recolhida, então
+  // clica em editar primeiro.
+  it('ferramenta salva ausente da lista -> mostra o aviso; presente -> não mostra', async () => {
     const step = {
       name: 'Período',
       collect: {
-        attribute: 'periodo_reservado',
-        type: 'choice',
-        domain_from_tool: 'consultar_periodos',
+        items: [
+          {
+            attribute: 'periodo_reservado',
+            type: 'choice',
+            required: true,
+            domain_from_tool: 'consultar_periodos',
+          },
+        ],
       },
     };
 
     const semTool = mountForm(step, { tools: [{ name: 'outra_coisa' }] });
+    await semTool
+      .get('[data-testid="collect-item-edit-periodo_reservado"]')
+      .trigger('click');
     expect(semTool.find('[data-testid="tool-domain-missing"]').exists()).toBe(
       true
     );
@@ -348,6 +493,9 @@ describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferrament
     const comTool = mountForm(step, {
       tools: [{ name: 'consultar_periodos' }],
     });
+    await comTool
+      .get('[data-testid="collect-item-edit-periodo_reservado"]')
+      .trigger('click');
     expect(comTool.find('[data-testid="tool-domain-missing"]').exists()).toBe(
       false
     );
@@ -355,7 +503,7 @@ describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferrament
   });
 });
 
-// Higiene de variáveis: preview da normalização (item 1) + exclusão (item 4). A busca (item 5) é o ComboBox.
+// Higiene de variáveis: preview da normalização + exclusão. A busca é o ComboBox de "+ Selecionar...".
 describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -365,7 +513,7 @@ describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)'
   it('preview: "número_conta" mostra a chave normalizada que vai nascer ("numero_conta")', async () => {
     const wrapper = mountForm({ name: 'Coleta' });
 
-    await wrapper.get('button.underline').trigger('click'); // abre criar
+    await wrapper.get('[data-testid="collect-add-custom"]').trigger('click');
     await wrapper
       .get('[data-testid="new-variable-name"]')
       .setValue('número_conta');
@@ -376,9 +524,14 @@ describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)'
     wrapper.unmount();
   });
 
-  it('excluir variável interna: confirma, chama DELETE no endpoint e emite variable-deleted', async () => {
+  it('excluir variável interna: confirma, chama DELETE no endpoint, emite variable-deleted e remove o item que a usava', async () => {
     const wrapper = mountForm(
-      { name: 'Coleta' },
+      {
+        name: 'Coleta',
+        collect: {
+          items: [{ attribute: 'documento_cpf', type: 'text', required: true }],
+        },
+      },
       { leadVariables: [{ id: 99, name: 'documento_cpf' }] }
     );
     vi.stubGlobal('axios', {
@@ -387,7 +540,7 @@ describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)'
     });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    await wrapper.get('button.underline').trigger('click'); // abre criar/gerenciar
+    await wrapper.get('[data-testid="collect-add-custom"]').trigger('click'); // abre criar/gerenciar
     await wrapper
       .get('[data-testid="delete-variable-documento_cpf"]')
       .trigger('click');
@@ -397,14 +550,23 @@ describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)'
       '/ai_lead_variables/99'
     );
     expect(wrapper.emitted('variableDeleted')[0]).toEqual([99]);
+
+    // fecha o painel de criar/gerenciar antes de salvar — senão o "Criar" (bg-n-brand, disabled, sem
+    // nome digitado) é o PRIMEIRO .bg-n-brand no DOM e o clique no "Salvar" da etapa não acha o botão certo.
+    await wrapper.get('[data-testid="collect-cancel-create"]').trigger('click');
+    await wrapper.get('button.bg-n-brand').trigger('click');
+    await flushPromises();
+    expect(wrapper.emitted('save').at(-1)[0].collect).toBe(null); // item órfão removido junto
+
     wrapper.unmount();
   });
 });
 
-// Pedido do usuário (18/08): quando o dado coletado é um atributo personalizado do tipo "lista", tipo
-// e opções têm que ser SEMPRE espelho do atributo — travados, não digitáveis à parte (evita a IA
-// validando opções diferentes das que o resto do sistema aceita pra esse atributo).
-describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', () => {
+// Pedido do usuário (18/08, ampliado): quando o dado coletado é um atributo personalizado (CAD,
+// qualquer tipo), tipo e opções têm que ser SEMPRE espelho do atributo — travados, não digitáveis à
+// parte (evita a IA validando opções diferentes das que o resto do sistema aceita pra esse atributo).
+// Etapa carregada do banco abre com o card RECOLHIDO — cada teste clica em editar primeiro.
+describe('AiStepForm.vue — atributo de CAD trava tipo/opções do item', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
@@ -416,22 +578,27 @@ describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', ()
     attribute_values: ['Chapecó', 'Maravilha'],
   };
 
-  it('etapa com atributo de CAD lista: trava o Select de tipo e mostra as opções como somente-leitura, espelhando o CAD', () => {
+  it('item de CAD lista: trava o Select de tipo e mostra as opções como somente-leitura, espelhando o CAD', async () => {
     const wrapper = mountForm(
       { name: 'Cidade', collect: { attribute: 'cidade', type: 'text' } },
       { customAttributes: [cidadeCad] }
     );
+    await wrapper
+      .get('[data-testid="collect-item-edit-cidade"]')
+      .trigger('click');
 
     expect(
       wrapper
-        .findComponent('[data-testid="step-collect-type"]')
+        .findComponent('[data-testid="collect-item-type-cidade"]')
         .props('disabled')
     ).toBe(true);
-    const locked = wrapper.get('[data-testid="step-collect-options-locked"]');
+    const locked = wrapper.get(
+      '[data-testid="collect-item-options-locked-cidade"]'
+    );
     expect(locked.element.disabled).toBe(true);
     expect(locked.element.value).toBe('Chapecó\nMaravilha');
     expect(
-      wrapper.find('[data-testid="step-collect-options-free"]').exists()
+      wrapper.find('[data-testid="collect-item-options-free-cidade"]').exists()
     ).toBe(false);
     wrapper.unmount();
   });
@@ -440,7 +607,7 @@ describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', ()
   // "Escolha (opções)" com valores digitados à mão, sem relação com o atributo real (que nem é lista).
   // Qualquer CAD trava o Tipo do dado (mapeado do attribute_display_type); só CAD tipo lista mostra
   // a caixa de opções (travada) — os demais tipos não têm "opções" pra mostrar.
-  it('atributo de CAD tipo "link" (não-lista): trava o Select de tipo (mapeado pra texto) e NÃO mostra nenhuma caixa de opções', () => {
+  it('item de CAD tipo "link" (não-lista): trava o Select de tipo (mapeado pra texto) e NÃO mostra nenhuma caixa de opções', async () => {
     const linkCad = {
       attribute_key: 'chave_1_2_3_',
       attribute_display_type: 'link',
@@ -456,22 +623,29 @@ describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', ()
       },
       { customAttributes: [linkCad] }
     );
+    await wrapper
+      .get('[data-testid="collect-item-edit-chave_1_2_3_"]')
+      .trigger('click');
 
     const typeSelect = wrapper.findComponent(
-      '[data-testid="step-collect-type"]'
+      '[data-testid="collect-item-type-chave_1_2_3_"]'
     );
     expect(typeSelect.props('disabled')).toBe(true);
     expect(typeSelect.props('modelValue')).toBe('text');
     expect(
-      wrapper.find('[data-testid="step-collect-options-locked"]').exists()
+      wrapper
+        .find('[data-testid="collect-item-options-locked-chave_1_2_3_"]')
+        .exists()
     ).toBe(false);
     expect(
-      wrapper.find('[data-testid="step-collect-options-free"]').exists()
+      wrapper
+        .find('[data-testid="collect-item-options-free-chave_1_2_3_"]')
+        .exists()
     ).toBe(false);
     wrapper.unmount();
   });
 
-  it('atributo de CAD tipo "número": trava o Select de tipo mapeado pra "number"', () => {
+  it('item de CAD tipo "número": trava o Select de tipo mapeado pra "number"', async () => {
     const numeroCad = {
       attribute_key: 'idade',
       attribute_display_type: 'number',
@@ -480,16 +654,19 @@ describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', ()
       { name: 'Etapa', collect: { attribute: 'idade', type: 'text' } },
       { customAttributes: [numeroCad] }
     );
+    await wrapper
+      .get('[data-testid="collect-item-edit-idade"]')
+      .trigger('click');
 
     const typeSelect = wrapper.findComponent(
-      '[data-testid="step-collect-type"]'
+      '[data-testid="collect-item-type-idade"]'
     );
     expect(typeSelect.props('disabled')).toBe(true);
     expect(typeSelect.props('modelValue')).toBe('number');
     wrapper.unmount();
   });
 
-  it('atributo SEM CAD lista correspondente: tipo/opções continuam livres pra editar', () => {
+  it('item SEM CAD correspondente: tipo/opções continuam livres pra editar', async () => {
     const wrapper = mountForm(
       {
         name: 'Nome',
@@ -501,17 +678,23 @@ describe('AiStepForm.vue — atributo de CAD tipo lista trava tipo/opções', ()
       },
       { customAttributes: [cidadeCad] }
     );
+    await wrapper
+      .get('[data-testid="collect-item-edit-nome_cliente"]')
+      .trigger('click');
 
     expect(
       wrapper
-        .findComponent('[data-testid="step-collect-type"]')
+        .findComponent('[data-testid="collect-item-type-nome_cliente"]')
         .props('disabled')
     ).toBe(false);
     expect(
-      wrapper.find('[data-testid="step-collect-options-locked"]').exists()
+      wrapper
+        .find('[data-testid="collect-item-options-locked-nome_cliente"]')
+        .exists()
     ).toBe(false);
     expect(
-      wrapper.get('[data-testid="step-collect-options-free"]').element.value
+      wrapper.get('[data-testid="collect-item-options-free-nome_cliente"]')
+        .element.value
     ).toBe('A\nB');
     wrapper.unmount();
   });

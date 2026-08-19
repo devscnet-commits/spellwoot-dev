@@ -114,7 +114,8 @@ class Ai::PythonOrchestratorClient
     end
 
     parsed = response.parsed_response
-    Rails.logger.info "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation.id} reply_present=#{parsed['reply'].present?} conversation_id=#{parsed['conversation_id'].inspect}"
+    Rails.logger.info "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation.id} " \
+                       "reply_present=#{parsed['reply'].present?} conversation_id=#{parsed['conversation_id'].inspect}"
     { reply: parsed['reply'], conversation_id: parsed['conversation_id'], byok_fallback: parsed['byok_fallback'] == true,
       # Auto-relato do modelo (0.0-1.0, orchestrator.CONFIANCA_KEY) — nil quando o Python não conseguiu
       # parsear o JSON do turno. Ai::Gateway usa isto pra decidir handoff por baixa confiança
@@ -172,6 +173,15 @@ class Ai::PythonOrchestratorClient
       # desde que o primeiro department dela foi pro Python. nil quando a conta não tem BYOK — o
       # orquestrador cai na chave global dele mesmo, comportamento IDÊNTICO a antes desta mudança.
       account_api_key: account_api_key,
+      # Catálogo FECHADO de nomes que "dados_coletados[].chave" pode assumir NESTE agente —
+      # orchestrator.py injeta como enum no schema estrito da OpenAI, que passa a REJEITAR qualquer
+      # chave fora da lista (fecha a classe de bug já vista ao vivo: a IA escrevendo "cidade_usuario"
+      # em vez de "cidade" — só o texto do prompt impedia isso antes). Mesma fonte que já existia pra
+      # gerar os schemas de "registrar_*" (Ai::StepCaptureTool, superseded no caminho Python) — nunca
+      # tinha sido reaproveitada pro contrato JSON em si. [] = nenhuma variável/atributo cadastrado
+      # ainda -> orchestrator.py NÃO restringe (chave livre), pra não travar a primeira captura de
+      # uma conta nova.
+      known_attribute_keys: state_manager.known_slot_keys(@agent),
       # Pedido do dono da conta (19/08): texto/dados configurados que ANTES iam soltos no
       # system_prompt (ver comentário em #system_prompt) — o schema virou dinâmico
       # (ai-orchestrator/orchestrator.py#_build_reply_schema) e usa isto pra montar a description de
@@ -483,21 +493,20 @@ class Ai::PythonOrchestratorClient
   # schema. {} (sem "attributes") numa etapa informativa (sem collect) — não força a IA a inventar uma
   # chave que não existe.
   #
-  # type/options SÓ no caso de 1 atributo — numa etapa de vários atributos (achado ao vivo 16/08,
-  # ticket 586: collect.attribute aceita array) aplicar o mesmo tipo/enum a todos seria errado (ex.:
-  # enum de cidades vazando pro atributo "viabilidade" da mesma etapa), mesmo critério de
-  # Ai::StepCaptureTool#property_schema.
+  # Substitui a antiga #step_extraction_instruction/#step_slot_metadata_text (REGRA DE EXTRAÇÃO JSON em
+  # texto fixo no prompt) — mesma fonte (Ai::StepSlot.items), mas devolvida como DADOS (hash) pro
+  # payload em vez de já formatada, pra manter o system_prompt estático (ver comentário no topo de
+  # #system_prompt). Quem monta o texto agora é ai-orchestrator/orchestrator.py#_collect_hint_text.
+  #
+  # CADA item carrega SEU PRÓPRIO type/options/required/hint (achado ao vivo 16/08, ticket 586: uma
+  # etapa com CPF + e-mail aplicando o MESMO tipo/enum aos dois é bug real) — nunca um único
+  # type/options compartilhado por toda a etapa quando há mais de 1 atributo declarado. {} ('items' => [])
+  # numa etapa informativa (sem collect) — não força a IA a inventar uma chave que não existe.
   def collect_hint_for_schema
-    attributes = Ai::StepSlot.declared_attributes(current_step)
-    return { 'attributes' => [] } if attributes.empty?
+    items = Ai::StepSlot.items(current_step)
+    return { 'items' => [] } if items.empty?
 
-    required = !Ai::StepSlot.optional?(current_step)
-    if Ai::StepSlot.multi_attribute?(current_step)
-      { 'attributes' => attributes, 'type' => nil, 'options' => [], 'required' => required }
-    else
-      { 'attributes' => attributes, 'type' => Ai::StepSlot.type(current_step),
-        'options' => Ai::StepSlot.options(current_step), 'required' => required }
-    end
+    { 'items' => items.map { |item| item.slice('attribute', 'type', 'options', 'required', 'hint') } }
   end
 
   # Pedido do usuário: apertar o foco da coleta (só o dado da etapa atual, com exceção clara pra

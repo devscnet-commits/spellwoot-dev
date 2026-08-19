@@ -289,29 +289,35 @@ class Api::Internal::AiExecuteToolController < ActionController::API
                                  agent: agent, dispatcher: nil, run: nil).run(step)
   end
 
-  # 'collect' => 'attribute' aceita string OU array (ver #missing_required_attributes) — extraído
-  # pra reuso: "etapa sem NENHUM attribute declarado" é a mesma definição de "etapa informativa" do
-  # manual interno, usada tanto pra validar dado obrigatório quanto pra travar a varredura acima.
+  # "etapa sem NENHUM attribute declarado" é a mesma definição de "etapa informativa" do manual interno,
+  # usada tanto pra validar dado obrigatório quanto pra travar a varredura acima.
+  #
+  # Ai::StepSlot.declared_attributes (não mais `step.dig('collect', 'attribute')` lido cru): este
+  # controller tinha sua PRÓPRIA leitura de `collect`, duplicada e divergente da de Ai::StepSlot — cega
+  # pro formato NOVO de "DADOS PARA COLETA NA ETAPA" (collect.items[], um type/options/required/hint por
+  # dado). Uma etapa configurada nesse formato novo tinha `collect.dig('attribute')` sempre nil aqui (a
+  # chave mora dentro de cada item, não solta), então #collect_attributes SEMPRE devolvia [] pra ela —
+  # nada preenchido, nada faltando, a etapa "concluía" sozinha sem exigir nada do cliente. Unificado na
+  # mesma fonte que Ai::PythonOrchestratorClient usa pra montar a REGRA DE EXTRAÇÃO JSON: os dois lados
+  # (o que a IA é instruída a pedir, o que o Rails exige pra avançar) não podem mais divergir.
   def collect_attributes(step)
-    return [] unless step.is_a?(Hash)
-
-    Array(step.dig('collect', 'attribute') || step.dig(:collect, :attribute)).compact_blank
+    Ai::StepSlot.declared_attributes(step)
   end
 
-  # collect.attribute aceita string (único formato real usado pela tela hoje) OU array — Array()
-  # normaliza os dois sem inventar campo novo (suporta múltiplos campos obrigatórios por etapa se o
-  # playbook algum dia vier a usar isso; hoje sempre 1 elemento). slot_required: false (NUNCA
-  # collect.required — ver AiStepForm/aiStepPayload) = campo opcional, NUNCA bloqueia avanço — decisão
-  # CONFIRMADA (não é mais assunção pendente): cliente respondeu -> salva normalmente (fora do escopo
-  # deste método, quem grava é registrar_*/salvar_memoria_ia); cliente não respondeu OU disse
-  # explicitamente "prefiro não informar" -> tanto faz pro avanço, a etapa segue de qualquer jeito
-  # porque não é obrigatória. Sem sinal novo de "recusa" vindo do modelo — a ausência do dado em
-  # ai_collected_facts já basta pra decidir (não bloqueia), não precisa distinguir os dois casos.
+  # slot_required: false (nível da etapa, formato ANTIGO) NUNCA bloqueia avanço — decisão CONFIRMADA:
+  # cliente respondeu -> salva normalmente (fora do escopo deste método, quem grava é registrar_*/
+  # salvar_memoria_ia); cliente não respondeu OU disse explicitamente "prefiro não informar" -> tanto faz
+  # pro avanço, a etapa segue porque não é obrigatória. Sem sinal novo de "recusa" vindo do modelo — a
+  # ausência do dado em ai_collected_facts já basta pra decidir (não bloqueia), não precisa distinguir os
+  # dois casos. Ai::StepSlot.items já resolve essa precedência (collect.required explícito > slot_required
+  # da etapa > obrigatório por default) pro formato antigo, e lê 'required' direto por item no formato
+  # novo — cada dado da etapa bloqueia (ou não) o avanço de forma independente dos outros.
   def missing_required_attributes(step, facts)
     return [] unless step.is_a?(Hash)
-    return [] if step['slot_required'] == false || step[:slot_required] == false
 
-    collect_attributes(step).reject { |attr| facts.to_h[attr.to_s].present? }
+    Ai::StepSlot.items(step).select { |item| item['required'] }
+                .map { |item| item['attribute'] }
+                .reject { |attr| facts.to_h[attr.to_s].present? }
   end
 
   # As 3 ações do desfecho declarado — espelha Ai::Gateway#force_conclusion (motor legado) exatamente,

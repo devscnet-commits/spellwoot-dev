@@ -360,12 +360,13 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         body = JSON.parse(req.body)
-        body['collect_hint'] == { 'attributes' => ['cpf'], 'type' => 'text', 'options' => [], 'required' => true } &&
+        body['collect_hint'] ==
+          { 'items' => [{ 'attribute' => 'cpf', 'type' => 'text', 'options' => [], 'required' => true, 'hint' => nil }] } &&
           !body['system_prompt'].include?('REGRA DE EXTRAÇÃO JSON')
       }
     end
 
-    it 'numa etapa informativa (sem collect), vem com attributes vazio' do
+    it 'numa etapa informativa (sem collect), vem com items vazio' do
       Ai::Playbook.create!(agent: agent, steps: [
         { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente.' }
       ])
@@ -374,17 +375,17 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['collect_hint'] == { 'attributes' => [] }
+        JSON.parse(req.body)['collect_hint'] == { 'items' => [] }
       }
     end
 
-    it 'sem playbook nenhum, vem com attributes vazio (current_step é nil)' do
+    it 'sem playbook nenhum, vem com items vazio (current_step é nil)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['collect_hint'] == { 'attributes' => [] }
+        JSON.parse(req.body)['collect_hint'] == { 'items' => [] }
       }
     end
 
@@ -402,8 +403,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['collect_hint'] ==
-          { 'attributes' => ['plano'], 'type' => 'choice', 'options' => %w[Fibra 5G], 'required' => true }
+        JSON.parse(req.body)['collect_hint'] == { 'items' => [
+          { 'attribute' => 'plano', 'type' => 'choice', 'options' => %w[Fibra 5G], 'required' => true, 'hint' => nil }
+        ] }
       }
     end
 
@@ -417,8 +419,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['collect_hint'] ==
-          { 'attributes' => ['indicacao'], 'type' => 'text', 'options' => [], 'required' => false }
+        JSON.parse(req.body)['collect_hint'] == { 'items' => [
+          { 'attribute' => 'indicacao', 'type' => 'text', 'options' => [], 'required' => false, 'hint' => nil }
+        ] }
       }
     end
 
@@ -428,10 +431,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # (Api::Internal::AiExecuteToolController#collect_attributes) exigia separadas. A etapa nunca
     # completava: avancar_etapa vinha true, mas o índice nunca avançava, e o teto de "travado"
     # (stuck_handoff_turns) ia subindo turno a turno até estourar — sem nada de errado visível na
-    # conversa. Agora collect_hint nomeia as DUAS chaves reais numa lista (type/options ficam nil/vazio
-    # pra multi-atributo — ver Ai::StepSlot.multi_attribute?), e o Python monta um item PRÓPRIO por
-    # atributo na description do schema.
-    it 'etapa com MAIS de um atributo declarado: lista CADA atributo real, sem type/options (multi-atributo)' do
+    # conversa. Agora collect_hint lista as DUAS chaves reais, cada uma como item PRÓPRIO — type/options
+    # continuam compartilhados entre os dois (é o que o formato ANTIGO de collect guarda: um único
+    # type/options pro collect inteiro, nunca por atributo — ver Ai::StepSlot#items_from_legacy_collect).
+    it 'etapa com MAIS de um atributo declarado (formato antigo, array): nomeia CADA atributo real como item próprio, nunca uma chave colada' do
       Ai::Playbook.create!(agent: agent, steps: [
         { 'name' => 'Cidade', 'instructions' => 'Peça a cidade e verifique a viabilidade.',
           'collect' => { 'attribute' => %w[cidade viabilidade], 'options' => %w[Chapecó Maravilha] } }
@@ -441,8 +444,35 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        JSON.parse(req.body)['collect_hint'] ==
-          { 'attributes' => %w[cidade viabilidade], 'type' => nil, 'options' => [], 'required' => true }
+        JSON.parse(req.body)['collect_hint'] == { 'items' => [
+          { 'attribute' => 'cidade', 'type' => 'text', 'options' => %w[Chapecó Maravilha], 'required' => true, 'hint' => nil },
+          { 'attribute' => 'viabilidade', 'type' => 'text', 'options' => %w[Chapecó Maravilha], 'required' => true, 'hint' => nil }
+        ] }
+      }
+    end
+
+    # "DADOS PARA COLETA NA ETAPA" (collect.items[]): CADA dado com SEU PRÓPRIO type/required/hint —
+    # CPF obrigatório e e-mail opcional na MESMA etapa, cada um validado com o formato certo, em vez de
+    # os dois caírem no genérico "obrigatório/opcional" que o formato antigo aplicava com 2+ atributos.
+    it 'formato collect.items[]: cada dado leva SEU type/required/hint no collect_hint enviado ao Python' do
+      Ai::Playbook.create!(agent: agent, steps: [
+        { 'name' => 'Dados do cliente', 'instructions' => 'Colete CPF, nome e e-mail.',
+          'collect' => { 'items' => [
+            { 'attribute' => 'cpf_cliente', 'type' => 'cpf', 'required' => true },
+            { 'attribute' => 'nome_cliente', 'type' => 'text', 'required' => true },
+            { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => false, 'hint' => 'para nota fiscal' }
+          ] } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        JSON.parse(req.body)['collect_hint'] == { 'items' => [
+          { 'attribute' => 'cpf_cliente', 'type' => 'cpf', 'options' => [], 'required' => true, 'hint' => nil },
+          { 'attribute' => 'nome_cliente', 'type' => 'text', 'options' => [], 'required' => true, 'hint' => nil },
+          { 'attribute' => 'email_cliente', 'type' => 'email', 'options' => [], 'required' => false, 'hint' => 'para nota fiscal' }
+        ] }
       }
     end
   end

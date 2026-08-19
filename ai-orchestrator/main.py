@@ -47,6 +47,12 @@ class ProcessRequest(BaseModel):
     # BYOK (billing Fase 3, Ai::ModelRouter.account_provider_key): chave OpenAI própria da conta,
     # quando configurada. None = usa a chave global fixa (comportamento de sempre).
     account_api_key: Optional[str] = None
+    # Catálogo FECHADO de nomes que "dados_coletados[].chave" pode assumir neste agente
+    # (Ai::StateManager#known_slot_keys — etapas do playbook ∪ Ai::LeadVariable ∪
+    # CustomAttributeDefinition da conta). orchestrator.py injeta isso como enum no schema estrito —
+    # a OpenAI passa a rejeitar qualquer chave fora do catálogo, em vez de só confiar no texto do
+    # prompt. [] (default) = sem restrição, mesmo comportamento de sempre.
+    known_attribute_keys: list[str] = []
     # Pedido do dono da conta (19/08): texto configurado da conta que ANTES ia solto no system_prompt
     # — agora entra na description do campo correspondente do schema (orchestrator._build_reply_schema)
     # em vez de duplicado em texto. transfer_when/close_when/close_message espelham
@@ -112,6 +118,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             temperature=request.temperature,
             image_urls=request.image_urls,
             account_api_key=request.account_api_key,
+            known_attribute_keys=request.known_attribute_keys,
             transfer_when=request.transfer_when,
             close_when=request.close_when,
             close_message=request.close_message,

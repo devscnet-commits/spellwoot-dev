@@ -205,40 +205,62 @@ _BASE_REPLY_SCHEMA = {
     "additionalProperties": False,
 }
 
+def _item_metadata_text(item: dict) -> str:
+    """tipo/opções/obrigatoriedade/dica de UM item — mesmo texto que
+    Ai::PythonOrchestratorClient#step_slot_metadata_text (Rails, removido 19/08) montava."""
+    parts = [f"tipo: {item['type']}"] if item.get("type") else []
+    if item.get("options"):
+        parts.append("opções válidas: " + ", ".join(item["options"]))
+    parts.append("OBRIGATÓRIO" if item.get("required") else "opcional")
+    if item.get("hint"):
+        parts.append(f"dica: {item['hint']}")
+    return ", ".join(parts)
+
 
 def _collect_hint_text(collect_hint: dict) -> str:
     """Porta Ai::PythonOrchestratorClient#step_extraction_instruction/#step_slot_metadata_text (Rails,
-    removidos 19/08) pro lado do schema. collect_hint vem do Rails: {"attributes": [...], "type":
-    str|None, "options": [...], "required": bool}. "" quando não há atributo declarado na etapa atual
+    removidos 19/08) pro lado do schema. collect_hint vem do Rails como {"items": [{"attribute":,
+    "type":, "options": [...], "required": bool, "hint": str|None}, ...]} — Ai::StepSlot.items(step), um
+    item por dado declarado na etapa, CADA um com seu próprio type/options/required/hint (achado ao vivo
+    16/08, ticket 586: uma etapa com CPF + e-mail aplicando o MESMO tipo aos dois é bug real — nunca um
+    único type/options compartilhado quando há mais de 1 atributo). "" quando não há item na etapa atual
     (etapa informativa) — nada a acrescentar."""
-    attributes = (collect_hint or {}).get("attributes") or []
-    if not attributes:
+    items = (collect_hint or {}).get("items") or []
+    if not items:
         return ""
 
-    required_text = "OBRIGATÓRIO" if collect_hint.get("required") else "opcional"
-    if len(attributes) > 1:
-        lista = ", ".join(f"'{a}'" for a in attributes)
+    if len(items) == 1:
+        item = items[0]
         return (
-            f" NESTA ETAPA, extraia especificamente os dados referentes a {lista} ({required_text}) — "
-            "CADA um vira um item PRÓPRIO aqui, nunca uma única chave combinando os dois."
+            f" NESTA ETAPA, extraia especificamente o dado referente a '{item['attribute']}' "
+            f"({_item_metadata_text(item)}) e inclua um item aqui com \"chave\": \"{item['attribute']}\"."
         )
 
-    attribute = attributes[0]
-    meta_parts = [f"tipo: {collect_hint['type']}"] if collect_hint.get("type") else []
-    if collect_hint.get("options"):
-        meta_parts.append("opções válidas: " + ", ".join(collect_hint["options"]))
-    meta_parts.append(required_text)
+    lista = "\n".join(f"- \"{item['attribute']}\" ({_item_metadata_text(item)})" for item in items)
     return (
-        f" NESTA ETAPA, extraia especificamente o dado referente a '{attribute}' ({', '.join(meta_parts)}) "
-        f"e inclua um item aqui com \"chave\": \"{attribute}\"."
+        " NESTA ETAPA, extraia especificamente os seguintes dados, CADA um como um item PRÓPRIO aqui "
+        f"(nunca uma única chave combinando vários):\n{lista}"
     )
 
 
 def _build_reply_schema(*, transfer_when: str | None, close_when: str | None,
-                        close_message: str | None, collect_hint: dict | None) -> dict:
+                        close_message: str | None, collect_hint: dict | None,
+                        known_attribute_keys: list[str] | None) -> dict:
     """Monta o schema da resposta pra ESTA chamada — deepcopy do template + description personalizada
     com o texto configurado da conta. Ver comentário em _BASE_REPLY_SCHEMA (pedido do dono da conta,
-    19/08)."""
+    19/08).
+
+    known_attribute_keys (Ai::StateManager#known_slot_keys — etapas do playbook ∪ Ai::LeadVariable ∪
+    CustomAttributeDefinition do agente, calculado no Rails e mandado no payload de /process): quando
+    presente, restringe "chave" (dentro de dados_coletados) a um ENUM FECHADO — a OpenAI passa a
+    REJEITAR estruturalmente qualquer nome fora do catálogo, antes mesmo de a resposta voltar. Fecha a
+    classe de bug já vista ao vivo (a IA escrevendo "cidade_usuario" em vez de "cidade" — só o texto do
+    prompt impedia isso, e já falhou uma vez de verdade); não depende mais só da IA "se comportar".
+    None/[] -> "chave" livre (comportamento anterior a esta mudança), de propósito: um enum VAZIO faria
+    "chave" NUNCA validar — travaria QUALQUER captura, mesmo legítima, num agente que ainda não cadastrou
+    nenhuma variável/atributo. Trade-off ACEITO junto (decisão de produto, não efeito colateral): isto
+    fecha a porta do "salvar_memoria_ia" como catch-all pra contexto avulso sem catálogo nenhum —
+    dados_coletados só aceita, daqui pra frente, o que já está configurado no agente."""
     schema = copy.deepcopy(_BASE_REPLY_SCHEMA)
     props = schema["properties"]
 
@@ -266,6 +288,8 @@ def _build_reply_schema(*, transfer_when: str | None, close_when: str | None,
     props[ENCERRAR_KEY]["description"] = encerrar_desc
 
     props[DADOS_KEY]["description"] += _collect_hint_text(collect_hint)
+    if known_attribute_keys:
+        props[DADOS_KEY]["items"]["properties"]["chave"]["enum"] = known_attribute_keys
 
     return schema
 
@@ -413,7 +437,8 @@ def _turn_kwargs(*, model: str, conversation_id: str, instructions: str, input_v
     são enviadas. Era exatamente esse o bug do followup — ele não as reenviava, então a partir da 2ª
     rodada o modelo ficava sem ferramenta alguma e MAX_TOOL_ITERATIONS nunca passava de uma volta.
     `reply_schema` vem de _build_reply_schema (montado UMA vez em run_conversation, reusado em TODA
-    chamada deste turno) — ver comentário lá (pedido do dono da conta, 19/08)."""
+    chamada deste turno — inclusive o enum de "chave" por known_attribute_keys) — ver comentário lá
+    (pedido do dono da conta, 19/08)."""
     kwargs = {
         "model": model,
         "conversation": conversation_id,
@@ -457,6 +482,7 @@ def run_conversation(
     temperature: float | None = None,
     image_urls: list[str] | None = None,
     account_api_key: str | None = None,
+    known_attribute_keys: list[str] | None = None,
     transfer_when: str | None = None,
     close_when: str | None = None,
     close_message: str | None = None,
@@ -482,6 +508,10 @@ def run_conversation(
     chamada real caiu pra chave global — Rails usa isso pra cobrar 1 crédito (ver
     Ai::Gateway#consume_byok_fallback_credit).
 
+    known_attribute_keys: catálogo fechado de nomes que "dados_coletados[].chave" pode assumir NESTE
+    agente (Ai::StateManager#known_slot_keys) — ver _build_reply_schema. None/[] = sem restrição (mesmo
+    comportamento de sempre).
+
     transfer_when/close_when/close_message/collect_hint (pedido do dono da conta, 19/08): texto/dados
     configurados da conta que ANTES iam soltos no system_prompt (Rails) e agora entram na description
     do campo correspondente do schema — ver _build_reply_schema. Montado UMA vez aqui, reusado em
@@ -492,7 +522,8 @@ def run_conversation(
     resolved_model = model or config.OPENAI_MODEL
     instructions = _build_instructions(system_prompt)
     reply_schema = _build_reply_schema(transfer_when=transfer_when, close_when=close_when,
-                                       close_message=close_message, collect_hint=collect_hint)
+                                       close_message=close_message, collect_hint=collect_hint,
+                                       known_attribute_keys=known_attribute_keys)
 
     client, using_account_key = _resolve_client(account_api_key)
     # A OpenAI Conversation precisa existir ANTES da primeira chamada (ver _ensure_conversation) —
