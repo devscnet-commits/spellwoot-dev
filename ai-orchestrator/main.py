@@ -47,6 +47,12 @@ class ProcessRequest(BaseModel):
     # BYOK (billing Fase 3, Ai::ModelRouter.account_provider_key): chave OpenAI própria da conta,
     # quando configurada. None = usa a chave global fixa (comportamento de sempre).
     account_api_key: Optional[str] = None
+    # Catálogo FECHADO de nomes que "dados_coletados[].chave" pode assumir neste department
+    # (Ai::StateManager#known_slot_keys — etapas do playbook ∪ Ai::LeadVariable ∪
+    # CustomAttributeDefinition da conta). orchestrator.py injeta isso como enum no schema estrito —
+    # a OpenAI passa a rejeitar qualquer chave fora do catálogo, em vez de só confiar no texto do
+    # prompt. [] (default) = sem restrição, mesmo comportamento de sempre.
+    known_attribute_keys: list[str] = []
 
 
 class ProcessResponse(BaseModel):
@@ -103,6 +109,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             temperature=request.temperature,
             image_urls=request.image_urls,
             account_api_key=request.account_api_key,
+            known_attribute_keys=request.known_attribute_keys,
         )
     except orchestrator.TurnFailed as e:
         # Never leak internals (stack traces, prompts, API errors) to the Rails side — só o

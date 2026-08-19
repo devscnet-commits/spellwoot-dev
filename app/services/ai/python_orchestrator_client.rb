@@ -172,7 +172,16 @@ class Ai::PythonOrchestratorClient
       # ligado + chave própria configurada (ex.: conta #2) consumia a chave/cota da SCNET em silêncio
       # desde que o primeiro department dela foi pro Python. nil quando a conta não tem BYOK — o
       # orquestrador cai na chave global dele mesmo, comportamento IDÊNTICO a antes desta mudança.
-      account_api_key: account_api_key
+      account_api_key: account_api_key,
+      # Catálogo FECHADO de nomes que "dados_coletados[].chave" pode assumir NESTE department —
+      # orchestrator.py injeta como enum no schema estrito da OpenAI, que passa a REJEITAR qualquer
+      # chave fora da lista (fecha a classe de bug já vista ao vivo: a IA escrevendo "cidade_usuario"
+      # em vez de "cidade" — só o texto do prompt impedia isso antes). Mesma fonte que já existia pra
+      # gerar os schemas de "registrar_*" (Ai::StepCaptureTool, superseded no caminho Python) — nunca
+      # tinha sido reaproveitada pro contrato JSON em si. [] = nenhuma variável/atributo cadastrado
+      # ainda -> orchestrator.py NÃO restringe (chave livre), pra não travar a primeira captura de
+      # uma conta nova.
+      known_attribute_keys: state_manager.known_slot_keys(@department)
     }
   end
 

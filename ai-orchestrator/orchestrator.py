@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import time
@@ -193,14 +194,38 @@ STRUCTURED_REPLY_SCHEMA = {
     "additionalProperties": False,
 }
 
-_TEXT_FORMAT = {
-    "format": {
-        "type": "json_schema",
-        "name": "resposta_atendimento",
-        "schema": STRUCTURED_REPLY_SCHEMA,
-        "strict": True,
+def _text_format(known_attribute_keys: list[str] | None) -> dict:
+    """text.format da Responses API — o schema estrito que TODA resposta do turno tem que obedecer.
+
+    known_attribute_keys (Ai::StateManager#known_slot_keys — etapas do playbook ∪ Ai::LeadVariable ∪
+    CustomAttributeDefinition do department, calculado no Rails e mandado no payload de /process):
+    quando presente, restringe "chave" a um ENUM FECHADO — a OpenAI passa a REJEITAR estruturalmente
+    qualquer nome fora do catálogo, antes mesmo de a resposta voltar. Fecha a classe de bug já vista ao
+    vivo (a IA escrevendo "cidade_usuario" em vez de "cidade" — só o texto do prompt impedia isso, e já
+    falhou uma vez de verdade); não depende mais só da IA "se comportar".
+
+    None/[] -> "chave" livre (comportamento anterior a esta mudança), de propósito: um enum VAZIO faria
+    "chave" NUNCA validar — travaria QUALQUER captura, mesmo legítima, numa conta que ainda não cadastrou
+    nenhuma variável/atributo. O default do parâmetro em run_conversation também é None, então uma
+    chamada sem known_attribute_keys (Rails antigo, ou os testes deste arquivo) continua byte-idêntica.
+
+    Trade-off ACEITO junto (decisão de produto, não efeito colateral): isto fecha a porta do
+    "salvar_memoria_ia" como catch-all pra contexto avulso sem catálogo nenhum — dados_coletados só
+    aceita, daqui pra frente, o que já está configurado no department. Ver PR que introduziu isto.
+
+    Reconstrói o schema a CADA chamada (deepcopy de STRUCTURED_REPLY_SCHEMA, não mais uma constante de
+    módulo) porque a lista de chaves é POR DEPARTMENT, nunca global."""
+    schema = copy.deepcopy(STRUCTURED_REPLY_SCHEMA)
+    if known_attribute_keys:
+        schema["properties"][DADOS_KEY]["items"]["properties"]["chave"]["enum"] = known_attribute_keys
+    return {
+        "format": {
+            "type": "json_schema",
+            "name": "resposta_atendimento",
+            "schema": schema,
+            "strict": True,
+        }
     }
-}
 
 # No longer offered as OpenAI function tools: the model now expresses these via the JSON reply itself
 # (see the keys above), not a tool call. "registrar_*" (one synthesized tool per known attribute,
@@ -339,12 +364,14 @@ def _build_tools(tools_schema: list, vector_store_id: str | None) -> list:
 
 
 def _turn_kwargs(*, model: str, conversation_id: str, instructions: str, input_value,
-                 temperature: float | None, tools_list: list | None = None) -> dict:
+                 temperature: float | None, text_format: dict, tools_list: list | None = None) -> dict:
     """Base de TODA chamada do turno (inicial, followup do loop, fechamento de pendência, retry).
     `tools_list` omitido significa "esta chamada não oferece ferramenta nenhuma", NUNCA "mantém as de
     antes": a Responses API não guarda tools na Conversation, elas valem só para a requisição em que
     são enviadas. Era exatamente esse o bug do followup — ele não as reenviava, então a partir da 2ª
-    rodada o modelo ficava sem ferramenta alguma e MAX_TOOL_ITERATIONS nunca passava de uma volta."""
+    rodada o modelo ficava sem ferramenta alguma e MAX_TOOL_ITERATIONS nunca passava de uma volta.
+    `text_format` é passado pelo chamador (não mais uma constante de módulo — ver _text_format) porque
+    o enum de "chave" é POR DEPARTMENT; a MESMA instância vale pra todas as chamadas de um turno."""
     kwargs = {
         "model": model,
         "conversation": conversation_id,
@@ -357,7 +384,7 @@ def _turn_kwargs(*, model: str, conversation_id: str, instructions: str, input_v
         # Completions name; passing it here would raise a TypeError on this SDK/API instead of
         # working). json_schema ESTRITO (STRUCTURED_REPLY_SCHEMA acima) — a OpenAI valida a resposta
         # contra o schema antes de devolver, não é mais "confia que o texto do prompt basta".
-        "text": _TEXT_FORMAT,
+        "text": text_format,
         # A Conversation é persistente e não expira (ver _ensure_conversation): sem truncation, um
         # atendimento longo cresce até estourar a janela de contexto e o ticket passa a devolver 400
         # PERMANENTE — o conversation_id já está gravado no Rails, não há como "recomeçar". "auto"
@@ -388,6 +415,7 @@ def run_conversation(
     temperature: float | None = None,
     image_urls: list[str] | None = None,
     account_api_key: str | None = None,
+    known_attribute_keys: list[str] | None = None,
 ) -> tuple[str, str, bool, float | None, bool]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
     (text.format=json_schema, strict — STRUCTURED_REPLY_SCHEMA) — control flow (save/advance/transfer/
@@ -407,7 +435,11 @@ def run_conversation(
     account_api_key: chave própria da conta (Ai::ModelRouter.account_provider_key, BYOK Fase 3),
     quando configurada. byok_fallback no retorno avisa Rails que essa chave falhou por auth e a
     chamada real caiu pra chave global — Rails usa isso pra cobrar 1 crédito (ver
-    Ai::Gateway#consume_byok_fallback_credit)."""
+    Ai::Gateway#consume_byok_fallback_credit).
+
+    known_attribute_keys: catálogo fechado de nomes que "dados_coletados[].chave" pode assumir NESTE
+    department (Ai::StateManager#known_slot_keys) — ver _text_format. None/[] = sem restrição (mesmo
+    comportamento de sempre)."""
     openai_tools = _build_tools(tools_schema, vector_store_id)
     # Multi-tenant: Rails resolves this per Account (Ai::OperationProfile); config.OPENAI_MODEL is
     # only the fallback for a tenant with no profile, never a global override.
@@ -426,6 +458,7 @@ def run_conversation(
             ai_department_id=ai_department_id, mode=mode, conversation_id=conversation_id,
             instructions=instructions, resolved_model=resolved_model, openai_tools=openai_tools,
             user_input=user_input, image_urls=image_urls, temperature=temperature, provider=provider,
+            text_format=_text_format(known_attribute_keys),
         )
     except Exception as e:
         # A conversation JÁ existe do lado da OpenAI daqui pra frente — ver TurnFailed: sem levar o id
@@ -439,6 +472,7 @@ def _run_turn(
     *, client: OpenAI, using_account_key: bool, ticket_id: int, ai_department_id: int, mode: str,
     conversation_id: str, instructions: str, resolved_model: str, openai_tools: list,
     user_input: str, image_urls: list[str] | None, temperature: float | None, provider: str | None,
+    text_format: dict,
 ) -> tuple[str, bool, float | None, bool]:
     """O turno em si, com a conversation já garantida. Separado de run_conversation só para que
     QUALQUER falha daqui pra frente ainda saiba qual conversation_id devolver ao Rails (TurnFailed).
@@ -460,6 +494,7 @@ def _run_turn(
     response = _create(_turn_kwargs(
         model=resolved_model, conversation_id=conversation_id, instructions=instructions,
         input_value=_build_input(user_input, image_urls), temperature=temperature, tools_list=openai_tools,
+        text_format=text_format,
     ))
 
     # Real business tools only (control/capture tools are never in openai_tools anymore): executa o que
@@ -534,6 +569,7 @@ def _run_turn(
         response = _create(_turn_kwargs(
             model=resolved_model, conversation_id=conversation_id, instructions=instructions,
             input_value=tool_outputs, temperature=temperature, tools_list=openai_tools,
+            text_format=text_format,
         ))
 
     # Loop encerrado (limite de rodadas ou orçamento de tempo) com function call ainda pendente: a
@@ -553,7 +589,7 @@ def _run_turn(
                 "output": json.dumps({"error": True, "message": "Limite de ferramentas deste turno atingido."},
                                      ensure_ascii=False),
             } for call in pending_calls],
-            temperature=temperature,
+            temperature=temperature, text_format=text_format,
         ))
 
     payload = _parse_structured_reply(response.output_text)
@@ -565,7 +601,7 @@ def _run_turn(
             model=resolved_model, conversation_id=conversation_id, instructions=instructions,
             input_value="Responda ao cliente agora, no formato JSON definido no system prompt, com base no "
                         "que você acabou de fazer.",
-            temperature=temperature,
+            temperature=temperature, text_format=text_format,
         ))
         payload = _parse_structured_reply(response.output_text)
 
