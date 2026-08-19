@@ -25,9 +25,9 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   // 'base_prompt' | 'step_instructions'
   kind: { type: String, default: 'base_prompt' },
-  // Department em edição: ancora as CAPACIDADES REAIS (tools/knowledge/variáveis) no backend, para o
+  // Agente em edição: ancora as CAPACIDADES REAIS (tools/knowledge/variáveis) no backend, para o
   // assistente não sugerir consulta sem fonte nem variável inventada. Ausente => o backend degrada.
-  departmentId: { type: [String, Number], default: null },
+  agentId: { type: [String, Number], default: null },
 });
 const emit = defineEmits(['update:open', 'apply']);
 
@@ -68,7 +68,7 @@ const generate = async () => {
       {
         kind: props.kind,
         brief: brief.value.trim(),
-        department_id: props.departmentId || undefined,
+        agent_id: props.agentId || undefined,
       }
     );
     if (isStepKind.value) {

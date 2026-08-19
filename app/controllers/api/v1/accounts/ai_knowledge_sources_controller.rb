@@ -31,11 +31,10 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     head :no_content
   end
 
-  # Departments the user can scope a source to (all agents in the account). "Todos/Compartilhado"
-  # (nil) is offered by the front, not here.
-  def departments
-    render json: ::Ai::Department.where(account_id: Current.account.id).includes(:agent).order(:id).map { |d|
-      { id: d.id, name: d.name, agent: d.agent&.assistant_name.presence || d.agent&.name }
+  # Agents the user can scope a source to. "Todos/Compartilhado" (nil) is offered by the front, not here.
+  def agents
+    render json: ::Ai::Agent.where(account_id: Current.account.id).order(:id).map { |a|
+      { id: a.id, name: a.assistant_name.presence || a.name }
     }
   end
 
@@ -51,7 +50,7 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
   end
 
   def source_params
-    params.require(:ai_knowledge_source).permit(:kind, :title, :raw, :status, :price, :ai_department_id)
+    params.require(:ai_knowledge_source).permit(:kind, :title, :raw, :status, :price, :ai_agent_id)
   end
 
   # A file upload (TXT/CSV) becomes a "documento" source whose text is the file content;
@@ -70,8 +69,8 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
 
     { kind: 'documento', title: File.basename(file.original_filename.to_s, ext),
       raw: decode_text(file.read), status: 'active',
-      # Escopo do import (nil = compartilhado). Validado por department_within_account no model.
-      ai_department_id: params[:ai_department_id].presence }
+      # Escopo do import (nil = compartilhado). Validado por agent_within_account no model.
+      ai_agent_id: params[:ai_agent_id].presence }
   end
 
   # Preserva acentuação: o upload vem como bytes (ASCII-8BIT). Usa como UTF-8 quando válido;

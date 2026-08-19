@@ -51,7 +51,7 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
 
         reply_text, conversation_id, byok_fallback, confidence, transferred = orchestrator.run_conversation(
             ticket_id=1,
-            ai_department_id=1,
+            ai_agent_id=1,
             mode="live",
             system_prompt="system prompt de teste",
             tools_schema=[KNOWLEDGE_TOOL_SCHEMA],
@@ -146,7 +146,7 @@ class TestNormalizeToolResult:
             mock_execute_tool.return_value = {"result": {}, "status": "failed", "error": "404 token not found"}
 
             orchestrator.run_conversation(
-                ticket_id=1, ai_department_id=1, mode="live", system_prompt="system prompt de teste",
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="system prompt de teste",
                 tools_schema=[], vector_store_id=None, user_input="quero agendar em Maravilha",
                 conversation_id=None,
             )
@@ -177,11 +177,11 @@ class TestAvancarEtapaSempreRepassado:
             mock_execute_tool.return_value = {"result": {}, "status": "blocked_missing_data", "error": None}
 
             reply_text, confidence, transferred = orchestrator._dispatch_structured_reply(
-                payload, ticket_id=1, ai_department_id=1, mode="live",
+                payload, ticket_id=1, ai_agent_id=1, mode="live",
             )
 
         mock_execute_tool.assert_any_call(
-            ticket_id=1, ai_department_id=1, tool_name=orchestrator.ADVANCE_STEP_TOOL,
+            ticket_id=1, ai_agent_id=1, tool_name=orchestrator.ADVANCE_STEP_TOOL,
             arguments={}, mode="live",
         )
         assert reply_text == "Perfeito!"
@@ -205,10 +205,10 @@ class TestHandoffTarget:
         with patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
             mock_execute_tool.return_value = {"result": {}, "status": "executed", "error": None}
 
-            orchestrator._dispatch_structured_reply(payload, ticket_id=1, ai_department_id=1, mode="live")
+            orchestrator._dispatch_structured_reply(payload, ticket_id=1, ai_agent_id=1, mode="live")
 
         mock_execute_tool.assert_any_call(
-            ticket_id=1, ai_department_id=1, tool_name=orchestrator.TRANSFER_TOOL,
+            ticket_id=1, ai_agent_id=1, tool_name=orchestrator.TRANSFER_TOOL,
             arguments={"handoff_summary": "Cliente quer negociar dívida.", "handoff_target": "Financeiro"},
             mode="live",
         )
@@ -223,16 +223,16 @@ class TestHandoffTarget:
         with patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
             mock_execute_tool.return_value = {"result": {}, "status": "executed", "error": None}
 
-            orchestrator._dispatch_structured_reply(payload, ticket_id=1, ai_department_id=1, mode="live")
+            orchestrator._dispatch_structured_reply(payload, ticket_id=1, ai_agent_id=1, mode="live")
 
         mock_execute_tool.assert_any_call(
-            ticket_id=1, ai_department_id=1, tool_name=orchestrator.TRANSFER_TOOL,
+            ticket_id=1, ai_agent_id=1, tool_name=orchestrator.TRANSFER_TOOL,
             arguments={"handoff_summary": "Motivo.", "handoff_target": ""},
             mode="live",
         )
 
 
-# Migração da confiança pro motor Python (Ai::HandoffEvaluator/department.transfer_rules
+# Migração da confiança pro motor Python (Ai::HandoffEvaluator/agent.transfer_rules
 # ['min_confidence'] nunca tinha equivalente no Structured Outputs — o campo existia na tela e não
 # fazia nada). Python só REPORTA "confianca"; quem decide transferir por baixa confiança é o Rails
 # (Ai::Gateway), depois deste turno já ter rodado — ver orchestrator.CONFIANCA_KEY.
@@ -249,7 +249,7 @@ class TestConfianca:
     def test_confianca_numerica_e_repassada_ao_caller(self):
         with patch.object(orchestrator.tools, "execute_tool"):
             _, confidence, _ = orchestrator._dispatch_structured_reply(
-                self._payload(confianca=0.35), ticket_id=1, ai_department_id=1, mode="live",
+                self._payload(confianca=0.35), ticket_id=1, ai_agent_id=1, mode="live",
             )
 
         assert confidence == 0.35
@@ -257,7 +257,7 @@ class TestConfianca:
     def test_confianca_ausente_vira_none_nunca_quebra(self):
         with patch.object(orchestrator.tools, "execute_tool"):
             _, confidence, _ = orchestrator._dispatch_structured_reply(
-                self._payload(), ticket_id=1, ai_department_id=1, mode="live",
+                self._payload(), ticket_id=1, ai_agent_id=1, mode="live",
             )
 
         assert confidence is None
@@ -268,7 +268,7 @@ class TestConfianca:
     def test_confianca_booleana_e_tratada_como_ausente(self):
         with patch.object(orchestrator.tools, "execute_tool"):
             _, confidence, _ = orchestrator._dispatch_structured_reply(
-                self._payload(confianca=True), ticket_id=1, ai_department_id=1, mode="live",
+                self._payload(confianca=True), ticket_id=1, ai_agent_id=1, mode="live",
             )
 
         assert confidence is None
@@ -277,10 +277,10 @@ class TestConfianca:
         with patch.object(orchestrator.tools, "execute_tool"):
             _, _, transferred_true = orchestrator._dispatch_structured_reply(
                 self._payload(transferir_humano=True, handoff_summary="motivo"),
-                ticket_id=1, ai_department_id=1, mode="live",
+                ticket_id=1, ai_agent_id=1, mode="live",
             )
             _, _, transferred_false = orchestrator._dispatch_structured_reply(
-                self._payload(), ticket_id=1, ai_department_id=1, mode="live",
+                self._payload(), ticket_id=1, ai_agent_id=1, mode="live",
             )
 
         assert transferred_true is True
@@ -312,7 +312,7 @@ class TestCorteDoLoopFechaChamadaPendente:
             mock_execute_tool.return_value = {"result": "ok"}
 
             reply_text, _, _, _, _ = orchestrator.run_conversation(
-                ticket_id=1, ai_department_id=1, mode="live", system_prompt="p",
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p",
                 tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None,
                 user_input="oi", conversation_id=None,
             )
@@ -340,7 +340,7 @@ class TestCorteDoLoopFechaChamadaPendente:
             ]
 
             orchestrator.run_conversation(
-                ticket_id=1, ai_department_id=1, mode="live", system_prompt="p",
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p",
                 tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None,
                 user_input="oi", conversation_id=None,
             )
@@ -359,7 +359,7 @@ class TestFalhaPreservaAConversation:
 
             try:
                 orchestrator.run_conversation(
-                    ticket_id=1, ai_department_id=1, mode="live", system_prompt="p", tools_schema=[],
+                    ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p", tools_schema=[],
                     vector_store_id=None, user_input="oi", conversation_id=None,
                 )
             except orchestrator.TurnFailed as e:
@@ -374,39 +374,45 @@ class TestFalhaPreservaAConversation:
 # bug já vista ao vivo: "cidade_usuario" em vez de "cidade"). Decisão de produto aceita junto: fecha
 # a porta do salvar_memoria_ia como catch-all pra contexto avulso sem catálogo nenhum.
 class TestTextFormatEnumDeChaves:
-    def _chave_property(self, text_format):
-        return text_format["format"]["schema"]["properties"]["dados_coletados"]["items"]["properties"]["chave"]
+    def _schema(self, known_attribute_keys):
+        return orchestrator._build_reply_schema(
+            transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+            known_attribute_keys=known_attribute_keys,
+        )
+
+    def _chave_property(self, schema):
+        return schema["properties"]["dados_coletados"]["items"]["properties"]["chave"]
 
     def test_sem_known_attribute_keys_chave_continua_string_livre_sem_enum(self):
-        tf = orchestrator._text_format(None)
-        assert "enum" not in self._chave_property(tf)
+        schema = self._schema(None)
+        assert "enum" not in self._chave_property(schema)
 
     def test_lista_vazia_tambem_nao_restringe_travaria_a_primeira_captura_de_conta_nova(self):
-        tf = orchestrator._text_format([])
-        assert "enum" not in self._chave_property(tf)
+        schema = self._schema([])
+        assert "enum" not in self._chave_property(schema)
 
     def test_com_known_attribute_keys_chave_vira_enum_fechado(self):
-        tf = orchestrator._text_format(["cpf_cliente", "nome_cliente", "email_cliente"])
-        assert self._chave_property(tf)["enum"] == ["cpf_cliente", "nome_cliente", "email_cliente"]
+        schema = self._schema(["cpf_cliente", "nome_cliente", "email_cliente"])
+        assert self._chave_property(schema)["enum"] == ["cpf_cliente", "nome_cliente", "email_cliente"]
 
     def test_resto_do_schema_intacto_so_a_chave_muda(self):
-        # Prova de não-regressão: _text_format não é uma reescrita paralela do schema, é o MESMO
-        # STRUCTURED_REPLY_SCHEMA com um único campo aninhado trocado — todo o resto (mensagem,
+        # Prova de não-regressão: _build_reply_schema não é uma reescrita paralela do schema, é o
+        # MESMO _BASE_REPLY_SCHEMA com um único campo aninhado trocado — todo o resto (mensagem,
         # avancar_etapa, confianca, etc.) tem que sobreviver idêntico.
-        sem_enum = orchestrator._text_format(None)
-        com_enum = orchestrator._text_format(["cidade"])
-        sem_enum["format"]["schema"]["properties"]["dados_coletados"]["items"]["properties"].pop("chave")
-        com_enum["format"]["schema"]["properties"]["dados_coletados"]["items"]["properties"].pop("chave")
+        sem_enum = self._schema(None)
+        com_enum = self._schema(["cidade"])
+        sem_enum["properties"]["dados_coletados"]["items"]["properties"].pop("chave")
+        com_enum["properties"]["dados_coletados"]["items"]["properties"].pop("chave")
         assert sem_enum == com_enum
 
     def test_deepcopy_uma_chamada_nunca_vaza_enum_pra_outra(self):
-        # Duplo cuidado: STRUCTURED_REPLY_SCHEMA é reusado por TODAS as contas — se _text_format
+        # Duplo cuidado: _BASE_REPLY_SCHEMA é reusado por TODAS as contas — se _build_reply_schema
         # mutasse o dict compartilhado em vez de copiar, o enum de uma conta vazaria pro schema
         # "sem restrição" da próxima chamada (de outra conta, sem known_attribute_keys nenhum).
-        orchestrator._text_format(["vazou_isso"])
-        tf_depois = orchestrator._text_format(None)
-        assert "enum" not in self._chave_property(tf_depois)
-        assert "enum" not in orchestrator.STRUCTURED_REPLY_SCHEMA["properties"]["dados_coletados"]["items"]["properties"]["chave"]
+        self._schema(["vazou_isso"])
+        schema_depois = self._schema(None)
+        assert "enum" not in self._chave_property(schema_depois)
+        assert "enum" not in orchestrator._BASE_REPLY_SCHEMA["properties"]["dados_coletados"]["items"]["properties"]["chave"]
 
 
 class TestKnownAttributeKeysDePontaAPonta:
@@ -430,7 +436,7 @@ class TestKnownAttributeKeysDePontaAPonta:
             mock_execute_tool.return_value = {"result": "ok"}
 
             orchestrator.run_conversation(
-                ticket_id=1, ai_department_id=1, mode="live", system_prompt="p",
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p",
                 tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None, user_input="oi",
                 conversation_id=None, known_attribute_keys=["cpf_cliente", "nome_cliente"],
             )
@@ -445,7 +451,7 @@ class TestKnownAttributeKeysDePontaAPonta:
             mock_client.responses.create.return_value = _response("r1", [], output_text=json.dumps(self._payload()))
 
             orchestrator.run_conversation(
-                ticket_id=1, ai_department_id=1, mode="live", system_prompt="p", tools_schema=[],
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p", tools_schema=[],
                 vector_store_id=None, user_input="oi", conversation_id=None,
             )
 

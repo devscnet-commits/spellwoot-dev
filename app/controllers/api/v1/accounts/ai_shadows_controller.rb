@@ -46,7 +46,6 @@ class Api::V1::Accounts::AiShadowsController < Api::V1::Accounts::BaseController
     source = params[:ai_shadow] || {}
     out = {}
     out[:scope] = hashify(source[:scope]) if source.key?(:scope)
-    out[:data_signals] = hashify(source[:data_signals]) if source.key?(:data_signals)
     out
   end
 

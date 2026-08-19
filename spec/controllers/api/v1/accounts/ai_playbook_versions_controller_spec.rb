@@ -13,22 +13,18 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
   let(:agent) do
     Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
   end
-  let(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true })
-  end
 
-  def dept_path
-    "/api/v1/accounts/#{account.id}/ai_agents/#{agent.id}/ai_departments/#{department.id}"
+  def agent_path
+    "/api/v1/accounts/#{account.id}/ai_agents/#{agent.id}"
   end
 
   def upsert_playbook(steps:, default_messages: {})
-    patch dept_path,
-          params: { ai_department: { playbook: { objetivo: 'obj', steps: steps, default_messages: default_messages } } },
+    patch agent_path,
+          params: { ai_agent: { playbook: { objetivo: 'obj', steps: steps, default_messages: default_messages } } },
           headers: admin.create_new_auth_token, as: :json
   end
 
-  describe 'PATCH ai_departments/:id com playbook (gatilho de snapshot)' do
+  describe 'PATCH ai_agents/:id com playbook (gatilho de snapshot)' do
     it 'grava uma Ai::Version com versionable Ai::Playbook' do
       expect do
         upsert_playbook(steps: [{ 'name' => 'a' }])
@@ -41,14 +37,14 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
     it 'lista na shape { id, version_number, note, created_at }' do
       upsert_playbook(steps: [{ 'name' => 'a' }])
 
-      get "#{dept_path}/ai_playbook_versions", headers: admin.create_new_auth_token, as: :json
+      get "#{agent_path}/ai_playbook_versions", headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:success)
       expect(response.parsed_body.first.keys).to match_array(%w[id version_number note created_at])
     end
 
-    it 'retorna [] quando o department ainda não tem playbook' do
-      get "#{dept_path}/ai_playbook_versions", headers: admin.create_new_auth_token, as: :json
+    it 'retorna [] quando o agente ainda não tem playbook' do
+      get "#{agent_path}/ai_playbook_versions", headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:success)
       expect(response.parsed_body).to eq([])
@@ -58,11 +54,11 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
   describe 'POST ai_playbook_versions/:id/restore (SUBSTITUIÇÃO, não merge)' do
     it 'restaura a lista INTEIRA de steps da v1 (não mistura com os steps novos)' do
       upsert_playbook(steps: [{ 'name' => 'a' }, { 'name' => 'b' }])
-      playbook = department.reload.playbook
+      playbook = agent.reload.playbook
       v1 = Ai::Version.for_record(playbook).recent.first
       upsert_playbook(steps: [{ 'name' => 'x' }, { 'name' => 'y' }, { 'name' => 'z' }])
 
-      post "#{dept_path}/ai_playbook_versions/#{v1.id}/restore",
+      post "#{agent_path}/ai_playbook_versions/#{v1.id}/restore",
            headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:success)
@@ -73,11 +69,11 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
 
     it 'substitui default_messages inteiro (chaves que só existem no estado novo não sobrevivem)' do
       upsert_playbook(steps: [{ 'name' => 'a' }], default_messages: { 'greeting' => 'oi' })
-      playbook = department.reload.playbook
+      playbook = agent.reload.playbook
       v1 = Ai::Version.for_record(playbook).recent.first
       upsert_playbook(steps: [{ 'name' => 'a' }], default_messages: { 'greeting' => 'hello', 'extra' => 'novo' })
 
-      post "#{dept_path}/ai_playbook_versions/#{v1.id}/restore",
+      post "#{agent_path}/ai_playbook_versions/#{v1.id}/restore",
            headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:success)
@@ -86,10 +82,10 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
 
     it 'grava a versão de rollback com a nota' do
       upsert_playbook(steps: [{ 'name' => 'a' }])
-      playbook = department.reload.playbook
+      playbook = agent.reload.playbook
       v1 = Ai::Version.for_record(playbook).recent.first
 
-      post "#{dept_path}/ai_playbook_versions/#{v1.id}/restore",
+      post "#{agent_path}/ai_playbook_versions/#{v1.id}/restore",
            headers: admin.create_new_auth_token, as: :json
 
       expect(Ai::Version.for_record(playbook).recent.first.note).to eq("Restaurado da v#{v1.version_number}")
@@ -98,7 +94,7 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
     it 'retorna 404 para uma versão inexistente' do
       upsert_playbook(steps: [{ 'name' => 'a' }])
 
-      post "#{dept_path}/ai_playbook_versions/999999/restore",
+      post "#{agent_path}/ai_playbook_versions/999999/restore",
            headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:not_found)
@@ -109,13 +105,13 @@ RSpec.describe 'AI Playbook Versions API', type: :request do
     # sobrescrever, tornando-se REVERSÍVEL. Prova de mutação por nome.
     it 'captura o estado ATUAL (mudança por console) antes de restaurar -> recuperável' do
       upsert_playbook(steps: [{ 'name' => 'a' }])
-      playbook = department.reload.playbook
+      playbook = agent.reload.playbook
       v1 = Ai::Version.for_record(playbook).recent.first
       # mudança OUT-OF-BAND (console): NÃO gera versão
       playbook.update!(steps: [{ 'name' => 'a', 'on_complete' => { 'action' => 'handoff_human' } }])
 
       expect do
-        post "#{dept_path}/ai_playbook_versions/#{v1.id}/restore",
+        post "#{agent_path}/ai_playbook_versions/#{v1.id}/restore",
              headers: admin.create_new_auth_token, as: :json
       end.to change {
         Ai::Version.for_record(playbook).where(note: 'Estado antes da restauração').count

@@ -27,6 +27,13 @@ class Ai::AgentInbox < ApplicationRecord
 
   validates :mode, inclusion: { in: MODES }
 
-  scope :live, -> { where(mode: 'live', active: true) }
-  scope :shadow, -> { where(mode: 'shadow', active: true) }
+  # Achado ao vivo (19/08): "Inativo" no agente (Ai::Agent#status) não desligava NADA em tempo real —
+  # só essa própria coluna active/mode do binding é que mandava. Um agente marcado "Inativo" que
+  # continuasse com a caixa marcada em "Atendimento IA" seguia respondendo o cliente normalmente (e
+  # ainda bloqueava a auto-atribuição humana via Conversation#ai_pending_handoff?, que só olha pra
+  # este binding). agent_active fecha esse buraco: reusa Ai::Agent.active (existia, mas nunca era
+  # usado por ninguém).
+  scope :agent_active, -> { joins(:agent).merge(Ai::Agent.active) }
+  scope :live, -> { where(mode: 'live', active: true).agent_active }
+  scope :shadow, -> { where(mode: 'shadow', active: true).agent_active }
 end

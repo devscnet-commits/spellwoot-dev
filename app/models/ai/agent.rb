@@ -16,14 +16,19 @@
 #  category                 :string
 #  company_name             :string
 #  guardrails               :text
+#  behavior                 :jsonb            not null
+#  close_rules              :jsonb            not null
+#  follow_up                :jsonb            not null
 #  handoff_agent_ids        :jsonb            not null
 #  handoff_team_ids         :jsonb            not null
 #  identify_as              :string           default("ai")
 #  identity                 :jsonb            not null
 #  name                     :string           not null
 #  site                     :string
+#  sla                      :jsonb            not null
 #  stage                    :string           default("sandbox"), not null
 #  status                   :string           default("active"), not null
+#  transfer_rules           :jsonb            not null
 #  version                  :string
 #  created_at               :datetime         not null
 #  updated_at               :datetime         not null
@@ -53,7 +58,17 @@ class Ai::Agent < ApplicationRecord
   # Optional routing link: conversations assigned to this team are handled by this agent.
   belongs_to :team, class_name: '::Team', optional: true
   has_many :agent_inboxes, class_name: 'Ai::AgentInbox', foreign_key: :ai_agent_id, dependent: :destroy
-  has_many :departments, class_name: 'Ai::Department', foreign_key: :ai_agent_id, dependent: :destroy
+  # Fusão Departamento -> Agente (19/08): antes eram registros filhos separados (Ai::Department,
+  # has_many, multi-department nunca usado de fato — confirmado por auditoria). Agora são colunas
+  # diretas do agente; estas associações substituem o que antes vinha de department.tools/
+  # department.playbook/etc.
+  has_one :playbook, -> { where(active: true) }, class_name: 'Ai::Playbook', foreign_key: :ai_agent_id
+  has_many :tools, class_name: 'Ai::Tool', foreign_key: :ai_agent_id
+  has_many :knowledge_sources, class_name: 'Ai::KnowledgeSource', foreign_key: :ai_agent_id
+  has_many :lead_variables, class_name: 'Ai::LeadVariable', foreign_key: :ai_agent_id, inverse_of: :agent
+  has_many :department_integrations, class_name: 'Ai::DepartmentIntegration', foreign_key: :ai_agent_id
+  has_many :integration_links, through: :department_integrations, source: :integration_link
+  has_many :runs, class_name: 'Ai::Run', foreign_key: :ai_agent_id
 
   validates :name, presence: true
   validates :stage, inclusion: { in: STAGES }

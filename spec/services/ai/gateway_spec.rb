@@ -151,6 +151,66 @@ RSpec.describe Ai::Gateway do
     end
   end
 
+  # === Cenário 2c: ORÇAMENTO DO PERFIL ESTOURADO (Ai::OperationProfile#budget) ========
+  # Achado ao vivo (18/08): o campo "Orçamento" salvava monthly_usd/on_limit mas nada lia — era
+  # decorativo. Espelha o cenário de crédito esgotado acima, mas o teto é do PERFIL (reusável entre
+  # agentes), não da conta.
+  context 'orçamento do perfil estourado' do
+    it 'on_limit stop: não responde, handoff pro humano, nota interna, sem chamar o Python' do
+      create_department
+      binding = create_binding(mode: 'live')
+      profile.update!(budget: { 'monthly_usd' => 10, 'on_limit' => 'stop' })
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent.id, cost: 15, status: 'recorded')
+      stub_python(reply: 'NÃO deveria responder')
+
+      convo = deliver('Preciso de ajuda', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to eq(%w[
+                                         message.received department.resolved
+                                         handoff.executed handoff.assign_failed handoff.budget_exceeded
+                                       ])
+      expect(convo.messages.outgoing.where(private: false).count).to eq(0)
+      expect(Ai::PythonOrchestratorClient).not_to have_received(:process_message)
+      expect(run_for(convo).status).to eq('budget_exceeded')
+    end
+
+    it 'on_limit alert: SEGUE respondendo normalmente, só avisa (não bloqueia)' do
+      create_department
+      binding = create_binding(mode: 'live')
+      profile.update!(budget: { 'monthly_usd' => 10, 'on_limit' => 'alert' })
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent.id, cost: 15, status: 'recorded')
+      stub_python(reply: 'Claro, posso ajudar com isso!')
+
+      convo = deliver('Preciso de ajuda', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to include('reply.sent')
+      expect(event_types(convo)).not_to include('handoff.budget_exceeded')
+      expect(convo.messages.outgoing.last&.content).to eq('Claro, posso ajudar com isso!')
+    end
+
+    it 'gasto ABAIXO do teto: não interfere em nada' do
+      create_department
+      binding = create_binding(mode: 'live')
+      profile.update!(budget: { 'monthly_usd' => 100, 'on_limit' => 'stop' })
+      Ai::Run.create!(account_id: account.id, ai_agent_id: agent.id, cost: 1, status: 'recorded')
+      stub_python(reply: 'Claro!')
+
+      convo = deliver('oi', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to include('reply.sent')
+    end
+
+    it 'sem teto configurado (budget vazio): não interfere em nada' do
+      create_department
+      binding = create_binding(mode: 'live')
+      stub_python(reply: 'Claro!')
+
+      convo = deliver('oi', binding: binding, mode: 'live')
+
+      expect(event_types(convo)).to include('reply.sent')
+    end
+  end
+
   # === Cenário 7: NO_DEPARTMENT — encerra cedo (agente sem department ativo) ==========
   context 'sem department resolvido' do
     it 'finalizes early as no_department' do

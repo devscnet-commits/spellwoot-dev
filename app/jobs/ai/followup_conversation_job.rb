@@ -48,50 +48,57 @@ class Ai::FollowupConversationJob < ApplicationJob
     end
     return log_skip(conversation_id, 'human_assigned') if conversation.assignee_id.present?
 
-    binding = Ai::AgentInbox.live.includes(agent: :account).find_by(inbox_id: conversation.inbox_id)
+    binding = resolved_binding(conversation)
     return log_skip(conversation_id, 'no_live_binding') if binding.nil?
     unless binding.agent.account&.feature_enabled?('ai_core')
       return log_skip(conversation_id, 'ai_core_disabled', agent_id: binding.agent_id)
     end
 
-    department = resolved_department(conversation, binding)
-    return log_skip(conversation_id, 'no_department_resolved', agent_id: binding.agent_id) if department.nil?
-
-    behaviors = Array(department.follow_up.to_h['behaviors'])
-    fallback = fallback_actions(department)
+    agent = binding.agent
+    behaviors = Array(agent.follow_up.to_h['behaviors'])
+    fallback = fallback_actions(agent)
     if behaviors.empty? && fallback.empty?
-      return log_skip(conversation_id, 'no_followup_or_fallback_configured', department_id: department.id)
+      return log_skip(conversation_id, 'no_followup_or_fallback_configured', agent_id: agent.id)
     end
 
     inbox = ::Inbox.find_by(id: binding.inbox_id)
     return log_skip(conversation_id, 'inbox_not_found', inbox_id: binding.inbox_id) if inbox.nil?
 
-    process(binding, department, behaviors, fallback, inbox, conversation, binding.agent.account_id)
+    process(binding, agent, behaviors, fallback, inbox, conversation, agent.account_id)
   end
 
-  # Bug real ao vivo (isolamento): o follow-up "puxava a mensagem de OUTROS departamentos/agentes".
-  # Ai::DepartmentResolver.resolve com message_content: nil (não há mensagem nova no contexto de
-  # follow-up) SÓ é determinístico quando há override, mapeamento único de inbox, ou um único
-  # department ativo — pra agente MULTI-department sem nada disso, ele cai no is_default/primeiro por
-  # POSIÇÃO, que não tem NENHUMA relação com qual department de fato conduziu esta conversa. Fonte de
-  # verdade real: Ai::Run#ai_department_id, gravado a cada turno que o Gateway realmente processou
-  # (app/services/ai/gateway.rb) — o department que RESOLVEU esta conversa ao vivo, fato histórico, não
-  # uma re-classificação às cegas. DepartmentResolver só entra como fallback pra conversa que a IA
-  # nunca processou ainda (sem nenhum Ai::Run, ex.: logo após o binding ser criado).
-  def resolved_department(conversation, binding)
-    last_department_id = Ai::Run.where(conversation_id: conversation.id).where.not(ai_department_id: nil)
-                                .order(created_at: :desc).limit(1).pick(:ai_department_id)
-    if last_department_id
-      # Escopado ao agente/conta DESTE binding — mesma disciplina multi-tenant do override em
-      # Ai::DepartmentResolver (nunca confiar num id cru sem validar de quem ele é).
-      dept = binding.agent.departments.active.find_by(id: last_department_id)
-      return dept if dept
+  # Achado ao vivo (18/08): com MAIS de um agente "live" na MESMA inbox (ex.: duas versões da Maya em
+  # produção simultaneamente pra teste), o antigo `Ai::AgentInbox.live.find_by(inbox_id:)` — sem
+  # NENHUM critério de ordem — devolvia sempre a MESMA linha pra essa inbox, não importa de qual
+  # agente fosse a conversa de verdade. Efeito: o follow-up do agente configurado nunca disparava
+  # (o job achava que estava lidando com o OUTRO agente, sem follow-up nenhum), e o agente errado
+  # nunca via a config certa aplicada à conversa certa. Ai::GatewayRunJob (resposta ao vivo) já
+  # resolve isso com um desempate determinístico ([priority, id] entre os elegíveis pela posse de
+  # time — ver #select_winner/#eligible_live? lá) — o follow-up não usava nada disso.
+  #
+  # Corrigido no mesmo espírito de #run (a etapa que descobre qual agente atendeu): para uma conversa que a IA já atendeu,
+  # Ai::Run#ai_agent_id é o FATO histórico de qual agente respondeu de verdade — usa ele direto, sem
+  # eleição nenhuma. Só cai na eleição por [priority, id] (mesma regra do Gateway, replicada aqui)
+  # quando não há Ai::Run ainda (conversa nova, binding acabou de ser criado).
+  def resolved_binding(conversation)
+    last_agent_id = Ai::Run.where(conversation_id: conversation.id).where.not(ai_agent_id: nil)
+                           .order(created_at: :desc).limit(1).pick(:ai_agent_id)
+    if last_agent_id
+      binding = Ai::AgentInbox.live.includes(agent: :account)
+                              .find_by(inbox_id: conversation.inbox_id, ai_agent_id: last_agent_id)
+      return binding if binding
     end
 
-    department, = Ai::DepartmentResolver.resolve(
-      agent: binding.agent, inbox_id: conversation.inbox_id, message_content: nil, conversation: conversation
-    )
-    department
+    candidates = Ai::AgentInbox.live.includes(agent: :account).where(inbox_id: conversation.inbox_id)
+    eligible = candidates.select { |b| team_eligible?(b, conversation.team_id) }
+    eligible.min_by { |b| [b.priority.to_i, b.id] }
+  end
+
+  # Mesmo critério de posse-de-time que Ai::GatewayRunJob#eligible_live? usa: agente sem time atende
+  # qualquer conversa; agente COM time só atende conversa do mesmo time.
+  def team_eligible?(binding, conversation_team_id)
+    agent_team_id = binding.agent.team_id
+    agent_team_id.nil? || (conversation_team_id.present? && conversation_team_id == agent_team_id)
   end
 
   # ===================================================================================
@@ -105,9 +112,9 @@ class Ai::FollowupConversationJob < ApplicationJob
   # ENTRE o sweep enfileirar e este job rodar) já é coberto com precisão por #awaiting_customer? logo
   # acima — se o cliente respondeu, a ÚLTIMA mensagem passa a ser dele, não nossa, e o guard já barra.
   # O piso fixo era redundante com isso e só atrapalhava configurações curtas legítimas.
-  def process(binding, department, behaviors, fallback, inbox, conversation, account_id)
+  def process(binding, agent, behaviors, fallback, inbox, conversation, account_id)
     unless awaiting_customer?(conversation)
-      return log_skip(conversation.id, 'last_message_is_customers', department_id: department.id)
+      return log_skip(conversation.id, 'last_message_is_customers', agent_id: agent.id)
     end
     return log_skip(conversation.id, 'human_assigned') if conversation.assignee_id.present? # a human already took over
     # Já entregue a um humano (handoff): a IA/follow-up saem de cena — não retomam nem finalizam.
@@ -116,26 +123,26 @@ class Ai::FollowupConversationJob < ApplicationJob
 
     # No follow-up configured: skip straight to the no-follow-up decision (close_rules).
     if behaviors.empty?
-      maybe_run_fallback(department, fallback, inbox, conversation, account_id)
+      maybe_run_fallback(agent, fallback, inbox, conversation, account_id)
       return
     end
 
     behavior = active_behavior(behaviors, inbox)
-    return log_skip(conversation.id, 'no_matching_behavior_for_now', department_id: department.id) if behavior.nil?
+    return log_skip(conversation.id, 'no_matching_behavior_for_now', agent_id: agent.id) if behavior.nil?
 
     attempts = Array(behavior['attempts'])
     sent = followups_since_incoming(conversation)
 
     if sent.count < attempts.size
-      maybe_send_attempt(binding, department, attempts, sent, conversation, account_id)
+      maybe_send_attempt(binding, agent, attempts, sent, conversation, account_id)
     else
-      maybe_run_action(department, behavior, inbox, conversation, account_id, sent)
+      maybe_run_action(agent, behavior, inbox, conversation, account_id, sent)
     end
   end
 
   # --- Sending the next attempt ------------------------------------------------
 
-  def maybe_send_attempt(binding, department, attempts, sent, conversation, account_id)
+  def maybe_send_attempt(binding, agent, attempts, sent, conversation, account_id)
     index = sent.count
     delay = attempts[index]['delay_minutes'].to_i
     last_at = sent.maximum(:created_at) || last_incoming_at(conversation) || conversation.last_activity_at
@@ -146,14 +153,14 @@ class Ai::FollowupConversationJob < ApplicationJob
     message = effective_message(attempts, index)
     return log_skip(conversation.id, 'attempt_message_blank', index: index) if message.blank?
 
-    if Ai::ReplyPolicy.allowed?(mode: binding.mode, department: department, conversation: conversation)
+    if Ai::ReplyPolicy.allowed?(mode: binding.mode, agent: agent, conversation: conversation)
       Messages::MessageBuilder.new(nil, conversation, { content: message, private: false }).perform
       emit(account_id, conversation.id, 'followup.sent', { index: index + 1, chars: message.length })
       Rails.logger.info "[Ai::FollowupConversationJob] conv=#{conversation.id} sent=true index=#{index + 1}"
     else
-      reason = Ai::ReplyPolicy.skip_reason(mode: binding.mode, department: department, conversation: conversation)
+      reason = Ai::ReplyPolicy.skip_reason(mode: binding.mode, agent: agent, conversation: conversation)
       emit(account_id, conversation.id, 'followup.intended', { index: index + 1, executed: false, reason: reason })
-      log_skip(conversation.id, "reply_policy_#{reason}", mode: binding.mode, department_id: department.id)
+      log_skip(conversation.id, "reply_policy_#{reason}", mode: binding.mode, agent_id: agent.id)
     end
   end
 
@@ -168,18 +175,18 @@ class Ai::FollowupConversationJob < ApplicationJob
 
   # --- Action after the last attempt + inactivity window -----------------------
 
-  def maybe_run_action(department, behavior, inbox, conversation, account_id, sent)
-    inactivity = inactivity_minutes(department)
+  def maybe_run_action(agent, behavior, inbox, conversation, account_id, sent)
+    inactivity = inactivity_minutes(agent)
     last_send = sent.maximum(:created_at)
     return if last_send && last_send > inactivity.minutes.ago # still inside the inactivity window
 
-    run_action(behavior['no_response_action'].to_s, department, inbox, conversation, account_id)
+    run_action(behavior['no_response_action'].to_s, agent, inbox, conversation, account_id)
   end
 
-  def run_action(action, department, inbox, conversation, account_id)
+  def run_action(action, agent, inbox, conversation, account_id)
     case action
     when 'finalize'
-      send_close_message(department, conversation)
+      send_close_message(agent, conversation)
       conversation.update!(status: :resolved)
       record_action(conversation, account_id, 'finalize')
     when 'discard'
@@ -190,11 +197,11 @@ class Ai::FollowupConversationJob < ApplicationJob
     when 'wait_business_hours'
       # Hold until business hours, then assign to a human.
       if business_hours_open?(inbox)
-        assigned = assign_to_human(conversation, department)
+        assigned = assign_to_human(conversation, agent)
         record_action(conversation, account_id, 'assign', via: 'wait_business_hours', assigned: assigned)
       end
     else # 'assign' (default)
-      assigned = assign_to_human(conversation, department)
+      assigned = assign_to_human(conversation, agent)
       record_action(conversation, account_id, 'assign', assigned: assigned)
     end
   end
@@ -203,29 +210,29 @@ class Ai::FollowupConversationJob < ApplicationJob
 
   # Ordered list of decisions for when the inactivity window passes and there is no
   # follow-up to fire. Order = priority; the first one wins.
-  def fallback_actions(department)
-    Array(department.close_rules.to_h['no_followup_actions']).map(&:to_s).select(&:present?)
+  def fallback_actions(agent)
+    Array(agent.close_rules.to_h['no_followup_actions']).map(&:to_s).select(&:present?)
   end
 
-  def maybe_run_fallback(department, fallback, inbox, conversation, account_id)
+  def maybe_run_fallback(agent, fallback, inbox, conversation, account_id)
     action = fallback.first
     return if action.blank?
 
     quiet_at = quiet_since(conversation)
-    inactivity = inactivity_minutes(department)
+    inactivity = inactivity_minutes(agent)
     return if quiet_at && quiet_at > inactivity.minutes.ago # still inside the inactivity window
 
-    run_fallback_action(action, department, inbox, conversation, account_id)
+    run_fallback_action(action, agent, inbox, conversation, account_id)
   end
 
-  def run_fallback_action(action, department, inbox, conversation, account_id)
+  def run_fallback_action(action, agent, inbox, conversation, account_id)
     case action
     when 'finalize'
-      send_close_message(department, conversation)
+      send_close_message(agent, conversation)
       conversation.update!(status: :resolved)
       record_action(conversation, account_id, 'finalize', via: 'no_followup')
     when 'transfer_human'
-      assigned = assign_to_human(conversation, department)
+      assigned = assign_to_human(conversation, agent)
       record_action(conversation, account_id, 'transfer_human', via: 'no_followup', assigned: assigned)
     when 'transfer_ai'
       # Re-engage the AI proactively: re-run the Gateway anchored on the customer's last
@@ -260,9 +267,9 @@ class Ai::FollowupConversationJob < ApplicationJob
   #
   # Devolve se um humano ficou de fato atribuído — quem chama grava isso no evento, pra que
   # followup.action nunca mais afirme uma transferência que não aconteceu.
-  def assign_to_human(conversation, department)
+  def assign_to_human(conversation, agent)
     coordinator = Ai::HandoffCoordinator.new(
-      conversation: conversation, account: conversation.account, agent: department.agent, message: nil
+      conversation: conversation, account: conversation.account, agent: agent, message: nil
     )
     coordinator.assign_human(coordinator.human_team_id({}), reason: 'followup_timeout')
     conversation.reload.assignee_id.present?
@@ -277,8 +284,8 @@ class Ai::FollowupConversationJob < ApplicationJob
     Ai::GatewayRunJob.perform_later(anchor.id)
   end
 
-  def send_close_message(department, conversation)
-    message = department.close_rules.to_h['message'].to_s.strip
+  def send_close_message(agent, conversation)
+    message = agent.close_rules.to_h['message'].to_s.strip
     return if message.blank?
 
     Messages::MessageBuilder.new(nil, conversation, { content: message, private: false }).perform
@@ -338,8 +345,8 @@ class Ai::FollowupConversationJob < ApplicationJob
     Time.current.strftime('%H:%M')
   end
 
-  def inactivity_minutes(department)
-    minutes = department.close_rules.to_h['inactivity_minutes'].to_i
+  def inactivity_minutes(agent)
+    minutes = agent.close_rules.to_h['inactivity_minutes'].to_i
     minutes.positive? ? minutes : DEFAULT_INACTIVITY
   end
 

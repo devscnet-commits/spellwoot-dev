@@ -21,11 +21,11 @@ import {
   reconcileSteps,
 } from './aiStepPayload';
 
-// When embedded inside the agent (the agent's single default department), ids come by prop
-// and the page chrome (breadcrumb / outer shell / Cancelar) is hidden.
+// Always embedded inside the agent detail page now (fusão Departamento -> Agente, 19/08) — the
+// page chrome (breadcrumb / outer shell / Cancelar) stays hidden, and every field here is really
+// just another section of the SAME Ai::Agent record (behavior/playbook/tools/follow-up/close_rules).
 const props = defineProps({
   embedded: { type: Boolean, default: false },
-  embedDepartmentId: { type: [String, Number], default: null },
   // When embedded, which agent-level group of sections to show.
   section: { type: String, default: null },
 });
@@ -33,10 +33,7 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 
-const isNew = computed(() => route.params.departmentId === 'new');
-const departmentId = ref(
-  props.embedDepartmentId || (isNew.value ? null : route.params.departmentId)
-);
+const isNew = computed(() => false);
 const activeTab = ref('instructions');
 
 // Flattened into agent-level tabs when embedded: each group maps to underlying sections.
@@ -68,23 +65,21 @@ const loadedSteps = ref([]);
 const conflict = ref({ phase: null });
 const cloneSteps = arr =>
   JSON.parse(JSON.stringify(Array.isArray(arr) ? arr : []));
-// Operational summary counts (read-only) served by the departments index serializer.
+// Operational summary counts (read-only) served by the agent serializer.
 const summary = ref({ steps: 0, tools: 0, knowledge: 0 });
 
 const form = reactive({
-  name: '',
   objetivo: '',
-  status: 'active',
   steps: [],
   transfer_when_steps: '',
   close_when_steps: '',
-  // Transferência por confiança (department.transfer_rules.min_confidence): transfere se a confiança
+  // Transferência por confiança (agent.transfer_rules.min_confidence): transfere se a confiança
   // da IA for menor que o valor (0 = desligado). É o único gatilho determinístico — o match por
   // palavra-chave foi removido (substring sem contexto gerava falso positivo). Diferente de
   // transfer_when, que é só sugestão no prompt.
   transfer_min_confidence: 0,
   // Transferir para humano se a IA travar numa etapa de coleta por X mensagens
-  // (department.transfer_rules.stuck_handoff_turns). Default 3; 0 = desligado (nunca transfere por trava).
+  // (agent.transfer_rules.stuck_handoff_turns). Default 3; 0 = desligado (nunca transfere por trava).
   stuck_handoff_turns: 10,
   // Atendimento
   group_delay_seconds: '',
@@ -105,8 +100,6 @@ const form = reactive({
   // não existir mensagem para disparar, o agente segue por estas decisões (ordem =
   // prioridade). Cada item é { uid (transitório), type }.
   no_followup_action: '',
-  is_default: false,
-  position: 0,
 });
 const {
   isDirty: deptDirty,
@@ -116,7 +109,6 @@ const {
 
 const agentUrl = () =>
   `/api/v1/accounts/${route.params.accountId}/ai_agents/${route.params.agentId}`;
-const deptCollectionUrl = () => `${agentUrl()}/ai_departments`;
 
 // Custom attributes (account-level): source for the "Dado que esta etapa coleta" select in
 // AiStepForm (the agent may use all of them — no per-agent opt-out).
@@ -132,31 +124,23 @@ const fetchCustomAttributes = async () => {
   }
 };
 
-// Variáveis INTERNAS do department (Ai::LeadVariable): fonte do Select da chave de slot no AiStepForm
-// (junto com customAttributes). O endpoint index já existia; ninguém o consumia. departmentId pode ser
-// nulo em "novo" -> mantém [] (o inline-create depende do department já salvo).
+// Variáveis INTERNAS do agente (Ai::LeadVariable): fonte do Select da chave de slot no AiStepForm
+// (junto com customAttributes). O endpoint index já existia; ninguém o consumia.
 const leadVariables = ref([]);
 const fetchLeadVariables = async () => {
-  if (!departmentId.value) return;
   try {
-    const { data } = await axios.get(
-      `${deptCollectionUrl()}/${departmentId.value}/ai_lead_variables`
-    );
+    const { data } = await axios.get(`${agentUrl()}/ai_lead_variables`);
     leadVariables.value = Array.isArray(data) ? data : [];
   } catch (error) {
     leadVariables.value = [];
   }
 };
-// (B2) Ferramentas do department: fonte do Select "opções vêm de: ferramenta" num slot choice do AiStepForm.
-// Mesmo endpoint que a aba Ferramentas (AiTools) consome; buscado aqui para passar como prop às etapas. Falha
-// ou "novo" (sem departmentId) => [] (o modo ferramenta do form avisa que não há ferramenta).
+// (B2) Ferramentas do agente: fonte do Select "opções vêm de: ferramenta" num slot choice do AiStepForm.
+// Mesmo endpoint que a aba Ferramentas (AiTools) consome; buscado aqui para passar como prop às etapas.
 const deptTools = ref([]);
 const fetchDeptTools = async () => {
-  if (!departmentId.value) return;
   try {
-    const { data } = await axios.get(
-      `${deptCollectionUrl()}/${departmentId.value}/ai_tools`
-    );
+    const { data } = await axios.get(`${agentUrl()}/ai_tools`);
     deptTools.value = Array.isArray(data) ? data : [];
   } catch (error) {
     deptTools.value = [];
@@ -192,16 +176,6 @@ const fetchTeams = async () => {
     teams.value = Array.isArray(data) ? data : data?.payload || [];
   } catch (error) {
     teams.value = [];
-  }
-};
-// Departamentos irmãos do agente (destino da automação change_ai_department).
-const departmentsList = ref([]);
-const fetchDepartmentsList = async () => {
-  try {
-    const { data } = await axios.get(deptCollectionUrl());
-    departmentsList.value = Array.isArray(data) ? data : data?.payload || [];
-  } catch (error) {
-    departmentsList.value = [];
   }
 };
 // Agente dono, para a WHITELIST do desfecho (on_complete): handoff_team_ids / handoff_agent_ids.
@@ -342,14 +316,14 @@ const hydrate = dept => {
   const close = dept.close_rules || {};
   const transferRules = dept.transfer_rules || {};
   Object.assign(form, {
-    name: dept.name || '',
-    objetivo: dept.objetivo || '',
-    status: dept.status || 'active',
+    // objetivo não tem campo editável na tela (nunca teve) — só sobrevive via playbook.objetivo,
+    // round-tripado aqui pra não ser apagado a cada save (ver #buildPayload).
+    objetivo: playbook.objetivo || '',
     steps: parseSteps(playbook.steps),
     transfer_when_steps: arrayToLines(playbook.transfer_when),
     close_when_steps: arrayToLines(playbook.close_when),
     transfer_min_confidence: Number(transferRules.min_confidence) || 0,
-    // ?? 3: chave ausente (department antigo) => default 3; valor 0 explícito é preservado.
+    // ?? 3: chave ausente (agente antigo) => default 3; valor 0 explícito é preservado.
     stuck_handoff_turns: Number(transferRules.stuck_handoff_turns ?? 10),
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
@@ -360,23 +334,17 @@ const hydrate = dept => {
     close_message: close.message || '',
     inactivity_minutes: close.inactivity_minutes ?? 30,
     no_followup_action: parseNoFollowupAction(close.no_followup_actions),
-    is_default: dept.is_default || false,
-    position: dept.position ?? 0,
   });
 };
 
 const fetchDepartment = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(deptCollectionUrl());
-  const dept = (Array.isArray(data) ? data : []).find(
-    d => String(d.id) === String(departmentId.value)
-  );
-  if (dept) {
-    hydrate(dept);
+  const { data } = await axios.get(agentUrl());
+  if (data) {
+    hydrate(data);
     summary.value = {
-      steps: dept.steps_count ?? 0,
-      tools: dept.tools_count ?? 0,
-      knowledge: dept.knowledge_sources_count ?? 0,
+      steps: data.steps_count ?? 0,
+      tools: data.tools_count ?? 0,
+      knowledge: data.knowledge_sources_count ?? 0,
     };
   }
   captureDept();
@@ -416,12 +384,7 @@ const buildFinalization = () => ({
 });
 
 const buildPayload = () => ({
-  ai_department: {
-    name: form.name,
-    objetivo: form.objetivo,
-    status: form.status,
-    is_default: true,
-    position: form.position,
+  ai_agent: {
     behavior: {
       auto_attendance: true,
       grouping: { delay_seconds: Number(form.group_delay_seconds) || 0 },
@@ -462,29 +425,13 @@ const save = async () => {
   }
   isSaving.value = true;
   try {
-    if (isNew.value) {
-      const { data } = await axios.post(deptCollectionUrl(), buildPayload());
-      departmentId.value = data.id;
-      // (Q6) Também no create: o router.replace REUSA o componente (não recarrega), então sem re-hidratar,
-      // um save-de-etapa seguinte (agora PATCH) mandaria a versão velha -> 409. Fresca da resposta do POST.
-      playbookLockVersion.value = data?.playbook?.lock_version ?? 0;
-      useAlert(t('AI_DEPARTMENTS.SAVED'));
-      router.replace({
-        name: 'ai_department_detail',
-        params: { agentId: route.params.agentId, departmentId: data.id },
-      });
-    } else {
-      const { data } = await axios.patch(
-        `${deptCollectionUrl()}/${departmentId.value}`,
-        buildPayload()
-      );
-      // (Q6) Re-hidrata o lock_version com a versão FRESCA da resposta. Com (B) o save dispara por etapa; sem
-      // isto, o 2º save da sequência mandaria a versão velha e levaria 409 SEMPRE. O serialize devolve
-      // playbook.as_json (inclui lock_version), a mesma forma que o load lê. Fallback: preserva o atual.
-      playbookLockVersion.value =
-        data?.playbook?.lock_version ?? playbookLockVersion.value;
-      useAlert(t('AI_DEPARTMENTS.SAVED'));
-    }
+    const { data } = await axios.patch(agentUrl(), buildPayload());
+    // (Q6) Re-hidrata o lock_version com a versão FRESCA da resposta. Com (B) o save dispara por etapa; sem
+    // isto, o 2º save da sequência mandaria a versão velha e levaria 409 SEMPRE. O serialize devolve
+    // playbook.as_json (inclui lock_version), a mesma forma que o load lê. Fallback: preserva o atual.
+    playbookLockVersion.value =
+      data?.playbook?.lock_version ?? playbookLockVersion.value;
+    useAlert(t('AI_DEPARTMENTS.SAVED'));
     conflict.value = { phase: null };
     resetDept();
   } catch (error) {
@@ -506,11 +453,8 @@ const save = async () => {
 const reapplyConflict = async () => {
   isSaving.value = true;
   try {
-    const { data } = await axios.get(deptCollectionUrl());
-    const dept = (Array.isArray(data) ? data : []).find(
-      d => String(d.id) === String(departmentId.value)
-    );
-    const freshPlaybook = dept?.playbook || {};
+    const { data } = await axios.get(agentUrl());
+    const freshPlaybook = data?.playbook || {};
     const freshSteps = parseSteps(freshPlaybook.steps);
     const result = reconcileSteps(freshSteps, form.steps, loadedSteps.value);
     if (result.status === 'merged') {
@@ -554,11 +498,9 @@ const goBack = () =>
   });
 
 // Operational readiness (%): a checklist over data already loaded — no backend.
+// 'INSTRUCTIONS'/'OBJETIVO' removidos: eram um ✓ enganoso pra campos sem editor na UI. O % é
+// dinâmico (divide por checks.length), então cada remoção some sem desalinhar a conta.
 const readinessChecks = computed(() => [
-  // 'INSTRUCTIONS' removido: era um ✓ enganoso para uma coluna legada sem editor na UI
-  // (ai_departments.instructions). O % é dinâmico (divide por checks.length), então some sem
-  // desalinhar a conta.
-  { key: 'OBJETIVO', ok: !!form.objetivo?.trim() },
   { key: 'STEPS', ok: summary.value.steps > 0 },
   { key: 'KNOWLEDGE', ok: summary.value.knowledge > 0 },
   { key: 'TOOLS', ok: summary.value.tools > 0 },
@@ -572,7 +514,7 @@ const readinessPct = computed(() => {
 
 // --- Histórico de versões (painel extraído em AiVersionHistory.vue) ---
 const versionsBaseUrl = computed(
-  () => `${deptCollectionUrl()}/${departmentId.value}/ai_department_versions`
+  () => `${agentUrl()}/ai_agent_behavior_versions`
 );
 
 // --- Etapas (cards arrastáveis; edição inline no próprio card) ---
@@ -732,7 +674,6 @@ onMounted(async () => {
     fetchDeptTools(),
     fetchLabels(),
     fetchTeams(),
-    fetchDepartmentsList(),
     fetchAgent(),
     fetchAgents(),
   ]);
@@ -779,7 +720,7 @@ onMounted(async () => {
           <Logo class="h-8 w-auto shrink-0" />
         </div>
 
-        <!-- Operational summary: what this department is made of, at a glance -->
+        <!-- Operational summary: what this agent is made of, at a glance -->
         <div
           v-if="!isNew && !embedded"
           class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-n-slate-11"
@@ -1323,8 +1264,6 @@ onMounted(async () => {
                     :lead-variables="leadVariables"
                     :tools="deptTools"
                     :agent-id="route.params.agentId"
-                    :department-id="departmentId"
-                    :departments="departmentsList"
                     :handoff-teams="handoffTeams"
                     :handoff-agents="handoffAgents"
                     class="p-4"
@@ -1398,8 +1337,6 @@ onMounted(async () => {
                 :lead-variables="leadVariables"
                 :tools="deptTools"
                 :agent-id="route.params.agentId"
-                :department-id="departmentId"
-                :departments="departmentsList"
                 :handoff-teams="handoffTeams"
                 :handoff-agents="handoffAgents"
                 @save="saveStep"
@@ -1472,7 +1409,6 @@ onMounted(async () => {
         <AiTools
           v-if="visibleSections.has('tools') && !isNew"
           :agent-id="route.params.agentId"
-          :department-id="departmentId"
         />
 
         <!-- (1) Tarja de conflito (save defasado / 409). Diz o que FAZER, não só o que houve. As alterações

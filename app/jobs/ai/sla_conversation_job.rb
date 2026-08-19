@@ -40,20 +40,18 @@ class Ai::SlaConversationJob < ApplicationJob
 
   # --- MOVIDO VERBATIM (resolve-ou-intende) + cutoff/re-check por binding no run time ---
   def process(binding, conversation)
-    department = binding.agent.departments.active.first
-    return if department.nil?
-
-    timeout = department.sla['response_timeout_minutes'].to_i
+    agent = binding.agent
+    timeout = agent.sla['response_timeout_minutes'].to_i
     return unless timeout.positive?
 
-    # Re-check da inatividade AGORA (cutoff do departamento no run time).
+    # Re-check da inatividade AGORA (cutoff do agente no run time).
     return if conversation.last_activity_at.blank? || conversation.last_activity_at >= timeout.minutes.ago
 
-    account_id = binding.agent.account_id
-    # The per-department auto_attendance toggle is a kill switch for every autonomous action.
-    acts_live = binding.mode == 'live' && department.behavior.to_h['auto_attendance'] != false
+    account_id = agent.account_id
+    # The per-agent auto_attendance toggle is a kill switch for every autonomous action.
+    acts_live = binding.mode == 'live' && agent.behavior.to_h['auto_attendance'] != false
 
-    if acts_live && department.sla['on_timeout'].to_s == 'resolve'
+    if acts_live && agent.sla['on_timeout'].to_s == 'resolve'
       Ai::CapabilityRegistry.execute('conversation.resolve', conversation: conversation, input: {})
       conversation.reload # reflete o status p/ o `break` do run
       emit(account_id, conversation.id, 'sla.closed', { executed: true })

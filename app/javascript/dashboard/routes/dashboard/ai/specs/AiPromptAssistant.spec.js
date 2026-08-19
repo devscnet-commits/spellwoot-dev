@@ -69,9 +69,9 @@ describe('AiPromptAssistant.vue', () => {
     expect(wrapper.findComponent(Button).props('isLoading')).toBe(false);
   });
 
-  // PR4 — quando a tela sabe o department (etapas/Comportamento), envia department_id para o backend
+  // PR4 — quando a tela sabe o agente (etapas/Comportamento), envia agent_id para o backend
   // ancorar as capacidades reais (não sugerir consulta sem fonte nem variável inventada).
-  it('envia department_id no corpo quando a prop está preenchida', async () => {
+  it('envia agent_id no corpo quando a prop está preenchida', async () => {
     const post = vi.fn(() =>
       Promise.resolve({
         data: { objective: 'x', rules: ['y'] },
@@ -79,7 +79,7 @@ describe('AiPromptAssistant.vue', () => {
     );
     const wrapper = mountPanel(
       { post },
-      { kind: 'step_instructions', departmentId: 42 }
+      { kind: 'step_instructions', agentId: 42 }
     );
 
     wrapper
@@ -94,7 +94,7 @@ describe('AiPromptAssistant.vue', () => {
       {
         kind: 'step_instructions',
         brief: 'consulta de fatura',
-        department_id: 42,
+        agent_id: 42,
       }
     );
   });

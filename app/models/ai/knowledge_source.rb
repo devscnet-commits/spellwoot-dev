@@ -11,22 +11,22 @@
 #  created_at       :datetime         not null
 #  updated_at       :datetime         not null
 #  account_id       :bigint           not null
-#  ai_department_id :bigint
+#  ai_agent_id      :bigint
 #
 # Indexes
 #
-#  index_ai_knowledge_sources_on_ai_department_id  (ai_department_id)
+#  index_ai_knowledge_sources_on_ai_agent_id  (ai_agent_id)
 #
 class Ai::KnowledgeSource < ApplicationRecord
   belongs_to :account, class_name: '::Account'
-  belongs_to :department, class_name: 'Ai::Department', foreign_key: :ai_department_id, optional: true
+  belongs_to :agent, class_name: 'Ai::Agent', foreign_key: :ai_agent_id, optional: true
   has_many :chunks, class_name: 'Ai::KnowledgeChunk', foreign_key: :ai_knowledge_source_id, dependent: :destroy
 
   scope :active, -> { where(status: 'active') }
 
-  # Optional department scope must belong to the SAME account (blocks attaching a source to another
-  # tenant's department). nil = shared/account-wide source.
-  validate :department_within_account
+  # Optional agent scope must belong to the SAME account (blocks attaching a source to another
+  # tenant's agent). nil = shared/account-wide source.
+  validate :agent_within_account
 
   # Keep the retrievable chunks in sync: website sources are crawled (which then ingests),
   # the others are ingested directly from title/raw.
@@ -34,10 +34,10 @@ class Ai::KnowledgeSource < ApplicationRecord
 
   private
 
-  def department_within_account
-    return if ai_department_id.blank?
+  def agent_within_account
+    return if ai_agent_id.blank?
 
-    errors.add(:ai_department_id, 'inválido') unless department && department.account_id == account_id
+    errors.add(:ai_agent_id, 'inválido') unless agent && agent.account_id == account_id
   end
 
   def sync_knowledge

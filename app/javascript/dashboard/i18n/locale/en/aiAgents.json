@@ -388,6 +388,7 @@
       "STEP_COLLECT_TYPE_CHOICE": "Escolha (opções)",
       "STEP_COLLECT_TYPE_ATTACHMENT": "Anexo (documento/foto)",
       "STEP_COLLECT_REQUIRED": "Obrigatório para avançar (recomendado)",
+      "STEP_COLLECT_LOCKED_HINT": "Tipo e opções vêm do atributo personalizado. Para alterações, edite diretamente no atributo personalizado (Configurações → Atributos personalizados).",
       "STEP_COLLECT_OPTIONS": "Opções (uma por linha)",
       "STEP_COLLECT_OPTIONS_PLACEHOLDER": "Manhã\nTarde\nNoite",
       "STEP_COLLECT_OPTIONS_SOURCE": "As opções vêm de:",
@@ -848,23 +849,13 @@
     "FORM": {
       "NAME": "Nome do perfil",
       "PROVIDER": "Provedor",
+      "PROVIDER_SOON": "em breve",
       "MODEL": "Modelo",
       "BUDGET": "Orçamento mensal (USD)",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar",
       "EDIT": "Editar",
       "DELETE": "Excluir"
-    },
-    "ROUTING": {
-      "TITLE": "Estratégia de roteamento (confiança do RAG)",
-      "DESCRIPTION": "Define como o sistema decide entre cache, IA econômica e IA premium pela confiança da busca vetorial.",
-      "HIGH": "Confiança alta — score ≥ (serve do cache, sem IA)",
-      "LOW": "Confiança baixa — score < (IA premium gera resposta nova)",
-      "CHEAP_PROVIDER": "Provedor da IA econômica (zona cinzenta)",
-      "CHEAP_MODEL": "Modelo da IA econômica",
-      "PREMIUM_PROVIDER": "Provedor da IA premium (confiança baixa)",
-      "PREMIUM_MODEL": "Modelo da IA premium",
-      "EXPLAINER": "Score ≥ confiança alta → serve do cache, instantâneo e sem custo. Entre as duas faixas → a IA econômica julga (serve ou escala). Abaixo da confiança baixa → a IA premium gera uma resposta nova."
     },
     "SAVED": "Perfil salvo.",
     "DELETED": "Perfil excluído.",

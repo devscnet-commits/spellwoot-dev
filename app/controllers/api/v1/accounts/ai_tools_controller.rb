@@ -1,15 +1,15 @@
-# CRUD for a department's Tools. A Tool wraps a capability (internal) or an integration (external).
-# Nested under ai_agents -> ai_departments.
+# CRUD for an agent's Tools. A Tool wraps a capability (internal) or an integration (external).
+# Nested under ai_agents.
 class Api::V1::Accounts::AiToolsController < Api::V1::Accounts::BaseController
-  before_action :set_department
+  before_action :set_agent
   before_action :set_tool, only: %i[update destroy]
 
   def index
-    render json: @department.tools.order(:id)
+    render json: @agent.tools.order(:id)
   end
 
   def create
-    tool = @department.tools.new(tool_params.merge(account_id: Current.account.id))
+    tool = @agent.tools.new(tool_params.merge(account_id: Current.account.id))
     tool.assign_attributes(schema_params)
     save_and_render(tool, :created)
   end
@@ -26,14 +26,13 @@ class Api::V1::Accounts::AiToolsController < Api::V1::Accounts::BaseController
 
   private
 
-  def set_department
-    agent = ::Ai::Agent.find_by(id: params[:ai_agent_id], account_id: Current.account.id)
-    @department = agent&.departments&.find_by(id: params[:ai_department_id])
-    render(json: { error: 'departamento não encontrado' }, status: :not_found) if @department.nil?
+  def set_agent
+    @agent = ::Ai::Agent.find_by(id: params[:ai_agent_id], account_id: Current.account.id)
+    render(json: { error: 'agente não encontrado' }, status: :not_found) if @agent.nil?
   end
 
   def set_tool
-    @tool = @department.tools.find_by(id: params[:id])
+    @tool = @agent.tools.find_by(id: params[:id])
     render(json: { error: 'ferramenta não encontrada' }, status: :not_found) if @tool.nil?
   end
 

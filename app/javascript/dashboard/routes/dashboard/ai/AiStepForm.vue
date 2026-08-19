@@ -21,16 +21,14 @@ const props = defineProps({
   labels: { type: Array, default: () => [] },
   teams: { type: Array, default: () => [] },
   customAttributes: { type: Array, default: () => [] },
-  // Variáveis INTERNAS do department (Ai::LeadVariable). Fonte do Select da chave junto com customAttributes;
+  // Variáveis INTERNAS do agente (Ai::LeadVariable). Fonte do Select da chave junto com customAttributes;
   // o inline-create grava aqui (não em CustomAttributeDefinition).
   leadVariables: { type: Array, default: () => [] },
-  // (B2) Ferramentas do department (Ai::Tool), carregadas pelo pai. Fonte do Select "opções vêm de: ferramenta"
+  // (B2) Ferramentas do agente (Ai::Tool), carregadas pelo pai. Fonte do Select "opções vêm de: ferramenta"
   // num slot choice. Usadas só pelo NOME (domain_from_tool guarda o nome). Vazio => o modo ferramenta avisa.
   tools: { type: Array, default: () => [] },
-  // Contexto para o POST do inline-create de LeadVariable (nested em ai_agents -> ai_departments).
+  // Contexto para o POST do inline-create de LeadVariable (nested em ai_agents).
   agentId: { type: [String, Number], default: null },
-  departmentId: { type: [String, Number], default: null },
-  departments: { type: Array, default: () => [] },
   // Desfecho (b)-core: times da WHITELIST do agente (handoff_team_ids) e IAs de handoff (handoff_agent_ids),
   // já resolvidos pelo pai. NÃO são todos os times da conta (props.teams) — é a lista que a resolução do
   // backend aceita (é aqui que entra a validação de escrita: fora da whitelist não é selecionável).
@@ -80,19 +78,71 @@ const legacyCollectAsRawItems = (collect, step) => {
     }));
 };
 
-const rawItemToDraft = raw => ({
-  uid: nextCollectItemUid(),
-  attribute: raw.attribute || '',
-  type: raw.type || 'text',
-  options: Array.isArray(raw.options) ? raw.options.join('\n') : '',
-  source: raw.domain_from_tool ? 'tool' : 'fixed',
-  domainTool: raw.domain_from_tool || '',
-  required: raw.required ?? true,
-  hint: raw.hint || '',
-  // Carregado do banco = já configurado -> começa RECOLHIDO (senão toda etapa com 3 dados abriria com
-  // 3 cards abertos, ilegível). Só nasce expandido quando ADICIONADO nesta sessão de edição.
-  expanded: false,
-});
+// Retorna as opções de um CAD como array de strings, ou [] quando não há valores.
+const cadOptionsFor = key => {
+  if (!key) return [];
+  const cad = (props.customAttributes || []).find(a => a.attribute_key === key);
+  if (!cad) return [];
+  return Array.isArray(cad.attribute_values)
+    ? cad.attribute_values.filter(Boolean)
+    : [];
+};
+
+// O CAD (qualquer tipo) que um atributo coletado referencia, ou null (LeadVariable interna — aí sim o
+// tipo/opções ficam livres pro usuário decidir, não há definição real pra espelhar).
+const cadFor = key => {
+  if (!key) return null;
+  return (
+    (props.customAttributes || []).find(a => a.attribute_key === key) || null
+  );
+};
+
+// Achado ao vivo (18/08, ampliado): o pedido original travava só CAD tipo "lista" — mas um CAD tipo
+// "link" (ex.: chave_1_2_3_) deixava a etapa oferecer "Escolha (opções)" com valores digitados à mão
+// (ex.: "coisa 1/coisa2/coisa3") sem relação NENHUMA com o atributo real. Qualquer CAD (lista, texto,
+// número, link, etc.) tem um tipo definido em Configurações → Atributos personalizados — um item da
+// etapa não deveria poder divergir disso pra NENHUM tipo, não só lista. O mapeamento abaixo decide
+// qual "Tipo do dado" da etapa corresponde a cada attribute_display_type do CAD.
+const CAD_TYPE_TO_STEP_TYPE = {
+  text: 'text',
+  number: 'number',
+  currency: 'number',
+  percent: 'number',
+  link: 'text',
+  date: 'text',
+  checkbox: 'text',
+  list: 'choice',
+};
+
+// Espelha type/options do CAD quando o atributo referencia um — TANTO ao seedar do banco quanto ao
+// adicionar um item novo (ver #newItemFromAttribute), porque o campo fica TRAVADO na tela: o usuário
+// não tem como corrigir manualmente um valor desatualizado, então o que é exibido tem que ser SEMPRE
+// o que o CAD diz agora, nunca o que ficou gravado no step em algum save anterior.
+const mirrorCadOnto = item => {
+  const cad = cadFor(item.attribute);
+  if (!cad) return item;
+  item.type = CAD_TYPE_TO_STEP_TYPE[cad.attribute_display_type] || 'text';
+  if (item.type === 'choice') {
+    item.source = 'fixed';
+    item.options = cadOptionsFor(item.attribute).join('\n');
+  }
+  return item;
+};
+
+const rawItemToDraft = raw =>
+  mirrorCadOnto({
+    uid: nextCollectItemUid(),
+    attribute: raw.attribute || '',
+    type: raw.type || 'text',
+    options: Array.isArray(raw.options) ? raw.options.join('\n') : '',
+    source: raw.domain_from_tool ? 'tool' : 'fixed',
+    domainTool: raw.domain_from_tool || '',
+    required: raw.required ?? true,
+    hint: raw.hint || '',
+    // Carregado do banco = já configurado -> começa RECOLHIDO (senão toda etapa com 3 dados abriria
+    // com 3 cards abertos, ilegível). Só nasce expandido quando ADICIONADO nesta sessão de edição.
+    expanded: false,
+  });
 
 const seedCollectItems = (collect, step) => {
   if (!collect) return [];
@@ -137,16 +187,6 @@ const draft = reactive({
   })),
 });
 
-// Retorna as opções de um CAD como array de strings, ou [] quando não há valores.
-const cadOptionsFor = key => {
-  if (!key) return [];
-  const cad = (props.customAttributes || []).find(a => a.attribute_key === key);
-  if (!cad) return [];
-  return Array.isArray(cad.attribute_values)
-    ? cad.attribute_values.filter(Boolean)
-    : [];
-};
-
 // --- "+ Selecionar dado do sistema para coletar...": união LeadVariable ∪ CustomAttributeDefinition,
 // filtrada pro que AINDA NÃO foi adicionado nesta etapa (evita coletar o mesmo dado duas vezes). Ao
 // contrário do Select antigo (uma escolha SUBSTITUÍA a anterior), aqui escolher AGREGA um item novo —
@@ -154,6 +194,16 @@ const cadOptionsFor = key => {
 const usedAttributes = computed(
   () => new Set(draft.collectItems.map(i => i.attribute).filter(Boolean))
 );
+
+// O CAD tipo "lista" especificamente — só esse tem attribute_values pra mirar em "Opções".
+const cadListFor = key => {
+  const cad = cadFor(key);
+  return cad && cad.attribute_display_type === 'list' ? cad : null;
+};
+
+// Por item (não mais um único slotLocked global — cada item da etapa tem SEU PRÓPRIO atributo, e só
+// espelha um CAD quando O DELE for um).
+const isItemLocked = item => !!cadFor(item.attribute);
 
 const addExistingKey = ref('');
 const addExistingOptions = computed(() =>
@@ -175,11 +225,14 @@ const originOf = attribute =>
     ? 'system'
     : 'memory';
 
-// Ao adicionar um dado que já é um CustomAttributeDefinition tipo "lista": auto-preenche type=choice e
-// as opções — mesmo atalho que existia antes como watch contínuo; agora roda UMA vez, no momento de
-// adicionar (com vários itens, reagir a "qual mudou" não faz mais sentido como watch global).
-const newItemFromAttribute = attribute => {
-  const item = {
+// Ao adicionar um dado que já é um CustomAttributeDefinition (qualquer tipo — achado ao vivo 18/08,
+// ampliado: travar só CAD tipo "lista" deixava um CAD tipo "link"/"número"/etc. oferecer um "Tipo do
+// dado" divergente do que já está definido em Configurações → Atributos personalizados): auto-preenche
+// o type espelhando o CAD (e as opções, quando for lista) — mesmo atalho que existia antes como watch
+// contínuo; agora roda UMA vez, no momento de adicionar (com vários itens, reagir a "qual mudou" não
+// faz mais sentido como watch global). LeadVariable interna (sem CAD) mantém o comportamento livre.
+const newItemFromAttribute = attribute =>
+  mirrorCadOnto({
     uid: nextCollectItemUid(),
     attribute,
     type: 'text',
@@ -189,17 +242,7 @@ const newItemFromAttribute = attribute => {
     required: true,
     hint: '',
     expanded: true, // recém-adicionado -> abre pra configurar tipo/obrigatório/dica na hora
-  };
-  const isListCad = (props.customAttributes || []).some(
-    a => a.attribute_key === attribute && a.attribute_display_type === 'list'
-  );
-  const values = cadOptionsFor(attribute);
-  if (isListCad && values.length) {
-    item.type = 'choice';
-    item.options = values.join('\n');
-  }
-  return item;
-};
+  });
 
 watch(addExistingKey, key => {
   if (!key) return;
@@ -234,8 +277,7 @@ const createVariable = async () => {
   createError.value = '';
   try {
     const { data } = await axios.post(
-      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}` +
-        `/ai_departments/${props.departmentId}/ai_lead_variables`,
+      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}/ai_lead_variables`,
       { ai_lead_variable: { name } }
     );
     emit('variableCreated', data); // pai empilha em leadVariables => a opção aparece
@@ -287,8 +329,7 @@ const deleteVariable = async v => {
   deleteError.value = '';
   try {
     await axios.delete(
-      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}` +
-        `/ai_departments/${props.departmentId}/ai_lead_variables/${v.id}`
+      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}/ai_lead_variables/${v.id}`
     );
     // era usada por algum item desta etapa -> remove (a variável em si já sumiu do backend; deixar o
     // item pendurado gravaria uma chave órfã no próximo save).
@@ -334,8 +375,8 @@ const slotTypeOptions = computed(() => [
   },
 ]);
 
-// (B2) Ferramentas do department como opções do Select "opções vêm de: ferramenta". O value é o NOME (é o que
-// domain_from_tool grava e o backend resolve). Placeholder vazio quando o department não tem ferramenta.
+// (B2) Ferramentas do agente como opções do Select "opções vêm de: ferramenta". O value é o NOME (é o que
+// domain_from_tool grava e o backend resolve). Placeholder vazio quando o agente não tem ferramenta.
 const toolOptions = computed(() =>
   (props.tools || [])
     .map(tl => (tl?.name || '').trim())
@@ -344,7 +385,7 @@ const toolOptions = computed(() =>
 );
 
 // Aviso anti-degradação-silenciosa: um item está em modo ferramenta e o NOME salvo não existe (mais) na
-// lista do department (ferramenta removida/renomeada). O runtime já faz fail-open + emite
+// lista do agente (ferramenta removida/renomeada). O runtime já faz fail-open + emite
 // tool_domain.unextractable, mas quem edita a etapa precisa VER que o slot voltou a aceitar qualquer
 // valor. Função (não computed) — agora é POR ITEM, chamada no v-for.
 const isToolDomainMissing = item => {
@@ -373,10 +414,6 @@ const typeOptions = computed(() => [
   {
     value: 'change_team',
     label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_CHANGE_TEAM'),
-  },
-  {
-    value: 'change_ai_department',
-    label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_CHANGE_AI_DEPARTMENT'),
   },
   {
     value: 'update_attribute',
@@ -409,9 +446,6 @@ const handoffTeamOptions = computed(() =>
 );
 const handoffAgentOptions = computed(() =>
   props.handoffAgents.map(a => ({ value: a.name, label: a.name }))
-);
-const departmentOptions = computed(() =>
-  props.departments.map(d => ({ value: d.id, label: d.name }))
 );
 // Só atributos de CONVERSA (a automação grava em conversation.custom_attributes).
 const attributeOptions = computed(() =>
@@ -748,14 +782,42 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
             <Select
               v-model="item.type"
               :options="slotTypeOptions"
+              :disabled="isItemLocked(item)"
+              :data-testid="`collect-item-type-${item.attribute}`"
               @update:model-value="onItemTypeChange(item)"
             />
           </label>
 
-          <!-- choice: as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA (domínio
-               dinâmico). Um modo por vez, POR ITEM — cada dado choice desta etapa escolhe a sua fonte. -->
+          <!-- Travado: o dado coletado É um atributo personalizado (CAD, qualquer tipo — achado ao
+               vivo 18/08, ampliado) — tipo e opções têm que ser SEMPRE espelho do atributo, sem editar
+               por aqui. Nem mostra o escolhe-a-fonte (fixa/ferramenta): travado, a fonte É o
+               atributo, sempre. -->
+          <p
+            v-if="isItemLocked(item)"
+            class="text-xs text-n-slate-11 flex items-start gap-1"
+          >
+            <span class="i-lucide-lock size-3.5 shrink-0 mt-0.5" />
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_LOCKED_HINT') }}
+          </p>
+          <label
+            v-if="isItemLocked(item) && cadListFor(item.attribute)"
+            class="flex flex-col gap-1 text-xs"
+          >
+            {{ $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS') }}
+            <textarea
+              :value="item.options"
+              rows="2"
+              disabled
+              :data-testid="`collect-item-options-locked-${item.attribute}`"
+              class="px-2 py-1 rounded border border-n-weak bg-n-slate-2 text-n-slate-11 resize-y cursor-not-allowed"
+            />
+          </label>
+
+          <!-- choice (não travado): as opções vêm de uma LISTA FIXA ou do RESULTADO de uma FERRAMENTA
+               (domínio dinâmico). Um modo por vez, POR ITEM — cada dado choice desta etapa escolhe a
+               sua fonte. -->
           <div
-            v-if="item.type === 'choice'"
+            v-else-if="!isItemLocked(item) && item.type === 'choice'"
             class="flex flex-col gap-2 text-xs"
           >
             <span class="text-n-slate-11">
@@ -794,6 +856,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
                 :placeholder="
                   $t('AI_DEPARTMENTS.FORM.STEP_COLLECT_OPTIONS_PLACEHOLDER')
                 "
+                :data-testid="`collect-item-options-free-${item.attribute}`"
                 class="px-2 py-1 rounded border border-n-weak bg-n-solid-1 resize-y"
               />
             </label>
@@ -1009,21 +1072,6 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
               }}</span>
             </label>
 
-            <!-- change_ai_department -->
-            <label
-              v-else-if="automation.type === 'change_ai_department'"
-              class="flex flex-col gap-1 text-xs text-n-slate-11"
-            >
-              {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_DEPARTMENT') }}
-              <Select
-                v-model="automation.params.department_id"
-                :options="departmentOptions"
-                :placeholder="
-                  $t('AI_DEPARTMENTS.FORM.AUTOMATION_DEPARTMENT_PLACEHOLDER')
-                "
-              />
-            </label>
-
             <!-- update_attribute -->
             <template v-else-if="automation.type === 'update_attribute'">
               <label class="flex flex-col gap-1 text-xs text-n-slate-11">
@@ -1188,7 +1236,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
     <AiPromptAssistant
       v-model:open="assistantOpen"
       kind="step_instructions"
-      :department-id="departmentId"
+      :agent-id="agentId"
       @apply="applyAssistantSuggestion"
     />
   </div>

@@ -12,7 +12,7 @@ const route = useRoute();
 const { t } = useI18n();
 
 const blank = () => ({
-  facets: { departments: [], error_types: [], statuses: [] },
+  facets: { agents: [], error_types: [], statuses: [] },
   summary: {
     evaluated: 0,
     unanswered: 0,
@@ -22,7 +22,7 @@ const blank = () => ({
     tools_missing: 0,
     knowledge_gaps: 0,
     by_resolution: {},
-    by_department: [],
+    by_agent: [],
     by_error: [],
   },
   insights: [],
@@ -40,7 +40,7 @@ const filters = ref({
   period: '0',
   from: '',
   to: '',
-  department_id: '',
+  agent_id: '',
   error_type: '',
   status: '',
   has_reply: '',
@@ -84,9 +84,9 @@ const periodOptions = computed(() => [
   { value: '30', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_30') },
   { value: 'custom', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_CUSTOM') },
 ]);
-const departmentOptions = computed(() => [
+const agentOptions = computed(() => [
   { value: '', label: t('AI_SHADOW_RUNS.FILTERS.DEPARTMENT_ALL') },
-  ...data.value.facets.departments.map(d => ({
+  ...data.value.facets.agents.map(d => ({
     value: String(d.id),
     label: d.name,
   })),
@@ -152,19 +152,19 @@ const insightBody = i => {
   if (i.type === 'faq') {
     return t('AI_SHADOW_RUNS.INSIGHT.FAQ_BODY', {
       count: i.count,
-      department: i.department,
+      agent: i.agent,
     });
   }
   if (i.type === 'instruction') {
     return t('AI_SHADOW_RUNS.INSIGHT.INSTRUCTION_BODY', {
       count: i.count,
-      department: i.department,
+      agent: i.agent,
     });
   }
   if (i.type === 'tool') {
     return t('AI_SHADOW_RUNS.INSIGHT.TOOL_BODY', {
       count: i.count,
-      department: i.department,
+      agent: i.agent,
       tool: i.tool,
     });
   }
@@ -189,7 +189,7 @@ const diagnosticBlocks = computed(() => [
 // Drill-down: clicar num insight expande a lista das perguntas (runs) daquela lacuna.
 const expandedKey = ref(null);
 const insightKey = (blockKey, insight) =>
-  `${blockKey}:${insight.department || ''}:${insight.tool || ''}:${insight.error_type || ''}`;
+  `${blockKey}:${insight.agent || ''}:${insight.tool || ''}:${insight.error_type || ''}`;
 const isExpanded = (blockKey, insight) =>
   expandedKey.value === insightKey(blockKey, insight);
 const toggleInsight = (blockKey, insight) => {
@@ -276,7 +276,7 @@ const goToPage = page => {
 const clearFilters = () => {
   filters.value = {
     period: '0',
-    department_id: '',
+    agent_id: '',
     error_type: '',
     status: '',
     has_reply: '',
@@ -401,10 +401,7 @@ onMounted(fetchRuns);
               <span class="text-xs font-medium text-n-slate-11">
                 {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_DEPARTMENT') }}
               </span>
-              <Select
-                v-model="filters.department_id"
-                :options="departmentOptions"
-              />
+              <Select v-model="filters.agent_id" :options="agentOptions" />
             </label>
             <label class="flex flex-col gap-1 min-w-0">
               <span class="text-xs font-medium text-n-slate-11">
@@ -601,7 +598,7 @@ onMounted(fetchRuns);
 
           <!-- Oportunidades por departamento -->
           <section
-            v-if="data.summary.by_department.length"
+            v-if="data.summary.by_agent.length"
             class="flex flex-col gap-2"
           >
             <h2 class="text-sm font-semibold text-n-slate-12">
@@ -609,7 +606,7 @@ onMounted(fetchRuns);
             </h2>
             <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
               <div
-                v-for="(dept, index) in data.summary.by_department"
+                v-for="(dept, index) in data.summary.by_agent"
                 :key="index"
                 class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
               >
@@ -678,11 +675,11 @@ onMounted(fetchRuns);
                     }}
                   </span>
                   <span
-                    v-if="run.department"
+                    v-if="run.agent"
                     class="inline-flex items-center gap-1 text-n-slate-11 truncate"
                   >
                     <span class="i-lucide-layers size-3.5 shrink-0" />
-                    {{ run.department }}
+                    {{ run.agent }}
                     <span v-if="run.routing_method" class="text-n-slate-10">
                       {{
                         `· ${$t('AI_SHADOW_RUNS.RUN.VIA')} ${methodLabel(run.routing_method)}`

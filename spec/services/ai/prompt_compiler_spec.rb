@@ -361,7 +361,8 @@ RSpec.describe Ai::PromptCompiler do
       dept
     end
 
-    before { create(:team, account: account, name: 'Suporte N2') }
+    # Sem fallback (18/08): a whitelist tem que ser explícita pra este time aparecer no prompt.
+    before { real_agent.update!(handoff_team_ids: [create(:team, account: account, name: 'Suporte N2').id]) }
 
     def compile(followup:, knowledge: ['Internet Fibra 300 Mega — Plano residencial R$ 89,90'])
       described_class.compile(
@@ -502,16 +503,15 @@ RSpec.describe Ai::PromptCompiler do
       expect(prompt.index('- Suporte')).to be < prompt.index('- Comerciais')
     end
 
-    it 'whitelist VAZIA: fallback para todos os times da conta + loga aviso (não silencioso)' do
-      allow(Rails.logger).to receive(:warn)
+    it 'whitelist VAZIA: NENHUM time é oferecido (sem fallback pra todos os times da conta)' do
       agent.update!(handoff_team_ids: [])
       prompt = prompt_for(agent)
 
       aggregate_failures do
-        expect(Rails.logger).to have_received(:warn).with(/sem handoff_team_ids/)
-        expect(prompt).to include('Comerciais')
-        expect(prompt).to include('Suporte')
-        expect(prompt).to include('Financeiro') # fallback: TODOS os times aparecem
+        expect(prompt).not_to include('Times disponíveis')
+        expect(prompt).not_to include('Comerciais')
+        expect(prompt).not_to include('Suporte')
+        expect(prompt).not_to include('Financeiro')
       end
     end
   end

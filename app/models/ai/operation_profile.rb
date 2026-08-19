@@ -34,6 +34,13 @@ class Ai::OperationProfile < ApplicationRecord
   has_many :agents, class_name: 'Ai::Agent', foreign_key: :ai_operation_profile_id
 
   validates :name, :supervisor_provider, :supervisor_model, presence: true
+  # Achado ao vivo (18/08): sem isso, clicar "Novo nível" -> "Máxima Qualidade" -> Salvar repetidas
+  # vezes (sem editar o nome, que o preset já preenche com "Premium") criava vários perfis IDÊNTICOS
+  # no nome, sem nenhum aviso — indistinguíveis na hora de escolher qual usar num agente. Sem índice
+  # único no banco (tela de admin, baixa concorrência — o risco de corrida é aceitável aqui).
+  validates :name, uniqueness: {
+    scope: :account_id, case_sensitive: false, message: 'já está em uso — escolha um nome diferente'
+  }
   validate :groq_supervisor_model_approved
   # Posição abstrata do slider (0-100). O Ai::TemperatureMapper traduz para a temperatura real de
   # cada provider — é este o valor de fato usado no fluxo hoje.
@@ -51,6 +58,29 @@ class Ai::OperationProfile < ApplicationRecord
   # supervisor; Summary = cai no supervisor).
   def worker(key)
     worker_overrides&.dig(key.to_s) || {}
+  end
+
+  # Pedido do usuário (18/08): o campo "Orçamento" (budget.monthly_usd/on_limit) era só decorativo —
+  # nada no backend lia. O teto é do PERFIL, não de um agente isolado — um perfil pode ser reaproveitado
+  # por vários agentes (has_many :agents acima) — então soma o gasto de TODOS eles. Usa Ai::Run#cost (o
+  # valor GRAVADO por Ai::ModelRouter.estimate_cost no momento da chamada), não um recálculo pelo preço
+  # atual — isso é o que a tela "Custo de IA" já faz (Ai::ModelRouter.price_for); aqui só decide se
+  # estourou o teto ou não, com o mesmo custo que o próprio Ai::Run já registrou.
+  def month_to_date_cost
+    Ai::Run.where(ai_agent_id: agents.select(:id), created_at: Time.current.beginning_of_month..).sum(:cost).to_f
+  end
+
+  def budget_monthly_usd
+    budget.to_h['monthly_usd'].to_f
+  end
+
+  def budget_on_limit
+    budget.to_h['on_limit'].presence || 'downgrade'
+  end
+
+  # Sem teto configurado (0/ausente) => nunca estourado. Ver Ai::Gateway#budget_exceeded? (ponto de uso).
+  def budget_exceeded?
+    budget_monthly_usd.positive? && month_to_date_cost >= budget_monthly_usd
   end
 
   private

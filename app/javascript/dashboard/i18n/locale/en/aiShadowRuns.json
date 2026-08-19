@@ -78,11 +78,11 @@
     "INSIGHT": {
       "EMPTY": "Nenhuma ação sugerida neste recorte. 🎉",
       "FAQ_TITLE": "Vire FAQ / reforce o conhecimento",
-      "FAQ_BODY": "{count} pergunta(s) sem cobertura de conhecimento em {department}. Crie uma FAQ ou fonte de conhecimento.",
+      "FAQ_BODY": "{count} pergunta(s) sem cobertura de conhecimento em {agent}. Crie uma FAQ ou fonte de conhecimento.",
       "INSTRUCTION_TITLE": "Instrução fraca",
-      "INSTRUCTION_BODY": "{count} resposta(s) de baixa confiança em {department}. Reforce as instruções do fluxo.",
+      "INSTRUCTION_BODY": "{count} resposta(s) de baixa confiança em {agent}. Reforce as instruções do fluxo.",
       "TOOL_TITLE": "Ferramenta ausente",
-      "TOOL_BODY": "A ferramenta \"{tool}\" foi sugerida {count}× em {department}, mas não está configurada.",
+      "TOOL_BODY": "A ferramenta \"{tool}\" foi sugerida {count}× em {agent}, mas não está configurada.",
       "ERROR_TITLE": "Erro recorrente",
       "ERROR_BODY": "{error} aconteceu {count}× — precisa de correção estrutural.",
       "NO_QUESTION": "(sem pergunta registrada)",
@@ -145,6 +145,7 @@
     },
     "FORM": {
       "NAME": "Nome",
+      "NAME_REQUIRED": "Dê um nome pra esse analista antes de salvar.",
       "INSTRUCTIONS": "Instruções de avaliação",
       "INSTRUCTIONS_PLACEHOLDER": "O que o analista deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
       "INBOXES": "Caixas observadas",

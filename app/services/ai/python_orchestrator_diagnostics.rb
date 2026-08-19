@@ -35,24 +35,24 @@ module Ai::PythonOrchestratorDiagnostics
   # seu próprio decision.made com source: 'python_orchestrator'.
   def recent_runs(conversation, limit: 5)
     Ai::Run.where(conversation_id: conversation.id).order(created_at: :desc).limit(limit)
-           .pluck(:id, :created_at, :status, :error_type, :ai_department_id)
-           .map do |id, created_at, status, error_type, department_id|
-      { id: id, created_at: created_at, status: status, error_type: error_type, department_id: department_id }
+           .pluck(:id, :created_at, :status, :error_type, :ai_agent_id)
+           .map do |id, created_at, status, error_type, agent_id|
+      { id: id, created_at: created_at, status: status, error_type: error_type, agent_id: agent_id }
     end
   end
 
-  # --- Passo 3: python_orchestrator_on? bate o esperado pro department real? -------------------------
+  # --- Passo 3: python_orchestrator_on? bate o esperado pro agente real? ------------------------------
   # raw.class importa: string truthy ("true") só passa desde a correção que aceita os dois formatos —
   # se esse fix ainda não subiu no ambiente checado, uma flag gravada como STRING ainda cai no legado
   # SEM exceção nenhuma (sintoma idêntico a "Python em silêncio total").
   def flag_status(conversation)
-    department_ids = Ai::Run.where(conversation_id: conversation.id).distinct.pluck(:ai_department_id).compact
-    department_ids = candidate_department_ids(conversation) if department_ids.empty?
-    return [] if department_ids.empty?
+    agent_ids = Ai::Run.where(conversation_id: conversation.id).distinct.pluck(:ai_agent_id).compact
+    agent_ids = candidate_agent_ids(conversation) if agent_ids.empty?
+    return [] if agent_ids.empty?
 
-    Ai::Department.where(id: department_ids).map do |d|
-      raw = d.behavior.to_h['python_orchestrator']
-      { department_id: d.id, name: d.name, raw: raw, raw_class: raw.class.to_s, on: truthy?(raw) }
+    Ai::Agent.where(id: agent_ids).map do |a|
+      raw = a.behavior.to_h['python_orchestrator']
+      { agent_id: a.id, name: a.name, raw: raw, raw_class: raw.class.to_s, on: truthy?(raw) }
     end
   end
 
@@ -68,22 +68,18 @@ module Ai::PythonOrchestratorDiagnostics
     return { skipped: 'nenhum Ai::AgentInbox ativo nesta inbox' } if binding.nil?
 
     agent = binding.agent
-    department, method = Ai::DepartmentResolver.resolve(agent: agent, inbox_id: conversation.inbox_id,
-                                                        message_content: message.content, conversation: conversation)
-    return { skipped: "Ai::DepartmentResolver não achou department (method=#{method})" } if department.nil?
 
     result = Ai::PythonOrchestratorClient.process_message(
-      conversation: conversation, content: message.content, agent: agent, department: department,
+      conversation: conversation, content: message.content, agent: agent,
       mode: 'shadow', message: message
     )
-    { department_id: department.id, department_name: department.name, resolve_method: method, result: result }
+    { agent_id: agent.id, agent_name: agent.name, result: result }
   rescue StandardError => e
     { exception: "#{e.class}: #{e.message}", backtrace: e.backtrace.first(10) }
   end
 
-  def candidate_department_ids(conversation)
-    Ai::AgentInbox.where(inbox_id: conversation.inbox_id, active: true)
-                  .flat_map { |b| b.agent.departments.pluck(:id) }.uniq
+  def candidate_agent_ids(conversation)
+    Ai::AgentInbox.where(inbox_id: conversation.inbox_id, active: true).pluck(:ai_agent_id).uniq
   end
 
   def truthy?(value)

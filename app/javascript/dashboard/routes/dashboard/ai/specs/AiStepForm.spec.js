@@ -25,8 +25,6 @@ const mountForm = (step, extraProps = {}) => {
       customAttributes: [],
       leadVariables: [],
       agentId: '3',
-      departmentId: '5',
-      departments: [],
       ...extraProps,
     },
   });
@@ -407,7 +405,7 @@ describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO Cus
 
     // POST no endpoint de LEAD VARIABLE, não em custom_attribute_definitions
     const [url, body] = window.axios.post.mock.calls[0];
-    expect(url).toContain('/ai_agents/3/ai_departments/5/ai_lead_variables');
+    expect(url).toContain('/ai_agents/3/ai_lead_variables');
     expect(url).not.toContain('custom_attribute_definitions');
     expect(body).toEqual({ ai_lead_variable: { name: 'bairro' } });
 
@@ -464,7 +462,7 @@ describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferrament
     wrapper.unmount();
   });
 
-  // Anti-degradação-silenciosa: a ferramenta salva não existe mais na lista do department -> avisa na tela
+  // Anti-degradação-silenciosa: a ferramenta salva não existe mais na lista do agente -> avisa na tela
   // (o runtime já faz fail-open + tool_domain.unextractable, mas quem edita precisa VER). O item precisa
   // estar EXPANDIDO pro aviso aparecer (é dentro do editor) — etapa carregada do banco abre recolhida, então
   // clica em editar primeiro.
@@ -560,6 +558,144 @@ describe('AiStepForm.vue — higiene de variáveis (normalização + exclusão)'
     await flushPromises();
     expect(wrapper.emitted('save').at(-1)[0].collect).toBe(null); // item órfão removido junto
 
+    wrapper.unmount();
+  });
+});
+
+// Pedido do usuário (18/08, ampliado): quando o dado coletado é um atributo personalizado (CAD,
+// qualquer tipo), tipo e opções têm que ser SEMPRE espelho do atributo — travados, não digitáveis à
+// parte (evita a IA validando opções diferentes das que o resto do sistema aceita pra esse atributo).
+// Etapa carregada do banco abre com o card RECOLHIDO — cada teste clica em editar primeiro.
+describe('AiStepForm.vue — atributo de CAD trava tipo/opções do item', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  const cidadeCad = {
+    attribute_key: 'cidade',
+    attribute_display_type: 'list',
+    attribute_values: ['Chapecó', 'Maravilha'],
+  };
+
+  it('item de CAD lista: trava o Select de tipo e mostra as opções como somente-leitura, espelhando o CAD', async () => {
+    const wrapper = mountForm(
+      { name: 'Cidade', collect: { attribute: 'cidade', type: 'text' } },
+      { customAttributes: [cidadeCad] }
+    );
+    await wrapper
+      .get('[data-testid="collect-item-edit-cidade"]')
+      .trigger('click');
+
+    expect(
+      wrapper
+        .findComponent('[data-testid="collect-item-type-cidade"]')
+        .props('disabled')
+    ).toBe(true);
+    const locked = wrapper.get(
+      '[data-testid="collect-item-options-locked-cidade"]'
+    );
+    expect(locked.element.disabled).toBe(true);
+    expect(locked.element.value).toBe('Chapecó\nMaravilha');
+    expect(
+      wrapper.find('[data-testid="collect-item-options-free-cidade"]').exists()
+    ).toBe(false);
+    wrapper.unmount();
+  });
+
+  // Achado ao vivo (18/08, ampliado): um CAD tipo "link" (chave_1_2_3_) deixava a etapa mostrar
+  // "Escolha (opções)" com valores digitados à mão, sem relação com o atributo real (que nem é lista).
+  // Qualquer CAD trava o Tipo do dado (mapeado do attribute_display_type); só CAD tipo lista mostra
+  // a caixa de opções (travada) — os demais tipos não têm "opções" pra mostrar.
+  it('item de CAD tipo "link" (não-lista): trava o Select de tipo (mapeado pra texto) e NÃO mostra nenhuma caixa de opções', async () => {
+    const linkCad = {
+      attribute_key: 'chave_1_2_3_',
+      attribute_display_type: 'link',
+    };
+    const wrapper = mountForm(
+      {
+        name: 'Etapa',
+        collect: {
+          attribute: 'chave_1_2_3_',
+          type: 'choice',
+          options: ['coisa 1', 'coisa2'],
+        },
+      },
+      { customAttributes: [linkCad] }
+    );
+    await wrapper
+      .get('[data-testid="collect-item-edit-chave_1_2_3_"]')
+      .trigger('click');
+
+    const typeSelect = wrapper.findComponent(
+      '[data-testid="collect-item-type-chave_1_2_3_"]'
+    );
+    expect(typeSelect.props('disabled')).toBe(true);
+    expect(typeSelect.props('modelValue')).toBe('text');
+    expect(
+      wrapper
+        .find('[data-testid="collect-item-options-locked-chave_1_2_3_"]')
+        .exists()
+    ).toBe(false);
+    expect(
+      wrapper
+        .find('[data-testid="collect-item-options-free-chave_1_2_3_"]')
+        .exists()
+    ).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('item de CAD tipo "número": trava o Select de tipo mapeado pra "number"', async () => {
+    const numeroCad = {
+      attribute_key: 'idade',
+      attribute_display_type: 'number',
+    };
+    const wrapper = mountForm(
+      { name: 'Etapa', collect: { attribute: 'idade', type: 'text' } },
+      { customAttributes: [numeroCad] }
+    );
+    await wrapper
+      .get('[data-testid="collect-item-edit-idade"]')
+      .trigger('click');
+
+    const typeSelect = wrapper.findComponent(
+      '[data-testid="collect-item-type-idade"]'
+    );
+    expect(typeSelect.props('disabled')).toBe(true);
+    expect(typeSelect.props('modelValue')).toBe('number');
+    wrapper.unmount();
+  });
+
+  it('item SEM CAD correspondente: tipo/opções continuam livres pra editar', async () => {
+    const wrapper = mountForm(
+      {
+        name: 'Nome',
+        collect: {
+          attribute: 'nome_cliente',
+          type: 'choice',
+          options: ['A', 'B'],
+        },
+      },
+      { customAttributes: [cidadeCad] }
+    );
+    await wrapper
+      .get('[data-testid="collect-item-edit-nome_cliente"]')
+      .trigger('click');
+
+    expect(
+      wrapper
+        .findComponent('[data-testid="collect-item-type-nome_cliente"]')
+        .props('disabled')
+    ).toBe(false);
+    expect(
+      wrapper
+        .find('[data-testid="collect-item-options-locked-nome_cliente"]')
+        .exists()
+    ).toBe(false);
+    expect(
+      wrapper.get('[data-testid="collect-item-options-free-nome_cliente"]')
+        .element.value
+    ).toBe('A\nB');
     wrapper.unmount();
   });
 });

@@ -39,12 +39,11 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     runs = filtered(base).order(created_at: :desc).limit(MAX_RUNS).to_a
     runs = apply_decision_filters(runs)
 
-    dept_names = department_names(runs)
-    dept_tools = department_tools(runs)
-    methods = routing_methods(runs)
+    agent_names = agent_names(runs)
+    agent_tools = agent_tools(runs)
     questions = questions_for(runs)
 
-    rows = runs.map { |run| row(run, dept_names, dept_tools, methods, questions) }
+    rows = runs.map { |run| row(run, agent_names, agent_tools, questions) }
 
     page, per_page = pagination_params
     total = rows.size
@@ -108,7 +107,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   end
 
   def filtered(scope)
-    scope = scope.where(ai_department_id: params[:department_id]) if params[:department_id].present?
+    scope = scope.where(ai_agent_id: params[:agent_id]) if params[:agent_id].present?
     scope = scope.where(error_type: params[:error_type]) if params[:error_type].present?
     scope = scope.where(status: params[:status]) if params[:status].present?
     scope = scope.where(conversation_id: params[:conversation_id]) if params[:conversation_id].present?
@@ -124,17 +123,30 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     runs
   end
 
-  def row(run, dept_names, dept_tools, methods, questions)
+  # Nomes de controle RESERVADOS (avancar_etapa/registrar_*/salvar_memoria_ia/continuar_conversa/
+  # conversation.resolve/conversation.transfer) — nunca foram, e nunca serão, uma Ai::Tool
+  # configurável pelo admin (Api::Internal::AiExecuteToolController os reconhece por nome fixo, não
+  # por cadastro). Só podem aparecer aqui em Ai::Run de ANTES da migração pro Structured Outputs
+  # (17/08), quando o motor Ruby legado oferecia alguns deles como function-calling de verdade — ver
+  # docs/ai-shadow-analysis-module-assessment.md §3. Marcá-los como "ferramenta ausente" pede pro
+  # admin configurar algo que não é configurável; exclui sempre, independente da data do run.
+  RESERVED_TOOL_NAMES = [
+    Ai::PythonOrchestratorClient::ADVANCE_STEP_TOOL, Ai::PythonOrchestratorClient::RESOLVE_TOOL,
+    Ai::PythonOrchestratorClient::TRANSFER_TOOL, Ai::PythonOrchestratorClient::CONTINUE_TOOL,
+    Ai::PythonOrchestratorClient::MEMORY_TOOL
+  ].freeze
+
+  def row(run, agent_names, agent_tools, questions)
     tool = tool_name(run)
-    missing = tool.present? && !dept_tools[run.ai_department_id].to_a.include?(tool.downcase)
+    missing = tool.present? && RESERVED_TOOL_NAMES.exclude?(tool) &&
+              !agent_tools[run.ai_agent_id].to_a.include?(tool.downcase)
     {
       id: run.id,
       conversation_id: run.conversation_id,
       question: questions.dig(run.id, :text),
       question_message_id: questions.dig(run.id, :message_id),
-      department_id: run.ai_department_id,
-      department: dept_names[run.ai_department_id],
-      routing_method: methods[run.id],
+      agent_id: run.ai_agent_id,
+      agent: agent_names[run.ai_agent_id],
       resolution: classify(run),
       status: run.status,
       error_type: run.error_type,
@@ -221,7 +233,7 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
       tools_missing: rows.count { |r| r[:tool_missing] },
       knowledge_gaps: rows.count { |r| knowledge_gap?(r) },
       by_resolution: by_resolution,
-      by_department: by_department(rows),
+      by_agent: by_agent(rows),
       by_error: rows.select { |r| r[:error_type].present? }
                     .group_by { |r| r[:error_type] }.transform_values(&:size)
                     .map { |error_type, count| { error_type: error_type, count: count } }
@@ -229,8 +241,8 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     }
   end
 
-  def by_department(rows)
-    rows.select { |r| r[:department].present? }.group_by { |r| r[:department] }.map do |name, group|
+  def by_agent(rows)
+    rows.select { |r| r[:agent].present? }.group_by { |r| r[:agent] }.map do |name, group|
       { name: name, total: group.size, errors: group.count { |r| r[:error_type].present? },
         unanswered: group.count { |r| r[:resolution] == 'unanswered' } }
     end.sort_by { |d| -d[:errors] }
@@ -247,21 +259,21 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   end
 
   def knowledge_insights(rows)
-    rows.select { |r| knowledge_gap?(r) && r[:department].present? }
-        .group_by { |r| r[:department] }
-        .map { |name, group| { type: 'faq', department: name, count: group.size, examples: examples(group) } }
+    rows.select { |r| knowledge_gap?(r) && r[:agent].present? }
+        .group_by { |r| r[:agent] }
+        .map { |name, group| { type: 'faq', agent: name, count: group.size, examples: examples(group) } }
   end
 
   def instruction_insights(rows)
-    rows.select { |r| low_confidence?(r) && r[:department].present? }
-        .group_by { |r| r[:department] }
-        .map { |name, group| { type: 'instruction', department: name, count: group.size, examples: examples(group) } }
+    rows.select { |r| low_confidence?(r) && r[:agent].present? }
+        .group_by { |r| r[:agent] }
+        .map { |name, group| { type: 'instruction', agent: name, count: group.size, examples: examples(group) } }
   end
 
   def tool_insights(rows)
     rows.select { |r| r[:tool_missing] }
-        .group_by { |r| [r[:department], r[:tool]] }
-        .map { |(name, tool), group| { type: 'tool', department: name, tool: tool, count: group.size, examples: examples(group) } }
+        .group_by { |r| [r[:agent], r[:tool]] }
+        .map { |(name, tool), group| { type: 'tool', agent: name, tool: tool, count: group.size, examples: examples(group) } }
   end
 
   def error_insights(rows)
@@ -280,9 +292,9 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
   end
 
   def facets(scope)
-    dept_ids = scope.where.not(ai_department_id: nil).distinct.pluck(:ai_department_id)
+    agent_ids = scope.where.not(ai_agent_id: nil).distinct.pluck(:ai_agent_id)
     {
-      departments: ::Ai::Department.where(id: dept_ids).pluck(:id, :name).map { |id, name| { id: id, name: name } },
+      agents: ::Ai::Agent.where(id: agent_ids).pluck(:id, :name).map { |id, name| { id: id, name: name } },
       error_types: scope.where.not(error_type: nil).distinct.pluck(:error_type),
       statuses: scope.distinct.pluck(:status)
     }
@@ -310,35 +322,16 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     end
   end
 
-  def department_names(runs)
-    ids = runs.map(&:ai_department_id).compact.uniq
-    ::Ai::Department.where(id: ids).pluck(:id, :name).to_h
+  def agent_names(runs)
+    ids = runs.map(&:ai_agent_id).compact.uniq
+    ::Ai::Agent.where(id: ids).pluck(:id, :name).to_h
   end
 
-  def department_tools(runs)
-    ids = runs.map(&:ai_department_id).compact.uniq
-    ::Ai::Tool.where(ai_department_id: ids).pluck(:ai_department_id, :name)
-              .each_with_object(Hash.new { |h, k| h[k] = [] }) do |(dept_id, name), acc|
-      acc[dept_id] << name.to_s.downcase
-    end
-  end
-
-  # Maps run.id => routing method (single/inbox_mapping/classifier/default/fallback) from the
-  # existing `department.resolved` event. One batched query; matched to each run by time window.
-  def routing_methods(runs)
-    conv_ids = runs.map(&:conversation_id).compact.uniq
-    return {} if conv_ids.empty?
-
-    events = ::Ai::Event.where(conversation_id: conv_ids, event_type: 'department.resolved')
-                        .pluck(:conversation_id, :created_at, :payload)
-    by_conversation = events.group_by(&:first)
-    runs.each_with_object({}) do |run, acc|
-      candidates = by_conversation[run.conversation_id]
-      next if candidates.blank?
-
-      window = run.created_at..(run.updated_at + 2.seconds)
-      match = candidates.find { |(_conv, created_at, _payload)| window.cover?(created_at) }
-      acc[run.id] = (match || candidates.last)[2]['method'] if match || candidates.last
+  def agent_tools(runs)
+    ids = runs.map(&:ai_agent_id).compact.uniq
+    ::Ai::Tool.where(ai_agent_id: ids).pluck(:ai_agent_id, :name)
+              .each_with_object(Hash.new { |h, k| h[k] = [] }) do |(agent_id, name), acc|
+      acc[agent_id] << name.to_s.downcase
     end
   end
 end

@@ -39,15 +39,11 @@ class Ai::SlaSweepJob < ApplicationJob
     ids
   end
 
-  # Bindings ativos (live E shadow — o SLA grava intenção p/ shadow também) com departamento
-  # ativo e SLA positivo, cada um com o cutoff do seu departamento (calculado no dispatch p/
-  # estreitar; o job recalcula no run time).
+  # Bindings ativos (live E shadow — o SLA grava intenção p/ shadow também) com SLA positivo, cada
+  # um com o cutoff do seu agente (calculado no dispatch p/ estreitar; o job recalcula no run time).
   def eligible_bindings
     Ai::AgentInbox.where(active: true).includes(agent: :account).filter_map do |binding|
-      department = binding.agent.departments.active.first
-      next if department.nil?
-
-      timeout = department.sla['response_timeout_minutes'].to_i
+      timeout = binding.agent.sla['response_timeout_minutes'].to_i
       next unless timeout.positive?
 
       [binding, timeout.minutes.ago]

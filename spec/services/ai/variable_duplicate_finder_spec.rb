@@ -9,40 +9,40 @@ RSpec.describe Ai::VariableDuplicateFinder do
     Ai::OperationProfile.create!(account_id: account.id, name: 'padrão', supervisor_provider: 'openai', supervisor_model: 'gpt-4o')
   end
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comercial', status: 'active')
-  end
 
   describe '.lead_variable_duplicates' do
-    it 'acha o par quando "X" e "registrar_X" existem no MESMO department' do
-      base = Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'plano_escolhido')
-      dup = Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'registrar_plano_escolhido')
+    it 'acha o par quando "X" e "registrar_X" existem no MESMO agent' do
+      base = Ai::LeadVariable.create!(account: account, ai_agent_id: agent.id, name: 'plano_escolhido')
+      dup = Ai::LeadVariable.create!(account: account, ai_agent_id: agent.id, name: 'registrar_plano_escolhido')
 
       pairs = described_class.lead_variable_duplicates
 
       expect(pairs).to contain_exactly(
-        { department_id: department.id, base: 'plano_escolhido', base_id: base.id,
+        { agent_id: agent.id, base: 'plano_escolhido', base_id: base.id,
           duplicate: 'registrar_plano_escolhido', duplicate_id: dup.id }
       )
     end
 
-    it 'NÃO acha par entre departments DIFERENTES (mesmo com os dois nomes existindo)' do
-      other = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Outro', status: 'active')
-      Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'viabilidade')
-      Ai::LeadVariable.create!(account: account, ai_department_id: other.id, name: 'registrar_viabilidade')
+    it 'NÃO acha par entre agents DIFERENTES (mesmo com os dois nomes existindo)' do
+      other_profile = Ai::OperationProfile.create!(account_id: account.id, name: 'p2',
+                                                    supervisor_provider: 'openai', supervisor_model: 'gpt-4o')
+      other = Ai::Agent.create!(account: account, name: 'Outro', status: 'active',
+                                ai_operation_profile_id: other_profile.id)
+      Ai::LeadVariable.create!(account: account, ai_agent_id: agent.id, name: 'viabilidade')
+      Ai::LeadVariable.create!(account: account, ai_agent_id: other.id, name: 'registrar_viabilidade')
 
       expect(described_class.lead_variable_duplicates).to be_empty
     end
 
     it '"registrar_X" sozinha, sem a base "X", NÃO é reportada (não tem com o que duplicar)' do
-      Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'registrar_orfa')
+      Ai::LeadVariable.create!(account: account, ai_agent_id: agent.id, name: 'registrar_orfa')
 
       expect(described_class.lead_variable_duplicates).to be_empty
     end
 
     it 'nomes sem o prefixo reservado nunca aparecem' do
-      Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'cidade')
-      Ai::LeadVariable.create!(account: account, ai_department_id: department.id, name: 'telefone')
+      Ai::LeadVariable.create!(account: account, ai_agent_id: agent.id, name: 'cidade')
+      Ai::LeadVariable.create!(account: account, ai_agent_id: agent.id, name: 'telefone')
 
       expect(described_class.lead_variable_duplicates).to be_empty
     end

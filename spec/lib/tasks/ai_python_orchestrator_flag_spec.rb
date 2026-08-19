@@ -2,7 +2,15 @@ require 'rails_helper'
 require 'rake'
 
 # Substitui o console/rails runner que era a ÚNICA forma de ligar behavior['python_orchestrator']
-# (sem UI ainda) — continua opt-in POR department, nunca um default automático.
+# (sem UI ainda) — continua opt-in POR agente, nunca um default automático.
+#
+# NOTA (fusão Departamento -> Agente): lib/tasks/ai.rake ainda invoca Ai::Department.find_by
+# (args[:department_id]) nestas duas tasks — a classe Ai::Department foi REMOVIDA do código
+# (app/models/ai/department.rb não existe mais), então a task quebra com NameError em runtime.
+# Isso é um gap de produção FORA do escopo desta rodada (só specs). Este spec foi migrado para
+# o formato agent-based que o restante do domínio já usa (behavior agora é coluna do Ai::Agent),
+# antecipando o fix da task — ele só voltará a passar depois que ai.rake for atualizado para
+# receber agent_id/Ai::Agent em vez de department_id/Ai::Department.
 RSpec.describe 'ai:enable_python_orchestrator / ai:disable_python_orchestrator', type: :task do
   before(:all) do
     Rails.application.load_tasks unless Rake::Task.task_defined?('ai:enable_python_orchestrator')
@@ -14,10 +22,9 @@ RSpec.describe 'ai:enable_python_orchestrator / ai:disable_python_orchestrator',
     Ai::OperationProfile.create!(account_id: account.id, name: 'padrão',
                                  supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
   end
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let!(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comercial', status: 'active',
-                           behavior: { 'auto_attendance' => true })
+  let!(:agent) do
+    Ai::Agent.create!(account: account, name: 'Comercial', status: 'active', ai_operation_profile_id: profile.id,
+                      behavior: { 'auto_attendance' => true })
   end
   let(:disable_task) { Rake::Task['ai:disable_python_orchestrator'] }
 
@@ -27,32 +34,32 @@ RSpec.describe 'ai:enable_python_orchestrator / ai:disable_python_orchestrator',
   end
 
   describe 'ai:enable_python_orchestrator' do
-    it 'liga a flag SÓ para o department pedido, preservando o resto de behavior' do
-      enable_task.invoke(department.id.to_s)
+    it 'liga a flag SÓ para o agente pedido, preservando o resto de behavior' do
+      enable_task.invoke(agent.id.to_s)
 
-      expect(department.reload.behavior).to include('python_orchestrator' => true, 'auto_attendance' => true)
+      expect(agent.reload.behavior).to include('python_orchestrator' => true, 'auto_attendance' => true)
     end
 
-    it 'não afeta outros departments' do
-      other = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Outro', status: 'active')
+    it 'não afeta outros agentes' do
+      other = Ai::Agent.create!(account: account, name: 'Outro', status: 'active', ai_operation_profile_id: profile.id)
 
-      enable_task.invoke(department.id.to_s)
+      enable_task.invoke(agent.id.to_s)
 
       expect(other.reload.behavior.to_h['python_orchestrator']).to be_nil
     end
 
-    it 'aborta com mensagem clara se o department não existe' do
+    it 'aborta com mensagem clara se o agente não existe' do
       expect { enable_task.invoke('999999999') }.to raise_error(SystemExit)
     end
   end
 
   describe 'ai:disable_python_orchestrator' do
     it 'desliga a flag (volta ao caminho legado)' do
-      department.update!(behavior: department.behavior.merge('python_orchestrator' => true))
+      agent.update!(behavior: agent.behavior.merge('python_orchestrator' => true))
 
-      disable_task.invoke(department.id.to_s)
+      disable_task.invoke(agent.id.to_s)
 
-      expect(department.reload.behavior['python_orchestrator']).to be(false)
+      expect(agent.reload.behavior['python_orchestrator']).to be(false)
     end
   end
 end

@@ -5,23 +5,24 @@
 # pois só a CapabilityExecution precisa dele (ai_run_id). Emite os MESMOS ai_events de antes.
 #
 # ATENÇÃO: recebe `acts_live` por injeção — logo o Gateway só pode criar este dispatcher DEPOIS de
-# resolver @acts_live (após o department). Todos os call-sites do run são posteriores a isso.
+# resolver @acts_live. Todos os call-sites do run são posteriores a isso.
 class Ai::ActionDispatcher
   # Delay incremental entre as partes quando o agente responde "como humano" (várias mensagens curtas
   # simulando alguém digitando). Fase 2 possível: emitir presença "digitando" (uazapi toggle_typing)
   # entre as partes — não implementado agora.
   PART_DELAY_SECONDS = 2
 
-  def initialize(conversation:, account:, mode:, acts_live:, as_human: false)
+  def initialize(conversation:, account:, agent:, mode:, acts_live:, as_human: false)
     @conversation = conversation
     @account = account
+    @agent = agent
     @mode = mode
     @acts_live = acts_live
     # No modo humano (Ai::Agent.identify_as == 'human') a resposta é quebrada em várias mensagens.
     @as_human = as_human
   end
 
-  # Why an action was not executed: shadow binding, the department toggle off, or a missing tool.
+  # Why an action was not executed: shadow binding, the agent toggle off, or a missing tool.
   def not_acting_reason(tool = :present)
     return 'shadow_mode' unless @mode == 'live'
     return 'auto_attendance_off' unless @acts_live
@@ -48,25 +49,25 @@ class Ai::ActionDispatcher
     emit("#{label}.failed", { error: "#{e.class}: #{e.message}" })
   end
 
-  # Sends the AI reply to the customer — the only outward-facing action. Gated by the department
+  # Sends the AI reply to the customer — the only outward-facing action. Gated by the agent's
   # reply_scope (off by default): 'all' replies to every live conversation, 'canary' only when the
   # conversation carries the configured label. Shadow / off / missing label records intention only.
   #
   # bypass_handoff: ver Ai::ReplyPolicy#allowed? — repassado pelo Gateway quando ESTE turno (não um
   # anterior) é quem acabou de transferir/atribuir a conversa, pra a mensagem de encerramento do
   # próprio modelo não ser engolida pelo handoff que ele mesmo decidiu neste turno.
-  def reply(department, text, bypass_handoff: false)
+  def reply(text, bypass_handoff: false)
     return if text.blank?
 
-    # Safety cap: stop replying after the department's max number of AI replies in this
+    # Safety cap: stop replying after the agent's max number of AI replies in this
     # conversation (0 = no limit). Counts 'reply.sent' events, so human agent replies don't count.
-    max_replies = department.behavior.to_h['max_replies'].to_i
+    max_replies = @agent.behavior.to_h['max_replies'].to_i
     if max_replies.positive? && ai_replies_count >= max_replies
       emit('reply.skipped', { reason: 'max_replies_reached', max: max_replies })
       return
     end
 
-    state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, department: department, conversation: @conversation,
+    state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, agent: @agent, conversation: @conversation,
                                                    bypass_handoff: bypass_handoff)
     if state == :live
       deliver(text)
@@ -75,7 +76,7 @@ class Ai::ActionDispatcher
       emit('reply.sent', { chars: text.length })
       consume_credit
     else
-      reason = Ai::ReplyPolicy.skip_reason(mode: @mode, department: department, conversation: @conversation,
+      reason = Ai::ReplyPolicy.skip_reason(mode: @mode, agent: @agent, conversation: @conversation,
                                             bypass_handoff: bypass_handoff)
       emit('reply.intended', { executed: false, reason: reason })
     end
