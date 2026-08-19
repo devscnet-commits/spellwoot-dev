@@ -734,9 +734,11 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # Reposicionada (17/08) pra perto do topo do system_prompt. "Você é <nome>." saiu de vez (18/08,
     # pedido de redução de prompt — texto livre do admin não estava marcado pra ficar, ver comentário em
     # Ai::PythonOrchestratorClient#system_prompt) e handoff_target_instruction foi removida por completo
-    # (mesmo pedido — ver describe 'Times disponíveis' mais abaixo), então identify_as_instruction agora
-    # é SEMPRE a primeira linha do system_prompt, com ou sem handoff_team_ids.
-    describe 'identify_as_instruction (primeira linha do system_prompt)' do
+    # (mesmo pedido — ver describe 'Times disponíveis' mais abaixo). Remanejada de novo (19/08, pedido do
+    # dono da conta): agora vai DEPOIS do "prompt geral do agente" (base_prompt) — antes vinha antes.
+    # Vira lines[1] quando o agente TEM base_prompt (o default do factory tem); lines[0] só se o agente
+    # não tiver base_prompt configurado.
+    describe 'identify_as_instruction (depois do base_prompt no system_prompt)' do
       it 'identify_as="human" (default do agent): instrui a quebrar em mensagens curtas com linha em branco' do
         agent.update!(identify_as: 'human')
         stub_orchestrator
@@ -746,8 +748,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
         # "Não diga que é uma inteligência artificial" saiu (18/08, pedido de redução de prompt) — ver
         # comentário em Ai::PythonOrchestratorClient#identify_as_instruction (risco assumido).
         expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-          line = JSON.parse(req.body)['system_prompt'].lines[0]
-          line.include?('Aja como um atendente humano da equipe') &&
+          prompt = JSON.parse(req.body)['system_prompt']
+          line = prompt.lines[1]
+          prompt.lines[0].strip == agent.base_prompt &&
+            line.include?('Aja como um atendente humano da equipe') &&
             line.include?('LINHA EM BRANCO entre elas (dois \n)') &&
             line.include?('"mensagem_para_cliente"')
         }
@@ -760,7 +764,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
         described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
         expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-          line = JSON.parse(req.body)['system_prompt'].lines[0]
+          line = JSON.parse(req.body)['system_prompt'].lines[1]
           line.include?('assistente virtual (IA)') && !line.include?('LINHA EM BRANCO')
         }
       end
