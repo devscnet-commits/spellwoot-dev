@@ -11,19 +11,19 @@ RSpec.describe 'Ai::StateManager — evento slot.inferred_type_used (Fase 1 type
     Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
                                  supervisor_model: 'gpt-4.1-mini')
   end
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let(:department) do
-    d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cad', status: 'active', behavior: {})
-    d.create_playbook!(active: true, steps: [
+  let(:agent) do
+    a = Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id,
+                          behavior: {})
+    a.create_playbook!(active: true, steps: [
                          { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'type' => 'cpf' } },
                          { 'name' => 'Tel fixo', 'collect' => { 'attribute' => 'telefone_fixo', 'type' => 'text' } }
                        ])
-    d.lead_variables.create!(account: account, name: 'telefone_cliente') # step-less, chave infere phone
-    d.lead_variables.create!(account: account, name: 'cidade')           # step-less, NÃO infere formato
-    d
+    a.lead_variables.create!(account: account, name: 'telefone_cliente') # step-less, chave infere phone
+    a.lead_variables.create!(account: account, name: 'cidade')           # step-less, NÃO infere formato
+    a
   end
-  let(:cpf_step) { department.playbook.steps[0] }
-  let(:tel_step) { department.playbook.steps[1] }
+  let(:cpf_step) { agent.playbook.steps[0] }
+  let(:tel_step) { agent.playbook.steps[1] }
   let(:manager) { Ai::StateManager.new(conversation: conversation, agent: agent) }
 
   def events
@@ -34,7 +34,7 @@ RSpec.describe 'Ai::StateManager — evento slot.inferred_type_used (Fase 1 type
   it 'chave STEP-LESS que infere formato (lead_variable telefone_cliente) -> emite; declarado e não-formato NÃO' do
     manager.persist_attributes(
       { 'documento_cpf' => '110.336.369-75', 'telefone_cliente' => '47999998888', 'cidade' => 'Chapecó' },
-      department, source: :supervisor, expected_step: cpf_step
+      agent, source: :supervisor, expected_step: cpf_step
     )
 
     attrs = events
@@ -45,14 +45,14 @@ RSpec.describe 'Ai::StateManager — evento slot.inferred_type_used (Fase 1 type
 
   it 'slot de etapa declarado como TEXT mas cuja chave infere formato -> emite (step_less false)' do
     manager.persist_attributes(
-      { 'telefone_fixo' => '4733334444' }, department, source: :supervisor, expected_step: tel_step
+      { 'telefone_fixo' => '4733334444' }, agent, source: :supervisor, expected_step: tel_step
     )
 
     expect(events).to include('attribute' => 'telefone_fixo', 'inferred_type' => 'phone', 'step_less' => false)
   end
 
   it 'fonte :trusted (não passa pelo gate) NÃO emite (a medição é do gate do supervisor)' do
-    manager.persist_attributes({ 'telefone_cliente' => '47999998888' }, department, source: :trusted)
+    manager.persist_attributes({ 'telefone_cliente' => '47999998888' }, agent, source: :trusted)
 
     expect(events).to be_empty
   end

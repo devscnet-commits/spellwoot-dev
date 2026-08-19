@@ -1,6 +1,6 @@
 # Decides whether the AI should stop and hand off to a human. Reasons, in order:
 #   - the model explicitly chose 'handoff';
-#   - confidence below the department threshold.
+#   - confidence below the agent's threshold.
 # Pure decision — it does not transfer; the Gateway executes (live) or records intention (shadow).
 class Ai::HandoffEvaluator
   # 0 = desligado por padrão: NÃO transfere por confiança sozinho. A transferência por confiança
@@ -12,8 +12,8 @@ class Ai::HandoffEvaluator
   # um sinal da própria IA avaliando o contexto.)
   DEFAULT_MIN_CONFIDENCE = 0.0
 
-  def self.evaluate(decision:, department:)
-    rules = department.transfer_rules || {}
+  def self.evaluate(decision:, agent:)
+    rules = agent.transfer_rules || {}
 
     return reason('modelo_pediu_transferencia') if decision['decision'] == 'handoff'
 

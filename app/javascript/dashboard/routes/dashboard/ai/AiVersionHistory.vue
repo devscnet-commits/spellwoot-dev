@@ -13,7 +13,7 @@ import Button from 'dashboard/components-next/button/Button.vue';
 const props = defineProps({
   // Versions collection endpoint, e.g. `.../ai_agents/:id/ai_agent_versions`.
   baseUrl: { type: String, required: true },
-  // i18n key for the restore-failure alert (agent vs department scopes differ here).
+  // i18n key for the restore-failure alert (differs by which record this history is for).
   errorKey: { type: String, default: 'AI_AGENTS.ERROR' },
   // i18n key for the panel title. Default keeps the generic label; callers that show more than one
   // panel side by side (ex.: aba Comportamento: prompt vs. configurações) passam chaves distintas.

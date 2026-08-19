@@ -46,16 +46,16 @@ RSpec.describe Ai::TurnCapture do
     Ai::OperationProfile.create!(account_id: account.id, name: 'p',
                                  supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
   end
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let(:department) do
-    dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Fluxo', status: 'active', behavior: {})
-    dept.create_playbook!(active: true, steps: [
-                            { 'name' => 'Etapa A',
-                              'collect' => { 'attribute' => 'campo_a', 'type' => 'text', 'required' => true } },
-                            { 'name' => 'Etapa B',
-                              'collect' => { 'attribute' => 'campo_b', 'type' => 'text', 'required' => true } }
-                          ])
-    dept
+  let(:agent) do
+    a = Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id,
+                          behavior: {})
+    a.create_playbook!(active: true, steps: [
+                         { 'name' => 'Etapa A',
+                           'collect' => { 'attribute' => 'campo_a', 'type' => 'text', 'required' => true } },
+                         { 'name' => 'Etapa B',
+                           'collect' => { 'attribute' => 'campo_b', 'type' => 'text', 'required' => true } }
+                       ])
+    a
   end
   let(:capture) do
     described_class.new(conversation: conversation,
@@ -74,12 +74,12 @@ RSpec.describe Ai::TurnCapture do
   # que a reply_text do turno ANTERIOR pediu (ai_last_asked_slot) quando presente; cai para o slot da etapa
   # corrente quando ausente (fallback). O AVANÇO NÃO muda (segue o slot da etapa — item 5).
   describe '#capture — asked_slot dirige o destino' do
-    let(:step) { department.playbook.steps.first } # etapa CORRENTE = Etapa A (slot campo_a)
+    let(:step) { agent.playbook.steps.first } # etapa CORRENTE = Etapa A (slot campo_a)
 
     it 'asked_slot ≠ slot da etapa: grava no slot PERGUNTADO (campo_b), NÃO no da etapa (campo_a), e emite slot.asked_desync' do
       conversation.update!(additional_attributes: { 'ai_last_asked_slot' => 'campo_b' })
 
-      capture.capture(step, { 'attributes' => {} }, 'valor do campo b', nil, department)
+      capture.capture(step, { 'attributes' => {} }, 'valor do campo b', nil, agent)
 
       expect(facts['campo_b']).to eq('valor do campo b') # destino = a PERGUNTA
       expect(facts).not_to have_key('campo_a')           # NÃO caiu no slot da etapa
@@ -91,11 +91,11 @@ RSpec.describe Ai::TurnCapture do
       # O with(_, "campo_b", ...) QUEBRA por mutação se a origem do slot voltar a ser o da etapa (campo_a).
       expect(capture).to receive(:declined_turn?).with(step, 'campo_b', anything, 'x').and_return(true)
 
-      expect(capture.capture(step, { 'attributes' => {} }, 'x', nil, department)).to eq({ declined: true })
+      expect(capture.capture(step, { 'attributes' => {} }, 'x', nil, agent)).to eq({ declined: true })
     end
 
     it 'FALLBACK: sem ai_last_asked_slot, a captura segue o slot da ETAPA (campo_a) e NÃO emite desync' do
-      capture.capture(step, { 'attributes' => {} }, 'valor do campo a', nil, department)
+      capture.capture(step, { 'attributes' => {} }, 'valor do campo a', nil, agent)
 
       expect(facts['campo_a']).to eq('valor do campo a') # destino = slot da etapa (comportamento anterior)
       expect(facts).not_to have_key('campo_b')
@@ -105,7 +105,7 @@ RSpec.describe Ai::TurnCapture do
     it 'turno saudável (asked_slot == slot da etapa): NÃO emite slot.asked_desync' do
       conversation.update!(additional_attributes: { 'ai_last_asked_slot' => 'campo_a' })
 
-      capture.capture(step, { 'attributes' => {} }, 'valor do campo a', nil, department)
+      capture.capture(step, { 'attributes' => {} }, 'valor do campo a', nil, agent)
 
       expect(events('slot.asked_desync')).to be_empty
       expect(facts).to include('campo_a' => 'valor do campo a')
@@ -114,7 +114,7 @@ RSpec.describe Ai::TurnCapture do
     it 'asked_slot desconhecido (chave fantasma) é IGNORADO: NÃO escreve a chave, cai no slot da etapa e emite slot.asked_slot_unknown' do
       conversation.update!(additional_attributes: { 'ai_last_asked_slot' => 'chave_fantasma' })
 
-      capture.capture(step, { 'attributes' => {} }, 'valor qualquer', nil, department)
+      capture.capture(step, { 'attributes' => {} }, 'valor qualquer', nil, agent)
 
       expect(facts).not_to have_key('chave_fantasma')           # NÃO envenena ai_collected_facts
       expect(facts['campo_a']).to eq('valor qualquer')          # fallback: slot da etapa corrente
@@ -128,8 +128,8 @@ RSpec.describe Ai::TurnCapture do
   # SAI: NÃO escreve por cima, NÃO limpa, NÃO toca no espelho custom_attributes. A semântica afirmativa/
   # negativa fica para PR próprio (detector = juiz estruturado). O token de ausência não é confirmável.
   describe '#capture — turno de confirmação (asked_slot já preenchido)' do
-    let(:step_a) { department.playbook.steps.first } # campo_a
-    let(:step_b) { department.playbook.steps[1] }    # campo_b (etapa corrente no cenário de confirmação)
+    let(:step_a) { agent.playbook.steps.first } # campo_a
+    let(:step_b) { agent.playbook.steps[1] }    # campo_b (etapa corrente no cenário de confirmação)
 
     it 'asked_slot já preenchido: emite slot.asked_confirmation_turn e NÃO escreve, NÃO captura' do
       conversation.update!(additional_attributes: {
@@ -138,7 +138,7 @@ RSpec.describe Ai::TurnCapture do
                              'ai_last_asked_slot' => 'campo_a'
                            })
 
-      expect(capture.capture(step_b, { 'attributes' => {} }, 'sim, pode ser', nil, department)).to be_nil
+      expect(capture.capture(step_b, { 'attributes' => {} }, 'sim, pode ser', nil, agent)).to be_nil
 
       expect(facts['campo_a']).to eq('valor original') # intacto (não sobrescreveu)
       expect(facts).not_to have_key('campo_b')         # não escreveu no slot da etapa corrente
@@ -153,7 +153,7 @@ RSpec.describe Ai::TurnCapture do
                              'ai_last_asked_slot' => 'campo_a'
                            }, custom_attributes: { 'campo_a' => 'corrigido pelo humano' })
 
-      capture.capture(step_b, { 'attributes' => {} }, 'não, está errado', nil, department)
+      capture.capture(step_b, { 'attributes' => {} }, 'não, está errado', nil, agent)
 
       expect(facts['campo_a']).to eq('valor original')                                        # NÃO limpou a memória
       expect(conversation.reload.custom_attributes['campo_a']).to eq('corrigido pelo humano') # NÃO tocou o espelho
@@ -167,7 +167,7 @@ RSpec.describe Ai::TurnCapture do
                              'ai_last_asked_slot' => 'campo_a'
                            })
 
-      capture.capture(step_a, { 'attributes' => {} }, 'qualquer', nil, department)
+      capture.capture(step_a, { 'attributes' => {} }, 'qualquer', nil, agent)
 
       expect(events('slot.asked_confirmation_turn')).to be_empty
     end
@@ -181,7 +181,7 @@ RSpec.describe Ai::TurnCapture do
                              'ai_last_asked_slot' => 'campo_a'
                            })
 
-      result = capture.capture(step_a, { 'attributes' => { 'campo_a' => Ai::StepSlot::ABSENT } }, 'não tenho', nil, department)
+      result = capture.capture(step_a, { 'attributes' => { 'campo_a' => Ai::StepSlot::ABSENT } }, 'não tenho', nil, agent)
 
       expect(result).to eq({ declined: true })                       # a recusa NÃO foi curto-circuitada
       expect(events('slot.asked_confirmation_turn')).not_to be_empty # a confirmação ainda é sinalizada
@@ -195,20 +195,22 @@ RSpec.describe Ai::TurnCapture do
   # Coexiste com a confirmação de slot JÁ preenchido (asked_confirmation_turn), que vence por ordem (fact_present?).
   # Slot choice options=[manhã,tarde,noite]: é aí que "sim" reprova no gate (em texto livre "sim" validaria).
   describe '#capture — Frente B: substituição por valor proposto (slot vazio, validação-first)' do
-    let(:period_department) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Reserva', status: 'active',
-                                    behavior: {})
-      dept.create_playbook!(active: true, steps: [
-                              { 'name' => 'Período',
-                                'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice',
-                                               'options' => %w[manhã tarde noite], 'required' => true } }
-                            ])
-      dept
+    let(:period_agent) do
+      p = Ai::OperationProfile.create!(account_id: account.id, name: 'p2', supervisor_provider: 'openai',
+                                       supervisor_model: 'gpt-4.1-mini')
+      a = Ai::Agent.create!(account: account, name: 'Reserva', status: 'active', ai_operation_profile_id: p.id,
+                            behavior: {})
+      a.create_playbook!(active: true, steps: [
+                           { 'name' => 'Período',
+                             'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice',
+                                            'options' => %w[manhã tarde noite], 'required' => true } }
+                         ])
+      a
     end
-    let(:period_step) { period_department.playbook.steps.first }
+    let(:period_step) { period_agent.playbook.steps.first }
     let(:period_capture) do
       described_class.new(conversation: conversation,
-                          persister: Ai::StateManager.new(conversation: conversation, agent: agent), agent: agent)
+                          persister: Ai::StateManager.new(conversation: conversation, agent: period_agent), agent: period_agent)
     end
 
     # Estado deixado pelo turno anterior: perguntou periodo_reservado E propôs `value` (par asked+proposto).
@@ -221,7 +223,7 @@ RSpec.describe Ai::TurnCapture do
       propose('tarde')
 
       period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'sim' } },
-                             'sim pode ser', nil, period_department)
+                             'sim pode ser', nil, period_agent)
 
       expect(facts['periodo_reservado']).to eq('tarde') # o proposto — não "sim"
       expect(events('slot.captured').last.payload).to include('attribute' => 'periodo_reservado', 'status' => 'confirmed')
@@ -231,7 +233,7 @@ RSpec.describe Ai::TurnCapture do
       propose('tarde')
 
       period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'não' } },
-                             'não, prefiro outro', nil, period_department)
+                             'não, prefiro outro', nil, period_agent)
 
       expect(facts).not_to have_key('periodo_reservado') # a proposta NÃO foi gravada numa recusa
       expect(events('slot.captured')).to be_empty
@@ -241,7 +243,7 @@ RSpec.describe Ai::TurnCapture do
       propose('tarde')
 
       period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'manhã' } },
-                             'prefiro manhã', nil, period_department)
+                             'prefiro manhã', nil, period_agent)
 
       # capture NÃO grava o attribute válido (Opção B: quem persiste é o Gateway) — o que importa aqui é que a
       # substituição pela proposta NÃO disparou: nada de "tarde", nenhum slot.captured.
@@ -252,7 +254,7 @@ RSpec.describe Ai::TurnCapture do
     it 'attributes VAZIO (modelo mudo) -> B NÃO substitui: sem valor no attributes, sem sinal (não vira "tarde")' do
       propose('tarde')
 
-      period_capture.capture(period_step, { 'attributes' => {} }, 'sim pode ser', nil, period_department)
+      period_capture.capture(period_step, { 'attributes' => {} }, 'sim pode ser', nil, period_agent)
 
       # Contrato de B: attributes vazio NUNCA vira a proposta. (O texto cai na captura determinística
       # pré-existente do choice, fora do escopo de B — o que importa aqui é que "tarde" não foi substituído.)
@@ -267,7 +269,7 @@ RSpec.describe Ai::TurnCapture do
                            })
 
       result = period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'sim' } },
-                                      'sim', nil, period_department)
+                                      'sim', nil, period_agent)
 
       expect(result).to be_nil
       expect(facts['periodo_reservado']).to eq('tarde') # intacto — o ramo de substituição nem roda
@@ -279,7 +281,7 @@ RSpec.describe Ai::TurnCapture do
       propose('tarde')
 
       period_capture.capture(period_step, { 'attributes' => { 'periodo_reservado' => 'sim' } },
-                             'sim pode ser', nil, period_department)
+                             'sim pode ser', nil, period_agent)
 
       expect(facts['periodo_reservado']).to eq('tarde')
       expect(facts['periodo_reservado']).not_to eq('sim')

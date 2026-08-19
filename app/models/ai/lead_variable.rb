@@ -1,4 +1,4 @@
-# A lead variable the agent collects during the conversation (Instruções tab). Per department.
+# A lead variable the agent collects during the conversation (Instruções tab). Per agent.
 # == Schema Information
 #
 # Table name: ai_lead_variables
@@ -13,11 +13,11 @@
 #  created_at            :datetime         not null
 #  updated_at            :datetime         not null
 #  account_id            :bigint           not null
-#  ai_department_id      :bigint           not null
+#  ai_agent_id           :bigint           not null
 #
 # Indexes
 #
-#  index_ai_lead_variables_on_ai_department_id  (ai_department_id)
+#  index_ai_lead_variables_on_ai_agent_id  (ai_agent_id)
 #
 class Ai::LeadVariable < ApplicationRecord
   VAR_TYPES = %w[texto numero booleano lista].freeze
@@ -27,7 +27,7 @@ class Ai::LeadVariable < ApplicationRecord
   NAME_FORMAT = /\A[a-z][a-z0-9_]*\z/
 
   belongs_to :account, class_name: '::Account'
-  belongs_to :department, class_name: 'Ai::Department', foreign_key: :ai_department_id, inverse_of: :lead_variables
+  belongs_to :agent, class_name: 'Ai::Agent', foreign_key: :ai_agent_id, inverse_of: :lead_variables
 
   # SÓ on: :create — normalizar/validar no update RENOMEARIA uma variável existente, orfanando o dado já
   # coletado nas conversas em andamento (ai_collected_facts) e na memória do contato (key_facts, imutável e
@@ -39,7 +39,7 @@ class Ai::LeadVariable < ApplicationRecord
                    length: { maximum: 60 }, on: :create
   # rubocop:disable Rails/UniqueValidationWithoutIndex -- índice único exigiria migração de dados (pode haver
   # dup legado); a validação é on: :create e best-effort — impede NOVA duplicata pela UI, sem tocar as existentes
-  validates :name, uniqueness: { scope: :ai_department_id, case_sensitive: false }, on: :create
+  validates :name, uniqueness: { scope: :ai_agent_id, case_sensitive: false }, on: :create
   # rubocop:enable Rails/UniqueValidationWithoutIndex
   validates :var_type, inclusion: { in: VAR_TYPES }
 

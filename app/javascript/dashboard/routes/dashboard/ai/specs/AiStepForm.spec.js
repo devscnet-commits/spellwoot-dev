@@ -25,8 +25,6 @@ const mountForm = (step, extraProps = {}) => {
       customAttributes: [],
       leadVariables: [],
       agentId: '3',
-      departmentId: '5',
-      departments: [],
       ...extraProps,
     },
   });
@@ -276,7 +274,7 @@ describe('AiStepForm.vue — inline-create cria LeadVariable (interna), NÃO Cus
 
     // POST no endpoint de LEAD VARIABLE, não em custom_attribute_definitions
     const [url, body] = window.axios.post.mock.calls[0];
-    expect(url).toContain('/ai_agents/3/ai_departments/5/ai_lead_variables');
+    expect(url).toContain('/ai_agents/3/ai_lead_variables');
     expect(url).not.toContain('custom_attribute_definitions');
     expect(body).toEqual({ ai_lead_variable: { name: 'bairro' } });
 
@@ -329,7 +327,7 @@ describe('AiStepForm.vue — choice: fonte das opções (lista fixa vs ferrament
     wrapper.unmount();
   });
 
-  // Anti-degradação-silenciosa: a ferramenta salva não existe mais na lista do department -> avisa na tela
+  // Anti-degradação-silenciosa: a ferramenta salva não existe mais na lista do agente -> avisa na tela
   // (o runtime já faz fail-open + tool_domain.unextractable, mas quem edita precisa VER).
   it('ferramenta salva ausente da lista -> mostra o aviso; presente -> não mostra', () => {
     const step = {

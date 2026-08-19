@@ -12,20 +12,20 @@ RSpec.describe 'Ai tool-domain via caminho do JUIZ (repro conv 436)' do # ruboco
   let(:profile) do
     Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
   end
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let(:dept) do
-    d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Reserva', status: 'active', behavior: {})
+  let(:agent) do
+    a = Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id,
+                          behavior: {})
     # UMA etapa só, com a declaração — idêntico ao playbook 5 [13] AGENDAMENTO
-    d.create_playbook!(active: true, steps: [
+    a.create_playbook!(active: true, steps: [
                          { 'name' => 'AGENDAMENTO',
                            'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice',
                                           'options' => %w[manhã tarde], 'domain_from_tool' => 'consultar_periodos' } }
                        ])
-    d
+    a
   end
-  let(:step) { dept.playbook.steps[0] }
+  let(:step) { agent.playbook.steps[0] }
   let(:tool) do
-    Ai::Tool.create!(account: account, ai_department_id: dept.id, name: 'consultar_periodos',
+    Ai::Tool.create!(account: account, ai_agent_id: agent.id, name: 'consultar_periodos',
                      implementation_type: 'webhook', webhook_config: { 'url' => 'https://x' }, status: 'active')
   end
   let(:manager) { Ai::StateManager.new(conversation: conversation, agent: agent) }
@@ -49,7 +49,7 @@ RSpec.describe 'Ai tool-domain via caminho do JUIZ (repro conv 436)' do # ruboco
 
   it 'persist_judged("manhã") com expected_step = a etapa que declara domain_from_tool -> REJEITA (não grava)' do
     # o juiz decidiu {status:answered, value:"manhã"} -> persist_judged é o que grava
-    capture.send(:persist_judged, step, 'periodo_reservado', 'manhã', dept, 'judge', 'answered')
+    capture.send(:persist_judged, step, 'periodo_reservado', 'manhã', agent, 'judge', 'answered')
 
     expect(facts).not_to have_key('periodo_reservado')                       # NÃO gravou (ao contrário de prod)
     expect(events('facts.rejected').last&.payload).to include('reason' => 'not_in_tool_result')
@@ -57,13 +57,13 @@ RSpec.describe 'Ai tool-domain via caminho do JUIZ (repro conv 436)' do # ruboco
   end
 
   it 'controle: "tarde" (dentro do domínio) grava — prova que o caminho do juiz NÃO está morto' do
-    capture.send(:persist_judged, step, 'periodo_reservado', 'tarde', dept, 'judge', 'answered')
+    capture.send(:persist_judged, step, 'periodo_reservado', 'tarde', agent, 'judge', 'answered')
 
     expect(facts['periodo_reservado']).to eq('tarde')
   end
 
   it 'controle: a extração pega o array nested {body:{periodos:[...]}} (não é output plano)' do
-    tool_dom = manager.send(:tool_domain, step, dept)
+    tool_dom = manager.send(:tool_domain, step, agent)
     expect(tool_dom[:list]).to eq(%w[tarde]) # se isto falhar, o furo é o extrator no output aninhado
   end
 end

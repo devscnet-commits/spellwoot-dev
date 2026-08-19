@@ -28,8 +28,8 @@ const { t } = useI18n();
 const isNew = computed(() => route.params.agentId === 'new');
 const agentId = ref(isNew.value ? null : route.params.agentId);
 
-// The agent holds identity, the inboxes it serves, and its departments. Knowledge / tools /
-// steps / follow-up live INSIDE each department (Comercial uses different tools than Financeiro).
+// The agent holds identity, the inboxes it serves, and (fusão Departamento -> Agente, 19/08) its
+// own behavior/knowledge/tools/steps/follow-up directly — no more separate department record.
 const TAB_KEYS = [
   'about',
   'behavior',
@@ -40,7 +40,7 @@ const TAB_KEYS = [
   'inboxes',
   'test',
 ];
-// The agent tabs that edit the default department's sections (flattened).
+// The agent tabs that edit the agent's own config sections (flattened).
 const DEPT_TABS = ['behavior', 'followup', 'finalization', 'steps', 'tools'];
 const activeKey = ref(route.query.tab === 'test' ? 'test' : 'about');
 const tabs = computed(() =>
@@ -56,7 +56,6 @@ const onTabChanged = tab => {
 };
 
 const profiles = ref([]);
-const departments = ref([]);
 const isSaving = ref(false);
 
 const STAGE_BADGE = {
@@ -178,38 +177,6 @@ const fetchAgent = async () => {
   });
 };
 
-// The agent owns a single default department (its behavior/knowledge/steps/tools). It is
-// resolved (or created) on load and edited inline in the "Comportamento" tab.
-const defaultDeptId = ref(null);
-const fetchDepartments = async () => {
-  if (isNew.value) return;
-  const { data } = await axios.get(
-    `${agentUrl()}/${agentId.value}/ai_departments`
-  );
-  departments.value = Array.isArray(data) ? data : [];
-};
-const ensureDefaultDepartment = async () => {
-  if (isNew.value || !agentId.value) return;
-  const existing =
-    departments.value.find(d => d.is_default) || departments.value[0];
-  if (existing) {
-    defaultDeptId.value = existing.id;
-    return;
-  }
-  const { data } = await axios.post(
-    `${agentUrl()}/${agentId.value}/ai_departments`,
-    {
-      ai_department: {
-        name: agentForm.assistant_name || agentForm.name || 'Atendimento',
-        is_default: true,
-        status: 'active',
-      },
-    }
-  );
-  departments.value = [data];
-  defaultDeptId.value = data.id;
-};
-
 // Avatares são salvos como base64 inline. Encolhemos no cliente (quadrado, lado
 // máx AVATAR_MAX_PX) para o data URL ficar leve e caber no campo sem inflar o banco.
 const AVATAR_MAX_PX = 192;
@@ -278,8 +245,6 @@ const saveAgent = async () => {
       const { data } = await axios.post(agentUrl(), { ai_agent: payload });
       agentId.value = data.id;
       router.replace({ name: 'ai_agent_detail', params: { agentId: data.id } });
-      await fetchDepartments();
-      await ensureDefaultDepartment();
       // eslint-disable-next-line no-use-before-define
       fetchInboxes();
     } else {
@@ -365,7 +330,6 @@ const testResult = ref(null);
 const isTesting = ref(false);
 
 // Governance read-out for the Lab: how the engine decided (all from the Tester response).
-const testMethodLabel = m => (m ? t(`AI_AGENTS.TEST.METHODS.${m}`, m) : '');
 const testResolvedBy = computed(() => {
   const r = testResult.value;
   if (!r || r.error) return null;
@@ -397,8 +361,7 @@ onMounted(async () => {
   fetchAgents();
   await fetchAgent();
   captureAgent();
-  await Promise.all([fetchDepartments(), fetchInboxes()]);
-  await ensureDefaultDepartment();
+  await fetchInboxes();
 });
 </script>
 
@@ -865,7 +828,7 @@ onMounted(async () => {
               <AiPromptAssistant
                 v-model:open="promptAssistantOpen"
                 kind="base_prompt"
-                :department-id="defaultDeptId"
+                :agent-id="agentId"
               />
               <div class="flex flex-col gap-1">
                 <TextArea
@@ -890,7 +853,7 @@ onMounted(async () => {
 
               <!-- Histórico do prompt do agente (base_prompt/guardrails via Ai::Version).
                    Fica DENTRO desta seção, junto aos campos que restaura — distinto do
-                   "Histórico das Configurações" (ai_department_versions) que vem no AiDepartmentDetail. -->
+                   "Histórico das Configurações" (ai_agent_behavior_versions) que vem no AiDepartmentDetail. -->
               <AiVersionHistory
                 v-if="!isNew"
                 :base-url="versionsBaseUrl"
@@ -899,13 +862,7 @@ onMounted(async () => {
               />
             </section>
 
-            <AiDepartmentDetail
-              v-if="defaultDeptId"
-              :key="defaultDeptId"
-              embedded
-              :embed-department-id="defaultDeptId"
-              :section="activeKey"
-            />
+            <AiDepartmentDetail embedded :section="activeKey" />
           </template>
         </div>
 
@@ -992,12 +949,6 @@ onMounted(async () => {
                   <div
                     v-for="stat in [
                       {
-                        icon: 'i-lucide-layers',
-                        label: $t('AI_AGENTS.TEST.DEPARTMENT'),
-                        value:
-                          testResult.department || $t('AI_AGENTS.TEST.NONE'),
-                      },
-                      {
                         icon: 'i-lucide-wrench',
                         label: $t('AI_AGENTS.TEST.TOOL'),
                         value: testResult.tool || $t('AI_AGENTS.TEST.NONE'),
@@ -1073,20 +1024,6 @@ onMounted(async () => {
                     {{ $t('AI_AGENTS.TEST.GOVERNANCE_TITLE') }}
                   </span>
                   <div class="flex flex-col gap-1.5 text-xs text-n-slate-11">
-                    <p class="mb-0">
-                      <span
-                        class="i-lucide-layers size-3.5 inline-block align-text-bottom"
-                      />
-                      {{ $t('AI_AGENTS.TEST.CHOSEN_BY') }}:
-                      <span class="text-n-slate-12 font-medium">
-                        {{ testResult.department || $t('AI_AGENTS.TEST.NONE') }}
-                        <template v-if="testResult.department_method">
-                          {{
-                            `(${testMethodLabel(testResult.department_method)})`
-                          }}
-                        </template>
-                      </span>
-                    </p>
                     <p v-if="testResolvedBy" class="mb-0">
                       <span
                         class="i-lucide-sparkles size-3.5 inline-block align-text-bottom"

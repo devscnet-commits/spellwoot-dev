@@ -24,10 +24,7 @@ class Ai::PromptCompiler
     fixed << "Responda no idioma #{agent.assistant_language}." if agent.assistant_language.present?
     fixed << "Regras de segurança (nunca viole): #{agent.guardrails}." if agent.guardrails.present?
 
-    fixed << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
-    # NÃO injetar `department.instructions`: coluna legada, sem editor na UI (comportamento é montado
-    # por objetivo + steps do playbook). Ficava como ruído órfão no prompt. Coluna mantida no schema
-    # (aposentada só a leitura) — cleanup de schema é débito separado.
+    fixed << "Agente de IA: #{department.name}."
     #
     # LISTA das etapas + transfer/close: FIXO, só no prompt completo (não no followup). A ÂNCORA da etapa
     # NÃO entra aqui — muda por turno, então é VARIÁVEL e vai para a seção variável (senão quebra o prefixo).

@@ -8,10 +8,9 @@ RSpec.describe Ai::PythonOrchestratorDiagnostics do
   let(:profile) do
     Ai::OperationProfile.create!(account_id: account.id, name: 'padrão', supervisor_provider: 'openai', supervisor_model: 'gpt-4o')
   end
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comercial', status: 'active',
-                           behavior: { 'python_orchestrator' => true })
+  let(:agent) do
+    Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id,
+                      behavior: { 'python_orchestrator' => true })
   end
   let(:conversation) { create(:conversation, account: account, inbox: inbox) }
 
@@ -36,52 +35,49 @@ RSpec.describe Ai::PythonOrchestratorDiagnostics do
       expect(described_class.recent_runs(conversation)).to eq([])
     end
 
-    it 'devolve os runs recentes com status/error_type/department_id' do
+    it 'devolve os runs recentes com status/error_type/agent_id' do
       Ai::Run.create!(account_id: account.id, conversation_id: conversation.id, ai_agent_id: agent.id,
                       inbox_id: inbox.id, run_type: 'decision', mode: 'live', status: 'error',
-                      error_type: 'internal_error', ai_department_id: department.id)
+                      error_type: 'internal_error')
 
       runs = described_class.recent_runs(conversation)
 
       expect(runs.size).to eq(1)
-      expect(runs.first).to include(status: 'error', error_type: 'internal_error', department_id: department.id)
+      expect(runs.first).to include(status: 'error', error_type: 'internal_error', agent_id: agent.id)
     end
   end
 
   describe '.flag_status' do
-    it 'resolve o department VIA Ai::Run quando existe' do
+    it 'resolve o agente VIA Ai::Run quando existe' do
       Ai::Run.create!(account_id: account.id, conversation_id: conversation.id, ai_agent_id: agent.id,
-                      inbox_id: inbox.id, run_type: 'decision', mode: 'live', status: 'recorded',
-                      ai_department_id: department.id)
+                      inbox_id: inbox.id, run_type: 'decision', mode: 'live', status: 'recorded')
 
       flags = described_class.flag_status(conversation)
 
       expect(flags).to contain_exactly(
-        { department_id: department.id, name: 'Comercial', raw: true, raw_class: 'TrueClass', on: true }
+        { agent_id: agent.id, name: 'Bot', raw: true, raw_class: 'TrueClass', on: true }
       )
     end
 
     it 'sem Ai::Run, resolve VIA Ai::AgentInbox ativo da inbox' do
       Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
-      department # força a criação
 
       flags = described_class.flag_status(conversation)
 
-      expect(flags.map { |f| f[:department_id] }).to include(department.id)
+      expect(flags.map { |f| f[:agent_id] }).to include(agent.id)
     end
 
     it 'aceita a flag gravada como STRING "true" (achado ao vivo do bug do tipo)' do
-      department.update!(behavior: { 'python_orchestrator' => 'true' })
+      agent.update!(behavior: { 'python_orchestrator' => 'true' })
       Ai::Run.create!(account_id: account.id, conversation_id: conversation.id, ai_agent_id: agent.id,
-                      inbox_id: inbox.id, run_type: 'decision', mode: 'live', status: 'recorded',
-                      ai_department_id: department.id)
+                      inbox_id: inbox.id, run_type: 'decision', mode: 'live', status: 'recorded')
 
       flags = described_class.flag_status(conversation)
 
       expect(flags.first).to include(raw: 'true', raw_class: 'String', on: true)
     end
 
-    it '[] quando não acha department candidato nem por Ai::Run nem por Ai::AgentInbox' do
+    it '[] quando não acha agente candidato nem por Ai::Run nem por Ai::AgentInbox' do
       expect(described_class.flag_status(conversation)).to eq([])
     end
   end
@@ -100,7 +96,6 @@ RSpec.describe Ai::PythonOrchestratorDiagnostics do
     it 'chama Ai::PythonOrchestratorClient FORÇANDO mode: shadow, mesmo pedindo diagnóstico numa conta live' do
       create(:message, conversation: conversation, account: account, message_type: 'incoming', content: 'oi')
       Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
-      department
 
       expect(Ai::PythonOrchestratorClient).to receive(:process_message)
         .with(hash_including(mode: 'shadow'))
@@ -109,13 +104,12 @@ RSpec.describe Ai::PythonOrchestratorDiagnostics do
       result = described_class.direct_call(conversation)
 
       expect(result[:result]).to eq(reply: 'Oi! Como posso ajudar?', conversation_id: 'conv_1')
-      expect(result[:department_id]).to eq(department.id)
+      expect(result[:agent_id]).to eq(agent.id)
     end
 
     it 'captura a exceção CRUA em vez de deixar o rescue silencioso escondê-la (o ponto inteiro do diagnóstico)' do
       create(:message, conversation: conversation, account: account, message_type: 'incoming', content: 'oi')
       Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
-      department
       allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_raise(NoMethodError.new('boom'))
 
       result = described_class.direct_call(conversation)

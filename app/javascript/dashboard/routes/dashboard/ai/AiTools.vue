@@ -10,9 +10,8 @@ import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDelete
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const props = defineProps({
-  // Optional overrides so this view can be embedded inside the agent (default department).
+  // Optional override so this view can be embedded inside the agent detail page.
   agentId: { type: [String, Number], default: null },
-  departmentId: { type: [String, Number], default: null },
 });
 
 const route = useRoute();
@@ -209,8 +208,7 @@ const goIntegrations = () =>
 const baseUrl = () => {
   const accountId = route.params.accountId;
   const agentId = props.agentId || route.params.agentId;
-  const departmentId = props.departmentId || route.params.departmentId;
-  return `/api/v1/accounts/${accountId}/ai_agents/${agentId}/ai_departments/${departmentId}/ai_tools`;
+  return `/api/v1/accounts/${accountId}/ai_agents/${agentId}/ai_tools`;
 };
 
 const fetchTools = async () => {

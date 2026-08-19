@@ -8,8 +8,8 @@
 # AiPromptAssistant.vue but never applied to the form/step — it only exists for the human to read).
 # Suggestion-only for base_prompt (copy-paste); step_instructions can be applied directly into the
 # form's 3 fields (AiPromptAssistant.vue's "apply" button) — either way nothing is auto-saved to the
-# backend, the user still reviews before saving the step. Account-scoped, but when a `department`
-# is given it grounds the suggestion in that department's REAL capabilities (tools, knowledge sources,
+# backend, the user still reviews before saving the step. Account-scoped, but when an `agent`
+# is given it grounds the suggestion in that agent's REAL capabilities (tools, knowledge sources,
 # variables) — so it stops teaching the user to promise consultations that have no source (o bug de
 # "vou verificar suas faturas" sem ferramenta). Os system prompts (texto grande) ficam em
 # Ai::PromptAssistant::Prompts. Reuses Ai::ModelRouter (cheap fixed model) and records an Ai::Run for
@@ -18,11 +18,11 @@ class Ai::PromptAssistant
   MODEL = 'gpt-4.1-mini'.freeze
   KINDS = %w[base_prompt step_instructions].freeze
 
-  def initialize(account:, kind:, brief:, department: nil, requested_by: nil)
+  def initialize(account:, kind:, brief:, agent: nil, requested_by: nil)
     @account = account
     @kind = kind.to_s
     @brief = brief.to_s
-    @department = department
+    @agent = agent
     @requested_by = requested_by
   end
 
@@ -52,8 +52,8 @@ class Ai::PromptAssistant
 
   private
 
-  # System prompt (regras estáticas por kind) + o bloco de CAPACIDADES REAIS do department. As regras
-  # 7/9 (ação só com fonte) e 4 (variável do select) referenciam esse bloco por nome; sem department
+  # System prompt (regras estáticas por kind) + o bloco de CAPACIDADES REAIS do agente. As regras
+  # 7/9 (ação só com fonte) e 4 (variável do select) referenciam esse bloco por nome; sem agente
   # ele degrada para um aviso honesto (nunca some — senão a regra ficaria pendurada sem o dado).
   def full_system_prompt
     [system_prompt(@kind), capabilities_block].compact.join("\n\n")
@@ -64,9 +64,9 @@ class Ai::PromptAssistant
   end
 
   # Bloco que ancora o item 1 (ação sem fonte) e o item 3 (variável do select). Tools/knowledge valem
-  # para os dois kinds; variáveis só interessam ao step. Sem department: contexto indisponível -> aviso.
+  # para os dois kinds; variáveis só interessam ao step. Sem agente: contexto indisponível -> aviso.
   def capabilities_block
-    return unavailable_capabilities if @department.nil?
+    return unavailable_capabilities if @agent.nil?
 
     parts = ['CAPACIDADES REAIS DESTE AGENTE — use SÓ o que está listado aqui. Se o pedido exigir algo ' \
              'que não está nesta lista, AVISE no texto (conforme as regras) em vez de inventar.']
@@ -96,7 +96,7 @@ class Ai::PromptAssistant
   end
 
   def tools_section
-    rows = @department.tools.active.pluck(:name, :description)
+    rows = @agent.tools.active.pluck(:name, :description)
     return 'Ferramentas cadastradas: NENHUMA. Não instrua nenhuma consulta/verificação via ferramenta.' if rows.empty?
 
     lines = rows.map { |name, desc| "- #{name}: #{desc}" }
@@ -105,7 +105,7 @@ class Ai::PromptAssistant
 
   def knowledge_section
     rows = Ai::KnowledgeSource.active
-                              .where(account_id: @account.id, ai_department_id: [@department.id, nil])
+                              .where(account_id: @account.id, ai_agent_id: [@agent.id, nil])
                               .pluck(:kind, :title)
     return 'Fontes de conhecimento cadastradas: NENHUMA.' if rows.empty?
 
@@ -141,7 +141,7 @@ class Ai::PromptAssistant
 
   def internal_variable_rows(panel_keys)
     rows = {}
-    @department.lead_variables.order(:position).pluck(:name, :var_type).each do |name, vtype|
+    @agent.lead_variables.order(:position).pluck(:name, :var_type).each do |name, vtype|
       key = name.to_s.strip
       next if key.blank? || rows.key?(key)
 

@@ -7,8 +7,8 @@
 # próprio, mantendo o golden master intacto.
 class Ai::HandoffCoordinator
   MAX_AI_HOPS = 2
-  # Tag de visibilidade quando o handoff não acha NENHUM agente atribuível (mesmo padrão dos outros
-  # fallbacks: department-override-indisponivel, chave-propria-falhou).
+  # Tag de visibilidade quando o handoff não acha NENHUM agente atribuível (mesmo padrão do outro
+  # fallback: chave-propria-falhou).
   NO_AGENT_LABEL = 'sem-agente-disponivel'.freeze
   # Tag quando não há NENHUM time configurado para transferência (nem "Time deste agente" nem
   # "Transferir para times"): sinaliza ao dono que faltou configurar, em vez de cair em membro aleatório.

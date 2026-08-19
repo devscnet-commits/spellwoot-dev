@@ -1,6 +1,6 @@
 # Runs the Gateway for every active agent bound to the message's inbox (shadow + live).
 # Mandatory plumbing for the AI runtime (not the optional "shadow" validation feature). The
-# binding's mode drives behaviour: shadow records only; live may reply, gated by the department
+# binding's mode drives behaviour: shadow records only; live may reply, gated by the agent's
 # reply_scope (off by default, canary for piloting). Background only.
 #
 # Team routing: when several agents attend the same inbox, only the agent that owns the

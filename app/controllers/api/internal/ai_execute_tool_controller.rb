@@ -14,7 +14,7 @@
 # Name translation: Ai::PythonOrchestratorClient SANITIZES every tool name before it reaches OpenAI
 # (Ai::ToolNameSanitizer — OpenAI 400s on anything outside [a-zA-Z0-9_-], and Ai::CapabilityRegistry's
 # whole convention is dotted keys). Python calls back with that SAME sanitized name, so every lookup
-# here resolves it against the real candidate set (CONTROL_CAPABILITIES / the department's own tool
+# here resolves it against the real candidate set (CONTROL_CAPABILITIES / the agent's own tool
 # names) instead of guessing what character a "_" used to be.
 class Api::Internal::AiExecuteToolController < ActionController::API
   before_action :authenticate_internal_request!
@@ -23,30 +23,30 @@ class Api::Internal::AiExecuteToolController < ActionController::API
 
   def create
     conversation = ::Conversation.find(params[:ticket_id])
-    department = Ai::Department.find(params[:ai_department_id])
-    # Multi-tenant guard: the department must belong to the SAME account as the conversation. Without
+    agent = Ai::Agent.find(params[:ai_agent_id])
+    # Multi-tenant guard: the agent must belong to the SAME account as the conversation. Without
     # this, a malformed/forged payload could execute one account's tool against another account's
     # conversation. This endpoint already sits behind the internal Bearer token (authenticate_internal_request!),
     # so 403 here doesn't expose anything to an unauthenticated caller — only to whoever already holds that token.
-    unless department.account_id == conversation.account_id
+    unless agent.account_id == conversation.account_id
       return render json: { error: 'forbidden' }, status: :forbidden
     end
 
     return render json: continue_conversation if params[:tool_name] == Ai::PythonOrchestratorClient::CONTINUE_TOOL
 
-    return render json: advance_step(conversation, department) if params[:tool_name] == Ai::PythonOrchestratorClient::ADVANCE_STEP_TOOL
+    return render json: advance_step(conversation, agent) if params[:tool_name] == Ai::PythonOrchestratorClient::ADVANCE_STEP_TOOL
 
     control_key = resolve_control_capability(params[:tool_name])
-    return render json: run_capability(conversation, department, control_key) if control_key
+    return render json: run_capability(conversation, agent, control_key) if control_key
 
     attribute = Ai::StepCaptureTool.attribute_for(params[:tool_name])
-    return render json: capture_attribute(conversation, department, attribute) if attribute
+    return render json: capture_attribute(conversation, agent, attribute) if attribute
 
-    return render json: save_memory(conversation, department) if params[:tool_name] == Ai::PythonOrchestratorClient::MEMORY_TOOL
+    return render json: save_memory(conversation, agent) if params[:tool_name] == Ai::PythonOrchestratorClient::MEMORY_TOOL
 
-    return render json: search_knowledge(department) if params[:tool_name] == Ai::PythonOrchestratorClient::KNOWLEDGE_TOOL
+    return render json: search_knowledge(agent) if params[:tool_name] == Ai::PythonOrchestratorClient::KNOWLEDGE_TOOL
 
-    tool = find_real_tool!(department, params[:tool_name])
+    tool = find_real_tool!(agent, params[:tool_name])
 
     execution = Ai::ToolExecutor.new(
       tool: tool,
@@ -69,9 +69,9 @@ class Api::Internal::AiExecuteToolController < ActionController::API
 
   # Ai::Tool#name has no format validation — an admin could type spaces/accents/dots into it, which
   # Ai::PythonOrchestratorClient would ALSO have sanitized on the way out. Resolve against the
-  # department's own (real, unsanitized) tool names before hitting the DB by name.
-  def find_real_tool!(department, sanitized_name)
-    tools = department.tools.active.to_a
+  # agent's own (real, unsanitized) tool names before hitting the DB by name.
+  def find_real_tool!(agent, sanitized_name)
+    tools = agent.tools.active.to_a
     original_name = Ai::ToolNameSanitizer.resolve(sanitized_name, tools.map(&:name))
     tools.find { |t| t.name == original_name } ||
       raise(ActiveRecord::RecordNotFound, "Couldn't find Ai::Tool with name=#{sanitized_name.inspect}")
@@ -82,7 +82,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   end
 
   # Same live/shadow discipline Ai::ToolExecutor already enforces for real tools — shadow never
-  # mutates, it only records that the AI WOULD have acted, so a department piloted behind canary/
+  # mutates, it only records that the AI WOULD have acted, so an agent piloted behind canary/
   # shadow doesn't leak side effects (step advance, resolve, transfer) into real conversation state.
   def live?
     mode == 'live'
@@ -94,10 +94,10 @@ class Api::Internal::AiExecuteToolController < ActionController::API
 
   # Upsert (Ai::StateManager#persist_attributes merges by key — calling this again with a corrected
   # value UPDATES ai_collected_facts, never duplicates).
-  def capture_attribute(conversation, department, attribute)
+  def capture_attribute(conversation, agent, attribute)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
-    persist_and_report(conversation, department, attribute, arguments[attribute])
+    persist_and_report(conversation, agent, attribute, arguments[attribute])
   end
 
   # Híbrido, deliberado (Ai::PythonOrchestratorClient::MEMORY_TOOL comment): "registrar_*" continua
@@ -109,18 +109,18 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # sem gate) — se a IA por acaso usar uma chave que JÁ é um CustomAttributeDefinition real, espelha
   # igual a qualquer outro dado :trusted; não há proteção especial contra isso aqui, é o mesmo
   # comportamento de qualquer escrita confiável.
-  def save_memory(conversation, department)
+  def save_memory(conversation, agent)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
     chave = arguments['chave'].to_s.strip
     return { result: {}, status: 'skipped', error: 'chave vazia — nada foi registrado' } if chave.blank?
 
-    persist_and_report(conversation, department, chave, arguments['valor'])
+    persist_and_report(conversation, agent, chave, arguments['valor'])
   end
 
-  def persist_and_report(conversation, department, key, value)
-    gated = Ai::StateManager.new(conversation: conversation, agent: department.agent)
-                            .persist_attributes({ key => value }, department, source: :trusted)
+  def persist_and_report(conversation, agent, key, value)
+    gated = Ai::StateManager.new(conversation: conversation, agent: agent)
+                            .persist_attributes({ key => value }, agent, source: :trusted)
     persisted = gated.key?(key)
     { result: { key => value }, status: persisted ? 'executed' : 'skipped',
       error: persisted ? nil : 'valor vazio — nada foi registrado' }
@@ -133,11 +133,11 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # gateiam por live? porque ESCREVEM estado da conversa. Isto fecha o gap de "RAG vazio silencioso": o
   # resultado da busca é sempre um function_call_output que a IA precisa processar, mesmo quando é
   # "nada encontrado" — nunca mais um bloco de prompt que simplesmente não aparece sem avisar ninguém.
-  def search_knowledge(department)
+  def search_knowledge(agent)
     query = arguments['pergunta'].to_s.strip
     return { result: {}, status: 'skipped', error: 'pergunta vazia — nada foi buscado' } if query.blank?
 
-    chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: department.account_id, department_id: department.id)
+    chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: agent.account_id, agent_id: agent.id)
     conteudo = chunks.present? ? chunks.join("\n---\n") : 'Nada encontrado na base de conhecimento para essa pergunta.'
     { result: { 'encontrado' => chunks.present?, 'conteudo' => conteudo }, status: 'executed', error: nil }
   rescue StandardError => e
@@ -213,15 +213,14 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # quando capturou algo" — motivo (index == start_index) É esse "o modelo disse que terminou ESTA".
   #
   # Segundo achado (mesma investigação): "Automações ao concluir etapa" (tag/webhook/mudar de
-  # time/mudar de department/preencher atributo — Ai::StepAutomationRunner) nunca disparava no
-  # caminho Python — só existia o disparo via Ai::StateManager#track_step, morto desde a eliminação
-  # do motor legado (zero call sites). Religado aqui, mesma idempotência por índice
-  # (ai_step_last_fired_index) que o caminho legado já usava — sobrevive a um retry de webhook
-  # duplicado do Python sem repetir a automação.
-  def advance_step(conversation, department)
+  # time/preencher atributo — Ai::StepAutomationRunner) nunca disparava no caminho Python — só existia
+  # o disparo via Ai::StateManager#track_step, morto desde a eliminação do motor legado (zero call
+  # sites). Religado aqui, mesma idempotência por índice (ai_step_last_fired_index) que o caminho
+  # legado já usava — sobrevive a um retry de webhook duplicado do Python sem repetir a automação.
+  def advance_step(conversation, agent)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
-    steps = Array(department.playbook&.steps)
+    steps = Array(agent.playbook&.steps)
     return { result: {}, status: 'skipped', error: 'sem etapas configuradas' } if steps.empty?
 
     attrs = conversation.additional_attributes || {}
@@ -235,7 +234,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
       current_step = steps[index]
       break if index != start_index && collect_attributes(current_step).empty?
 
-      fire_step_automations(conversation, current_step, index)
+      fire_step_automations(conversation, agent, current_step, index)
 
       on_complete = current_step.is_a?(Hash) ? (current_step['on_complete'] || current_step[:on_complete]) : nil
       if on_complete.is_a?(Hash)
@@ -244,7 +243,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
         # ai_step_turns seguia subindo até o stuck_handoff_turns — sempre que o desfecho configurado
         # NÃO encerrava a conversa (transferir, preencher atributo, mudar de time).
         persist_step_index(conversation, index)
-        return execute_step_conclusion(conversation, department, on_complete)
+        return execute_step_conclusion(conversation, agent, on_complete)
       end
 
       break if index == steps.size - 1
@@ -275,7 +274,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # run_record de Gateway) — Ai::StepAutomationRunner cai no caminho SEM auditoria de
   # Ai::CapabilityExecution pras ações via CapabilityRegistry, mesmo padrão que #run_capability já usa
   # pras control tools (avancar_etapa/registrar_* também não geram linha de auditoria).
-  def fire_step_automations(conversation, step, index)
+  def fire_step_automations(conversation, agent, step, index)
     automations = Array(step.is_a?(Hash) ? (step['automations'] || step[:automations]) : nil)
     return if automations.empty?
 
@@ -287,7 +286,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     conversation.update!(additional_attributes: attrs)
 
     Ai::StepAutomationRunner.new(conversation: conversation, account: conversation.account,
-                                 agent: department.agent, dispatcher: nil, run: nil).run(step)
+                                 agent: agent, dispatcher: nil, run: nil).run(step)
   end
 
   # 'collect' => 'attribute' aceita string OU array (ver #missing_required_attributes) — extraído
@@ -318,7 +317,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # As 3 ações do desfecho declarado — espelha Ai::Gateway#force_conclusion (motor legado) exatamente,
   # trocando action_dispatcher/handoff_coordinator memoizados do Gateway por instâncias locais (este
   # controller não tem run_record nem @acts_live — roda direto, o gate live? já filtrou acima).
-  def execute_step_conclusion(conversation, department, info)
+  def execute_step_conclusion(conversation, agent, info)
     case info['action'].to_s
     when 'close'
       result = Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::RESOLVE_TOOL,
@@ -326,11 +325,11 @@ class Api::Internal::AiExecuteToolController < ActionController::API
       { result: { 'conclusion' => 'close' }.merge(result[:output].is_a?(Hash) ? result[:output] : {}),
         status: 'executed', error: nil }
     when 'handoff_ai'
-      routed = step_handoff_coordinator(conversation, department).route_to_ai({ 'handoff_target' => info['target'].to_s })
+      routed = step_handoff_coordinator(conversation, agent).route_to_ai({ 'handoff_target' => info['target'].to_s })
       { result: { 'conclusion' => 'handoff_ai', 'target' => info['target'], 'routed' => routed ? true : false },
         status: 'executed', error: nil }
     else # handoff_human (default) — mesma leitura de team que Ai::Gateway#force_conclusion
-      coordinator = step_handoff_coordinator(conversation, department)
+      coordinator = step_handoff_coordinator(conversation, agent)
       team_id = coordinator.conclusion_team_id(info)
       reason = info['reason'].presence || 'conclusao'
       # Achado 2.3: handoff_human já entregue (ai_handoff true) — pula TAMBÉM o "unassign" da
@@ -355,8 +354,8 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # GatewayRunJob) — este controller não recebe o message_id que disparou o turno (o payload Rails->
   # Python nunca mandou), então usa a ÚLTIMA mensagem incoming da conversa como substituta razoável
   # (mesma inbox, é o que dispararia o próximo turno de qualquer forma).
-  def step_handoff_coordinator(conversation, department)
-    Ai::HandoffCoordinator.new(conversation: conversation, account: department.account, agent: department.agent,
+  def step_handoff_coordinator(conversation, agent)
+    Ai::HandoffCoordinator.new(conversation: conversation, account: agent.account, agent: agent,
                                message: conversation.messages.incoming.order(:id).last)
   end
 
@@ -364,10 +363,10 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # Ai::ToolExecutor dispatches to for configured tools) — not routed through Ai::ToolExecutor because
   # these aren't admin-configured Ai::Tool rows, they're always-available control tools. No
   # Ai::CapabilityExecution audit row for the same reason "avancar_etapa"/"registrar_*" don't have one.
-  def run_capability(conversation, department, key)
+  def run_capability(conversation, agent, key)
     return { result: {}, status: 'skipped', error: nil } unless live?
 
-    return transfer_to_human(conversation, department) if key == Ai::PythonOrchestratorClient::TRANSFER_TOOL
+    return transfer_to_human(conversation, agent) if key == Ai::PythonOrchestratorClient::TRANSFER_TOOL
 
     result = Ai::CapabilityRegistry.execute(key, conversation: conversation, input: arguments)
     { result: result[:output], status: 'executed', error: nil }
@@ -398,9 +397,9 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # do modelo agora, então #human_team_id cai sempre no time default (reverte o achado de 17/08 pra
   # contas com 2+ times marcados; risco assumido, ver comentário em
   # Ai::PythonOrchestratorClient#system_prompt).
-  def transfer_to_human(conversation, department)
+  def transfer_to_human(conversation, agent)
     save_handoff_summary(conversation)
-    coordinator = step_handoff_coordinator(conversation, department)
+    coordinator = step_handoff_coordinator(conversation, agent)
     team_id = coordinator.human_team_id({ 'handoff_target' => arguments['handoff_target'].to_s })
     Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL, conversation: conversation,
                                    input: { 'unassign' => true, 'team_id' => team_id })

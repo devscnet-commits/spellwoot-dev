@@ -1,8 +1,8 @@
 # Bridges Ai::Gateway to the Python AI orchestrator microservice, which owns the OpenAI Responses
 # API reasoning/tool-call loop for a turn (native OpenAI tools like file_search resolved entirely
 # in Python; Rails-side tools proxied back via Api::Internal::AiExecuteToolController). Replaces
-# Ai::ContextBuilder + Ai::ModelRouter for departments opted into this path — Gateway keeps billing,
-# department resolution and final delivery (Ai::ActionDispatcher) exactly as before.
+# Ai::ContextBuilder + Ai::ModelRouter for agents opted into this path — Gateway keeps billing
+# and final delivery (Ai::ActionDispatcher) exactly as before.
 #
 # History: no flattened message blob is sent. conversation_id (an OpenAI Conversations API id,
 # conv_..., persistent and non-expiring — reused from the SAME
@@ -74,16 +74,15 @@ class Ai::PythonOrchestratorClient
   # quando chamar (objetivo da etapa + o que o cliente perguntou), sem pré-configuração de query/kind.
   KNOWLEDGE_TOOL = 'consultar_conhecimento'
 
-  def self.process_message(conversation:, content:, agent:, department:, mode:, message: nil, force_handoff_notice: false)
-    new(conversation: conversation, content: content, agent: agent, department: department, mode: mode,
+  def self.process_message(conversation:, content:, agent:, mode:, message: nil, force_handoff_notice: false)
+    new(conversation: conversation, content: content, agent: agent, mode: mode,
         message: message, force_handoff_notice: force_handoff_notice).perform
   end
 
-  def initialize(conversation:, content:, agent:, department:, mode:, message: nil, force_handoff_notice: false)
+  def initialize(conversation:, content:, agent:, mode:, message: nil, force_handoff_notice: false)
     @conversation = conversation
     @content = content
     @agent = agent
-    @department = department
     @mode = mode
     @message = message
     @force_handoff_notice = force_handoff_notice
@@ -139,9 +138,9 @@ class Ai::PythonOrchestratorClient
 
   def payload
     {
-      # Sent as integers, matching the orchestrator's Pydantic request model (ticket_id/ai_department_id: int).
+      # Sent as integers, matching the orchestrator's Pydantic request model (ticket_id/ai_agent_id: int).
       ticket_id: @conversation.id,
-      ai_department_id: @department.id,
+      ai_agent_id: @agent.id,
       mode: @mode,
       system_prompt: system_prompt,
       tools_schema: tools_schema,
@@ -149,7 +148,7 @@ class Ai::PythonOrchestratorClient
       # nenhuma tela, nenhum job). Mantido (lido corretamente de department.behavior) para quando essa
       # sincronização existir; até lá, a base de conhecimento chega pela tool #knowledge_tool
       # (consultar_conhecimento — Ai::KnowledgeRetriever, pgvector, já populado).
-      vector_store_id: @department.behavior.to_h['vector_store_id'],
+      vector_store_id: @agent.behavior.to_h['vector_store_id'],
       user_input: @content.to_s,
       # RAW pixels the model reads NATIVELY (not text captions folded into @content upstream in
       # Ai::Gateway): the WhatsApp photo's own url, if any, THEN the rasterized pages (base64 data
@@ -187,7 +186,7 @@ class Ai::PythonOrchestratorClient
   # Mesma resolução que Ai::Gateway#maybe_byok_fallback (motor legado) já usa: só existe quando a
   # conta tem a feature custom_llm_api_key ligada E uma chave de verdade salva no Hub pro provider.
   def account_api_key
-    Ai::ModelRouter.account_provider_key(@department.account_id, operation_profile&.supervisor_provider.presence || 'openai')
+    Ai::ModelRouter.account_provider_key(@agent.account_id, operation_profile&.supervisor_provider.presence || 'openai')
   end
 
   def image_url
@@ -397,7 +396,7 @@ class Ai::PythonOrchestratorClient
   def customer_memory_block
     return nil if @conversation.contact_id.blank?
 
-    memory = Ai::CustomerMemory.find_by(contact_id: @conversation.contact_id, account_id: @department.account_id)
+    memory = Ai::CustomerMemory.find_by(contact_id: @conversation.contact_id, account_id: @agent.account_id)
     return nil if memory.nil?
 
     facts = memory.key_facts.to_h.reject { |_k, v| v.to_s.strip.blank? }
@@ -432,7 +431,7 @@ class Ai::PythonOrchestratorClient
   # Mesma fonte que #current_step usa (Ai::StateManager#next_step — já existia pro look-ahead de
   # conhecimento do motor legado, reaproveitada aqui). Leitura PURA, não avança nada.
   def next_step
-    @next_step ||= state_manager.next_step(@department)
+    @next_step ||= state_manager.next_step(@agent)
   end
 
   # Bug URGENTE ao vivo: etapas escritas (ou geradas pelo Ai::PromptAssistant) ANTES da migração pra
@@ -563,15 +562,15 @@ class Ai::PythonOrchestratorClient
   # Mesma fonte e formatação que Ai::PromptCompiler#step_lines/compile já usa para transfer_when/
   # close_when (Ai::Playbook, não Ai::Department) — mesmo texto que o caminho legado mostraria.
   def transfer_when_text
-    Array(@department.playbook&.transfer_when).join('; ').presence
+    Array(@agent.playbook&.transfer_when).join('; ').presence
   end
 
   def close_when_text
-    Array(@department.playbook&.close_when).join('; ').presence
+    Array(@agent.playbook&.close_when).join('; ').presence
   end
 
   def close_message
-    @department.close_rules.to_h['message'].presence
+    @agent.close_rules.to_h['message'].presence
   end
 
   # structured_output_instruction/encerrar_atendimento_rule REMOVIDAS (19/08) — ver comentário em
@@ -604,7 +603,7 @@ class Ai::PythonOrchestratorClient
   end
 
   def real_tools
-    @real_tools ||= @department.tools.active.map do |tool|
+    @real_tools ||= @agent.tools.active.map do |tool|
       { name: Ai::ToolNameSanitizer.sanitize(tool.name), description: tool.description, input_schema: tool.input_schema }
     end
   end
@@ -633,7 +632,7 @@ class Ai::PythonOrchestratorClient
   def has_knowledge?
     return @has_knowledge if defined?(@has_knowledge)
 
-    source_ids = Ai::KnowledgeRetriever.source_ids_for(@department.account_id, @department.id, nil)
+    source_ids = Ai::KnowledgeRetriever.source_ids_for(@agent.account_id, @agent.id, nil)
     @has_knowledge = source_ids.present? && Ai::KnowledgeChunk.where(ai_knowledge_source_id: source_ids).exists?
   end
 
@@ -659,6 +658,6 @@ class Ai::PythonOrchestratorClient
   # avança nada; só lê o mesmo ai_step_index que o caminho legado também lê. Quem avança é
   # Api::Internal::AiExecuteToolController ao receber uma chamada de "avancar_etapa".
   def current_step
-    @current_step ||= state_manager.current_step(@department)
+    @current_step ||= state_manager.current_step(@agent)
   end
 end

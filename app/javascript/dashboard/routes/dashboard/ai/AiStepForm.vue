@@ -21,16 +21,14 @@ const props = defineProps({
   labels: { type: Array, default: () => [] },
   teams: { type: Array, default: () => [] },
   customAttributes: { type: Array, default: () => [] },
-  // Variáveis INTERNAS do department (Ai::LeadVariable). Fonte do Select da chave junto com customAttributes;
+  // Variáveis INTERNAS do agente (Ai::LeadVariable). Fonte do Select da chave junto com customAttributes;
   // o inline-create grava aqui (não em CustomAttributeDefinition).
   leadVariables: { type: Array, default: () => [] },
-  // (B2) Ferramentas do department (Ai::Tool), carregadas pelo pai. Fonte do Select "opções vêm de: ferramenta"
+  // (B2) Ferramentas do agente (Ai::Tool), carregadas pelo pai. Fonte do Select "opções vêm de: ferramenta"
   // num slot choice. Usadas só pelo NOME (domain_from_tool guarda o nome). Vazio => o modo ferramenta avisa.
   tools: { type: Array, default: () => [] },
-  // Contexto para o POST do inline-create de LeadVariable (nested em ai_agents -> ai_departments).
+  // Contexto para o POST do inline-create de LeadVariable (nested em ai_agents).
   agentId: { type: [String, Number], default: null },
-  departmentId: { type: [String, Number], default: null },
-  departments: { type: Array, default: () => [] },
   // Desfecho (b)-core: times da WHITELIST do agente (handoff_team_ids) e IAs de handoff (handoff_agent_ids),
   // já resolvidos pelo pai. NÃO são todos os times da conta (props.teams) — é a lista que a resolução do
   // backend aceita (é aqui que entra a validação de escrita: fora da whitelist não é selecionável).
@@ -73,7 +71,7 @@ const draft = reactive({
     : '',
   // (B2) Fonte das opções de um slot choice: 'fixed' (lista digitada) ou 'tool' (domínio dinâmico = resultado
   // da ferramenta). Semeado do banco: collect.domain_from_tool presente => 'tool'. collectDomainTool guarda o
-  // NOME da ferramenta (é o que Ai::StepSlot.domain_from_tool lê e resolve por department.tools.find_by(name:)).
+  // NOME da ferramenta (é o que Ai::StepSlot.domain_from_tool lê e resolve por agent.tools.find_by(name:)).
   collectSource: props.step?.collect?.domain_from_tool ? 'tool' : 'fixed',
   collectDomainTool: props.step?.collect?.domain_from_tool || '',
   // Obrigatório? SEMPRE no nível da etapa (slot_required), NUNCA collect.required (Gap 2 desacoplou).
@@ -203,8 +201,7 @@ const createVariable = async () => {
   createError.value = '';
   try {
     const { data } = await axios.post(
-      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}` +
-        `/ai_departments/${props.departmentId}/ai_lead_variables`,
+      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}/ai_lead_variables`,
       { ai_lead_variable: { name } }
     );
     emit('variableCreated', data); // pai empilha em leadVariables => a opção aparece
@@ -256,8 +253,7 @@ const deleteVariable = async v => {
   deleteError.value = '';
   try {
     await axios.delete(
-      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}` +
-        `/ai_departments/${props.departmentId}/ai_lead_variables/${v.id}`
+      `/api/v1/accounts/${route.params.accountId}/ai_agents/${props.agentId}/ai_lead_variables/${v.id}`
     );
     if (draft.collectAttribute === v.name) draft.collectAttribute = ''; // era a selecionada -> limpa
     emit('variableDeleted', v.id); // pai remove de leadVariables
@@ -301,8 +297,8 @@ const slotTypeOptions = computed(() => [
   },
 ]);
 
-// (B2) Ferramentas do department como opções do Select "opções vêm de: ferramenta". O value é o NOME (é o que
-// domain_from_tool grava e o backend resolve). Placeholder vazio quando o department não tem ferramenta.
+// (B2) Ferramentas do agente como opções do Select "opções vêm de: ferramenta". O value é o NOME (é o que
+// domain_from_tool grava e o backend resolve). Placeholder vazio quando o agente não tem ferramenta.
 const toolOptions = computed(() =>
   (props.tools || [])
     .map(tl => (tl?.name || '').trim())
@@ -311,7 +307,7 @@ const toolOptions = computed(() =>
 );
 
 // Aviso anti-degradação-silenciosa: o slot está em modo ferramenta e o NOME salvo não existe (mais) na lista
-// do department (ferramenta removida/renomeada). O runtime já faz fail-open + emite tool_domain.unextractable,
+// do agente (ferramenta removida/renomeada). O runtime já faz fail-open + emite tool_domain.unextractable,
 // mas quem edita a etapa precisa VER que o slot voltou a aceitar qualquer valor. Só alerta quando há nome salvo.
 const toolDomainMissing = computed(() => {
   if (draft.collectSource !== 'tool') return false;
@@ -326,10 +322,6 @@ const typeOptions = computed(() => [
   {
     value: 'change_team',
     label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_CHANGE_TEAM'),
-  },
-  {
-    value: 'change_ai_department',
-    label: t('AI_DEPARTMENTS.FORM.AUTOMATION_TYPE_CHANGE_AI_DEPARTMENT'),
   },
   {
     value: 'update_attribute',
@@ -362,9 +354,6 @@ const handoffTeamOptions = computed(() =>
 );
 const handoffAgentOptions = computed(() =>
   props.handoffAgents.map(a => ({ value: a.name, label: a.name }))
-);
-const departmentOptions = computed(() =>
-  props.departments.map(d => ({ value: d.id, label: d.name }))
 );
 // Só atributos de CONVERSA (a automação grava em conversation.custom_attributes).
 const attributeOptions = computed(() =>
@@ -926,21 +915,6 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
               }}</span>
             </label>
 
-            <!-- change_ai_department -->
-            <label
-              v-else-if="automation.type === 'change_ai_department'"
-              class="flex flex-col gap-1 text-xs text-n-slate-11"
-            >
-              {{ $t('AI_DEPARTMENTS.FORM.AUTOMATION_DEPARTMENT') }}
-              <Select
-                v-model="automation.params.department_id"
-                :options="departmentOptions"
-                :placeholder="
-                  $t('AI_DEPARTMENTS.FORM.AUTOMATION_DEPARTMENT_PLACEHOLDER')
-                "
-              />
-            </label>
-
             <!-- update_attribute -->
             <template v-else-if="automation.type === 'update_attribute'">
               <label class="flex flex-col gap-1 text-xs text-n-slate-11">
@@ -1105,7 +1079,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
     <AiPromptAssistant
       v-model:open="assistantOpen"
       kind="step_instructions"
-      :department-id="departmentId"
+      :agent-id="agentId"
       @apply="applyAssistantSuggestion"
     />
   </div>

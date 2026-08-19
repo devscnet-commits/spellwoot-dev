@@ -8,13 +8,10 @@ RSpec.describe 'AI Lead Variables API', type: :request do
                                            supervisor_model: 'gpt-4.1-mini')
     Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
   end
-  let(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Dep', status: 'active', behavior: {})
-  end
-  let(:variable) { department.lead_variables.create!(account: account, name: 'documento_cpf', var_type: 'texto') }
+  let(:variable) { agent.lead_variables.create!(account: account, name: 'documento_cpf', var_type: 'texto') }
 
   def base_url
-    "/api/v1/accounts/#{account.id}/ai_agents/#{agent.id}/ai_departments/#{department.id}/ai_lead_variables"
+    "/api/v1/accounts/#{account.id}/ai_agents/#{agent.id}/ai_lead_variables"
   end
 
   describe 'POST create — normaliza e valida' do
@@ -42,7 +39,7 @@ RSpec.describe 'AI Lead Variables API', type: :request do
     end
 
     it 'exclui a variável quando NENHUMA etapa a usa' do
-      department.create_playbook!(active: true, steps: [{ 'name' => 'Outra', 'collect' => { 'attribute' => 'outra_chave' } }])
+      agent.create_playbook!(active: true, steps: [{ 'name' => 'Outra', 'collect' => { 'attribute' => 'outra_chave' } }])
 
       delete_variable(variable)
 
@@ -51,7 +48,7 @@ RSpec.describe 'AI Lead Variables API', type: :request do
     end
 
     it 'IMPEDE (422 com o nome da etapa) excluir variável EM USO por uma etapa' do
-      department.create_playbook!(active: true, steps: [{ 'name' => 'Cadastro CPF', 'collect' => { 'attribute' => 'documento_cpf' } }])
+      agent.create_playbook!(active: true, steps: [{ 'name' => 'Cadastro CPF', 'collect' => { 'attribute' => 'documento_cpf' } }])
 
       delete_variable(variable)
 
