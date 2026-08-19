@@ -262,7 +262,11 @@ class Ai::PythonOrchestratorClient
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
     # "Responda no idioma X" removido (18/08, pedido do dono da conta — redução de prompt).
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
-    lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
+    # Pedido do dono da conta (19/08): "Departamento: X. Objetivo: Y." virou "Agente de IA: X." —
+    # department.objetivo NUNCA teve campo de edição na tela (só existia no payload/checklist, sempre
+    # vazio pra todo mundo — "Objetivo: ." sem nada depois). Nome trocado de department.name pro nome
+    # do AGENTE (o que o usuário realmente reconhece e configura).
+    lines << "Agente de IA: #{@agent.assistant_name.presence || @agent.name}."
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
     lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
