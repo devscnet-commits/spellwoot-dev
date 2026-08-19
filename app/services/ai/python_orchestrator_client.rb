@@ -469,45 +469,43 @@ class Ai::PythonOrchestratorClient
   # true, mas o teto de "travado" (stuck_handoff_turns) ia subindo turno a turno até estourar e transferir
   # pra humano — sem NADA de errado visível na conversa. Agora gera um item de "dados_coletados" por
   # atributo declarado, sempre.
+  #
+  # "DADOS PARA COLETA NA ETAPA" (tela): cada dado configurado carrega SEU PRÓPRIO type/options/required/
+  # hint (Ai::StepSlot.items) — CPF e e-mail na MESMA etapa validam cada um com o formato certo, em vez de
+  # os dois caírem no genérico "obrigatório/opcional" que #step_slot_metadata_text aplicava quando a etapa
+  # tinha mais de 1 atributo. "dica" (item['hint']) é texto livre do admin pra desambiguar um atributo sem
+  # reescrever a etapa inteira (ex.: "Cidade para instalar a internet", não confundir com cidade natal).
   def step_extraction_instruction
-    attributes = Ai::StepSlot.declared_attributes(current_step)
-    return nil if attributes.empty?
+    items = Ai::StepSlot.items(current_step)
+    return nil if items.empty?
 
-    if attributes.one?
-      attribute = attributes.first
-      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}' " \
-        "(#{step_slot_metadata_text}). Assim que o cliente informar isso, você DEVE adicionar um item na " \
-        "lista \"dados_coletados\" no seu JSON de resposta com \"chave\": \"#{attribute}\" e o valor " \
-        'extraído.'
+    if items.one?
+      item = items.first
+      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{item['attribute']}' " \
+        "(#{step_slot_metadata_text(item)}). Assim que o cliente informar isso, você DEVE adicionar um " \
+        "item na lista \"dados_coletados\" no seu JSON de resposta com \"chave\": \"#{item['attribute']}\" " \
+        'e o valor extraído.'
     else
-      lista = attributes.map { |a| "'#{a}'" }.join(', ')
-      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os dados referentes a #{lista} " \
-        "(#{step_slot_metadata_text}) — CADA um vira um item PRÓPRIO em \"dados_coletados\", nunca uma " \
-        'única chave combinando os dois. Assim que o cliente informar cada um, adicione o item ' \
-        'correspondente com "chave" igual ao nome exato do atributo e o valor extraído.'
+      lista = items.map { |item| "- \"#{item['attribute']}\" (#{step_slot_metadata_text(item)})" }.join("\n")
+      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os seguintes dados, CADA um como um item " \
+        "PRÓPRIO em \"dados_coletados\" (nunca uma única chave combinando vários):\n#{lista}\nAssim que " \
+        'o cliente informar cada um, adicione o item correspondente com "chave" igual ao nome exato do ' \
+        'atributo acima e o valor extraído.'
     end
   end
 
-  # Tipo/opções/obrigatoriedade do slot da etapa ATUAL, pro contexto de #data_validation_instruction
-  # ter algo real pra validar contra — sem isso a IA só teria o NOME do atributo, sem saber se é CPF,
-  # telefone, uma lista fechada de opções, etc. tools_schema TINHA essa info (o input_schema de
-  # "registrar_<attribute>"), mas essa tool é filtrada antes de chegar à OpenAI (orchestrator.py) — só
-  # sobrava o nome da chave. Ai::StepSlot é a MESMA fonte que gerava aquele input_schema.
-  #
-  # type/options (collect['type']/collect['options']) existem UMA vez por ETAPA, não por atributo — numa
-  # etapa de vários atributos aplicar o mesmo tipo/enum a todos seria errado (ex.: enum de cidades
-  # vazando pro atributo "viabilidade" da mesma etapa), então esse caso cai pro genérico
-  # obrigatório/opcional, sem tipo/opções (mesmo critério de Ai::StepCaptureTool#property_schema).
-  def step_slot_metadata_text
-    required = !Ai::StepSlot.optional?(current_step)
-    return required ? 'OBRIGATÓRIO' : 'opcional' if Ai::StepSlot.multi_attribute?(current_step)
-
-    type = Ai::StepSlot.type(current_step)
-    options = Ai::StepSlot.options(current_step)
-
-    parts = ["tipo: #{type}"]
-    parts << "opções válidas: #{options.join(', ')}" if options.present?
-    parts << (required ? 'OBRIGATÓRIO' : 'opcional')
+  # Tipo/opções/obrigatoriedade/dica de UM item (Ai::StepSlot.items), pro contexto de
+  # #data_validation_instruction ter algo real pra validar contra — sem isso a IA só teria o NOME do
+  # atributo, sem saber se é CPF, telefone, uma lista fechada de opções, etc. tools_schema TINHA essa
+  # info (o input_schema de "registrar_<attribute>"), mas essa tool é filtrada antes de chegar à OpenAI
+  # (orchestrator.py) — só sobrava o nome da chave. Ai::StepSlot é a MESMA fonte que gerava aquele
+  # input_schema. Recebe o item (não a etapa): cada dado tem seu próprio type/options agora, não existe
+  # mais "o type da etapa" — ver comentário de #step_extraction_instruction.
+  def step_slot_metadata_text(item)
+    parts = ["tipo: #{item['type']}"]
+    parts << "opções válidas: #{item['options'].join(', ')}" if item['options'].present?
+    parts << (item['required'] ? 'OBRIGATÓRIO' : 'opcional')
+    parts << "dica: #{item['hint']}" if item['hint'].present?
     parts.join(', ')
   end
 

@@ -428,8 +428,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # (Api::Internal::AiExecuteToolController#collect_attributes) exigia separadas. A etapa nunca
     # completava: avancar_etapa vinha true, mas o índice nunca avançava, e o teto de "travado"
     # (stuck_handoff_turns) ia subindo turno a turno até estourar — sem nada de errado visível na
-    # conversa. Agora o prompt nomeia as DUAS chaves reais, cada uma como item próprio.
-    it 'etapa com MAIS de um atributo declarado: nomeia CADA atributo real, nunca uma chave colada' do
+    # conversa. Agora o prompt nomeia as DUAS chaves reais, cada uma como item próprio — e cada uma
+    # LEVA o type/options declarados (antes escondidos pelo colapso genérico do multi_attribute?, já
+    # que type/options eram um único valor pro collect antigo, compartilhado pelos dois atributos).
+    it 'etapa com MAIS de um atributo declarado (formato antigo, array): nomeia CADA atributo real, com type/options, nunca uma chave colada' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Cidade', 'instructions' => 'Peça a cidade e verifique a viabilidade.',
           'collect' => { 'attribute' => %w[cidade viabilidade], 'options' => %w[Chapecó Maravilha] } }
@@ -440,9 +442,35 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os dados referentes a 'cidade', 'viabilidade'") &&
-          prompt.include?('CADA um vira um item PRÓPRIO em "dados_coletados", nunca uma') &&
+        prompt.include?('REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os seguintes dados, CADA ' \
+                        'um como um item PRÓPRIO em "dados_coletados"') &&
+          prompt.include?('- "cidade" (tipo: text, opções válidas: Chapecó, Maravilha, OBRIGATÓRIO)') &&
+          prompt.include?('- "viabilidade" (tipo: text, opções válidas: Chapecó, Maravilha, OBRIGATÓRIO)') &&
           !prompt.include?('["cidade", "viabilidade"]')
+      }
+    end
+
+    # "DADOS PARA COLETA NA ETAPA" (collect.items[]): CADA dado com SEU PRÓPRIO type/required/hint —
+    # CPF obrigatório e e-mail opcional na MESMA etapa, cada um validado com o formato certo, em vez de
+    # os dois caírem no genérico "obrigatório/opcional" que o formato antigo aplicava com 2+ atributos.
+    it 'formato collect.items[]: cada dado leva SEU type/required, e a dica de extração aparece quando declarada' do
+      Ai::Playbook.create!(department: department, steps: [
+        { 'name' => 'Dados do cliente', 'instructions' => 'Colete CPF, nome e e-mail.',
+          'collect' => { 'items' => [
+            { 'attribute' => 'cpf_cliente', 'type' => 'cpf', 'required' => true },
+            { 'attribute' => 'nome_cliente', 'type' => 'text', 'required' => true },
+            { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => false, 'hint' => 'para nota fiscal' }
+          ] } }
+      ])
+      stub_orchestrator
+
+      described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
+
+      expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
+        prompt = JSON.parse(req.body)['system_prompt']
+        prompt.include?('- "cpf_cliente" (tipo: cpf, OBRIGATÓRIO)') &&
+          prompt.include?('- "nome_cliente" (tipo: text, OBRIGATÓRIO)') &&
+          prompt.include?('- "email_cliente" (tipo: email, opcional, dica: para nota fiscal)')
       }
     end
   end

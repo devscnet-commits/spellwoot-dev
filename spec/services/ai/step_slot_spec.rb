@@ -102,4 +102,71 @@ RSpec.describe Ai::StepSlot do
       expect(described_class.options(step)).to eq(%w[A B])
     end
   end
+
+  # "DADOS PARA COLETA NA ETAPA" — cada dado configurado carrega SEU PRÓPRIO type/options/required/hint
+  # (collect.items[]), em vez de 1 collect por etapa inteira. #items é a fonte que
+  # Ai::PythonOrchestratorClient (REGRA DE EXTRAÇÃO JSON) e Api::Internal::AiExecuteToolController
+  # (missing_required_attributes) passam a consumir — os métodos singulares abaixo (#type/#optional?/
+  # #options/#domain_from_tool) continuam existindo, só pra compat com quem lê "a etapa tem 1 slot"
+  # (StateManager, TurnCapture, TrivialTurnGate etc.), lendo o PRIMEIRO item.
+  describe '.items — coleta de VÁRIOS dados na mesma etapa, cada um com seu próprio type/required/hint' do
+    let(:step) do
+      { 'name' => 'Dados do cliente', 'collect' => { 'items' => [
+        { 'attribute' => 'cpf_cliente', 'type' => 'cpf', 'required' => true },
+        { 'attribute' => 'nome_cliente', 'type' => 'text', 'required' => true },
+        { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => false, 'hint' => 'para nota fiscal' }
+      ] } }
+    end
+
+    it 'devolve um item normalizado por dado, na ordem declarada' do
+      items = described_class.items(step)
+
+      expect(items.map { |i| i['attribute'] }).to eq(%w[cpf_cliente nome_cliente email_cliente])
+      expect(items.map { |i| i['type'] }).to eq(%w[cpf text email])
+    end
+
+    it 'required por item — obrigatório e opcional na MESMA etapa' do
+      items = described_class.items(step)
+
+      expect(items[0]['required']).to be(true)  # cpf_cliente
+      expect(items[2]['required']).to be(false) # email_cliente
+    end
+
+    it 'item sem "required" explícito -> default true (mesma regra do formato antigo)' do
+      step_default = { 'collect' => { 'items' => [{ 'attribute' => 'x', 'type' => 'text' }] } }
+
+      expect(described_class.items(step_default).first['required']).to be(true)
+    end
+
+    it 'hint só quando declarado' do
+      items = described_class.items(step)
+
+      expect(items[2]['hint']).to eq('para nota fiscal') # email_cliente
+      expect(items[0]['hint']).to be_nil                 # cpf_cliente
+    end
+
+    it '#declared_attributes / #multi_attribute? funcionam por cima de #items, sem mudança de assinatura' do
+      expect(described_class.declared_attributes(step)).to eq(%w[cpf_cliente nome_cliente email_cliente])
+      expect(described_class.multi_attribute?(step)).to be(true)
+    end
+
+    it 'os métodos singulares (compat) leem o PRIMEIRO item, não quebram numa etapa multi-dado' do
+      expect(described_class.attribute(step)).to eq('cpf_cliente')
+      expect(described_class.type(step)).to eq('cpf')
+      expect(described_class.optional?(step)).to be(false) # cpf_cliente é obrigatório
+    end
+
+    it 'etapa antiga (1 collect, sem items[]) continua funcionando via #items — compat retroativa' do
+      step_legado = { 'collect' => { 'attribute' => 'cidade', 'type' => 'text' } }
+
+      expect(described_class.items(step_legado)).to eq(
+        [{ 'attribute' => 'cidade', 'type' => 'text', 'options' => [], 'domain_from_tool' => nil,
+           'required' => true, 'hint' => nil }]
+      )
+    end
+
+    it 'etapa informativa (sem collect): items vazio, nada quebra' do
+      expect(described_class.items({ 'name' => 'Boas-vindas' })).to eq([])
+    end
+  end
 end

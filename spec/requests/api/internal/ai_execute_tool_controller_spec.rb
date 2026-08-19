@@ -247,6 +247,35 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(response.parsed_body['status']).to eq('executed')
       end
 
+      # "DADOS PARA COLETA NA ETAPA" (collect.items[] — cada dado com SEU PRÓPRIO type/options/required,
+      # não mais 1 collect.attribute por etapa): este controller lia `step.dig('collect', 'attribute')`
+      # CRU, direto do jsonb, em vez de Ai::StepSlot — cego pro formato novo, porque a chave mora dentro
+      # de cada item, não solta em collect.attribute. Uma etapa configurada assim tinha
+      # #missing_required_attributes SEMPRE [] (nada faltando) e avançava mesmo sem nenhum dado
+      # coletado. Unificado em Ai::StepSlot.items (mesma fonte que Ai::PythonOrchestratorClient usa pra
+      # montar a REGRA DE EXTRAÇÃO JSON) — este teste protege contra a divergência voltar.
+      it 'etapa no formato collect.items[]: cada item bloqueia (ou não) de forma independente pelo seu próprio required' do
+        department.playbook.update!(steps: [
+          { 'name' => 'dados_cliente', 'collect' => { 'items' => [
+            { 'attribute' => 'cpf_cliente', 'type' => 'cpf', 'required' => true },
+            { 'attribute' => 'nome_cliente', 'type' => 'text', 'required' => true },
+            { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => false }
+          ] } },
+          { 'name' => 'fim' }
+        ])
+        conversation.update!(additional_attributes: conversation.additional_attributes.merge('ai_step_index' => 0))
+
+        with_facts('nome_cliente' => 'Jaqueline') # falta cpf (obrigatório); email nunca vem (opcional)
+        call_tool('avancar_etapa')
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(0)
+        expect(response.parsed_body['status']).to eq('blocked_missing_data')
+
+        with_facts('nome_cliente' => 'Jaqueline', 'cpf_cliente' => '12345678900') # os DOIS obrigatórios
+        call_tool('avancar_etapa') # email_cliente (opcional) segue vazio e não bloqueia
+        expect(conversation.reload.additional_attributes['ai_step_index']).to eq(1)
+        expect(response.parsed_body['status']).to eq('executed')
+      end
+
       # Varredura através de MAIS de 2 etapas numa chamada só (cliente adianta 3 respostas de uma vez):
       # nome_cliente sem dado seria bloqueado, então parte de index 1 (cidade) já satisfeito, com
       # escolha_caminho/tamanho_imovel TAMBÉM já adiantados — uma chamada varre os 3 e trava em
