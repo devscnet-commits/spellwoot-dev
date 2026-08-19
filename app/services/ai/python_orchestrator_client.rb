@@ -255,16 +255,21 @@ class Ai::PythonOrchestratorClient
     # "Você é #{nome}." removido (18/08, pedido do dono da conta — redução de prompt): não estava
     # marcado pra ficar, e o nome do agente é texto livre digitado pelo admin — poderia expor qualquer
     # coisa verbatim no prompt (ex.: um nome tipo "agente de suporte da turma do fundão").
-    lines << identify_as_instruction
+    # Pedido do dono da conta (19/08): identify_as_instruction ("Aja como um atendente humano da
+    # equipe...") remanejada pra DEPOIS do prompt geral do agente (base_prompt) — antes vinha antes.
     lines << @agent.base_prompt if @agent.base_prompt.present?
+    lines << identify_as_instruction
     lines << "Personalidade: #{@agent.assistant_personality}." if @agent.assistant_personality.present?
     # "Responda no idioma X" removido (18/08, pedido do dono da conta — redução de prompt).
     lines << "Regras de segurança (nunca viole): #{@agent.guardrails}." if @agent.guardrails.present?
-    lines << "Departamento: #{@department.name}. Objetivo: #{@department.objetivo}."
+    # Pedido do dono da conta (19/08): "Departamento: X. Objetivo: Y." virou "Agente de IA: X." —
+    # department.objetivo NUNCA teve campo de edição na tela (só existia no payload/checklist, sempre
+    # vazio pra todo mundo — "Objetivo: ." sem nada depois). Nome trocado de department.name pro nome
+    # do AGENTE (o que o usuário realmente reconhece e configura).
+    lines << "Agente de IA: #{@agent.assistant_name.presence || @agent.name}."
     lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
     lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
     lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
-    lines << structured_output_instruction
 
     # DINÂMICO — muda a cada turno (documento anexado neste turno, fatos acumulados, ai_step_index
     # avança). Fica no FINAL, contíguo, nunca antes do bloco estático acima.
@@ -280,6 +285,12 @@ class Ai::PythonOrchestratorClient
              "COLETA abaixo; use isso só pra conduzir a conversa com continuidade, sem soar como se não " \
              "soubesse o que vem a seguir):\n#{next_step_instructions}" \
       if next_step_instructions.present?
+    # Pedido do dono da conta (19/08): structured_output_instruction (REGRAS: avancar_etapa/
+    # transferir_humano/encerrar_atendimento) SAIU do bloco estático de identidade/guardrails e
+    # desceu pra cá — junto do grupo de regras de comportamento por turno (REGRA DE EXTRAÇÃO/REGRAS DE
+    # FOCO/DISCIPLINA DE FERRAMENTAS), não mais perto de "Transfira para humano quando"/departamento.
+    # Conteúdo idêntico, só mudou de lugar.
+    lines << structured_output_instruction
     lines << step_extraction_instruction if step_extraction_instruction.present?
     lines << data_validation_instruction if data_validation_instruction.present?
     lines << tool_discipline_instruction if tool_discipline_instruction.present?
