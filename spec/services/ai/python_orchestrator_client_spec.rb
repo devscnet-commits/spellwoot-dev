@@ -609,36 +609,36 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
+      # REGRAS: (structured_output_instruction) removida por completo (19/08, pedido do dono da conta —
+      # ver comentário em Ai::PythonOrchestratorClient#system_prompt); as descriptions de
+      # transferir_humano/encerrar_atendimento agora vivem só no json_schema (orchestrator.py), não
+      # neste texto.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        # Structured Outputs (orchestrator.py): a IA não chama mais "conversation.resolve"/
-        # "conversation.transfer" por nome — expressa a mesma decisão via "transferir_humano"/
-        # "encerrar_atendimento" no JSON, que o Python lê e é quem chama o webhook.
         prompt.include?('Transfira para humano quando: cliente pede humano.') &&
           prompt.include?('Encerre quando: cliente confirma que não quer mais nada.') &&
           prompt.include?('Foi um prazer te atender!') &&
-          prompt.include?('"transferir_humano": true SOMENTE quando precisar transferir') &&
-          prompt.include?('"encerrar_atendimento": true SOMENTE quando as condições de encerramento configuradas')
+          !prompt.include?('REGRAS:')
       }
     end
 
     # Achado ao vivo (17/08, ticket 599): sem close_when configurado, a IA marcou
     # "encerrar_atendimento": true sozinha só porque o cliente disse "ta bem obrigada" — pulou etapas
     # inteiras (incluindo a de Finalização, cujo desfecho configurado era TRANSFERIR pra um humano, não
-    # resolver). A regra antiga dizia "SOMENTE quando as condições configuradas ABAIXO forem atendidas",
-    # mas sem close_when não existe nada "abaixo" — a IA ficou sem gatilho nenhum e mesmo assim marcou.
-    it 'sem NENHUM close_when configurado, proíbe explicitamente marcar encerrar_atendimento por conta própria' do
+    # resolver). encerrar_atendimento_rule (que corrigia isso em texto) foi REMOVIDA por completo
+    # (19/08, pedido do dono da conta — ver comentário em Ai::PythonOrchestratorClient#system_prompt).
+    # Risco assumido: a description do campo no json_schema é genérica ("SOMENTE quando as condições
+    # configuradas foram atendidas") e não sabe se o department tem ou não close_when — reintroduz
+    # exatamente a ambiguidade que causou o bug de 17/08.
+    it 'NÃO proíbe mais marcar encerrar_atendimento por conta própria (regra removida, 19/08)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
-      # Texto do meio/fim cortado (18/08, pedido de redução de prompt) — ver comentário em
-      # Ai::PythonOrchestratorClient#encerrar_atendimento_rule (risco de reincidência assumido).
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
         !prompt.include?('Encerre quando:') &&
-          prompt.include?('"encerrar_atendimento": mantenha SEMPRE false') &&
-          !prompt.include?('SOMENTE quando as condições de encerramento configuradas abaixo')
+          !prompt.include?('"encerrar_atendimento": mantenha SEMPRE false')
       }
     end
   end
@@ -986,10 +986,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # transferir"/"atendimento encerrado" em mensagem_para_cliente sem marcar o booleano correspondente.
   # O cliente recebia a promessa; a ação (handoff real / resolver a conversa) nunca acontecia.
   #
-  # Pedido do dono da conta (18/08, redução de prompt): as 2 regras abaixo foram REMOVIDAS do prompt —
-  # ver comentário em Ai::PythonOrchestratorClient#structured_output_instruction. Risco assumido:
-  # exatamente a classe de bug descrita acima pode voltar. Testes viram guarda de que o corte foi o
-  # pretendido (não um esquecimento futuro) — se a regra voltar, troque de volta pra "prompt.include?".
+  # Pedido do dono da conta (18/08, redução de prompt; 19/08, remoção completa do bloco inteiro) — ver
+  # comentário em Ai::PythonOrchestratorClient#system_prompt. Risco assumido: exatamente a classe de
+  # bug descrita acima pode voltar. Testes viram guarda de que o corte foi o pretendido (não um
+  # esquecimento futuro) — se a regra voltar, troque de volta pra "prompt.include?".
   describe 'PROIBIÇÃO de "fake-transfer"/"fake-close" (dizer sem marcar o campo) — REMOVIDA (18/08)' do
     it 'NÃO proíbe mais alegar transferência sem marcar transferir_humano+handoff_summary' do
       stub_orchestrator
@@ -1019,10 +1019,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # Ai::PythonOrchestratorClient#system_prompt) — os 4 testes que verificavam sua redação saíram
   # junto.
   #
-  # Pedido do dono da conta (18/08, redução de prompt): a regra de "fake-save" abaixo (não fingir que
-  # salvou sem preencher "dados_coletados") TAMBÉM foi removida — ver comentário em
-  # Ai::PythonOrchestratorClient#structured_output_instruction. Risco assumido: o bug real que essa
-  # regra corrigia (dado perdido silenciosamente) pode voltar.
+  # Pedido do dono da conta (18/08, redução de prompt; 19/08, remoção completa do bloco inteiro) — a
+  # regra de "fake-save" abaixo (não fingir que salvou sem preencher "dados_coletados") TAMBÉM foi
+  # removida — ver comentário em Ai::PythonOrchestratorClient#system_prompt. Risco assumido: o bug real
+  # que essa regra corrigia (dado perdido silenciosamente) pode voltar.
   describe 'contrato JSON estruturado (achados em teste ao vivo)' do
     # Bug real ao vivo, round 2 (era do design de tool-calling): a IA chamava "continuar_conversa" (o
     # no-op que sustentava tool_choice="required") e dizia em texto "Recebi seu CPF!" sem NUNCA chamar
@@ -1041,19 +1041,20 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
 
     # Bug real ao vivo (WhatsApp), 2 rodadas: cliente disse "vendas", a IA respondeu "Perfeito, é
-    # vendas mesmo?" em loop, sem nunca registrar/avançar. A instrução original (function-calling) foi
-    # substituída pela regra equivalente do contrato JSON: registrar em "dados_coletados" e marcar
-    # "avancar_etapa": true na MESMA resposta, sem turno extra de confirmação.
-    it 'proíbe pedir confirmação e manda registrar + avançar na mesma resposta, sem turno extra' do
+    # vendas mesmo?" em loop, sem nunca registrar/avançar. A regra que corrigia isso em texto
+    # (structured_output_instruction) foi REMOVIDA por completo (19/08, pedido do dono da conta — ver
+    # comentário em Ai::PythonOrchestratorClient#system_prompt). RISCO: nenhuma description de campo do
+    # json_schema cobre "não peça confirmação, registre e avance NA MESMA resposta" — esse bug pode
+    # voltar. Guarda de que a remoção foi intencional — se a regra voltar, troque de volta pra
+    # "prompt.include?".
+    it 'NÃO proíbe mais pedir confirmação em loop (regra removida, 19/08)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'vendas', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?("NÃO peça confirmação ('é isso mesmo?', 'posso confirmar?')") &&
-          prompt.include?('registre o dado em "dados_coletados" E marque "avancar_etapa": true na') &&
-          prompt.include?('sem inserir um turno extra de confirmação')
+        !prompt.include?("NÃO peça confirmação ('é isso mesmo?', 'posso confirmar?')")
       }
     end
 
@@ -1181,8 +1182,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # "dados_coletados" sem tool dedicada — não é mais oferecida como tool à OpenAI (tools_schema não
   # manda mais "registrar_*"/tools de controle, ver comentário em
   # Ai::PythonOrchestratorClient#tools_schema). O MECANISMO continua (o campo "dados_coletados" segue
-  # obrigatório no json_schema estrito do lado Python) — só a frase explicando chave/valor/atualiza-não-
-  # duplica saiu do prompt (18/08, pedido de redução — ver #structured_output_instruction).
+  # obrigatório no json_schema estrito do lado Python) — a frase explicando chave/valor/atualiza-não-
+  # duplica saiu do prompt (18/08, pedido de redução; o bloco inteiro foi removido em 19/08 — ver
+  # comentário em Ai::PythonOrchestratorClient#system_prompt).
   describe 'catch-all de memória ("dados_coletados" -> salvar_memoria_ia no Python)' do
     # Structured Outputs: a IA não escolhe mais entre "registrar_*" e "salvar_memoria_ia" — todo dado
     # (com ou sem tool dedicada no design antigo) vai pro mesmo lugar, "dados_coletados"; é o Python
