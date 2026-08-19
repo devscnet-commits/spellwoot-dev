@@ -100,6 +100,33 @@ RSpec.describe Ai::GatewayRunJob do
       expect(ran).to eq([{ agent_id: a_maya.id, mode: 'live' }])
       expect(tie_event).to be_nil
     end
+
+    # Achado ao vivo (19/08): agente "Inativo" (Ai::Agent#status) continuava respondendo de verdade se
+    # a caixa ainda estivesse marcada em "Atendimento IA" — o status do agente nunca era checado aqui.
+    it 'agente INATIVO com binding live ainda marcado na caixa: NÃO roda (nem live, nem shadow)' do
+      inativa = Ai::Agent.create!(account: account, name: 'Desligada', status: 'inactive',
+                                  ai_operation_profile_id: profile.id, team_id: nil)
+      binding_for(inativa, mode: 'live', priority: 1)
+
+      ran = spy_gateway
+      described_class.new.perform(message.id)
+
+      expect(ran).to eq([])
+    end
+
+    it 'um live ATIVO + um live INATIVO na mesma caixa: só o ativo roda, e sem falso tie' do
+      ativa = agent('Maya')
+      inativa = Ai::Agent.create!(account: account, name: 'Desligada', status: 'inactive',
+                                  ai_operation_profile_id: profile.id, team_id: nil)
+      binding_for(ativa, mode: 'live', priority: 1)
+      binding_for(inativa, mode: 'live', priority: 1)
+
+      ran = spy_gateway
+      described_class.new.perform(message.id)
+
+      expect(ran).to eq([{ agent_id: ativa.id, mode: 'live' }])
+      expect(tie_event).to be_nil
+    end
   end
 
   # Vencedor FORÇADO (handoff IA→IA): a IA de destino (ai_routed_agent_id) ganha ACIMA da eleição por

@@ -24,7 +24,9 @@ class Ai::GatewayRunJob < ApplicationJob
 
     content_override = grouped ? Ai::MessageGrouping.grouped_content(message.conversation) : nil
     conversation_team_id = message.conversation&.team_id
-    bindings = Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).includes(:agent).to_a
+    # agent_active (19/08): um agente "Inativo" não deve rodar NEM em shadow (custo/ruído de um agente
+    # que o admin desligou) — ver comentário em Ai::AgentInbox#agent_active.
+    bindings = Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).agent_active.includes(:agent).to_a
 
     # DESEMPATE (frente a — conserto do duplo-envio): entre os bindings LIVE ELEGÍVEIS (mode 'live' +
     # posse-de-time), elege UM por [priority ASC, id ASC] — priority deixa de ser campo morto, id vira

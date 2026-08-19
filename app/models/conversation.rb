@@ -235,7 +235,7 @@ class Conversation < ApplicationRecord
   def ai_assistant_active?
     return false unless account.feature_enabled?('ai_core')
 
-    Ai::AgentInbox.where(inbox_id: inbox_id, mode: 'live', active: true).exists?
+    Ai::AgentInbox.live.where(inbox_id: inbox_id).exists?
   end
 
   def ai_pending_handoff?
