@@ -391,9 +391,13 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # reproduziu isso (STRUCTURED_REPLY_SCHEMA só tinha handoff_summary), então TODA transferência direta
   # caía sempre no mesmo time default/configurado, cega à intenção — mesmo com o admin escrevendo um
   # guardrail tipo "nunca invente nomes de time, use só os da lista" (texto sem efeito nenhum, porque
-  # não existia ONDE a IA declarar um nome). orchestrator.py agora manda handoff_target de volta
-  # (Ai::PythonOrchestratorClient#handoff_target_instruction lista a MESMA whitelist no prompt); repassa
-  # pro MESMO Ai::HandoffCoordinator#human_team_id/match_team_by_name que #execute_step_conclusion já usa.
+  # não existia ONDE a IA declarar um nome). orchestrator.py manda handoff_target de volta; repassa pro
+  # MESMO Ai::HandoffCoordinator#human_team_id/match_team_by_name que #execute_step_conclusion já usa.
+  # Pedido do dono da conta (18/08, redução de prompt): a instrução que listava a whitelist no prompt
+  # (Ai::PythonOrchestratorClient#handoff_target_instruction) foi REMOVIDA — handoff_target volta vazio
+  # do modelo agora, então #human_team_id cai sempre no time default (reverte o achado de 17/08 pra
+  # contas com 2+ times marcados; risco assumido, ver comentário em
+  # Ai::PythonOrchestratorClient#system_prompt).
   def transfer_to_human(conversation, department)
     save_handoff_summary(conversation)
     coordinator = step_handoff_coordinator(conversation, department)

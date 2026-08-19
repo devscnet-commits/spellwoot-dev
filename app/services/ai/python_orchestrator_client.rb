@@ -243,7 +243,15 @@ class Ai::PythonOrchestratorClient
     # contrato de formatação \n\n que Ai::ActionDispatcher#split_parts lê pra quebrar em várias
     # mensagens); por isso desceu pra perto do bloco de identidade/base_prompt, não ficou solta com
     # as guardrails removidas.
-    lines << handoff_target_instruction if handoff_target_instruction.present?
+    # handoff_target_instruction removido (18/08, pedido do dono da conta — redução de prompt): não
+    # estava marcado pra ficar. RISCO REAL, não cosmético — reverte exatamente o bug achado ao vivo em
+    # 17/08 (ver histórico git): sem essa instrução, o modelo não tem como saber os nomes válidos de
+    # time, "handoff_target" volta sempre vazio, e Ai::HandoffCoordinator#human_team_id cai sempre no
+    # time DEFAULT (o primeiro da whitelist) — para contas com 2+ times marcados em "Transferir para
+    # times (humanos)", a IA perde a capacidade de rotear por intenção; tudo vai pro mesmo time. Pra
+    # contas com só 1 time marcado (caso desta conta hoje), o default já É esse time — sem efeito
+    # prático até que um segundo time seja marcado. Decisão do dono da conta, ciente do risco.
+    #
     # "Você é #{nome}." removido (18/08, pedido do dono da conta — redução de prompt): não estava
     # marcado pra ficar, e o nome do agente é texto livre digitado pelo admin — poderia expor qualquer
     # coisa verbatim no prompt (ex.: um nome tipo "agente de suporte da turma do fundão").
@@ -303,26 +311,9 @@ class Ai::PythonOrchestratorClient
     end
   end
 
-  # Achado ao vivo (17/08): o motor Ruby legado deixava a IA nomear o TIME de destino do handoff
-  # (handoff_target — Ai::PromptCompiler#human_handoff_teams listava a whitelist e instruía "copie o
-  # nome EXATO"), casado contra agent.handoff_team_ids via Ai::HandoffCoordinator#match_team_by_name.
-  # O contrato JSON novo nunca reproduziu isso — "transferir_humano" virou um boolean cego, e TODA
-  # transferência direta caía sempre no mesmo time default/configurado (Ai::HandoffCoordinator
-  # #human_team_id({}), sem handoff_target nenhum) — mesmo com o admin escrevendo um guardrail tipo
-  # "nunca invente nomes de time, use só os da lista" (Regras de segurança do agente): esse texto não
-  # tinha mais NENHUM campo pra IA realmente usar. Reusa Ai::PromptCompiler.human_handoff_teams (função
-  # pura, já lida com whitelist vazia + fallback + log) em vez de duplicar a lógica. nil sem NENHUM time
-  # na conta — não força a IA a escolher entre nada.
-  def handoff_target_instruction
-    teams = Ai::PromptCompiler.human_handoff_teams(@agent)
-    return nil if teams.blank?
-
-    lines = teams.map { |t| "- #{t.name}" }
-    "Ao transferir para humano (\"transferir_humano\": true), preencha \"handoff_target\" com o nome " \
-      'EXATO do time de destino, copiado da lista abaixo (NUNCA invente nem use uma categoria genérica ' \
-      "como \"suporte\" ou \"comercial\"). Se nenhum time da lista se encaixar, deixe \"handoff_target\" " \
-      "vazio (\"\") e transfira mesmo assim. Times disponíveis:\n#{lines.join("\n")}"
-  end
+  # handoff_target_instruction removido (18/08) — ver comentário em #system_prompt (risco assumido).
+  # Existiu pra consertar o achado ao vivo de 17/08: sem ela, "transferir_humano" volta a ser um
+  # boolean cego e toda transferência cai no time default (git history tem o texto original).
 
   # Achado ao vivo: a IA leu uma CNH em PDF e alucinou o ano (1997 virou 1991), além de salvar dados
   # que a etapa nem tinha pedido (data de nascimento, RG). A leitura em si é DESEJADA (o usuário foi

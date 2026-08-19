@@ -733,10 +733,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # nunca era instruído a produzir "\n\n" em mensagem_para_cliente, então não tinha o que quebrar.
     # Reposicionada (17/08) pra perto do topo do system_prompt. "Você é <nome>." saiu de vez (18/08,
     # pedido de redução de prompt — texto livre do admin não estava marcado pra ficar, ver comentário em
-    # Ai::PythonOrchestratorClient#system_prompt), então identify_as_instruction virou a PRIMEIRA linha
-    # aqui (department sem handoff_team_ids — senão handoff_target_instruction entraria antes, ver
-    # describe 'Times disponíveis' mais abaixo).
-    describe 'identify_as_instruction (primeira linha do system_prompt, sem handoff_team_ids)' do
+    # Ai::PythonOrchestratorClient#system_prompt) e handoff_target_instruction foi removida por completo
+    # (mesmo pedido — ver describe 'Times disponíveis' mais abaixo), então identify_as_instruction agora
+    # é SEMPRE a primeira linha do system_prompt, com ou sem handoff_team_ids.
+    describe 'identify_as_instruction (primeira linha do system_prompt)' do
       it 'identify_as="human" (default do agent): instrui a quebrar em mensagens curtas com linha em branco' do
         agent.update!(identify_as: 'human')
         stub_orchestrator
@@ -1085,8 +1085,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # (handoff_target, casado contra a whitelist agent.handoff_team_ids — Ai::PromptCompiler
   # #human_handoff_teams) — o Structured Outputs nunca reproduziu isso, então toda transferência direta
   # caía sempre no mesmo time default, cega à intenção. Reusa a MESMA função pura do motor legado.
-  describe 'Times disponíveis (handoff_target_instruction)' do
-    it 'lista os times da whitelist do agente e instrui a copiar o nome EXATO' do
+  # Pedido do dono da conta (18/08, redução de prompt): handoff_target_instruction foi REMOVIDA de vez
+  # (não só a whitelist — o método inteiro) — ver comentário em
+  # Ai::PythonOrchestratorClient#system_prompt e em Api::Internal::AiExecuteToolController#transfer_to_human
+  # (risco assumido: reverte o achado de 17/08 pra contas com 2+ times marcados).
+  describe 'Times disponíveis (handoff_target_instruction) — REMOVIDA (18/08)' do
+    it 'NÃO lista mais os times da whitelist nem instrui a preencher handoff_target' do
       team_a = create(:team, account: account, name: 'Suporte Técnico')
       team_b = create(:team, account: account, name: 'Financeiro')
       agent.update!(handoff_team_ids: [team_a.id, team_b.id])
@@ -1096,13 +1100,11 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
         prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('preencha "handoff_target" com o nome') &&
-          prompt.include?('- Suporte Técnico') &&
-          prompt.include?('- Financeiro')
+        !prompt.include?('handoff_target') && !prompt.include?('Suporte Técnico') && !prompt.include?('Financeiro')
       }
     end
 
-    it 'sem NENHUM time na conta, não aparece (nada pra IA escolher)' do
+    it 'sem NENHUM time na conta, também não aparece (nada pra IA escolher)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
