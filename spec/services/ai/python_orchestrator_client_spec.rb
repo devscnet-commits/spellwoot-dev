@@ -182,32 +182,32 @@ RSpec.describe Ai::PythonOrchestratorClient do
 
       captured = []
       stub_request(:post, described_class::ORCHESTRATOR_URL).to_return do |request|
-        captured << JSON.parse(request.body)['system_prompt']
+        captured << JSON.parse(request.body)
         { status: 200, body: { reply: 'ok', conversation_id: 'conv_pizza' }.to_json,
           headers: { 'Content-Type' => 'application/json' } }
       end
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
-      prompt = captured.first
+      body = captured.first
+      prompt = body['system_prompt']
 
       # Mesma FORMA de blocos que qualquer playbook (Maya inclusa) produziria — objective/rules
-      # (Ai::StepInstructionText), extração JSON, validação de foco, próxima etapa.
+      # (Ai::StepInstructionText), validação de foco, próxima etapa. A extração JSON (collect.attribute)
+      # não vem mais em texto no prompt (19/08) — vai no payload, pro schema (orchestrator.py).
       expect(prompt).to include('ETAPA ATUAL:')
       expect(prompt).to include('Objetivo: Descobrir o sabor da pizza que o cliente quer.')
       expect(prompt).to include('Regras:')
       expect(prompt).to include('- Se o cliente pedir "surpresa", sugira o sabor mais vendido do dia.')
-      expect(prompt).to include("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a 'sabor_pizza'")
+      expect(prompt).not_to include('REGRA DE EXTRAÇÃO JSON')
+      expect(body['collect_hint']).to eq('attributes' => ['sabor_pizza'], 'type' => 'text', 'options' => [], 'required' => true)
       expect(prompt).to include('REGRAS DE FOCO E VALIDAÇÃO DA COLETA')
       expect(prompt).to include('PRÓXIMA ETAPA')
       expect(prompt).to include('Confirmar o endereço de entrega.')
 
       # Nenhum vocabulário da Maya vaza pro prompt de um playbook que nunca o declarou -- prova de que
-      # não há fallback/hardcode escondido puxando texto de outro domínio. "cidade" sozinho fica de
-      # fora de propósito: aparece como exemplo ilustrativo genérico dentro de
-      # #structured_output_instruction (estático, IDÊNTICO pra qualquer department, não lido dos dados
-      # do playbook) — coincidência de vocabulário, não hardcode; os nomes compostos abaixo não têm
-      # esse risco de falso positivo.
-      %w[viabilidade plano_escolhido documento_cpf aparelhos_conectados tamanho_imovel].each do |maya_word|
+      # não há fallback/hardcode escondido puxando texto de outro domínio. Os nomes abaixo não têm
+      # overlap nenhum com o vocabulário deste playbook (pizza).
+      %w[cidade viabilidade plano_escolhido documento_cpf aparelhos_conectados tamanho_imovel].each do |maya_word|
         expect(prompt).not_to include(maya_word)
       end
     end
@@ -346,7 +346,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # "JSON"/"dados_coletados" nunca deveriam vir da BOCA do admin. Esta regra é montada pelo Rails a
   # partir do "Dado que esta etapa coleta" (o mesmo Select/collect.attribute), nomeando a chave exata
   # que a IA deve preencher em "dados_coletados" NESTA etapa — sem o admin nunca digitar isso.
-  describe 'REGRA DE EXTRAÇÃO JSON (step_extraction_instruction — nomeia o collect.attribute da etapa ATUAL)' do
+  #
+  # Pedido do dono da conta (19/08): isto NÃO vai mais em texto no system_prompt — sai como o campo
+  # collect_hint do payload (#collect_hint_for_schema), e é o Python (_collect_hint_text, ver
+  # ai-orchestrator/test_reply_schema.py) quem monta a description do campo "dados_coletados" no
+  # json_schema com essa informação, por chamada.
+  describe 'collect_hint (collect_hint_for_schema — nomeia o collect.attribute da etapa ATUAL pro schema)' do
     it 'nomeia o attribute declarado no collect da etapa ativa' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente.' },
@@ -358,14 +363,13 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a 'cpf'") &&
-          prompt.include?('adicionar um item na lista "dados_coletados"') &&
-          prompt.include?('"chave": "cpf"')
+        body = JSON.parse(req.body)
+        body['collect_hint'] == { 'attributes' => ['cpf'], 'type' => 'text', 'options' => [], 'required' => true } &&
+          !body['system_prompt'].include?('REGRA DE EXTRAÇÃO JSON')
       }
     end
 
-    it 'não aparece numa etapa informativa (sem collect)' do
+    it 'numa etapa informativa (sem collect), vem com attributes vazio' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Boas-vindas', 'instructions' => 'Cumprimente.' }
       ])
@@ -374,24 +378,24 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        !JSON.parse(req.body)['system_prompt'].include?('REGRA DE EXTRAÇÃO JSON')
+        JSON.parse(req.body)['collect_hint'] == { 'attributes' => [] }
       }
     end
 
-    it 'sem playbook nenhum, não aparece (current_step é nil)' do
+    it 'sem playbook nenhum, vem com attributes vazio (current_step é nil)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        !JSON.parse(req.body)['system_prompt'].include?('REGRA DE EXTRAÇÃO JSON')
+        JSON.parse(req.body)['collect_hint'] == { 'attributes' => [] }
       }
     end
 
     # Pedido do usuário (validação de formato): a IA só consegue validar CPF/telefone/escolha/etc.
-    # contra o tipo/opções REAIS da etapa se esses dados chegarem no prompt — sem isso ela só tem o
-    # nome do atributo. tools_schema tinha essa info (input_schema de "registrar_*"), mas essa tool é
-    # filtrada antes de chegar à OpenAI no motor Python; step_slot_metadata_text é quem preenche a lacuna.
+    # contra o tipo/opções REAIS da etapa se essa informação chegar — sem isso ela só tem o nome do
+    # atributo. tools_schema tinha essa info (input_schema de "registrar_*"), mas essa tool é filtrada
+    # antes de chegar à OpenAI no motor Python; collect_hint é quem preenche a lacuna agora.
     it 'inclui tipo/opções/obrigatoriedade do slot (pro contexto de validação de formato)' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Plano', 'instructions' => 'Pergunte o plano.',
@@ -402,12 +406,12 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('tipo: choice') && prompt.include?('opções válidas: Fibra, 5G') && prompt.include?('OBRIGATÓRIO')
+        JSON.parse(req.body)['collect_hint'] ==
+          { 'attributes' => ['plano'], 'type' => 'choice', 'options' => %w[Fibra 5G], 'required' => true }
       }
     end
 
-    it 'campo opcional (slot_required: false): metadata diz "opcional", não "OBRIGATÓRIO"' do
+    it 'campo opcional (slot_required: false): required vem false' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Indicação', 'instructions' => 'Pergunte se tem indicação.', 'slot_required' => false,
           'collect' => { 'attribute' => 'indicacao', 'type' => 'text' } }
@@ -417,8 +421,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('tipo: text, opcional') && !prompt.include?('tipo: text, OBRIGATÓRIO')
+        JSON.parse(req.body)['collect_hint'] ==
+          { 'attributes' => ['indicacao'], 'type' => 'text', 'options' => [], 'required' => false }
       }
     end
 
@@ -428,8 +432,10 @@ RSpec.describe Ai::PythonOrchestratorClient do
     # (Api::Internal::AiExecuteToolController#collect_attributes) exigia separadas. A etapa nunca
     # completava: avancar_etapa vinha true, mas o índice nunca avançava, e o teto de "travado"
     # (stuck_handoff_turns) ia subindo turno a turno até estourar — sem nada de errado visível na
-    # conversa. Agora o prompt nomeia as DUAS chaves reais, cada uma como item próprio.
-    it 'etapa com MAIS de um atributo declarado: nomeia CADA atributo real, nunca uma chave colada' do
+    # conversa. Agora collect_hint nomeia as DUAS chaves reais numa lista (type/options ficam nil/vazio
+    # pra multi-atributo — ver Ai::StepSlot.multi_attribute?), e o Python monta um item PRÓPRIO por
+    # atributo na description do schema.
+    it 'etapa com MAIS de um atributo declarado: lista CADA atributo real, sem type/options (multi-atributo)' do
       Ai::Playbook.create!(department: department, steps: [
         { 'name' => 'Cidade', 'instructions' => 'Peça a cidade e verifique a viabilidade.',
           'collect' => { 'attribute' => %w[cidade viabilidade], 'options' => %w[Chapecó Maravilha] } }
@@ -439,10 +445,8 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?("REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os dados referentes a 'cidade', 'viabilidade'") &&
-          prompt.include?('CADA um vira um item PRÓPRIO em "dados_coletados", nunca uma') &&
-          !prompt.include?('["cidade", "viabilidade"]')
+        JSON.parse(req.body)['collect_hint'] ==
+          { 'attributes' => %w[cidade viabilidade], 'type' => nil, 'options' => [], 'required' => true }
       }
     end
   end
@@ -600,8 +604,13 @@ RSpec.describe Ai::PythonOrchestratorClient do
     end
   end
 
-  describe 'system_prompt traz encerramento/transferência configurados + instrução do contrato JSON' do
-    it 'inclui transfer_when/close_when (do playbook) e a mensagem de encerramento (do department)' do
+  # Pedido do dono da conta (19/08): transfer_when/close_when/close_message saíram do texto do
+  # system_prompt e passam a viajar como campos próprios do payload — é o Python
+  # (_build_reply_schema, orchestrator.py) quem os interpola na description de
+  # transferir_humano/encerrar_atendimento do json_schema, por chamada. Ver ai-orchestrator/
+  # test_reply_schema.py pra cobertura desse lado.
+  describe 'payload traz transfer_when/close_when/close_message (pro schema dinâmico do Python)' do
+    it 'manda transfer_when/close_when (do playbook) e close_message (do department)' do
       Ai::Playbook.create!(department: department, transfer_when: ['cliente pede humano'],
                            close_when: ['cliente confirma que não quer mais nada'])
       department.update!(close_rules: { 'message' => 'Foi um prazer te atender!' })
@@ -610,35 +619,35 @@ RSpec.describe Ai::PythonOrchestratorClient do
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       # REGRAS: (structured_output_instruction) removida por completo (19/08, pedido do dono da conta —
-      # ver comentário em Ai::PythonOrchestratorClient#system_prompt); as descriptions de
-      # transferir_humano/encerrar_atendimento agora vivem só no json_schema (orchestrator.py), não
-      # neste texto.
+      # ver comentário em Ai::PythonOrchestratorClient#system_prompt); o texto "Transfira para humano
+      # quando"/"Encerre quando" não vai mais no prompt.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        prompt.include?('Transfira para humano quando: cliente pede humano.') &&
-          prompt.include?('Encerre quando: cliente confirma que não quer mais nada.') &&
-          prompt.include?('Foi um prazer te atender!') &&
-          !prompt.include?('REGRAS:')
+        body = JSON.parse(req.body)
+        body['transfer_when'] == 'cliente pede humano' &&
+          body['close_when'] == 'cliente confirma que não quer mais nada' &&
+          body['close_message'] == 'Foi um prazer te atender!' &&
+          !body['system_prompt'].include?('Transfira para humano quando:') &&
+          !body['system_prompt'].include?('Encerre quando:') &&
+          !body['system_prompt'].include?('REGRAS:')
       }
     end
 
     # Achado ao vivo (17/08, ticket 599): sem close_when configurado, a IA marcou
     # "encerrar_atendimento": true sozinha só porque o cliente disse "ta bem obrigada" — pulou etapas
     # inteiras (incluindo a de Finalização, cujo desfecho configurado era TRANSFERIR pra um humano, não
-    # resolver). encerrar_atendimento_rule (que corrigia isso em texto) foi REMOVIDA por completo
-    # (19/08, pedido do dono da conta — ver comentário em Ai::PythonOrchestratorClient#system_prompt).
-    # Risco assumido: a description do campo no json_schema é genérica ("SOMENTE quando as condições
-    # configuradas foram atendidas") e não sabe se o department tem ou não close_when — reintroduz
-    # exatamente a ambiguidade que causou o bug de 17/08.
-    it 'NÃO proíbe mais marcar encerrar_atendimento por conta própria (regra removida, 19/08)' do
+    # resolver). encerrar_atendimento_rule (que corrigia isso em texto) foi removida do Rails (19/08) —
+    # a mesma proteção agora vive em orchestrator._build_reply_schema: sem close_when, a description do
+    # campo vira uma proibição explícita ("mantenha SEMPRE false... NUNCA marque true por conta
+    # própria"), não a genérica ambígua. Ver test_sem_close_when_vira_proibicao_explicita_nao_a_
+    # description_generica_ambigua em ai-orchestrator/test_reply_schema.py.
+    it 'sem close_when configurado, manda close_when nil pro Python (que aplica a proibição explícita)' do
       stub_orchestrator
 
       described_class.process_message(conversation: conversation, content: 'oi', agent: agent, department: department, mode: 'live')
 
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL).with { |req|
-        prompt = JSON.parse(req.body)['system_prompt']
-        !prompt.include?('Encerre quando:') &&
-          !prompt.include?('"encerrar_atendimento": mantenha SEMPRE false')
+        body = JSON.parse(req.body)
+        body['close_when'].nil? && !body['system_prompt'].include?('Encerre quando:')
       }
     end
   end

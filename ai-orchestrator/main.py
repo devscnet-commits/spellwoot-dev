@@ -47,6 +47,15 @@ class ProcessRequest(BaseModel):
     # BYOK (billing Fase 3, Ai::ModelRouter.account_provider_key): chave OpenAI própria da conta,
     # quando configurada. None = usa a chave global fixa (comportamento de sempre).
     account_api_key: Optional[str] = None
+    # Pedido do dono da conta (19/08): texto configurado da conta que ANTES ia solto no system_prompt
+    # — agora entra na description do campo correspondente do schema (orchestrator._build_reply_schema)
+    # em vez de duplicado em texto. transfer_when/close_when/close_message espelham
+    # Ai::PythonOrchestratorClient#transfer_when_text/#close_when_text/#close_message; collect_hint
+    # espelha #step_extraction_instruction (removidos do Rails no mesmo pedido).
+    transfer_when: Optional[str] = None
+    close_when: Optional[str] = None
+    close_message: Optional[str] = None
+    collect_hint: Optional[dict] = None
 
 
 class ProcessResponse(BaseModel):
@@ -103,6 +112,10 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             temperature=request.temperature,
             image_urls=request.image_urls,
             account_api_key=request.account_api_key,
+            transfer_when=request.transfer_when,
+            close_when=request.close_when,
+            close_message=request.close_message,
+            collect_hint=request.collect_hint,
         )
     except orchestrator.TurnFailed as e:
         # Never leak internals (stack traces, prompts, API errors) to the Rails side — só o

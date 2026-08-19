@@ -172,7 +172,15 @@ class Ai::PythonOrchestratorClient
       # ligado + chave própria configurada (ex.: conta #2) consumia a chave/cota da SCNET em silêncio
       # desde que o primeiro department dela foi pro Python. nil quando a conta não tem BYOK — o
       # orquestrador cai na chave global dele mesmo, comportamento IDÊNTICO a antes desta mudança.
-      account_api_key: account_api_key
+      account_api_key: account_api_key,
+      # Pedido do dono da conta (19/08): texto/dados configurados que ANTES iam soltos no
+      # system_prompt (ver comentário em #system_prompt) — o schema virou dinâmico
+      # (ai-orchestrator/orchestrator.py#_build_reply_schema) e usa isto pra montar a description de
+      # transferir_humano/encerrar_atendimento/dados_coletados por chamada.
+      transfer_when: transfer_when_text,
+      close_when: close_when_text,
+      close_message: close_message,
+      collect_hint: collect_hint_for_schema
     }
   end
 
@@ -267,9 +275,12 @@ class Ai::PythonOrchestratorClient
     # vazio pra todo mundo — "Objetivo: ." sem nada depois). Nome trocado de department.name pro nome
     # do AGENTE (o que o usuário realmente reconhece e configura).
     lines << "Agente de IA: #{@agent.assistant_name.presence || @agent.name}."
-    lines << "Transfira para humano quando: #{transfer_when_text}." if transfer_when_text.present?
-    lines << "Encerre quando: #{close_when_text}." if close_when_text.present?
-    lines << "Mensagem de encerramento sugerida: #{close_message}." if close_message.present?
+    # "Transfira para humano quando"/"Encerre quando"/"Mensagem de encerramento sugerida" REMOVIDAS do
+    # prompt (19/08, pedido do dono da conta): schema virou DINÂMICO
+    # (ai-orchestrator/orchestrator.py#_build_reply_schema) — esse texto configurado agora entra na
+    # description de transferir_humano/encerrar_atendimento no schema, montado por chamada a partir do
+    # que #payload manda (transfer_when_text/close_when_text/close_message abaixo), em vez de duplicado
+    # aqui em texto solto.
 
     # DINÂMICO — muda a cada turno (documento anexado neste turno, fatos acumulados, ai_step_index
     # avança). Fica no FINAL, contíguo, nunca antes do bloco estático acima.
@@ -286,16 +297,15 @@ class Ai::PythonOrchestratorClient
              "soubesse o que vem a seguir):\n#{next_step_instructions}" \
       if next_step_instructions.present?
     # Pedido do dono da conta (19/08): structured_output_instruction (REGRAS: avancar_etapa/
-    # transferir_humano/encerrar_atendimento) REMOVIDA do prompt por completo — o próprio json_schema
-    # estrito (STRUCTURED_REPLY_SCHEMA, orchestrator.py) já carrega a description de cada campo, então
-    # a explicação em texto solto aqui era duplicada. RISCO assumido: a description do schema é FIXA
-    # (não muda por department) e mais curta — perde 2 nuances que só existiam neste texto: (1) "não
-    # peça confirmação, registre e avance NA MESMA resposta, sem turno extra" (nenhuma description de
-    # campo cobre isso — era a correção de um bug ao vivo específico); (2) o ramo "SEM close_when
-    # configurado, mantenha SEMPRE false" do encerrar_atendimento_rule — a description do schema é
-    # genérica ("SOMENTE quando as condições configuradas foram atendidas") e não sabe se o department
-    # tem ou não close_when, então reintroduz a ambiguidade que motivou aquele ramo em 17/08.
-    lines << step_extraction_instruction if step_extraction_instruction.present?
+    # transferir_humano/encerrar_atendimento) e step_extraction_instruction (REGRA DE EXTRAÇÃO JSON)
+    # REMOVIDAS do prompt por completo. O json_schema deixou de ser fixo — agora é montado por chamada
+    # (ai-orchestrator/orchestrator.py#_build_reply_schema), com a description de cada campo já
+    # incorporando o texto configurado da conta (transfer_when/close_when/close_message, ver #payload)
+    # e o atributo/tipo/opções da etapa atual (collect_hint, ver #collect_hint_for_schema). Isso
+    # resolve os 2 riscos que a remoção anterior (mais cedo hoje) tinha deixado em aberto: o ramo "SEM
+    # close_when, mantenha SEMPRE false" (Ai::PythonOrchestratorClient#encerrar_atendimento_rule,
+    # removido) foi portado pro schema Python — não é mais uma description genérica ambígua; e o
+    # atributo específico da etapa (antes só em texto aqui) agora vai no schema também.
     lines << data_validation_instruction if data_validation_instruction.present?
     lines << tool_discipline_instruction if tool_discipline_instruction.present?
     lines << force_handoff_instruction if @force_handoff_notice
@@ -465,63 +475,30 @@ class Ai::PythonOrchestratorClient
     sanitized
   end
 
-  # Achado pelo usuário: o admin escreve SÓ "Objetivo"/"Regras" em linguagem natural na tela da etapa
-  # (AiStepForm.vue) — "JSON"/"dados_coletados" nunca deveriam aparecer ali. Esta regra é montada AQUI
-  # pelo Rails, nunca digitada pelo admin, a partir do "Dado que esta etapa coleta" (o Select que grava
-  # collect.attribute — MESMA fonte, Ai::StepSlot.declared_attributes, que o design antigo de
-  # function-calling usava pra nomear a tool "registrar_<attribute>", Ai::StepCaptureTool). Esta nomeia
-  # a(s) chave(s) exata(s) que importa(m) NESTA etapa, pra IA não "escolher" um nome de chave por conta
-  # própria. nil numa etapa informativa (sem collect) — não força a IA a inventar uma chave que não existe.
+  # Substitui step_extraction_instruction/step_slot_metadata_text (REGRA DE EXTRAÇÃO JSON, removida do
+  # prompt 19/08 — pedido do dono da conta, schema dinâmico): mesma fonte (Ai::StepSlot,
+  # collect.attribute — a MESMA que o design antigo de function-calling usava pra nomear a tool
+  # "registrar_<attribute>", Ai::StepCaptureTool), mas devolvida como DADOS (hash) pro payload em vez
+  # de já vir formatada em texto — quem monta o texto agora é
+  # ai-orchestrator/orchestrator.py#_collect_hint_text, dentro da description de "dados_coletados" no
+  # schema. {} (sem "attributes") numa etapa informativa (sem collect) — não força a IA a inventar uma
+  # chave que não existe.
   #
-  # Etapa com MAIS de um atributo declarado (achado ao vivo 16/08, ticket 586): collect.attribute aceita
-  # string OU array desde sempre (Api::Internal::AiExecuteToolController#collect_attributes já usava
-  # Array() puro pra validar avanço), mas ESTE método fazia `Ai::StepSlot.attribute` (só o 1º/único) e
-  # colava um array de 2 atributos numa ÚNICA chave colada (ex.: '["cidade", "viabilidade"]') — a IA só
-  # tinha instrução/ferramenta pra escrever essa chave colada, nunca as duas chaves reais que a validação
-  # de avanço exigia separadas. A etapa nunca completava: o cliente respondia certo, avancar_etapa vinha
-  # true, mas o teto de "travado" (stuck_handoff_turns) ia subindo turno a turno até estourar e transferir
-  # pra humano — sem NADA de errado visível na conversa. Agora gera um item de "dados_coletados" por
-  # atributo declarado, sempre.
-  def step_extraction_instruction
+  # type/options SÓ no caso de 1 atributo — numa etapa de vários atributos (achado ao vivo 16/08,
+  # ticket 586: collect.attribute aceita array) aplicar o mesmo tipo/enum a todos seria errado (ex.:
+  # enum de cidades vazando pro atributo "viabilidade" da mesma etapa), mesmo critério de
+  # Ai::StepCaptureTool#property_schema.
+  def collect_hint_for_schema
     attributes = Ai::StepSlot.declared_attributes(current_step)
-    return nil if attributes.empty?
+    return { 'attributes' => [] } if attributes.empty?
 
-    if attributes.one?
-      attribute = attributes.first
-      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair o dado referente a '#{attribute}' " \
-        "(#{step_slot_metadata_text}). Assim que o cliente informar isso, você DEVE adicionar um item na " \
-        "lista \"dados_coletados\" no seu JSON de resposta com \"chave\": \"#{attribute}\" e o valor " \
-        'extraído.'
-    else
-      lista = attributes.map { |a| "'#{a}'" }.join(', ')
-      "REGRA DE EXTRAÇÃO JSON: Nesta etapa, você deve extrair os dados referentes a #{lista} " \
-        "(#{step_slot_metadata_text}) — CADA um vira um item PRÓPRIO em \"dados_coletados\", nunca uma " \
-        'única chave combinando os dois. Assim que o cliente informar cada um, adicione o item ' \
-        'correspondente com "chave" igual ao nome exato do atributo e o valor extraído.'
-    end
-  end
-
-  # Tipo/opções/obrigatoriedade do slot da etapa ATUAL, pro contexto de #data_validation_instruction
-  # ter algo real pra validar contra — sem isso a IA só teria o NOME do atributo, sem saber se é CPF,
-  # telefone, uma lista fechada de opções, etc. tools_schema TINHA essa info (o input_schema de
-  # "registrar_<attribute>"), mas essa tool é filtrada antes de chegar à OpenAI (orchestrator.py) — só
-  # sobrava o nome da chave. Ai::StepSlot é a MESMA fonte que gerava aquele input_schema.
-  #
-  # type/options (collect['type']/collect['options']) existem UMA vez por ETAPA, não por atributo — numa
-  # etapa de vários atributos aplicar o mesmo tipo/enum a todos seria errado (ex.: enum de cidades
-  # vazando pro atributo "viabilidade" da mesma etapa), então esse caso cai pro genérico
-  # obrigatório/opcional, sem tipo/opções (mesmo critério de Ai::StepCaptureTool#property_schema).
-  def step_slot_metadata_text
     required = !Ai::StepSlot.optional?(current_step)
-    return required ? 'OBRIGATÓRIO' : 'opcional' if Ai::StepSlot.multi_attribute?(current_step)
-
-    type = Ai::StepSlot.type(current_step)
-    options = Ai::StepSlot.options(current_step)
-
-    parts = ["tipo: #{type}"]
-    parts << "opções válidas: #{options.join(', ')}" if options.present?
-    parts << (required ? 'OBRIGATÓRIO' : 'opcional')
-    parts.join(', ')
+    if Ai::StepSlot.multi_attribute?(current_step)
+      { 'attributes' => attributes, 'type' => nil, 'options' => [], 'required' => required }
+    else
+      { 'attributes' => attributes, 'type' => Ai::StepSlot.type(current_step),
+        'options' => Ai::StepSlot.options(current_step), 'required' => required }
+    end
   end
 
   # Pedido do usuário: apertar o foco da coleta (só o dado da etapa atual, com exceção clara pra
