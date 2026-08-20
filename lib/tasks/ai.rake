@@ -29,55 +29,55 @@ namespace :ai do
 end
 
 # python_orchestrator não tem UI (Ai::Gateway#python_orchestrator_on?, comportamento default OFF —
-# departments sem a chave continuam byte-idênticos ao caminho legado decide()/call_with_tools()). Só
+# agentes sem a chave continuam byte-idênticos ao caminho legado decide()/call_with_tools()). Só
 # um rails console/runner ligava a flag até aqui; estas tasks substituem isso por um comando único,
-# continuam opt-in POR department (nunca ligam pra ninguém além do id passado) — deliberadamente NÃO
+# continuam opt-in POR agente (nunca ligam pra ninguém além do id passado) — deliberadamente NÃO
 # um default automático ligado a ter Ai::AgentInbox ativo, que migraria 100% da base de uma vez.
 namespace :ai do
-  desc 'Liga behavior[\'python_orchestrator\'] = true para UM department (opt-in, sem console)'
-  task :enable_python_orchestrator, %i[department_id] => :environment do |_t, args|
-    department = Ai::Department.find_by(id: args[:department_id])
-    abort("Department ##{args[:department_id]} não encontrado.") unless department
+  desc 'Liga behavior[\'python_orchestrator\'] = true para UM agente (opt-in, sem console)'
+  task :enable_python_orchestrator, %i[agent_id] => :environment do |_t, args|
+    agent = Ai::Agent.find_by(id: args[:agent_id])
+    abort("Agente ##{args[:agent_id]} não encontrado.") unless agent
 
-    department.update!(behavior: department.behavior.to_h.merge('python_orchestrator' => true))
-    puts "Department ##{department.id} (#{department.name}): python_orchestrator = true"
+    agent.update!(behavior: agent.behavior.to_h.merge('python_orchestrator' => true))
+    puts "Agente ##{agent.id} (#{agent.name}): python_orchestrator = true"
   end
 
-  desc 'Desliga behavior[\'python_orchestrator\'] para UM department (volta ao caminho legado)'
-  task :disable_python_orchestrator, %i[department_id] => :environment do |_t, args|
-    department = Ai::Department.find_by(id: args[:department_id])
-    abort("Department ##{args[:department_id]} não encontrado.") unless department
+  desc 'Desliga behavior[\'python_orchestrator\'] para UM agente (volta ao caminho legado)'
+  task :disable_python_orchestrator, %i[agent_id] => :environment do |_t, args|
+    agent = Ai::Agent.find_by(id: args[:agent_id])
+    abort("Agente ##{args[:agent_id]} não encontrado.") unless agent
 
-    department.update!(behavior: department.behavior.to_h.merge('python_orchestrator' => false))
-    puts "Department ##{department.id} (#{department.name}): python_orchestrator = false"
+    agent.update!(behavior: agent.behavior.to_h.merge('python_orchestrator' => false))
+    puts "Agente ##{agent.id} (#{agent.name}): python_orchestrator = false"
   end
 end
 
 # Item 3 do usuário: identificar e (opcionalmente) remover Ai::LeadVariable órfãs — variáveis que
-# nenhuma etapa do playbook ATUAL do department referencia mais em collect.attribute. Lógica em
+# nenhuma etapa do playbook ATUAL do agente referencia mais em collect.attribute. Lógica em
 # Ai::LeadVariableOrphanFinder (mesma definição de "em uso" que já bloqueia exclusão manual pela tela).
-def ai_rake_print_orphans(department, orphans)
-  puts "Department ##{department.id} (#{department&.name}): #{orphans.size} órfã(s)"
+def ai_rake_print_orphans(agent, orphans)
+  puts "Agente ##{agent.id} (#{agent&.name}): #{orphans.size} órfã(s)"
   orphans.each { |v| puts "  ##{v.id} #{v.name}" }
 end
 
-def ai_rake_orphan_report_for_department(department, json)
-  orphans = Ai::LeadVariableOrphanFinder.for_department(department)
+def ai_rake_orphan_report_for_agent(agent, json)
+  orphans = Ai::LeadVariableOrphanFinder.for_agent(agent)
   if json
-    puts JSON.pretty_generate(orphans.map { |v| { id: v.id, name: v.name, department_id: department.id } })
+    puts JSON.pretty_generate(orphans.map { |v| { id: v.id, name: v.name, agent_id: agent.id } })
   else
-    ai_rake_print_orphans(department, orphans)
+    ai_rake_print_orphans(agent, orphans)
   end
 end
 
-def ai_rake_prune_orphans(department, orphans)
+def ai_rake_prune_orphans(agent, orphans)
   if orphans.empty?
-    puts "Department ##{department.id} (#{department.name}): nenhuma órfã para remover."
+    puts "Agente ##{agent.id} (#{agent.name}): nenhuma órfã para remover."
     return
   end
 
   unless ENV['CONFIRM'] == 'true'
-    puts "[DRY RUN] Removeria #{orphans.size} LeadVariable(s) órfã(s) do department ##{department.id} (#{department.name}):"
+    puts "[DRY RUN] Removeria #{orphans.size} LeadVariable(s) órfã(s) do agente ##{agent.id} (#{agent.name}):"
     orphans.each { |v| puts "  ##{v.id} #{v.name}" }
     puts 'Rode de novo com CONFIRM=true para remover de verdade.'
     return
@@ -85,47 +85,47 @@ def ai_rake_prune_orphans(department, orphans)
 
   removed = orphans.map { |v| "##{v.id} #{v.name}" }
   orphans.each(&:destroy!)
-  puts "Removidas #{removed.size} LeadVariable(s) órfã(s) do department ##{department.id} (#{department.name}):"
+  puts "Removidas #{removed.size} LeadVariable(s) órfã(s) do agente ##{agent.id} (#{agent.name}):"
   removed.each { |r| puts "  #{r}" }
 end
 
 def ai_rake_orphan_report_for_all(json)
-  by_department = Ai::LeadVariableOrphanFinder.all.group_by(&:ai_department_id)
+  by_agent = Ai::LeadVariableOrphanFinder.all.group_by(&:ai_agent_id)
   if json
     puts JSON.pretty_generate(
-      by_department.map { |dept_id, vars| { department_id: dept_id, orphans: vars.map { |v| { id: v.id, name: v.name } } } }
+      by_agent.map { |agent_id, vars| { agent_id: agent_id, orphans: vars.map { |v| { id: v.id, name: v.name } } } }
     )
-  elsif by_department.empty?
-    puts 'Nenhuma LeadVariable órfã em nenhum department.'
+  elsif by_agent.empty?
+    puts 'Nenhuma LeadVariable órfã em nenhum agente.'
   else
-    by_department.each { |dept_id, vars| ai_rake_print_orphans(Ai::Department.find_by(id: dept_id), vars) }
+    by_agent.each { |agent_id, vars| ai_rake_print_orphans(Ai::Agent.find_by(id: agent_id), vars) }
   end
 end
 
 namespace :ai do
-  desc 'Lista Ai::LeadVariable órfãs (READ-ONLY). Sem args: todo o sistema; com department_id: só esse department.'
-  task :lead_variables_orphan_report, %i[department_id] => :environment do |_t, args|
+  desc 'Lista Ai::LeadVariable órfãs (READ-ONLY). Sem args: todo o sistema; com agent_id: só esse agente.'
+  task :lead_variables_orphan_report, %i[agent_id] => :environment do |_t, args|
     json = ENV['FORMAT'].to_s.downcase == 'json'
 
-    if args[:department_id].present?
-      department = Ai::Department.find_by(id: args[:department_id])
-      abort("Department ##{args[:department_id]} não encontrado.") unless department
+    if args[:agent_id].present?
+      agent = Ai::Agent.find_by(id: args[:agent_id])
+      abort("Agente ##{args[:agent_id]} não encontrado.") unless agent
 
-      ai_rake_orphan_report_for_department(department, json)
+      ai_rake_orphan_report_for_agent(agent, json)
     else
       ai_rake_orphan_report_for_all(json)
     end
   end
 
-  desc 'Remove as LeadVariable órfãs de UM department. Dry-run por padrão; CONFIRM=true remove de fato.'
-  task :prune_orphan_lead_variables, %i[department_id] => :environment do |_t, args|
-    department = Ai::Department.find_by(id: args[:department_id])
-    abort("Department ##{args[:department_id]} não encontrado.") unless department
+  desc 'Remove as LeadVariable órfãs de UM agente. Dry-run por padrão; CONFIRM=true remove de fato.'
+  task :prune_orphan_lead_variables, %i[agent_id] => :environment do |_t, args|
+    agent = Ai::Agent.find_by(id: args[:agent_id])
+    abort("Agente ##{args[:agent_id]} não encontrado.") unless agent
 
     # Recalcula na hora do delete (não reaproveita um relatório antigo) para não apagar uma variável que
     # passou a ser usada por uma etapa nova entre o relatório e a execução desta task.
-    orphans = Ai::LeadVariableOrphanFinder.for_department(department)
-    ai_rake_prune_orphans(department, orphans)
+    orphans = Ai::LeadVariableOrphanFinder.for_agent(agent)
+    ai_rake_prune_orphans(agent, orphans)
   end
 end
 
@@ -137,8 +137,8 @@ def ai_rake_print_lead_dupes(lead_dupes)
 
   puts "LeadVariable duplicadas (#{lead_dupes.size}):"
   lead_dupes.each do |d|
-    department = Ai::Department.find_by(id: d[:department_id])
-    puts "  department ##{d[:department_id]} (#{department&.name}): '#{d[:base]}' (##{d[:base_id]}) <-> " \
+    agent = Ai::Agent.find_by(id: d[:agent_id])
+    puts "  agente ##{d[:agent_id]} (#{agent&.name}): '#{d[:base]}' (##{d[:base_id]}) <-> " \
          "'#{d[:duplicate]}' (##{d[:duplicate_id]})"
   end
 end
@@ -168,8 +168,8 @@ namespace :ai do
     attr_dupes = Ai::VariableDuplicateFinder.custom_attribute_duplicates
 
     if account
-      dept_ids = Ai::Department.where(account_id: account.id).pluck(:id)
-      lead_dupes = lead_dupes.select { |d| dept_ids.include?(d[:department_id]) }
+      agent_ids = Ai::Agent.where(account_id: account.id).pluck(:id)
+      lead_dupes = lead_dupes.select { |d| agent_ids.include?(d[:agent_id]) }
       attr_dupes = attr_dupes.select { |d| d[:account_id] == account.id }
     end
 
@@ -188,17 +188,17 @@ end
 # ÚNICO motor, listar quem só funciona direito no legado hoje. READ-ONLY — lógica em
 # Ai::PythonMigrationAuditor.
 namespace :ai do
-  desc 'Lista departments que quebrariam se o motor legado fosse eliminado agora (provider != openai, automações de etapa)'
+  desc 'Lista agentes que quebrariam se o motor legado fosse eliminado agora (provider != openai, automações de etapa)'
   task python_migration_audit: :environment do
     report = Ai::PythonMigrationAuditor.report
     puts '=' * 70
     puts '1. PROVIDER != OPENAI — orchestrator.py só chama a OpenAI, sempre'
     puts '=' * 70
     if report[:non_openai_provider].empty?
-      puts '  Nenhum. Todo department roteado hoje usa (ou cairia no default) provider openai.'
+      puts '  Nenhum. Todo agente roteado hoje usa (ou cairia no default) provider openai.'
     else
-      report[:non_openai_provider].each do |d|
-        puts "  department ##{d[:department_id]} (#{d[:name]}, conta #{d[:account_id]}): provider=#{d[:provider]}"
+      report[:non_openai_provider].each do |a|
+        puts "  agente ##{a[:agent_id]} (#{a[:name]}, conta #{a[:account_id]}): provider=#{a[:provider]}"
       end
     end
     puts "\n#{'=' * 70}"
@@ -208,12 +208,12 @@ namespace :ai do
     if report[:step_automations].empty?
       puts '  Nenhum. Nenhum playbook ativo tem etapa com automations configurada.'
     else
-      report[:step_automations].each do |d|
-        puts "  department ##{d[:department_id]} (#{d[:name]}, conta #{d[:account_id]}): etapas #{d[:step_names].join(', ')}"
+      report[:step_automations].each do |a|
+        puts "  agente ##{a[:agent_id]} (#{a[:name]}, conta #{a[:account_id]}): etapas #{a[:step_names].join(', ')}"
       end
     end
     puts "\n#{'=' * 70}"
-    puts '3. ALCANCE — quantos departments seriam movidos se a flag sumisse'
+    puts '3. ALCANCE — quantos agentes seriam movidos se a flag sumisse'
     puts '=' * 70
     puts "  já no Python: #{report[:engine_split][:on_python]}  |  ainda no legado (seriam movidos): #{report[:engine_split][:on_legacy]}"
     total_blockers = report[:non_openai_provider].size + report[:step_automations].size
@@ -221,7 +221,7 @@ namespace :ai do
     if total_blockers.zero?
       puts '  Nenhum blocker encontrado nestes 2 pontos.'
     else
-      puts "  #{total_blockers} department(s) com pelo menos 1 blocker — NÃO eliminar o legado sem tratar esses casos."
+      puts "  #{total_blockers} agente(s) com pelo menos 1 blocker — NÃO eliminar o legado sem tratar esses casos."
     end
     puts '=' * 70
   end
@@ -248,16 +248,16 @@ namespace :ai do
     if runs.empty?
       puts '  NENHUM Ai::Run encontrado — o Gateway nunca rodou pra essa conversa (problema é ANTES do Gateway).'
     else
-      runs.each { |r| puts "  ##{r[:id]} #{r[:created_at]} status=#{r[:status]} error_type=#{r[:error_type]} department_id=#{r[:department_id]}" }
+      runs.each { |r| puts "  ##{r[:id]} #{r[:created_at]} status=#{r[:status]} error_type=#{r[:error_type]} agent_id=#{r[:agent_id]}" }
     end
     puts "\n#{'=' * 70}"
-    puts '3. PYTHON_ORCHESTRATOR_ON? — valor real por department candidato'
+    puts '3. PYTHON_ORCHESTRATOR_ON? — valor real por agente candidato'
     puts '=' * 70
     flags = Ai::PythonOrchestratorDiagnostics.flag_status(conversation)
     if flags.empty?
-      puts '  Não achei nenhum department candidato (nem via Ai::Run, nem via Ai::AgentInbox desta inbox).'
+      puts '  Não achei nenhum agente candidato (nem via Ai::Run, nem via Ai::AgentInbox desta inbox).'
     else
-      flags.each { |f| puts "  department ##{f[:department_id]} (#{f[:name]}): raw=#{f[:raw].inspect} class=#{f[:raw_class]} => #{f[:on]}" }
+      flags.each { |f| puts "  agente ##{f[:agent_id]} (#{f[:name]}): raw=#{f[:raw].inspect} class=#{f[:raw_class]} => #{f[:on]}" }
     end
     puts "\n#{'=' * 70}"
     puts "4. CHAMADA DIRETA (mode: 'shadow' forçado — nunca muta dado real, gasta tokens de verdade)"
@@ -269,7 +269,7 @@ namespace :ai do
       puts "  !!! EXCEÇÃO (isso é o que o rescue silencioso normalmente esconde): #{direct[:exception]}"
       direct[:backtrace].each { |l| puts "      #{l}" }
     else
-      puts "  department resolvido: ##{direct[:department_id]} (#{direct[:department_name]}), method=#{direct[:resolve_method]}"
+      puts "  agente: ##{direct[:agent_id]} (#{direct[:agent_name]})"
       puts "  resultado: #{direct[:result].inspect}"
       if direct[:result][:reply].present?
         puts '  -> a chamada FUNCIONOU (Python respondeu).'

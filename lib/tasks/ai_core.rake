@@ -31,15 +31,13 @@ namespace :ai_core do
       b.priority = 1
     end
 
-    department = Ai::Department.find_or_create_by!(ai_agent_id: agent.id, name: 'Comercial') do |d|
-      d.account_id = account.id
-      d.objetivo = 'Converter leads em clientes'
-      d.transfer_rules = { 'when' => ['cliente pedir humano', 'negociação especial'] }
-      d.close_rules = { 'when' => ['SLA estourar sem resposta do cliente'] }
-    end
+    agent.update!(
+      transfer_rules: { 'when' => ['cliente pedir humano', 'negociação especial'] },
+      close_rules: { 'when' => ['SLA estourar sem resposta do cliente'] }
+    )
 
-    Ai::Playbook.find_or_create_by!(ai_department_id: department.id) do |pb|
-      pb.objetivo = department.objetivo
+    Ai::Playbook.find_or_create_by!(ai_agent_id: agent.id) do |pb|
+      pb.objetivo = 'Converter leads em clientes'
       pb.steps = ['Qualificar', 'Apresentar proposta', 'Coletar documentos', 'Transferir para vendedor']
       pb.transfer_when = ['Cliente pedir humano', 'Cliente solicitar negociação especial', 'Confiança baixa']
       pb.close_when = ['SLA estourar sem resposta do cliente']
@@ -47,7 +45,7 @@ namespace :ai_core do
       pb.active = true
     end
 
-    Ai::Tool.find_or_create_by!(account_id: account.id, ai_department_id: department.id, name: 'Consultar Lead') do |tool|
+    Ai::Tool.find_or_create_by!(account_id: account.id, ai_agent_id: agent.id, name: 'Consultar Lead') do |tool|
       tool.description = 'Consulta os dados do lead/contato atual.'
       tool.implementation_type = 'capability'
       tool.capability_key = 'contact.read'
@@ -55,7 +53,7 @@ namespace :ai_core do
       tool.governance = 'allowed'
     end
 
-    Ai::Tool.find_or_create_by!(account_id: account.id, ai_department_id: department.id, name: 'Registrar Lead') do |tool|
+    Ai::Tool.find_or_create_by!(account_id: account.id, ai_agent_id: agent.id, name: 'Registrar Lead') do |tool|
       tool.description = 'Registra/atualiza dados do lead (nome, interesse, etapa).'
       tool.implementation_type = 'capability'
       tool.capability_key = 'contact.update_attributes'
@@ -63,7 +61,7 @@ namespace :ai_core do
       tool.governance = 'require_confirmation'
     end
 
-    source = Ai::KnowledgeSource.find_or_create_by!(account_id: account.id, ai_department_id: department.id, title: 'FAQ Comercial') do |s|
+    source = Ai::KnowledgeSource.find_or_create_by!(account_id: account.id, ai_agent_id: agent.id, title: 'FAQ Comercial') do |s|
       s.kind = 'faq'
       s.raw = 'FAQ comercial de exemplo'
     end
@@ -100,14 +98,12 @@ namespace :ai_core do
 
     runs.each do |run|
       events = Ai::Event.where(conversation_id: run.conversation_id).order(:created_at)
-      dept = events.find { |e| e.event_type == 'department.resolved' }&.payload
       knowledge = events.find { |e| e.event_type == 'knowledge.retrieved' }&.payload
       tool = events.find { |e| e.event_type == 'tool.intended' }&.payload
 
       puts '────────────────────────────────────────'
       puts "RUN ##{run.id}  (mode=#{run.mode}, status=#{run.status})"
       puts "Agente resolvido:     #{run.ai_agent_id}"
-      puts "Departamento:         #{dept&.dig('name')}"
       puts "Conhecimento (qtd):   #{knowledge&.dig('count')}"
       puts "Resposta que SERIA enviada: #{run.decision['reply_text']}"
       puts "Ferramenta que SERIA chamada: #{tool&.dig('tool')&.to_json || '—'} (executada? #{tool ? 'NÃO (shadow)' : 'n/a'})"
