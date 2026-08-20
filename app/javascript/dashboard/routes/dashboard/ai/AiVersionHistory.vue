@@ -1,6 +1,6 @@
 <script setup>
 // Reusable "Histórico de versões" panel (list + Restaurar). Extracted from the duplicated inline
-// blocks of AiAgentDetail.vue and AiDepartmentDetail.vue. The three things that used to differ
+// blocks of AiAgentDetail.vue and AiAgentBehaviorPanel.vue. The three things that used to differ
 // between the copies are now props/events: the endpoint (baseUrl), the error i18n key (errorKey)
 // and the post-restore refresh of the parent record (@restored). The version object shape
 // { id, version_number, note, created_at } and the AI_AGENTS.VERSIONS.* i18n namespace are shared.
