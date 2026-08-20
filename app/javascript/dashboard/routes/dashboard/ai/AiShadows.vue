@@ -264,7 +264,9 @@ onMounted(() => {
                 ? $t('AI_SHADOWS.FORM.NAME_REQUIRED')
                 : ''
             "
-            message-type="error"
+            :message-type="
+              saveAttempted && !form.name.trim() ? 'error' : 'info'
+            "
           />
 
           <div class="flex flex-col gap-1.5">
