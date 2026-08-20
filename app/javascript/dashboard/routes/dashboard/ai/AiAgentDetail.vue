@@ -13,7 +13,7 @@ import AiVersionHistory from './AiVersionHistory.vue';
 import AiPromptAssistant from './AiPromptAssistant.vue';
 import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
 import Logo from 'next/icon/Logo.vue';
-import AiDepartmentDetail from './AiDepartmentDetail.vue';
+import AiAgentBehaviorPanel from './AiAgentBehaviorPanel.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import {
   defaultAgentForm,
@@ -853,7 +853,7 @@ onMounted(async () => {
 
               <!-- Histórico do prompt do agente (base_prompt/guardrails via Ai::Version).
                    Fica DENTRO desta seção, junto aos campos que restaura — distinto do
-                   "Histórico das Configurações" (ai_agent_behavior_versions) que vem no AiDepartmentDetail. -->
+                   "Histórico das Configurações" (ai_agent_behavior_versions) que vem no AiAgentBehaviorPanel. -->
               <AiVersionHistory
                 v-if="!isNew"
                 :base-url="versionsBaseUrl"
@@ -862,7 +862,7 @@ onMounted(async () => {
               />
             </section>
 
-            <AiDepartmentDetail embedded :section="activeKey" />
+            <AiAgentBehaviorPanel embedded :section="activeKey" />
           </template>
         </div>
 
