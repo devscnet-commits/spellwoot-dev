@@ -12,7 +12,6 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import AiVersionHistory from './AiVersionHistory.vue';
 import AiPromptAssistant from './AiPromptAssistant.vue';
 import TabBar from 'dashboard/components-next/tabbar/TabBar.vue';
-import Logo from 'next/icon/Logo.vue';
 import AiAgentBehaviorPanel from './AiAgentBehaviorPanel.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 import {
@@ -399,7 +398,9 @@ onMounted(async () => {
       <div
         class="rounded-2xl border border-n-weak bg-n-solid-1 px-4 sm:px-8 py-6 flex flex-col gap-5"
       >
-        <!-- Header: name (left) + brand logo (right) -->
+        <!-- Header: name (left). Brand logo (right) removed on purpose (20/08, pedido do dono da
+             conta): mostrava o logo padrão do Chatwoot, não o da Conexi IA — sem branding próprio
+             pronto ainda, fica em branco em vez de exibir a marca errada. -->
         <div class="flex items-start justify-between gap-4">
           <div class="flex items-center gap-3 min-w-0">
             <h1 class="text-2xl font-semibold text-n-slate-12 truncate">
@@ -417,7 +418,6 @@ onMounted(async () => {
               {{ $t(`AI_AGENTS.STAGES.${agentForm.stage.toUpperCase()}`) }}
             </span>
           </div>
-          <Logo class="h-7 w-auto shrink-0" />
         </div>
 
         <TabBar
