@@ -279,7 +279,7 @@ def _build_reply_schema(*, transfer_when: str | None, close_when: str | None,
     else:
         encerrar_desc = (
             "mantenha SEMPRE false — não existe condição de encerramento configurada pra este "
-            "departamento. NUNCA marque true por conta própria, mesmo que o cliente agradeça ou se "
+            "agente. NUNCA marque true por conta própria, mesmo que o cliente agradeça ou se "
             "despeça — isso NÃO é sinal de que o atendimento deve terminar. A única forma correta de "
             "concluir é a etapa atual alcançar o desfecho configurado dela."
         )
