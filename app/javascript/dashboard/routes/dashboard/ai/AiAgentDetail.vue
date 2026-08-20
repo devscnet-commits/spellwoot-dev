@@ -1,6 +1,6 @@
 <script setup>
 /* global axios */
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
@@ -324,36 +324,54 @@ const saveInboxes = async () => {
   }
 };
 
-// --- Teste ---
-const testMessage = ref('');
-const testResult = ref(null);
-const isTesting = ref(false);
+// --- Teste (Aba Laboratório): conversa simulada rodando o Ai::Gateway REAL (mesmo motor que
+// atende clientes) contra uma inbox de teste isolada — ver
+// Api::V1::Accounts::AiAgentTestConversationsController. Nenhuma mensagem sai de verdade.
+const testUrl = () =>
+  `${agentUrl()}/${agentId.value}/ai_agent_test_conversation`;
+const testMessages = ref([]);
+const testDraft = ref('');
+const testLoading = ref(false);
+const testLoaded = ref(false);
 
-// Governance read-out for the Lab: how the engine decided (all from the Tester response).
-const testResolvedBy = computed(() => {
-  const r = testResult.value;
-  if (!r || r.error) return null;
-  if (r.decision === 'handoff') return 'transfer';
-  if (r.tool) return 'tool';
-  if (r.reply && (r.knowledge_used ?? 0) > 0) return 'knowledge';
-  if (r.reply) return 'instruction';
-  return 'unanswered';
-});
-const runTest = async () => {
-  if (!testMessage.value.trim() || isNew.value) return;
-  isTesting.value = true;
-  testResult.value = null;
+const fetchTestConversation = async () => {
+  const { data } = await axios.get(testUrl());
+  testMessages.value = data.messages || [];
+  testLoaded.value = true;
+};
+
+const resetTest = async () => {
+  testLoading.value = true;
   try {
-    const { data } = await axios.post(`${agentUrl()}/${agentId.value}/test`, {
-      message: testMessage.value,
-    });
-    testResult.value = data;
+    await axios.post(`${testUrl()}/reset`);
+    testMessages.value = [];
   } catch (error) {
     useAlert(t('AI_AGENTS.ERROR'));
   } finally {
-    isTesting.value = false;
+    testLoading.value = false;
   }
 };
+
+const sendTestMessage = async () => {
+  const content = testDraft.value.trim();
+  if (!content || isNew.value || testLoading.value) return;
+  testDraft.value = '';
+  testLoading.value = true;
+  try {
+    const { data } = await axios.post(`${testUrl()}/messages`, { content });
+    testMessages.value = data.messages || [];
+  } catch (error) {
+    useAlert(t('AI_AGENTS.ERROR'));
+  } finally {
+    testLoading.value = false;
+  }
+};
+
+watch(activeKey, async key => {
+  if (key === 'test' && !isNew.value && !testLoaded.value) {
+    await fetchTestConversation();
+  }
+});
 
 onMounted(async () => {
   await fetchProfiles();
@@ -362,6 +380,7 @@ onMounted(async () => {
   await fetchAgent();
   captureAgent();
   await fetchInboxes();
+  if (activeKey.value === 'test' && !isNew.value) await fetchTestConversation();
 });
 </script>
 
@@ -868,20 +887,31 @@ onMounted(async () => {
 
         <!-- TESTE -->
         <div v-else-if="activeKey === 'test'" class="flex flex-col gap-5">
-          <div class="flex items-center gap-3">
-            <span
-              class="size-10 rounded-xl bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
-            >
-              <span class="i-lucide-flask-conical size-5" />
-            </span>
-            <div class="flex flex-col">
-              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
-                {{ $t('AI_AGENTS.TEST.LAB_TITLE') }}
-              </h2>
-              <p class="text-sm text-n-slate-11 mb-0">
-                {{ $t('AI_AGENTS.TEST.LAB_SUBTITLE') }}
-              </p>
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <span
+                class="size-10 rounded-xl bg-n-brand/10 text-n-brand flex items-center justify-center shrink-0"
+              >
+                <span class="i-lucide-flask-conical size-5" />
+              </span>
+              <div class="flex flex-col min-w-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+                  {{ $t('AI_AGENTS.TEST.LAB_TITLE') }}
+                </h2>
+                <p class="text-sm text-n-slate-11 mb-0">
+                  {{ $t('AI_AGENTS.TEST.LAB_SUBTITLE') }}
+                </p>
+              </div>
             </div>
+            <Button
+              v-if="!isNew"
+              icon="i-lucide-rotate-ccw"
+              variant="faded"
+              color="slate"
+              :label="$t('AI_AGENTS.TEST.RESET')"
+              :is-loading="testLoading && !testMessages.length"
+              @click="resetTest"
+            />
           </div>
 
           <p v-if="isNew" class="text-sm text-n-slate-11">
@@ -889,197 +919,65 @@ onMounted(async () => {
           </p>
 
           <template v-else>
+            <!-- Conversa simulada: cada mensagem passa pelo Ai::Gateway de verdade (mesmas etapas,
+                 ferramentas, memória e gates de reply_scope/auto_attendance/horário que valem pro
+                 cliente real) — não é mais um dry-run à parte. -->
             <div
-              class="rounded-2xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3"
+              class="rounded-2xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-3 min-h-[320px]"
             >
-              <TextArea
-                v-model="testMessage"
-                :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
-                :max-length="1000"
-              />
-              <div class="flex justify-end">
-                <Button
-                  icon="i-lucide-play"
-                  :label="$t('AI_AGENTS.TEST.SEND')"
-                  :is-loading="isTesting"
-                  @click="runTest"
-                />
-              </div>
-            </div>
-
-            <div v-if="testResult" class="flex flex-col gap-4">
-              <p
-                v-if="testResult.error"
-                class="text-sm text-n-ruby-11 rounded-xl border border-n-ruby-6 bg-n-ruby-2 px-4 py-3"
+              <div
+                class="flex-1 flex flex-col gap-2 overflow-y-auto max-h-[480px]"
               >
-                {{ testResult.error }}
-              </p>
-              <template v-else>
-                <!-- Simulação do diálogo -->
-                <div class="flex flex-col gap-2">
+                <p
+                  v-if="!testMessages.length"
+                  class="text-sm text-n-slate-11 text-center py-8 mb-0"
+                >
+                  {{ $t('AI_AGENTS.TEST.EMPTY') }}
+                </p>
+                <template v-for="m in testMessages" :key="m.id">
                   <div
+                    v-if="m.message_type === 'incoming'"
                     class="self-end max-w-[80%] rounded-2xl rounded-br-sm bg-n-brand text-white px-4 py-2.5 text-sm whitespace-pre-wrap"
                   >
-                    {{ testMessage }}
+                    {{ m.content }}
                   </div>
                   <div
+                    v-else-if="m.private"
+                    class="self-center max-w-[90%] rounded-xl bg-n-amber-3 text-n-amber-11 px-3 py-2 text-xs whitespace-pre-wrap"
+                  >
+                    {{ m.content }}
+                  </div>
+                  <div
+                    v-else
                     class="self-start max-w-[80%] rounded-2xl rounded-bl-sm bg-n-solid-1 border border-n-weak px-4 py-2.5 text-sm text-n-slate-12 whitespace-pre-wrap"
                   >
-                    {{ testResult.reply || $t('AI_AGENTS.TEST.NONE') }}
+                    {{ m.content }}
                   </div>
-                </div>
-
-                <!-- Decisão de roteamento -->
-                <div
-                  v-if="testResult.routing_band"
-                  class="flex items-center gap-2"
+                </template>
+                <p
+                  v-if="testLoading"
+                  class="self-start text-xs text-n-slate-11 mb-0"
                 >
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_AGENTS.TEST.ROUTING') }}:
-                  </span>
-                  <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-n-alpha-2 text-n-slate-12"
-                  >
-                    {{ $t(`AI_AGENTS.TEST.BANDS.${testResult.routing_band}`) }}
-                  </span>
-                </div>
+                  {{ $t('AI_AGENTS.TEST.THINKING') }}
+                </p>
+              </div>
 
-                <!-- Métricas do motor -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div
-                    v-for="stat in [
-                      {
-                        icon: 'i-lucide-wrench',
-                        label: $t('AI_AGENTS.TEST.TOOL'),
-                        value: testResult.tool || $t('AI_AGENTS.TEST.NONE'),
-                      },
-                      {
-                        icon: 'i-lucide-book-open',
-                        label: $t('AI_AGENTS.TEST.KNOWLEDGE'),
-                        value: testResult.knowledge_used ?? 0,
-                      },
-                      {
-                        icon: 'i-lucide-gauge',
-                        label: $t('AI_AGENTS.TEST.SCORE'),
-                        value:
-                          testResult.vector_score ?? $t('AI_AGENTS.TEST.NONE'),
-                      },
-                      {
-                        icon: 'i-lucide-cpu',
-                        label: $t('AI_AGENTS.TEST.MODEL'),
-                        value: testResult.model || $t('AI_AGENTS.TEST.NONE'),
-                      },
-                      {
-                        icon: 'i-lucide-coins',
-                        label: $t('AI_AGENTS.TEST.COST'),
-                        value: testResult.cost ?? $t('AI_AGENTS.TEST.NONE'),
-                      },
-                      {
-                        icon: 'i-lucide-timer',
-                        label: $t('AI_AGENTS.TEST.TIME'),
-                        value:
-                          testResult.latency_ms ?? $t('AI_AGENTS.TEST.NONE'),
-                      },
-                      {
-                        icon: 'i-lucide-hash',
-                        label: $t('AI_AGENTS.TEST.TOKENS'),
-                        value: `${testResult.tokens_in ?? 0} / ${testResult.tokens_out ?? 0}`,
-                      },
-                      {
-                        icon: 'i-lucide-bot',
-                        label: $t('AI_AGENTS.TEST.WORKER'),
-                        value: testResult.worker
-                          ? $t(`AI_AGENTS.TEST.WORKERS.${testResult.worker}`)
-                          : $t('AI_AGENTS.TEST.NONE'),
-                      },
-                      {
-                        icon: 'i-lucide-target',
-                        label: $t('AI_AGENTS.TEST.CONFIDENCE'),
-                        value:
-                          testResult.confidence != null
-                            ? `${Math.round(testResult.confidence * 100)}%`
-                            : $t('AI_AGENTS.TEST.NONE'),
-                      },
-                    ]"
-                    :key="stat.label"
-                    class="rounded-xl border border-n-weak bg-n-solid-2 p-3 flex flex-col gap-1"
-                  >
-                    <span
-                      class="flex items-center gap-1.5 text-xs text-n-slate-11"
-                    >
-                      <span :class="stat.icon" class="size-3.5 inline-block" />
-                      {{ stat.label }}
-                    </span>
-                    <span class="text-sm font-medium text-n-slate-12 truncate">
-                      {{ stat.value }}
-                    </span>
-                  </div>
-                </div>
-
-                <!-- Governança da decisão: por que a IA decidiu assim -->
-                <div
-                  class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-2"
-                >
-                  <span class="text-xs font-semibold text-n-slate-12">
-                    {{ $t('AI_AGENTS.TEST.GOVERNANCE_TITLE') }}
-                  </span>
-                  <div class="flex flex-col gap-1.5 text-xs text-n-slate-11">
-                    <p v-if="testResolvedBy" class="mb-0">
-                      <span
-                        class="i-lucide-sparkles size-3.5 inline-block align-text-bottom"
-                      />
-                      {{ $t('AI_AGENTS.TEST.RESOLVED_BY') }}:
-                      <span class="text-n-slate-12 font-medium">
-                        {{ $t(`AI_AGENTS.TEST.RESOLVED.${testResolvedBy}`) }}
-                      </span>
-                    </p>
-                    <p class="mb-0">
-                      <span
-                        class="i-lucide-wrench size-3.5 inline-block align-text-bottom"
-                      />
-                      {{ $t('AI_AGENTS.TEST.TOOLS_CONSIDERED') }}:
-                      <span class="text-n-slate-12">
-                        {{
-                          testResult.tools_considered?.length
-                            ? testResult.tools_considered.join(', ')
-                            : $t('AI_AGENTS.TEST.NONE')
-                        }}
-                      </span>
-                      <template v-if="testResult.tool">
-                        {{ ' · ' }}
-                        <span class="text-n-slate-12 font-medium">
-                          {{
-                            `${$t('AI_AGENTS.TEST.TOOL_EXECUTED')}: ${testResult.tool}`
-                          }}
-                        </span>
-                      </template>
-                    </p>
-                    <p v-if="testResult.handoff_reason" class="mb-0">
-                      <span
-                        class="i-lucide-user-round size-3.5 inline-block align-text-bottom"
-                      />
-                      {{ $t('AI_AGENTS.TEST.HANDOFF_BY') }}:
-                      <span class="text-n-slate-12 font-medium">{{
-                        testResult.handoff_reason
-                      }}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  v-if="testResult.knowledge_preview?.length"
-                  class="rounded-xl border border-n-weak bg-n-solid-2 p-4 flex flex-col gap-1"
-                >
-                  <span class="text-xs font-medium text-n-slate-11">
-                    {{ $t('AI_AGENTS.TEST.KNOWLEDGE_PREVIEW') }}
-                  </span>
-                  <ul class="text-xs text-n-slate-11 list-disc pl-4">
-                    <li v-for="(k, i) in testResult.knowledge_preview" :key="i">
-                      {{ k }}
-                    </li>
-                  </ul>
-                </div>
-              </template>
+              <div class="flex gap-2 items-end">
+                <TextArea
+                  v-model="testDraft"
+                  :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
+                  :max-length="1000"
+                  custom-text-area-class="min-h-10"
+                  @keydown.enter.exact.prevent="sendTestMessage"
+                />
+                <Button
+                  icon="i-lucide-send"
+                  :label="$t('AI_AGENTS.TEST.SEND')"
+                  :is-loading="testLoading"
+                  :disabled="!testDraft.trim()"
+                  @click="sendTestMessage"
+                />
+              </div>
             </div>
           </template>
         </div>

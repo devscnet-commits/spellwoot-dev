@@ -69,9 +69,12 @@ Rails.application.routes.draw do
           resources :ai_shadow_runs, only: [:index]
           resources :ai_shadows, only: %i[index create update destroy]
           resources :ai_agents do
-            member { post :test }
             member { post :duplicate }
             resource :ai_agent_inboxes, only: %i[show update]
+            resource :ai_agent_test_conversation, only: [:show], controller: 'ai_agent_test_conversations' do
+              post :reset
+              post :messages, action: :create_message
+            end
             resources :ai_agent_versions, only: [:index] do
               member { post :restore }
             end
