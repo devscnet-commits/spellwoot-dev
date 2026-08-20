@@ -18,7 +18,12 @@ def _function_call(name, arguments, call_id):
 
 
 def _response(response_id, output, output_text=""):
-    return SimpleNamespace(id=response_id, output=output, output_text=output_text)
+    # usage: uma Response real da OpenAI sempre traz isso (orchestrator._run_turn soma
+    # input_tokens/output_tokens de cada chamada do turno pro custo real — ver Ai::Gateway/
+    # Api::V1::Accounts::AiCostsController). Valores fixos e não-zero pra também provar que a soma
+    # atravessa múltiplas chamadas do mesmo turno, não só que o atributo existe.
+    return SimpleNamespace(id=response_id, output=output, output_text=output_text,
+                           usage=SimpleNamespace(input_tokens=10, output_tokens=5))
 
 
 # Tool REAL (não filtrada por _is_superseded_tool), pra provar que ela sobrevive a cada rodada.
@@ -49,21 +54,26 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
         mock_client.responses.create.side_effect = [resp1, resp2, resp3]
         mock_execute_tool.return_value = {"result": "ok"}
 
-        reply_text, conversation_id, byok_fallback, confidence, transferred = orchestrator.run_conversation(
-            ticket_id=1,
-            ai_agent_id=1,
-            mode="live",
-            system_prompt="system prompt de teste",
-            tools_schema=[KNOWLEDGE_TOOL_SCHEMA],
-            vector_store_id=None,
-            user_input="quanto custa e meu nome é Joana",
-            conversation_id=None,
+        reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model = (
+            orchestrator.run_conversation(
+                ticket_id=1,
+                ai_agent_id=1,
+                mode="live",
+                system_prompt="system prompt de teste",
+                tools_schema=[KNOWLEDGE_TOOL_SCHEMA],
+                vector_store_id=None,
+                user_input="quanto custa e meu nome é Joana",
+                conversation_id=None,
+            )
         )
 
     # conversation_id ausente => cria uma conversation nova antes da 1ª chamada.
     assert mock_client.conversations.create.call_count == 1
     # 3 chamadas à Responses API: a inicial + 1 followup por rodada de ferramenta (2 rodadas).
     assert mock_client.responses.create.call_count == 3
+    # custo real (achado 20/08): soma o usage das 3 chamadas do turno, não só da última.
+    assert (tokens_in, tokens_out) == (30, 15)
+    assert used_model == orchestrator.config.OPENAI_MODEL
     # as 3 chamadas referenciam a MESMA conversation — é isso que faz da 2ª chamada de ferramenta
     # parte do MESMO turno/atendimento, sem depender de encadear por ID de resposta.
     assert mock_client.responses.create.call_args_list[0].kwargs["conversation"] == "conv_abc"
@@ -311,7 +321,7 @@ class TestCorteDoLoopFechaChamadaPendente:
             mock_client.responses.create.side_effect = pendentes + [final]
             mock_execute_tool.return_value = {"result": "ok"}
 
-            reply_text, _, _, _, _ = orchestrator.run_conversation(
+            reply_text, _, _, _, _, _, _, _ = orchestrator.run_conversation(
                 ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p",
                 tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None,
                 user_input="oi", conversation_id=None,

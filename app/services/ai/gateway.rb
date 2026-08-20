@@ -206,7 +206,17 @@ class Ai::Gateway
     # daqui) — sem isso esses turnos TAMBÉM cairiam em 'unanswered'. 'tool'/knowledge_count continuam
     # sem sinal (orchestrator.py não devolve isso pro Rails hoje — ver
     # docs/ai-shadow-analysis-module-assessment.md §5, fora do escopo deste fix).
-    run_record.update!(provider: 'openai',
+    # Custo real (achado ao vivo, 20/08): antes desta chamada, model/tokens_in/tokens_out ficavam
+    # SEMPRE ausentes aqui — Ai::PythonOrchestratorClient não trazia usage nenhum do Python, então
+    # TODO run deste motor tinha custo zerado na tela "Custos de IA" (Api::V1::Accounts::
+    # AiCostsController), mesmo a conta sendo cobrada de verdade pela OpenAI — e o orçamento do perfil
+    # (Ai::OperationProfile#budget_exceeded?, que soma Ai::Run.cost) nunca disparava de verdade por
+    # causa do mesmo buraco. billed_model é o que REALMENTE rodou (Ai::PythonOrchestratorClient
+    # devolve o valor após o fallback do orchestrator.py, pode divergir do supervisor_model do perfil).
+    billed_model = result[:model].presence || supervisor_model
+    run_record.update!(provider: 'openai', model: billed_model,
+                        tokens_in: result[:tokens_in].to_i, tokens_out: result[:tokens_out].to_i,
+                        cost: Ai::ModelRouter.estimate_cost(billed_model, result[:tokens_in], result[:tokens_out]),
                         decision: { 'decision' => (result[:transferred] ? 'handoff' : 'reply'),
                                     'reply_text' => result[:reply], 'confidence' => result[:confidence] },
                         status: status, error_type: (status == 'error' ? 'provider_error' : nil))
@@ -532,6 +542,13 @@ class Ai::Gateway
   # Ai::PythonMigrationAuditor). Serve ao breaker tanto no gate pré-chamada quanto no record pós-chamada.
   def supervisor_provider
     @agent.operation_profile&.supervisor_provider.presence || 'openai'
+  end
+
+  # Fallback pro cálculo de custo quando o Python não devolveu o model usado (turno que falhou antes
+  # de qualquer chamada real chegar ao fim — ver Ai::PythonOrchestratorClient). Não muda o que É
+  # cobrado, só evita Ai::ModelRouter.price_for(nil) caindo cego no preço-padrão de segurança.
+  def supervisor_model
+    @agent.operation_profile&.supervisor_model
   end
 
   # Breaker por (conta, provider) memoizado no run — o mesmo objeto para o gate pré-chamada e o record
