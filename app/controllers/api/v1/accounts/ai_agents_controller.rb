@@ -21,7 +21,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   # Tipos válidos de automação ao concluir etapa.
   STEP_AUTOMATION_TYPES = %w[tag webhook change_team update_attribute].freeze
 
-  before_action :set_agent, only: %i[show update destroy test duplicate]
+  before_action :set_agent, only: %i[show update destroy duplicate]
   before_action :validate_plan_ai_agents_limit, only: [:create]
 
   def index
@@ -69,11 +69,6 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   def destroy
     @agent.destroy!
     head :no_content
-  end
-
-  # Teste tab: dry-run a message against the agent and return the decision breakdown.
-  def test
-    render json: ::Ai::Tester.run(agent: @agent, message: params[:message].to_s)
   end
 
   # Duplica o agente INTEIRO (identidade, comportamento, playbook/etapas, tools, knowledge sources,

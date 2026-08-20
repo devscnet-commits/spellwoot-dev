@@ -180,55 +180,12 @@
     "TEST": {
       "TITLE": "Testar a IA",
       "LAB_TITLE": "Laboratório de teste",
-      "LAB_SUBTITLE": "Simule uma mensagem do cliente e veja a decisão do motor: fluxo, conhecimento, modelo e custo.",
-      "QUESTION": "Pergunta (como se fosse o cliente)",
+      "LAB_SUBTITLE": "Converse como se fosse o cliente — roda o mesmo motor real (etapas, ferramentas e memória), sem enviar nada de verdade.",
       "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
       "SEND": "Enviar",
-      "DEPARTMENT": "Fluxo escolhido",
-      "TOOL": "Ferramenta utilizada",
-      "KNOWLEDGE": "Conhecimento utilizado",
-      "TIME": "Latência (ms)",
-      "COST": "Custo (USD)",
-      "MODEL": "Modelo final utilizado",
-      "TOKENS": "Tokens (entrada / saída)",
-      "SCORE": "Confiança da busca",
-      "ROUTING": "Decisão de roteamento",
-      "WORKER": "Modelo utilizado",
-      "BANDS": {
-        "high": "Confiança alta · cache",
-        "mid": "Zona cinzenta · IA econômica",
-        "low": "Confiança baixa · IA premium"
-      },
-      "WORKERS": {
-        "cache": "Cache (sem IA)",
-        "judge": "IA econômica (julga)",
-        "generator": "IA premium (gera)"
-      },
-      "CONFIDENCE": "Confiança",
-      "GOVERNANCE_TITLE": "Governança da decisão",
-      "CHOSEN_BY": "Fluxo escolhido",
-      "RESOLVED_BY": "Resposta resolvida por",
-      "TOOLS_CONSIDERED": "Ferramentas consideradas",
-      "TOOL_EXECUTED": "executada",
-      "HANDOFF_BY": "Transferência por",
-      "METHODS": {
-        "single": "único fluxo",
-        "inbox_mapping": "mapeamento da caixa",
-        "classifier": "roteamento automático",
-        "default": "fluxo padrão",
-        "fallback": "fallback",
-        "manual": "seleção manual"
-      },
-      "RESOLVED": {
-        "knowledge": "conhecimento",
-        "instruction": "instrução do fluxo",
-        "tool": "ferramenta",
-        "transfer": "transferência para humano",
-        "unanswered": "sem resposta"
-      },
-      "KNOWLEDGE_PREVIEW": "Conhecimento consultado",
-      "REPLY": "Resposta da IA",
-      "NONE": "—"
+      "RESET": "Reiniciar teste",
+      "EMPTY": "Nenhuma mensagem ainda. Comece a conversa abaixo.",
+      "THINKING": "A IA está respondendo..."
     },
     "FORM": {
       "IDENTITY": "Identidade",
