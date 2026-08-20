@@ -78,6 +78,17 @@ class ProcessResponse(BaseModel):
     # true quando ESTE turno já disparou TRANSFER_TOOL (o modelo pediu transferir_humano) — Rails usa
     # isso pra não tentar transferir de novo por baixa confiança em cima de um handoff que já rodou.
     transferred: bool = False
+    # Achado ao vivo (20/08): sem isto, Ai::Run.tokens_in/tokens_out/cost ficava ZERADO pra todo turno
+    # deste motor — a tela "Custos de IA" (Rails) nunca soube quanto uma conversa realmente gastou,
+    # embora a OpenAI cobrasse de verdade. Soma de TODAS as chamadas reais do turno (tool loop pode
+    # fazer mais de uma) — ver _run_turn/orchestrator.run_conversation.
+    tokens_in: int = 0
+    tokens_out: int = 0
+    # Modelo REALMENTE usado (request.model, ou o fallback config.OPENAI_MODEL quando Rails não manda
+    # nenhum — ver orchestrator.run_conversation#resolved_model) — Rails precisa do valor real, não do
+    # que mandou, pra calcular o custo com o preço certo (o fallback pode divergir do que o tenant tem
+    # configurado).
+    model: str = ""
 
 
 def _authenticate(authorization: Optional[str]) -> None:
@@ -104,7 +115,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     )
 
     try:
-        reply_text, conversation_id, byok_fallback, confidence, transferred = orchestrator.run_conversation(
+        reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
             ai_agent_id=request.ai_agent_id,
             mode=request.mode,
@@ -143,4 +154,5 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     logger.info("ticket_id=%s reply enviada para Rails: %s", request.ticket_id, reply_text)
 
     return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, conversation_id=conversation_id,
-                            byok_fallback=byok_fallback, confidence=confidence, transferred=transferred)
+                            byok_fallback=byok_fallback, confidence=confidence, transferred=transferred,
+                            tokens_in=tokens_in, tokens_out=tokens_out, model=used_model)

@@ -110,7 +110,7 @@ class Ai::PythonOrchestratorClient
       # orchestrator.TurnFailed): repassado para o Ai::Gateway persistir mesmo assim, senão uma única
       # chamada com falha fazia o turno seguinte abrir uma conversation nova e perder o histórico.
       return { reply: nil, conversation_id: failed_conversation_id(response), byok_fallback: false,
-               confidence: nil, transferred: false }
+               confidence: nil, transferred: false, tokens_in: 0, tokens_out: 0, model: nil }
     end
 
     parsed = response.parsed_response
@@ -120,10 +120,17 @@ class Ai::PythonOrchestratorClient
       # Auto-relato do modelo (0.0-1.0, orchestrator.CONFIANCA_KEY) — nil quando o Python não conseguiu
       # parsear o JSON do turno. Ai::Gateway usa isto pra decidir handoff por baixa confiança
       # (Ai::HandoffEvaluator); este client só repassa o que o Python mandou.
-      confidence: parsed['confidence'], transferred: parsed['transferred'] == true }
+      confidence: parsed['confidence'], transferred: parsed['transferred'] == true,
+      # Achado ao vivo (20/08): sem isto, Ai::Run.tokens_in/tokens_out/cost ficava zerado pra todo
+      # turno deste motor, mesmo cobrando de verdade — ver Ai::Gateway#run e
+      # Api::V1::Accounts::AiCostsController. model é o que REALMENTE rodou (pode divergir do que foi
+      # mandado, se este agente não tinha nenhum configurado — orchestrator.py aplica o fallback).
+      tokens_in: parsed['tokens_in'].to_i, tokens_out: parsed['tokens_out'].to_i,
+      model: parsed['model'].presence }
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
-    { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false }
+    { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false,
+      tokens_in: 0, tokens_out: 0, model: nil }
   end
 
   private

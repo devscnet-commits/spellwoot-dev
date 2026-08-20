@@ -487,18 +487,21 @@ def run_conversation(
     close_when: str | None = None,
     close_message: str | None = None,
     collect_hint: dict | None = None,
-) -> tuple[str, str, bool, float | None, bool]:
+) -> tuple[str, str, bool, float | None, bool, int, int, str]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
     (text.format=json_schema, strict — _build_reply_schema) — control flow (save/advance/transfer/
     close) is decided by Python from the parsed JSON and dispatched to Rails' webhook, never by which
     tool the model chose to call.
     Real (admin-configured) business tools are still offered as function tools for genuine external
-    actions. Always returns (reply_text, conversation_id, byok_fallback, confidence, transferred) —
-    including when parsing fails or MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to
-    special-case a cut-off turn, only real transport/API failures. confidence is the model's own
-    0.0-1.0 self-report (None when the payload didn't parse); transferred is whether THIS turn already
-    dispatched TRANSFER_TOOL — Rails uses it to skip its own confidence-based handoff when the model
-    already decided to transfer on its own.
+    actions. Always returns (reply_text, conversation_id, byok_fallback, confidence, transferred,
+    tokens_in, tokens_out) — including when parsing fails or MAX_TOOL_ITERATIONS is hit — so the
+    caller (main.py) never has to special-case a cut-off turn, only real transport/API failures.
+    confidence is the model's own 0.0-1.0 self-report (None when the payload didn't parse);
+    transferred is whether THIS turn already dispatched TRANSFER_TOOL — Rails uses it to skip its own
+    confidence-based handoff when the model already decided to transfer on its own. tokens_in/
+    tokens_out are the SUM across every real OpenAI call this turn made (tool loop can be more than
+    one) — Rails uses them to compute the run's real cost (Api::V1::Accounts::AiCostsController,
+    Ai::Gateway).
 
     `provider` is accepted and logged ONLY — no dispatch yet: multi-provider routing doesn't exist,
     only multi-KEY (BYOK, same provider) via account_api_key.
@@ -532,7 +535,7 @@ def run_conversation(
     using_account_key = using_account_key and not conv_byok_fallback
 
     try:
-        reply_text, turn_byok_fallback, confidence, transferred = _run_turn(
+        reply_text, turn_byok_fallback, confidence, transferred, tokens_in, tokens_out = _run_turn(
             client=client, using_account_key=using_account_key, ticket_id=ticket_id,
             ai_agent_id=ai_agent_id, mode=mode, conversation_id=conversation_id,
             instructions=instructions, resolved_model=resolved_model, openai_tools=openai_tools,
@@ -544,7 +547,8 @@ def run_conversation(
         # junto do erro, o Rails não persistia nada e o turno seguinte recomeçava do zero.
         raise TurnFailed(conversation_id) from e
 
-    return reply_text, conversation_id, conv_byok_fallback or turn_byok_fallback, confidence, transferred
+    return (reply_text, conversation_id, conv_byok_fallback or turn_byok_fallback, confidence, transferred,
+            tokens_in, tokens_out, resolved_model)
 
 
 def _run_turn(
@@ -552,20 +556,31 @@ def _run_turn(
     conversation_id: str, instructions: str, resolved_model: str, openai_tools: list,
     user_input: str, image_urls: list[str] | None, temperature: float | None, provider: str | None,
     reply_schema: dict,
-) -> tuple[str, bool, float | None, bool]:
+) -> tuple[str, bool, float | None, bool, int, int]:
     """O turno em si, com a conversation já garantida. Separado de run_conversation só para que
     QUALQUER falha daqui pra frente ainda saiba qual conversation_id devolver ao Rails (TurnFailed).
-    Devolve (reply_text, byok_fallback, confidence, transferred)."""
+    Devolve (reply_text, byok_fallback, confidence, transferred, tokens_in, tokens_out)."""
     byok_fallback = False
+    # Custo real (achado ao vivo, 20/08): Rails nunca soube quantos tokens um turno gastou —
+    # ProcessResponse não trazia usage nenhum, então TODO run do motor Python ficava com
+    # tokens_in/tokens_out/cost ZERADOS na tela "Custos de IA" (Api::V1::Accounts::AiCostsController),
+    # mesmo com a conta sendo cobrada de verdade pela OpenAI. Um turno pode fazer VÁRIAS chamadas reais
+    # (tool loop) — soma o usage de CADA UMA aqui, no único ponto por onde toda chamada passa.
+    # output_tokens da Responses API já INCLUI os tokens de reasoning (não é um custo à parte a somar).
+    tokens_in = 0
+    tokens_out = 0
 
     def _create(kwargs: dict):
         """Ponto único por onde passa toda chamada real: log completo, fallback BYOK e propagação do
         client/flag resultantes — as chamadas seguintes do MESMO turno nunca voltam à chave ruim."""
-        nonlocal client, using_account_key, byok_fallback
+        nonlocal client, using_account_key, byok_fallback, tokens_in, tokens_out
         _log_create_kwargs(ticket_id, kwargs)
         response, client, fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, kwargs)
         using_account_key = using_account_key and not fallback
         byok_fallback = byok_fallback or fallback
+        if response.usage is not None:
+            tokens_in += response.usage.input_tokens or 0
+            tokens_out += response.usage.output_tokens or 0
         _log_raw_response(ticket_id, response)
         return response
 
@@ -699,7 +714,7 @@ def _run_turn(
     reply_text, confidence, transferred = _dispatch_structured_reply(
         payload, ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
     )
-    return reply_text, byok_fallback, confidence, transferred
+    return reply_text, byok_fallback, confidence, transferred, tokens_in, tokens_out
 
 
 def _parse_structured_reply(text: str | None) -> dict | None:

@@ -98,10 +98,14 @@ class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
     agg
   end
 
+  # Um run guarda ai_agent_id mesmo depois do agente ser excluído (Ai::Run não tem FK com cascade) —
+  # de propósito, o histórico de custo precisa sobreviver à exclusão. Sem isto, o nome caía pra
+  # "#123" cru, indistinguível de um id de verdade — agora fica claro que é um agente que já foi
+  # excluído, não um erro de carregamento.
   def by_agent(scope)
     agg = grouped_cost(scope, :ai_agent_id)
     names = agent_names(agg.keys)
-    agg.map { |id, row| { name: names[id] || "##{id}", runs: row[:runs], cost: row[:cost] } }
+    agg.map { |id, row| { name: names[id] || "Agente excluído (##{id})", runs: row[:runs], cost: row[:cost] } }
   end
 
   def by_error(scope)
