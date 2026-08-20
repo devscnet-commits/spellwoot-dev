@@ -172,7 +172,7 @@ export const buildStepPayload = ({
   return payload;
 };
 
-// Merge do saveStep (AiDepartmentDetail): a etapa editada = a existente sobrescrita SÓ pelas chaves que o
+// Merge do saveStep (AiAgentBehaviorPanel): a etapa editada = a existente sobrescrita SÓ pelas chaves que o
 // payload emite. Chaves que buildStepPayload NÃO emite (campos legados/futuros do backend) sobrevivem pelo
 // spread. Extraído para testar essa preservação sem montar o route-view inteiro (a cobertura do PR 1, que
 // ficou verificada só por leitura). Protege qualquer chave que buildStepPayload não emite (ex.: knowledge legado).
