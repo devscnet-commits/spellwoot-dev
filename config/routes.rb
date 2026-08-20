@@ -70,6 +70,7 @@ Rails.application.routes.draw do
           resources :ai_shadows, only: %i[index create update destroy]
           resources :ai_agents do
             member { post :test }
+            member { post :duplicate }
             resource :ai_agent_inboxes, only: %i[show update]
             resources :ai_agent_versions, only: [:index] do
               member { post :restore }
