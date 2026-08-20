@@ -14,17 +14,16 @@ RSpec.describe 'Ai slot tool-domain (B2 mitigação)' do # rubocop:disable RSpec
   end
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
   let(:dept) do
-    d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Reserva', status: 'active', behavior: {})
-    d.create_playbook!(active: true, steps: [
-                         { 'name' => 'Período',
-                           'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'text',
-                                          'domain_from_tool' => 'consultar_periodos', 'required' => true } }
-                       ])
-    d
+    agent.create_playbook!(active: true, steps: [
+                             { 'name' => 'Período',
+                               'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'text',
+                                              'domain_from_tool' => 'consultar_periodos', 'required' => true } }
+                           ])
+    agent
   end
   let(:step) { dept.playbook.steps[0] }
   let(:tool) do
-    Ai::Tool.create!(account: account, ai_department_id: dept.id, name: 'consultar_periodos',
+    Ai::Tool.create!(account: account, ai_agent_id: agent.id, name: 'consultar_periodos',
                      implementation_type: 'capability', capability_key: 'schedule.periods', status: 'active')
   end
   let(:manager) { Ai::StateManager.new(conversation: conversation, agent: agent) }
@@ -75,10 +74,10 @@ RSpec.describe 'Ai slot tool-domain (B2 mitigação)' do # rubocop:disable RSpec
 
   # ===== A prova de segurança: OPT-IN — slot sem domain_from_tool = gate inalterado =====
   it 'slot SEM domain_from_tool -> gate INALTERADO (grava "manhã" como hoje)' do
-    d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comum', status: 'active', behavior: {})
-    d.create_playbook!(active: true, steps: [{ 'name' => 'P', 'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'text' } }])
+    agent.create_playbook!(active: true, steps: [{ 'name' => 'P', 'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'text' } }])
     Ai::StateManager.new(conversation: conversation, agent: agent)
-                    .persist_attributes({ 'periodo_reservado' => 'manhã' }, d, source: :supervisor, expected_step: d.playbook.steps[0])
+                    .persist_attributes({ 'periodo_reservado' => 'manhã' }, agent, source: :supervisor,
+                                        expected_step: agent.playbook.steps[0])
 
     expect(facts['periodo_reservado']).to eq('manhã')
   end
@@ -134,13 +133,12 @@ RSpec.describe 'Ai slot tool-domain (B2 mitigação)' do # rubocop:disable RSpec
   # blank -> 'invalid_value', rejeitando à toa um valor que ESTÁ na lista da ferramenta.
   context 'quando o slot é choice com options estáticas vazias (opções vêm da ferramenta)' do # rubocop:disable RSpec/ContextWording
     let(:dept) do
-      d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Reserva', status: 'active', behavior: {})
-      d.create_playbook!(active: true, steps: [
-                           { 'name' => 'Período',
-                             'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice', 'options' => [],
-                                            'domain_from_tool' => 'consultar_periodos', 'required' => true } }
-                         ])
-      d
+      agent.create_playbook!(active: true, steps: [
+                               { 'name' => 'Período',
+                                 'collect' => { 'attribute' => 'periodo_reservado', 'type' => 'choice', 'options' => [],
+                                                'domain_from_tool' => 'consultar_periodos', 'required' => true } }
+                             ])
+      agent
     end
 
     it 'valor DENTRO do domínio -> aceita (o estático de options vazias NÃO rejeita)' do

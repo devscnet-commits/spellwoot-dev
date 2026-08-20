@@ -15,13 +15,12 @@ RSpec.describe 'Ai memory prefill (Frente C PR3)' do # rubocop:disable RSpec/Des
   end
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
   let(:cpf_dept) do
-    d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro', status: 'active',
-                               behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
-    d.create_playbook!(active: true, steps: [
-                         { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'type' => 'cpf', 'required' => true } },
-                         { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco_completo', 'type' => 'text', 'required' => true } }
-                       ])
-    d
+    agent.update!(transfer_rules: { 'stuck_handoff_turns' => 3 })
+    agent.create_playbook!(active: true, steps: [
+                             { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'type' => 'cpf', 'required' => true } },
+                             { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco_completo', 'type' => 'text', 'required' => true } }
+                           ])
+    agent
   end
   let(:cpf_step) { cpf_dept.playbook.steps[0] }
   let(:endereco_step) { cpf_dept.playbook.steps[1] }

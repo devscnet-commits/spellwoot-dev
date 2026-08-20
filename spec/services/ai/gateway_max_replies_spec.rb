@@ -9,15 +9,12 @@ RSpec.describe 'Ai::Gateway max_replies handoff', type: :model do
     Ai::OperationProfile.create!(account_id: account.id, name: 'p',
                                  supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
   end
-  let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  let(:dept) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comercial', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all',
-                                       'max_replies' => 3 })
+  let(:agent) do
+    Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id,
+                      behavior: { 'auto_attendance' => true, 'reply_scope' => 'all', 'max_replies' => 3 })
   end
 
   before do
-    dept
     Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
     allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
     allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
@@ -98,7 +95,7 @@ RSpec.describe 'Ai::Gateway max_replies handoff', type: :model do
   end
 
   context 'max_replies = 0 (desligado)' do
-    before { dept.update!(behavior: dept.behavior.merge('max_replies' => 0)) }
+    before { agent.update!(behavior: agent.behavior.merge('max_replies' => 0)) }
 
     it 'não dispara o handoff mesmo com muitas respostas' do
       convo = create(:conversation, account: account, inbox: inbox, status: 'open')

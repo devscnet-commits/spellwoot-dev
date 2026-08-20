@@ -21,8 +21,7 @@ RSpec.describe 'Ai::Gateway fallback BYOK', type: :model do
     allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
     allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
     allow(Ai::Workers::MediaProcessor).to receive(:process).and_return(nil)
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
+    agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
     Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
 
     # 1ª decisão (chave própria) falha por auth; o retry (force_global_key) responde normal.

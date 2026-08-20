@@ -37,14 +37,13 @@ RSpec.describe 'Avanço de etapa — bateria (item 5)' do # rubocop:disable RSpe
     conversation.update!(additional_attributes: (conversation.additional_attributes || {}).merge('ai_step_index' => idx))
   end
 
-  # dept com UM slot configurável (+ Fim). type: text/phone/choice; options p/ choice.
+  # agente com UM slot configurável (+ Fim). type: text/phone/choice; options p/ choice.
   def dept_with(slot:, type: 'text', required: true, options: nil)
     collect = { 'attribute' => slot, 'type' => type, 'required' => required }
     collect['options'] = options if options
-    dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "D_#{slot}", status: 'active',
-                                  behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
-    dept.create_playbook!(active: true, steps: [{ 'name' => 'Slot', 'collect' => collect }, { 'name' => 'Fim' }])
-    dept
+    agent.update!(transfer_rules: { 'stuck_handoff_turns' => 3 })
+    agent.create_playbook!(active: true, steps: [{ 'name' => 'Slot', 'collect' => collect }, { 'name' => 'Fim' }])
+    agent
   end
 
   # Um turno: track_step com os attributes CRUS do modelo e/ou o texto do cliente.
@@ -65,13 +64,12 @@ RSpec.describe 'Avanço de etapa — bateria (item 5)' do # rubocop:disable RSpe
   # ===== 1) HAPPY PATH multi-etapa (representa "as 16 etapas" em unidade) =============================
   describe 'happy path — funil avança etapa a etapa com valores válidos' do
     let(:funnel) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Funil', status: 'active', behavior: {})
-      dept.create_playbook!(active: true, steps: [
-                              { 'name' => 'Nome', 'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true } },
-                              { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => true } },
-                              { 'name' => 'Fim' }
-                            ])
-      dept
+      agent.create_playbook!(active: true, steps: [
+                               { 'name' => 'Nome', 'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true } },
+                               { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => true } },
+                               { 'name' => 'Fim' }
+                             ])
+      agent
     end
 
     it 'coleta os obrigatórios em sequência e avança 0 -> 1 -> 2 (conclusão)' do

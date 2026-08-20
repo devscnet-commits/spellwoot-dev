@@ -3,6 +3,16 @@
 # dados), mesmo padrão de db/migrate/20260716120000_drop_legacy_ai_version_tables.rb.
 class DropAiDepartments < ActiveRecord::Migration[7.1]
   def up
+    # Órfãos: linhas cujo ai_department_id apontava pra um department que já tinha sido destruído
+    # ANTES desta fusão rodar (achado ao vivo, 19/08: o "Suporte" vazio apagado direto no console
+    # durante a investigação que autorizou a fusão) — a migração anterior (backfill) não encontrou
+    # o department correspondente pra copiar o ai_agent_id, então ficaram para trás com ai_agent_id
+    # NULL. Sem department nem dono possível daqui pra frente (a tabela já era pra ser descartada
+    # por completo), então são descartadas aqui, antes de travar a coluna como NOT NULL abaixo.
+    %w[ai_department_integrations ai_knowledge_sources ai_lead_variables ai_playbooks ai_tools].each do |table|
+      execute "DELETE FROM #{table} WHERE ai_department_id IS NOT NULL AND ai_agent_id IS NULL"
+    end
+
     add_index :ai_department_integrations, %i[ai_agent_id ai_integration_link_id],
               unique: true, name: 'idx_ai_agent_integrations_unique'
     change_column_null :ai_department_integrations, :ai_agent_id, false

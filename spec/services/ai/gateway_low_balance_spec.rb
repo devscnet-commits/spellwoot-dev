@@ -23,8 +23,7 @@ RSpec.describe 'Ai::Gateway aviso de saldo baixo', type: :model do
     allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
     allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
     allow(Ai::Workers::MediaProcessor).to receive(:process).and_return(nil)
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
+    agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
     Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
     allow(Ai::ModelRouter).to receive(:decide).and_return(
       { provider: 'openai', model: 'gpt-4.1-mini', decision: { 'decision' => 'reply', 'reply_text' => 'oi' },

@@ -36,15 +36,14 @@ RSpec.describe Ai::PromptCompiler do
   it 'segue compilando normalmente o restante (identidade + objetivo do departamento)' do
     prompt = compile(build_dept(instructions: 'qualquer coisa'))
 
-    expect(prompt).to include('Departamento: Comercial')
-    expect(prompt).to include('Objetivo: Converter leads em clientes')
+    expect(prompt).to include('Agente de IA: Comercial.')
     expect(prompt).to include('SCNET')
   end
 
   it 'departments com instructions vazio compilam igual (nunca importou)' do
     prompt = compile(build_dept(instructions: ''))
 
-    expect(prompt).to include('Departamento: Comercial')
+    expect(prompt).to include('Agente de IA: Comercial.')
     expect(prompt).not_to include('Instruções:')
   end
 
@@ -155,7 +154,7 @@ RSpec.describe Ai::PromptCompiler do
     end
 
     let(:fixed_markers) do
-      ['Você é a assistente da SCNET.', 'Departamento: Comercial', 'Etapas do atendimento (na ordem):',
+      ['Você é a assistente da SCNET.', 'Agente de IA: Comercial.', 'Etapas do atendimento (na ordem):',
        'Transfira para humano quando', 'Encerre quando', 'Retorne ESTRITAMENTE um JSON']
     end
 
@@ -348,14 +347,14 @@ RSpec.describe Ai::PromptCompiler do
                         guardrails: 'Nunca prometa desconto.')
     end
     let(:real_dept) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: real_agent.id, name: 'Comercial',
-                                    objetivo: 'Vender', status: 'active', behavior: {})
+      real_agent.update!(behavior: {})
+      dept = real_agent
       dept.create_playbook!(active: true, transfer_when: ['cliente irritado'], steps: [
                               { 'name' => 'CADASTRO', 'instructions' => 'Peça e grave documento.' },
                               { 'name' => 'Fim' }
                             ])
       dept.lead_variables.create!(name: 'cidade', account: account)
-      Ai::Tool.create!(account: account, ai_department_id: dept.id, name: 'consulta_cobertura',
+      Ai::Tool.create!(account: account, ai_agent_id: dept.id, name: 'consulta_cobertura',
                        implementation_type: 'capability', capability_key: 'coverage.check', status: 'active',
                        description: 'Checa cobertura')
       dept
@@ -462,10 +461,7 @@ RSpec.describe Ai::PromptCompiler do
     let(:agent) do
       Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id)
     end
-    let(:dept) do
-      Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comercial',
-                             objetivo: 'Vender', status: 'active', behavior: {})
-    end
+    let(:dept) { agent }
     let!(:t_comercial) { create(:team, account: account, name: 'Comerciais', description: 'contratação de planos e vendas') }
     let!(:t_suporte)   { create(:team, account: account, name: 'Suporte', description: 'problemas técnicos e reparos') }
     let!(:t_fora)      { create(:team, account: account, name: 'Financeiro', description: 'cobrança') }
@@ -631,10 +627,7 @@ RSpec.describe Ai::PromptCompiler do
       ag.update!(handoff_team_ids: [create(:team, account: account, name: 'Suporte N2').id])
       ag
     end
-    let(:dept) do
-      Ai::Department.create!(account: account, ai_agent_id: agent_with_team.id, name: 'Comercial',
-                             objetivo: 'Vender', status: 'active', behavior: {})
-    end
+    let(:dept) { agent_with_team }
 
     it 'o bloco de times humanos inclui a proibição de categoria genérica' do
       prompt = described_class.compile(agent: agent_with_team, department: dept,

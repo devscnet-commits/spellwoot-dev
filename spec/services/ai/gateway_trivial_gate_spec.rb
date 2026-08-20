@@ -21,19 +21,18 @@ RSpec.describe Ai::Gateway do
   end
 
   def create_department
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
+    agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
   end
 
-  # Dept cuja etapa 1 é TERMINAL (on_complete 'close' — sem team_id, não aciona a validação H6), precedida
+  # Agente cuja etapa 1 é TERMINAL (on_complete 'close' — sem team_id, não aciona a validação H6), precedida
   # por um slot OBRIGATÓRIO (etapa 0). O conclude_ready depende de documento_cpf estar preenchido.
   def create_terminal_department
-    dept = create_department
-    dept.create_playbook!(active: true, steps: [
-                            { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'required' => true } },
-                            { 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }
-                          ])
-    dept
+    create_department
+    agent.create_playbook!(active: true, steps: [
+                             { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'required' => true } },
+                             { 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }
+                           ])
+    agent
   end
 
   # Entrega "ok" logo após NOSSA fala, com a conversa na etapa TERMINAL (índice 1) e os facts informados.
@@ -89,7 +88,7 @@ RSpec.describe Ai::Gateway do
       convo = deliver_after_our_reply('Obrigada!!', binding: binding)
 
       expect(Ai::ModelRouter).not_to have_received(:decide)
-      expect(events(convo)).to eq(%w[message.received department.resolved turn.trivial_skipped])
+      expect(events(convo)).to eq(%w[message.received turn.trivial_skipped])
 
       run = Ai::Run.find_by(conversation_id: convo.id)
       expect(run.run_type).to eq('trivial_skip')

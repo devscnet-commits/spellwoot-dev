@@ -15,13 +15,10 @@ RSpec.describe Ai::Playbook do
     Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id,
                       handoff_team_ids: [team_in.id])
   end
-  let(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active', behavior: {})
-  end
 
   def build_playbook(team_id)
-    department.build_playbook(active: true, close_when: [], transfer_when: [], default_messages: {},
-                              steps: [{ 'name' => 'Fim', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team_id } }])
+    agent.build_playbook(active: true, close_when: [], transfer_when: [], default_messages: {},
+                         steps: [{ 'name' => 'Fim', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team_id } }])
   end
 
   describe 'on_complete_teams_in_whitelist (H6 escrita)' do
@@ -49,8 +46,8 @@ RSpec.describe Ai::Playbook do
     end
 
     it 'on_complete sem team_id (close/handoff_ai) -> não valida, salva' do
-      playbook = department.build_playbook(active: true, close_when: [], transfer_when: [], default_messages: {},
-                                           steps: [{ 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }])
+      playbook = agent.build_playbook(active: true, close_when: [], transfer_when: [], default_messages: {},
+                                      steps: [{ 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }])
       expect(playbook.save).to be(true)
     end
 
