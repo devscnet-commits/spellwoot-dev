@@ -21,7 +21,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   # Tipos válidos de automação ao concluir etapa.
   STEP_AUTOMATION_TYPES = %w[tag webhook change_team update_attribute].freeze
 
-  before_action :set_agent, only: %i[show update destroy test]
+  before_action :set_agent, only: %i[show update destroy test duplicate]
   before_action :validate_plan_ai_agents_limit, only: [:create]
 
   def index
@@ -76,7 +76,65 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
     render json: ::Ai::Tester.run(agent: @agent, message: params[:message].to_s)
   end
 
+  # Duplica o agente INTEIRO (identidade, comportamento, playbook/etapas, tools, knowledge sources,
+  # lead variables, integrações) — pedido do dono da conta (20/08): a cópia manual pelo front (GET +
+  # spread + POST) só trazia os campos planos/jsonb do Ai::Agent porque #create nunca chamou
+  # #upsert_playbook nem sabia dos registros dependentes (tools/knowledge/lead_variables/integrations
+  # vivem em tabelas à parte, referenciadas por ai_agent_id — só existem DEPOIS do agente novo ter um
+  # id). Deliberadamente NÃO copia ai_agent_inboxes: a cópia nasce sem nenhuma caixa vinculada (mesmo
+  # efeito prático de "todas como não atende" — Ai::AgentInboxesController#show já reporta 'none' pra
+  # qualquer inbox sem binding) para nunca colocar duas IAs respondendo a mesma caixa por engano.
+  # status sempre 'inactive' na cópia, até o dono revisar e ativar manualmente.
+  def duplicate
+    copy = nil
+    ::Ai::Agent.transaction do
+      copy = @agent.dup
+      copy.name = next_duplicate_name(@agent.name)
+      copy.status = 'inactive'
+      copy.save!
+
+      duplicate_playbook(copy)
+      duplicate_has_many(@agent.tools, copy)
+      duplicate_has_many(@agent.knowledge_sources, copy) # after_commit da cópia re-ingere os chunks
+      duplicate_has_many(@agent.lead_variables, copy)
+      duplicate_has_many(@agent.department_integrations, copy)
+    end
+    ::Ai::Version.snapshot!(copy, snapshot_fields: ::Ai::Agent::SNAPSHOT_FIELDS)
+    render json: serialize(copy), status: :created
+  end
+
   private
+
+  # "Nome X" -> "Nome X 1"; duplicar de novo (a partir do original OU de qualquer cópia numerada) ->
+  # "Nome X 2", sempre a partir do MAIOR número já usado por esse nome-base na conta (nunca reusa um
+  # número already tomado, mesmo se cópias intermediárias forem apagadas/renomeadas fora de ordem).
+  def next_duplicate_name(name)
+    base = name.to_s.sub(/ \d+\z/, '')
+    used = ::Ai::Agent.where(account_id: Current.account.id)
+                      .where('name = ? OR name LIKE ?', base, "#{base} %")
+                      .pluck(:name)
+    numbers = used.filter_map { |n| n[/\A#{Regexp.escape(base)} (\d+)\z/, 1]&.to_i }
+    "#{base} #{(numbers.max || 0) + 1}"
+  end
+
+  def duplicate_playbook(copy)
+    original = @agent.playbook
+    return if original.nil?
+
+    playbook = original.dup
+    playbook.ai_agent_id = copy.id
+    playbook.lock_version = 0
+    playbook.version = 1
+    playbook.save!
+  end
+
+  def duplicate_has_many(records, copy)
+    records.find_each do |record|
+      row = record.dup
+      row.ai_agent_id = copy.id
+      row.save!
+    end
+  end
 
   # Limite de agentes IA do plano atual (billing Fase 2). Sem plano/limite => não bloqueia.
   def validate_plan_ai_agents_limit

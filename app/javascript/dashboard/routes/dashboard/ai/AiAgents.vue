@@ -127,12 +127,13 @@ const patchAgent = async (agent, payload, okMessage) => {
   }
 };
 
+// Cópia INTEIRA feita no backend (#duplicate) numa transação só — identidade, comportamento,
+// playbook/etapas, tools, knowledge sources, lead variables e integrações. Nasce "Nome N" (nome-base
+// + próximo número livre), status inativo e sem nenhuma caixa vinculada, pra revisar antes de ativar.
 const duplicate = async agent => {
   openMenuId.value = null;
   try {
-    const { data: full } = await axios.get(`${baseUrl()}/${agent.id}`);
-    const copy = { ...full, id: undefined, name: `${full.name} (cópia)` };
-    await axios.post(baseUrl(), { ai_agent: copy });
+    await axios.post(`${baseUrl()}/${agent.id}/duplicate`);
     useAlert(t('AI_AGENTS.SAVED'));
     fetchAgents();
   } catch (error) {
