@@ -9,9 +9,8 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
     Ai::OperationProfile.create!(account: account, name: 'padrão', supervisor_provider: 'openai', supervisor_model: 'gpt-4o')
   end
   let(:agent) { Ai::Agent.create!(account: account, name: 'Assistente', ai_operation_profile_id: operation_profile.id) }
-  let(:department) { Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Comercial') }
   let!(:tool) do
-    Ai::Tool.create!(account: account, ai_department_id: department.id, name: 'conversation.add_label',
+    Ai::Tool.create!(account: account, ai_agent_id: agent.id, name: 'conversation.add_label',
                      implementation_type: 'capability', capability_key: 'conversation.add_label', status: 'active')
   end
   let(:correct_token) { 'internal-test-token' }
@@ -22,7 +21,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
   def call_webhook(headers: {})
     with_modified_env INTERNAL_AI_TOKEN: correct_token do
       post '/api/internal/ai_execute_tool',
-           params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: 'conversation_add_label',
+           params: { ticket_id: conversation.id, ai_agent_id: agent.id, tool_name: 'conversation_add_label',
                       arguments: { label: 'Cliente em Negociação' }, mode: 'live' },
            headers: headers, as: :json
     end
@@ -46,7 +45,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       it 'tool desconhecida (não é controle, capture nem tool real — nem sanitizada nem não) devolve 404' do
         with_modified_env INTERNAL_AI_TOKEN: correct_token do
           post '/api/internal/ai_execute_tool',
-               params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: 'tool_que_nao_existe',
+               params: { ticket_id: conversation.id, ai_agent_id: agent.id, tool_name: 'tool_que_nao_existe',
                           arguments: {}, mode: 'live' },
                headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
         end
@@ -58,7 +57,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
     def call_tool(tool_name, arguments: {}, mode: 'live')
       with_modified_env INTERNAL_AI_TOKEN: correct_token do
         post '/api/internal/ai_execute_tool',
-             params: { ticket_id: conversation.id, ai_department_id: department.id, tool_name: tool_name,
+             params: { ticket_id: conversation.id, ai_agent_id: agent.id, tool_name: tool_name,
                         arguments: arguments, mode: mode },
              headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
       end
@@ -66,7 +65,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
 
     context 'chamada de uma capture tool "registrar_*" (Ai::StepCaptureTool — etapa do playbook, não uma Ai::Tool real)' do
       before do
-        Ai::Playbook.create!(department: department,
+        Ai::Playbook.create!(agent: agent,
                              steps: [{ 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco', 'type' => 'text' } }])
       end
 
@@ -99,7 +98,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
 
     context 'chamada de "avancar_etapa" (avanço agentic — a IA decide, não um índice travado)' do
       before do
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Boas-vindas' },
           { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco' } },
           { 'name' => 'Fim' }
@@ -154,7 +153,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
     #     pelos 8 testes acima, que continuam passando)
     context 'validação de dado obrigatório antes de avançar (bug ticket 557)' do
       before do
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'nome_cliente', 'collect' => { 'attribute' => 'nome_cliente' } },
           { 'name' => 'cidade', 'collect' => { 'attribute' => 'cidade' } },
           { 'name' => 'escolha_caminho', 'collect' => { 'attribute' => 'escolha_caminho' } },
@@ -230,7 +229,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       # etapa só tem 1 collect.attribute na tela), o código tem que exigir TODOS, não só o primeiro —
       # Array() em collect.attribute aceita string OU array sem precisar de um campo novo no schema.
       it 'etapa com múltiplos campos obrigatórios (collect.attribute como array): só A presente NÃO libera — precisa de A e B' do
-        department.playbook.update!(steps: [
+        agent.playbook.update!(steps: [
           { 'name' => 'dados_duplos', 'collect' => { 'attribute' => %w[nome_cliente cidade] } },
           { 'name' => 'fim' }
         ])
@@ -255,7 +254,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       # coletado. Unificado em Ai::StepSlot.items (mesma fonte que Ai::PythonOrchestratorClient usa pra
       # montar a REGRA DE EXTRAÇÃO JSON) — este teste protege contra a divergência voltar.
       it 'etapa no formato collect.items[]: cada item bloqueia (ou não) de forma independente pelo seu próprio required' do
-        department.playbook.update!(steps: [
+        agent.playbook.update!(steps: [
           { 'name' => 'dados_cliente', 'collect' => { 'items' => [
             { 'attribute' => 'cpf_cliente', 'type' => 'cpf', 'required' => true },
             { 'attribute' => 'nome_cliente', 'type' => 'text', 'required' => true },
@@ -296,7 +295,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       # novo do modelo pra distinguir os dois casos), a etapa segue de qualquer jeito.
       context 'campo opcional (slot_required: false) — item 5, decisão confirmada' do
         before do
-          department.playbook.update!(steps: [
+          agent.playbook.update!(steps: [
             { 'name' => 'telefone_secundario', 'collect' => { 'attribute' => 'telefone_secundario' },
               'slot_required' => false },
             { 'name' => 'fim' }
@@ -345,7 +344,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
 
       it 'action=close: resolve a conversa, SEM avançar o índice' do
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'close' } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -362,8 +361,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         team = create(:team, account: account)
         create(:team_member, team: team, user: create(:user, account: account))
         agent.update!(handoff_team_ids: [team.id])
-        department.reload # limpa a associação :agent memoizada — a validação do Playbook precisa ver o update acima
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team.id } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -382,7 +380,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
                                          ai_operation_profile_id: operation_profile.id)
         Ai::AgentInbox.create!(ai_agent_id: target_agent.id, inbox_id: conversation.inbox_id, mode: 'live', active: true)
         agent.update!(handoff_agent_ids: [target_agent.id])
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_ai', 'target' => 'Vendas' } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -398,7 +396,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
 
       it 'em modo shadow, NÃO executa o desfecho (mesmo gate live? das outras control tools)' do
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'close' } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -410,7 +408,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
 
       it 'etapa SEM on_complete continua avançando o índice normalmente (não regride o caminho comum)' do
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Boas-vindas' },
           { 'name' => 'Fim' }
         ])
@@ -437,7 +435,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       end
 
       it 'action=close chamado duas vezes: observa se a 2ª chamada erra, duplica ou é no-op' do
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'close' } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -464,8 +462,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         team = create(:team, account: account)
         create(:team_member, team: team, user: create(:user, account: account))
         agent.update!(handoff_team_ids: [team.id])
-        department.reload
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team.id } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -496,8 +493,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         create(:team_member, team: team, user: member_a)
         create(:team_member, team: team, user: member_b)
         agent.update!(handoff_team_ids: [team.id])
-        department.reload
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_human', 'team_id' => team.id } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -515,7 +511,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
                                          ai_operation_profile_id: operation_profile.id)
         Ai::AgentInbox.create!(ai_agent_id: target_agent.id, inbox_id: conversation.inbox_id, mode: 'live', active: true)
         agent.update!(handoff_agent_ids: [target_agent.id])
-        Ai::Playbook.create!(department: department, steps: [
+        Ai::Playbook.create!(agent: agent, steps: [
           { 'name' => 'Finalização', 'on_complete' => { 'action' => 'handoff_ai', 'target' => 'Vendas' } }
         ])
         conversation.update!(additional_attributes: { 'ai_step_index' => 0 }, status: 'open')
@@ -664,7 +660,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         conversation.reload
         expect(conversation.additional_attributes['ai_handoff']).to be true
         expect(conversation.assignee_id).to be_nil
-        expect(Ai::ReplyPolicy.effective_reply_state(mode: 'live', department: department, conversation: conversation))
+        expect(Ai::ReplyPolicy.effective_reply_state(mode: 'live', agent: agent, conversation: conversation))
           .not_to eq(:live)
       end
 
@@ -711,7 +707,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
     context 'chamada de "consultar_conhecimento" (RAG agentic — tool real, sempre disponível)' do
       it 'devolve os trechos encontrados, SEM criar Ai::CapabilityExecution' do
         allow(Ai::KnowledgeRetriever).to receive(:retrieve)
-          .with(query: 'quanto custa o plano fibra?', account_id: account.id, department_id: department.id)
+          .with(query: 'quanto custa o plano fibra?', account_id: account.id, agent_id: agent.id)
           .and_return(['Plano Fibra 500MB: R$ 99,90/mês'])
 
         expect { call_tool('consultar_conhecimento', arguments: { pergunta: 'quanto custa o plano fibra?' }) }
@@ -797,17 +793,16 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(conversation.reload.label_list).not_to include('Cliente em Negociação')
       end
 
-      it 'retorna 403 quando o ai_department_id não pertence à account do ticket_id (guard multi-tenant)' do
+      it 'retorna 403 quando o ai_agent_id não pertence à account do ticket_id (guard multi-tenant)' do
         other_account = create(:account)
         other_operation_profile = Ai::OperationProfile.create!(account: other_account, name: 'padrão',
                                                                 supervisor_provider: 'openai', supervisor_model: 'gpt-4o')
         other_agent = Ai::Agent.create!(account: other_account, name: 'Assistente',
                                         ai_operation_profile_id: other_operation_profile.id)
-        other_department = Ai::Department.create!(account: other_account, ai_agent_id: other_agent.id, name: 'Outra conta')
 
         with_modified_env INTERNAL_AI_TOKEN: correct_token do
           post '/api/internal/ai_execute_tool',
-               params: { ticket_id: conversation.id, ai_department_id: other_department.id, tool_name: 'conversation_add_label',
+               params: { ticket_id: conversation.id, ai_agent_id: other_agent.id, tool_name: 'conversation_add_label',
                           arguments: { label: 'Cliente em Negociação' }, mode: 'live' },
                headers: { 'Authorization' => "Bearer #{correct_token}" }, as: :json
         end

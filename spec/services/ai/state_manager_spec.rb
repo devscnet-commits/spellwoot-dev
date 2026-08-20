@@ -12,8 +12,8 @@ RSpec.describe Ai::StateManager do
     Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
   end
   let(:department) do
-    dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                                  behavior: {})
+    agent.update!(behavior: {})
+    dept = agent
     dept.create_playbook!(active: true, steps: [
                             { 'name' => 'Coleta', 'group_delay_seconds' => 5,
                               'automations' => [{ 'type' => 'tag', 'params' => { 'label' => 'vip' } }] },
@@ -142,8 +142,8 @@ RSpec.describe Ai::StateManager do
     end
 
     def req_dept
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ReqSlots', status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 5 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 5 })
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'A', 'collect' => { 'attribute' => 'campo_a', 'type' => 'text', 'required' => true } },
                               { 'name' => 'B', 'collect' => { 'attribute' => 'campo_b', 'type' => 'text', 'required' => true } }
@@ -264,7 +264,8 @@ RSpec.describe Ai::StateManager do
     # Etapa SEM slot (terminal/informativa, ex.: FINALIZAÇÃO): asked_slot vazio é o ESPERADO, não omissão —
     # não polui a medição. Prod: um asked_slot.omitted com slot:nil na FINALIZAÇÃO era falso-positivo.
     it 'etapa SEM slot + asked_slot "" (mesmo com reply "?") -> NÃO emite asked_slot.omitted' do
-      d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Fim', status: 'active', behavior: {})
+      agent.update!(behavior: {})
+      d = agent
       d.create_playbook!(active: true, steps: [{ 'name' => 'FINALIZAÇÃO' }]) # sem collect => sem slot
       conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
 
@@ -364,7 +365,8 @@ RSpec.describe Ai::StateManager do
     end
 
     def dept_with(name, steps)
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active', behavior: {})
+      agent.update!(behavior: {})
+      dept = agent
       dept.create_playbook!(active: true, steps: steps)
       dept
     end
@@ -432,8 +434,8 @@ RSpec.describe Ai::StateManager do
   # nome — cada teste morre se o resolver voltar a contar o cru pré-gate. (Slot phone: o gate valida formato.)
   describe '#track_step — avanço lê o gate, não o cru (item 5)' do
     let(:phone_department) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ColetaFone',
-                                    status: 'active', behavior: {})
+      agent.update!(behavior: {})
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Telefone',
                                 'collect' => { 'attribute' => 'telefone', 'type' => 'phone', 'required' => true } },
@@ -479,8 +481,8 @@ RSpec.describe Ai::StateManager do
 
   describe '#track_step — avanço DETERMINÍSTICO por slot (collect)' do
     let(:slot_department) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'ColetaSlot',
-                                    status: 'active', behavior: {})
+      agent.update!(behavior: {})
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Nome',
                                 'collect' => { 'attribute' => 'nome', 'type' => 'text', 'required' => true },
@@ -545,8 +547,8 @@ RSpec.describe Ai::StateManager do
 
   describe '#track_step — rede de segurança (Camada A extração + Camada B fallback)' do
     let(:safety_department) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro',
-                                    status: 'active', behavior: {})
+      agent.update!(behavior: {})
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'CPF',
                                 'collect' => { 'attribute' => 'cpf', 'type' => 'cpf', 'required' => true } },
@@ -647,8 +649,8 @@ RSpec.describe Ai::StateManager do
     # === CONSERTO: slot inferido da instrução + confirmação-única de valor estranho ================
     describe 'conserto — slot inferido + confirma 1x se estranho, nunca fica preso' do
       let(:infer_department) do
-        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro2',
-                                      status: 'active', behavior: {})
+        agent.update!(behavior: {})
+        dept = agent
         # etapa SEM collect declarado; a instrução manda gravar no atributo email (criada antes do #259)
         dept.create_playbook!(active: true, steps: [
                                 { 'name' => 'CADASTRO de email', 'collect' => { 'attribute' => 'email' },
@@ -698,8 +700,8 @@ RSpec.describe Ai::StateManager do
 
       # Reprodução da conv 358: etapa com a forma DIRETA "Grave endereco_completo ..." (sem "atributo").
       it 'conv 358: etapa "Grave endereco_completo com o texto fornecido." captura o endereço e AVANÇA' do
-        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro3',
-                                      status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        dept = agent
         dept.create_playbook!(active: true, steps: [
                                 { 'name' => 'Endereço', 'collect' => { 'attribute' => 'endereco_completo' },
                                   'instructions' => 'Peça o endereço. Grave endereco_completo com o texto fornecido.' },
@@ -721,8 +723,8 @@ RSpec.describe Ai::StateManager do
         CustomAttributeDefinition.create!(account: account, attribute_key: 'cidade',
                                           attribute_display_name: 'Cidade', attribute_model: 'conversation_attribute',
                                           attribute_display_type: 'text')
-        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cidade', status: 'active',
-                                      behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        dept = agent
         dept.create_playbook!(active: true, steps: [
                                 { 'name' => 'Cidade', 'collect' => { 'attribute' => 'cidade' },
                                   'instructions' => 'Pergunte e grave a cidade conforme informado.' },
@@ -737,8 +739,8 @@ RSpec.describe Ai::StateManager do
       end
 
       it 'slot capturado SEM campo cadastrado fica só em ai_collected_facts (não em custom_attributes)' do
-        dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cidade2', status: 'active',
-                                      behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+        dept = agent
         dept.create_playbook!(active: true, steps: [
                                 { 'name' => 'Cidade', 'collect' => { 'attribute' => 'cidade' },
                                   'instructions' => 'Pergunte e grave a cidade conforme informado.' },
@@ -759,8 +761,8 @@ RSpec.describe Ai::StateManager do
   # se o modelo devolveu attributes, ELE é dono do turno; o texto cru só entra quando o modelo é mudo.
   describe '#track_step — BUG 1: precedência do modelo (Opção B) + idempotência por mensagem' do
     let(:cascade_department) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cascata', status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Caminho',
                                 'collect' => { 'attribute' => 'escolha_caminho', 'type' => 'text', 'required' => true } },
@@ -881,8 +883,8 @@ RSpec.describe Ai::StateManager do
   # reperguntava algo já recebido. Agora o anexo grava fatos determinísticos e preenche o slot da etapa.
   describe '#track_step — BUG 3: anexo vira dado' do
     let(:attach_department) do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Anexos', status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Localização' }, # etapa informativa (sem slot)
                               { 'name' => 'Comprovante',
@@ -976,8 +978,8 @@ RSpec.describe Ai::StateManager do
     def infer_dept(name, instruction)
       # Gap 4 v2: teto de recusa = stuck_limit (12) — MESMO limiar do absoluto. Depts de PERGUNTA não
       # transferem cedo; o absoluto (12) só é atingido nos testes que iteram até lá.
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      dept = agent
       # collect DECLARADO: a chave é decodificada da instrução do teste (conjunto FIXO destes specs —
       # "grave <k>" ou "no atributo <k>"). NÃO é o infer de produção (removido); é só o decoder do fixture.
       attribute = instruction[/no atributo (\w+)/, 1] || instruction[/grave (?:o )?(\w+)/, 1]
@@ -1073,8 +1075,8 @@ RSpec.describe Ai::StateManager do
     end
 
     def choice_dept
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Choice-A', status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Período',
                                 'collect' => { 'attribute' => 'periodo', 'type' => 'choice',
@@ -1150,8 +1152,8 @@ RSpec.describe Ai::StateManager do
     def infer_dept(name, instruction)
       # Gap 4 v2: teto de recusa = stuck_limit (12) — MESMO limiar do absoluto. Depts de PERGUNTA não
       # transferem cedo; o absoluto (12) só é atingido nos testes que iteram até lá.
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      dept = agent
       # collect DECLARADO: a chave é decodificada da instrução do teste (conjunto FIXO destes specs —
       # "grave <k>" ou "no atributo <k>"). NÃO é o infer de produção (removido); é só o decoder do fixture.
       attribute = instruction[/no atributo (\w+)/, 1] || instruction[/grave (?:o )?(\w+)/, 1]
@@ -1354,8 +1356,8 @@ RSpec.describe Ai::StateManager do
     def infer_dept(name, instruction)
       # Gap 4 v2: teto de recusa = stuck_limit (12) — MESMO limiar do absoluto. Depts de PERGUNTA não
       # transferem cedo; o absoluto (12) só é atingido nos testes que iteram até lá.
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: name, status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      dept = agent
       # collect DECLARADO: a chave é decodificada da instrução do teste (conjunto FIXO destes specs —
       # "grave <k>" ou "no atributo <k>"). NÃO é o infer de produção (removido); é só o decoder do fixture.
       attribute = instruction[/no atributo (\w+)/, 1] || instruction[/grave (?:o )?(\w+)/, 1]
@@ -1821,8 +1823,8 @@ RSpec.describe Ai::StateManager do
     end
 
     it 'aceita a chave do SLOT da etapa atual mesmo sem CustomAttributeDefinition/lead_variable' do
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Slot', status: 'active',
-                                    behavior: {})
+      agent.update!(behavior: {})
+      dept = agent
       dept.create_playbook!(active: true, steps: [{ 'name' => 'Doc', 'collect' => { 'attribute' => 'documento_extra' } }])
       conversation.update!(additional_attributes: { 'ai_step_index' => 0 })
 
@@ -1872,8 +1874,8 @@ RSpec.describe Ai::StateManager do
     # Funil de 3 etapas de coleta; nenhuma chave é CustomAttributeDefinition da conta (legítimas por
     # construção via collect['attribute'] — é o caso da conv 387).
     def funnel_department
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Funil', status: 'active',
-                                    behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'text', 'required' => true } },
                               { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'type' => 'text', 'required' => true } },
@@ -1966,8 +1968,8 @@ RSpec.describe Ai::StateManager do
     # Funil com um slot CHOICE (plano) no MEIO — nenhuma chave é CustomAttributeDefinition da conta: todas
     # legítimas só por serem declaradas no collect (é o caso da conv da evidência).
     def funnel_with_choice
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Funil5', status: 'active',
-                                    behavior: {})
+      agent.update!(behavior: {})
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'text' } },
                               { 'name' => 'Plano', 'collect' => { 'attribute' => 'plano_escolhido', 'type' => 'choice',
@@ -2124,8 +2126,8 @@ RSpec.describe Ai::StateManager do
     def gap1_dept(required:, slot: 'email_cliente', type: 'text')
       collect = { 'attribute' => slot, 'type' => type }
       collect['required'] = false unless required
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "G#{SecureRandom.hex(3)}",
-                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 12 })
+      dept = agent
       dept.create_playbook!(active: true, steps: [{ 'name' => 'Slot', 'collect' => collect }, { 'name' => 'Fim' }])
       dept
     end
@@ -2284,8 +2286,8 @@ RSpec.describe Ai::StateManager do
       step = { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente' },
                'instructions' => 'Peça e grave o email_cliente conforme informado.' }
       step['slot_required'] = false if optional
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "I#{SecureRandom.hex(3)}",
-                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => 3 })
+      dept = agent
       dept.create_playbook!(active: true, steps: [step, { 'name' => 'Fim' }])
       dept
     end
@@ -2407,8 +2409,8 @@ RSpec.describe Ai::StateManager do
       step = { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente' },
                'instructions' => 'Peça e grave o email_cliente conforme informado.' }
       step['slot_required'] = false if optional
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "R#{SecureRandom.hex(3)}",
-                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => turns })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => turns })
+      dept = agent
       dept.create_playbook!(active: true, steps: [step, { 'name' => 'Fim' }])
       dept
     end
@@ -2523,8 +2525,8 @@ RSpec.describe Ai::StateManager do
     end
 
     def abs_dept(absolute)
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "T#{SecureRandom.hex(3)}",
-                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => absolute })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => absolute })
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Email', 'collect' => { 'attribute' => 'email_cliente' },
                                 'instructions' => 'Peça e grave o email_cliente conforme informado.' },
@@ -2622,8 +2624,8 @@ RSpec.describe Ai::StateManager do
     def st_questions; conversation.reload.additional_attributes.to_h['ai_step_questions']; end
 
     def q_dept(stuck)
-      dept = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: "Q#{SecureRandom.hex(3)}",
-                                    status: 'active', behavior: {}, transfer_rules: { 'stuck_handoff_turns' => stuck })
+      agent.update!(behavior: {}, transfer_rules: { 'stuck_handoff_turns' => stuck })
+      dept = agent
       dept.create_playbook!(active: true, steps: [
                               { 'name' => 'Endereco', 'collect' => { 'attribute' => 'endereco_completo' },
                                 'instructions' => 'Peça e grave o endereco_completo.' },
@@ -2749,7 +2751,8 @@ RSpec.describe Ai::StateManager do
   # delega ao conclude_ready?. on_complete 'close' (sem team_id) p/ não acionar a validação H6 no save.
   describe '#conclude_ready_for_current? (wrapper do TrivialTurnGate)' do
     let(:dept) do
-      d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'W', status: 'active', behavior: {})
+      agent.update!(behavior: {})
+      d = agent
       d.create_playbook!(active: true, steps: [
                            { 'name' => 'Nome', 'collect' => { 'attribute' => 'nome', 'required' => true } }, # 0
                            { 'name' => 'Fim', 'on_complete' => { 'action' => 'close' } }                     # 1 terminal
@@ -2783,9 +2786,7 @@ RSpec.describe Ai::StateManager do
     let(:contact) { create(:contact, account: account) }
     let(:convo) { create(:conversation, account: account, inbox: inbox, contact: contact) }
     let(:mgr) { described_class.new(conversation: convo, agent: agent) }
-    let(:dept) do
-      Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'C', status: 'active', behavior: {})
-    end
+    let(:dept) { agent }
 
     def contact_facts
       Ai::CustomerMemory.find_by(contact_id: contact.id, account_id: account.id)&.key_facts.to_h

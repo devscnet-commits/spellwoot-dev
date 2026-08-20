@@ -7,12 +7,9 @@ RSpec.describe Ai::LeadVariable do
                                            supervisor_model: 'gpt-4.1-mini')
     Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id)
   end
-  let(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Dep', status: 'active', behavior: {})
-  end
 
   def build_var(name)
-    department.lead_variables.create(account: account, name: name, var_type: 'texto')
+    agent.lead_variables.create(account: account, name: name, var_type: 'texto')
   end
 
   # Regra de FORMATO, agnóstica de idioma (não vocabulário): transliteração ASCII + [a-z0-9_], começa por letra.
@@ -41,12 +38,14 @@ RSpec.describe Ai::LeadVariable do
       expect(build_var('2via')).not_to be_persisted
     end
 
-    it 'unicidade por DEPARTMENT (case-insensitive), não global' do
+    it 'unicidade por AGENTE (case-insensitive), não global' do
       build_var('documento_cpf')
       expect(build_var('Documento_CPF')).not_to be_persisted # normaliza p/ documento_cpf -> colide
 
-      dep2 = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Dep2', status: 'active', behavior: {})
-      expect(dep2.lead_variables.create(account: account, name: 'documento_cpf', var_type: 'texto')).to be_persisted
+      profile2 = Ai::OperationProfile.create!(account_id: account.id, name: 'p2', supervisor_provider: 'openai',
+                                              supervisor_model: 'gpt-4.1-mini')
+      agent2 = Ai::Agent.create!(account: account, name: 'Bot2', status: 'active', ai_operation_profile_id: profile2.id)
+      expect(agent2.lead_variables.create(account: account, name: 'documento_cpf', var_type: 'texto')).to be_persisted
     end
 
     it 'tamanho máximo (60)' do
@@ -56,7 +55,7 @@ RSpec.describe Ai::LeadVariable do
 
   describe 'NÃO renomeia as existentes (só on: :create)' do
     it 'editar uma variável fora do padrão NÃO a normaliza (preserva a chave do dado já coletado)' do
-      legacy = department.lead_variables.create!(account: account, name: 'legado')
+      legacy = agent.lead_variables.create!(account: account, name: 'legado')
       # rubocop:disable Rails/SkipsModelValidations -- simula dado LEGADO fora do padrão (bypass proposital)
       legacy.update_column(:name, 'número_conta_ou_cpf_cnpj')
       # rubocop:enable Rails/SkipsModelValidations

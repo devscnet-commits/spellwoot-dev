@@ -15,12 +15,11 @@ RSpec.describe 'Ai rejection feedback (4)' do # rubocop:disable RSpec/DescribeCl
   end
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
   let(:dept) do
-    d = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Cadastro', status: 'active', behavior: {})
-    d.create_playbook!(active: true, steps: [
-                         { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'type' => 'cpf', 'required' => true } },
-                         { 'name' => 'E-mail', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => true } }
-                       ])
-    d
+    agent.create_playbook!(active: true, steps: [
+                             { 'name' => 'CPF', 'collect' => { 'attribute' => 'documento_cpf', 'type' => 'cpf', 'required' => true } },
+                             { 'name' => 'E-mail', 'collect' => { 'attribute' => 'email_cliente', 'type' => 'email', 'required' => true } }
+                           ])
+    agent
   end
   let(:cpf_step) { dept.playbook.steps[0] }
   let(:manager) { Ai::StateManager.new(conversation: conversation, agent: agent) }

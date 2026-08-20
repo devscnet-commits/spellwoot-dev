@@ -21,8 +21,7 @@ RSpec.describe 'Ai::Gateway enfileira resumo de handoff', type: :model do
     # update_memory (pós-dispatch) chama o worker Summary via call_model — neutraliza para não fazer
     # chamada real (o foco aqui é só o enqueue do resumo de handoff, não a memória).
     allow(Ai::ModelRouter).to receive(:call_model).and_return({ text: '', tokens_in: 0, tokens_out: 0, status: 'recorded' })
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
+    agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
     Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
   end
 

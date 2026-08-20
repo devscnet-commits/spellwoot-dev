@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 # Teto de segurança por etapa (ai_step_turns) no caminho do orquestrador Python (motor ÚNICO desde a
-# eliminação do legado — não há mais flag por department): o Gateway é o guarda-fio da contagem
+# eliminação do legado — não há mais flag por agente): o Gateway é o guarda-fio da contagem
 # (Rails), não a IA. Isola o Ai::PythonOrchestratorClient (stub direto do método de classe) para
 # testar SÓ o comportamento do Gateway ao redor dele — a montagem do payload em si já é coberta por
 # spec/services/ai/python_orchestrator_client_spec.rb.
@@ -12,19 +12,12 @@ RSpec.describe Ai::Gateway do
     Ai::OperationProfile.create!(account_id: account.id, name: 'padrão', supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
   end
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
-  # let! — precisa existir no banco ANTES do Ai::DepartmentResolver rodar dentro de #deliver; um
-  # `let` preguiçoso nunca referenciado explicitamente nos testes nunca seria criado (o Gateway
-  # cairia direto em 'no_department', sem nunca chegar na chamada ao Python).
-  let!(:department) do
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento', status: 'active',
-                           behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' },
-                           transfer_rules: transfer_rules)
-  end
   let(:transfer_rules) { {} }
   let(:binding) { Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true) }
 
   before do
     account.enable_features!('ai_core')
+    agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' }, transfer_rules: transfer_rules)
     allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
     allow(Ai::Workers::MediaProcessor).to receive(:process).and_return(nil)
     allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: 'Olá!', conversation_id: 'conv_1')
@@ -96,9 +89,9 @@ RSpec.describe Ai::Gateway do
     end
 
     it 'limite 0 desliga o teto (nunca força)' do
-      # department.update! (não mutar o hash do `let` em memória) — o Gateway lê o department via uma
-      # query NOVA (Ai::DepartmentResolver), então só uma escrita real no banco é visível pra ele.
-      department.update!(transfer_rules: { 'stuck_handoff_turns' => 0 })
+      # agent.update! (não mutar o hash do `let` em memória) — o Gateway lê o agente via uma
+      # query NOVA, então só uma escrita real no banco é visível pra ele.
+      agent.update!(transfer_rules: { 'stuck_handoff_turns' => 0 })
       convo = create(:conversation, account: account, inbox: inbox, status: 'open',
                                     additional_attributes: { 'ai_step_turns' => 999 })
       message = create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming', content: 'oi')
@@ -147,7 +140,7 @@ RSpec.describe Ai::Gateway do
     end
 
     it 'min_confidence 0 (desligado, default): nunca transfere por confiança, mesmo com confidence baixa' do
-      department.update!(transfer_rules: { 'min_confidence' => 0 })
+      agent.update!(transfer_rules: { 'min_confidence' => 0 })
       allow(Ai::PythonOrchestratorClient).to receive(:process_message)
         .and_return(reply: 'Olá!', conversation_id: 'conv_1', confidence: 0.01, transferred: false)
 
@@ -166,12 +159,12 @@ RSpec.describe Ai::Gateway do
     end
   end
 
-  # Python é o motor ÚNICO — não existe mais department "sem python_orchestrator" nem checagem de
-  # flag (truthy/string) pra testar; skip_vision é incondicionalmente true pra QUALQUER department,
+  # Python é o motor ÚNICO — não existe mais agente "sem python_orchestrator" nem checagem de
+  # flag (truthy/string) pra testar; skip_vision é incondicionalmente true pra QUALQUER agente,
   # já que a OpenAI sempre recebe os pixels crus no mesmo turno (ver Ai::PythonOrchestratorClient).
   # Substituem os 3 testes antigos (ligado/string-truthy/sem-flag), que testavam um branch que não
   # existe mais desde a eliminação do motor legado.
-  it 'skip_vision é sempre true no MediaProcessor, pra qualquer department' do
+  it 'skip_vision é sempre true no MediaProcessor, pra qualquer agente' do
     deliver
 
     expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, skip_vision: true)

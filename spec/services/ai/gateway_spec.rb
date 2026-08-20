@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 # Golden master do Ai::Gateway com Python como motor ÚNICO — trava o COMPORTAMENTO OBSERVÁVEL dos
-# GATES compartilhados (billing/breaker/department/override) que rodam ANTES/DEPOIS da chamada ao
+# GATES compartilhados (billing/breaker) que rodam ANTES/DEPOIS da chamada ao
 # Python, e o happy-path básico do próprio branch (reply, shadow, erro de provider). O antigo
 # dispatch interno da IA (handoff/close/tools/loop/slot via decision_kind) saiu do Gateway junto com
 # a eliminação do motor legado — o Python decide e chama os webhooks
@@ -32,11 +32,9 @@ RSpec.describe Ai::Gateway do
 
   # --- Helpers (sem factory nova; cria direto como o resto do repo) --------------------
 
-  # Um único department ativo → DepartmentResolver resolve por 'single' SEM chamar o classificador.
+  # O agente já vem resolvido diretamente pelo Ai::AgentInbox (binding) — não há mais classificação.
   def create_department(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' }, transfer_rules: {}, close_rules: {})
-    Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Atendimento',
-                           status: 'active', behavior: behavior, transfer_rules: transfer_rules,
-                           close_rules: close_rules)
+    agent.update!(behavior: behavior, transfer_rules: transfer_rules, close_rules: close_rules)
   end
 
   def create_binding(mode:)
@@ -80,7 +78,7 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Oi, tudo bem?', binding: binding, mode: 'shadow')
 
-      expect(event_types(convo)).to eq(%w[message.received department.resolved decision.made reply.intended])
+      expect(event_types(convo)).to eq(%w[message.received decision.made reply.intended])
 
       # Shadow não envia nada ao cliente.
       expect(convo.messages.outgoing.count).to eq(0)
@@ -97,7 +95,7 @@ RSpec.describe Ai::Gateway do
 
       convo = deliver('Preciso de ajuda', binding: binding, mode: 'live')
 
-      expect(event_types(convo)).to eq(%w[message.received department.resolved decision.made reply.sent])
+      expect(event_types(convo)).to eq(%w[message.received decision.made reply.sent])
 
       expect(convo.messages.outgoing.last&.content).to eq('Claro, posso ajudar com isso!')
       expect(run_for(convo).status).to eq('recorded')
@@ -115,7 +113,7 @@ RSpec.describe Ai::Gateway do
       convo = deliver('Preciso de ajuda', binding: binding, mode: 'live')
 
       expect(event_types(convo)).to eq(%w[
-                                         message.received department.resolved
+                                         message.received
                                          handoff.executed handoff.assign_failed handoff.credit_exhausted
                                        ])
       # A IA não respondeu ao cliente (a nota interna é privada); o Python nem foi chamado.
@@ -166,7 +164,7 @@ RSpec.describe Ai::Gateway do
       convo = deliver('Preciso de ajuda', binding: binding, mode: 'live')
 
       expect(event_types(convo)).to eq(%w[
-                                         message.received department.resolved
+                                         message.received
                                          handoff.executed handoff.assign_failed handoff.budget_exceeded
                                        ])
       expect(convo.messages.outgoing.where(private: false).count).to eq(0)
@@ -211,66 +209,16 @@ RSpec.describe Ai::Gateway do
     end
   end
 
-  # === Cenário 7: NO_DEPARTMENT — encerra cedo (agente sem department ativo) ==========
-  context 'sem department resolvido' do
-    it 'finalizes early as no_department' do
-      binding = create_binding(mode: 'live')
-      stub_python(reply: 'nunca chega aqui')
-
-      convo = deliver('Olá', binding: binding, mode: 'live')
-
-      expect(event_types(convo)).to eq(%w[message.received department.resolved])
-
-      expect(run_for(convo).status).to eq('no_department')
-      expect(convo.messages.outgoing.count).to eq(0)
-      expect(Ai::PythonOrchestratorClient).not_to have_received(:process_message)
-    end
-  end
-
-  # === Cenário 9: OVERRIDE de department por conversa (Fase 2) =========================
-  context 'override de department por conversa (Fase 2)' do
-    def deliver_with_override(content, override_id, binding:)
-      convo = create(:conversation, account: account, inbox: inbox, status: 'open',
-                                    additional_attributes: { 'ai_department_override' => override_id })
-      message = create(:message, account: account, inbox: inbox, conversation: convo,
-                                 message_type: 'incoming', content: content)
-      described_class.new(message: message, agent_inbox: binding, mode: 'live').run
-      convo.reload
-    end
-
-    it 'honors a valid override (department.resolved method = override) and skips the classifier' do
-      create_department
-      dept_b = Ai::Department.create!(account: account, ai_agent_id: agent.id, name: 'Vendas', status: 'active',
-                                      behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
-      binding = create_binding(mode: 'live')
-      stub_python(reply: 'ok')
-      allow(Ai::DepartmentResolver).to receive(:classify).and_return(nil) # se rodasse, não seria 'override'
-
-      convo = deliver_with_override('oi', dept_b.id, binding: binding)
-
-      event = Ai::Event.find_by(conversation_id: convo.id, event_type: 'department.resolved')
-      expect(event.payload['method']).to eq('override')
-      expect(event.payload['department_id']).to eq(dept_b.id)
-      expect(Ai::DepartmentResolver).not_to have_received(:classify)
-    end
-
-    it 'tags department-override-indisponivel and proceeds normally when the override is unavailable' do
-      create_department # 1 department ativo -> override para outro id cai em 'single'
-      binding = create_binding(mode: 'live')
-      stub_python(reply: 'ok')
-
-      convo = deliver_with_override('oi', 999_999, binding: binding)
-
-      expect(convo.label_list).to include('department-override-indisponivel')
-      expect(run_for(convo).status).to eq('recorded')
-      expect(convo.messages.outgoing.count).to eq(1)
-    end
-  end
+  # Cenários 7 (NO_DEPARTMENT) e 9 (override de department por conversa) foram REMOVIDOS na fusão
+  # Departamento -> Agente (19/08): o agente vem sempre resolvido direto do Ai::AgentInbox (binding) —
+  # não há mais classificação nem múltiplos departamentos por agente pra escolher/sobrepor entre eles
+  # (Ai::DepartmentResolver, ai_department_override e o evento department.resolved foram removidos do
+  # código; confirmado por auditoria que nunca havia mais de 1 departamento real em uso por agente).
 
   # === Fase 1: erro de PROVEDOR (status error) -> handoff em vez de silêncio ==========
   # Porta o force_provider_handoff pro branch Python (antes só existia no caminho decide() legado) —
   # sem isto, Ai::PythonOrchestratorClient#perform já devolve reply: nil em qualquer erro HTTP/
-  # timeout/exceção e action_dispatcher.reply(department, nil) é um no-op silencioso, deixando o
+  # timeout/exceção e action_dispatcher.reply(nil) é um no-op silencioso, deixando o
   # cliente sem resposta E sem handoff.
   context 'provider indisponível (status error): transfere com nota privada, sem mensagem ao cliente' do
     it 'erro de provedor -> nota privada + transferência (reason provider_unavailable), NÃO cai no silêncio' do
