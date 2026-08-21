@@ -181,9 +181,12 @@ onMounted(hydrate);
 </script>
 
 <template>
-  <div
-    class="border border-n-weak rounded-xl p-5 flex flex-col gap-6 bg-n-solid-2"
-  >
+  <!-- Achado ao vivo (21/08): este root TINHA sua própria border/rounded-xl/bg — quando aninhado
+       dentro do card de uma linha (ver AiProfiles.vue), as duas bordas/arredondamentos coexistiam
+       (Vue só ANEXA a class recebida, não substitui), então a "sanfona" continuava parecendo uma
+       caixa separada e solta, não uma extensão do card clicado. Sem estilo de card aqui — quem
+       fornece a moldura agora é sempre quem usa este componente (mesmo padrão de AiStepForm.vue). -->
+  <div class="p-5 flex flex-col gap-6">
     <!-- Nível de atendimento: o que o cliente escolhe (resultado, não motor) -->
     <section class="flex flex-col gap-2">
       <div class="flex flex-col gap-0.5">

@@ -185,19 +185,23 @@ onMounted(fetchProfiles);
             <AiProfileForm
               v-if="editingId === profile.id"
               :profile="profile"
-              class="border-t border-n-weak rounded-none"
+              class="border-t border-n-weak bg-n-solid-2"
               @save="save"
               @cancel="editingId = null"
             />
           </div>
         </div>
 
-        <AiProfileForm
+        <div
           v-if="editingId === 'new'"
-          :profile="null"
-          @save="save"
-          @cancel="editingId = null"
-        />
+          class="rounded-xl border border-n-weak bg-n-solid-2 overflow-hidden"
+        >
+          <AiProfileForm
+            :profile="null"
+            @save="save"
+            @cancel="editingId = null"
+          />
+        </div>
 
         <ConfirmDeleteModal
           v-if="deleteTarget"
