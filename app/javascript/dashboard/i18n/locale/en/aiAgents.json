@@ -617,7 +617,7 @@
       "INTEGRATION_CONFIGURE": "Configurar em Configurações → Integrações",
       "INPUT_SCHEMA": "Schema de entrada (JSON)",
       "ARGS_LABEL": "Argumentos da ferramenta",
-      "ARGS_HINT": "Dados que a IA preenche antes de chamar. Construtor visual: Nome, Tipo (Texto, Número, Sim/Não, Data, Lista) e Descrição. Todo argumento adicionado é obrigatório — só adicione o que a IA realmente precisa informar.",
+      "ARGS_HINT": "Dados que a IA preenche antes de chamar.",
       "ARGS_EMPTY": "Nenhum argumento. A ferramenta não recebe dados de entrada.",
       "ARGS_ADVANCED": "JSON avançado",
       "ARGS_BUILDER": "Voltar ao construtor",
