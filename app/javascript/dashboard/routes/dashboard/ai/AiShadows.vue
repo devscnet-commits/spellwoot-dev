@@ -273,15 +273,15 @@ onMounted(() => {
             <span class="text-heading-3 text-n-slate-12">
               {{ $t('AI_SHADOWS.FORM.INSTRUCTIONS') }}
             </span>
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_SHADOWS.FORM.SUGGESTIONS_HINT') }}
+            </span>
             <textarea
               v-model="form.instructions"
               rows="6"
               :placeholder="$t('AI_SHADOWS.FORM.INSTRUCTIONS_PLACEHOLDER')"
               class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y leading-relaxed text-sm text-n-slate-12"
             />
-            <span class="text-xs text-n-slate-11">
-              {{ $t('AI_SHADOWS.FORM.SUGGESTIONS_HINT') }}
-            </span>
             <div class="flex flex-wrap gap-2 pt-1">
               <button
                 v-for="key in SUGGESTION_KEYS"

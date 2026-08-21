@@ -153,7 +153,7 @@
       "SCOPE": "O que observar",
       "OBSERVE_AI": "Atendimentos da IA",
       "OBSERVE_HUMAN": "Atendimentos humanos",
-      "SUGGESTIONS_HINT": "Clique nas sugestões abaixo para adicioná-las às instruções de avaliação.",
+      "SUGGESTIONS_HINT": "Clique nas sugestões abaixo ou digite direto no campo, para adicionar as instruções de avaliação.",
       "STATUS": "Status",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar"

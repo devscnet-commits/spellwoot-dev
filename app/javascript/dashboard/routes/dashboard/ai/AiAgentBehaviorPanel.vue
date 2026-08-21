@@ -849,7 +849,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-base font-semibold text-n-slate-12">
+            <h2 class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.GROUPING_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -869,7 +869,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-base font-semibold text-n-slate-12">
+            <h2 class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.MAX_REPLIES_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -889,7 +889,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-base font-semibold text-n-slate-12">
+            <h2 class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -932,7 +932,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-base font-semibold text-n-slate-12">
+            <h2 class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -1032,7 +1032,7 @@ onMounted(async () => {
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
                 {{ $t('AI_DEPARTMENTS.FOLLOWUP.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -1083,7 +1083,9 @@ onMounted(async () => {
                 <div
                   class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
                 >
-                  <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT') }}</span>
+                  <span class="font-medium">{{
+                    $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT')
+                  }}</span>
                   <Select
                     v-model="bhv.context"
                     :options="contextOptionsFor(bhv)"
@@ -1095,7 +1097,7 @@ onMounted(async () => {
                   v-if="bhv.context === 'custom'"
                   class="flex flex-col gap-2"
                 >
-                  <span class="text-sm text-n-slate-12">
+                  <span class="text-sm font-medium text-n-slate-12">
                     {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOWS') }}
                   </span>
                   <div
@@ -1199,14 +1201,13 @@ onMounted(async () => {
                 <div
                   class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
                 >
-                  <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE') }}</span>
+                  <span class="font-medium">{{
+                    $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE')
+                  }}</span>
                   <Select
                     v-model="bhv.no_response_action"
                     :options="fuNoResponseOptions"
                   />
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE_HINT') }}
-                  </span>
                 </div>
               </div>
             </div>
@@ -1230,7 +1231,7 @@ onMounted(async () => {
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
+              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
                 {{ $t('AI_DEPARTMENTS.FINALIZATION.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -1254,14 +1255,14 @@ onMounted(async () => {
                  visual, perto da mensagem de encerramento que é enviada quando o gatilho dispara. -->
             <label class="flex flex-col gap-1 text-sm text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
+              <span class="text-xs font-normal text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
+              </span>
               <textarea
                 v-model="form.close_when_steps"
                 rows="4"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem] leading-relaxed"
               />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
-              </span>
             </label>
 
             <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">

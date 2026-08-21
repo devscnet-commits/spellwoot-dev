@@ -107,19 +107,19 @@ onMounted(() => {
           </div>
           <div class="flex items-end gap-3">
             <div class="flex flex-col gap-1.5">
-              <span class="text-xs text-n-slate-11">{{
+              <span class="text-sm font-medium text-n-slate-12">{{
                 $t('AI_COSTS.AGENT')
               }}</span>
               <Select v-model="agentId" :options="agentOptions" />
             </div>
             <div class="flex flex-col gap-1.5">
-              <span class="text-xs text-n-slate-11">{{
+              <span class="text-sm font-medium text-n-slate-12">{{
                 $t('AI_COSTS.PERIOD')
               }}</span>
               <Select v-model="period" :options="periodOptions" />
             </div>
             <div v-if="period === 'custom'" class="flex flex-col gap-1.5">
-              <span class="text-xs text-n-slate-11">{{
+              <span class="text-sm font-medium text-n-slate-12">{{
                 $t('AI_COSTS.FROM')
               }}</span>
               <input
@@ -130,7 +130,7 @@ onMounted(() => {
               />
             </div>
             <div v-if="period === 'custom'" class="flex flex-col gap-1.5">
-              <span class="text-xs text-n-slate-11">{{
+              <span class="text-sm font-medium text-n-slate-12">{{
                 $t('AI_COSTS.TO')
               }}</span>
               <input
@@ -154,7 +154,7 @@ onMounted(() => {
         <!-- Headline numbers -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div class="border border-n-weak rounded-xl p-4">
-            <p class="text-xs text-n-slate-11 mb-1">
+            <p class="text-xs font-medium text-n-slate-11 mb-1">
               {{ $t('AI_COSTS.TOTAL_COST') }}
             </p>
             <p class="text-lg font-semibold text-n-slate-12 mb-1">
@@ -170,7 +170,7 @@ onMounted(() => {
             </p>
           </div>
           <div class="border border-n-weak rounded-xl p-4">
-            <p class="text-xs text-n-slate-11 mb-1">
+            <p class="text-xs font-medium text-n-slate-11 mb-1">
               {{ $t('AI_COSTS.TOTAL_TOKENS') }}
             </p>
             <p class="text-lg font-semibold text-n-slate-12 mb-1">
@@ -186,7 +186,7 @@ onMounted(() => {
             </p>
           </div>
           <div class="border border-n-weak rounded-xl p-4">
-            <p class="text-xs text-n-slate-11 mb-1">
+            <p class="text-xs font-medium text-n-slate-11 mb-1">
               {{ $t('AI_COSTS.TOTAL_RUNS') }}
             </p>
             <p class="text-lg font-semibold text-n-slate-12 mb-0">
@@ -194,7 +194,7 @@ onMounted(() => {
             </p>
           </div>
           <div class="border border-n-weak rounded-xl p-4">
-            <p class="text-xs text-n-slate-11 mb-1">
+            <p class="text-xs font-medium text-n-slate-11 mb-1">
               {{ $t('AI_COSTS.TOTAL_ERRORS') }}
             </p>
             <p
@@ -218,7 +218,7 @@ onMounted(() => {
         <template v-else>
           <!-- By agent -->
           <div class="flex flex-col gap-2">
-            <h2 class="text-sm font-semibold text-n-slate-12">
+            <h2 class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_COSTS.BY_AGENT') }}
             </h2>
             <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
@@ -248,7 +248,7 @@ onMounted(() => {
 
           <!-- Errors by type -->
           <div v-if="data.by_error.length" class="flex flex-col gap-2">
-            <h2 class="text-sm font-semibold text-n-slate-12">
+            <h2 class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_COSTS.BY_ERROR') }}
             </h2>
             <div class="flex flex-wrap gap-2">
@@ -267,7 +267,7 @@ onMounted(() => {
 
           <!-- By model -->
           <div class="flex flex-col gap-2">
-            <h2 class="text-sm font-semibold text-n-slate-12">
+            <h2 class="text-sm font-medium text-n-slate-12">
               {{ $t('AI_COSTS.BY_MODEL') }}
             </h2>
             <div class="border border-n-weak rounded-xl overflow-x-auto">

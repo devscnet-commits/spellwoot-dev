@@ -400,21 +400,23 @@ onMounted(() => {
         <div
           class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
         >
-          <span>{{ $t('AI_TOOLS.FORM.TYPE') }}</span>
+          <span class="font-medium">{{ $t('AI_TOOLS.FORM.TYPE') }}</span>
           <Select v-model="form.implementation_type" :options="typeOptions" />
         </div>
         <div
           v-if="isCapability"
           class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
         >
-          <span>{{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}</span>
+          <span class="font-medium">{{
+            $t('AI_TOOLS.FORM.CAPABILITY_KEY')
+          }}</span>
           <Select v-model="form.capability_key" :options="capabilityOptions" />
         </div>
         <div
           v-else-if="isIntegration"
           class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
         >
-          <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
+          <span class="font-medium">{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
           <Select
             v-if="hasIntegrations"
             v-model="form.integration_link_id"
@@ -442,7 +444,9 @@ onMounted(() => {
         >
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label class="flex flex-col gap-1 sm:col-span-2">
-              <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_URL') }}</span>
+              <span class="font-medium">{{
+                $t('AI_TOOLS.FORM.WEBHOOK_URL')
+              }}</span>
               <input
                 v-model="form.webhook_url"
                 type="text"
@@ -453,12 +457,16 @@ onMounted(() => {
             <div
               class="flex flex-col gap-1 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
             >
-              <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_METHOD') }}</span>
+              <span class="font-medium">{{
+                $t('AI_TOOLS.FORM.WEBHOOK_METHOD')
+              }}</span>
               <Select v-model="form.webhook_method" :options="methodOptions" />
             </div>
           </div>
           <label class="flex flex-col gap-1">
-            <span>{{ $t('AI_TOOLS.FORM.WEBHOOK_HEADERS') }}</span>
+            <span class="font-medium">{{
+              $t('AI_TOOLS.FORM.WEBHOOK_HEADERS')
+            }}</span>
             <textarea
               v-model="form.webhook_headers"
               rows="2"
@@ -483,12 +491,12 @@ onMounted(() => {
       <!-- Argumentos da ação: construtor visual + JSON avançado opcional -->
       <div class="flex flex-col gap-2">
         <div class="flex items-center justify-between gap-3">
-          <span class="text-sm text-n-slate-12">
+          <span class="text-sm font-medium text-n-slate-12">
             {{ $t('AI_TOOLS.FORM.ARGS_LABEL') }}
           </span>
           <button
             type="button"
-            class="text-xs text-n-slate-11 hover:text-n-brand"
+            class="text-xs font-medium text-n-slate-11 hover:text-n-brand"
             @click="toggleAdvanced"
           >
             {{

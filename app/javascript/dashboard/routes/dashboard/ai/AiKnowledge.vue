@@ -515,7 +515,7 @@ onMounted(() => {
       >
         <!-- O que você quer ensinar? — seleciona o tipo que vai importar/adicionar -->
         <div class="flex flex-col gap-2">
-          <span class="text-xs font-medium text-n-slate-11">
+          <span class="text-sm font-medium text-n-slate-12">
             {{ $t('AI_KNOWLEDGE.SOURCES.LABEL') }}
           </span>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -544,7 +544,7 @@ onMounted(() => {
 
         <!-- Escopo: para qual departamento este import vai (ou compartilhado) -->
         <div class="flex flex-col gap-1.5 max-w-sm">
-          <span class="text-xs font-medium text-n-slate-11">
+          <span class="text-sm font-medium text-n-slate-12">
             {{ $t('AI_KNOWLEDGE.FORM.DEPARTMENT') }}
           </span>
           <Select v-model="importAgentId" :options="importAgentOptions" />

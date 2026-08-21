@@ -125,7 +125,7 @@
     },
     "HANDOFF": {
       "TITLE": "Para onde o agente transfere",
-      "DESCRIPTION": "Para quais setores humanos e outras IAs este agente pode transferir uma conversa.",
+      "DESCRIPTION": "Para quais setores humanos e IAs este agente pode transferir uma conversa.",
       "ALLOWLIST": "Transferir para times (humanos)",
       "ALLOWLIST_HINT": "A IA só transfere para os marcados. Sem marcação, vai para um humano.",
       "NO_TEAMS": "Nenhum outro time disponível nesta conta.",
@@ -134,7 +134,7 @@
       "NO_IA": "Nenhuma outra IA ativa nesta conta.",
       "FALLBACK_LABEL": "Quando a IA não conseguir atender, enviar para",
       "FALLBACK_DEFAULT": "Padrão (primeiro time da lista acima)",
-      "FALLBACK_HINT": "Quando ela desiste (travou, sem tentativas, confiança baixa ou provedor fora) e o cliente não pediu setor. Só times marcados acima.",
+      "FALLBACK_HINT": "Usado quando a IA não decide o setor certo: ela desistiu (travou, sem tentativas, confiança baixa ou provedor fora) ou pediu um setor que não existe na lista. Só é aceito se o time estiver marcado acima.",
       "FALLBACK_EMPTY": "Marque ao menos um time acima para escolher o destino padrão."
     },
     "VERSIONS": {
@@ -166,7 +166,7 @@
     },
     "INBOXES": {
       "TITLE": "Quando este agente atende",
-      "DESCRIPTION": "Marque as caixas que este agente atende. Quando atende, ele responde ao cliente.",
+      "DESCRIPTION": "Marque as caixas que este agente atende.",
       "NONE": "Não atende",
       "SHADOW": "Análise (observa)",
       "LIVE": "Live (responde)",
@@ -181,7 +181,7 @@
     "TEST": {
       "TITLE": "Testar a IA",
       "LAB_TITLE": "Laboratório de teste",
-      "LAB_SUBTITLE": "Converse como se fosse o cliente — roda o mesmo motor real (etapas, ferramentas e memória), sem enviar nada de verdade.",
+      "LAB_SUBTITLE": "Ambiente de simulação para testar seu agente de IA configurado.",
       "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
       "SEND": "Enviar",
       "RESET": "Reiniciar teste",
@@ -205,7 +205,7 @@
       "BASE_PROMPT": "Prompt base da empresa",
       "BASE_PROMPT_HINT": "Contexto geral do assistente: quem ele é e sobre o que atende. Vale para todo o atendimento.",
       "GUARDRAILS": "Regras de segurança (o que nunca fazer)",
-      "GUARDRAILS_HINT": "Limites que o assistente nunca deve violar (ex.: não inventar preços/prazos; transferir para um humano quando não souber).",
+      "GUARDRAILS_HINT": "Limites que o assistente nunca deve violar.",
       "PROFILE": "Perfil operacional",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar",
@@ -292,12 +292,10 @@
       "STEP_ON_COMPLETE_TARGET_PLACEHOLDER": "Selecione uma IA",
       "STEP_ON_COMPLETE_TARGET_EMPTY": "Nenhuma IA em \"Transferir para IAs\". Configure a lista do agente para escolher aqui.",
       "STEP_NUMBER": "Etapa {number}",
-      "STEP_INSTRUCTION_TITLE": "O que a IA deve fazer nesta etapa",
       "STEP_OBJECTIVE_LABEL": "Objetivo",
       "STEP_OBJECTIVE_MICROHINT": "o que a IA precisa alcançar aqui",
       "STEP_OBJECTIVE_PLACEHOLDER": "Ex.: Obter a cidade e o tipo de cliente para verificar cobertura.",
       "STEP_RULES_LABEL": "Regras de comportamento",
-      "STEP_RULES_MICROHINT": "uma regra por linha",
       "STEP_RULES_PLACEHOLDER": "Ex.: Se o cliente já der a cidade espontaneamente, não pergunte de novo.\nAceite qualquer forma de dizer \"residencial\" (ex.: \"é pra minha casa\").",
       "SLOT_KEY_PANEL": "{key} · aparece no painel",
       "SLOT_KEY_INTERNAL": "{key} · interna (memória da IA)",
@@ -396,13 +394,13 @@
       "STEP_REMOVE": "Remover etapa",
       "STEP_DRAG": "Arraste para reordenar",
       "TRANSFER_TITLE": "Quando transferir para um humano",
-      "TRANSFER_INTRO": "Esses campos ajudam a IA a decidir quando a conversa precisa de um humano. O texto abaixo orienta a IA, mas não garante a ação — o modelo pode não seguir em todos os casos. A confiança mínima é um sinal mais direto: dispara quando a própria IA está insegura da resposta.",
+      "TRANSFER_INTRO": "Esses campos ajudam a IA a decidir quando a conversa precisa de um humano. A confiança mínima é um sinal mais direto: dispara quando a própria IA está insegura da resposta.",
       "TRANSFER_WHEN": "Transferir para humano quando (uma por linha)",
       "CLOSE_WHEN": "Encerrar quando (uma por linha)",
-      "CLOSE_WHEN_HINT": "Situações em que a IA deve encerrar a conversa. Isso orienta a IA, mas não garante — o modelo pode não encerrar em todos os casos. Quando encerra, a mensagem de encerramento acima é enviada.",
+      "CLOSE_WHEN_HINT": "Situações em que a IA deve encerrar a conversa. Quando encerra, a mensagem de encerramento acima é enviada.",
       "TRANSFER_MIN_CONFIDENCE": "Transferir se a IA estiver insegura",
       "STUCK_HANDOFF_TURNS": "Transferir para humano se travar em uma etapa por (X) mensagens",
-      "STUCK_HANDOFF_TURNS_HINT": "Teto de segurança: se a etapa não concluir após X mensagens do cliente (recusas, perguntas ou tentativas fora do formato), a IA avisa e transfere para um humano — em vez de ficar presa. Padrão 10; 0 = desligado.",
+      "STUCK_HANDOFF_TURNS_HINT": "Se a etapa não concluir após X mensagens do cliente, a IA transfere para um humano. Padrão 10; 0 = desligado.",
       "GREETING": "Mensagem de saudação",
       "SAVE": "Salvar",
       "ALL_SAVED": "Tudo salvo.",
@@ -468,13 +466,13 @@
       "FOLLOWUP_DELAY": "Aguardar (minutos)",
       "FOLLOWUP_MESSAGE": "Mensagem de follow-up",
       "GROUPING_TITLE": "Delay de agrupamento de mensagem",
-      "GROUPING_HINT": "Quando o cliente envia várias mensagens seguidas, a IA aguarda este tempo de silêncio para juntar tudo e responder uma vez só (em vez de responder cada fragmento). Útil sobretudo no horário comercial.",
+      "GROUPING_HINT": "Quando o cliente envia várias mensagens seguidas, a IA aguarda este tempo de silêncio para juntar tudo e responder uma vez só.",
       "GROUPING_DELAY": "Tempo de espera para agrupar (segundos)",
       "MAX_REPLIES_TITLE": "Número máximo de respostas",
-      "MAX_REPLIES_HINT": "Quantas respostas a IA pode enviar nesta conversa. Ao atingir o limite, a conversa é transferida automaticamente para a equipe humana configurada. Deixe 0 para não limitar.",
+      "MAX_REPLIES_HINT": "Quantas respostas a IA pode enviar nesta conversa. Ao atingir o limite, a conversa é transferida automaticamente para um humano. Deixe 0 para não limitar.",
       "MAX_REPLIES_FIELD": "Máximo de respostas (interações)",
       "INPUT_LIMIT_TITLE": "Tamanho das mensagens",
-      "INPUT_LIMIT_HINT": "Limita quantos caracteres da mensagem do cliente a IA lê por interação, para conter abuso e consumo de tokens. Não afeta o tamanho da resposta da IA. Deixe 0 para não limitar.",
+      "INPUT_LIMIT_HINT": "Limita quantos caracteres da mensagem do cliente a IA lê por interação. Deixe 0 para não limitar.",
       "INPUT_LIMIT_FIELD": "Máximo de caracteres na mensagem do cliente",
       "INPUT_LIMIT_ACTION": "Se a mensagem passar do limite",
       "INPUT_LIMIT_ACTION_TRUNCATE": "Cortar e seguir (lê só o início)",
@@ -482,7 +480,7 @@
       "INPUT_LIMIT_MESSAGE": "Mensagem ao pedir para resumir",
       "INPUT_LIMIT_MESSAGE_PLACEHOLDER": "Ex.: Sua mensagem ficou longa demais. Pode resumir em poucas linhas, por favor? 🙂",
       "ATTACHMENT_LIMIT_TITLE": "Tamanho de anexos (documento e áudio)",
-      "ATTACHMENT_LIMIT_HINT": "Limita o tamanho de cada tipo de anexo, separadamente. Anexo acima do limite não é processado (transcrito/lido) — a IA nem chega a ser chamada, e o cliente recebe a mensagem configurada pedindo um arquivo menor. Deixe 0 para não limitar aquele tipo. Imagem não tem limite aqui — a IA lê a imagem diretamente, sem processamento nosso para limitar.",
+      "ATTACHMENT_LIMIT_HINT": "Limita o tamanho de cada tipo de anexo. Deixe 0 para não limitar aquele tipo.",
       "ATTACHMENT_LIMIT_DOCUMENT_FIELD": "Máximo de caracteres no documento (PDF/docx)",
       "ATTACHMENT_LIMIT_DOCUMENT_MESSAGE": "Mensagem quando o documento passa do limite",
       "ATTACHMENT_LIMIT_AUDIO_FIELD": "Máximo de segundos de áudio",
@@ -498,11 +496,11 @@
     },
     "FOLLOWUP": {
       "TITLE": "Retomar contato quando não há resposta",
-      "HINT": "Após a IA responder e o cliente não retornar, mensagens de retomada são enviadas automaticamente. Configure uma ou mais regras por horário com tentativas, intervalos e texto. Sem regras, o follow-up está desligado.",
+      "HINT": "Após a IA responder e o cliente não retornar, mensagens de retomada são enviadas automaticamente. Configure uma ou mais regras por horário com tentativas, intervalos e texto.",
       "INSTRUCTIONS": "Como a IA deve chamar o cliente de volta",
       "INSTRUCTIONS_PLACEHOLDER": "Como a IA deve abordar a retomada (tom, objetivo). Deixe em branco para usar só as mensagens das tentativas.",
       "BEHAVIORS_TITLE": "Regras por horário",
-      "BEHAVIORS_HINT": "Defina regras diferentes para dentro e fora do horário de atendimento. Se os horários coincidirem, a regra 'Personalizado' vale primeiro.",
+      "BEHAVIORS_HINT": "Defina regras diferentes para dentro e fora do horário de atendimento.",
       "BEHAVIORS_EMPTY": "Nenhum comportamento. O follow-up está desligado.",
       "BEHAVIOR_ADD": "Adicionar comportamento",
       "BEHAVIOR_REMOVE": "Remover comportamento",
@@ -512,7 +510,6 @@
       "CTX_CUSTOM": "Personalizado",
       "WINDOWS": "Janelas de horário",
       "NO_RESPONSE": "Se o cliente não responder",
-      "NO_RESPONSE_HINT": "Após esgotar as tentativas e passar o tempo de inatividade (definido na Finalização). Se o cliente responder, a IA volta ao fluxo principal do prompt.",
       "NR_ASSIGN": "Passar para atendente humano",
       "NR_FINALIZE": "Finalizar conversa",
       "NR_DISCARD": "Fechar em silêncio",
@@ -557,13 +554,13 @@
     },
     "FINALIZATION": {
       "TITLE": "Finalização",
-      "HINT": "Responsável por encerrar conversas e pela regra de inatividade que todos os comportamentos de follow-up respeitam.",
+      "HINT": "Responsável por encerrar conversas e pela regra de inatividade que o follow-up respeita.",
       "INACTIVITY": "Tempo de inatividade (minutos)",
-      "INACTIVITY_HINT": "Após a última mensagem do follow-up, a IA espera esse tempo de silêncio do cliente e então executa a ação definida no comportamento (atribuir, finalizar, etc.). Vale para todos os comportamentos.",
+      "INACTIVITY_HINT": "Após a última mensagem do follow-up, a IA espera esse tempo de silêncio e então executa a ação definida no comportamento abaixo.",
       "MESSAGE": "Mensagem de encerramento",
       "MESSAGE_PLACEHOLDER": "Ex.: Obrigado pelo contato! Qualquer coisa, é só chamar. 😊",
       "NF_TITLE": "Quando não há follow-up configurado",
-      "NF_HINT": "Se a inatividade for atingida e não houver nenhuma mensagem de follow-up para disparar, escolha o que o agente faz. Vale apenas esta decisão.",
+      "NF_HINT": "Se a inatividade for atingida sem nenhuma mensagem de follow-up, o agente segue a opção abaixo.",
       "NF_DISABLED": "Desativado",
       "NF_TRANSFER_AI": "Transferir para IA",
       "NF_TRANSFER_HUMAN": "Passar para atendente humano",
@@ -620,7 +617,7 @@
       "INTEGRATION_CONFIGURE": "Configurar em Configurações → Integrações",
       "INPUT_SCHEMA": "Schema de entrada (JSON)",
       "ARGS_LABEL": "Argumentos da ferramenta",
-      "ARGS_HINT": "Dados que a IA preenche antes de chamar. Construtor visual: Nome, Tipo (Texto, Número, Sim/Não, Data, Lista) e Descrição. Todo argumento adicionado é obrigatório — só adicione o que a IA realmente precisa informar.",
+      "ARGS_HINT": "Dados que a IA preenche antes de chamar.",
       "ARGS_EMPTY": "Nenhum argumento. A ferramenta não recebe dados de entrada.",
       "ARGS_ADVANCED": "JSON avançado",
       "ARGS_BUILDER": "Voltar ao construtor",
@@ -678,11 +675,11 @@
       "KIND_ALL": "Todos os tipos",
       "EMPTY": "Nenhuma fonte neste filtro."
     },
-    "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui — FAQ, produtos, procedimentos — ela usa para responder os clientes.",
+    "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui vira conhecimento para responder os clientes.",
     "NEW": "Nova fonte",
     "DROPZONE": {
-      "HINT": "Arraste e solte um arquivo aqui, ou clique para procurar. A IA preenche várias entradas de uma vez (ex.: 30 perguntas de FAQ).",
-      "HINT_DOC": "Arraste e solte um arquivo aqui, ou clique para procurar. O conteúdo vira uma fonte de conhecimento que a IA consulta.",
+      "HINT": "Arraste e solte um arquivo aqui, ou clique para procurar.",
+      "HINT_DOC": "Arraste e solte um arquivo de texto (TXT) aqui, ou clique para procurar. Não é um modelo para preencher — o conteúdo do arquivo vira, direto, uma fonte de conhecimento que a IA consulta.",
       "FORMATS": "TXT e CSV · máx 5 MB (DOC, DOCX e PDF em breve)"
     },
     "IMPORT_KIND": {
@@ -705,7 +702,7 @@
     "IMPORT_EMPTY": "Nenhuma linha válida encontrada. Confira o formato (baixe o modelo).",
     "WEBSITE_PLACEHOLDER": "https://www.seusite.com.br",
     "SITE_ADD": "Adicionar",
-    "SITE_HINT": "A IA usa o conteúdo do site como conhecimento. A leitura automática das páginas é aplicada no processamento.",
+    "SITE_HINT": "A IA usa o conteúdo do site como conhecimento.",
     "EMPTY": "Nenhuma fonte de conhecimento cadastrada.",
     "FORM": {
       "KIND": "Tipo",
@@ -725,7 +722,7 @@
       "PRICE_PLACEHOLDER": "ex.: R$ 99,90/mês ou Sob consulta",
       "DEPARTMENT": "Agente",
       "DEPARTMENT_ALL": "Todos / Compartilhado",
-      "DEPARTMENT_HINT": "Deixe em \"Todos\" para todos os agentes usarem, ou escolha um agente para restringir este conhecimento a ele."
+      "DEPARTMENT_HINT": "Deixe em \"Todos\" para compartilhar, ou escolha um agente para restringir este conhecimento a ele."
     },
     "KINDS": {
       "FAQ": "FAQ",
@@ -774,7 +771,7 @@
   },
   "AI_PROFILES": {
     "TITLE": "Níveis de atendimento",
-    "DESCRIPTION": "Modelos reutilizáveis que definem o equilíbrio entre custo, velocidade e qualidade da IA. A configuração técnica fica em Avançado.",
+    "DESCRIPTION": "Modelos reutilizáveis que definem o equilíbrio entre custo, velocidade e qualidade da IA.",
     "NEW": "Novo nível",
     "EMPTY": "Nenhum nível de atendimento criado.",
     "PRESET": {
@@ -785,7 +782,7 @@
       "CUSTOMIZADO": "Personalizado"
     },
     "LEVELS": {
-      "HINT": "Escolha o equilíbrio entre custo, velocidade e qualidade. Os detalhes técnicos do motor ficam em Avançado.",
+      "HINT": "Escolha o equilíbrio entre custo, velocidade e qualidade.",
       "COST": "Custo",
       "SPEED": "Velocidade",
       "QUALITY": "Qualidade",
@@ -801,19 +798,17 @@
     },
     "ADVANCED": {
       "TITLE": "Avançado (motor)",
-      "DESCRIPTION": "Modelo da IA e orçamento. Só para usuários avançados — o nível acima já define bons padrões."
+      "DESCRIPTION": "Modelo da IA e orçamento."
     },
     "SUPERVISOR": {
       "TITLE": "Modelo da IA",
-      "DESCRIPTION": "O modelo principal que conduz o atendimento e usa as ferramentas.",
       "TEMPERATURE": "Criatividade das respostas",
-      "TEMPERATURE_HINT": "Mais rígido = respostas consistentes e previsíveis (recomendado para atendimento). Mais criativo = respostas variadas. O valor real é ajustado automaticamente para cada provedor.",
+      "TEMPERATURE_HINT": "Mais rígido = respostas consistentes e previsíveis. Mais criativo = respostas variadas.",
       "TEMPERATURE_RIGID": "Rígido",
       "TEMPERATURE_BALANCED": "Equilibrado",
       "TEMPERATURE_CREATIVE": "Criativo"
     },
     "BUDGET": {
-      "TITLE": "Orçamento",
       "DESCRIPTION": "Teto mensal de gasto com IA e o que fazer ao atingi-lo.",
       "MONTHLY": "Orçamento mensal (USD)",
       "ON_LIMIT": "Ao atingir o limite",
