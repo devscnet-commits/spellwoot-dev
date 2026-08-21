@@ -849,7 +849,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-sm font-medium text-n-slate-12">
+            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.GROUPING_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -869,7 +869,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-sm font-medium text-n-slate-12">
+            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.MAX_REPLIES_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -889,7 +889,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-sm font-medium text-n-slate-12">
+            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.INPUT_LIMIT_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -932,7 +932,7 @@ onMounted(async () => {
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >
-            <h2 class="text-sm font-medium text-n-slate-12">
+            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_TITLE') }}
             </h2>
             <p class="text-sm text-n-slate-11 mb-0">
@@ -1032,7 +1032,7 @@ onMounted(async () => {
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_DEPARTMENTS.FOLLOWUP.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -1041,7 +1041,7 @@ onMounted(async () => {
             </div>
 
             <div class="flex flex-col gap-0.5">
-              <span class="text-sm font-medium text-n-slate-12">
+              <span class="text-base font-semibold text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.FOLLOWUP.BEHAVIORS_TITLE') }}
               </span>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -1231,7 +1231,7 @@ onMounted(async () => {
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_DEPARTMENTS.FINALIZATION.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -1281,7 +1281,7 @@ onMounted(async () => {
             <!-- Decisão direta quando NÃO há follow-up configurado -->
             <div class="flex flex-col gap-3 pt-1 border-t border-n-weak">
               <div class="flex flex-col gap-0.5 pt-3">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_DEPARTMENTS.FINALIZATION.NF_TITLE') }}
                 </span>
                 <p class="text-xs text-n-slate-11 mb-0">
@@ -1323,7 +1323,7 @@ onMounted(async () => {
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
           >
             <div class="flex flex-col gap-0.5">
-              <span class="text-sm font-medium text-n-slate-12">
+              <span class="text-base font-semibold text-n-slate-12">
                 {{ $t('AI_DEPARTMENTS.STEPS_TITLE') }}
               </span>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -1460,7 +1460,7 @@ onMounted(async () => {
                  (gatilho determinístico). UMA explicação no topo do bloco, não uma por campo. -->
             <div class="flex flex-col gap-3 pt-1 border-t border-n-weak">
               <div class="flex flex-col gap-0.5 pt-3">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_DEPARTMENTS.FORM.TRANSFER_TITLE') }}
                 </span>
                 <p class="text-xs text-n-slate-11 mb-0">

@@ -279,7 +279,7 @@ onMounted(hydrate);
       >
         <!-- Supervisor -->
         <div class="flex flex-col gap-2">
-          <h3 class="text-sm font-medium text-n-slate-12">
+          <h3 class="text-base font-semibold text-n-slate-12">
             {{ $t('AI_PROFILES.SUPERVISOR.TITLE') }}
           </h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -482,7 +482,7 @@ onMounted(async () => {
               </div>
 
               <div class="lg:col-span-2 flex flex-col gap-2">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.IDENTIFY_AS.LABEL') }}
                 </span>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -558,14 +558,15 @@ onMounted(async () => {
 
             <!-- Identidade essencial: nome + perfil operacional -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-              <Input
-                v-model="agentForm.assistant_name"
-                :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
-              />
               <div class="flex flex-col gap-1.5">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.AGENT_NAME') }}
+                </span>
+                <Input v-model="agentForm.assistant_name" />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.SOBRE.MODEL') }}
-                  <span class="text-n-ruby-9">*</span>
                 </span>
                 <Select
                   v-model="agentForm.ai_operation_profile_id"
@@ -587,25 +588,33 @@ onMounted(async () => {
               </div>
             </div>
 
-            <TextArea
-              v-model="agentForm.assistant_personality"
-              :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
-              :max-length="1000"
-            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-base font-semibold text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.PERSONALITY') }}
+              </span>
+              <TextArea
+                v-model="agentForm.assistant_personality"
+                :max-length="1000"
+              />
+            </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-              <Input
-                v-model="agentForm.company_name"
-                :label="$t('AI_AGENTS.SOBRE.COMPANY')"
-              />
-              <Input
-                v-model="agentForm.site"
-                :label="$t('AI_AGENTS.SOBRE.SITE')"
-              />
+              <div class="flex flex-col gap-1.5">
+                <span class="text-base font-semibold text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.COMPANY') }}
+                </span>
+                <Input v-model="agentForm.company_name" />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-base font-semibold text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.SITE') }}
+                </span>
+                <Input v-model="agentForm.site" />
+              </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
               <div class="flex flex-col gap-1.5">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
                 </span>
                 <Select
@@ -614,7 +623,7 @@ onMounted(async () => {
                 />
               </div>
               <div class="flex flex-col gap-1.5">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.FORM.STAGE') }}
                 </span>
                 <Select v-model="agentForm.stage" :options="stageOptions" />
@@ -653,7 +662,7 @@ onMounted(async () => {
             class="border border-n-weak rounded-xl p-5 flex flex-col gap-4 bg-n-solid-2"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_AGENTS.INBOXES.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -729,7 +738,7 @@ onMounted(async () => {
             class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_AGENTS.HANDOFF.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -925,7 +934,7 @@ onMounted(async () => {
                 <span class="i-lucide-flask-conical size-5" />
               </span>
               <div class="flex flex-col min-w-0">
-                <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                   {{ $t('AI_AGENTS.TEST.LAB_TITLE') }}
                 </h2>
                 <p class="text-sm text-n-slate-11 mb-0">
@@ -1056,6 +1065,7 @@ onMounted(async () => {
               <div class="flex gap-2 items-end">
                 <TextArea
                   v-model="testDraft"
+                  class="flex-1"
                   :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
                   :max-length="1000"
                   :resize="false"
