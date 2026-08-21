@@ -1056,6 +1056,7 @@ onMounted(async () => {
               <div class="flex gap-2 items-end">
                 <TextArea
                   v-model="testDraft"
+                  class="flex-1"
                   :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
                   :max-length="1000"
                   :resize="false"
