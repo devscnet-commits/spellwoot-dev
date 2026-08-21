@@ -218,7 +218,7 @@ onMounted(() => {
         <template v-else>
           <!-- By agent -->
           <div class="flex flex-col gap-2">
-            <h2 class="text-sm font-medium text-n-slate-12">
+            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_COSTS.BY_AGENT') }}
             </h2>
             <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
@@ -248,7 +248,7 @@ onMounted(() => {
 
           <!-- Errors by type -->
           <div v-if="data.by_error.length" class="flex flex-col gap-2">
-            <h2 class="text-sm font-medium text-n-slate-12">
+            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_COSTS.BY_ERROR') }}
             </h2>
             <div class="flex flex-wrap gap-2">
@@ -267,7 +267,7 @@ onMounted(() => {
 
           <!-- By model -->
           <div class="flex flex-col gap-2">
-            <h2 class="text-sm font-medium text-n-slate-12">
+            <h2 class="text-base font-semibold text-n-slate-12">
               {{ $t('AI_COSTS.BY_MODEL') }}
             </h2>
             <div class="border border-n-weak rounded-xl overflow-x-auto">

@@ -653,7 +653,7 @@ onMounted(async () => {
             class="border border-n-weak rounded-xl p-5 flex flex-col gap-4 bg-n-solid-2"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_AGENTS.INBOXES.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -729,7 +729,7 @@ onMounted(async () => {
             class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
           >
             <div class="flex flex-col gap-0.5">
-              <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+              <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                 {{ $t('AI_AGENTS.HANDOFF.TITLE') }}
               </h2>
               <p class="text-xs text-n-slate-11 mb-0">
@@ -925,7 +925,7 @@ onMounted(async () => {
                 <span class="i-lucide-flask-conical size-5" />
               </span>
               <div class="flex flex-col min-w-0">
-                <h2 class="text-sm font-medium text-n-slate-12 mb-0">
+                <h2 class="text-base font-semibold text-n-slate-12 mb-0">
                   {{ $t('AI_AGENTS.TEST.LAB_TITLE') }}
                 </h2>
                 <p class="text-sm text-n-slate-11 mb-0">

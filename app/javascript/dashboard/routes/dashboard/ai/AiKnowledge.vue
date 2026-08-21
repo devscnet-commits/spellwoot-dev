@@ -515,7 +515,7 @@ onMounted(() => {
       >
         <!-- O que você quer ensinar? — seleciona o tipo que vai importar/adicionar -->
         <div class="flex flex-col gap-2">
-          <span class="text-sm font-medium text-n-slate-12">
+          <span class="text-base font-semibold text-n-slate-12">
             {{ $t('AI_KNOWLEDGE.SOURCES.LABEL') }}
           </span>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">

@@ -604,7 +604,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
          etapa informativa (escolha implícita — não existe mais um "modo etapa informativa" à parte). -->
     <div class="flex flex-col gap-3">
       <div class="flex items-center justify-between gap-2">
-        <span class="text-sm font-medium text-n-slate-12">
+        <span class="text-base font-semibold text-n-slate-12">
           {{ $t('AI_DEPARTMENTS.FORM.COLLECT_SECTION_TITLE') }}
         </span>
         <span class="text-xs text-n-slate-11">{{ collectCountLabel }}</span>
@@ -962,7 +962,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
 
         <!-- automações ao concluir a etapa -->
         <div class="flex flex-col gap-2 border-t border-n-weak pt-3">
-          <span class="text-sm font-medium text-n-slate-12">
+          <span class="text-base font-semibold text-n-slate-12">
             {{ $t('AI_DEPARTMENTS.FORM.AUTOMATIONS_TITLE') }}
           </span>
 
