@@ -88,6 +88,14 @@ const form = reactive({
   // O que fazer quando a mensagem passa do limite: 'truncate' (corta) ou 'ask_resume' (pede resumo).
   max_input_action: 'truncate',
   max_input_message: '',
+  // Teto de tamanho por tipo de anexo (MB, 0 = sem limite). Anexo acima do teto não é processado
+  // (transcrito/lido) — o cliente recebe a mensagem correspondente. Documento = PDF/docx.
+  max_image_mb: '',
+  max_image_message: '',
+  max_document_mb: '',
+  max_document_message: '',
+  max_audio_mb: '',
+  max_audio_message: '',
   // Follow-up: SÓ retoma a conversa. Decisões de entrega ficam em Atribuição.
   // Lista de comportamentos de follow-up (1 por contexto de horário); cada um com
   // suas tentativas, carência e a ação se o cliente não responder.
@@ -330,6 +338,12 @@ const hydrate = dept => {
     max_input_chars: behavior.max_input_chars ?? '',
     max_input_action: behavior.max_input_action || 'truncate',
     max_input_message: behavior.max_input_message || '',
+    max_image_mb: behavior.max_image_mb ?? '',
+    max_image_message: behavior.max_image_message || '',
+    max_document_mb: behavior.max_document_mb ?? '',
+    max_document_message: behavior.max_document_message || '',
+    max_audio_mb: behavior.max_audio_mb ?? '',
+    max_audio_message: behavior.max_audio_message || '',
     followup_behaviors: hydrateBehaviors(followUp),
     close_message: close.message || '',
     inactivity_minutes: close.inactivity_minutes ?? 30,
@@ -392,6 +406,12 @@ const buildPayload = () => ({
       max_input_chars: Number(form.max_input_chars) || 0,
       max_input_action: form.max_input_action || 'truncate',
       max_input_message: (form.max_input_message || '').trim(),
+      max_image_mb: Number(form.max_image_mb) || 0,
+      max_image_message: (form.max_image_message || '').trim(),
+      max_document_mb: Number(form.max_document_mb) || 0,
+      max_document_message: (form.max_document_message || '').trim(),
+      max_audio_mb: Number(form.max_audio_mb) || 0,
+      max_audio_message: (form.max_audio_message || '').trim(),
       reply_scope: 'all',
     },
     follow_up: buildFollowUp(),
@@ -911,6 +931,123 @@ onMounted(async () => {
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
               />
             </label>
+          </section>
+
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_TITLE') }}
+            </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_HINT') }}
+            </p>
+
+            <div class="flex flex-col gap-1">
+              <label
+                class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+              >
+                {{
+                  $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_IMAGE_FIELD')
+                }}
+                <input
+                  v-model="form.max_image_mb"
+                  type="number"
+                  min="0"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label
+                v-if="Number(form.max_image_mb) > 0"
+                class="flex flex-col gap-1 text-sm text-n-slate-12"
+              >
+                {{
+                  $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_IMAGE_MESSAGE')
+                }}
+                <textarea
+                  v-model="form.max_image_message"
+                  rows="2"
+                  :placeholder="
+                    $t(
+                      'AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_MESSAGE_PLACEHOLDER_IMAGE'
+                    )
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
+                />
+              </label>
+            </div>
+
+            <div class="flex flex-col gap-1">
+              <label
+                class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+              >
+                {{
+                  $t(
+                    'AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_DOCUMENT_FIELD'
+                  )
+                }}
+                <input
+                  v-model="form.max_document_mb"
+                  type="number"
+                  min="0"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label
+                v-if="Number(form.max_document_mb) > 0"
+                class="flex flex-col gap-1 text-sm text-n-slate-12"
+              >
+                {{
+                  $t(
+                    'AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_DOCUMENT_MESSAGE'
+                  )
+                }}
+                <textarea
+                  v-model="form.max_document_message"
+                  rows="2"
+                  :placeholder="
+                    $t(
+                      'AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_MESSAGE_PLACEHOLDER_DOCUMENT'
+                    )
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
+                />
+              </label>
+            </div>
+
+            <div class="flex flex-col gap-1">
+              <label
+                class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs"
+              >
+                {{
+                  $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_AUDIO_FIELD')
+                }}
+                <input
+                  v-model="form.max_audio_mb"
+                  type="number"
+                  min="0"
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+                />
+              </label>
+              <label
+                v-if="Number(form.max_audio_mb) > 0"
+                class="flex flex-col gap-1 text-sm text-n-slate-12"
+              >
+                {{
+                  $t('AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_AUDIO_MESSAGE')
+                }}
+                <textarea
+                  v-model="form.max_audio_message"
+                  rows="2"
+                  :placeholder="
+                    $t(
+                      'AI_DEPARTMENTS.ATTENDANCE.ATTACHMENT_LIMIT_MESSAGE_PLACEHOLDER_AUDIO'
+                    )
+                  "
+                  class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16"
+                />
+              </label>
+            </div>
           </section>
 
           <!-- Histórico de versões da configuração (Comportamento + follow-up + etapas) -->

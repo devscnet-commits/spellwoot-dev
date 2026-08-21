@@ -38,13 +38,22 @@ class Ai::Gateway
     base_content = @content_override.presence || @message.content
 
     @stage = :persist
+    # Teto de tamanho por TIPO de anexo (imagem/documento/áudio) — checagem barata (só byte_size) ANTES
+    # de gastar com transcrição/OCR/parse. Achado ao vivo (21/08): só existia teto pra TEXTO
+    # (max_input_chars); um anexo gigante contornava o limite de caracteres inteiro (ia direto pra
+    # visão nativa ou era parseado por completo antes de qualquer corte). oversized_kind vira o
+    # file_type recusado ('image'/'audio'/'file'); skip_types evita processar esse anexo (o reply de
+    # recusa acontece mais abaixo, DEPOIS dos gates de credit/budget/max_replies/stuck_turns — mesmo
+    # lugar/prioridade do ask_resume de texto).
+    oversized_kind = Ai::Workers::MediaProcessor.oversized_attachment_type(@message, attachment_max_bytes)
     # Invisible worker: turn media (audio/image/PDF escaneado) into text the supervisor can use. Passa
     # o profile do agente para o OCR ler o worker de visão configurado (worker_overrides['ocr']).
     # skip_vision SEMPRE true — a OpenAI já recebe os pixels crus (Ai::PythonOrchestratorClient#image_urls:
     # foto direta E/OU páginas rasterizadas de PDF escaneado) e enxerga nativamente no MESMO turno, sem
     # o motor legado pra usar a legenda do OCR como fallback; áudio/docx/vídeo continuam passando por aqui
     # (sem equivalente nativo no Python ainda).
-    media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile, skip_vision: true)
+    media_text = Ai::Workers::MediaProcessor.process(@message, @agent.operation_profile, skip_vision: true,
+                                                      skip_types: Array(oversized_kind))
     emit(run_record, 'media.preprocessed', { text: media_text }) if media_text.present?
     effective_content = [base_content, media_text].compact.join("\n").strip
 
@@ -139,6 +148,14 @@ class Ai::Gateway
       emit(run_record, 'input.too_long', { chars: effective_content.length, max: max_input })
       action_dispatcher.reply(message)
       return finalize(run_record, 'input_too_long')
+    end
+
+    # Anexo (imagem/documento/áudio) acima do teto do seu tipo: já não foi processado (skip_types
+    # acima) — avisa o cliente com a mensagem configurada pro tipo e encerra, sem chamar o modelo.
+    if oversized_kind
+      emit(run_record, 'attachment.too_large', { kind: oversized_kind })
+      action_dispatcher.reply(oversized_attachment_message(oversized_kind))
+      return finalize(run_record, 'attachment_too_large')
     end
 
     # active_step ainda alimenta a Camada 0 (triagem de turno trivial) abaixo — o resto do que dependia
@@ -486,6 +503,34 @@ class Ai::Gateway
   def max_replies_reached?
     max = @agent.behavior.to_h['max_replies'].to_i
     max.positive? && Ai::Event.where(conversation_id: @conversation.id, event_type: 'reply.sent').count >= max
+  end
+
+  # Teto de tamanho por tipo de anexo (MB configurado no agente -> bytes). 0/ausente = sem limite pro
+  # tipo. Chaves = Attachment#file_type ('image'/'audio'/'file' — documentos entram como 'file').
+  def attachment_max_bytes
+    behavior = @agent.behavior.to_h
+    {
+      'image' => behavior['max_image_mb'].to_i * 1.megabyte,
+      'audio' => behavior['max_audio_mb'].to_i * 1.megabyte,
+      'file' => behavior['max_document_mb'].to_i * 1.megabyte
+    }
+  end
+
+  # Mensagem ao cliente quando um anexo estoura o teto do seu tipo — editável por tipo no agente
+  # (max_image_message/max_document_message/max_audio_message), com um default em português por tipo.
+  def oversized_attachment_message(kind)
+    behavior = @agent.behavior.to_h
+    case kind
+    when 'image'
+      behavior['max_image_message'].presence ||
+        'A imagem que você enviou é grande demais. Pode mandar uma versão menor, por favor? 🙂'
+    when 'audio'
+      behavior['max_audio_message'].presence ||
+        'O áudio que você enviou é grande demais. Pode mandar um áudio mais curto ou escrever, por favor? 🙂'
+    else
+      behavior['max_document_message'].presence ||
+        'O arquivo que você enviou é grande demais. Pode mandar uma versão menor, por favor? 🙂'
+    end
   end
 
   # true quando o auto-relato de confiança do modelo (result[:confidence], já vindo do Python) está
