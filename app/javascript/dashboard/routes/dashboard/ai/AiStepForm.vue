@@ -554,10 +554,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
     <!-- b) Instrução da etapa: 3 campos estruturados (Objetivo/Regras/Fala sugerida) em vez de 1
          textarea — texto estruturado segura melhor a atenção do modelo do que prosa longa. -->
     <div class="flex flex-col gap-3">
-      <div class="flex items-center gap-2 text-sm text-n-slate-12">
-        <span class="font-medium">{{
-          $t('AI_DEPARTMENTS.FORM.STEP_INSTRUCTION_TITLE')
-        }}</span>
+      <div class="flex justify-end -mb-1">
         <button
           type="button"
           class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
@@ -587,13 +584,8 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
 
       <!-- Regras -->
       <label class="flex flex-col gap-1.5 text-sm text-n-slate-12">
-        <span class="flex items-center gap-2">
-          <span class="font-medium">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_RULES_LABEL') }}
-          </span>
-          <span class="text-xs text-n-slate-11">
-            {{ $t('AI_DEPARTMENTS.FORM.STEP_RULES_MICROHINT') }}
-          </span>
+        <span class="font-medium">
+          {{ $t('AI_DEPARTMENTS.FORM.STEP_RULES_LABEL') }}
         </span>
         <textarea
           v-model="draft.rulesText"
@@ -930,7 +922,7 @@ const applyAssistantSuggestion = ({ objective, rules }) => {
         class="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm text-n-slate-12"
         @click="advancedOpen = !advancedOpen"
       >
-        <span class="flex items-center gap-1.5">
+        <span class="flex items-center gap-1.5 font-medium">
           <span
             class="i-lucide-chevron-down size-4 transition-transform"
             :class="{ 'rotate-180': advancedOpen }"
