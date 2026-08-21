@@ -623,7 +623,7 @@ onMounted(async () => {
                 />
               </div>
               <div class="flex flex-col gap-1.5">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.FORM.STAGE') }}
                 </span>
                 <Select v-model="agentForm.stage" :options="stageOptions" />
