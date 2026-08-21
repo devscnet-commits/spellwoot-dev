@@ -675,11 +675,11 @@
       "KIND_ALL": "Todos os tipos",
       "EMPTY": "Nenhuma fonte neste filtro."
     },
-    "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui — FAQ, produtos, procedimentos — ela usa para responder os clientes.",
+    "DESCRIPTION": "Ensine sua empresa para a IA. Tudo o que você adicionar aqui vira conhecimento para responder os clientes.",
     "NEW": "Nova fonte",
     "DROPZONE": {
-      "HINT": "Arraste e solte um arquivo aqui, ou clique para procurar. A IA preenche várias entradas de uma vez (ex.: 30 perguntas de FAQ).",
-      "HINT_DOC": "Arraste e solte um arquivo aqui, ou clique para procurar. O conteúdo vira uma fonte de conhecimento que a IA consulta.",
+      "HINT": "Arraste e solte um arquivo aqui, ou clique para procurar.",
+      "HINT_DOC": "Arraste e solte um arquivo de texto (TXT) aqui, ou clique para procurar. Não é um modelo para preencher — o conteúdo do arquivo vira, direto, uma fonte de conhecimento que a IA consulta.",
       "FORMATS": "TXT e CSV · máx 5 MB (DOC, DOCX e PDF em breve)"
     },
     "IMPORT_KIND": {
@@ -702,7 +702,7 @@
     "IMPORT_EMPTY": "Nenhuma linha válida encontrada. Confira o formato (baixe o modelo).",
     "WEBSITE_PLACEHOLDER": "https://www.seusite.com.br",
     "SITE_ADD": "Adicionar",
-    "SITE_HINT": "A IA usa o conteúdo do site como conhecimento. A leitura automática das páginas é aplicada no processamento.",
+    "SITE_HINT": "A IA usa o conteúdo do site como conhecimento.",
     "EMPTY": "Nenhuma fonte de conhecimento cadastrada.",
     "FORM": {
       "KIND": "Tipo",
@@ -722,7 +722,7 @@
       "PRICE_PLACEHOLDER": "ex.: R$ 99,90/mês ou Sob consulta",
       "DEPARTMENT": "Agente",
       "DEPARTMENT_ALL": "Todos / Compartilhado",
-      "DEPARTMENT_HINT": "Deixe em \"Todos\" para todos os agentes usarem, ou escolha um agente para restringir este conhecimento a ele."
+      "DEPARTMENT_HINT": "Deixe em \"Todos\" para compartilhar, ou escolha um agente para restringir este conhecimento a ele."
     },
     "KINDS": {
       "FAQ": "FAQ",
