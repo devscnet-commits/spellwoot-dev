@@ -482,7 +482,7 @@ onMounted(async () => {
               </div>
 
               <div class="lg:col-span-2 flex flex-col gap-2">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.IDENTIFY_AS.LABEL') }}
                 </span>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -558,14 +558,15 @@ onMounted(async () => {
 
             <!-- Identidade essencial: nome + perfil operacional -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-              <Input
-                v-model="agentForm.assistant_name"
-                :label="$t('AI_AGENTS.SOBRE.AGENT_NAME')"
-              />
               <div class="flex flex-col gap-1.5">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.AGENT_NAME') }}
+                </span>
+                <Input v-model="agentForm.assistant_name" />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.SOBRE.MODEL') }}
-                  <span class="text-n-ruby-9">*</span>
                 </span>
                 <Select
                   v-model="agentForm.ai_operation_profile_id"
@@ -587,25 +588,33 @@ onMounted(async () => {
               </div>
             </div>
 
-            <TextArea
-              v-model="agentForm.assistant_personality"
-              :label="$t('AI_AGENTS.SOBRE.PERSONALITY')"
-              :max-length="1000"
-            />
+            <div class="flex flex-col gap-1.5">
+              <span class="text-base font-semibold text-n-slate-12">
+                {{ $t('AI_AGENTS.SOBRE.PERSONALITY') }}
+              </span>
+              <TextArea
+                v-model="agentForm.assistant_personality"
+                :max-length="1000"
+              />
+            </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-              <Input
-                v-model="agentForm.company_name"
-                :label="$t('AI_AGENTS.SOBRE.COMPANY')"
-              />
-              <Input
-                v-model="agentForm.site"
-                :label="$t('AI_AGENTS.SOBRE.SITE')"
-              />
+              <div class="flex flex-col gap-1.5">
+                <span class="text-base font-semibold text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.COMPANY') }}
+                </span>
+                <Input v-model="agentForm.company_name" />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-base font-semibold text-n-slate-12">
+                  {{ $t('AI_AGENTS.SOBRE.SITE') }}
+                </span>
+                <Input v-model="agentForm.site" />
+              </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
               <div class="flex flex-col gap-1.5">
-                <span class="text-sm font-medium text-n-slate-12">
+                <span class="text-base font-semibold text-n-slate-12">
                   {{ $t('AI_AGENTS.SOBRE.LANGUAGE') }}
                 </span>
                 <Select

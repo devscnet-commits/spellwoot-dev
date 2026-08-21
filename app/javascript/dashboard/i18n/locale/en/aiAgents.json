@@ -70,7 +70,7 @@
       "HUMAN": "Agir como humano",
       "HUMAN_HINT": "Atende como um membro da equipe, sem revelar que é IA.",
       "AI": "Agir como uma IA",
-      "AI_HINT": "Pode assumir que é um assistente virtual."
+      "AI_HINT": "É um assistente virtual."
     },
     "SOBRE": {
       "AGENT_NAME": "Nome do agente",
