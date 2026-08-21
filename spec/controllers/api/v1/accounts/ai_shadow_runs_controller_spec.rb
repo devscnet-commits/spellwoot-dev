@@ -54,7 +54,7 @@ RSpec.describe Api::V1::Accounts::AiShadowRunsController do
   describe '#row — "ferramenta ausente" NUNCA aponta um nome de controle reservado' do
     def missing_flag_for(tool_name)
       run = run_with_decision({ 'decision' => 'tool', 'tool' => { 'name' => tool_name } })
-      controller_instance.send(:row, run, {}, {}, {}, {})[:tool_missing]
+      controller_instance.send(:row, run, {}, {}, {})[:tool_missing]
     end
 
     it 'salvar_memoria_ia e continuar_conversa NUNCA são "ferramenta ausente" (nomes de controle, não configuráveis)' do

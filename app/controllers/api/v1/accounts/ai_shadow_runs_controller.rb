@@ -23,6 +23,16 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     obrigad valeu vlw oi ola olá oie bomdia boatarde boanoite tchau ok okay blz beleza sim nao não certo
   ].freeze
 
+  # Achado ao vivo (21/08): antes, TODA visita carregava até MAX_RUNS (10 mil) linhas pra memória do
+  # Ruby e só DEPOIS cortava a página com .slice — o comentário original já admitia isso era "último
+  # anteparo contra OOM", ou seja, o autor sabia que ia bater nesse teto. Agora a LISTA (as `page_rows`
+  # exibidas) usa paginação de banco de verdade (LIMIT/OFFSET numa scope filtrada e indexada) — só
+  # classifica (agent/tool/pergunta) as `per_page` linhas da página atual, não a janela inteira.
+  # Resumo/insights continuam precisando OLHAR A JANELA INTEIRA (resolução, lacuna de conhecimento etc.
+  # são calculados por linha, em Ruby, sobre decision jsonb + texto da pergunta) — isso não muda aqui;
+  # o que muda é que o resultado fica em cache por alguns minutos, então navegar entre páginas do MESMO
+  # filtro não repete o scan completo a cada clique. Persistir a classificação NO MOMENTO DO RUN (pra
+  # virar um GROUP BY de verdade) é o próximo passo, fora do escopo deste fix pontual.
   def index
     bounds = window_bounds
     if bounds == :too_large
@@ -35,25 +45,24 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     start_time, finish_time = bounds
     base = ::Ai::Run.where(account_id: Current.account.id)
                     .where(created_at: start_time..finish_time)
-
-    runs = filtered(base).order(created_at: :desc).limit(MAX_RUNS).to_a
-    runs = apply_decision_filters(runs)
-
-    agent_names = agent_names(runs)
-    agent_tools = agent_tools(runs)
-    questions = questions_for(runs)
-
-    rows = runs.map { |run| row(run, agent_names, agent_tools, questions) }
+    scope = filtered(base)
 
     page, per_page = pagination_params
-    total = rows.size
-    paged = rows.slice((page - 1) * per_page, per_page) || []
+    total = scope.count
+    page_runs = scope.order(created_at: :desc).offset((page - 1) * per_page).limit(per_page).to_a
+    page_rows = rows_for(page_runs)
+
+    summary_data = Rails.cache.fetch(summary_cache_key(start_time, finish_time), expires_in: 2.minutes) do
+      window_runs = scope.order(created_at: :desc).limit(MAX_RUNS).to_a
+      window_rows = rows_for(window_runs)
+      { summary: summary(window_rows), insights: insights(window_rows) }
+    end
 
     render json: {
       facets: facets(base),
-      summary: summary(rows),
-      insights: insights(rows),
-      runs: paged,
+      summary: summary_data[:summary],
+      insights: summary_data[:insights],
+      runs: page_rows,
       pagination: {
         page: page,
         per_page: per_page,
@@ -106,21 +115,40 @@ class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseControl
     nil
   end
 
+  # has_reply/has_tool viviam como filtro em RUBY, depois de carregar a janela inteira — sem isso a
+  # paginação teria que ler tudo pra saber quantas linhas passam no filtro antes de cortar a página.
+  # decision->>'reply_text'/decision#>>'{tool,name}' são as MESMAS chaves que #reply_text/#tool_name
+  # leem embaixo — só reescritas como predicado SQL sobre o jsonb.
   def filtered(scope)
     scope = scope.where(ai_agent_id: params[:agent_id]) if params[:agent_id].present?
     scope = scope.where(error_type: params[:error_type]) if params[:error_type].present?
     scope = scope.where(status: params[:status]) if params[:status].present?
     scope = scope.where(conversation_id: params[:conversation_id]) if params[:conversation_id].present?
+    scope = scope.where("COALESCE(decision->>'reply_text', '') != ''") if params[:has_reply] == 'true'
+    scope = scope.where("COALESCE(decision->>'reply_text', '') = ''") if params[:has_reply] == 'false'
+    scope = scope.where("COALESCE(decision#>>'{tool,name}', '') != ''") if params[:has_tool] == 'true'
+    scope = scope.where("COALESCE(decision#>>'{tool,name}', '') = ''") if params[:has_tool] == 'false'
     scope
   end
 
-  # has_reply / has_tool / resolution live in the decision jsonb — filter in Ruby after load.
-  def apply_decision_filters(runs)
-    runs = runs.select { |r| reply_text(r).present? } if params[:has_reply] == 'true'
-    runs = runs.reject { |r| reply_text(r).present? } if params[:has_reply] == 'false'
-    runs = runs.select { |r| tool_name(r).present? } if params[:has_tool] == 'true'
-    runs = runs.reject { |r| tool_name(r).present? } if params[:has_tool] == 'false'
-    runs
+  # Chave do cache do resumo/insights (a janela inteira, não a página) — precisa refletir TODO filtro
+  # que muda quais runs entram na conta, senão dois filtros diferentes leem o resumo um do outro.
+  def summary_cache_key(start_time, finish_time)
+    filters = params.slice(:agent_id, :error_type, :status, :conversation_id, :has_reply, :has_tool)
+                    .to_unsafe_h.sort.to_h
+    "ai_shadow_runs_summary/#{Current.account.id}/#{start_time.to_i}-#{finish_time.to_i}/#{filters}"
+  end
+
+  # Monta as linhas exibidas/classificadas para um conjunto de runs (a página atual, OU a janela
+  # inteira pro resumo/insights) — os lookups em lote (nome do agente, ferramentas, pergunta do
+  # cliente) são escopados só a ESTE conjunto, nunca a mais do que o necessário.
+  def rows_for(runs)
+    return [] if runs.empty?
+
+    names = agent_names(runs)
+    tools = agent_tools(runs)
+    questions = questions_for(runs)
+    runs.map { |run| row(run, names, tools, questions) }
   end
 
   # Nomes de controle RESERVADOS (avancar_etapa/registrar_*/salvar_memoria_ia/continuar_conversa/
