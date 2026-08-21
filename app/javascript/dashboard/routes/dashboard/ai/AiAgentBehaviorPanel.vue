@@ -1083,7 +1083,9 @@ onMounted(async () => {
                 <div
                   class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
                 >
-                  <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT') }}</span>
+                  <span class="font-medium">{{
+                    $t('AI_DEPARTMENTS.FOLLOWUP.CONTEXT')
+                  }}</span>
                   <Select
                     v-model="bhv.context"
                     :options="contextOptionsFor(bhv)"
@@ -1095,7 +1097,7 @@ onMounted(async () => {
                   v-if="bhv.context === 'custom'"
                   class="flex flex-col gap-2"
                 >
-                  <span class="text-sm text-n-slate-12">
+                  <span class="text-sm font-medium text-n-slate-12">
                     {{ $t('AI_DEPARTMENTS.FOLLOWUP.WINDOWS') }}
                   </span>
                   <div
@@ -1199,14 +1201,13 @@ onMounted(async () => {
                 <div
                   class="flex flex-col gap-1.5 text-sm text-n-slate-12 max-w-sm"
                 >
-                  <span>{{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE') }}</span>
+                  <span class="font-medium">{{
+                    $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE')
+                  }}</span>
                   <Select
                     v-model="bhv.no_response_action"
                     :options="fuNoResponseOptions"
                   />
-                  <span class="text-xs text-n-slate-11">
-                    {{ $t('AI_DEPARTMENTS.FOLLOWUP.NO_RESPONSE_HINT') }}
-                  </span>
                 </div>
               </div>
             </div>
