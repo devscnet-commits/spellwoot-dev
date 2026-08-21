@@ -186,7 +186,10 @@
       "SEND": "Enviar",
       "RESET": "Reiniciar teste",
       "EMPTY": "Nenhuma mensagem ainda. Comece a conversa abaixo.",
-      "THINKING": "A IA está respondendo..."
+      "THINKING": "A IA está respondendo...",
+      "USAGE_TOTAL": "Sessão: {tokensIn} in / {tokensOut} out · US$ {cost}",
+      "USAGE_HINT": "Tokens e custo reais desta sessão de teste (mesmo dado de Custos de IA) — gera gasto de verdade na OpenAI, igual a um atendimento real.",
+      "USAGE_TURN": "{tokensIn} in / {tokensOut} out · US$ {cost}"
     },
     "FORM": {
       "IDENTITY": "Identidade",
