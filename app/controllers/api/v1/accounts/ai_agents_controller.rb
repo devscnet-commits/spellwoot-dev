@@ -16,6 +16,12 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
     behavior.max_input_chars
     behavior.max_input_action
     behavior.max_input_message
+    behavior.max_image_mb
+    behavior.max_image_message
+    behavior.max_document_mb
+    behavior.max_document_message
+    behavior.max_audio_mb
+    behavior.max_audio_message
   ].freeze
 
   # Tipos válidos de automação ao concluir etapa.

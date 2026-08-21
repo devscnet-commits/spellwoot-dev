@@ -56,16 +56,40 @@ class Ai::Workers::MediaProcessor
   # nenhum pra saber que precisão importava). PDF de TEXTO real (não escaneado) não passa por visão em
   # NENHUM dos dois motores — pdf-reader é confiável, sem risco de alucinação. Áudio/docx/vídeo
   # continuam INTACTOS nos dois caminhos — sem vision nenhuma envolvida.
-  def self.process(message, profile = nil, skip_vision: false)
+  # skip_types: file_types ('image'/'audio'/'file') a NÃO processar — usado pelo Gateway para pular o
+  # anexo que já foi rejeitado por #oversized_attachment_type (economiza a transcrição/OCR/parse de um
+  # anexo que já vai ser recusado; ver Ai::Gateway#run).
+  def self.process(message, profile = nil, skip_vision: false, skip_types: [])
     attachments = message.attachments.to_a
     return nil if attachments.empty?
 
     account_id = message.account_id
     conversation_id = message.conversation_id
-    attachments.map { |attachment| extract(attachment, account_id, profile, conversation_id, skip_vision: skip_vision) }
-               .compact.join("\n").presence
+    attachments.map do |attachment|
+      next nil if skip_types.include?(attachment.file_type)
+
+      extract(attachment, account_id, profile, conversation_id, skip_vision: skip_vision)
+    end.compact.join("\n").presence
   rescue StandardError => e
     Rails.logger.error "[Ai::Workers::MediaProcessor] #{e.class}: #{e.message}"
+    nil
+  end
+
+  # Checagem BARATA (só byte_size, sem baixar/transcrever/OCR nada) se algum anexo da mensagem estoura
+  # o teto configurado pro seu tipo — chamada pelo Gateway ANTES de #process, pra decidir se recusa o
+  # anexo (avisa o cliente, nunca gasta com transcrição/visão/parse) sem pagar o custo de processá-lo
+  # primeiro. max_bytes: hash file_type ('image'/'audio'/'file') => limite em bytes (0/nil/ausente =
+  # sem limite pra aquele tipo). Retorna o file_type do PRIMEIRO anexo oversized, ou nil.
+  def self.oversized_attachment_type(message, max_bytes)
+    return nil if max_bytes.blank?
+
+    message.attachments.to_a.each do |attachment|
+      limit = max_bytes[attachment.file_type].to_i
+      next unless limit.positive?
+      next unless attachment.file.attached?
+
+      return attachment.file_type if attachment.file.blob.byte_size > limit
+    end
     nil
   end
 
