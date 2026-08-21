@@ -856,7 +856,10 @@ onMounted(async () => {
               class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-4"
             >
               <div class="flex flex-col gap-1">
-                <div class="flex justify-end -mb-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-base font-semibold text-n-slate-12">
+                    {{ $t('AI_AGENTS.FORM.BASE_PROMPT') }}
+                  </span>
                   <button
                     type="button"
                     class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
@@ -866,7 +869,6 @@ onMounted(async () => {
                 </div>
                 <TextArea
                   v-model="agentForm.base_prompt"
-                  :label="$t('AI_AGENTS.FORM.BASE_PROMPT')"
                   :max-length="4000"
                   resize
                   custom-text-area-class="min-h-40 resize-y"
@@ -876,7 +878,10 @@ onMounted(async () => {
                 </p>
               </div>
               <div class="flex flex-col gap-1">
-                <div class="flex justify-end -mb-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-base font-semibold text-n-slate-12">
+                    {{ $t('AI_AGENTS.FORM.GUARDRAILS') }}
+                  </span>
                   <button
                     type="button"
                     class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
@@ -886,7 +891,6 @@ onMounted(async () => {
                 </div>
                 <TextArea
                   v-model="agentForm.guardrails"
-                  :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
                   :max-length="2000"
                   resize
                   custom-text-area-class="min-h-40 resize-y"
