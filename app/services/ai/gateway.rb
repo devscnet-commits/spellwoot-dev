@@ -238,7 +238,11 @@ class Ai::Gateway
                         tokens_in: result[:tokens_in].to_i, tokens_out: result[:tokens_out].to_i,
                         cost: Ai::ModelRouter.estimate_cost(billed_model, result[:tokens_in], result[:tokens_out]),
                         decision: { 'decision' => (result[:transferred] ? 'handoff' : 'reply'),
-                                    'reply_text' => result[:reply], 'confidence' => result[:confidence] },
+                                    'reply_text' => result[:reply], 'confidence' => result[:confidence],
+                                    # Quebra por ferramenta chamada (pedido da aba Teste, 21/08) — só lida
+                                    # hoje por Api::V1::Accounts::AiAgentTestConversationsController;
+                                    # nenhum consumidor existente lê esta chave, então é segura de adicionar.
+                                    'tool_calls' => result[:tool_calls] },
                         status: status, error_type: (status == 'error' ? 'provider_error' : nil))
     emit(run_record, 'decision.made', { decision: { 'kind' => 'reply' }, source: 'python_orchestrator' }, run_id: run_record.id)
 

@@ -89,6 +89,11 @@ class ProcessResponse(BaseModel):
     # que mandou, pra calcular o custo com o preço certo (o fallback pode divergir do que o tenant tem
     # configurado).
     model: str = ""
+    # Pedido do dono da conta (21/08, aba Teste): quebra de tokens POR ferramenta chamada, não só o
+    # total do turno — cada item é {"tool": nome, "tokens_in": int, "tokens_out": int} (ver
+    # orchestrator._run_turn). Hoje só consumido pelo Ai::Gateway pra exibir na aba Teste; não afeta
+    # tokens_in/tokens_out acima, que continuam sendo a soma de tudo.
+    tool_calls: list = []
 
 
 def _authenticate(authorization: Optional[str]) -> None:
@@ -115,7 +120,7 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     )
 
     try:
-        reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model = orchestrator.run_conversation(
+        reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model, tool_usage = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
             ai_agent_id=request.ai_agent_id,
             mode=request.mode,
@@ -155,4 +160,4 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
 
     return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, conversation_id=conversation_id,
                             byok_fallback=byok_fallback, confidence=confidence, transferred=transferred,
-                            tokens_in=tokens_in, tokens_out=tokens_out, model=used_model)
+                            tokens_in=tokens_in, tokens_out=tokens_out, model=used_model, tool_calls=tool_usage)

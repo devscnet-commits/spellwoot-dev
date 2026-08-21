@@ -110,7 +110,7 @@ class Ai::PythonOrchestratorClient
       # orchestrator.TurnFailed): repassado para o Ai::Gateway persistir mesmo assim, senão uma única
       # chamada com falha fazia o turno seguinte abrir uma conversation nova e perder o histórico.
       return { reply: nil, conversation_id: failed_conversation_id(response), byok_fallback: false,
-               confidence: nil, transferred: false, tokens_in: 0, tokens_out: 0, model: nil }
+               confidence: nil, transferred: false, tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [] }
     end
 
     parsed = response.parsed_response
@@ -126,11 +126,14 @@ class Ai::PythonOrchestratorClient
       # Api::V1::Accounts::AiCostsController. model é o que REALMENTE rodou (pode divergir do que foi
       # mandado, se este agente não tinha nenhum configurado — orchestrator.py aplica o fallback).
       tokens_in: parsed['tokens_in'].to_i, tokens_out: parsed['tokens_out'].to_i,
-      model: parsed['model'].presence }
+      model: parsed['model'].presence,
+      # Quebra por ferramenta chamada (achado ao vivo, 21/08, pedido da aba Teste) — [{"tool","tokens_in",
+      # "tokens_out"}, ...], ver orchestrator._run_turn. Não soma nada novo em tokens_in/tokens_out acima.
+      tool_calls: Array(parsed['tool_calls']) }
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
     { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false,
-      tokens_in: 0, tokens_out: 0, model: nil }
+      tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [] }
   end
 
   private

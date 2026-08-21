@@ -18,14 +18,21 @@ class Api::V1::Accounts::AiAgentTestConversationsController < Api::V1::Accounts:
 
   def show
     conversation = current_test_conversation
-    render json: { conversation_id: conversation&.id, messages: serialize_messages(conversation) }
+    render json: { conversation_id: conversation&.id, messages: serialize_messages(conversation),
+                  usage_total: serialize_usage_total(conversation) }
   end
 
   def reset
     conversation = create_test_conversation!
-    render json: { conversation_id: conversation.id, messages: [] }
+    render json: { conversation_id: conversation.id, messages: [], usage_total: serialize_usage_total(conversation) }
   end
 
+  # Custo/tokens reais (achado ao vivo, 21/08): o Teste roda o Ai::Gateway REAL — cada turno já cria
+  # um Ai::Run de verdade (mesmo tokens_in/tokens_out/cost que "Custos de IA" lê), só não aparecia na
+  # tela. Marca o maior id ANTES de rodar e busca o(s) Ai::Run criado(s) DEPOIS dele para este
+  # conversation_id — evita precisar de uma coluna nova (message_id) em ai_runs só pra linkar; o Teste
+  # não manda anexo (sem UI de upload aqui), então skip_vision:true no Gateway garante 0 Ai::Run extra
+  # de visão por turno — sempre exatamente 1 run por mensagem enviada.
   def create_message
     content = params[:content].to_s.strip
     return render(json: { error: 'mensagem vazia' }, status: :unprocessable_entity) if content.blank?
@@ -33,9 +40,16 @@ class Api::V1::Accounts::AiAgentTestConversationsController < Api::V1::Accounts:
     conversation = current_test_conversation || create_test_conversation!
     message = conversation.messages.create!(account: Current.account, inbox: conversation.inbox,
                                             message_type: :incoming, content: content)
+    last_run_id = ::Ai::Run.maximum(:id) || 0
     ::Ai::Gateway.new(message: message, agent_inbox: test_binding, mode: 'live').run
+    turn_run = ::Ai::Run.where(conversation_id: conversation.id).where('id > ?', last_run_id).order(:id).first
 
-    render json: { conversation_id: conversation.id, messages: serialize_messages(conversation.reload) }
+    render json: {
+      conversation_id: conversation.id,
+      messages: serialize_messages(conversation.reload),
+      usage: serialize_usage(turn_run),
+      usage_total: serialize_usage_total(conversation)
+    }
   end
 
   private
@@ -82,5 +96,35 @@ class Api::V1::Accounts::AiAgentTestConversationsController < Api::V1::Accounts:
       { 'id' => m.id, 'content' => m.content, 'message_type' => m.message_type, 'private' => m.private?,
         'created_at' => m.created_at }
     end
+  end
+
+  def serialize_usage(run)
+    return nil if run.nil?
+
+    { 'tokens_in' => run.tokens_in, 'tokens_out' => run.tokens_out, 'cost' => run.cost.to_f.round(6),
+      'tool_calls' => serialize_tool_calls(run) }
+  end
+
+  # Quebra por ferramenta chamada dentro deste turno (achado ao vivo, 21/08 — orchestrator.py grava em
+  # Ai::Run.decision['tool_calls'], ver Ai::Gateway#run). Custo de cada item calculado com o MESMO
+  # preço/modelo do turno (run.model) — não é um preço à parte por ferramenta, é o mesmo motor.
+  def serialize_tool_calls(run)
+    Array(run.decision['tool_calls']).map do |call|
+      tokens_in = call['tokens_in'].to_i
+      tokens_out = call['tokens_out'].to_i
+      { 'tool' => call['tool'], 'tokens_in' => tokens_in, 'tokens_out' => tokens_out,
+        'cost' => Ai::ModelRouter.estimate_cost(run.model, tokens_in, tokens_out) }
+    end
+  end
+
+  # Total acumulado da SESSÃO de teste atual (soma de todos os Ai::Run desta conversation_id) — cada
+  # "Reiniciar teste" cria uma conversa nova (#create_test_conversation!), então o total sempre
+  # reflete só a sessão em aberto, nunca acumula com testes anteriores já reiniciados. Mesmo
+  # arredondamento de Api::V1::Accounts::AiCostsController (6 casas).
+  def serialize_usage_total(conversation)
+    return { 'tokens_in' => 0, 'tokens_out' => 0, 'cost' => 0.0 } if conversation.nil?
+
+    runs = ::Ai::Run.where(conversation_id: conversation.id)
+    { 'tokens_in' => runs.sum(:tokens_in), 'tokens_out' => runs.sum(:tokens_out), 'cost' => runs.sum(:cost).to_f.round(6) }
   end
 end

@@ -338,18 +338,32 @@ const testMessages = ref([]);
 const testDraft = ref('');
 const testLoading = ref(false);
 const testLoaded = ref(false);
+// Tokens/custo reais do Ai::Run que cada turno já cria (mesmo dado que "Custos de IA" lê) — só não
+// aparecia na tela do Teste. usageTotal = soma da sessão aberta (zera a cada "Reiniciar teste").
+const EMPTY_USAGE = { tokens_in: 0, tokens_out: 0, cost: 0 };
+const testUsageTotal = ref({ ...EMPTY_USAGE });
+
+const applyTurnUsage = usage => {
+  if (!usage || !testMessages.value.length) return;
+  // O turno pode gerar mais de uma mensagem (ex.: nota interna de handoff + resposta) — anota o
+  // custo do turno na ÚLTIMA, aproximação aceitável pro Teste (não é o extrato de cobrança oficial).
+  const lastIndex = testMessages.value.length - 1;
+  testMessages.value[lastIndex] = { ...testMessages.value[lastIndex], usage };
+};
 
 const fetchTestConversation = async () => {
   const { data } = await axios.get(testUrl());
   testMessages.value = data.messages || [];
+  testUsageTotal.value = data.usage_total || { ...EMPTY_USAGE };
   testLoaded.value = true;
 };
 
 const resetTest = async () => {
   testLoading.value = true;
   try {
-    await axios.post(`${testUrl()}/reset`);
+    const { data } = await axios.post(`${testUrl()}/reset`);
     testMessages.value = [];
+    testUsageTotal.value = data.usage_total || { ...EMPTY_USAGE };
   } catch (error) {
     useAlert(t('AI_AGENTS.ERROR'));
   } finally {
@@ -365,6 +379,8 @@ const sendTestMessage = async () => {
   try {
     const { data } = await axios.post(`${testUrl()}/messages`, { content });
     testMessages.value = data.messages || [];
+    applyTurnUsage(data.usage);
+    testUsageTotal.value = data.usage_total || testUsageTotal.value;
   } catch (error) {
     useAlert(t('AI_AGENTS.ERROR'));
   } finally {
@@ -917,15 +933,33 @@ onMounted(async () => {
                 </p>
               </div>
             </div>
-            <Button
-              v-if="!isNew"
-              icon="i-lucide-rotate-ccw"
-              variant="faded"
-              color="slate"
-              :label="$t('AI_AGENTS.TEST.RESET')"
-              :is-loading="testLoading && !testMessages.length"
-              @click="resetTest"
-            />
+            <div class="flex items-center gap-3 shrink-0">
+              <span
+                v-if="
+                  !isNew &&
+                  testUsageTotal.tokens_in + testUsageTotal.tokens_out > 0
+                "
+                class="text-xs text-n-slate-11 whitespace-nowrap"
+                :title="$t('AI_AGENTS.TEST.USAGE_HINT')"
+              >
+                {{
+                  $t('AI_AGENTS.TEST.USAGE_TOTAL', {
+                    tokensIn: testUsageTotal.tokens_in,
+                    tokensOut: testUsageTotal.tokens_out,
+                    cost: testUsageTotal.cost.toFixed(6),
+                  })
+                }}
+              </span>
+              <Button
+                v-if="!isNew"
+                icon="i-lucide-rotate-ccw"
+                variant="faded"
+                color="slate"
+                :label="$t('AI_AGENTS.TEST.RESET')"
+                :is-loading="testLoading && !testMessages.length"
+                @click="resetTest"
+              />
+            </div>
           </div>
 
           <p v-if="isNew" class="text-sm text-n-slate-11">
@@ -957,15 +991,60 @@ onMounted(async () => {
                   </div>
                   <div
                     v-else-if="m.private"
-                    class="self-center max-w-[90%] rounded-xl bg-n-amber-3 text-n-amber-11 px-3 py-2 text-xs whitespace-pre-wrap"
+                    class="self-center flex flex-col gap-1 max-w-[90%]"
                   >
-                    {{ m.content }}
+                    <div
+                      class="rounded-xl bg-n-amber-3 text-n-amber-11 px-3 py-2 text-xs whitespace-pre-wrap"
+                    >
+                      {{ m.content }}
+                    </div>
+                    <!-- Tokens/custo REAIS deste turno (mesmo Ai::Run que "Custos de IA" lê) — só
+                         no turno que acabou de rodar, não recuperável ao recarregar a aba. -->
+                    <span
+                      v-if="m.usage"
+                      class="self-center text-xs text-n-slate-10"
+                    >
+                      {{
+                        $t('AI_AGENTS.TEST.USAGE_TURN', {
+                          tokensIn: m.usage.tokens_in,
+                          tokensOut: m.usage.tokens_out,
+                          cost: m.usage.cost.toFixed(6),
+                        })
+                      }}
+                    </span>
                   </div>
                   <div
                     v-else
-                    class="self-start max-w-[80%] rounded-2xl rounded-bl-sm bg-n-solid-1 border border-n-weak px-4 py-2.5 text-sm text-n-slate-12 whitespace-pre-wrap"
+                    class="self-start flex flex-col gap-1 max-w-[80%]"
                   >
-                    {{ m.content }}
+                    <div
+                      class="rounded-2xl rounded-bl-sm bg-n-solid-1 border border-n-weak px-4 py-2.5 text-sm text-n-slate-12 whitespace-pre-wrap"
+                    >
+                      {{ m.content }}
+                    </div>
+                    <span
+                      v-for="(call, i) in m.usage && m.usage.tool_calls"
+                      :key="i"
+                      class="text-xs text-n-slate-10"
+                    >
+                      {{
+                        $t('AI_AGENTS.TEST.USAGE_TOOL_CALL', {
+                          tool: call.tool,
+                          tokensIn: call.tokens_in,
+                          tokensOut: call.tokens_out,
+                          cost: call.cost.toFixed(6),
+                        })
+                      }}
+                    </span>
+                    <span v-if="m.usage" class="text-xs text-n-slate-10">
+                      {{
+                        $t('AI_AGENTS.TEST.USAGE_TURN', {
+                          tokensIn: m.usage.tokens_in,
+                          tokensOut: m.usage.tokens_out,
+                          cost: m.usage.cost.toFixed(6),
+                        })
+                      }}
+                    </span>
                   </div>
                 </template>
                 <p
@@ -981,7 +1060,8 @@ onMounted(async () => {
                   v-model="testDraft"
                   :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
                   :max-length="1000"
-                  custom-text-area-class="min-h-10"
+                  :resize="false"
+                  custom-text-area-class="min-h-10 max-h-10"
                   @keydown.enter.exact.prevent="sendTestMessage"
                 />
                 <Button

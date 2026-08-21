@@ -487,15 +487,16 @@ def run_conversation(
     close_when: str | None = None,
     close_message: str | None = None,
     collect_hint: dict | None = None,
-) -> tuple[str, str, bool, float | None, bool, int, int, str]:
+) -> tuple[str, str, bool, float | None, bool, int, int, str, list]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
     (text.format=json_schema, strict — _build_reply_schema) — control flow (save/advance/transfer/
     close) is decided by Python from the parsed JSON and dispatched to Rails' webhook, never by which
     tool the model chose to call.
     Real (admin-configured) business tools are still offered as function tools for genuine external
     actions. Always returns (reply_text, conversation_id, byok_fallback, confidence, transferred,
-    tokens_in, tokens_out) — including when parsing fails or MAX_TOOL_ITERATIONS is hit — so the
-    caller (main.py) never has to special-case a cut-off turn, only real transport/API failures.
+    tokens_in, tokens_out, resolved_model, tool_usage) — including when parsing fails or
+    MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to special-case a cut-off turn,
+    only real transport/API failures.
     confidence is the model's own 0.0-1.0 self-report (None when the payload didn't parse);
     transferred is whether THIS turn already dispatched TRANSFER_TOOL — Rails uses it to skip its own
     confidence-based handoff when the model already decided to transfer on its own. tokens_in/
@@ -535,7 +536,7 @@ def run_conversation(
     using_account_key = using_account_key and not conv_byok_fallback
 
     try:
-        reply_text, turn_byok_fallback, confidence, transferred, tokens_in, tokens_out = _run_turn(
+        reply_text, turn_byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage = _run_turn(
             client=client, using_account_key=using_account_key, ticket_id=ticket_id,
             ai_agent_id=ai_agent_id, mode=mode, conversation_id=conversation_id,
             instructions=instructions, resolved_model=resolved_model, openai_tools=openai_tools,
@@ -548,7 +549,7 @@ def run_conversation(
         raise TurnFailed(conversation_id) from e
 
     return (reply_text, conversation_id, conv_byok_fallback or turn_byok_fallback, confidence, transferred,
-            tokens_in, tokens_out, resolved_model)
+            tokens_in, tokens_out, resolved_model, tool_usage)
 
 
 def _run_turn(
@@ -596,6 +597,13 @@ def _run_turn(
     # são reenviadas em cada rodada (ver _turn_kwargs) porque a Responses API não as guarda.
     deadline = time.monotonic() + config.TURN_BUDGET
     fallback_payload = None
+    # Pedido do dono da conta (21/08, aba Teste): quebra do custo POR ferramenta chamada, não só o
+    # total do turno. parallel_tool_calls=False (linha ~449) => cada rodada do loop tem NO MÁXIMO 1
+    # function_call, então o usage da resposta que TROUXE o pedido de chamada (response.usage, ANTES de
+    # executar a tool) já é, na prática, o custo daquela decisão específica — atribuído ao nome da(s)
+    # tool(s) desta rodada. Só usado hoje pelo Ai::Gateway pra exibir na aba Teste (Ai::Run.decision);
+    # não afeta tokens_in/tokens_out do turno, que continuam sendo a SOMA de tudo.
+    tool_usage: list[dict] = []
 
     for _ in range(config.MAX_TOOL_ITERATIONS):
         function_calls = [item for item in response.output if item.type == "function_call"]
@@ -607,6 +615,11 @@ def _run_turn(
         # como rede de segurança: se o parse final falhar duas vezes, a decisão real do modelo vale
         # mais que o texto estático de último recurso.
         fallback_payload = _parse_structured_reply(response.output_text) or fallback_payload
+
+        round_tokens_in = response.usage.input_tokens if response.usage else 0
+        round_tokens_out = response.usage.output_tokens if response.usage else 0
+        for call in function_calls:
+            tool_usage.append({"tool": call.name, "tokens_in": round_tokens_in, "tokens_out": round_tokens_out})
 
         # Orçamento de parede do turno (config.TURN_BUDGET): o Rails abandona o POST em
         # AI_ORCHESTRATOR_TIMEOUT e força handoff, mas o Python seguia rodando — salvando dado,
@@ -714,7 +727,7 @@ def _run_turn(
     reply_text, confidence, transferred = _dispatch_structured_reply(
         payload, ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
     )
-    return reply_text, byok_fallback, confidence, transferred, tokens_in, tokens_out
+    return reply_text, byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage
 
 
 def _parse_structured_reply(text: str | None) -> dict | None:
