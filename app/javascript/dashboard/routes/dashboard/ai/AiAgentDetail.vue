@@ -271,6 +271,12 @@ const versionsBaseUrl = computed(
   () => `${agentUrl()}/${agentId.value}/ai_agent_versions`
 );
 const promptAssistantOpen = ref(false);
+// 'base_prompt' | 'guardrails' — qual varinha abriu o painel (um único painel, kind dinâmico).
+const promptAssistantKind = ref('base_prompt');
+const openPromptAssistant = kind => {
+  promptAssistantKind.value = kind;
+  promptAssistantOpen.value = true;
+};
 
 const goBack = () => router.push({ name: 'ai_agents_index' });
 // Managing/creating custom levels is an advanced surface, off the main nav.
@@ -830,7 +836,7 @@ onMounted(async () => {
                     type="button"
                     class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
                     :title="$t('AI_AGENTS.PROMPT_ASSISTANT.OPEN')"
-                    @click="promptAssistantOpen = true"
+                    @click="openPromptAssistant('base_prompt')"
                   />
                 </div>
                 <TextArea
@@ -844,12 +850,15 @@ onMounted(async () => {
                   {{ $t('AI_AGENTS.FORM.BASE_PROMPT_HINT') }}
                 </p>
               </div>
-              <AiPromptAssistant
-                v-model:open="promptAssistantOpen"
-                kind="base_prompt"
-                :agent-id="agentId"
-              />
               <div class="flex flex-col gap-1">
+                <div class="flex justify-end -mb-1">
+                  <button
+                    type="button"
+                    class="i-lucide-sparkles size-4 text-n-slate-10 hover:text-n-brand"
+                    :title="$t('AI_AGENTS.PROMPT_ASSISTANT.OPEN')"
+                    @click="openPromptAssistant('guardrails')"
+                  />
+                </div>
                 <TextArea
                   v-model="agentForm.guardrails"
                   :label="$t('AI_AGENTS.FORM.GUARDRAILS')"
@@ -861,6 +870,11 @@ onMounted(async () => {
                   {{ $t('AI_AGENTS.FORM.GUARDRAILS_HINT') }}
                 </p>
               </div>
+              <AiPromptAssistant
+                v-model:open="promptAssistantOpen"
+                :kind="promptAssistantKind"
+                :agent-id="agentId"
+              />
               <div class="flex justify-end">
                 <Button
                   :label="$t('AI_AGENTS.FORM.SAVE')"

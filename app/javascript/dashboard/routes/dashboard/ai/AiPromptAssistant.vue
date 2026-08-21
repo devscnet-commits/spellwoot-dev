@@ -1,8 +1,8 @@
 <script setup>
 /* global axios */
-// Slide-over (painel lateral) que sugere um base_prompt ou instruções de etapa a partir de um brief do
-// usuário. base_prompt: single-shot, UMA sugestão em texto (não preenche o campo; o usuário copia) —
-// o base_prompt não tem "campos" pra aplicar direto. step_instructions: contrato de 2 campos SEPARADOS
+// Slide-over (painel lateral) que sugere um base_prompt, guardrails ou instruções de etapa a partir de
+// um brief do usuário. base_prompt/guardrails: single-shot, UMA sugestão em texto (não preenche o
+// campo; o usuário copia) — nenhum dos dois tem "campos" pra aplicar direto. step_instructions: contrato de 2 campos SEPARADOS
 // (objective/rules, espelha AiStepForm.vue) — o admin revisa o preview e clica
 // "Usar esta sugestão" pra aplicar direto nos 2 campos do form (emit('apply')); nada é salvo sozinho,
 // o Salvar da etapa continua sendo o único gesto que persiste. Usa o axios GLOBAL do Chatwoot
@@ -23,7 +23,7 @@ import TeleportWithDirection from 'dashboard/components-next/TeleportWithDirecti
 
 const props = defineProps({
   open: { type: Boolean, default: false },
-  // 'base_prompt' | 'step_instructions'
+  // 'base_prompt' | 'guardrails' | 'step_instructions'
   kind: { type: String, default: 'base_prompt' },
   // Agente em edição: ancora as CAPACIDADES REAIS (tools/knowledge/variáveis) no backend, para o
   // assistente não sugerir consulta sem fonte nem variável inventada. Ausente => o backend degrada.
@@ -37,15 +37,17 @@ const { t } = useI18n();
 const isStepKind = computed(() => props.kind === 'step_instructions');
 
 const brief = ref('');
-const suggestion = ref(''); // base_prompt: texto único
+const suggestion = ref(''); // base_prompt/guardrails: texto único
 const structured = ref(null); // step_instructions: { objective, rules } — SÓ isso vai pro apply()
 const adminWarnings = ref([]); // step_instructions: avisos pro admin humano — NUNCA aplicados ao form
 const loading = ref(false);
 
+const TITLES = {
+  step_instructions: 'AI_AGENTS.PROMPT_ASSISTANT.TITLE_STEP_INSTRUCTIONS',
+  guardrails: 'AI_AGENTS.PROMPT_ASSISTANT.TITLE_GUARDRAILS',
+};
 const title = computed(() =>
-  isStepKind.value
-    ? t('AI_AGENTS.PROMPT_ASSISTANT.TITLE_STEP_INSTRUCTIONS')
-    : t('AI_AGENTS.PROMPT_ASSISTANT.TITLE_BASE_PROMPT')
+  t(TITLES[props.kind] || 'AI_AGENTS.PROMPT_ASSISTANT.TITLE_BASE_PROMPT')
 );
 
 const hasResult = computed(() =>

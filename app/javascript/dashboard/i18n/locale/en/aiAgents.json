@@ -148,6 +148,7 @@
     },
     "PROMPT_ASSISTANT": {
       "TITLE_BASE_PROMPT": "Assistente de prompt base",
+      "TITLE_GUARDRAILS": "Assistente de regras de segurança",
       "TITLE_STEP_INSTRUCTIONS": "Assistente de instruções da etapa",
       "SUBTITLE": "Descreva o que você precisa e receba uma sugestão de texto. Nenhuma alteração é aplicada automaticamente; revise antes de utilizar.",
       "BRIEF_LABEL": "O que você precisa?",
