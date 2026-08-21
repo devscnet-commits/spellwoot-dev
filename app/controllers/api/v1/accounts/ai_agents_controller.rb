@@ -84,7 +84,15 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
     copy = nil
     ::Ai::Agent.transaction do
       copy = @agent.dup
-      copy.name = next_duplicate_name(@agent.name)
+      # Achado ao vivo (21/08): a tela mostra assistant_name quando preenchido (AiAgents.vue,
+      # AiAgentDetail.vue — {{ agent.assistant_name || agent.name }}), não a coluna "name" — "name" é
+      # só o identificador interno (obrigatório, mas sem campo de edição na tela; buildAgentPayload só
+      # o preenche na CRIAÇÃO, espelhando assistant_name de então — os dois podem divergir depois se
+      # assistant_name for editado). A primeira versão numerava só "name", que a tela nunca mostra —
+      # a cópia saía com o MESMO assistant_name do original, parecendo que nada tinha mudado.
+      new_name = next_duplicate_name(@agent.assistant_name.presence || @agent.name)
+      copy.name = new_name
+      copy.assistant_name = new_name if @agent.assistant_name.present?
       copy.status = 'inactive'
       copy.save!
 
@@ -103,12 +111,17 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   # "Nome X" -> "Nome X 1"; duplicar de novo (a partir do original OU de qualquer cópia numerada) ->
   # "Nome X 2", sempre a partir do MAIOR número já usado por esse nome-base na conta (nunca reusa um
   # número already tomado, mesmo se cópias intermediárias forem apagadas/renomeadas fora de ordem).
-  def next_duplicate_name(name)
-    base = name.to_s.sub(/ \d+\z/, '')
-    used = ::Ai::Agent.where(account_id: Current.account.id)
-                      .where('name = ? OR name LIKE ?', base, "#{base} %")
-                      .pluck(:name)
-    numbers = used.filter_map { |n| n[/\A#{Regexp.escape(base)} (\d+)\z/, 1]&.to_i }
+  # Busca por assistant_name OU name (o display já cai pro fallback name quando assistant_name está
+  # vazio — mesmo critério de #duplicate, pra achar duplicatas mesmo que os dois campos tenham
+  # divergido num agente editado à mão antes desta correção).
+  def next_duplicate_name(base_name)
+    base = base_name.to_s.sub(/ \d+\z/, '')
+    display_names = ::Ai::Agent.where(account_id: Current.account.id)
+                               .where('assistant_name = ? OR assistant_name LIKE ? OR name = ? OR name LIKE ?',
+                                      base, "#{base} %", base, "#{base} %")
+                               .pluck(:assistant_name, :name)
+                               .map { |assistant_name, name| assistant_name.presence || name }
+    numbers = display_names.filter_map { |n| n[/\A#{Regexp.escape(base)} (\d+)\z/, 1]&.to_i }
     "#{base} #{(numbers.max || 0) + 1}"
   end
 
