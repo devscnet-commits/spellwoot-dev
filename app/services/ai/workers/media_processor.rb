@@ -75,21 +75,63 @@ class Ai::Workers::MediaProcessor
     nil
   end
 
-  # Checagem BARATA (só byte_size, sem baixar/transcrever/OCR nada) se algum anexo da mensagem estoura
-  # o teto configurado pro seu tipo — chamada pelo Gateway ANTES de #process, pra decidir se recusa o
-  # anexo (avisa o cliente, nunca gasta com transcrição/visão/parse) sem pagar o custo de processá-lo
-  # primeiro. max_bytes: hash file_type ('image'/'audio'/'file') => limite em bytes (0/nil/ausente =
-  # sem limite pra aquele tipo). Retorna o file_type do PRIMEIRO anexo oversized, ou nil.
-  def self.oversized_attachment_type(message, max_bytes)
-    return nil if max_bytes.blank?
+  # Teto configurável por tipo, checado ANTES de gastar com a API paga (áudio/Whisper) ou de mandar pro
+  # modelo (documento) — NUNCA depois. Unidade escolhida por tipo (decisão de produto, 21/08): MB não é
+  # uma unidade que o admin (não-técnico) saiba calibrar. Áudio: SEGUNDOS, via ffprobe (não decodifica o
+  # áudio inteiro, só lê o header/metadata — não paga o custo do Whisper pra descobrir que ia recusar).
+  # Documento: CARACTERES do texto já extraído (mesma unidade do limite de texto que o admin já
+  # entende) — reprocessa o PDF/docx aqui, mas pdf-reader/docx são LOCAIS e baratos, sem custo de API;
+  # o que queremos evitar é só a chamada ao modelo, não a extração em si (mesmo raciocínio de
+  # #pending_vision_images, que já reprocessa por esse motivo). Imagem NÃO tem teto aqui: sem unidade
+  # fácil de configurar, a IA lê nativamente via visão (image_url) sem passar por este arquivo — decisão
+  # consciente de não limitar. limits: { audio_max_seconds:, document_max_chars: } (0/nil = sem limite
+  # pro tipo). Retorna o file_type do PRIMEIRO anexo oversized ('audio'/'file'), ou nil.
+  def self.oversized_attachment_type(message, account_id, profile, conversation_id, limits)
+    return nil if limits.blank?
 
     message.attachments.to_a.each do |attachment|
-      limit = max_bytes[attachment.file_type].to_i
-      next unless limit.positive?
-      next unless attachment.file.attached?
+      case attachment.file_type
+      when 'audio'
+        max_seconds = limits[:audio_max_seconds].to_i
+        next unless max_seconds.positive? && attachment.file.attached?
 
-      return attachment.file_type if attachment.file.blob.byte_size > limit
+        seconds = audio_duration_seconds(attachment)
+        return 'audio' if seconds && seconds > max_seconds
+      when 'file'
+        max_chars = limits[:document_max_chars].to_i
+        next unless max_chars.positive? && attachment.file.attached?
+
+        text = document(attachment, account_id, profile, conversation_id, skip_vision: true)
+        return 'file' if text && text.length > max_chars
+      end
     end
+    nil
+  end
+
+  # Duração do áudio em segundos via `ffprobe` (lê só o metadata/header do arquivo, não decodifica o
+  # áudio inteiro). nil se ffprobe faltar/falhar/não retornar duração (formato exótico ou corrompido) —
+  # o caller trata como "não sei a duração" e DEIXA PASSAR (fail-open, mesmo espírito do resto deste
+  # arquivo: nunca bloqueia o atendimento por uma falha nossa de infra).
+  def self.audio_duration_seconds(attachment)
+    Tempfile.create(['ai-audio-probe', audio_extension(attachment)]) do |tmp|
+      tmp.binmode
+      tmp.write(attachment.file.download)
+      tmp.rewind
+      ffprobe_duration(tmp.path)
+    end
+  rescue StandardError => e
+    Rails.logger.warn "[Ai::Workers::MediaProcessor] duração do áudio: #{e.class}: #{e.message}"
+    nil
+  end
+
+  def self.ffprobe_duration(path)
+    require 'open3'
+    out, status = Open3.capture2('ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                                  '-of', 'default=noprint_wrappers=1:nokey=1', path)
+    return nil unless status.success?
+
+    Float(out.strip)
+  rescue StandardError, ArgumentError
     nil
   end
 

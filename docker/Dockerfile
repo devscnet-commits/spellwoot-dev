@@ -132,6 +132,7 @@ RUN apk update && apk add --no-cache \
   postgresql-client \
   imagemagick \
   ghostscript \
+  ffmpeg \
   git \
   vips \
   && gem install bundler -v "$BUNDLER_VERSION"
