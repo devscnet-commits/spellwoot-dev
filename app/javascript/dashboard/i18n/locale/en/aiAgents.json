@@ -189,7 +189,8 @@
       "THINKING": "A IA está respondendo...",
       "USAGE_TOTAL": "Sessão: {tokensIn} in / {tokensOut} out · US$ {cost}",
       "USAGE_HINT": "Tokens e custo reais desta sessão de teste (mesmo dado de Custos de IA) — gera gasto de verdade na OpenAI, igual a um atendimento real.",
-      "USAGE_TURN": "{tokensIn} in / {tokensOut} out · US$ {cost}"
+      "USAGE_TURN": "{tokensIn} in / {tokensOut} out · US$ {cost}",
+      "USAGE_TOOL_CALL": "🔧 chamada da ferramenta {tool}: {tokensIn} in / {tokensOut} out · US$ {cost}"
     },
     "FORM": {
       "IDENTITY": "Identidade",

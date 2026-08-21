@@ -1022,6 +1022,20 @@ onMounted(async () => {
                     >
                       {{ m.content }}
                     </div>
+                    <span
+                      v-for="(call, i) in m.usage && m.usage.tool_calls"
+                      :key="i"
+                      class="text-xs text-n-slate-10"
+                    >
+                      {{
+                        $t('AI_AGENTS.TEST.USAGE_TOOL_CALL', {
+                          tool: call.tool,
+                          tokensIn: call.tokens_in,
+                          tokensOut: call.tokens_out,
+                          cost: call.cost.toFixed(6),
+                        })
+                      }}
+                    </span>
                     <span v-if="m.usage" class="text-xs text-n-slate-10">
                       {{
                         $t('AI_AGENTS.TEST.USAGE_TURN', {

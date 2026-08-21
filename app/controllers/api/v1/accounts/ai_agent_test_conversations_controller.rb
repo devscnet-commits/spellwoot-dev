@@ -101,7 +101,20 @@ class Api::V1::Accounts::AiAgentTestConversationsController < Api::V1::Accounts:
   def serialize_usage(run)
     return nil if run.nil?
 
-    { 'tokens_in' => run.tokens_in, 'tokens_out' => run.tokens_out, 'cost' => run.cost.to_f.round(6) }
+    { 'tokens_in' => run.tokens_in, 'tokens_out' => run.tokens_out, 'cost' => run.cost.to_f.round(6),
+      'tool_calls' => serialize_tool_calls(run) }
+  end
+
+  # Quebra por ferramenta chamada dentro deste turno (achado ao vivo, 21/08 — orchestrator.py grava em
+  # Ai::Run.decision['tool_calls'], ver Ai::Gateway#run). Custo de cada item calculado com o MESMO
+  # preço/modelo do turno (run.model) — não é um preço à parte por ferramenta, é o mesmo motor.
+  def serialize_tool_calls(run)
+    Array(run.decision['tool_calls']).map do |call|
+      tokens_in = call['tokens_in'].to_i
+      tokens_out = call['tokens_out'].to_i
+      { 'tool' => call['tool'], 'tokens_in' => tokens_in, 'tokens_out' => tokens_out,
+        'cost' => Ai::ModelRouter.estimate_cost(run.model, tokens_in, tokens_out) }
+    end
   end
 
   # Total acumulado da SESSÃO de teste atual (soma de todos os Ai::Run desta conversation_id) — cada
