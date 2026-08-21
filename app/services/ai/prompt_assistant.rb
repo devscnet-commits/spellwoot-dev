@@ -16,7 +16,7 @@
 # audit/cost — consuming the account's AI credits like every other AI call.
 class Ai::PromptAssistant
   MODEL = 'gpt-4.1-mini'.freeze
-  KINDS = %w[base_prompt step_instructions].freeze
+  KINDS = %w[base_prompt guardrails step_instructions].freeze
 
   def initialize(account:, kind:, brief:, agent: nil, requested_by: nil)
     @account = account
@@ -60,7 +60,11 @@ class Ai::PromptAssistant
   end
 
   def system_prompt(kind)
-    kind == 'base_prompt' ? Prompts::BASE_PROMPT_SYSTEM : Prompts::STEP_INSTRUCTIONS_SYSTEM
+    case kind
+    when 'base_prompt' then Prompts::BASE_PROMPT_SYSTEM
+    when 'guardrails' then Prompts::GUARDRAILS_SYSTEM
+    else Prompts::STEP_INSTRUCTIONS_SYSTEM
+    end
   end
 
   # Bloco que ancora o item 1 (ação sem fonte) e o item 3 (variável do select). Tools/knowledge valem
