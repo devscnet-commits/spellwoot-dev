@@ -771,7 +771,7 @@
   },
   "AI_PROFILES": {
     "TITLE": "Níveis de atendimento",
-    "DESCRIPTION": "Modelos reutilizáveis que definem o equilíbrio entre custo, velocidade e qualidade da IA. A configuração técnica fica em Avançado.",
+    "DESCRIPTION": "Modelos reutilizáveis que definem o equilíbrio entre custo, velocidade e qualidade da IA.",
     "NEW": "Novo nível",
     "EMPTY": "Nenhum nível de atendimento criado.",
     "PRESET": {
@@ -782,7 +782,7 @@
       "CUSTOMIZADO": "Personalizado"
     },
     "LEVELS": {
-      "HINT": "Escolha o equilíbrio entre custo, velocidade e qualidade. Os detalhes técnicos do motor ficam em Avançado.",
+      "HINT": "Escolha o equilíbrio entre custo, velocidade e qualidade.",
       "COST": "Custo",
       "SPEED": "Velocidade",
       "QUALITY": "Qualidade",
@@ -798,19 +798,17 @@
     },
     "ADVANCED": {
       "TITLE": "Avançado (motor)",
-      "DESCRIPTION": "Modelo da IA e orçamento. Só para usuários avançados — o nível acima já define bons padrões."
+      "DESCRIPTION": "Modelo da IA e orçamento."
     },
     "SUPERVISOR": {
       "TITLE": "Modelo da IA",
-      "DESCRIPTION": "O modelo principal que conduz o atendimento e usa as ferramentas.",
       "TEMPERATURE": "Criatividade das respostas",
-      "TEMPERATURE_HINT": "Mais rígido = respostas consistentes e previsíveis (recomendado para atendimento). Mais criativo = respostas variadas. O valor real é ajustado automaticamente para cada provedor.",
+      "TEMPERATURE_HINT": "Mais rígido = respostas consistentes e previsíveis. Mais criativo = respostas variadas.",
       "TEMPERATURE_RIGID": "Rígido",
       "TEMPERATURE_BALANCED": "Equilibrado",
       "TEMPERATURE_CREATIVE": "Criativo"
     },
     "BUDGET": {
-      "TITLE": "Orçamento",
       "DESCRIPTION": "Teto mensal de gasto com IA e o que fazer ao atingi-lo.",
       "MONTHLY": "Orçamento mensal (USD)",
       "ON_LIMIT": "Ao atingir o limite",

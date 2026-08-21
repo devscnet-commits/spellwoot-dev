@@ -279,14 +279,9 @@ onMounted(hydrate);
       >
         <!-- Supervisor -->
         <div class="flex flex-col gap-2">
-          <div class="flex flex-col gap-0.5">
-            <h3 class="text-sm font-medium text-n-slate-12">
-              {{ $t('AI_PROFILES.SUPERVISOR.TITLE') }}
-            </h3>
-            <p class="text-xs text-n-slate-11 mb-0">
-              {{ $t('AI_PROFILES.SUPERVISOR.DESCRIPTION') }}
-            </p>
-          </div>
+          <h3 class="text-sm font-medium text-n-slate-12">
+            {{ $t('AI_PROFILES.SUPERVISOR.TITLE') }}
+          </h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="flex flex-col gap-1.5">
               <span class="text-sm font-medium text-n-slate-12">{{
@@ -349,14 +344,9 @@ onMounted(hydrate);
 
         <!-- Budget -->
         <div class="flex flex-col gap-2">
-          <div class="flex flex-col gap-0.5">
-            <h3 class="text-sm font-medium text-n-slate-12">
-              {{ $t('AI_PROFILES.BUDGET.TITLE') }}
-            </h3>
-            <p class="text-xs text-n-slate-11 mb-0">
-              {{ $t('AI_PROFILES.BUDGET.DESCRIPTION') }}
-            </p>
-          </div>
+          <p class="text-xs text-n-slate-11 mb-0">
+            {{ $t('AI_PROFILES.BUDGET.DESCRIPTION') }}
+          </p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               v-model="form.budget_usd"
