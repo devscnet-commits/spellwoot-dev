@@ -125,7 +125,7 @@
     },
     "HANDOFF": {
       "TITLE": "Para onde o agente transfere",
-      "DESCRIPTION": "Para quais setores humanos e outras IAs este agente pode transferir uma conversa.",
+      "DESCRIPTION": "Para quais setores humanos e IAs este agente pode transferir uma conversa.",
       "ALLOWLIST": "Transferir para times (humanos)",
       "ALLOWLIST_HINT": "A IA só transfere para os marcados. Sem marcação, vai para um humano.",
       "NO_TEAMS": "Nenhum outro time disponível nesta conta.",
@@ -134,7 +134,7 @@
       "NO_IA": "Nenhuma outra IA ativa nesta conta.",
       "FALLBACK_LABEL": "Quando a IA não conseguir atender, enviar para",
       "FALLBACK_DEFAULT": "Padrão (primeiro time da lista acima)",
-      "FALLBACK_HINT": "Quando ela desiste (travou, sem tentativas, confiança baixa ou provedor fora) e o cliente não pediu setor. Só times marcados acima.",
+      "FALLBACK_HINT": "Usado quando a IA não decide o setor certo: ela desistiu (travou, sem tentativas, confiança baixa ou provedor fora) ou pediu um setor que não existe na lista. Só é aceito se o time estiver marcado acima.",
       "FALLBACK_EMPTY": "Marque ao menos um time acima para escolher o destino padrão."
     },
     "VERSIONS": {
@@ -166,7 +166,7 @@
     },
     "INBOXES": {
       "TITLE": "Quando este agente atende",
-      "DESCRIPTION": "Marque as caixas que este agente atende. Quando atende, ele responde ao cliente.",
+      "DESCRIPTION": "Marque as caixas que este agente atende.",
       "NONE": "Não atende",
       "SHADOW": "Análise (observa)",
       "LIVE": "Live (responde)",
@@ -181,7 +181,7 @@
     "TEST": {
       "TITLE": "Testar a IA",
       "LAB_TITLE": "Laboratório de teste",
-      "LAB_SUBTITLE": "Converse como se fosse o cliente — roda o mesmo motor real (etapas, ferramentas e memória), sem enviar nada de verdade.",
+      "LAB_SUBTITLE": "Ambiente de simulação para testar seu agente de IA configurado.",
       "PLACEHOLDER": "Escreva uma mensagem como se fosse o cliente...",
       "SEND": "Enviar",
       "RESET": "Reiniciar teste",
