@@ -3,6 +3,8 @@
 # Table name: ai_knowledge_sources
 #
 #  id               :bigint           not null, primary key
+#  crawl_error      :text
+#  crawl_status     :string
 #  kind             :string           default("faq"), not null
 #  price            :string
 #  raw              :text
@@ -42,7 +44,13 @@ class Ai::KnowledgeSource < ApplicationRecord
 
   def sync_knowledge
     if kind == 'website'
-      Ai::SiteCrawlJob.perform_later(id) if previously_new_record? || saved_change_to_title?
+      return unless previously_new_record? || saved_change_to_title?
+
+      # 'pending' na hora de enfileirar, não só quando o job termina — sem isto, editar a URL de uma
+      # fonte que já tinha falhado (ou já estava indexada) deixava o badge antigo na tela até o job
+      # rodar, parecendo que nada aconteceu.
+      update_column(:crawl_status, 'pending') # rubocop:disable Rails/SkipsModelValidations
+      Ai::SiteCrawlJob.perform_later(id)
     elsif previously_new_record? || saved_change_to_title? || saved_change_to_raw?
       Ai::KnowledgeIngestJob.perform_later(id)
     end

@@ -653,6 +653,11 @@
     "TITLE": "Conhecimento",
     "SHARED": "Compartilhado",
     "ORPHAN": "Fonte órfã",
+    "CRAWL": {
+      "PENDING": "Buscando o site…",
+      "OK": "Site indexado",
+      "FAILED": "Falha ao ler o site"
+    },
     "FILTER": {
       "SCOPE_LABEL": "Agente",
       "SCOPE_ALL": "Todos",
