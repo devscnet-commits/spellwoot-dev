@@ -1,5 +1,7 @@
 # Fetches a website knowledge source (title holds the URL), extracts the page text into `raw`
-# and triggers ingestion so it becomes retrievable. Best-effort: failures are logged, not raised.
+# and triggers ingestion so it becomes retrievable. Best-effort: failures are logged AND recorded on
+# the source (crawl_status/crawl_error) — antes só o log via Rails.logger.error existia, e a tela nunca
+# mostrava nada quando o crawl falhava; a fonte ficava salva com "raw" vazio, parecendo normal.
 class Ai::SiteCrawlJob < ApplicationJob
   queue_as :low
 
@@ -11,22 +13,28 @@ class Ai::SiteCrawlJob < ApplicationJob
     return if source.nil? || source.kind != 'website'
 
     url = normalize_url(source.title.to_s.strip)
-    return if url.blank?
+    return fail!(source, 'URL vazia ou inválida.') if url.blank?
 
     # url vem de um KnowledgeSource (título editável pelo usuário) → valida contra SSRF. O SafeHttp
     # segue redirects, mas REVALIDA cada hop (antes o follow_redirects: true cru permitia um redirect
     # para 169.254.169.254/rede interna). Ver CVE-2026-5205.
     response = Ai::SafeHttp.request(:get, url, headers: { 'User-Agent' => 'ConexiiaBot/1.0' }, timeout: TIMEOUT)
     text = extract_text(response.body.to_s)
-    return if text.blank?
+    return fail!(source, 'A página não tem texto para extrair.') if text.blank?
 
-    source.update_columns(raw: text.first(MAX_CHARS), updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+    source.update_columns(raw: text.first(MAX_CHARS), crawl_status: 'ok', crawl_error: nil, # rubocop:disable Rails/SkipsModelValidations
+                          updated_at: Time.current)
     Ai::KnowledgeIngestJob.perform_later(source.id)
   rescue StandardError => e
     Rails.logger.error "[Ai::SiteCrawlJob] source=#{source_id} #{e.class}: #{e.message}"
+    fail!(source, e.message.to_s.first(500)) if source
   end
 
   private
+
+  def fail!(source, message)
+    source.update_columns(crawl_status: 'failed', crawl_error: message) # rubocop:disable Rails/SkipsModelValidations
+  end
 
   def normalize_url(url)
     return '' if url.blank?

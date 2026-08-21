@@ -129,6 +129,34 @@ const scopeBadge = source => {
   };
 };
 
+// Badge de status do crawl — SÓ pra fontes tipo "website" (as demais nunca tiveram esse problema: o
+// texto já vem digitado/enviado na hora). Sem isto, um crawl que falha (site fora do ar, timeout,
+// bloqueado) ficava mudo — a fonte parecia salva normalmente, mas nunca virava conhecimento buscável
+// (ver Ai::SiteCrawlJob). null quando não é website ou nunca foi enfileirada ainda.
+const crawlBadge = source => {
+  if (source.kind !== 'website') return null;
+  if (source.crawl_status === 'ok') {
+    return {
+      text: t('AI_KNOWLEDGE.CRAWL.OK'),
+      icon: 'i-lucide-check',
+      class: 'bg-n-teal-3 text-n-teal-11',
+    };
+  }
+  if (source.crawl_status === 'failed') {
+    return {
+      text: t('AI_KNOWLEDGE.CRAWL.FAILED'),
+      icon: 'i-lucide-alert-triangle',
+      class: 'bg-n-ruby-3 text-n-ruby-11',
+      title: source.crawl_error || '',
+    };
+  }
+  return {
+    text: t('AI_KNOWLEDGE.CRAWL.PENDING'),
+    icon: 'i-lucide-loader-circle',
+    class: 'bg-n-alpha-2 text-n-slate-11',
+  };
+};
+
 // Documentos: drag-and-drop or click to upload a TXT/CSV file; the backend extracts its text.
 const fileInput = ref(null);
 const dragActive = ref(false);
@@ -787,6 +815,15 @@ onMounted(() => {
                 >
                   <span :class="scopeBadge(source).icon" class="size-3" />
                   {{ scopeBadge(source).text }}
+                </span>
+                <span
+                  v-if="crawlBadge(source)"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+                  :class="crawlBadge(source).class"
+                  :title="crawlBadge(source).title"
+                >
+                  <span :class="crawlBadge(source).icon" class="size-3" />
+                  {{ crawlBadge(source).text }}
                 </span>
               </div>
             </div>
