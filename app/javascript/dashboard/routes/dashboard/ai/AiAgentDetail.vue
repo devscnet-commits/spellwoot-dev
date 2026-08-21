@@ -981,7 +981,8 @@ onMounted(async () => {
                   v-model="testDraft"
                   :placeholder="$t('AI_AGENTS.TEST.PLACEHOLDER')"
                   :max-length="1000"
-                  custom-text-area-class="min-h-10"
+                  :resize="false"
+                  custom-text-area-class="min-h-10 max-h-10"
                   @keydown.enter.exact.prevent="sendTestMessage"
                 />
                 <Button
