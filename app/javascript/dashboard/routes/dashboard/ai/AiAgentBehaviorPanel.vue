@@ -1255,14 +1255,14 @@ onMounted(async () => {
                  visual, perto da mensagem de encerramento que é enviada quando o gatilho dispara. -->
             <label class="flex flex-col gap-1 text-sm text-n-slate-12">
               {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN') }}
+              <span class="text-xs font-normal text-n-slate-11">
+                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
+              </span>
               <textarea
                 v-model="form.close_when_steps"
                 rows="4"
                 class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-[5rem] leading-relaxed"
               />
-              <span class="text-xs text-n-slate-11">
-                {{ $t('AI_DEPARTMENTS.FORM.CLOSE_WHEN_HINT') }}
-              </span>
             </label>
 
             <label class="flex flex-col gap-1 text-sm text-n-slate-12 max-w-xs">
