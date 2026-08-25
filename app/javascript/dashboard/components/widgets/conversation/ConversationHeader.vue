@@ -29,6 +29,15 @@ const conversationHeader = ref(null);
 const { width } = useElementSize(conversationHeader);
 const { isAWebWidgetInbox } = useInbox();
 
+// Responsividade pela largura REAL do header (não do viewport): com o painel do contato aberto o
+// header fica estreito mesmo em telas largas, então o breakpoint xl: forçava linha num espaço
+// apertado e os botões cobriam a foto. Abaixo de 640px empilhamos (coluna) e compactamos as ações.
+// width === 0 = ainda não medido → assume largo (desktop, caso mais comum) p/ evitar flash.
+const COMPACT_WIDTH = 640;
+const isCompact = computed(
+  () => width.value > 0 && width.value < COMPACT_WIDTH
+);
+
 const currentChat = computed(() => store.getters.getSelectedChat);
 const accountId = computed(() => store.getters.getCurrentAccountId);
 
@@ -81,10 +90,12 @@ const isReopened = computed(
 <template>
   <div
     ref="conversationHeader"
-    class="flex flex-col gap-3 items-center justify-between flex-1 w-full min-w-0 xl:flex-row px-4 py-3 h-28 xl:h-16"
+    class="flex gap-3 items-center justify-between flex-1 w-full min-w-0 px-4 py-3"
+    :class="isCompact ? 'flex-col h-28' : 'flex-row h-16'"
   >
     <div
-      class="flex items-center justify-start w-full xl:w-auto max-w-full min-w-0 xl:flex-1"
+      class="flex items-center justify-start max-w-full min-w-0 overflow-hidden"
+      :class="isCompact ? 'w-full' : 'w-auto flex-1'"
     >
       <BackButton
         v-if="showBackButton"
@@ -98,6 +109,7 @@ const isReopened = computed(
         :status="currentContact.availability_status"
         hide-offline-status
         rounded-full
+        class="shrink-0"
       />
       <div
         class="flex flex-col items-start min-w-0 ml-3 overflow-hidden rtl:ml-0 rtl:mr-3"
@@ -133,7 +145,8 @@ const isReopened = computed(
       </div>
     </div>
     <div
-      class="flex flex-row items-center justify-start xl:justify-end flex-shrink-0 gap-2 w-full xl:w-auto header-actions-wrap"
+      class="flex flex-row flex-wrap items-center gap-2 min-w-0 header-actions-wrap"
+      :class="isCompact ? 'w-full justify-start' : 'w-auto justify-end'"
     >
       <SLACardLabel
         v-if="hasSlaPolicyId"
@@ -142,7 +155,7 @@ const isReopened = computed(
         :parent-width="width"
         class="hidden md:flex"
       />
-      <MoreActions :conversation-id="currentChat.id" />
+      <MoreActions :conversation-id="currentChat.id" :compact="isCompact" />
     </div>
   </div>
 </template>

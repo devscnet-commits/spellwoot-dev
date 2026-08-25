@@ -31,6 +31,10 @@ class ContactPolicy < ApplicationPolicy
     true
   end
 
+  def ai_memory?
+    true
+  end
+
   def destroy_custom_attributes?
     true
   end

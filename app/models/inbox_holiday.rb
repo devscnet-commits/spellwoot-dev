@@ -1,5 +1,29 @@
 # frozen_string_literal: true
 
+# == Schema Information
+#
+# Table name: inbox_holidays
+#
+#  id            :bigint           not null, primary key
+#  holiday_day   :integer          not null
+#  holiday_month :integer          not null
+#  holiday_year  :integer
+#  name          :string           not null
+#  recurring     :boolean          default(TRUE), not null
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#  account_id    :bigint
+#  inbox_id      :bigint           not null
+#
+# Indexes
+#
+#  index_inbox_holidays_on_account_id  (account_id)
+#  index_inbox_holidays_on_inbox_id    (inbox_id)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (inbox_id => inboxes.id)
+#
 class InboxHoliday < ApplicationRecord
   belongs_to :inbox
 

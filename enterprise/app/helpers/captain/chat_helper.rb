@@ -130,6 +130,7 @@ module Captain::ChatHelper
   end
 
   def log_chat_completion_request
-    Rails.logger.info("#{self.class.name} Assistant: #{@assistant.id}, requesting completion for #{@messages} with #{@tools&.length || 0} tools")
+    # PII: don't log @messages (conversation content) — only counts.
+    Rails.logger.info("#{self.class.name} Assistant: #{@assistant.id}, requesting completion for #{@messages&.length || 0} messages with #{@tools&.length || 0} tools")
   end
 end

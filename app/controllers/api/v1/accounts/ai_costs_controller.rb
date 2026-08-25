@@ -6,7 +6,7 @@
 class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
   def index
     scope = ::Ai::Run.where(account_id: Current.account.id)
-    scope = scope.where('ai_runs.created_at >= ?', period_start) if period_start
+    scope = apply_period(scope)
     scope = scope.where(ai_agent_id: params[:agent_id]) if params[:agent_id].present?
 
     models = by_model(scope)
@@ -32,6 +32,31 @@ class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
   def period_start
     days = params[:days].to_i
     days.positive? ? days.days.ago : nil
+  end
+
+  # Filtro de data: intervalo customizado (from/to em YYYY-MM-DD) tem prioridade; senão usa ?days=N.
+  def apply_period(scope)
+    from = parse_date(params[:from])
+    to = parse_date(params[:to])
+    if from && to
+      scope.where(created_at: from.beginning_of_day..to.end_of_day)
+    elsif from
+      scope.where('ai_runs.created_at >= ?', from.beginning_of_day)
+    elsif to
+      scope.where('ai_runs.created_at <= ?', to.end_of_day)
+    elsif period_start
+      scope.where('ai_runs.created_at >= ?', period_start)
+    else
+      scope
+    end
+  end
+
+  def parse_date(value)
+    return nil if value.blank?
+
+    Date.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
   end
 
   def round6(value)
@@ -73,10 +98,14 @@ class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
     agg
   end
 
+  # Um run guarda ai_agent_id mesmo depois do agente ser excluído (Ai::Run não tem FK com cascade) —
+  # de propósito, o histórico de custo precisa sobreviver à exclusão. Sem isto, o nome caía pra
+  # "#123" cru, indistinguível de um id de verdade — agora fica claro que é um agente que já foi
+  # excluído, não um erro de carregamento.
   def by_agent(scope)
     agg = grouped_cost(scope, :ai_agent_id)
     names = agent_names(agg.keys)
-    agg.map { |id, row| { name: names[id] || "##{id}", runs: row[:runs], cost: row[:cost] } }
+    agg.map { |id, row| { name: names[id] || "Agente excluído (##{id})", runs: row[:runs], cost: row[:cost] } }
   end
 
   def by_error(scope)

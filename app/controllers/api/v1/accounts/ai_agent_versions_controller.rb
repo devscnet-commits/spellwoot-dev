@@ -4,15 +4,19 @@ class Api::V1::Accounts::AiAgentVersionsController < Api::V1::Accounts::BaseCont
   before_action :set_agent
 
   def index
-    render json: ::Ai::AgentVersion.where(ai_agent_id: @agent.id).recent
+    render json: ::Ai::Version.for_record(@agent).recent.map { |version| serialize(version) }
   end
 
   def restore
-    version = ::Ai::AgentVersion.find_by(id: params[:id], ai_agent_id: @agent.id)
+    version = ::Ai::Version.for_record(@agent).find_by(id: params[:id])
     return render(json: { error: 'versão não encontrada' }, status: :not_found) if version.nil?
 
-    @agent.update!(version.snapshot.slice(*::Ai::AgentVersion::SNAPSHOT_FIELDS))
-    ::Ai::AgentVersion.snapshot!(@agent, note: "Restaurado da v#{version.version_number}")
+    # PRÉ-SNAPSHOT: captura o estado ATUAL antes de sobrescrever (mudanças por console não geram versão) —
+    # torna o restore REVERSÍVEL. Ver ai_playbook_versions_controller.
+    ::Ai::Version.snapshot!(@agent, snapshot_fields: ::Ai::Agent::SNAPSHOT_FIELDS, note: 'Estado antes da restauração')
+    version.restore!(::Ai::Agent::SNAPSHOT_FIELDS)
+    ::Ai::Version.snapshot!(@agent, snapshot_fields: ::Ai::Agent::SNAPSHOT_FIELDS,
+                                    note: "Restaurado da v#{version.version_number}")
     render json: @agent
   end
 
@@ -21,5 +25,11 @@ class Api::V1::Accounts::AiAgentVersionsController < Api::V1::Accounts::BaseCont
   def set_agent
     @agent = ::Ai::Agent.find_by(id: params[:ai_agent_id], account_id: Current.account.id)
     render(json: { error: 'agente não encontrado' }, status: :not_found) if @agent.nil?
+  end
+
+  # Mesma shape enxuta do ai_department_versions ({ id, version_number, note, created_at }); o front
+  # (AiVersionHistory.vue) só usa esses campos e não deve receber o snapshot/versionable/account_id.
+  def serialize(version)
+    version.slice(:id, :version_number, :note, :created_at)
   end
 end

@@ -8,6 +8,18 @@ require 'rails/all'
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+# RubyLLM: opta pela API acts_as "nova" (associação) em vez da legada. NÃO adotamos a persistência
+# acts_as do RubyLLM (não há Chat/Message/ToolCall/Model nem tabelas; Ai::Run/Ai::Event já cobrem isso).
+# Isto apenas DESLIGA o aviso de deprecação que o railtie loga no `else` de RubyLLM.config.use_new_acts_as
+# (ruby_llm/railtie.rb) — ele dispara pela flag, SEM checar uso real de acts_as, então saía em todo boot
+# mesmo sem usarmos nada. Tem de ficar AQUI (após Bundler.require, que define RubyLLM; e ANTES da classe
+# Application), porque o Rails carrega os models/roda `on_load :active_record` antes dos initializers —
+# em config/initializers/ruby_llm.rb a flag chegaria tarde ("funciona em dev, falha em prod"). Chave de
+# API/endpoint/registry seguem em lib/llm/config.rb (lazy, sem problema de timing).
+RubyLLM.configure do |config|
+  config.use_new_acts_as = true
+end
+
 ## Load the specific APM agent
 # We rely on DOTENV to load the environment variables
 # We need these environment variables to load the specific APM agent
@@ -65,6 +77,10 @@ module Chatwoot
     # https://discuss.rubyonrails.org/t/cve-2022-32224-possible-rce-escalation-bug-with-serialized-columns-in-active-record/81017
     # FIX ME : fixes breakage of installation config. we need to migrate.
     config.active_record.yaml_column_permitted_classes = [ActiveSupport::HashWithIndifferentAccess]
+
+    # Usa structure.sql (pg_dump) em vez de schema.rb: preserva 100% do pgvector
+    # (extensão vector + índices ivfflat/hnsw com opclass), que o dumper Ruby não round-trip.
+    config.active_record.schema_format = :sql
 
     # Disable PDF/video preview generation as we don't use them
     config.active_storage.previewers = []

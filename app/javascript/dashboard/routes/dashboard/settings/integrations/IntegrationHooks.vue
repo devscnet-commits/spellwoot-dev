@@ -9,6 +9,10 @@ import MultipleIntegrationHooks from './MultipleIntegrationHooks.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 
+// Integrações cuja configuração foi movida para "APIs & Credentials" e que não
+// devem mais expor o campo de chave na tela de Integração clássica.
+const HIDDEN_INTEGRATIONS = ['openai'];
+
 export default {
   components: {
     NewHook,
@@ -77,6 +81,14 @@ export default {
     },
   },
   mounted() {
+    // A chave OpenAI passou a ser configurada apenas em "APIs & Credentials"
+    // (integrations-hub) — fonte única lida pelo agente de IA. Mesmo com o card
+    // oculto na lista, a URL direta ainda exporia o campo de chave; por isso
+    // redirecionamos o OpenAI clássico para o hub.
+    if (HIDDEN_INTEGRATIONS.includes(String(this.integrationId))) {
+      this.$router.replace({ name: 'integrations_hub' });
+      return;
+    }
     this.$store.dispatch('integrations/get');
   },
   methods: {

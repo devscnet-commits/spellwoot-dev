@@ -127,12 +127,13 @@ const patchAgent = async (agent, payload, okMessage) => {
   }
 };
 
+// Cópia INTEIRA feita no backend (#duplicate) numa transação só — identidade, comportamento,
+// playbook/etapas, tools, knowledge sources, lead variables e integrações. Nasce "Nome N" (nome-base
+// + próximo número livre), status inativo e sem nenhuma caixa vinculada, pra revisar antes de ativar.
 const duplicate = async agent => {
   openMenuId.value = null;
   try {
-    const { data: full } = await axios.get(`${baseUrl()}/${agent.id}`);
-    const copy = { ...full, id: undefined, name: `${full.name} (cópia)` };
-    await axios.post(baseUrl(), { ai_agent: copy });
+    await axios.post(`${baseUrl()}/${agent.id}/duplicate`);
     useAlert(t('AI_AGENTS.SAVED'));
     fetchAgents();
   } catch (error) {
@@ -220,9 +221,6 @@ onMounted(fetchAgents);
             <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.PROFILE') }}
             </th>
-            <th class="hidden lg:table-cell text-left font-medium px-3 py-2.5">
-              {{ $t('AI_AGENTS.LIST.DEPARTMENTS') }}
-            </th>
             <th class="text-left font-medium px-3 py-2.5">
               {{ $t('AI_AGENTS.LIST.STATUS') }}
             </th>
@@ -269,13 +267,6 @@ onMounted(fetchAgents);
             <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
               {{
                 agent.operation_profile_name || $t('AI_AGENTS.LIST.NO_PROFILE')
-              }}
-            </td>
-            <td class="hidden lg:table-cell px-3 py-3 text-n-slate-11">
-              {{
-                $t('AI_AGENTS.LIST.DEPARTMENTS_COUNT', {
-                  count: agent.departments_count ?? 0,
-                })
               }}
             </td>
             <td class="px-3 py-3">

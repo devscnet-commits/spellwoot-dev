@@ -15,13 +15,9 @@ class Ai::Copilot
     return { 'error' => 'nenhum agente IA vinculado a esta caixa' } if binding.nil?
 
     agent = binding.agent
-    department, = Ai::DepartmentResolver.resolve(
-      agent: agent, inbox_id: @conversation.inbox_id, message_content: last_customer_message
-    )
-    return { 'error' => 'nenhum departamento ativo' } if department.nil?
 
     knowledge = Ai::KnowledgeRetriever.retrieve(
-      query: last_customer_message, account_id: @account.id
+      query: last_customer_message, account_id: @account.id, agent_id: agent.id
     )
 
     run = Ai::Run.create!(
@@ -30,8 +26,9 @@ class Ai::Copilot
     )
     result = Ai::ModelRouter.decide(
       profile: agent.operation_profile,
-      system_prompt: build_prompt(agent, department, knowledge),
-      user_message: transcript
+      system_prompt: build_prompt(agent, knowledge),
+      user_message: transcript,
+      account_id: @account.id
     )
     run.update!(
       provider: result[:provider], model: result[:model], tokens_in: result[:tokens_in],
@@ -69,12 +66,11 @@ class Ai::Copilot
                  .join("\n")
   end
 
-  def build_prompt(agent, department, knowledge)
+  def build_prompt(agent, knowledge)
     parts = []
     parts << 'Você é um COPILOTO que ajuda o ATENDENTE HUMANO. Você NUNCA responde o cliente diretamente.'
     parts << "Assistente da empresa: #{agent.assistant_name.presence || agent.name}. #{agent.base_prompt}"
-    parts << "Departamento: #{department.name}. Objetivo: #{department.objetivo}."
-    if (pb = department.playbook) && pb.steps.present?
+    if (pb = agent.playbook) && pb.steps.present?
       parts << "Etapas do atendimento: #{Array(pb.steps).join(' -> ')}."
     end
     parts << "Base de conhecimento relevante:\n#{knowledge.join("\n---\n")}" if knowledge.present?

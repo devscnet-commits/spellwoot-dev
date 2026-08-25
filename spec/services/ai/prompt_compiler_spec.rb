@@ -1,0 +1,640 @@
+require 'rails_helper'
+
+RSpec.describe Ai::PromptCompiler do
+  # Doubles leves: o compile só lê atributos (e faz Team.where/Ai::Agent.where, que voltam vazios).
+  def build_agent
+    double('agent',
+           base_prompt: 'Você é a assistente da SCNET.', assistant_personality: nil,
+           assistant_language: nil, guardrails: nil, assistant_name: 'Bia', name: 'Bia',
+           company_name: 'SCNET', site: nil, identify_as: 'ai', account_id: 987_654,
+           handoff_agent_ids: [])
+  end
+
+  def build_dept(instructions:)
+    double('dept', name: 'Comercial', objetivo: 'Converter leads em clientes',
+                   instructions: instructions, playbook: nil, lead_variables: [])
+  end
+
+  def compile(dept)
+    described_class.compile(agent: build_agent, department: dept, knowledge: [], memory: nil, tools: [])
+  end
+
+  it 'NÃO injeta mais o campo legado department.instructions no prompt (dept com lixo)' do
+    prompt = compile(build_dept(instructions: 'dhsezhdsrhsderhesdr'))
+
+    expect(prompt).not_to include('dhsezhdsrhsderhesdr')
+    expect(prompt).not_to include('Instruções:')
+  end
+
+  it 'ignora até um valor "válido" antigo em instructions (aposentado independente do conteúdo)' do
+    prompt = compile(build_dept(instructions: 'Sempre confirme os dados duas vezes.'))
+
+    expect(prompt).not_to include('Sempre confirme os dados duas vezes.')
+    expect(prompt).not_to include('Instruções:')
+  end
+
+  it 'segue compilando normalmente o restante (identidade + objetivo do departamento)' do
+    prompt = compile(build_dept(instructions: 'qualquer coisa'))
+
+    expect(prompt).to include('Agente de IA: Comercial.')
+    expect(prompt).to include('SCNET')
+  end
+
+  it 'departments com instructions vazio compilam igual (nunca importou)' do
+    prompt = compile(build_dept(instructions: ''))
+
+    expect(prompt).to include('Agente de IA: Comercial.')
+    expect(prompt).not_to include('Instruções:')
+  end
+
+  describe 'bloco de conhecimento (uso restrito — anti-alucinação)' do
+    def compile_with_knowledge(knowledge)
+      described_class.compile(agent: build_agent, department: build_dept(instructions: nil),
+                              knowledge: knowledge, memory: nil, tools: [])
+    end
+
+    it 'injeta o conhecimento E a instrução de usar SÓ ele / nunca inventar produto/valor' do
+      prompt = compile_with_knowledge(["Internet Fibra 300 Mega\nPlano residencial R$ 89,90"])
+
+      expect(prompt).to include('Base de conhecimento relevante')
+      expect(prompt).to include('Internet Fibra 300 Mega') # o conteúdo do RAG entrou
+      expect(prompt).to include('Use APENAS os produtos, planos, valores')
+      expect(prompt).to include('NUNCA invente')
+    end
+
+    it 'não injeta o bloco (nem a instrução) quando não há conhecimento' do
+      prompt = compile_with_knowledge([])
+
+      expect(prompt).not_to include('Base de conhecimento relevante')
+      expect(prompt).not_to include('NUNCA invente')
+    end
+
+    # Guarda determinística (conv 397): a etapa declarou fonte e o retrieval voltou vazio.
+    it 'knowledge_gap com conhecimento VAZIO injeta o aviso "não afirme sem fonte"' do
+      prompt = described_class.compile(agent: build_agent, department: build_dept(instructions: nil),
+                                       knowledge: [], memory: nil, tools: [], knowledge_gap: true)
+
+      expect(prompt).to include('A FONTE de conhecimento que esta etapa precisa consultar NÃO retornou dados')
+    end
+
+    it 'knowledge_gap é IGNORADO quando HÁ conhecimento (o bloco normal vence)' do
+      prompt = described_class.compile(agent: build_agent, department: build_dept(instructions: nil),
+                                       knowledge: ['algum chunk'], memory: nil, tools: [], knowledge_gap: true)
+
+      expect(prompt).to include('Base de conhecimento relevante')
+      expect(prompt).not_to include('NÃO retornou dados')
+    end
+
+    it 'sem conhecimento e sem knowledge_gap: nenhum aviso (comportamento inalterado)' do
+      expect(compile_with_knowledge([])).not_to include('NÃO retornou dados')
+    end
+  end
+
+  describe 'âncora determinística de etapa (step_index)' do
+    def build_dept_with_steps(steps)
+      pb = double('playbook', steps: steps, transfer_when: [], close_when: [])
+      double('dept', name: 'Comercial', objetivo: 'Converter leads', instructions: nil,
+                     playbook: pb, lead_variables: [])
+    end
+
+    def compile_step(steps, step_index: nil)
+      described_class.compile(agent: build_agent, department: build_dept_with_steps(steps),
+                              knowledge: [], memory: nil, tools: [], step_index: step_index)
+    end
+
+    let(:steps) { [{ 'name' => 'Coleta' }, { 'name' => 'Proposta' }, { 'name' => 'Fechamento' }] }
+
+    it 'ancora o modelo na etapa do índice informado (não deixa ele se autolocalizar)' do
+      prompt = compile_step(steps, step_index: 1)
+
+      expect(prompt).to include('ETAPA ATUAL (definida pelo sistema, não por você): 2 de 3 — "Proposta"')
+      expect(prompt).to include('NÃO volte a etapas anteriores')
+      # o texto legado que pedia o modelo se localizar sozinho saiu
+      expect(prompt).not_to include('informe o nome EXATO da etapa atual')
+    end
+
+    it 'assume a primeira etapa (índice 0) quando nenhum índice é passado' do
+      prompt = compile_step(steps, step_index: nil)
+
+      expect(prompt).to include('ETAPA ATUAL (definida pelo sistema, não por você): 1 de 3 — "Coleta"')
+    end
+
+    it 'clampa um índice fora do range na última etapa' do
+      prompt = compile_step(steps, step_index: 99)
+
+      expect(prompt).to include('3 de 3 — "Fechamento"')
+    end
+
+    it 'lista as etapas na ordem para contexto' do
+      prompt = compile_step(steps, step_index: 0)
+
+      expect(prompt).to include('Etapas do atendimento (na ordem):')
+      expect(prompt).to include('- Coleta')
+      expect(prompt).to include('- Fechamento')
+    end
+  end
+
+  # Prompt caching: prefixo FIXO primeiro, blocos VARIÁVEIS depois. Mesmo CONJUNTO de blocos de antes —
+  # só a ordem mudou; a âncora saiu de dentro do bloco de etapas e virou bloco próprio (variável).
+  describe 'reordenação para prompt caching (fixos antes, variáveis depois)' do
+    def build_dept_full
+      pb = double('playbook',
+                  steps: [{ 'name' => 'Coleta', 'collect' => { 'attribute' => 'cidade', 'required' => true } },
+                          { 'name' => 'Proposta' }],
+                  transfer_when: ['cliente irritado'], close_when: ['resolvido'])
+      double('dept', name: 'Comercial', objetivo: 'Vender', instructions: nil, playbook: pb, lead_variables: [])
+    end
+
+    let(:prompt) do
+      described_class.compile(
+        agent: build_agent, department: build_dept_full,
+        knowledge: ['Internet Fibra 300 Mega — R$ 89,90'], memory: double('mem', summary: 'cliente já é assinante'),
+        tools: [], collected: { 'nome' => 'Jaque' }, step_index: 0
+      )
+    end
+
+    let(:fixed_markers) do
+      ['Você é a assistente da SCNET.', 'Agente de IA: Comercial.', 'Etapas do atendimento (na ordem):',
+       'Transfira para humano quando', 'Encerre quando', 'Retorne ESTRITAMENTE um JSON']
+    end
+
+    let(:variable_markers) do
+      ['ETAPA ATUAL (definida', 'ESTADO DA COLETA', 'Base de conhecimento relevante', 'Memória da conversa:']
+    end
+
+    it 'todos os blocos FIXOS aparecem ANTES de qualquer bloco VARIÁVEL' do
+      fixed_idx = fixed_markers.map { |m| prompt.index(m) }
+      var_idx = variable_markers.map { |m| prompt.index(m) }
+
+      aggregate_failures do
+        expect(fixed_idx).to all(be_a(Integer)) # todos presentes
+        expect(var_idx).to all(be_a(Integer))
+        expect(fixed_idx.max).to be < var_idx.min
+      end
+    end
+
+    it 'o response_contract (fixo) vem ANTES da âncora, do estado da coleta e do RAG' do
+      contract = prompt.index('Retorne ESTRITAMENTE um JSON')
+
+      aggregate_failures do
+        expect(contract).to be < prompt.index('ETAPA ATUAL (definida')
+        expect(contract).to be < prompt.index('ESTADO DA COLETA')
+        expect(contract).to be < prompt.index('Base de conhecimento relevante')
+      end
+    end
+
+    # Contrato pergunta↔etapa: o campo asked_slot precisa estar no TEMPLATE JSON e ter instrução própria,
+    # senão o modelo nunca o devolve e o roteamento por pergunta (TurnCapture) fica sempre no fallback.
+    it 'o response_contract inclui asked_slot no template JSON e a instrução (cobre escolha/permissão + exemplo)' do
+      contract = described_class.response_contract
+
+      aggregate_failures do
+        expect(contract).to include('"asked_slot":""')
+        expect(contract).to include('Em "asked_slot", informe a CHAVE EXATA do slot')
+        # o furo dos 35%: pergunta de escolha/permissão cuja resposta É o slot — com o exemplo real
+        expect(contract).to include('perguntas de ESCOLHA, PERMISSÃO ou CONFIRMAÇÃO')
+        expect(contract).to include('asked_slot = escolha_caminho')
+      end
+    end
+
+    it 'a âncora da etapa NÃO aparece mais DENTRO do bloco de etapas (bloco próprio)' do
+      steps_block = prompt.split("\n\n").find { |p| p.start_with?('Etapas do atendimento') }
+
+      expect(steps_block).to be_present
+      expect(steps_block).not_to include('ETAPA ATUAL')
+    end
+
+    it 'nenhum bloco perdido nem duplicado (cada marcador único aparece exatamente uma vez)' do
+      (fixed_markers + variable_markers).each do |m|
+        expect(prompt.scan(m).size).to eq(1), "marcador #{m.inspect} apareceu #{prompt.scan(m).size}x"
+      end
+    end
+
+    it 'não sobra linha em branco entre blocos (nenhum bloco vazio -> nada de três quebras seguidas)' do
+      expect(prompt).not_to include("\n\n\n")
+    end
+
+    it 'sem RAG / sem memória / sem tools: compila e não deixa linha em branco sobrando' do
+      bare = described_class.compile(agent: build_agent, department: build_dept_full,
+                                     knowledge: [], memory: nil, tools: [], collected: {}, step_index: 0)
+
+      aggregate_failures do
+        expect(bare).to include('Retorne ESTRITAMENTE um JSON')
+        expect(bare).not_to include('Base de conhecimento relevante')
+        expect(bare).not_to include('Memória da conversa:')
+        expect(bare).not_to include("\n\n\n")
+      end
+    end
+  end
+
+  describe 'ESTADO DA COLETA (reforço ativo — JÁ TENHO / FALTA agora)' do
+    def build_dept_with_steps(steps)
+      pb = double('playbook', steps: steps, transfer_when: [], close_when: [])
+      double('dept', name: 'Comercial', objetivo: 'Converter leads', instructions: nil,
+                     playbook: pb, lead_variables: [])
+    end
+
+    def compile_state(steps:, step_index:, collected: {})
+      described_class.compile(agent: build_agent, department: build_dept_with_steps(steps),
+                              knowledge: [], memory: nil, tools: [], collected: collected,
+                              step_index: step_index)
+    end
+
+    let(:steps) do
+      [{ 'name' => 'Nome', 'collect' => { 'attribute' => 'nome', 'required' => true } },
+       { 'name' => 'Cidade', 'collect' => { 'attribute' => 'cidade', 'required' => true } },
+       { 'name' => 'Planos', 'complete_when' => 'always' }]
+    end
+
+    it 'mostra "JÁ TENHO" com os fatos coletados e a regra anti-repetição' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).to include('ESTADO DA COLETA')
+      expect(prompt).to include('✓ JÁ TENHO: nome=Jaque')
+      expect(prompt).to include('NUNCA peça de novo um dado da lista "JÁ TENHO"')
+    end
+
+    it 'no bloco "JÁ TENHO", o token de ausência é exibido como "não informado" (o modelo não vê o token cru como valor)' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => Ai::StepSlot::ABSENT })
+
+      expect(prompt).to include('✓ JÁ TENHO: nome=não informado')
+      # o token só pode aparecer na INSTRUÇÃO de recusa (input do modelo), NUNCA como valor já coletado
+      expect(prompt).not_to include("nome=#{Ai::StepSlot::ABSENT}")
+    end
+
+    it 'instrui o modelo a devolver a sentinela quando o cliente declinar o dado do slot' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).to include(Ai::StepSlot::ABSENT) # instrução A (input do modelo)
+      expect(prompt).to include('NÃO TEM')
+    end
+
+    it 'mostra "FALTA agora" com a CHAVE do slot da etapa atual quando ainda não coletado' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).to include('◦ FALTA agora')
+      expect(prompt).to include('cidade')
+    end
+
+    it 'NÃO mostra "FALTA agora" quando o slot da etapa atual já foi coletado' do
+      prompt = compile_state(steps: steps, step_index: 1, collected: { 'nome' => 'Jaque', 'cidade' => 'Chapecó' })
+
+      expect(prompt).not_to include('◦ FALTA agora')
+      expect(prompt).to include('✓ JÁ TENHO: nome=Jaque, cidade=Chapecó')
+    end
+
+    it 'não injeta "FALTA agora" em etapa informativa (sem collect)' do
+      prompt = compile_state(steps: steps, step_index: 2, collected: { 'nome' => 'Jaque' })
+
+      expect(prompt).not_to include('◦ FALTA agora')
+    end
+
+    it 'omite o bloco inteiro quando não há nada coletado e a etapa não declara slot' do
+      informational = [{ 'name' => 'Boas-vindas', 'complete_when' => 'always' }]
+      prompt = compile_state(steps: informational, step_index: 0, collected: {})
+
+      expect(prompt).not_to include('ESTADO DA COLETA')
+    end
+
+    it 'em etapa de slot sem nada coletado, mostra só "FALTA agora" (sem "JÁ TENHO")' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      expect(prompt).to include('ESTADO DA COLETA')
+      expect(prompt).to include('◦ FALTA agora')
+      expect(prompt).to include('nome')
+      expect(prompt).not_to include('✓ JÁ TENHO')
+    end
+
+    # conv 396 (runs 2039→2041): a confirmação isolada cria um turno SEM dado novo e é onde o motor se perde.
+    # O DEFAULT do bloco passa a ser acuse-inline; a confirmação isolada fica só como EXCEÇÃO p/ valor suspeito.
+    it 'DEFAULT: acusar o dado VÁLIDO INLINE (mesma msg do próximo pedido), NUNCA pergunta separada só p/ confirmar' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      aggregate_failures do
+        expect(prompt).to include('acuse-o na MESMA mensagem em que pede o próximo dado')
+        expect(prompt).to include('NUNCA faça uma pergunta separada só para confirmar')
+      end
+    end
+
+    it 'EXCEÇÃO preservada: valor incompleto/estranho/malformado ainda ganha a confirmação ISOLADA uma vez' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      aggregate_failures do
+        expect(prompt).to include('EXCEÇÃO')
+        expect(prompt).to include('incompleto/estranho/malformado')
+        expect(prompt).to include('confirme UMA única vez, isolada')
+      end
+    end
+
+    it 'o acuse-inline (default) vem ANTES da confirmação isolada (exceção) no bloco' do
+      prompt = compile_state(steps: steps, step_index: 0, collected: {})
+
+      expect(prompt.index('acuse-o na MESMA mensagem')).to be < prompt.index('EXCEÇÃO')
+    end
+  end
+
+  # Prompt ENXUTO da 2ª chamada (Ai::Gateway#tool_followup): a ferramenta já rodou, o modelo só REDIGE
+  # a resposta (pode pedir handoff/close). Saem os blocos de coleta/etapa/ferramenta; ficam persona,
+  # RAG (+anti-invenção), times de handoff e o contrato. Objetos reais (o bloco de times precisa de Team).
+  describe 'compile(followup:) — enxuga a 2ª chamada' do
+    let(:account) { create(:account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:real_agent) do
+      Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id,
+                        guardrails: 'Nunca prometa desconto.')
+    end
+    let(:real_dept) do
+      real_agent.update!(behavior: {})
+      dept = real_agent
+      dept.create_playbook!(active: true, transfer_when: ['cliente irritado'], steps: [
+                              { 'name' => 'CADASTRO', 'instructions' => 'Peça e grave documento.' },
+                              { 'name' => 'Fim' }
+                            ])
+      dept.lead_variables.create!(name: 'cidade', account: account)
+      Ai::Tool.create!(account: account, ai_agent_id: dept.id, name: 'consulta_cobertura',
+                       implementation_type: 'capability', capability_key: 'coverage.check', status: 'active',
+                       description: 'Checa cobertura')
+      dept
+    end
+
+    # Sem fallback (18/08): a whitelist tem que ser explícita pra este time aparecer no prompt.
+    before { real_agent.update!(handoff_team_ids: [create(:team, account: account, name: 'Suporte N2').id]) }
+
+    def compile(followup:, knowledge: ['Internet Fibra 300 Mega — Plano residencial R$ 89,90'])
+      described_class.compile(
+        agent: real_agent, department: real_dept, knowledge: knowledge, memory: nil,
+        tools: real_dept.tools.active.to_a, collected: { 'documento' => 'CNH-123' },
+        fillable_attributes: [%w[email E-mail]], step_index: 0, followup: followup
+      )
+    end
+
+    it 'followup NÃO contém: LISTA de etapas, lead_variables, fillable, tools, transfer_when' do
+      prompt = compile(followup: true)
+
+      aggregate_failures do
+        expect(prompt).not_to include('Etapas do atendimento')            # LISTA completa de etapas
+        expect(prompt).not_to include('Procure coletar naturalmente')      # lead_variables
+        expect(prompt).not_to include('Atributos da conversa para preencher') # fillable_attributes
+        expect(prompt).not_to include('Ferramentas disponíveis')           # tools
+        expect(prompt).not_to include('consulta_cobertura')
+        expect(prompt).not_to include('Transfira para humano quando')
+      end
+    end
+
+    # Ajuste do #273: a âncora da etapa corrente e o estado da coleta VOLTARAM ao followup (conv 372 — o
+    # followup redigia sem saber a etapa e repedia dado já coletado). O CORTE do #273 (lista de etapas,
+    # lead, fillable, tools) segue de pé — só estes dois blocos retornam.
+    it 'followup CONTÉM a âncora da etapa corrente e o ESTADO DA COLETA (JÁ TENHO com os fatos)' do
+      prompt = compile(followup: true)
+
+      aggregate_failures do
+        expect(prompt).to include('ETAPA ATUAL (definida pelo sistema, não por você): 1 de 2 — "CADASTRO"')
+        expect(prompt).to include('ESTADO DA COLETA (mantido pelo sistema')
+        expect(prompt).to include('✓ JÁ TENHO: documento=CNH-123') # facts populados aparecem no followup
+      end
+    end
+
+    it 'followup mostra "FALTA agora" com a CHAVE do slot da etapa quando ainda não coletado' do
+      real_dept.playbook.update!(steps: [
+                                   { 'name' => 'CADASTRO', 'collect' => { 'attribute' => 'documento_cpf' } },
+                                   { 'name' => 'Fim' }
+                                 ])
+      prompt = described_class.compile(
+        agent: real_agent, department: real_dept, knowledge: [], memory: nil, tools: [],
+        collected: {}, step_index: 0, followup: true
+      )
+
+      aggregate_failures do
+        expect(prompt).to include('◦ FALTA agora')
+        expect(prompt).to include('documento_cpf')
+        expect(prompt).not_to include('Etapas do atendimento') # a lista continua fora
+      end
+    end
+
+    it 'followup CONTÉM: persona, guardrails, RAG (+anti-invenção), times de handoff, response_contract' do
+      prompt = compile(followup: true)
+
+      aggregate_failures do
+        expect(prompt).to include('Bia')                                   # persona
+        expect(prompt).to include('Nunca prometa desconto.')               # guardrails
+        expect(prompt).to include('Base de conhecimento relevante')        # RAG
+        expect(prompt).to include('Internet Fibra 300 Mega')
+        expect(prompt).to include('NUNCA invente')                         # anti-invenção
+        expect(prompt).to include('Times disponíveis')                     # handoff humano
+        expect(prompt).to include('Suporte N2')
+        expect(prompt).to include('Retorne ESTRITAMENTE um JSON')          # response_contract
+      end
+    end
+
+    it 'PRIMEIRA chamada (followup: false, default) mantém o prompt COMPLETO e MAIOR (regressão)' do
+      full = compile(followup: false)
+
+      expect(full).to include('Etapas do atendimento')
+      expect(full).to include('ETAPA ATUAL')
+      expect(full).to include('✓ JÁ TENHO')
+      expect(full).to include('Ferramentas disponíveis')
+      expect(full).to include('consulta_cobertura')
+      expect(compile(followup: true).length).to be < full.length
+    end
+
+    it 'sem RAG e sem memória: o followup enxuto ainda compila (não quebra)' do
+      prompt = described_class.compile(agent: real_agent, department: real_dept, knowledge: [], memory: nil,
+                                       tools: [], customer_memory: nil, followup: true)
+
+      expect(prompt).to include('Retorne ESTRITAMENTE um JSON')
+      expect(prompt).not_to include('Base de conhecimento relevante')
+    end
+  end
+
+  # Ajuste (a) — roteamento por intenção: o bloco de times de handoff passa a listar SÓ a whitelist do
+  # agente (handoff_team_ids) com a description de cada time, para o modelo escolher por INTENÇÃO e não
+  # nomear um time que a resolução recusa. Objetos reais (o bloco precisa de Team.description).
+  describe 'bloco de times de handoff — fonte = whitelist (handoff_team_ids) + description' do
+    let(:account) { create(:account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:agent) do
+      Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id)
+    end
+    let(:dept) { agent }
+    let!(:t_comercial) { create(:team, account: account, name: 'Comerciais', description: 'contratação de planos e vendas') }
+    let!(:t_suporte)   { create(:team, account: account, name: 'Suporte', description: 'problemas técnicos e reparos') }
+    let!(:t_fora)      { create(:team, account: account, name: 'Financeiro', description: 'cobrança') }
+
+    def prompt_for(agent_arg)
+      described_class.compile(agent: agent_arg, department: dept, knowledge: [], memory: nil, tools: [])
+    end
+
+    it 'lista SÓ os times da whitelist (handoff_team_ids), não todos os times da conta' do
+      agent.update!(handoff_team_ids: [t_comercial.id, t_suporte.id])
+      prompt = prompt_for(agent)
+
+      aggregate_failures do
+        expect(prompt).to include('- Comerciais: contratação de planos e vendas')
+        expect(prompt).to include('- Suporte: problemas técnicos e reparos')
+        expect(prompt).not_to include('Financeiro') # fora da whitelist -> não é oferecido ao modelo
+      end
+    end
+
+    it 'inclui a description ao lado do nome quando existe; nome sozinho quando vazia' do
+      t_suporte.update!(description: '')
+      agent.update!(handoff_team_ids: [t_comercial.id, t_suporte.id])
+      prompt = prompt_for(agent)
+
+      aggregate_failures do
+        expect(prompt).to include('- Comerciais: contratação de planos e vendas') # com description
+        expect(prompt).to include('- Suporte')                                    # aparece
+        expect(prompt).not_to include('- Suporte:')                               # mas SEM ": " (vazia)
+      end
+    end
+
+    it 'respeita a ORDEM dos checkboxes (array), não a ordem do banco' do
+      agent.update!(handoff_team_ids: [t_suporte.id, t_comercial.id]) # Suporte marcado 1º
+      prompt = prompt_for(agent)
+      expect(prompt.index('- Suporte')).to be < prompt.index('- Comerciais')
+    end
+
+    it 'whitelist VAZIA: NENHUM time é oferecido (sem fallback pra todos os times da conta)' do
+      agent.update!(handoff_team_ids: [])
+      prompt = prompt_for(agent)
+
+      aggregate_failures do
+        expect(prompt).not_to include('Times disponíveis')
+        expect(prompt).not_to include('Comerciais')
+        expect(prompt).not_to include('Suporte')
+        expect(prompt).not_to include('Financeiro')
+      end
+    end
+  end
+
+  # collection_state_block: a REGRA passa a AUTORIZAR a correção de um valor já em JÁ TENHO (separando
+  # repergunta de atualização), e a frase de correção duplicada no fluxo do slot atual foi REMOVIDA — uma
+  # instrução, no lugar certo. LIMITE HONESTO: isto prova que o TEXTO está lá, não que o modelo obedece; o
+  # aceite é AO VIVO (reproduzir a conv da evidência; ver descrição do PR).
+  describe '.collection_state_block — autoriza correção de JÁ TENHO' do
+    let(:block) do
+      described_class.collection_state_block([], 0, { 'plano_escolhido' => 'Internet Fibra 600 Mega' })
+    end
+
+    it 'quando há JÁ TENHO, emite a cláusula de CORREÇÃO na REGRA (chave nova em attributes, atualização)' do
+      aggregate_failures do
+        expect(block).to include('JÁ TENHO')
+        expect(block).to include('CORRIGIR por conta própria')
+        expect(block).to include('a MESMA chave com o novo')
+        expect(block).to include('ATUALIZAÇÃO, não repergunta')
+      end
+    end
+
+    it 'NÃO emite mais a frase de correção duplicada no fluxo do dado VÁLIDO (uma instrução só)' do
+      # prova de mutação: falha se a linha 144 antiga ("Se o cliente corrigir depois, atualize o valor e siga")
+      # voltar — foram DUAS instruções de correção em lugares diferentes que criaram a confusão.
+      expect(block).not_to include('Se o cliente corrigir depois')
+    end
+  end
+
+  # CONTRATO (não orientação): quando há proposta pendente, o modelo tem de popular attributes[slot] na confirmação
+  # — senão vem mudo (echo_missing; 12/13 em plano_escolhido). Dirigido por estado do motor (ai_last_proposed_value).
+  describe '.pending_proposal_line (proposta pendente obriga a popular attributes)' do
+    it 'emite a linha de contrato quando há proposta pendente para o slot' do
+      line = described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => 'Fibra 300' })
+      aggregate_failures do
+        expect(line).to include('PROPOSTA PENDENTE')
+        expect(line).to include('plano_escolhido')
+        expect(line).to include('attributes')
+      end
+    end
+
+    # GUARDA DE POLARIDADE (conv 437: a linha foi lida como o oposto por causa da quebra do "nunca"): a instrução
+    # tem de mandar POPULAR, nunca deixar vazio. Falha se alguém inverter o sentido num refactor.
+    it 'INSTRUI a popular attributes, NÃO a deixar vazio' do
+      line = described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => 'Fibra 300' })
+      aggregate_failures do
+        expect(line).to include('SEMPRE popule')
+        expect(line).to include('NÃO pode vir vazio')
+      end
+    end
+
+    # A guarda de arquitetura: a linha é CONTRATO PURO. Se alguém colar exemplo/apresentação aqui, quebra a fronteira
+    # (vira orientação de conversa hardcoded — o hardcode que o tenant deveria controlar na INSTRUÇÃO DA ETAPA).
+    it 'é CONTRATO PURO — sem exemplo, "posso seguir", apresentação ou vocabulário de conversa' do
+      line = described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => 'Fibra 300' })
+      expect(line).not_to match(/posso seguir|apresent|Ainda é|Ex\.:|pergunte/i)
+    end
+
+    it 'NÃO emite sem proposta pendente nem sem slot' do
+      aggregate_failures do
+        expect(described_class.pending_proposal_line('plano_escolhido', {})).to be_nil
+        expect(described_class.pending_proposal_line('plano_escolhido', { 'pending_proposed' => '' })).to be_nil
+        expect(described_class.pending_proposal_line('', { 'pending_proposed' => 'X' })).to be_nil
+      end
+    end
+
+    it 'integra no collection_state_block quando o slot da etapa corrente tem proposta pendente' do
+      steps = [{ 'name' => 'PLANOS', 'collect' => { 'attribute' => 'plano_escolhido', 'type' => 'choice', 'options' => %w[a b] } }]
+      block = described_class.collection_state_block(steps, 0, {}, nil, { 'pending_proposed' => 'Fibra 300' })
+      expect(block).to include('PROPOSTA PENDENTE')
+    end
+  end
+
+  # Frente C — bloco da memória do CONTATO. Apresenta o dado como de atendimentos ANTERIORES (não desta
+  # conversa) e NÃO diz mais "use e não pergunte de novo" (o que fazer é da instrução da etapa).
+  describe 'bloco Memória do cliente (Frente C)' do
+    def compile_with_memory(customer_memory)
+      described_class.compile(agent: build_agent, department: build_dept(instructions: 'x'),
+                              knowledge: [], memory: nil, tools: [], customer_memory: customer_memory)
+    end
+
+    it 'conv seguinte do mesmo contato: o bloco aparece com os dados, marcado como de atendimentos anteriores' do
+      mem = Ai::CustomerMemory.new(summary: nil,
+                                   key_facts: { 'nome_cliente' => 'Jaqueline', 'documento_cpf' => '110.336.369-75' })
+
+      prompt = compile_with_memory(mem)
+
+      expect(prompt).to include('de atendimentos ANTERIORES')
+      expect(prompt).to include('Dados deste cliente (de atendimentos anteriores):')
+      expect(prompt).to include('nome_cliente: Jaqueline')
+      expect(prompt).to include('documento_cpf: 110.336.369-75')
+      expect(prompt).not_to include('não pergunte de novo') # a diretiva de uso saiu (decisão 2)
+    end
+
+    it 'contato SEM memória anterior (nil): bloco ausente, sem regressão' do
+      expect(compile_with_memory(nil)).not_to include('Memória deste cliente')
+    end
+
+    it 'memória vazia (sem summary nem facts): bloco ausente' do
+      empty = Ai::CustomerMemory.new(summary: nil, key_facts: {})
+
+      expect(compile_with_memory(empty)).not_to include('Memória deste cliente')
+    end
+  end
+
+  # 4ª aplicação do padrão "descrição vaga → modelo preenche errado": o bloco de handoff no prompt
+  # precisa proibir explicitamente categoria genérica ("suporte", "comercial"), senão o modelo inventa
+  # o nome em vez de copiar da lista → não casa → motor faz fallback pro time errado.
+  describe 'contrato handoff_target no prompt — NUNCA categoria genérica' do
+    let(:account) { create(:account) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+    let(:agent_with_team) do
+      ag = Ai::Agent.create!(account: account, name: 'Bia', status: 'active', ai_operation_profile_id: profile.id)
+      ag.update!(handoff_team_ids: [create(:team, account: account, name: 'Suporte N2').id])
+      ag
+    end
+    let(:dept) { agent_with_team }
+
+    it 'o bloco de times humanos inclui a proibição de categoria genérica' do
+      prompt = described_class.compile(agent: agent_with_team, department: dept,
+                                       knowledge: [], memory: nil, tools: [])
+
+      expect(prompt).to include('NUNCA')
+      expect(prompt).to match(/copie|como está/)
+    end
+  end
+end

@@ -31,7 +31,8 @@ class Api::V1::Accounts::AiOperationProfilesController < Api::V1::Accounts::Base
   end
 
   def profile_params
-    params.require(:ai_operation_profile).permit(:name, :tier, :supervisor_provider, :supervisor_model)
+    params.require(:ai_operation_profile).permit(:name, :tier, :supervisor_provider, :supervisor_model,
+                                                 :temperature_position, :supervisor_temperature)
   end
 
   def jsonb_params

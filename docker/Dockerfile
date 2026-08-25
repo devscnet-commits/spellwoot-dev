@@ -1,6 +1,6 @@
 # pre-build stage
-FROM node:24-alpine as node
-FROM ruby:3.4.4-alpine3.21 AS pre-builder
+FROM mirror.gcr.io/library/node:24-alpine AS node
+FROM mirror.gcr.io/library/ruby:3.4.4-alpine3.21 AS pre-builder
 
 ARG NODE_VERSION="24.13.0"
 ARG PNPM_VERSION="10.2.0"
@@ -65,6 +65,11 @@ COPY Gemfile Gemfile.lock ./
 RUN apk update && apk add --no-cache build-base musl ruby-full ruby-dev gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips
 RUN bundle config set --local force_ruby_platform true
 
+# O gem `datadog` compila uma extensão nativa de profiling (libdatadog) que falha/estoura a
+# memória ao ser construída no Alpine/musl (force_ruby_platform obriga build do source). Pulamos
+# essa extensão: o tracing segue funcionando; só o profiling nativo (não usado) fica de fora.
+ENV DD_PROFILING_NO_EXTENSION=true
+
 # Do not install development or test gems in production
 RUN if [ "$RAILS_ENV" = "production" ]; then \
   bundle config set without 'development test'; bundle install -j 4 -r 3; \
@@ -96,7 +101,7 @@ RUN rm -rf /gems/ruby/3.4.0/cache/*.gem \
   && rm .gitignore
 
 # final build stage
-FROM ruby:3.4.4-alpine3.21
+FROM mirror.gcr.io/library/ruby:3.4.4-alpine3.21
 
 ARG NODE_VERSION="24.13.0"
 ARG PNPM_VERSION="10.2.0"
@@ -126,6 +131,8 @@ RUN apk update && apk add --no-cache \
   tzdata \
   postgresql-client \
   imagemagick \
+  ghostscript \
+  ffmpeg \
   git \
   vips \
   && gem install bundler -v "$BUNDLER_VERSION"

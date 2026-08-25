@@ -1,110 +1,70 @@
-# Periodic follow-up sweep: nudges customers who received an AI/agent reply and went quiet.
-# Only live bindings act, and every send goes through Ai::ReplyPolicy (canary / business hours /
-# kill switch).
+# Dispatcher do follow-up. NÃO faz mais o trabalho inline: apenas seleciona as conversas
+# candidatas (query estreita e indexada) e enfileira 1 Ai::FollowupConversationJob por conversa,
+# que rodam em paralelo. Um lock ($alfred) garante que só um sweep dispara por vez (sem overlap).
 #
-# Department follow_up shape (jsonb):
-#   { "enabled": true, "message": "...", "delay_minutes": 60 (interval between nudges),
-#     "max_followups": 3 (after this many with no reply, hand to a human; 0 = unlimited),
-#     "when_agents_online": false (skip if a human is already handling, unless true),
-#     "window_start": "08:00", "window_end": "18:00" (only send within this window; blank = always) }
+# A decisão de follow-up (attempts / ação / fallback) segue idêntica — só foi MOVIDA para o
+# job por-conversa (Ai::FollowupConversationJob), sem alterar a lógica.
 class Ai::FollowupSweepJob < ApplicationJob
   queue_as :low
 
+  LOCK_KEY = 'ai:followup_sweep'
+  # TTL de segurança: se o dispatcher morrer sem liberar, o lock expira e o próximo ciclo roda.
+  # Como ele só enfileira (rápido), na prática libera em <1s pelo ensure.
+  LOCK_TTL = 2.minutes
+  # Só conversas paradas há pelo menos isso — não mexe em conversa "quente".
+  MIN_QUIET = 1.minute
+
+  # Reativado (17/08): estava DESATIVADO desde um corte de emergência (follow-up disparando em
+  # conversas ativas, interferindo em teste ao vivo) que cortou aqui, o único ponto de entrada, em
+  # vez de corrigir a causa raiz — deixado assim (comentário antigo dizia explicitamente "NÃO é o
+  # fix"). A causa raiz JÁ FOI corrigida desde então, em Ai::FollowupConversationJob#resolved_binding:
+  # usa Ai::Run#ai_agent_id (o agente que REALMENTE conduziu esta conversa, fato histórico) em vez de
+  # re-classificar às cegas. Reativando o sweep agora que o fix downstream já existe.
   def perform
-    Ai::AgentInbox.live.includes(agent: :account).find_each do |binding|
-      next unless binding.agent.account&.feature_enabled?('ai_core')
+    lock = Redis::LockManager.new
+    return unless lock.lock(LOCK_KEY, LOCK_TTL) # outro sweep já está rodando
 
-      department = binding.agent.departments.active.first
-      next if department.nil?
-
-      follow_up = department.follow_up.to_h
-      next unless follow_up['enabled'] && follow_up['message'].present?
-
-      interval = follow_up['delay_minutes'].to_i
-      next unless interval.positive?
-      next unless within_window?(follow_up)
-
-      sweep(binding, department, follow_up, interval)
+    begin
+      ids = candidate_conversations.pluck(:id)
+      # Achado ao vivo (17/08): uma conversa em teste ao vivo, em silêncio, nunca aparecia NENHUMA
+      # linha de Ai::FollowupConversationJob pra ela — nem um skip= sequer. Sem log nenhum aqui, não
+      # dava pra distinguir "nem virou candidata neste sweep" (bug em #candidate_conversations/
+      # #eligible_inbox_ids: status errado, assignee preso, inbox sem binding live, ou
+      # last_activity_at ainda "quente") de "virou candidata mas o job por-conversa não rodou". Loga
+      # a lista inteira a cada tick — poucos ids, custo desprezível, grepável por "candidates=".
+      Rails.logger.info "[Ai::FollowupSweepJob] candidates=#{ids}"
+      ids.each { |id| Ai::FollowupConversationJob.perform_later(id) }
+    ensure
+      lock.unlock(LOCK_KEY)
     end
   end
 
   private
 
-  def sweep(binding, department, follow_up, interval)
-    account_id = binding.agent.account_id
-    Conversation.where(inbox_id: binding.inbox_id, status: :open)
-                .where('last_activity_at < ?', interval.minutes.ago)
-                .find_each do |conversation|
-      next unless awaiting_customer?(conversation)
-      next if conversation.assignee_id.present? && !follow_up['when_agents_online']
+  # Query estreita e indexada: aberta OU pendente + sem humano + parada há um tempo + em inbox com IA
+  # ativa. Os guards finos (aguardando cliente, ai_handoff, já agiu, comportamento configurado) ficam
+  # no job por-conversa — barato e isolado.
+  #
+  # Achado ao vivo (17/08): só :open ficava de fora conversa em :pending — que é exatamente o caso de
+  # uso do follow-up (só a IA no controle, cliente aguardando resposta, ninguém assumiu ainda). O
+  # próprio follow-up oferece "Passar para atendente humano" como ação de inatividade — não faria
+  # sentido essa ação só existir pra conversa :open. :resolved/:snoozed continuam de fora (encerrada,
+  # ou explicitamente adormecida por escolha humana — não é o follow-up que deve acordar essa).
+  def candidate_conversations
+    inbox_ids = eligible_inbox_ids
+    return Conversation.none if inbox_ids.empty?
 
-      sent = followups_since_incoming(conversation)
-      max = follow_up['max_followups'].to_i
-      if max.positive? && sent.count >= max
-        hand_off(conversation, account_id)
-        next
-      end
-
-      # Space successive nudges by the interval (measured from the last nudge, or last activity).
-      last_at = sent.maximum(:created_at) || conversation.last_activity_at
-      next if last_at && last_at > interval.minutes.ago
-
-      send_follow_up(binding, department, follow_up, conversation, account_id)
-    rescue StandardError => e
-      Rails.logger.error "[Ai::FollowupSweepJob] conv=#{conversation.id} #{e.class}: #{e.message}"
-    end
+    Conversation
+      .where(status: %i[open pending], assignee_id: nil, inbox_id: inbox_ids)
+      .where('conversations.last_activity_at < ?', MIN_QUIET.ago)
+      .select(:id)
   end
 
-  def send_follow_up(binding, department, follow_up, conversation, account_id)
-    if Ai::ReplyPolicy.allowed?(mode: binding.mode, department: department, conversation: conversation)
-      Messages::MessageBuilder.new(nil, conversation, { content: follow_up['message'], private: false }).perform
-      emit(account_id, conversation.id, 'followup.sent', { chars: follow_up['message'].to_s.length })
-    else
-      reason = Ai::ReplyPolicy.skip_reason(mode: binding.mode, department: department, conversation: conversation)
-      emit(account_id, conversation.id, 'followup.intended', { executed: false, reason: reason })
-    end
-  end
-
-  # After the configured number of unanswered follow-ups, stop nudging and flag the conversation
-  # for a human (unassign so it returns to the queue). Recorded so the team can act / report.
-  def hand_off(conversation, account_id)
-    incoming_at = last_incoming_at(conversation) || conversation.created_at
-    already = Ai::Event.where(conversation_id: conversation.id, event_type: 'followup.handoff')
-                       .where('created_at > ?', incoming_at).exists?
-    return if already
-
-    conversation.update!(assignee_id: nil) if conversation.assignee_id.present?
-    emit(account_id, conversation.id, 'followup.handoff', { reason: 'max_followups_reached' })
-  end
-
-  # We only nudge when the last real message was ours (the customer is the one who went quiet).
-  def awaiting_customer?(conversation)
-    last = conversation.messages.where(message_type: %i[incoming outgoing]).order(:created_at).last
-    last&.outgoing?
-  end
-
-  def last_incoming_at(conversation)
-    conversation.messages.incoming.maximum(:created_at)
-  end
-
-  # Follow-ups already sent in this silence (since the customer's last incoming message).
-  def followups_since_incoming(conversation)
-    scope = Ai::Event.where(conversation_id: conversation.id, event_type: 'followup.sent')
-    incoming_at = last_incoming_at(conversation)
-    incoming_at ? scope.where('created_at > ?', incoming_at) : scope
-  end
-
-  # Restrict sends to the configured time window (server time). Supports overnight ranges.
-  def within_window?(follow_up)
-    start_at = follow_up['window_start'].to_s
-    end_at = follow_up['window_end'].to_s
-    return true if start_at.blank? || end_at.blank?
-
-    now = Time.current.strftime('%H:%M')
-    start_at <= end_at ? now.between?(start_at, end_at) : (now >= start_at || now <= end_at)
-  end
-
-  def emit(account_id, conversation_id, type, payload)
-    Ai::Event.create!(account_id: account_id, conversation_id: conversation_id, event_type: type, payload: payload)
+  # Inboxes com um binding "live" cuja conta tem o ai_core ligado (mesma porta de entrada do
+  # sweep antigo). Poucos registros (nº de bindings), então resolver em Ruby é barato.
+  def eligible_inbox_ids
+    Ai::AgentInbox.live.includes(agent: :account).filter_map do |binding|
+      binding.inbox_id if binding.agent.account&.feature_enabled?('ai_core')
+    end.uniq
   end
 end

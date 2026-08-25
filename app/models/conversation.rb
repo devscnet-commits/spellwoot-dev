@@ -7,12 +7,18 @@
 #  agent_last_seen_at     :datetime
 #  assignee_last_seen_at  :datetime
 #  cached_label_list      :text
+#  closed_by_ai           :boolean          default(FALSE), not null
 #  contact_last_seen_at   :datetime
 #  custom_attributes      :jsonb
 #  first_reply_created_at :datetime
 #  identifier             :string
 #  last_activity_at       :datetime         not null
 #  priority               :integer
+#  result                 :integer          default("none"), not null
+#  result_canonical_key   :string
+#  result_category        :string
+#  result_reason          :string
+#  result_set_at          :datetime
 #  snoozed_until          :datetime
 #  status                 :integer          default("open"), not null
 #  uuid                   :uuid             not null
@@ -27,6 +33,7 @@
 #  contact_inbox_id       :bigint
 #  display_id             :integer          not null
 #  inbox_id               :integer          not null
+#  result_set_by_id       :bigint
 #  sla_policy_id          :bigint
 #  team_id                :bigint
 #
@@ -35,6 +42,7 @@
 #  conv_acid_inbid_stat_asgnid_idx                    (account_id,inbox_id,status,assignee_id)
 #  index_conversations_on_account_id                  (account_id)
 #  index_conversations_on_account_id_and_display_id   (account_id,display_id) UNIQUE
+#  index_conversations_on_account_id_and_result       (account_id,result)
 #  index_conversations_on_assignee_id_and_account_id  (assignee_id,account_id)
 #  index_conversations_on_campaign_id                 (campaign_id)
 #  index_conversations_on_contact_id                  (contact_id)
@@ -119,6 +127,10 @@ class Conversation < ApplicationRecord
   # parent delete blocked by the constraint (the cleanup job runs after). Delete them in-line.
   has_many :result_events, class_name: 'ConversationResultEvent', dependent: :delete_all
   has_many :meta_conversion_events, dependent: :delete_all
+  # Idem: ai_handoff_summaries (resumo do handoff automático da IA) tem FK NOT NULL para conversations.
+  # Sem delete_all in-line, deletar a conversa — ou o contato em cascata — trava na constraint (a FK
+  # também é ON DELETE CASCADE no banco como defesa em profundidade). Corrige o bug de conversa órfã.
+  has_many :ai_handoff_summaries, class_name: 'Ai::HandoffSummary', dependent: :delete_all
   belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset
@@ -215,6 +227,19 @@ class Conversation < ApplicationRecord
 
   def tweet?
     inbox.inbox_type == 'Twitter' && additional_attributes['type'] == 'tweet'
+  end
+
+  # A IA é um "agente" próprio: numa caixa com IA live ativa, a conversa pertence à IA até ela
+  # fazer o handoff. A auto-atribuição de humanos deve PULAR essas conversas (não pegar na criação)
+  # e só agir depois que a IA entregar — o handoff marca additional_attributes['ai_handoff'].
+  def ai_assistant_active?
+    return false unless account.feature_enabled?('ai_core')
+
+    Ai::AgentInbox.live.where(inbox_id: inbox_id).exists?
+  end
+
+  def ai_pending_handoff?
+    ai_assistant_active? && !additional_attributes.to_h['ai_handoff']
   end
 
   def recent_messages

@@ -31,6 +31,13 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     head :no_content
   end
 
+  # Agents the user can scope a source to. "Todos/Compartilhado" (nil) is offered by the front, not here.
+  def agents
+    render json: ::Ai::Agent.where(account_id: Current.account.id).order(:id).map { |a|
+      { id: a.id, name: a.assistant_name.presence || a.name }
+    }
+  end
+
   private
 
   def scope
@@ -43,7 +50,7 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
   end
 
   def source_params
-    params.require(:ai_knowledge_source).permit(:kind, :title, :raw, :status, :price)
+    params.require(:ai_knowledge_source).permit(:kind, :title, :raw, :status, :price, :ai_agent_id)
   end
 
   # A file upload (TXT/CSV) becomes a "documento" source whose text is the file content;
@@ -61,7 +68,20 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     raise UploadError, 'Formato não suportado. Use TXT ou CSV.' unless ALLOWED_UPLOAD_EXTENSIONS.include?(ext)
 
     { kind: 'documento', title: File.basename(file.original_filename.to_s, ext),
-      raw: file.read.to_s.encode('UTF-8', invalid: :replace, undef: :replace), status: 'active' }
+      raw: decode_text(file.read), status: 'active',
+      # Escopo do import (nil = compartilhado). Validado por agent_within_account no model.
+      ai_agent_id: params[:ai_agent_id].presence }
+  end
+
+  # Preserva acentuação: o upload vem como bytes (ASCII-8BIT). Usa como UTF-8 quando válido;
+  # senão assume Windows-1252/ISO-8859-1 (padrão de planilhas/Excel no BR) e transcodifica.
+  # (O encode direto de binário->UTF-8 com :replace destruía os acentos, virando "?".)
+  def decode_text(bytes)
+    raw = bytes.to_s
+    utf8 = raw.dup.force_encoding('UTF-8')
+    return utf8 if utf8.valid_encoding?
+
+    raw.dup.force_encoding('Windows-1252').encode('UTF-8', invalid: :replace, undef: :replace)
   end
 
   def ingest(source)
@@ -74,10 +94,11 @@ class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseC
     pieces.each { |content| source.chunks.create!(content: content, embedding: embed(content).presence) }
   end
 
+  # Embedding inline (síncrono, no request). Ai::Embedder usa a chave FRESCA da tela do sistema
+  # (sem restart). Degrada em nil em qualquer falha — o Ai::KnowledgeIngestJob (async, com retry) e
+  # o Ai::EmbeddingBackfillJob (cron) recuperam o vetor depois; a resposta do request nunca quebra.
   def embed(text)
-    return nil unless defined?(Captain::Llm::EmbeddingService)
-
-    Captain::Llm::EmbeddingService.new(account_id: Current.account.id).get_embedding(text)
+    Ai::Embedder.embed(text)
   rescue StandardError => e
     Rails.logger.warn "[AiKnowledge] embedding indisponível: #{e.message}"
     nil

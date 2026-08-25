@@ -5,13 +5,13 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 import Select from 'dashboard/components-next/select/Select.vue';
+import TagInput from 'dashboard/components-next/taginput/TagInput.vue';
 import ConfirmDeleteModal from 'dashboard/components/widgets/modal/ConfirmDeleteModal.vue';
 import { useFormDirty } from 'dashboard/composables/useFormDirty';
 
 const props = defineProps({
-  // Optional overrides so this view can be embedded inside the agent (default department).
+  // Optional override so this view can be embedded inside the agent detail page.
   agentId: { type: [String, Number], default: null },
-  departmentId: { type: [String, Number], default: null },
 });
 
 const route = useRoute();
@@ -30,7 +30,10 @@ const blank = () => ({
   implementation_type: 'capability',
   capability_key: '',
   integration_link_id: '',
-  governance: 'allowed',
+  // Webhook: requisição HTTP direta (config persistida em webhook_config — backend pendente).
+  webhook_url: '',
+  webhook_method: 'POST',
+  webhook_headers: '',
   status: 'active',
   // args drive the visual builder; input_schema_text stays the canonical value used on save.
   args: [],
@@ -56,25 +59,33 @@ const argTypeOptions = computed(() =>
 const blankArg = () => ({
   name: '',
   type: 'string',
-  required: false,
   description: '',
+  // For the "Lista" (array) type: the allowed options as chips (Enter to add).
+  options: [],
 });
 
-// Build a JSON Schema object from the argument rows.
+// Build a JSON Schema object from the argument rows. Every named argument is required —
+// if the user added it, the action needs it.
 const buildSchema = () => {
   const properties = {};
   const required = [];
   form.args.forEach(arg => {
     const key = (arg.name || '').trim();
     if (!key) return;
-    const prop =
-      arg.type === 'date'
-        ? { type: 'string', format: 'date' }
-        : { type: arg.type };
+    let prop;
+    if (arg.type === 'date') {
+      prop = { type: 'string', format: 'date' };
+    } else if (arg.type === 'array') {
+      // "Lista" = escolha única: a IA deve escolher exatamente uma das opções.
+      prop = { type: 'string' };
+      if (arg.options.length) prop.enum = [...arg.options];
+    } else {
+      prop = { type: arg.type };
+    }
     if ((arg.description || '').trim())
       prop.description = arg.description.trim();
     properties[key] = prop;
-    if (arg.required) required.push(key);
+    required.push(key);
   });
   const schema = { type: 'object', properties };
   if (required.length) schema.required = required;
@@ -84,13 +95,21 @@ const buildSchema = () => {
 // Turn an existing JSON Schema back into rows for the builder.
 const parseSchema = schema => {
   const schemaProps = schema && schema.properties ? schema.properties : {};
-  const req = Array.isArray(schema && schema.required) ? schema.required : [];
-  return Object.entries(schemaProps).map(([name, def]) => ({
-    name,
-    type: def && def.format === 'date' ? 'date' : (def && def.type) || 'string',
-    required: req.includes(name),
-    description: (def && def.description) || '',
-  }));
+  return Object.entries(schemaProps).map(([name, def]) => {
+    const hasEnum = def && Array.isArray(def.enum);
+    // A string carrying an enum is shown as the "Lista" (single-choice) builder row;
+    // a date format maps back to the "Data" type.
+    let type = (def && def.type) || 'string';
+    if (def && def.format === 'date') type = 'date';
+    else if (hasEnum) type = 'array';
+    const enumList = hasEnum ? def.enum : [];
+    return {
+      name,
+      type,
+      description: (def && def.description) || '',
+      options: Array.isArray(enumList) ? [...enumList] : [],
+    };
+  });
 };
 
 const addArg = () => form.args.push(blankArg());
@@ -133,31 +152,33 @@ const capabilityLabel = key => {
   const cap = CAPABILITIES.find(c => c.key === key);
   return cap ? t(`AI_TOOLS.CAPABILITIES.${cap.i18n}`) : key;
 };
-const GOVERNANCE_I18N = {
-  allowed: 'GOV_ALLOWED',
-  require_confirmation: 'GOV_CONFIRMATION',
-  require_approval: 'GOV_APPROVAL',
-};
-const governanceLabel = g =>
-  t(`AI_TOOLS.FORM.${GOVERNANCE_I18N[g] || 'GOV_ALLOWED'}`);
-const governanceHint = g =>
-  t(`AI_TOOLS.FORM.${GOVERNANCE_I18N[g] || 'GOV_ALLOWED'}_HINT`);
-const governanceBadge = g =>
-  ({
-    allowed: 'bg-n-teal-3 text-n-teal-11',
-    require_confirmation: 'bg-n-amber-3 text-n-amber-11',
-    require_approval: 'bg-n-ruby-3 text-n-ruby-11',
-  })[g] || 'bg-n-alpha-2 text-n-slate-11';
-
 const integrationName = id =>
   integrations.value.find(link => link.id === id)?.name || '';
 
+// Subtítulo do card conforme o tipo da ferramenta.
+const toolSubtitle = tool => {
+  if (tool.implementation_type === 'capability')
+    return capabilityLabel(tool.capability_key);
+  if (tool.implementation_type === 'webhook')
+    return tool.webhook_config?.url || t('AI_TOOLS.FORM.TYPE_WEBHOOK');
+  return integrationName(tool.integration_link_id);
+};
+
 const isCapability = computed(() => form.implementation_type === 'capability');
+const isIntegration = computed(
+  () => form.implementation_type === 'integration'
+);
+const isWebhook = computed(() => form.implementation_type === 'webhook');
 
 const typeOptions = computed(() => [
   { value: 'capability', label: t('AI_TOOLS.FORM.TYPE_CAPABILITY') },
   { value: 'integration', label: t('AI_TOOLS.FORM.TYPE_INTEGRATION') },
+  { value: 'webhook', label: t('AI_TOOLS.FORM.TYPE_WEBHOOK') },
 ]);
+const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => ({
+  value: m,
+  label: m,
+}));
 const capabilityOptions = computed(() => [
   { value: '', label: t('AI_TOOLS.FORM.NONE') },
   ...CAPABILITIES.map(c => ({
@@ -183,17 +204,11 @@ const goIntegrations = () =>
     name: 'settings_integrations_ai_systems',
     params: { accountId: route.params.accountId },
   });
-const governanceOptions = computed(() => [
-  { value: 'allowed', label: t('AI_TOOLS.FORM.GOV_ALLOWED') },
-  { value: 'require_confirmation', label: t('AI_TOOLS.FORM.GOV_CONFIRMATION') },
-  { value: 'require_approval', label: t('AI_TOOLS.FORM.GOV_APPROVAL') },
-]);
 
 const baseUrl = () => {
   const accountId = route.params.accountId;
   const agentId = props.agentId || route.params.agentId;
-  const departmentId = props.departmentId || route.params.departmentId;
-  return `/api/v1/accounts/${accountId}/ai_agents/${agentId}/ai_departments/${departmentId}/ai_tools`;
+  return `/api/v1/accounts/${accountId}/ai_agents/${agentId}/ai_tools`;
 };
 
 const fetchTools = async () => {
@@ -232,7 +247,9 @@ const openEdit = tool => {
     implementation_type: tool.implementation_type,
     capability_key: tool.capability_key || '',
     integration_link_id: tool.integration_link_id || '',
-    governance: tool.governance,
+    webhook_url: tool.webhook_config?.url || '',
+    webhook_method: tool.webhook_config?.method || 'POST',
+    webhook_headers: tool.webhook_config?.headers || '',
     status: tool.status,
     args: parseSchema(tool.input_schema || {}),
     input_schema_text: JSON.stringify(tool.input_schema || {}, null, 2),
@@ -260,8 +277,17 @@ const save = async () => {
       description: form.description,
       implementation_type: form.implementation_type,
       capability_key: isCapability.value ? form.capability_key : null,
-      integration_link_id: isCapability.value ? null : form.integration_link_id,
-      governance: form.governance,
+      integration_link_id: isIntegration.value
+        ? form.integration_link_id
+        : null,
+      webhook_config: isWebhook.value
+        ? {
+            url: form.webhook_url,
+            method: form.webhook_method,
+            headers: form.webhook_headers,
+          }
+        : null,
+      governance: 'allowed',
       status: form.status,
       input_schema: inputSchema,
     },
@@ -332,19 +358,9 @@ onMounted(() => {
               {{ tool.name }}
             </p>
             <p class="text-xs text-n-slate-11 truncate mb-0">
-              {{
-                tool.implementation_type === 'capability'
-                  ? capabilityLabel(tool.capability_key)
-                  : integrationName(tool.integration_link_id)
-              }}
+              {{ toolSubtitle(tool) }}
             </p>
           </div>
-          <span
-            class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-            :class="governanceBadge(tool.governance)"
-          >
-            {{ governanceLabel(tool.governance) }}
-          </span>
         </div>
         <div class="shrink-0 flex items-center gap-2 text-n-slate-11">
           <button
@@ -377,22 +393,30 @@ onMounted(() => {
           <input
             v-model="form.name"
             type="text"
-            class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+            :placeholder="$t('AI_TOOLS.FORM.NAME_PLACEHOLDER')"
+            class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
           />
         </label>
-        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
-          <span>{{ $t('AI_TOOLS.FORM.TYPE') }}</span>
+        <div
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
+        >
+          <span class="font-medium">{{ $t('AI_TOOLS.FORM.TYPE') }}</span>
           <Select v-model="form.implementation_type" :options="typeOptions" />
         </div>
         <div
           v-if="isCapability"
-          class="flex flex-col gap-1 text-sm text-n-slate-12"
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
         >
-          <span>{{ $t('AI_TOOLS.FORM.CAPABILITY_KEY') }}</span>
+          <span class="font-medium">{{
+            $t('AI_TOOLS.FORM.CAPABILITY_KEY')
+          }}</span>
           <Select v-model="form.capability_key" :options="capabilityOptions" />
         </div>
-        <div v-else class="flex flex-col gap-1 text-sm text-n-slate-12">
-          <span>{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
+        <div
+          v-else-if="isIntegration"
+          class="flex flex-col gap-1 text-sm text-n-slate-12 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
+        >
+          <span class="font-medium">{{ $t('AI_TOOLS.FORM.INTEGRATION') }}</span>
           <Select
             v-if="hasIntegrations"
             v-model="form.integration_link_id"
@@ -414,12 +438,42 @@ onMounted(() => {
             </button>
           </div>
         </div>
-        <div class="flex flex-col gap-1 text-sm text-n-slate-12">
-          <span>{{ $t('AI_TOOLS.FORM.GOVERNANCE') }}</span>
-          <Select v-model="form.governance" :options="governanceOptions" />
-          <span class="text-xs text-n-slate-11">
-            {{ governanceHint(form.governance) }}
-          </span>
+        <div
+          v-else
+          class="flex flex-col gap-3 text-sm text-n-slate-12 sm:col-span-2"
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="flex flex-col gap-1 sm:col-span-2">
+              <span class="font-medium">{{
+                $t('AI_TOOLS.FORM.WEBHOOK_URL')
+              }}</span>
+              <input
+                v-model="form.webhook_url"
+                type="text"
+                :placeholder="$t('AI_TOOLS.FORM.WEBHOOK_URL_PLACEHOLDER')"
+                class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
+              />
+            </label>
+            <div
+              class="flex flex-col gap-1 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
+            >
+              <span class="font-medium">{{
+                $t('AI_TOOLS.FORM.WEBHOOK_METHOD')
+              }}</span>
+              <Select v-model="form.webhook_method" :options="methodOptions" />
+            </div>
+          </div>
+          <label class="flex flex-col gap-1">
+            <span class="font-medium">{{
+              $t('AI_TOOLS.FORM.WEBHOOK_HEADERS')
+            }}</span>
+            <textarea
+              v-model="form.webhook_headers"
+              rows="2"
+              :placeholder="$t('AI_TOOLS.FORM.WEBHOOK_HEADERS_PLACEHOLDER')"
+              class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 resize-y min-h-16 font-mono text-xs"
+            />
+          </label>
         </div>
       </div>
       <label class="flex flex-col gap-1 text-sm text-n-slate-12">
@@ -427,18 +481,22 @@ onMounted(() => {
         <input
           v-model="form.description"
           type="text"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1"
+          :placeholder="$t('AI_TOOLS.FORM.DESCRIPTION_PLACEHOLDER')"
+          class="h-10 px-3 rounded-lg border border-n-weak bg-n-solid-1"
         />
+        <span class="text-xs text-n-slate-11">
+          {{ $t('AI_TOOLS.FORM.DESCRIPTION_HINT') }}
+        </span>
       </label>
       <!-- Argumentos da ação: construtor visual + JSON avançado opcional -->
       <div class="flex flex-col gap-2">
         <div class="flex items-center justify-between gap-3">
-          <span class="text-sm text-n-slate-12">
+          <span class="text-sm font-medium text-n-slate-12">
             {{ $t('AI_TOOLS.FORM.ARGS_LABEL') }}
           </span>
           <button
             type="button"
-            class="text-xs text-n-slate-11 hover:text-n-brand"
+            class="text-xs font-medium text-n-slate-11 hover:text-n-brand"
             @click="toggleAdvanced"
           >
             {{
@@ -457,6 +515,19 @@ onMounted(() => {
             {{ $t('AI_TOOLS.FORM.ARGS_EMPTY') }}
           </p>
           <div
+            v-if="form.args.length"
+            class="hidden sm:flex items-center gap-2 p-2 border border-transparent text-xs font-medium text-n-slate-11"
+          >
+            <span class="flex-1 min-w-[8rem]">
+              {{ $t('AI_TOOLS.FORM.ARG_COL_NAME') }}
+            </span>
+            <span class="w-36">{{ $t('AI_TOOLS.FORM.ARG_COL_TYPE') }}</span>
+            <span class="flex-[2] min-w-[10rem]">
+              {{ $t('AI_TOOLS.FORM.ARG_COL_DESC') }}
+            </span>
+            <span class="size-4 shrink-0" />
+          </div>
+          <div
             v-for="(arg, index) in form.args"
             :key="index"
             class="flex flex-wrap items-center gap-2 rounded-lg border border-n-weak bg-n-solid-1 p-2"
@@ -465,23 +536,19 @@ onMounted(() => {
               v-model="arg.name"
               type="text"
               :placeholder="$t('AI_TOOLS.FORM.ARG_NAME')"
-              class="flex-1 min-w-[8rem] px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
+              class="flex-1 min-w-[8rem] h-10 px-3 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
             />
-            <div class="w-36">
+            <div
+              class="w-36 [&>div]:w-full [&_select]:!h-10 [&_select]:!py-0 [&_select]:w-full"
+            >
               <Select v-model="arg.type" :options="argTypeOptions" />
             </div>
             <input
               v-model="arg.description"
               type="text"
               :placeholder="$t('AI_TOOLS.FORM.ARG_DESC')"
-              class="flex-[2] min-w-[10rem] px-3 py-2 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
+              class="flex-[2] min-w-[10rem] h-10 px-3 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12"
             />
-            <label
-              class="flex items-center gap-1.5 text-xs text-n-slate-12 whitespace-nowrap"
-            >
-              <input v-model="arg.required" type="checkbox" />
-              {{ $t('AI_TOOLS.FORM.ARG_REQUIRED') }}
-            </label>
             <button
               type="button"
               class="shrink-0 text-n-slate-11 hover:text-n-ruby-11"
@@ -490,6 +557,21 @@ onMounted(() => {
             >
               <span class="i-lucide-x size-4 inline-block" />
             </button>
+            <!-- Lista (array): opções que a IA pode escolher (chip por Enter) -->
+            <div v-if="arg.type === 'array'" class="w-full flex flex-col gap-1">
+              <div
+                class="w-full rounded-lg border border-n-weak bg-n-solid-2 px-3 py-2"
+              >
+                <TagInput
+                  v-model="arg.options"
+                  :placeholder="$t('AI_TOOLS.FORM.ARG_OPTIONS_PLACEHOLDER')"
+                  allow-create
+                />
+              </div>
+              <span class="text-xs text-n-slate-11">
+                {{ $t('AI_TOOLS.FORM.ARG_OPTIONS_HINT') }}
+              </span>
+            </div>
           </div>
           <button
             type="button"
@@ -503,8 +585,8 @@ onMounted(() => {
         <textarea
           v-else
           v-model="form.input_schema_text"
-          rows="6"
-          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-none"
+          rows="8"
+          class="px-3 py-2 rounded-lg border border-n-weak bg-n-solid-1 font-mono text-xs resize-y min-h-40"
         />
       </div>
       <div class="flex justify-end gap-2">

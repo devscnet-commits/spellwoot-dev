@@ -17,7 +17,11 @@ import {
   CMD_UNMUTE_CONVERSATION,
 } from 'dashboard/helper/commandbar/events';
 
-// No props needed as we're getting currentChat from the store directly
+defineProps({
+  // When the header is narrow, render the resolve/reopen button icon-only (label -> tooltip).
+  compact: { type: Boolean, default: false },
+});
+
 const store = useStore();
 const { t } = useI18n();
 
@@ -97,6 +101,7 @@ onUnmounted(() => {
     <ResolveAction
       :conversation-id="currentChat.id"
       :status="currentChat.status"
+      :compact="compact"
     />
     <div
       v-on-clickaway="() => toggleDropdown(false)"

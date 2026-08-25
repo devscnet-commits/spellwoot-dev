@@ -17,7 +17,8 @@ class Ai::Workers::Summary
       model: model_for(profile),
       system_prompt: 'Resuma a conversa em até 3 frases, em português, focando no que o cliente quer ' \
                      'e no estado do atendimento. Responda apenas o resumo.',
-      user_message: transcript
+      user_message: transcript,
+      account_id: agent.account_id
     )
     raw[:status] == 'error' ? nil : raw[:text].to_s.strip.presence
   rescue StandardError => e
@@ -33,13 +34,15 @@ class Ai::Workers::Summary
                 .join("\n")
   end
 
+  # worker_overrides é aninhado ({ 'summary' => { 'provider'=>, 'model'=> } }) — ver
+  # Ai::OperationProfile#worker. Antes lia flat ('summary_provider') e sempre caía no supervisor.
   def self.provider_for(profile)
-    profile&.worker_overrides&.dig('summary_provider').presence ||
-      profile&.supervisor_provider.presence || 'anthropic'
+    profile&.worker(:summary)&.dig('provider').presence ||
+      profile&.supervisor_provider.presence || 'openai'
   end
 
   def self.model_for(profile)
-    profile&.worker_overrides&.dig('summary_model').presence ||
-      profile&.supervisor_model.presence || 'claude-3-5-sonnet-latest'
+    profile&.worker(:summary)&.dig('model').presence ||
+      profile&.supervisor_model.presence || 'gpt-4.1-mini'
   end
 end

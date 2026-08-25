@@ -16,8 +16,9 @@ const { t } = useI18n();
 // Module tabs: the shadows list + the analysis (submodule), no navigation away.
 const activeTab = ref('shadows');
 
-// Signals the Shadow surfaces in the Validação screen.
-const SIGNALS = [
+// Quick suggestions: clicking one appends a ready-made line to the evaluation
+// instructions. There is a single source of truth — the instructions text.
+const SUGGESTION_KEYS = [
   'unanswered',
   'errors',
   'low_confidence',
@@ -30,6 +31,10 @@ const shadows = ref([]);
 const inboxes = ref([]);
 const isLoading = ref(false);
 const showForm = ref(false);
+// Pedido do usuário (18/08): o botão Salvar ficava desabilitado, sem NENHUM aviso do motivo (nome em
+// branco) — o usuário só descobria olhando com atenção. Agora o botão sempre reage ao clique: se
+// faltar o nome, marca saveAttempted (revela a mensagem inline no Input) e não chama a API à toa.
+const saveAttempted = ref(false);
 
 const blank = () => ({
   id: null,
@@ -38,7 +43,6 @@ const blank = () => ({
   status: 'active',
   observe_ai: true,
   observe_human: true,
-  signals: SIGNALS.reduce((acc, s) => ({ ...acc, [s]: true }), {}),
   inbox_ids: [],
 });
 const form = reactive(blank());
@@ -74,13 +78,13 @@ const toggleInbox = id => {
 
 const openNew = () => {
   Object.assign(form, blank());
+  saveAttempted.value = false;
   showForm.value = true;
   capture();
 };
 
 const openEdit = shadow => {
   const scope = shadow.scope || {};
-  const signals = shadow.data_signals || {};
   Object.assign(form, blank(), {
     id: shadow.id,
     name: shadow.name,
@@ -88,24 +92,31 @@ const openEdit = shadow => {
     status: shadow.status || 'active',
     observe_ai: scope.observe_ai !== false,
     observe_human: scope.observe_human !== false,
-    signals: SIGNALS.reduce(
-      (acc, s) => ({ ...acc, [s]: signals[s] !== false }),
-      {}
-    ),
     inbox_ids: Array.isArray(shadow.inbox_ids) ? [...shadow.inbox_ids] : [],
   });
+  saveAttempted.value = false;
   showForm.value = true;
   capture();
 };
 
+// Append a suggestion line to the instructions (no duplicates).
+const addSuggestion = key => {
+  const line = t(`AI_SHADOWS.SUGGESTIONS.${key.toUpperCase()}`);
+  const current = form.instructions.trim();
+  if (current.includes(line)) return;
+  form.instructions = current ? `${current}\n${line}` : line;
+};
+
 const save = async () => {
+  saveAttempted.value = true;
+  if (!form.name.trim()) return; // aborta cedo; a mensagem inline no Input já avisa o motivo
+
   const payload = {
     ai_shadow: {
       name: form.name,
       instructions: form.instructions,
       status: form.status,
       scope: { observe_ai: form.observe_ai, observe_human: form.observe_human },
-      data_signals: { ...form.signals },
       inbox_ids: form.inbox_ids,
     },
   };
@@ -119,7 +130,9 @@ const save = async () => {
     showForm.value = false;
     fetchShadows();
   } catch (error) {
-    useAlert(t('AI_SHADOWS.ERROR'));
+    // Mesmo padrão de AiKnowledge.vue/AiStepForm.vue — mostra a mensagem REAL de validação do
+    // backend (ex.: "Nome já em uso") em vez de um "deu erro" genérico sem detalhe nenhum.
+    useAlert(error.response?.data?.errors?.join('. ') || t('AI_SHADOWS.ERROR'));
   }
 };
 
@@ -243,18 +256,44 @@ onMounted(() => {
           v-if="showForm && activeTab === 'shadows'"
           class="border border-n-weak rounded-xl p-5 flex flex-col gap-5 bg-n-solid-2"
         >
-          <Input v-model="form.name" :label="$t('AI_SHADOWS.FORM.NAME')" />
+          <Input
+            v-model="form.name"
+            :label="$t('AI_SHADOWS.FORM.NAME')"
+            :message="
+              saveAttempted && !form.name.trim()
+                ? $t('AI_SHADOWS.FORM.NAME_REQUIRED')
+                : ''
+            "
+            :message-type="
+              saveAttempted && !form.name.trim() ? 'error' : 'info'
+            "
+          />
 
           <div class="flex flex-col gap-1.5">
             <span class="text-heading-3 text-n-slate-12">
               {{ $t('AI_SHADOWS.FORM.INSTRUCTIONS') }}
             </span>
+            <span class="text-xs text-n-slate-11">
+              {{ $t('AI_SHADOWS.FORM.SUGGESTIONS_HINT') }}
+            </span>
             <textarea
               v-model="form.instructions"
-              rows="5"
+              rows="6"
               :placeholder="$t('AI_SHADOWS.FORM.INSTRUCTIONS_PLACEHOLDER')"
               class="px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 resize-y leading-relaxed text-sm text-n-slate-12"
             />
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button
+                v-for="key in SUGGESTION_KEYS"
+                :key="key"
+                type="button"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-n-weak text-xs text-n-slate-11 hover:border-n-brand hover:text-n-brand transition-colors"
+                @click="addSuggestion(key)"
+              >
+                <span class="i-lucide-plus size-3" />
+                {{ $t(`AI_SHADOWS.SIGNALS.${key.toUpperCase()}`) }}
+              </button>
+            </div>
           </div>
 
           <!-- Caixas observadas -->
@@ -306,25 +345,6 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Sinais para a Validação -->
-          <div class="flex flex-col gap-1.5">
-            <span class="text-heading-3 text-n-slate-12">
-              {{ $t('AI_SHADOWS.FORM.SIGNALS') }}
-            </span>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <label
-                v-for="s in SIGNALS"
-                :key="s"
-                class="flex items-center gap-2 text-sm text-n-slate-12 rounded-lg border border-n-weak px-3 py-2"
-              >
-                <input v-model="form.signals[s]" type="checkbox" />
-                <span class="truncate">{{
-                  $t(`AI_SHADOWS.SIGNALS.${s.toUpperCase()}`)
-                }}</span>
-              </label>
-            </div>
-          </div>
-
           <!-- Status -->
           <div class="flex flex-col gap-1.5">
             <span class="text-heading-3 text-n-slate-12">
@@ -357,7 +377,7 @@ onMounted(() => {
             />
             <Button
               :label="$t('AI_SHADOWS.FORM.SAVE')"
-              :disabled="!isDirty || !form.name.trim()"
+              :disabled="!isDirty"
               @click="save"
             />
           </div>

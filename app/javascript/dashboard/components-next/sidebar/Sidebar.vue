@@ -301,21 +301,12 @@ const menuItems = computed(() => {
       name: 'AIAgents',
       icon: 'i-lucide-bot',
       label: t('SIDEBAR.AI_AGENTS'),
-      activeOn: [
-        'ai_agents_index',
-        'ai_agent_detail',
-        'ai_department_detail',
-        'ai_knowledge_index',
-      ],
+      activeOn: ['ai_agents_index', 'ai_agent_detail', 'ai_knowledge_index'],
       children: [
         {
           name: 'AIAgentsList',
           label: t('SIDEBAR.AI_AGENTS_LIST'),
-          activeOn: [
-            'ai_agents_index',
-            'ai_agent_detail',
-            'ai_department_detail',
-          ],
+          activeOn: ['ai_agents_index', 'ai_agent_detail'],
           to: accountScopedRoute('ai_agents_index'),
         },
         {
@@ -650,6 +641,12 @@ const menuItems = computed(() => {
           to: accountScopedRoute('canned_list'),
         },
         {
+          name: 'Settings Stickers',
+          label: t('SIDEBAR.STICKERS'),
+          icon: 'i-lucide-sticker',
+          to: accountScopedRoute('stickers_list'),
+        },
+        {
           name: 'Settings Integrations',
           label: t('SIDEBAR.INTEGRATIONS'),
           icon: 'i-lucide-blocks',
@@ -678,6 +675,12 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.SLA'),
           icon: 'i-lucide-clock-alert',
           to: accountScopedRoute('sla_list'),
+        },
+        {
+          name: 'Settings Plan',
+          label: t('SIDEBAR.PLAN'),
+          icon: 'i-lucide-package',
+          to: accountScopedRoute('plan_settings_list'),
         },
         {
           name: 'Conversation Workflow',

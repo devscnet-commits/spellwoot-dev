@@ -12,7 +12,7 @@ const route = useRoute();
 const { t } = useI18n();
 
 const blank = () => ({
-  facets: { departments: [], error_types: [], statuses: [] },
+  facets: { agents: [], error_types: [], statuses: [] },
   summary: {
     evaluated: 0,
     unanswered: 0,
@@ -22,18 +22,25 @@ const blank = () => ({
     tools_missing: 0,
     knowledge_gaps: 0,
     by_resolution: {},
-    by_department: [],
+    by_agent: [],
     by_error: [],
   },
   insights: [],
   runs: [],
+  pagination: { page: 1, per_page: 10, total: 0, total_pages: 1 },
 });
 const data = ref(blank());
 const isLoading = ref(false);
+// Teto de 1 ano: intervalo maior que isso é recusado (carregaria histórico demais em memória).
+const MAX_WINDOW_DAYS = 365;
+const rangeError = ref(false);
+const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 
 const filters = ref({
   period: '0',
-  department_id: '',
+  from: '',
+  to: '',
+  agent_id: '',
   error_type: '',
   status: '',
   has_reply: '',
@@ -75,10 +82,11 @@ const periodOptions = computed(() => [
   { value: '0', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_ALL') },
   { value: '7', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_7') },
   { value: '30', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_30') },
+  { value: 'custom', label: t('AI_SHADOW_RUNS.FILTERS.PERIOD_CUSTOM') },
 ]);
-const departmentOptions = computed(() => [
+const agentOptions = computed(() => [
   { value: '', label: t('AI_SHADOW_RUNS.FILTERS.DEPARTMENT_ALL') },
-  ...data.value.facets.departments.map(d => ({
+  ...data.value.facets.agents.map(d => ({
     value: String(d.id),
     label: d.name,
   })),
@@ -144,19 +152,19 @@ const insightBody = i => {
   if (i.type === 'faq') {
     return t('AI_SHADOW_RUNS.INSIGHT.FAQ_BODY', {
       count: i.count,
-      department: i.department,
+      agent: i.agent,
     });
   }
   if (i.type === 'instruction') {
     return t('AI_SHADOW_RUNS.INSIGHT.INSTRUCTION_BODY', {
       count: i.count,
-      department: i.department,
+      agent: i.agent,
     });
   }
   if (i.type === 'tool') {
     return t('AI_SHADOW_RUNS.INSIGHT.TOOL_BODY', {
       count: i.count,
-      department: i.department,
+      agent: i.agent,
       tool: i.tool,
     });
   }
@@ -178,34 +186,97 @@ const diagnosticBlocks = computed(() => [
   { key: 'error', title: 'RECURRING_ERRORS', items: errorInsights.value },
 ]);
 
+// Drill-down: clicar num insight expande a lista das perguntas (runs) daquela lacuna.
+const expandedKey = ref(null);
+const insightKey = (blockKey, insight) =>
+  `${blockKey}:${insight.agent || ''}:${insight.tool || ''}:${insight.error_type || ''}`;
+const isExpanded = (blockKey, insight) =>
+  expandedKey.value === insightKey(blockKey, insight);
+const toggleInsight = (blockKey, insight) => {
+  const k = insightKey(blockKey, insight);
+  expandedKey.value = expandedKey.value === k ? null : k;
+};
+// As perguntas-exemplo de cada lacuna vêm do próprio insight (backend), pois a lista de runs
+// agora é paginada e não contém o conjunto completo.
+const insightExamples = insight => insight.examples || [];
+// messageId deep-links to the exact message (ConversationView scrolls to it); omitted for older
+// runs that never recorded it, which then just open at the top.
+const conversationUrl = (id, messageId) =>
+  `/app/accounts/${route.params.accountId}/conversations/${id}` +
+  (messageId ? `?messageId=${messageId}` : '');
+
 const hasData = computed(() => data.value.summary.evaluated > 0);
 
+// Paginação real no servidor: o backend devolve só a página pedida + metadados.
+const perPage = ref('10');
+const currentPage = ref(1);
+const perPageOptions = [
+  { value: '10', label: '10' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
+];
+const totalRuns = computed(() => data.value.pagination.total || 0);
+const totalPages = computed(() => data.value.pagination.total_pages || 1);
+const rangeStart = computed(() =>
+  totalRuns.value ? (currentPage.value - 1) * Number(perPage.value) + 1 : 0
+);
+const rangeEnd = computed(() =>
+  Math.min(currentPage.value * Number(perPage.value), totalRuns.value)
+);
+
 const fetchRuns = async () => {
+  // Pré-checagem: intervalo custom acima de 1 ano nem chega ao servidor.
+  if (
+    filters.value.period === 'custom' &&
+    filters.value.from &&
+    filters.value.to &&
+    dayDiff(filters.value.from, filters.value.to) > MAX_WINDOW_DAYS
+  ) {
+    rangeError.value = true;
+    data.value = blank();
+    return;
+  }
+  rangeError.value = false;
   isLoading.value = true;
   try {
     const params = {};
     Object.entries(filters.value).forEach(([key, value]) => {
-      if (key === 'period') return;
+      if (['period', 'from', 'to'].includes(key)) return;
       if (value !== '' && value != null) params[key] = value;
     });
-    const days = Number(filters.value.period) || 0;
-    if (days > 0) params.days = days;
+    if (filters.value.period === 'custom') {
+      if (filters.value.from) params.from = filters.value.from;
+      if (filters.value.to) params.to = filters.value.to;
+    } else {
+      const days = Number(filters.value.period) || 0;
+      if (days > 0) params.days = days;
+    }
+    params.page = currentPage.value;
+    params.per_page = Number(perPage.value);
     const { data: payload } = await axios.get(
       `/api/v1/accounts/${route.params.accountId}/ai_shadow_runs`,
       { params }
     );
     data.value = { ...blank(), ...(payload || {}) };
   } catch (error) {
+    rangeError.value = error.response?.data?.error === 'range_too_large';
     data.value = blank();
   } finally {
     isLoading.value = false;
   }
 };
 
+const goToPage = page => {
+  const target = Math.min(Math.max(1, page), totalPages.value);
+  if (target === currentPage.value) return;
+  currentPage.value = target;
+  fetchRuns();
+};
+
 const clearFilters = () => {
   filters.value = {
     period: '0',
-    department_id: '',
+    agent_id: '',
     error_type: '',
     status: '',
     has_reply: '',
@@ -214,7 +285,15 @@ const clearFilters = () => {
   };
 };
 
-watch(filters, fetchRuns, { deep: true });
+// Filtros ou tamanho de página voltam para a página 1 e recarregam (a navegação usa goToPage).
+watch(
+  [filters, perPage],
+  () => {
+    currentPage.value = 1;
+    fetchRuns();
+  },
+  { deep: true }
+);
 onMounted(fetchRuns);
 </script>
 
@@ -290,14 +369,39 @@ onMounted(fetchRuns);
               </span>
               <Select v-model="filters.period" :options="periodOptions" />
             </label>
+            <label
+              v-if="filters.period === 'custom'"
+              class="flex flex-col gap-1 min-w-0"
+            >
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.FROM') }}
+              </span>
+              <input
+                v-model="filters.from"
+                type="date"
+                :max="filters.to || undefined"
+                class="rounded-lg border-0 outline-1 outline -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 py-2 px-3 text-sm text-n-slate-12"
+              />
+            </label>
+            <label
+              v-if="filters.period === 'custom'"
+              class="flex flex-col gap-1 min-w-0"
+            >
+              <span class="text-xs font-medium text-n-slate-11">
+                {{ $t('AI_SHADOW_RUNS.FILTERS.TO') }}
+              </span>
+              <input
+                v-model="filters.to"
+                type="date"
+                :min="filters.from || undefined"
+                class="rounded-lg border-0 outline-1 outline -outline-offset-1 outline-n-weak hover:outline-n-slate-6 focus:outline-n-blue-9 bg-n-surface-1 py-2 px-3 text-sm text-n-slate-12"
+              />
+            </label>
             <label class="flex flex-col gap-1 min-w-0">
               <span class="text-xs font-medium text-n-slate-11">
                 {{ $t('AI_SHADOW_RUNS.FILTERS.LABEL_DEPARTMENT') }}
               </span>
-              <Select
-                v-model="filters.department_id"
-                :options="departmentOptions"
-              />
+              <Select v-model="filters.agent_id" :options="agentOptions" />
             </label>
             <label class="flex flex-col gap-1 min-w-0">
               <span class="text-xs font-medium text-n-slate-11">
@@ -339,7 +443,17 @@ onMounted(fetchRuns);
         </div>
 
         <p
-          v-if="!isLoading && !hasData"
+          v-if="rangeError"
+          class="flex items-start gap-2 text-sm text-n-amber-11 rounded-xl border border-n-amber-6 bg-n-amber-3 px-4 py-3 mb-0"
+        >
+          <span class="i-lucide-triangle-alert size-4 shrink-0 mt-0.5" />
+          <span>{{
+            $t('AI_SHADOW_RUNS.RANGE_TOO_LARGE', { days: MAX_WINDOW_DAYS })
+          }}</span>
+        </p>
+
+        <p
+          v-else-if="!isLoading && !hasData"
           class="text-sm text-n-slate-11 py-8 text-center"
         >
           {{ $t('AI_SHADOW_RUNS.EMPTY') }}
@@ -413,40 +527,78 @@ onMounted(fetchRuns);
             >
               {{ $t('AI_SHADOW_RUNS.INSIGHT.EMPTY') }}
             </p>
-            <div
-              v-for="(insight, index) in block.items"
-              :key="index"
-              class="flex items-start gap-3 rounded-xl border border-n-weak bg-n-solid-1 p-3"
-            >
-              <span
-                class="shrink-0 size-8 rounded-lg flex items-center justify-center"
-                :class="INSIGHT_META[block.key].cls"
+            <div v-for="(insight, index) in block.items" :key="index">
+              <button
+                type="button"
+                class="w-full flex items-start gap-3 rounded-xl border border-n-weak bg-n-solid-1 p-3 text-left hover:border-n-brand transition-colors"
+                @click="toggleInsight(block.key, insight)"
               >
-                <span :class="INSIGHT_META[block.key].icon" class="size-4" />
-              </span>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-medium text-n-slate-12 mb-0">
-                  {{
-                    $t(
-                      `AI_SHADOW_RUNS.INSIGHT.${block.key.toUpperCase()}_TITLE`
-                    )
-                  }}
-                </p>
-                <p class="text-xs text-n-slate-11 mb-0">
-                  {{ insightBody(insight) }}
+                <span
+                  class="shrink-0 size-8 rounded-lg flex items-center justify-center"
+                  :class="INSIGHT_META[block.key].cls"
+                >
+                  <span :class="INSIGHT_META[block.key].icon" class="size-4" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-n-slate-12 mb-0">
+                    {{
+                      $t(
+                        `AI_SHADOW_RUNS.INSIGHT.${block.key.toUpperCase()}_TITLE`
+                      )
+                    }}
+                  </p>
+                  <p class="text-xs text-n-slate-11 mb-0">
+                    {{ insightBody(insight) }}
+                  </p>
+                </div>
+                <span
+                  class="shrink-0 inline-flex items-center gap-1.5 text-n-slate-12"
+                >
+                  <span
+                    class="i-lucide-chevron-down size-3.5 text-n-slate-10 transition-transform"
+                    :class="{ 'rotate-180': isExpanded(block.key, insight) }"
+                  />
+                  <span
+                    class="inline-flex items-center justify-center min-w-6 px-1.5 h-6 rounded-full bg-n-alpha-2 text-xs font-medium"
+                  >
+                    {{ insight.count }}
+                  </span>
+                </span>
+              </button>
+              <div
+                v-if="isExpanded(block.key, insight)"
+                class="mt-2 ml-11 flex flex-col gap-1.5"
+              >
+                <a
+                  v-for="r in insightExamples(insight)"
+                  :key="r.id"
+                  :href="conversationUrl(r.conversation_id, r.message_id)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="block rounded-lg border border-n-weak bg-n-alpha-1 px-3 py-2 hover:border-n-brand transition-colors"
+                >
+                  <span class="block text-xs text-n-slate-12 truncate">
+                    {{ r.question || $t('AI_SHADOW_RUNS.INSIGHT.NO_QUESTION') }}
+                  </span>
+                  <span class="block text-[10px] text-n-slate-10">
+                    {{ $t('AI_SHADOW_RUNS.RUN.CONVERSATION') }} #{{
+                      r.conversation_id
+                    }}
+                  </span>
+                </a>
+                <p
+                  v-if="!insightExamples(insight).length"
+                  class="text-xs text-n-slate-11 px-1 mb-0"
+                >
+                  {{ $t('AI_SHADOW_RUNS.INSIGHT.NO_EXAMPLES') }}
                 </p>
               </div>
-              <span
-                class="shrink-0 inline-flex items-center justify-center min-w-6 px-1.5 h-6 rounded-full bg-n-alpha-2 text-xs font-medium text-n-slate-12"
-              >
-                {{ insight.count }}
-              </span>
             </div>
           </section>
 
           <!-- Oportunidades por departamento -->
           <section
-            v-if="data.summary.by_department.length"
+            v-if="data.summary.by_agent.length"
             class="flex flex-col gap-2"
           >
             <h2 class="text-sm font-semibold text-n-slate-12">
@@ -454,7 +606,7 @@ onMounted(fetchRuns);
             </h2>
             <div class="border border-n-weak rounded-xl divide-y divide-n-weak">
               <div
-                v-for="(dept, index) in data.summary.by_department"
+                v-for="(dept, index) in data.summary.by_agent"
                 :key="index"
                 class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
               >
@@ -488,9 +640,22 @@ onMounted(fetchRuns);
 
           <!-- Execuções detalhadas -->
           <section class="flex flex-col gap-3">
-            <h2 class="text-sm font-semibold text-n-slate-12">
-              {{ $t('AI_SHADOW_RUNS.BLOCKS.RUNS') }}
-            </h2>
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <h2 class="text-sm font-semibold text-n-slate-12">
+                {{ $t('AI_SHADOW_RUNS.BLOCKS.RUNS') }}
+              </h2>
+              <div
+                v-if="data.runs.length"
+                class="flex items-center gap-2 text-xs text-n-slate-11"
+              >
+                <span>{{ $t('AI_SHADOW_RUNS.PAGINATION.PER_PAGE') }}</span>
+                <Select
+                  v-model="perPage"
+                  :options="perPageOptions"
+                  class="w-20"
+                />
+              </div>
+            </div>
             <p
               v-if="!data.runs.length"
               class="text-sm text-n-slate-11 py-4 text-center mb-0"
@@ -510,11 +675,11 @@ onMounted(fetchRuns);
                     }}
                   </span>
                   <span
-                    v-if="run.department"
+                    v-if="run.agent"
                     class="inline-flex items-center gap-1 text-n-slate-11 truncate"
                   >
                     <span class="i-lucide-layers size-3.5 shrink-0" />
-                    {{ run.department }}
+                    {{ run.agent }}
                     <span v-if="run.routing_method" class="text-n-slate-10">
                       {{
                         `· ${$t('AI_SHADOW_RUNS.RUN.VIA')} ${methodLabel(run.routing_method)}`
@@ -588,6 +753,50 @@ onMounted(fetchRuns);
                     })
                   }}
                 </span>
+              </div>
+            </div>
+
+            <!-- Navegação de páginas -->
+            <div
+              v-if="data.runs.length"
+              class="flex items-center justify-between gap-3 flex-wrap pt-1"
+            >
+              <span class="text-xs text-n-slate-11">
+                {{
+                  $t('AI_SHADOW_RUNS.PAGINATION.RANGE', {
+                    from: rangeStart,
+                    to: rangeEnd,
+                    total: totalRuns,
+                  })
+                }}
+              </span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-n-weak text-xs text-n-slate-12 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-n-alpha-1"
+                  :disabled="currentPage <= 1"
+                  @click="goToPage(currentPage - 1)"
+                >
+                  <span class="i-lucide-chevron-left size-3.5" />
+                  {{ $t('AI_SHADOW_RUNS.PAGINATION.PREV') }}
+                </button>
+                <span class="text-xs text-n-slate-11 px-1">
+                  {{
+                    $t('AI_SHADOW_RUNS.PAGINATION.PAGE', {
+                      current: currentPage,
+                      total: totalPages,
+                    })
+                  }}
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-n-weak text-xs text-n-slate-12 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-n-alpha-1"
+                  :disabled="currentPage >= totalPages"
+                  @click="goToPage(currentPage + 1)"
+                >
+                  {{ $t('AI_SHADOW_RUNS.PAGINATION.NEXT') }}
+                  <span class="i-lucide-chevron-right size-3.5" />
+                </button>
               </div>
             </div>
           </section>

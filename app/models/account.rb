@@ -6,7 +6,7 @@
 #  auto_resolve_duration :integer
 #  custom_attributes     :jsonb
 #  domain                :string(100)
-#  feature_flags         :bigint           default(0), not null
+#  enabled_feature_keys  :string           default([]), not null, is an Array
 #  internal_attributes   :jsonb            not null
 #  limits                :jsonb
 #  locale                :integer          default("en")
@@ -19,12 +19,11 @@
 #
 # Indexes
 #
-#  index_accounts_on_status  (status)
+#  index_accounts_on_enabled_feature_keys  (enabled_feature_keys) USING gin
+#  index_accounts_on_status                (status)
 #
 
 class Account < ApplicationRecord
-  # used for single column multi flags
-  include FlagShihTzu
   include Reportable
   include Featurable
   include CacheKeys
@@ -32,10 +31,9 @@ class Account < ApplicationRecord
   include AccountEmailRateLimitable
   include AccountSettingsSchema
 
-  DEFAULT_QUERY_SETTING = {
-    flag_query_mode: :bit_operator,
-    check_for_column: false
-  }.freeze
+  # The feature_flags bigint bitmask was replaced by enabled_feature_keys (see Featurable). Ignoring
+  # the column decouples the running app from it so the drop migration is safe under a rolling deploy.
+  self.ignored_columns += %w[feature_flags]
 
   validates :name, presence: true
   validates :domain, length: { maximum: 100 }
@@ -65,6 +63,7 @@ class Account < ApplicationRecord
   has_many :macros, dependent: :destroy_async
   has_many :campaigns, dependent: :destroy_async
   has_many :canned_responses, dependent: :destroy_async
+  has_many :stickers, dependent: :destroy_async
   has_many :categories, dependent: :destroy_async, class_name: '::Category'
   has_many :contacts, dependent: :destroy_async
   has_many :conversations, dependent: :destroy_async
@@ -99,6 +98,15 @@ class Account < ApplicationRecord
   has_many :webhooks, dependent: :destroy_async
   has_many :whatsapp_channels, dependent: :destroy_async, class_name: '::Channel::Whatsapp'
   has_many :working_hours, dependent: :destroy_async
+  # Plan/Subscription (Fase 1: dados + gate, sem enforcement). has_many mantém histórico de trocas;
+  # a subscription atual é derivada por scope (Subscription.current) — ver FeatureGate.
+  has_many :subscriptions, dependent: :destroy_async
+  has_one :ai_credit_balance, dependent: :destroy_async
+  # Overage pago (Fase 2): snapshots diários do excedente + cobranças por ciclo (média × preço).
+  has_many :overage_snapshots, dependent: :destroy_async
+  has_many :overage_charges, dependent: :destroy_async
+  # Solicitações de mais créditos de IA (billing Fase 1): fila de aprovação manual da SCNET.
+  has_many :ai_credit_requests, dependent: :destroy_async
 
   has_one_attached :contacts_export
 

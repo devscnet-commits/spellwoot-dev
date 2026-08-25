@@ -3,13 +3,12 @@ import AiShadowRuns from './AiShadowRuns.vue';
 import AiShadows from './AiShadows.vue';
 import AiAgents from './AiAgents.vue';
 import AiAgentDetail from './AiAgentDetail.vue';
-import AiDepartmentDetail from './AiDepartmentDetail.vue';
 import AiProfiles from './AiProfiles.vue';
 import AiKnowledge from './AiKnowledge.vue';
 import AiCosts from './AiCosts.vue';
 
-// "Agentes IA" configuration surface. Agents and their departments are edited through
-// the detail pages (tabs); Tools/Knowledge are embedded as tabs inside the department detail.
+// "Agentes IA" configuration surface. Each agent is edited on its own detail page (tabs);
+// Tools/Knowledge/Steps are embedded as tabs inside that same page.
 export const routes = [
   {
     path: frontendURL('accounts/:accountId/ai/shadow-runs'),
@@ -39,16 +38,6 @@ export const routes = [
     path: frontendURL('accounts/:accountId/ai/agents/:agentId'),
     name: 'ai_agent_detail',
     component: AiAgentDetail,
-    meta: {
-      permissions: ['administrator'],
-    },
-  },
-  {
-    path: frontendURL(
-      'accounts/:accountId/ai/agents/:agentId/departments/:departmentId/detail'
-    ),
-    name: 'ai_department_detail',
-    component: AiDepartmentDetail,
     meta: {
       permissions: ['administrator'],
     },

@@ -57,6 +57,11 @@ gem 'azure-storage-blob', git: 'https://github.com/chatwoot/azure-storage-ruby',
 gem 'google-cloud-storage', '>= 1.48.0', require: false
 gem 'image_processing'
 
+# Extração de conteúdo de documentos recebidos pela IA (Ai::Workers::MediaProcessor). Ambas puras
+# Ruby, sem dependência de sistema: pdf-reader (texto de PDF), docx (texto de .docx via rubyzip+nokogiri).
+gem 'docx'
+gem 'pdf-reader'
+
 ##-- for actionmailbox --##
 gem 'aws-actionmailbox-ses', '~> 0'
 
@@ -222,7 +227,6 @@ group :development do
   gem 'annotaterb'
   gem 'bullet'
   gem 'letter_opener'
-  gem 'rubocop', require: false
   gem 'scss_lint', require: false
   gem 'web-console', '>= 4.2.1'
 

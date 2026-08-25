@@ -20,18 +20,44 @@ class AutoAssignment::AssignmentService
 
   private
 
+  ASSIGNMENT_LOCK_TIMEOUT = 5.seconds
+
+  # find_available_agent (rate-limit check) and assign_conversation (rate-limit tracking write) are
+  # two separate Redis round trips (see AutoAssignment::RateLimiter) — not atomic on their own. Without
+  # this lock, the periodic AssignmentJob and a real-time AI handoff (Ai::HandoffCoordinator) can both
+  # read "agent is under fair_distribution_limit" before either writes its tracking key, so the agent
+  # ends up over the configured limit. The lock is per-inbox and held only for one conversation at a
+  # time, so it doesn't serialize unrelated inboxes or hold up the whole bulk run.
   def perform_for_conversation(conversation)
     return false unless assignable?(conversation)
 
+    with_assignment_lock { assign_available_agent(conversation) }
+  end
+
+  def assign_available_agent(conversation)
     agent = find_available_agent(conversation)
     return false unless agent
 
     assign_conversation(conversation, agent)
   end
 
+  def with_assignment_lock
+    lock_manager = Redis::LockManager.new
+    key = format(Redis::RedisKeys::ASSIGNMENT_MUTEX, inbox_id: inbox.id)
+    return false unless lock_manager.lock(key, ASSIGNMENT_LOCK_TIMEOUT)
+
+    begin
+      yield
+    ensure
+      lock_manager.unlock(key)
+    end
+  end
+
   def assignable?(conversation)
     conversation.status == 'open' &&
-      conversation.assignee_id.nil?
+      conversation.assignee_id.nil? &&
+      # A IA atende primeiro: não atribuir humano enquanto a conversa é da IA (pré-handoff).
+      !conversation.ai_pending_handoff?
   end
 
   def unassigned_conversations(limit)
