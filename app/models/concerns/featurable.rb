@@ -1,28 +1,30 @@
 module Featurable
   extend ActiveSupport::Concern
 
-  QUERY_MODE = {
-    flag_query_mode: :bit_operator,
-    check_for_column: false
-  }.freeze
-
   FEATURE_LIST = YAML.safe_load(Rails.root.join('config/features.yml').read).freeze
-
-  FEATURES = FEATURE_LIST.each_with_object({}) do |feature, result|
-    result[result.keys.size + 1] = "feature_#{feature['name']}".to_sym
-  end
+  FEATURE_NAMES = FEATURE_LIST.pluck('name').freeze
 
   included do
-    include FlagShihTzu
-    has_flags FEATURES.merge(column: 'feature_flags').merge(QUERY_MODE)
-
     before_create :enable_default_features
+
+    FEATURE_NAMES.each do |feature_name|
+      define_method("feature_#{feature_name}?") { feature_enabled?(feature_name) }
+
+      define_method("feature_#{feature_name}=") do |value|
+        ActiveModel::Type::Boolean.new.cast(value) ? enable_features(feature_name) : disable_features(feature_name)
+      end
+
+      scope "feature_#{feature_name}", -> { where('enabled_feature_keys @> ARRAY[?]::varchar[]', feature_name) }
+      scope "not_feature_#{feature_name}", -> { where.not('enabled_feature_keys @> ARRAY[?]::varchar[]', feature_name) }
+    end
+  end
+
+  def feature_enabled?(name)
+    enabled_feature_keys.include?(name.to_s)
   end
 
   def enable_features(*names)
-    names.each do |name|
-      send("feature_#{name}=", true)
-    end
+    self.enabled_feature_keys = (enabled_feature_keys | names.map(&:to_s))
   end
 
   def enable_features!(*names)
@@ -31,9 +33,7 @@ module Featurable
   end
 
   def disable_features(*names)
-    names.each do |name|
-      send("feature_#{name}=", false)
-    end
+    self.enabled_feature_keys = (enabled_feature_keys - names.map(&:to_s))
   end
 
   def disable_features!(*names)
@@ -41,12 +41,8 @@ module Featurable
     save
   end
 
-  def feature_enabled?(name)
-    send("feature_#{name}?")
-  end
-
   def all_features
-    FEATURE_LIST.pluck('name').index_with do |feature_name|
+    FEATURE_NAMES.index_with do |feature_name|
       feature_enabled?(feature_name)
     end
   end
@@ -57,6 +53,14 @@ module Featurable
 
   def disabled_features
     all_features.select { |_feature, enabled| enabled == false }
+  end
+
+  def selected_feature_flags=(flags)
+    self.enabled_feature_keys = Array(flags).select(&:present?).map { |flag| flag.to_s.delete_prefix('feature_') }
+  end
+
+  def selected_feature_flags
+    FEATURE_NAMES.select { |name| feature_enabled?(name) }.map { |name| :"feature_#{name}" }
   end
 
   private
