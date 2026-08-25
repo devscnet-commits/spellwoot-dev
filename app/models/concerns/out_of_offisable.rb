@@ -182,8 +182,10 @@ module OutOfOffisable
     return if params.blank?
 
     ActiveRecord::Base.transaction do
-      # Full replacement — client sends the whole list
-      inbox_holidays.delete_all
+      # Full replacement — client sends the whole list. Same delete_all pitfall as
+      # #update_working_periods above (dependent: :destroy_async nullifies inbox_id instead of
+      # deleting, and inbox_id is NOT NULL here too) — bare model relation for a real DELETE.
+      InboxHoliday.where(inbox_id: id).delete_all
       params.each do |holiday|
         inbox_holidays.create!(holiday.slice(*HOLIDAY_ATTRS))
       end
@@ -194,8 +196,10 @@ module OutOfOffisable
     return if params.blank?
 
     ActiveRecord::Base.transaction do
-      # Full replacement — client sends the whole list
-      inbox_exceptions.delete_all
+      # Full replacement — client sends the whole list. Same delete_all pitfall as
+      # #update_working_periods above (dependent: :destroy_async nullifies inbox_id instead of
+      # deleting, and inbox_id is NOT NULL here too) — bare model relation for a real DELETE.
+      InboxException.where(inbox_id: id).delete_all
       params.each do |exception|
         inbox_exceptions.create!(
           name:           exception['name'],
