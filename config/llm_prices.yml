@@ -1,0 +1,40 @@
+# LLM price table (USD per 1k tokens) used to estimate AI costs in ai_runs.cost and the Costs report.
+# Estimates only — caching, batch discounts, image tokens and FX are NOT reflected here.
+#
+# Matching: Ai::ModelRouter.price_for does a substring `model.include?(match)` and takes the FIRST
+# hit, so ORDER MATTERS — list the most specific patterns first (e.g. gpt-4o-mini before gpt-4o,
+# claude-3-5-sonnet before claude). `default` is the fallback when nothing matches.
+#
+# Override WITHOUT deploy: set an InstallationConfig named AI_LLM_PRICES to a JSON payload with the
+# same shape ({ "default": [in, out], "prices": [{ "match": "...", "in": 0.0, "out": 0.0 }] }).
+# Entries with a `match` already present here replace this one in place; new matches are checked
+# first. See Ai::ModelRouter.price_table.
+updated_at: "2026-07-04"
+default: [0.001, 0.003]
+prices:
+  - { match: "claude-3-5-haiku", in: 0.0008, out: 0.004 }
+  - { match: "claude-3-haiku", in: 0.00025, out: 0.00125 }
+  - { match: "claude-haiku", in: 0.0008, out: 0.004 }
+  - { match: "claude-3-opus", in: 0.015, out: 0.075 }
+  - { match: "claude-opus", in: 0.015, out: 0.075 }
+  - { match: "claude-3-5-sonnet", in: 0.003, out: 0.015 }
+  - { match: "claude-sonnet", in: 0.003, out: 0.015 }
+  - { match: "claude", in: 0.003, out: 0.015 }
+  - { match: "gpt-4o-mini", in: 0.00015, out: 0.0006 }
+  - { match: "gpt-4o", in: 0.0025, out: 0.01 }
+  - { match: "gpt-4.1-nano", in: 0.0001, out: 0.0004 }
+  - { match: "gpt-4.1-mini", in: 0.0004, out: 0.0016 }
+  - { match: "gpt-4.1", in: 0.002, out: 0.008 }
+  - { match: "o4-mini", in: 0.0011, out: 0.0044 }
+  - { match: "o3-mini", in: 0.0011, out: 0.0044 }
+  # gpt-oss (Groq) ANTES do catch-all "gpt" — senão o substring match cairia no preço genérico.
+  - { match: "gpt-oss-120b", in: 0.00015, out: 0.0006 }
+  - { match: "gpt", in: 0.0005, out: 0.0015 }
+  - { match: "gemini-2.0-flash", in: 0.000075, out: 0.0003 }
+  - { match: "gemini-1.5-flash", in: 0.000075, out: 0.0003 }
+  - { match: "gemini-flash", in: 0.000075, out: 0.0003 }
+  - { match: "gemini-1.5-pro", in: 0.00125, out: 0.005 }
+  - { match: "gemini-pro", in: 0.00125, out: 0.005 }
+  - { match: "gemini", in: 0.0005, out: 0.0015 }
+  # Groq (OpenAI-compatible; uso interno no classificador de department). Preço real da Groq.
+  - { match: "llama-3.1-8b-instant", in: 0.00005, out: 0.00008 }

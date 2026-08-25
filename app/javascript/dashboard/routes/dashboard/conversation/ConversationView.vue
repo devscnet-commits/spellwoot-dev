@@ -72,7 +72,10 @@ export default {
       const startWidth = contactPanelWidth.value;
       function onMove(ev) {
         const delta = startX - ev.clientX;
-        contactPanelWidth.value = Math.min(MAX_CONTACT_WIDTH, Math.max(MIN_CONTACT_WIDTH, startWidth + delta));
+        contactPanelWidth.value = Math.min(
+          MAX_CONTACT_WIDTH,
+          Math.max(MIN_CONTACT_WIDTH, startWidth + delta)
+        );
       }
       function onUp() {
         isContactResizing.value = false;

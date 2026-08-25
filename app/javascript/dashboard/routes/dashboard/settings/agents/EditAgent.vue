@@ -95,23 +95,6 @@ const selectedRole = computed(() =>
       role.id === selectedRoleId.value || role.name === selectedRoleId.value
   )
 );
-
-const statusList = computed(() => {
-  return [
-    t('PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.ONLINE'),
-    t('PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.BUSY'),
-    t('PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.OFFLINE'),
-  ];
-});
-
-const availabilityStatuses = computed(() =>
-  statusList.value.map((statusLabel, index) => ({
-    label: statusLabel,
-    value: AVAILABILITY_STATUS_KEYS[index],
-    disabled: props.availability === AVAILABILITY_STATUS_KEYS[index],
-  }))
-);
-
 const editAgent = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;

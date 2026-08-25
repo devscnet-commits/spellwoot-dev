@@ -1125,4 +1125,48 @@ RSpec.describe Conversation do
       end
     end
   end
+
+  # Achado ao vivo (19/08): "Inativo" no agente (Ai::Agent#status) não desligava nada aqui — só o
+  # binding (Ai::AgentInbox#active/mode) mandava. Um agente "Inativo" com a caixa ainda marcada em
+  # "Atendimento IA" continuava bloqueando a auto-atribuição humana pra sempre (ai_pending_handoff?
+  # nunca resolvia, pois a IA "dona" da conversa nunca respondia de verdade). Ver
+  # Ai::AgentInbox#agent_active.
+  describe '#ai_assistant_active? / #ai_pending_handoff? — agente Inativo não deve contar como IA ativa' do
+    let(:account) { create(:account) }
+    let(:inbox) { create(:inbox, account: account) }
+    let(:conversation) { create(:conversation, account: account, inbox: inbox) }
+    let(:profile) do
+      Ai::OperationProfile.create!(account_id: account.id, name: 'p', supervisor_provider: 'openai',
+                                   supervisor_model: 'gpt-4.1-mini')
+    end
+
+    before { account.enable_features!('ai_core') }
+
+    def bind_agent(status:, mode: 'live', active: true)
+      agent = Ai::Agent.create!(account: account, name: 'Maya', status: status, ai_operation_profile_id: profile.id)
+      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: mode, active: active)
+      agent
+    end
+
+    it 'agente ATIVO + binding live: ai_assistant_active? true, bloqueia auto-atribuição (ai_pending_handoff? true)' do
+      bind_agent(status: 'active')
+
+      expect(conversation.ai_assistant_active?).to be(true)
+      expect(conversation.ai_pending_handoff?).to be(true)
+    end
+
+    it 'agente INATIVO + binding AINDA marcado na caixa: ai_assistant_active? false, NÃO bloqueia mais a auto-atribuição' do
+      bind_agent(status: 'inactive')
+
+      expect(conversation.ai_assistant_active?).to be(false)
+      expect(conversation.ai_pending_handoff?).to be(false)
+    end
+
+    it 'ai_handoff já marcado: ai_pending_handoff? false mesmo com IA ativa (comportamento existente, não mudou)' do
+      bind_agent(status: 'active')
+      conversation.update!(additional_attributes: { 'ai_handoff' => true })
+
+      expect(conversation.ai_pending_handoff?).to be(false)
+    end
+  end
 end
