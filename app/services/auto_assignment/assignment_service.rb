@@ -55,9 +55,7 @@ class AutoAssignment::AssignmentService
 
   def assignable?(conversation)
     conversation.status == 'open' &&
-      conversation.assignee_id.nil? &&
-      # A IA atende primeiro: não atribuir humano enquanto a conversa é da IA (pré-handoff).
-      !conversation.ai_pending_handoff?
+      conversation.assignee_id.nil?
   end
 
   def unassigned_conversations(limit)

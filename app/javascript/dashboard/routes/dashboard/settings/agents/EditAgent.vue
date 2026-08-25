@@ -25,6 +25,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  receivesAssignments: {
+    type: Boolean,
+    default: true,
+  },
   provider: {
     type: String,
     default: '',
@@ -41,6 +45,7 @@ const store = useStore();
 const { t } = useI18n();
 
 const agentName = ref(props.name);
+const agentReceivesAssignments = ref(props.receivesAssignments);
 const selectedRoleId = ref(props.customRoleId || props.type);
 const agentCredentials = ref({ email: props.email });
 
@@ -90,23 +95,6 @@ const selectedRole = computed(() =>
       role.id === selectedRoleId.value || role.name === selectedRoleId.value
   )
 );
-
-const statusList = computed(() => {
-  return [
-    t('PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.ONLINE'),
-    t('PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.BUSY'),
-    t('PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.OFFLINE'),
-  ];
-});
-
-const availabilityStatuses = computed(() =>
-  statusList.value.map((statusLabel, index) => ({
-    label: statusLabel,
-    value: AVAILABILITY_STATUS_KEYS[index],
-    disabled: props.availability === AVAILABILITY_STATUS_KEYS[index],
-  }))
-);
-
 const editAgent = async () => {
   v$.value.$touch();
   if (v$.value.$invalid) return;
@@ -115,6 +103,7 @@ const editAgent = async () => {
     const payload = {
       id: props.id,
       name: agentName.value,
+      receives_assignments: agentReceivesAssignments.value,
     };
 
     if (selectedRole.value.name.startsWith('custom_')) {
@@ -170,6 +159,22 @@ const resetPassword = async () => {
             {{ $t('AGENT_MGMT.EDIT.FORM.AGENT_TYPE.ERROR') }}
           </span>
         </label>
+      </div>
+
+      <div class="w-full flex items-start justify-between gap-4 py-2">
+        <div class="flex flex-col gap-0.5">
+          <span class="text-sm font-medium text-n-slate-12">
+            {{ $t('AGENT_MGMT.EDIT.FORM.RECEIVES_ASSIGNMENTS.LABEL') }}
+          </span>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AGENT_MGMT.EDIT.FORM.RECEIVES_ASSIGNMENTS.DESCRIPTION') }}
+          </span>
+        </div>
+        <input
+          v-model="agentReceivesAssignments"
+          type="checkbox"
+          class="mt-1 flex-shrink-0"
+        />
       </div>
 
       <div class="flex flex-row justify-start w-full gap-2 px-0 py-2">

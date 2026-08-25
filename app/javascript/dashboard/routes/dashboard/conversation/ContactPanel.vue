@@ -15,8 +15,6 @@ import ConversationAction from './ConversationAction.vue';
 import ConversationParticipant from './ConversationParticipant.vue';
 import ContactInfo from './contact/ContactInfo.vue';
 import ContactNotes from './contact/ContactNotes.vue';
-import ContactAiMemory from './contact/ContactAiMemory.vue';
-import AiHandoffSummary from './AiHandoffSummary.vue';
 import ConversationInfo from './ConversationInfo.vue';
 import CustomAttributes from './customAttributes/CustomAttributes.vue';
 import Draggable from 'vuedraggable';
@@ -297,46 +295,6 @@ onMounted(() => {
               "
             >
               <ContactNotes :contact-id="contactId" />
-            </AccordionItem>
-          </div>
-          <div v-else-if="element.name === 'contact_ai_memory'">
-            <AccordionItem
-              :title="$t('CONVERSATION_SIDEBAR.ACCORDION.CONTACT_AI_MEMORY')"
-              :is-open="isContactSidebarItemOpen('is_contact_ai_memory_open')"
-              compact
-              @toggle="
-                value =>
-                  toggleSidebarUIState('is_contact_ai_memory_open', value)
-              "
-            >
-              <ContactAiMemory
-                :contact-id="contactId"
-                :collected-facts="
-                  conversationAdditionalAttributes.ai_collected_facts || {}
-                "
-              />
-            </AccordionItem>
-          </div>
-          <div v-else-if="element.name === 'conversation_handoff_summary'">
-            <AccordionItem
-              :title="
-                $t(
-                  'CONVERSATION_SIDEBAR.ACCORDION.CONVERSATION_HANDOFF_SUMMARY'
-                )
-              "
-              :is-open="
-                isContactSidebarItemOpen('is_conversation_handoff_summary_open')
-              "
-              compact
-              @toggle="
-                value =>
-                  toggleSidebarUIState(
-                    'is_conversation_handoff_summary_open',
-                    value
-                  )
-              "
-            >
-              <AiHandoffSummary :conversation-id="conversationId" />
             </AccordionItem>
           </div>
         </template>

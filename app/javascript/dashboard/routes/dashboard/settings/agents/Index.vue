@@ -84,7 +84,11 @@ const showEditAction = agent => {
 
 const showDeactivateAction = agent => {
   if (currentUserId.value === agent.id) return false;
-  if (agent.role === 'administrator' && verifiedAdministrators.value.length === 1) return false;
+  if (
+    agent.role === 'administrator' &&
+    verifiedAdministrators.value.length === 1
+  )
+    return false;
   return true;
 };
 
@@ -122,7 +126,9 @@ const toggleAgentActive = async agent => {
   try {
     if (agent.active === false) {
       await store.dispatch('agents/reactivate', agent.id);
-      showAlertMessage(t('AGENT_MGMT.DEACTIVATE.API.REACTIVATE_SUCCESS_MESSAGE'));
+      showAlertMessage(
+        t('AGENT_MGMT.DEACTIVATE.API.REACTIVATE_SUCCESS_MESSAGE')
+      );
     } else {
       loading.value[agent.id] = true;
       closeDeactivatePopup();
@@ -182,7 +188,7 @@ const confirmDeactivation = () => {
       </span>
       <div v-else class="divide-y divide-n-weak border-t border-n-weak">
         <div
-          v-for="(agent, index) in filteredAgentList"
+          v-for="agent in filteredAgentList"
           :key="agent.email"
           class="flex justify-between flex-row items-start gap-4 py-4"
         >
@@ -305,6 +311,7 @@ const confirmDeactivation = () => {
         :provider="currentAgent.provider"
         :type="currentAgent.role"
         :email="currentAgent.email"
+        :receives-assignments="currentAgent.receives_assignments !== false"
         :custom-role-id="currentAgent.custom_role_id"
         @close="hideEditPopup"
       />

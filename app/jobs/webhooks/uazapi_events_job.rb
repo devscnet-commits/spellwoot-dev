@@ -26,3 +26,5 @@ class Webhooks::UazapiEventsJob < ApplicationJob
     Rails.logger.error "[UAZAPI] #{e.backtrace.join("\n")}"
   end
 end
+
+
