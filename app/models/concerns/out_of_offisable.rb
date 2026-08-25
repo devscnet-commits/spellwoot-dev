@@ -162,7 +162,15 @@ module OutOfOffisable
       # The submitted set is the full desired schedule — the UI omits disabled days — so replace
       # every period. Deleting only the submitted days would leave a day that was turned off with
       # its old periods, making it reappear on reload (the "saved but reverted" bug).
-      working_periods.delete_all
+      #
+      # Achado ao vivo (24/08): `working_periods.delete_all` (via a associação has_many, que é
+      # dependent: :destroy_async) NÃO apaga as linhas — ele ANULA a FK (UPDATE inbox_id = NULL),
+      # e como inbox_id não aceita nulo, quebra com PG::NotNullViolation em toda tentativa de salvar
+      # (qualquer tipo de caixa, não só WhatsApp). Mesmo bug já identificado e corrigido em
+      # Inboxes::BusinessHoursReplicationService#copy_working_periods — só não tinha sido replicado
+      # aqui, no caminho principal (editar direto o horário da própria caixa). WorkingPeriod.where
+      # (bare model relation) faz um DELETE de verdade, sem passar pelo dependent da associação.
+      WorkingPeriod.where(inbox_id: id).delete_all
 
       Array(params).each_with_index do |period, idx|
         working_periods.create!(period.slice(*PERIOD_ATTRS).merge('position' => idx))
@@ -174,8 +182,10 @@ module OutOfOffisable
     return if params.blank?
 
     ActiveRecord::Base.transaction do
-      # Full replacement — client sends the whole list
-      inbox_holidays.delete_all
+      # Full replacement — client sends the whole list. Same delete_all pitfall as
+      # #update_working_periods above (dependent: :destroy_async nullifies inbox_id instead of
+      # deleting, and inbox_id is NOT NULL here too) — bare model relation for a real DELETE.
+      InboxHoliday.where(inbox_id: id).delete_all
       params.each do |holiday|
         inbox_holidays.create!(holiday.slice(*HOLIDAY_ATTRS))
       end
@@ -186,8 +196,10 @@ module OutOfOffisable
     return if params.blank?
 
     ActiveRecord::Base.transaction do
-      # Full replacement — client sends the whole list
-      inbox_exceptions.delete_all
+      # Full replacement — client sends the whole list. Same delete_all pitfall as
+      # #update_working_periods above (dependent: :destroy_async nullifies inbox_id instead of
+      # deleting, and inbox_id is NOT NULL here too) — bare model relation for a real DELETE.
+      InboxException.where(inbox_id: id).delete_all
       params.each do |exception|
         inbox_exceptions.create!(
           name:           exception['name'],
