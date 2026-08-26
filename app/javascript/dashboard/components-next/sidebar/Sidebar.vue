@@ -640,12 +640,7 @@ const menuItems = computed(() => {
           icon: 'i-lucide-message-square-quote',
           to: accountScopedRoute('canned_list'),
         },
-        {
-          name: 'Settings Stickers',
-          label: t('SIDEBAR.STICKERS'),
-          icon: 'i-lucide-sticker',
-          to: accountScopedRoute('stickers_list'),
-        },
+        
         {
           name: 'Settings Integrations',
           label: t('SIDEBAR.INTEGRATIONS'),
