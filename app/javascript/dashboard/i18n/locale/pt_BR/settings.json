@@ -295,6 +295,17 @@
     }
   },
   "SIDEBAR": {
+    "AI_AGENTS": "Agentes IA",
+    "AI_AGENTS_LIST": "Agentes",
+    "AI_KNOWLEDGE": "Conhecimento",
+    "AI_PROFILES": "N\u00edveis de atendimento",
+    "AI_INTEGRATIONS": "Integra\u00e7\u00f5es",
+    "AI_COSTS": "Custos",
+    "AI_SHADOW_RUNS": "An\u00e1lises com IA",
+    "STICKERS": "Figurinhas",
+    "REPORTS_LEADS": "Leads",
+    "REPORTS_MARKETING": "Marketing",
+    "REPORTS_SCHEDULE": "Hor\u00e1rios",
     "NO_ITEMS": "Nenhum item",
     "CURRENTLY_VIEWING_ACCOUNT": "Visualização atual:",
     "SWITCH": "Trocar",
