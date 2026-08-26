@@ -1,0 +1,192 @@
+{
+  "AI_SHADOW_RUNS": {
+    "TITLE": "Validação de Análises — Inteligência da IA",
+    "DESCRIPTION": "Avalie o que a IA acertou, errou ou deixou sem resposta e descubra exatamente o que ajustar: FAQ, instrução, ferramenta ou comportamento.",
+    "REFRESH": "Atualizar",
+    "LOADING": "Carregando...",
+    "EMPTY": "Nenhuma execução registrada ainda. Crie um analista para começar a avaliar.",
+    "RANGE_TOO_LARGE": "O intervalo escolhido é maior que {days} dias. Selecione um período de no máximo 1 ano para não sobrecarregar o sistema.",
+    "NONE": "—",
+    "COST_DISCLAIMER": "Os custos exibidos são estimativas do consumo dos modelos de IA. Não incluem impostos, IOF, taxas de câmbio ou outros encargos — portanto podem divergir da fatura final.",
+    "FILTERS": {
+      "TITLE": "Filtros",
+      "LABEL_PERIOD": "Período",
+      "LABEL_DEPARTMENT": "Fluxo",
+      "LABEL_ERROR": "Tipo de erro",
+      "LABEL_STATUS": "Status",
+      "LABEL_REPLY": "Resposta da IA",
+      "LABEL_TOOL": "Ferramenta",
+      "LABEL_CONVERSATION": "Conversa",
+      "PERIOD": "Período",
+      "PERIOD_ALL": "Todo o período",
+      "PERIOD_7": "Últimos 7 dias",
+      "PERIOD_30": "Últimos 30 dias",
+      "PERIOD_CUSTOM": "Personalizado",
+      "FROM": "De",
+      "TO": "Até",
+      "DEPARTMENT": "Fluxo",
+      "DEPARTMENT_ALL": "Todos os fluxos",
+      "ERROR_TYPE": "Tipo de erro",
+      "ERROR_ALL": "Todos os erros",
+      "STATUS": "Status",
+      "STATUS_ALL": "Todos os status",
+      "RESPONSE": "Resposta",
+      "HAS_REPLY": "Com resposta",
+      "NO_REPLY": "Sem resposta",
+      "TOOL": "Ferramenta",
+      "HAS_TOOL": "Com ferramenta sugerida",
+      "NO_TOOL": "Sem ferramenta",
+      "ANY": "Qualquer",
+      "CONVERSATION": "Conversa #",
+      "CLEAR": "Limpar filtros"
+    },
+    "KPI": {
+      "EVALUATED": "Execuções avaliadas",
+      "UNANSWERED": "Perguntas sem resposta",
+      "ERRORS": "Erros",
+      "LOW_CONFIDENCE": "Respostas de baixa confiança",
+      "TOOLS_SUGGESTED": "Ferramentas sugeridas",
+      "TOOLS_MISSING": "Ferramentas ausentes",
+      "KNOWLEDGE_GAPS": "Lacunas de conhecimento"
+    },
+    "BLOCKS": {
+      "SUMMARY": "Resumo executivo",
+      "KNOWLEDGE_GAPS": "Lacunas de conhecimento",
+      "INSTRUCTION_FAILS": "Falhas de instrução",
+      "TOOLS_MISSING": "Ferramentas ausentes",
+      "RECURRING_ERRORS": "Erros recorrentes",
+      "BY_DEPARTMENT": "Oportunidades por fluxo",
+      "RUNS": "Execuções detalhadas"
+    },
+    "PAGINATION": {
+      "PER_PAGE": "Por página",
+      "RANGE": "{from}–{to} de {total}",
+      "PAGE": "Página {current} de {total}",
+      "PREV": "Anterior",
+      "NEXT": "Próxima"
+    },
+    "RESOLUTION": {
+      "TITLE": "Como a IA resolveu",
+      "knowledge": "Por conhecimento",
+      "instruction": "Por instrução",
+      "tool": "Por ferramenta",
+      "transfer": "Transferência",
+      "closed": "Encerramento",
+      "unanswered": "Sem resposta",
+      "error": "Erro"
+    },
+    "INSIGHT": {
+      "EMPTY": "Nenhuma ação sugerida neste recorte. 🎉",
+      "FAQ_TITLE": "Vire FAQ / reforce o conhecimento",
+      "FAQ_BODY": "{count} pergunta(s) sem cobertura de conhecimento em {agent}. Crie uma FAQ ou fonte de conhecimento.",
+      "INSTRUCTION_TITLE": "Instrução fraca",
+      "INSTRUCTION_BODY": "{count} resposta(s) de baixa confiança em {agent}. Reforce as instruções do fluxo.",
+      "TOOL_TITLE": "Ferramenta ausente",
+      "TOOL_BODY": "A ferramenta \"{tool}\" foi sugerida {count}× em {agent}, mas não está configurada.",
+      "ERROR_TITLE": "Erro recorrente",
+      "ERROR_BODY": "{error} aconteceu {count}× — precisa de correção estrutural.",
+      "NO_QUESTION": "(sem pergunta registrada)",
+      "NO_EXAMPLES": "Sem exemplos no recorte atual (ajuste os filtros/período)."
+    },
+    "DEPT": {
+      "TOTAL": "execuções",
+      "ERRORS": "erros",
+      "UNANSWERED": "sem resposta"
+    },
+    "METHODS": {
+      "single": "único fluxo",
+      "inbox_mapping": "mapeamento da caixa",
+      "classifier": "roteamento automático",
+      "default": "fluxo padrão",
+      "fallback": "fallback",
+      "manual": "seleção manual"
+    },
+    "RUN": {
+      "CONVERSATION": "Conversa",
+      "VIA": "via",
+      "REPLY": "Resposta que seria enviada",
+      "NO_REPLY": "Nenhuma resposta proposta.",
+      "TOOL": "Ferramenta",
+      "TOOL_MISSING": "não configurada",
+      "KNOWLEDGE_COUNT": "{count} conhecimentos usados",
+      "CONFIDENCE": "Confiança",
+      "COST_ESTIMATED": "US$ {value} (estimado)",
+      "EMPTY": "Nenhuma execução com os filtros atuais."
+    },
+    "STATUS": {
+      "recorded": "Registrado",
+      "running": "Em andamento",
+      "no_department": "Sem fluxo",
+      "error": "Erro"
+    },
+    "ERROR_TYPES": {
+      "provider_timeout": "Tempo esgotado do provedor",
+      "provider_error": "Falha no provedor de IA",
+      "knowledge_timeout": "Tempo esgotado na busca de conhecimento",
+      "tool_failed": "Falha ao executar ferramenta",
+      "guardrail_blocked": "Bloqueado por regra de segurança",
+      "budget_exceeded": "Orçamento excedido",
+      "classification_failed": "Falha ao classificar o fluxo",
+      "unparsed_decision": "Resposta da IA ilegível (não enviada)",
+      "internal_error": "Erro interno (banco/política)",
+      "unknown": "Erro não identificado"
+    }
+  },
+  "AI_SHADOWS": {
+    "TITLE": "Análises com IA",
+    "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
+    "NEW": "Novo analista",
+    "ANALYSIS": "Ver análise",
+    "EMPTY": "Nenhum analista criado. Crie um analista para auditar seus atendimentos.",
+    "INBOX_COUNT": "{count} caixas",
+    "STATUS": {
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo"
+    },
+    "FORM": {
+      "NAME": "Nome",
+      "NAME_REQUIRED": "Dê um nome pra esse analista antes de salvar.",
+      "INSTRUCTIONS": "Instruções de avaliação",
+      "INSTRUCTIONS_PLACEHOLDER": "O que o analista deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
+      "INBOXES": "Caixas observadas",
+      "NO_INBOXES": "Nenhuma caixa nesta conta.",
+      "SCOPE": "O que observar",
+      "OBSERVE_AI": "Atendimentos da IA",
+      "OBSERVE_HUMAN": "Atendimentos humanos",
+      "SUGGESTIONS_HINT": "Clique nas sugestões abaixo ou digite direto no campo, para adicionar as instruções de avaliação.",
+      "STATUS": "Status",
+      "SAVE": "Salvar",
+      "CANCEL": "Cancelar"
+    },
+    "SIGNALS": {
+      "UNANSWERED": "Dúvidas não respondidas",
+      "ERRORS": "Erros / informação incorreta",
+      "LOW_CONFIDENCE": "Baixa confiança",
+      "KNOWLEDGE_GAPS": "Conhecimento faltante",
+      "TOOLS_MISSING": "Ferramenta que faltou",
+      "RECURRING": "Temas recorrentes"
+    },
+    "SUGGESTIONS": {
+      "UNANSWERED": "Aponte dúvidas do cliente que ficaram sem resposta.",
+      "ERRORS": "Sinalize erros ou informações incorretas passadas no atendimento.",
+      "LOW_CONFIDENCE": "Identifique respostas vagas ou dadas com baixa confiança.",
+      "KNOWLEDGE_GAPS": "Aponte assuntos sem cobertura na base de conhecimento.",
+      "TOOLS_MISSING": "Indique quando faltou uma ferramenta ou integração para resolver.",
+      "RECURRING": "Destaque temas ou problemas que se repetem nos atendimentos."
+    },
+    "SAVED": "Analista salvo.",
+    "DELETED": "Analista excluído.",
+    "ERROR": "Algo deu errado.",
+    "DELETE_MODAL": {
+      "TITLE": "Excluir analista",
+      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar",
+      "PLACEHOLDER": "Digite {name} para confirmar"
+    },
+    "TABS": {
+      "SHADOWS": "Analistas criados",
+      "ANALYSIS": "Análises"
+    }
+  }
+}

@@ -295,6 +295,8 @@
     }
   },
   "SIDEBAR": {
+    "PLAN": "Plano",
+    "PLAN": "Plano",
     "AI_AGENTS": "Agentes IA",
     "AI_AGENTS_LIST": "Agentes",
     "AI_KNOWLEDGE": "Conhecimento",

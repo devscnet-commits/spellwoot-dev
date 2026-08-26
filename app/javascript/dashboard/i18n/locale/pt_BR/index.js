@@ -7,6 +7,7 @@ import automation from './automation.json';
 import bulkActions from './bulkActions.json';
 import campaign from './campaign.json';
 import aiAgents from './aiAgents.json';
+import aiShadowRuns from './aiShadowRuns.json';
 import cannedMgmt from './cannedMgmt.json';
 import chatlist from './chatlist.json';
 import companies from './companies.json';
@@ -54,6 +55,7 @@ export default {
   ...bulkActions,
   ...campaign,
   ...aiAgents,
+  ...aiShadowRuns,
   ...cannedMgmt,
   ...chatlist,
   ...companies,
