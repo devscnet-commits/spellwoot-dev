@@ -6,7 +6,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show, :health, :uazapi_status, :migrate]
-  before_action :validate_whatsapp_cloud_channel, only: [:health]
+  before_action :validate_whatsapp_cloud_channel, only: [:health, :register_webhook]
   before_action :fetch_inbox_without_auth, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
   def index
     @inboxes = policy_scope(Current.account.inboxes.order_by_name.includes(:channel, { avatar_attachment: [:blob] }))
@@ -103,6 +103,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     render json: health_data
   rescue StandardError => e
     Rails.logger.error "[INBOX HEALTH] Error fetching health data: #{e.message}"
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
+  def register_webhook
+    Whatsapp::WebhookSetupService.new(@inbox.channel).perform
+    @inbox.channel.reauthorized!
+    render status: :ok, json: { message: 'Webhook registered successfully' }
+  rescue StandardError => e
+    Rails.logger.error "[WHATSAPP] Manual webhook registration failed for inbox_id=#{@inbox.id}: #{e.message}"
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
