@@ -65,7 +65,11 @@ class Whatsapp::EmbeddedSignupService
     return unless health_data
 
     if channel_in_pending_state?(health_data)
-      channel.prompt_reauthorization!
+      # Numbers freshly moved to a new WABA (e.g. re-embedded under a different business)
+      # commonly report NOT_APPLICABLE for a while after signup while Meta finishes
+      # provisioning them. That is not an authorization failure, so don't flag the channel
+      # as disconnected for it — same reasoning as the reauthorization flow above.
+      Rails.logger.info "[WHATSAPP] Channel #{channel.phone_number} is still pending provisioning on Meta's side"
     else
       Rails.logger.info "[WHATSAPP] Channel #{channel.phone_number} health check passed"
     end
