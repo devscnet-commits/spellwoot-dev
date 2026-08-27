@@ -71,6 +71,10 @@ class InboxPolicy < ApplicationPolicy
     admin?
   end
 
+  def register_webhook?
+    admin?
+  end
+
   def uazapi_status?
     admin?
   end
