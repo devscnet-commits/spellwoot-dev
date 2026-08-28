@@ -168,6 +168,10 @@
   description: 'Configure this if you want to use a different WhatsApp API version. Make sure its prefixed with `v`'
   value: 'v22.0'
   locked: false
+- name: WHATSAPP_DEFAULT_WEBHOOK_VERIFY_TOKEN
+  display_title: 'WhatsApp Default Webhook Verify Token'
+  description: 'Verify token for the app-level default WhatsApp webhook (GET /webhooks/whatsapp_default). Meta requires the app to already be subscribed to receive messages before embedded signup can override the callback per client (error #100) -- set this same value as the Verify Token on the default webhook configured in the Meta App Dashboard.'
+  locked: false
 # ------- End of WhatsApp Channel Related Config ------- #
 
 # MARK: Microsoft Email Channel Config
