@@ -8,6 +8,12 @@ class Inboxes::MigrateConversationsJob < ApplicationJob
     backup_migration_data(source_inbox)
 
     ActiveRecord::Base.transaction do
+      # Large inboxes (hundreds of thousands of messages) can exceed the global 14s
+      # statement_timeout (config/database.yml) on a single bulk UPDATE. SET LOCAL only
+      # applies for the duration of this transaction and is reset automatically on commit,
+      # so it doesn't affect any other query on this connection.
+      ActiveRecord::Base.connection.execute("SET LOCAL statement_timeout = '30min'")
+
       # 1. Bulk-update messages and events — 1 query each, regardless of volume
       Message.where(inbox_id: source_inbox.id).update_all(inbox_id: target_inbox.id)
       ReportingEvent.where(inbox_id: source_inbox.id).update_all(inbox_id: target_inbox.id)
