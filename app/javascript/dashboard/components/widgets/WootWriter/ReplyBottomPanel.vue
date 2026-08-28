@@ -9,13 +9,14 @@ import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 import { getAllowedFileTypesByChannel } from '@chatwoot/utils';
 import { ALLOWED_FILE_TYPES } from 'shared/constants/messages';
 import VideoCallButton from '../VideoCallButton.vue';
+import StickerPicker from './StickerPicker.vue';
 import { INBOX_TYPES } from 'dashboard/helper/inbox';
 import { mapGetters } from 'vuex';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 
 export default {
   name: 'ReplyBottomPanel',
-  components: { NextButton, FileUpload, VideoCallButton },
+  components: { NextButton, FileUpload, VideoCallButton, StickerPicker },
   mixins: [inboxMixin],
   props: {
     isNote: {
@@ -169,6 +170,7 @@ export default {
   data() {
     return {
       ALLOWED_FILE_TYPES,
+      showStickerPicker: false,
     };
   },
   computed: {
@@ -185,6 +187,12 @@ export default {
     showAttachButton() {
       if (this.isEditorDisabled) return false;
       return this.showFileUpload || this.isNote;
+    },
+    showStickerButton() {
+      if (this.isEditorDisabled) return false;
+      return (
+        !this.isOnPrivateNote && (this.isAPIInbox || this.isAWhatsAppChannel)
+      );
     },
     showAudioRecorderButton() {
       if (this.isEditorDisabled) return false;
@@ -276,6 +284,9 @@ export default {
     toggleMessageSignature() {
       this.setSignatureFlagForInbox(this.channelType, !this.sendWithSignature);
     },
+    toggleStickerPicker() {
+      this.showStickerPicker = !this.showStickerPicker;
+    },
     toggleInsertArticle() {
       this.$emit('toggleInsertArticle');
     },
@@ -295,6 +306,21 @@ export default {
         sm
         @click="toggleEmojiPicker"
       />
+      <div v-if="showStickerButton" class="relative">
+        <NextButton
+          v-tooltip.top-end="$t('CONVERSATION.REPLYBOX.TIP_STICKER_ICON')"
+          icon="i-ph-sticker"
+          slate
+          faded
+          sm
+          @click="toggleStickerPicker"
+        />
+        <StickerPicker
+          v-if="showStickerPicker"
+          :conversation-id="conversationId"
+          @close="showStickerPicker = false"
+        />
+      </div>
       <FileUpload
         v-if="showAttachButton"
         ref="uploadRef"
