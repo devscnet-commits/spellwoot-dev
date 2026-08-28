@@ -29,6 +29,7 @@ import conversationWorkflow from './conversationWorkflow/conversationWorkflow.ro
 import operationalFlows from './operationalFlows/operationalFlows.routes';
 import captain from './captain/captain.routes';
 import plan from './plan/plan.routes';
+import stickers from './stickers/stickers.routes';
 
 export default {
   routes: [
@@ -73,5 +74,6 @@ export default {
     ...operationalFlows.routes,
     ...captain.routes,
     ...plan.routes,
+    ...stickers.routes,
   ],
 };
