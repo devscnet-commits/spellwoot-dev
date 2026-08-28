@@ -73,7 +73,7 @@ class Whatsapp::Providers::Whatsapp360DialogService < Whatsapp::Providers::BaseS
 
   def send_attachment_message(phone_number, message)
     attachment = message.attachments.first
-    type = %w[image audio video].include?(attachment.file_type) ? attachment.file_type : 'document'
+    type = attachment_message_type(attachment, message)
     type_content = {
       'link': attachment.download_url
     }
@@ -91,6 +91,16 @@ class Whatsapp::Providers::Whatsapp360DialogService < Whatsapp::Providers::BaseS
     )
 
     process_response(response, message)
+  end
+
+  # Stickers are their own Message#content_type (not an Attachment#file_type --
+  # the attachment itself is just a webp image), so it has to be checked separately
+  # from the image/audio/video/document attachment kinds.
+  def attachment_message_type(attachment, message)
+    return 'sticker' if message.content_type == 'sticker'
+    return attachment.file_type if %w[image audio video].include?(attachment.file_type)
+
+    'document'
   end
 
   def error_message(response)
