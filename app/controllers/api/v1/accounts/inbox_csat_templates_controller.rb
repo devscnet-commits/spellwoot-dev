@@ -1,4 +1,6 @@
 class Api::V1::Accounts::InboxCsatTemplatesController < Api::V1::Accounts::BaseController
+  include WhatsappTemplateErrorParsing
+
   before_action :fetch_inbox
   before_action :validate_whatsapp_channel
   before_action :validate_captain_enabled, only: [:analyze]
@@ -110,26 +112,5 @@ class Api::V1::Accounts::InboxCsatTemplatesController < Api::V1::Accounts::BaseC
       error: error_message,
       details: whatsapp_error[:technical_details]
     }, status: :unprocessable_entity
-  end
-
-  def parse_whatsapp_error(response_body)
-    return { user_message: nil, technical_details: nil } if response_body.blank?
-
-    begin
-      error_data = JSON.parse(response_body)
-      whatsapp_error = error_data['error'] || {}
-
-      user_message = whatsapp_error['error_user_msg'] || whatsapp_error['message']
-      technical_details = {
-        code: whatsapp_error['code'],
-        subcode: whatsapp_error['error_subcode'],
-        type: whatsapp_error['type'],
-        title: whatsapp_error['error_user_title']
-      }.compact
-
-      { user_message: user_message, technical_details: technical_details }
-    rescue JSON::ParserError
-      { user_message: nil, technical_details: response_body }
-    end
   end
 end

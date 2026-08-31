@@ -307,6 +307,8 @@ Rails.application.routes.draw do
             resource :csat_template, only: [:show, :create], controller: 'inbox_csat_templates' do
               post :analyze, on: :collection
             end
+
+            resources :message_templates, only: [:index, :create]
           end
           resources :uazapi_inboxes, only: [:create] do
             collection do
