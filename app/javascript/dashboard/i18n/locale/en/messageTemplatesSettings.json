@@ -1,0 +1,39 @@
+{
+  "MESSAGE_TEMPLATES_MGMT": {
+    "HEADER": "Templates",
+    "HEADER_BTN_TXT": "New template",
+    "HEADER_BTN_TOOLTIP": "Coming soon",
+    "DESCRIPTION": "Create and manage WhatsApp message templates. Every template must be approved by Meta before it can be sent to customers.",
+    "LOADING": "Fetching templates...",
+    "SELECT_INBOX": {
+      "LABEL": "WhatsApp inbox",
+      "PLACEHOLDER": "Select an inbox"
+    },
+    "NO_WHATSAPP_INBOX": "Connect a WhatsApp Cloud API inbox to create and manage message templates.",
+    "NO_INBOX_SELECTED": "Select a WhatsApp inbox above to see its templates.",
+    "LIST": {
+      "404": "No templates found for this inbox yet.",
+      "TABLE_HEADER": {
+        "NAME": "Name",
+        "CATEGORY": "Category",
+        "STATUS": "Status",
+        "LANGUAGE": "Language",
+        "QUALITY": "Quality"
+      }
+    },
+    "STATUS": {
+      "APPROVED": "Approved",
+      "PENDING": "Pending",
+      "REJECTED": "Rejected",
+      "PAUSED": "Paused",
+      "DISABLED": "Disabled"
+    },
+    "QUALITY": {
+      "GREEN": "High",
+      "YELLOW": "Medium",
+      "RED": "Low",
+      "UNKNOWN": "Pending data"
+    },
+    "FETCH_ERROR": "Could not fetch templates for this inbox."
+  }
+}

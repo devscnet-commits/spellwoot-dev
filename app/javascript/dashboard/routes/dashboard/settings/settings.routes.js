@@ -18,6 +18,7 @@ import integrations from './integrations/integrations.routes';
 import integrationsHub from './integrations/integrationsHub.routes';
 import labels from './labels/labels.routes';
 import macros from './macros/macros.routes';
+import messageTemplates from './messageTemplates/messageTemplates.routes';
 import reports from './reports/reports.routes';
 import store from '../../../store';
 import sla from './sla/sla.routes';
@@ -64,6 +65,7 @@ export default {
     ...integrationsHub.routes,
     ...labels.routes,
     ...macros.routes,
+    ...messageTemplates.routes,
     ...reports.routes,
     ...sla.routes,
     ...plan.routes,

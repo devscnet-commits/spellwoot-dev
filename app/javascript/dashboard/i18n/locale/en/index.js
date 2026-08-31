@@ -42,6 +42,7 @@ import stickersMgmt from './stickersMgmt.json';
 import teamsSettings from './teamsSettings.json';
 import operationalFlowsSettings from './operationalFlowsSettings.json';
 import whatsappTemplates from './whatsappTemplates.json';
+import messageTemplatesSettings from './messageTemplatesSettings.json';
 import contentTemplates from './contentTemplates.json';
 import mfa from './mfa.json';
 import yearInReview from './yearInReview.json';
@@ -91,6 +92,7 @@ export default {
   ...teamsSettings,
   ...operationalFlowsSettings,
   ...whatsappTemplates,
+  ...messageTemplatesSettings,
   ...contentTemplates,
   ...mfa,
   ...yearInReview,

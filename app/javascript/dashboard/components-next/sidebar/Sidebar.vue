@@ -614,6 +614,13 @@ const menuItems = computed(() => {
           to: accountScopedRoute('settings_inbox_list'),
         },
         {
+          name: 'Settings Message Templates',
+          label: t('SIDEBAR.MESSAGE_TEMPLATES'),
+          icon: 'i-lucide-file-text',
+          activeOn: ['message_templates_wrapper', 'message_templates_list'],
+          to: accountScopedRoute('message_templates_list'),
+        },
+        {
           name: 'Settings Labels',
           label: t('SIDEBAR.LABELS'),
           icon: 'i-lucide-tags',

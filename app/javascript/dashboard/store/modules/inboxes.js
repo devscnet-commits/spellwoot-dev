@@ -366,6 +366,14 @@ export const actions = {
     );
     return response.data;
   },
+  createMessageTemplate: async (_, { inboxId, template }) => {
+    const response = await InboxesAPI.createMessageTemplate(inboxId, template);
+    return response.data;
+  },
+  getMessageTemplates: async (_, { inboxId }) => {
+    const response = await InboxesAPI.getMessageTemplates(inboxId);
+    return response.data;
+  },
   resetSecret: async ({ commit }, inboxId) => {
     try {
       const response = await InboxesAPI.resetSecret(inboxId);
