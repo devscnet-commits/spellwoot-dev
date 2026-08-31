@@ -35,6 +35,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   def extract_template_params
     params.require(:template).permit(
       :name, :category, :language, :body, :footer,
+      body_sample_values: [],
       buttons: [:type, :text, :url, :phone_number, :example]
     ).to_h.symbolize_keys
   end

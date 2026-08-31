@@ -56,10 +56,17 @@ class Whatsapp::MessageTemplateService
 
   def build_components(params)
     [
-      { type: 'BODY', text: params[:body] },
+      body_component(params),
       footer_component(params[:footer]),
       buttons_component(params[:buttons])
     ].compact
+  end
+
+  def body_component(params)
+    component = { type: 'BODY', text: params[:body] }
+    sample_values = params[:body_sample_values]
+    component[:example] = { body_text: [sample_values] } if sample_values.present?
+    component
   end
 
   def footer_component(footer)

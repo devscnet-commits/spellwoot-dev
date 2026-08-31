@@ -2,6 +2,7 @@ import { frontendURL } from '../../../../helper/URLHelper';
 
 import SettingsWrapper from '../SettingsWrapper.vue';
 import Index from './Index.vue';
+import CreateTemplate from './CreateTemplate.vue';
 
 export default {
   routes: [
@@ -26,6 +27,14 @@ export default {
             permissions: ['administrator'],
           },
           component: Index,
+        },
+        {
+          path: 'new',
+          name: 'message_templates_new',
+          meta: {
+            permissions: ['administrator'],
+          },
+          component: CreateTemplate,
         },
       ],
     },

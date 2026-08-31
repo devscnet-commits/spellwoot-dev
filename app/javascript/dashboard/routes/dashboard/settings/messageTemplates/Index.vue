@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useStoreGetters, useStore } from 'dashboard/composables/store';
 import { INBOX_TYPES } from 'dashboard/helper/inbox';
@@ -17,6 +18,8 @@ import {
 
 const getters = useStoreGetters();
 const store = useStore();
+const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 
 const selectedInboxId = ref(null);
@@ -87,12 +90,26 @@ const fetchTemplates = async () => {
   }
 };
 
+const goToCreateTemplate = () => {
+  router.push({
+    name: 'message_templates_new',
+    query: { inbox_id: selectedInboxId.value },
+  });
+};
+
 watch(selectedInboxId, fetchTemplates);
 
 onMounted(() => {
-  if (inboxOptions.value.length) {
-    selectedInboxId.value = inboxOptions.value[0].value;
-  }
+  if (!inboxOptions.value.length) return;
+
+  const queryInboxId = Number(route.query.inbox_id);
+  const isValidQueryInbox = inboxOptions.value.some(
+    option => option.value === queryInboxId
+  );
+
+  selectedInboxId.value = isValidQueryInbox
+    ? queryInboxId
+    : inboxOptions.value[0].value;
 });
 </script>
 
@@ -113,10 +130,10 @@ onMounted(() => {
       >
         <template #actions>
           <Button
-            v-tooltip.top="$t('MESSAGE_TEMPLATES_MGMT.HEADER_BTN_TOOLTIP')"
             :label="$t('MESSAGE_TEMPLATES_MGMT.HEADER_BTN_TXT')"
             size="sm"
-            disabled
+            :disabled="!selectedInboxId"
+            @click="goToCreateTemplate"
           />
         </template>
       </BaseSettingsHeader>
