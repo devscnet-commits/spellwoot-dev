@@ -4,6 +4,11 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   before_action :fetch_inbox
   before_action :validate_whatsapp_cloud_channel
 
+  def index
+    result = Whatsapp::MessageTemplateService.new(@inbox.channel).list_templates
+    render_template_list_result(result)
+  end
+
   def create
     template_params = extract_template_params
     service = Whatsapp::MessageTemplateService.new(@inbox.channel)
@@ -32,6 +37,15 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
       :name, :category, :language, :body, :footer,
       buttons: [:type, :text, :url, :phone_number, :example]
     ).to_h.symbolize_keys
+  end
+
+  def render_template_list_result(result)
+    if result[:success]
+      render json: { templates: result[:templates] }
+    else
+      whatsapp_error = parse_whatsapp_error(result[:response_body])
+      render json: { error: whatsapp_error[:user_message] || result[:error] }, status: :internal_server_error
+    end
   end
 
   def render_template_creation_result(result)

@@ -14,7 +14,36 @@ class Whatsapp::MessageTemplateService
     process_response(response, params)
   end
 
+  def list_templates
+    response = HTTParty.get(
+      "#{business_account_path}/message_templates",
+      query: { fields: 'id,name,category,status,language,quality_score' },
+      headers: api_headers
+    )
+    process_list_response(response)
+  end
+
   private
+
+  def process_list_response(response)
+    if response.success?
+      { success: true, templates: (response['data'] || []).map { |template| format_template(template) } }
+    else
+      Rails.logger.error "[WHATSAPP] Template list fetch failed: #{response.code} - #{response.body}"
+      { success: false, error: 'Failed to fetch templates', response_body: response.body }
+    end
+  end
+
+  def format_template(template)
+    {
+      id: template['id'],
+      name: template['name'],
+      category: template['category'],
+      status: template['status'],
+      language: template['language'],
+      quality: template.dig('quality_score', 'score')
+    }
+  end
 
   def build_request_body(params)
     {
