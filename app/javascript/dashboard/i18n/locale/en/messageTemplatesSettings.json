@@ -137,7 +137,8 @@
             "QUICK_REPLY": "Resposta rápida",
             "URL": "URL do site",
             "PHONE_NUMBER": "Ligar para número",
-            "COPY_CODE": "Copiar código de oferta"
+            "COPY_CODE": "Copiar código de oferta",
+            "CATALOG": "Ver catálogo"
           },
           "FIELDS": {
             "TEXT": "Texto do botão",

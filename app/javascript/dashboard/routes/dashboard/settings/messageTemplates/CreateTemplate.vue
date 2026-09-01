@@ -15,8 +15,10 @@ import TemplateHeaderField from './TemplateHeaderField.vue';
 
 const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;
+const CATALOG_MAX_BUTTONS = 1;
 const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
 const AUTH_BUTTON_TYPES = ['COPY_CODE'];
+const CATALOG_BUTTON_TYPES = ['CATALOG'];
 const AUTH_BODY_TEXT = '{{1}} é o seu código de verificação.';
 const MARKETING_SUBTYPES = [
   'STANDARD',
@@ -25,6 +27,7 @@ const MARKETING_SUBTYPES = [
   'ORDER_DETAILS',
   'CALL_PERMISSION_REQUEST',
 ];
+const SELECTABLE_MARKETING_SUBTYPES = ['STANDARD', 'CATALOG'];
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -120,7 +123,7 @@ const subtypes = computed(() =>
     id,
     label: subtypeLabels.value[id],
     description: subtypeDescriptions.value[id],
-    comingSoon: id !== 'STANDARD',
+    comingSoon: !SELECTABLE_MARKETING_SUBTYPES.includes(id),
   }))
 );
 
@@ -133,20 +136,30 @@ const buttonTypeLabels = computed(() => ({
     'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.PHONE_NUMBER'
   ),
   COPY_CODE: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.COPY_CODE'),
+  CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.CATALOG'),
 }));
 
 const isAuthentication = computed(() => form.category === 'AUTHENTICATION');
-
-const maxButtons = computed(() =>
-  isAuthentication.value ? AUTH_MAX_BUTTONS : MAX_BUTTONS
+const isCatalog = computed(
+  () => isMarketing.value && form.subtype === 'CATALOG'
 );
 
-const buttonTypeOptions = computed(() =>
-  (isAuthentication.value ? AUTH_BUTTON_TYPES : BUTTON_TYPES).map(type => ({
+const maxButtons = computed(() => {
+  if (isAuthentication.value) return AUTH_MAX_BUTTONS;
+  if (isCatalog.value) return CATALOG_MAX_BUTTONS;
+  return MAX_BUTTONS;
+});
+
+const buttonTypeOptions = computed(() => {
+  let types = BUTTON_TYPES;
+  if (isAuthentication.value) types = AUTH_BUTTON_TYPES;
+  else if (isCatalog.value) types = CATALOG_BUTTON_TYPES;
+
+  return types.map(type => ({
     value: type,
     label: buttonTypeLabels.value[type],
-  }))
-);
+  }));
+});
 
 const detectedVariables = computed(() => {
   const matches = form.body.matchAll(/\{\{(\d+)\}\}/g);
@@ -169,6 +182,14 @@ watch(
       .slice(0, AUTH_MAX_BUTTONS);
   }
 );
+
+watch(isCatalog, newIsCatalog => {
+  form.buttons = newIsCatalog
+    ? form.buttons
+        .filter(button => button.type === 'CATALOG')
+        .slice(0, CATALOG_MAX_BUTTONS)
+    : form.buttons.filter(button => button.type !== 'CATALOG');
+});
 
 const selectSubtype = subtype => {
   if (subtype.comingSoon) return;

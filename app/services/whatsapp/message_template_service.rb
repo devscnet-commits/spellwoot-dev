@@ -151,6 +151,8 @@ class Whatsapp::MessageTemplateService
       { type: 'PHONE_NUMBER', text: button[:text], phone_number: button[:phone_number] }
     when 'COPY_CODE'
       { type: 'COPY_CODE', example: button[:example] }
+    when 'CATALOG'
+      { type: 'CATALOG', text: button[:text] }
     else
       { type: 'QUICK_REPLY', text: button[:text] }
     end

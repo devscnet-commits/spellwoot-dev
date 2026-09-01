@@ -2,9 +2,10 @@ class Whatsapp::MessageTemplateValidator
   NAME_REGEX = /\A[a-z0-9_]+\z/
   ALLOWED_CATEGORIES = %w[MARKETING UTILITY AUTHENTICATION].freeze
   # QUICK_REPLY, URL, PHONE_NUMBER and COPY_CODE are valid for both Marketing and Utility templates,
-  # so no category-conditional split is needed here yet. FLOW, CATALOG and voice-call permission
-  # buttons are Marketing-only additions the builder doesn't support until that UI ships.
-  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE].freeze
+  # so no category-conditional split is needed here yet. CATALOG is Marketing-only, enforced by the
+  # builder UI (only offered under the Catalog subtype) and by catalog_button_error below. FLOW and
+  # voice-call permission buttons are Marketing-only additions the builder doesn't support yet.
+  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024
@@ -104,7 +105,16 @@ class Whatsapp::MessageTemplateValidator
     buttons = @params[:buttons] || []
     return ["A template can have at most #{MAX_BUTTONS} buttons"] if buttons.size > MAX_BUTTONS
 
+    error = catalog_button_error(buttons)
+    return [error] if error
+
     buttons.filter_map { |button| button_error(button) }
+  end
+
+  def catalog_button_error(buttons)
+    return unless buttons.any? { |button| button[:type] == 'CATALOG' }
+
+    "A CATALOG button must be the template's only button" if buttons.size > 1
   end
 
   def button_error(button)
