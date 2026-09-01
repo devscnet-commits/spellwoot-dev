@@ -11,8 +11,15 @@ class Whatsapp::MessageTemplateValidator
   MAX_BUTTON_PHONE_LENGTH = 20
   MAX_BUTTONS = 10
 
-  def initialize(params)
+  def self.body_variable_numbers(body)
+    body.to_s.scan(/\{\{(\d+)\}\}/).flatten.map(&:to_i).uniq.sort
+  end
+
+  # require_name: false for edits — Meta's template update endpoint only accepts category and
+  # components, the name can't be changed after creation.
+  def initialize(params, require_name: true)
     @params = params
+    @require_name = require_name
   end
 
   def valid?
@@ -21,7 +28,7 @@ class Whatsapp::MessageTemplateValidator
 
   def errors
     @errors ||= [
-      name_error,
+      (name_error if @require_name),
       category_error,
       body_error,
       footer_error,
@@ -47,6 +54,23 @@ class Whatsapp::MessageTemplateValidator
     body = @params[:body].to_s
     return 'Body is required' if body.blank?
     return "Body must be #{MAX_BODY_LENGTH} characters or fewer" if body.length > MAX_BODY_LENGTH
+    return 'Body cannot start or end with a variable' if dangling_variable?(body)
+
+    variable_sample_error(body)
+  end
+
+  def dangling_variable?(body)
+    body.match?(/\A\{\{\d+\}\}/) || body.match?(/\{\{\d+\}\}\z/)
+  end
+
+  def variable_sample_error(body)
+    numbers = self.class.body_variable_numbers(body)
+    return if numbers.empty?
+    return 'Variables must be sequential starting at {{1}} (e.g. {{1}}, {{2}})' unless numbers == (1..numbers.size).to_a
+
+    sample_values = @params[:body_sample_values] || []
+    return "Provide a sample value for each variable (#{numbers.size} expected)" if sample_values.size != numbers.size
+    return 'Sample values cannot be blank' if sample_values.any?(&:blank?)
   end
 
   def footer_error

@@ -308,7 +308,7 @@ Rails.application.routes.draw do
               post :analyze, on: :collection
             end
 
-            resources :message_templates, only: [:index, :create]
+            resources :message_templates, only: [:index, :create, :update, :destroy]
           end
           resources :uazapi_inboxes, only: [:create] do
             collection do

@@ -17,13 +17,63 @@ class Whatsapp::MessageTemplateService
   def list_templates
     response = HTTParty.get(
       "#{business_account_path}/message_templates",
-      query: { fields: 'id,name,category,status,language,quality_score' },
+      query: { fields: 'id,name,category,status,language,quality_score,components' },
       headers: api_headers
     )
     process_list_response(response)
   end
 
+  # Meta's template update endpoint is POST /<TEMPLATE_ID> — a different path shape than creation
+  # (which posts to the WABA) — and only accepts category/components/time-to-live. Editing an
+  # approved template re-triggers review; only APPROVED/REJECTED/PAUSED templates can be edited
+  # (Meta enforces this itself, we don't duplicate that check here).
+  def update_template(template_id, params)
+    validator = Whatsapp::MessageTemplateValidator.new(params, require_name: false)
+    return { success: false, error: validator.errors.join(', ') } unless validator.valid?
+
+    response = send_template_update_request(template_id, build_update_body(params))
+    process_update_response(response)
+  end
+
+  def delete_template(name)
+    response = HTTParty.delete(
+      "#{business_account_path}/message_templates?name=#{name}",
+      headers: api_headers
+    )
+    process_delete_response(response)
+  end
+
   private
+
+  def build_update_body(params)
+    { category: params[:category], components: build_components(params) }
+  end
+
+  def send_template_update_request(template_id, request_body)
+    HTTParty.post(
+      "#{api_base_path}/#{api_version}/#{template_id}",
+      headers: api_headers,
+      body: request_body.to_json
+    )
+  end
+
+  def process_update_response(response)
+    if response.success?
+      { success: true }
+    else
+      Rails.logger.error "[WHATSAPP] Template update failed: #{response.code} - #{response.body}"
+      { success: false, error: 'Template update failed', response_body: response.body }
+    end
+  end
+
+  def process_delete_response(response)
+    if response.success?
+      { success: true }
+    else
+      Rails.logger.error "[WHATSAPP] Template delete failed: #{response.code} - #{response.body}"
+      { success: false, error: 'Template delete failed', response_body: response.body }
+    end
+  end
 
   def process_list_response(response)
     if response.success?
@@ -41,7 +91,8 @@ class Whatsapp::MessageTemplateService
       category: template['category'],
       status: template['status'],
       language: template['language'],
-      quality: template.dig('quality_score', 'score')
+      quality: template.dig('quality_score', 'score'),
+      components: template['components']
     }
   end
 
@@ -56,10 +107,17 @@ class Whatsapp::MessageTemplateService
 
   def build_components(params)
     [
-      { type: 'BODY', text: params[:body] },
+      body_component(params),
       footer_component(params[:footer]),
       buttons_component(params[:buttons])
     ].compact
+  end
+
+  def body_component(params)
+    component = { type: 'BODY', text: params[:body] }
+    sample_values = params[:body_sample_values]
+    component[:example] = { body_text: [sample_values] } if sample_values.present?
+    component
   end
 
   def footer_component(footer)

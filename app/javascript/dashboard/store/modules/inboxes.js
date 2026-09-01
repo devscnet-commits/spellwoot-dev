@@ -366,6 +366,25 @@ export const actions = {
     );
     return response.data;
   },
+  createMessageTemplate: async (_, { inboxId, template }) => {
+    const response = await InboxesAPI.createMessageTemplate(inboxId, template);
+    return response.data;
+  },
+  getMessageTemplates: async (_, { inboxId }) => {
+    const response = await InboxesAPI.getMessageTemplates(inboxId);
+    return response.data;
+  },
+  updateMessageTemplate: async (_, { inboxId, templateId, template }) => {
+    const response = await InboxesAPI.updateMessageTemplate(
+      inboxId,
+      templateId,
+      template
+    );
+    return response.data;
+  },
+  deleteMessageTemplate: async (_, { inboxId, templateName }) => {
+    await InboxesAPI.deleteMessageTemplate(inboxId, templateName);
+  },
   resetSecret: async ({ commit }, inboxId) => {
     try {
       const response = await InboxesAPI.resetSecret(inboxId);

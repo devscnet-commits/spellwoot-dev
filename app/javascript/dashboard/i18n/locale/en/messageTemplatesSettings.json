@@ -1,0 +1,126 @@
+{
+  "MESSAGE_TEMPLATES_MGMT": {
+    "HEADER": "Templates",
+    "HEADER_BTN_TXT": "New template",
+    "DESCRIPTION": "Create and manage WhatsApp message templates. Every template must be approved by Meta before it can be sent to customers.",
+    "LOADING": "Fetching templates...",
+    "SELECT_INBOX": {
+      "LABEL": "WhatsApp inbox",
+      "PLACEHOLDER": "Select an inbox"
+    },
+    "NO_WHATSAPP_INBOX": "Connect a WhatsApp Cloud API inbox to create and manage message templates.",
+    "NO_INBOX_SELECTED": "Select a WhatsApp inbox above to see its templates.",
+    "LIST": {
+      "404": "No templates found for this inbox yet.",
+      "TABLE_HEADER": {
+        "NAME": "Name",
+        "CATEGORY": "Category",
+        "STATUS": "Status",
+        "LANGUAGE": "Language",
+        "QUALITY": "Quality",
+        "ACTIONS": "Actions"
+      }
+    },
+    "STATUS": {
+      "APPROVED": "Approved",
+      "PENDING": "Pending",
+      "REJECTED": "Rejected",
+      "PAUSED": "Paused",
+      "DISABLED": "Disabled"
+    },
+    "QUALITY": {
+      "GREEN": "High",
+      "YELLOW": "Medium",
+      "RED": "Low",
+      "UNKNOWN": "Pending data"
+    },
+    "FETCH_ERROR": "Could not fetch templates for this inbox.",
+    "CREATE": {
+      "BACK_BUTTON_LABEL": "Back to templates",
+      "HEADER": "New template",
+      "STEP_1": {
+        "TITLE": "Choose a category",
+        "DESCRIPTION": "The category determines what the template can be used for and how Meta reviews it.",
+        "NEXT_BUTTON": "Next: Content",
+        "CATEGORIES": {
+          "MARKETING": {
+            "LABEL": "Marketing",
+            "DESCRIPTION": "Promotions, offers, announcements and other messages meant to engage or sell to customers. Requires prior opt-in."
+          },
+          "UTILITY": {
+            "LABEL": "Utility",
+            "DESCRIPTION": "Order updates, account alerts and other non-promotional messages tied to a specific customer action or transaction."
+          }
+        }
+      },
+      "STEP_2": {
+        "TITLE": "Template content",
+        "BACK_BUTTON": "Back",
+        "SUBMIT_BUTTON": "Submit template",
+        "NAME": {
+          "LABEL": "Template name",
+          "PLACEHOLDER": "e.g. promo_summer_2026",
+          "HINT": "Lowercase letters, numbers and underscores only."
+        },
+        "LANGUAGE": {
+          "LABEL": "Language",
+          "PLACEHOLDER": "Select a language"
+        },
+        "BODY": {
+          "LABEL": "Body",
+          "PLACEHOLDER": "Write your message. Use {{1}}, {{2}}... to add variables.",
+          "ADD_VARIABLE": "Add variable"
+        },
+        "VARIABLES": {
+          "TITLE": "Sample values for variables",
+          "DESCRIPTION": "Meta uses these examples to review your template. They are not sent to customers.",
+          "PLACEHOLDER": "Sample value for {{variable}}"
+        },
+        "FOOTER": {
+          "LABEL": "Footer",
+          "PLACEHOLDER": "Optional footer text"
+        },
+        "BUTTONS": {
+          "TITLE": "Buttons",
+          "ADD_BUTTON": "Add button",
+          "REMOVE_BUTTON": "Remove button",
+          "MAX_REACHED": "You've reached the maximum of {count} buttons.",
+          "TYPES": {
+            "QUICK_REPLY": "Quick reply",
+            "URL": "Website URL",
+            "PHONE_NUMBER": "Call phone number",
+            "COPY_CODE": "Copy offer code"
+          },
+          "FIELDS": {
+            "TEXT": "Button text",
+            "URL": "URL",
+            "PHONE_NUMBER": "Phone number",
+            "EXAMPLE_CODE": "Sample code"
+          }
+        }
+      },
+      "SUCCESS_MESSAGE": "Template submitted to Meta for approval.",
+      "ERROR_MESSAGE": "Could not submit the template."
+    },
+    "EDIT": {
+      "TITLE": "Edit {name}",
+      "NOT_EDITABLE": "Only approved, rejected or paused templates can be edited",
+      "DESCRIPTION": "Editing replaces the template's content entirely and sends it back for Meta's review. The name, language and category can't be changed here.",
+      "CANCEL_BUTTON": "Cancel",
+      "SUBMIT_BUTTON": "Save changes",
+      "SUCCESS_MESSAGE": "Template updated and resubmitted to Meta for review.",
+      "ERROR_MESSAGE": "Could not update the template."
+    },
+    "DELETE": {
+      "TITLE": "Delete template",
+      "CONFIRM": {
+        "TITLE": "Delete this template?",
+        "MESSAGE": "This can't be undone. If the template is approved, you won't be able to reuse this name for 30 days.",
+        "YES": "Yes, delete",
+        "NO": "Cancel"
+      },
+      "SUCCESS_MESSAGE": "Template deleted.",
+      "ERROR_MESSAGE": "Could not delete the template."
+    }
+  }
+}

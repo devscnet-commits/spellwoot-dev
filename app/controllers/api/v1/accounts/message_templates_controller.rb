@@ -18,6 +18,24 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     render json: { error: 'Template parameters are required' }, status: :unprocessable_entity
   end
 
+  # :id here is the template's numeric Meta ID (as returned by #index) — Meta's update endpoint
+  # addresses templates by ID, not by name.
+  def update
+    template_params = extract_update_params
+    service = Whatsapp::MessageTemplateService.new(@inbox.channel)
+    result = service.update_template(params[:id], template_params)
+    render_template_update_result(result)
+  rescue ActionController::ParameterMissing
+    render json: { error: 'Template parameters are required' }, status: :unprocessable_entity
+  end
+
+  # :id here is the template's name — Meta's delete endpoint addresses templates by name.
+  def destroy
+    service = Whatsapp::MessageTemplateService.new(@inbox.channel)
+    result = service.delete_template(params[:id])
+    render_template_delete_result(result)
+  end
+
   private
 
   def fetch_inbox
@@ -35,6 +53,15 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   def extract_template_params
     params.require(:template).permit(
       :name, :category, :language, :body, :footer,
+      body_sample_values: [],
+      buttons: [:type, :text, :url, :phone_number, :example]
+    ).to_h.symbolize_keys
+  end
+
+  def extract_update_params
+    params.require(:template).permit(
+      :category, :body, :footer,
+      body_sample_values: [],
       buttons: [:type, :text, :url, :phone_number, :example]
     ).to_h.symbolize_keys
   end
@@ -52,7 +79,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     if result[:success]
       render_successful_template_creation(result)
     else
-      render_failed_template_creation(result)
+      render_service_error(result)
     end
   end
 
@@ -67,12 +94,26 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     }, status: :created
   end
 
-  def render_failed_template_creation(result)
-    whatsapp_error = parse_whatsapp_error(result[:response_body])
-    error_message = whatsapp_error[:user_message] || result[:error]
+  def render_template_update_result(result)
+    if result[:success]
+      render json: { success: true }
+    else
+      render_service_error(result)
+    end
+  end
 
+  def render_template_delete_result(result)
+    if result[:success]
+      head :no_content
+    else
+      render_service_error(result)
+    end
+  end
+
+  def render_service_error(result)
+    whatsapp_error = parse_whatsapp_error(result[:response_body])
     render json: {
-      error: error_message,
+      error: whatsapp_error[:user_message] || result[:error],
       details: whatsapp_error[:technical_details]
     }, status: :unprocessable_entity
   end
