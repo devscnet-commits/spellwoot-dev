@@ -1,6 +1,6 @@
 class Whatsapp::MessageTemplateValidator
   NAME_REGEX = /\A[a-z0-9_]+\z/
-  ALLOWED_CATEGORIES = %w[MARKETING UTILITY].freeze
+  ALLOWED_CATEGORIES = %w[MARKETING UTILITY AUTHENTICATION].freeze
   # QUICK_REPLY, URL, PHONE_NUMBER and COPY_CODE are valid for both Marketing and Utility templates,
   # so no category-conditional split is needed here yet. FLOW, CATALOG and voice-call permission
   # buttons are Marketing-only additions the builder doesn't support until that UI ships.
