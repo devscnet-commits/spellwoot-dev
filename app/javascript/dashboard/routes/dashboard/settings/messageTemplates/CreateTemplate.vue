@@ -16,9 +16,11 @@ import TemplateHeaderField from './TemplateHeaderField.vue';
 const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;
 const CATALOG_MAX_BUTTONS = 1;
+const FLOW_MAX_BUTTONS = 1;
 const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
 const AUTH_BUTTON_TYPES = ['COPY_CODE'];
 const CATALOG_BUTTON_TYPES = ['CATALOG'];
+const FLOW_BUTTON_TYPES = ['FLOW'];
 const AUTH_BODY_TEXT = '{{1}} é o seu código de verificação.';
 const MARKETING_SUBTYPES = [
   'STANDARD',
@@ -27,7 +29,7 @@ const MARKETING_SUBTYPES = [
   'ORDER_DETAILS',
   'CALL_PERMISSION_REQUEST',
 ];
-const SELECTABLE_MARKETING_SUBTYPES = ['STANDARD', 'CATALOG'];
+const SELECTABLE_MARKETING_SUBTYPES = ['STANDARD', 'CATALOG', 'FLOWS'];
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -137,16 +139,19 @@ const buttonTypeLabels = computed(() => ({
   ),
   COPY_CODE: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.COPY_CODE'),
   CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.CATALOG'),
+  FLOW: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.FLOW'),
 }));
 
 const isAuthentication = computed(() => form.category === 'AUTHENTICATION');
 const isCatalog = computed(
   () => isMarketing.value && form.subtype === 'CATALOG'
 );
+const isFlow = computed(() => isMarketing.value && form.subtype === 'FLOWS');
 
 const maxButtons = computed(() => {
   if (isAuthentication.value) return AUTH_MAX_BUTTONS;
   if (isCatalog.value) return CATALOG_MAX_BUTTONS;
+  if (isFlow.value) return FLOW_MAX_BUTTONS;
   return MAX_BUTTONS;
 });
 
@@ -154,6 +159,7 @@ const buttonTypeOptions = computed(() => {
   let types = BUTTON_TYPES;
   if (isAuthentication.value) types = AUTH_BUTTON_TYPES;
   else if (isCatalog.value) types = CATALOG_BUTTON_TYPES;
+  else if (isFlow.value) types = FLOW_BUTTON_TYPES;
 
   return types.map(type => ({
     value: type,
@@ -191,6 +197,14 @@ watch(isCatalog, newIsCatalog => {
     : form.buttons.filter(button => button.type !== 'CATALOG');
 });
 
+watch(isFlow, newIsFlow => {
+  form.buttons = newIsFlow
+    ? form.buttons
+        .filter(button => button.type === 'FLOW')
+        .slice(0, FLOW_MAX_BUTTONS)
+    : form.buttons.filter(button => button.type !== 'FLOW');
+});
+
 const selectSubtype = subtype => {
   if (subtype.comingSoon) return;
   form.subtype = subtype.id;
@@ -213,6 +227,8 @@ const addButton = type => {
     url: '',
     phone_number: '',
     example: '',
+    flow_id: '',
+    navigate_screen: '',
   });
 };
 
@@ -246,6 +262,9 @@ const buildTemplatePayload = () => ({
     example: ['COPY_CODE', 'URL'].includes(button.type)
       ? button.example || undefined
       : undefined,
+    flow_id: button.type === 'FLOW' ? button.flow_id : undefined,
+    navigate_screen:
+      button.type === 'FLOW' ? button.navigate_screen || undefined : undefined,
   })),
 });
 
@@ -512,6 +531,30 @@ const submitTemplate = async () => {
               :label="
                 $t(
                   'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
+                )
+              "
+            />
+
+            <Input
+              v-if="button.type === 'FLOW'"
+              v-model="button.flow_id"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID'
+                )
+              "
+              :message="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
+                )
+              "
+            />
+            <Input
+              v-if="button.type === 'FLOW'"
+              v-model="button.navigate_screen"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
                 )
               "
             />

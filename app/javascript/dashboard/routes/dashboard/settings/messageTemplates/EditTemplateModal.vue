@@ -36,6 +36,8 @@ const normalizeButton = button => ({
   url: button.type === 'URL' ? button.url || '' : '',
   phone_number: button.type === 'PHONE_NUMBER' ? button.phone_number || '' : '',
   example: buttonExample(button),
+  flow_id: button.type === 'FLOW' ? button.flow_id || '' : '',
+  navigate_screen: button.type === 'FLOW' ? button.navigate_screen || '' : '',
 });
 
 const normalizeHeader = component => {
@@ -83,6 +85,7 @@ const buttonTypeLabels = computed(() => ({
   ),
   COPY_CODE: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.COPY_CODE'),
   CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.CATALOG'),
+  FLOW: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.FLOW'),
 }));
 
 const buttonTypeOptions = computed(() =>
@@ -131,6 +134,9 @@ const buildTemplatePayload = () => ({
     example: ['COPY_CODE', 'URL'].includes(button.type)
       ? button.example || undefined
       : undefined,
+    flow_id: button.type === 'FLOW' ? button.flow_id : undefined,
+    navigate_screen:
+      button.type === 'FLOW' ? button.navigate_screen || undefined : undefined,
   })),
 });
 
@@ -261,6 +267,27 @@ const submit = async () => {
           :label="
             $t(
               'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
+            )
+          "
+        />
+        <Input
+          v-if="button.type === 'FLOW'"
+          v-model="button.flow_id"
+          :label="
+            $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID')
+          "
+          :message="
+            $t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
+            )
+          "
+        />
+        <Input
+          v-if="button.type === 'FLOW'"
+          v-model="button.navigate_screen"
+          :label="
+            $t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
             )
           "
         />

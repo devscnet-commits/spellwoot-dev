@@ -138,13 +138,17 @@
             "URL": "URL do site",
             "PHONE_NUMBER": "Ligar para número",
             "COPY_CODE": "Copiar código de oferta",
-            "CATALOG": "Ver catálogo"
+            "CATALOG": "Ver catálogo",
+            "FLOW": "Abrir Flow"
           },
           "FIELDS": {
             "TEXT": "Texto do botão",
             "URL": "URL",
             "PHONE_NUMBER": "Número de telefone",
-            "EXAMPLE_CODE": "Código de exemplo"
+            "EXAMPLE_CODE": "Código de exemplo",
+            "FLOW_ID": "ID do Flow",
+            "FLOW_ID_HINT": "ID do Flow já publicado no WhatsApp Manager.",
+            "NAVIGATE_SCREEN": "Tela inicial (opcional)"
           }
         }
       },

@@ -2,10 +2,13 @@ class Whatsapp::MessageTemplateValidator
   NAME_REGEX = /\A[a-z0-9_]+\z/
   ALLOWED_CATEGORIES = %w[MARKETING UTILITY AUTHENTICATION].freeze
   # QUICK_REPLY, URL, PHONE_NUMBER and COPY_CODE are valid for both Marketing and Utility templates,
-  # so no category-conditional split is needed here yet. CATALOG is Marketing-only, enforced by the
-  # builder UI (only offered under the Catalog subtype) and by catalog_button_error below. FLOW and
-  # voice-call permission buttons are Marketing-only additions the builder doesn't support yet.
-  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG].freeze
+  # so no category-conditional split is needed here yet. CATALOG and FLOW are Marketing-only,
+  # enforced by the builder UI (only offered under their matching subtype) and by
+  # EXCLUSIVE_BUTTON_TYPES below, since Meta requires each to be the template's only button.
+  # Order details and voice-call permission buttons are Marketing-only additions the builder
+  # doesn't support yet.
+  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW].freeze
+  EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024
@@ -105,16 +108,17 @@ class Whatsapp::MessageTemplateValidator
     buttons = @params[:buttons] || []
     return ["A template can have at most #{MAX_BUTTONS} buttons"] if buttons.size > MAX_BUTTONS
 
-    error = catalog_button_error(buttons)
+    error = exclusive_button_error(buttons)
     return [error] if error
 
     buttons.filter_map { |button| button_error(button) }
   end
 
-  def catalog_button_error(buttons)
-    return unless buttons.any? { |button| button[:type] == 'CATALOG' }
+  def exclusive_button_error(buttons)
+    exclusive_button = buttons.find { |button| EXCLUSIVE_BUTTON_TYPES.include?(button[:type]) }
+    return if exclusive_button.blank?
 
-    "A CATALOG button must be the template's only button" if buttons.size > 1
+    "A #{exclusive_button[:type]} button must be the template's only button" if buttons.size > 1
   end
 
   def button_error(button)
@@ -136,6 +140,8 @@ class Whatsapp::MessageTemplateValidator
       phone_number_error(button[:phone_number])
     when 'COPY_CODE'
       'Button example code is required' if button[:example].blank?
+    when 'FLOW'
+      'Button flow_id is required' if button[:flow_id].blank?
     end
   end
 

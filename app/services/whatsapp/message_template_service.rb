@@ -153,9 +153,17 @@ class Whatsapp::MessageTemplateService
       { type: 'COPY_CODE', example: button[:example] }
     when 'CATALOG'
       { type: 'CATALOG', text: button[:text] }
+    when 'FLOW'
+      build_flow_button(button)
     else
       { type: 'QUICK_REPLY', text: button[:text] }
     end
+  end
+
+  def build_flow_button(button)
+    flow_button = { type: 'FLOW', text: button[:text], flow_id: button[:flow_id], flow_action: 'navigate' }
+    flow_button[:navigate_screen] = button[:navigate_screen] if button[:navigate_screen].present?
+    flow_button
   end
 
   def build_url_button(button)
