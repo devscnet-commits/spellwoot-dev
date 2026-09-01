@@ -155,6 +155,8 @@ class Whatsapp::MessageTemplateService
       { type: 'CATALOG', text: button[:text] }
     when 'FLOW'
       build_flow_button(button)
+    when 'ORDER_DETAILS'
+      { type: 'ORDER_DETAILS', text: button[:text] }
     else
       { type: 'QUICK_REPLY', text: button[:text] }
     end

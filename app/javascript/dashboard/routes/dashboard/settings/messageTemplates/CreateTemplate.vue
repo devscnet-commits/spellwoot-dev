@@ -17,10 +17,12 @@ const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;
 const CATALOG_MAX_BUTTONS = 1;
 const FLOW_MAX_BUTTONS = 1;
+const ORDER_DETAILS_MAX_BUTTONS = 1;
 const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
 const AUTH_BUTTON_TYPES = ['COPY_CODE'];
 const CATALOG_BUTTON_TYPES = ['CATALOG'];
 const FLOW_BUTTON_TYPES = ['FLOW'];
+const ORDER_DETAILS_BUTTON_TYPES = ['ORDER_DETAILS'];
 const AUTH_BODY_TEXT = '{{1}} é o seu código de verificação.';
 const MARKETING_SUBTYPES = [
   'STANDARD',
@@ -29,7 +31,12 @@ const MARKETING_SUBTYPES = [
   'ORDER_DETAILS',
   'CALL_PERMISSION_REQUEST',
 ];
-const SELECTABLE_MARKETING_SUBTYPES = ['STANDARD', 'CATALOG', 'FLOWS'];
+const SELECTABLE_MARKETING_SUBTYPES = [
+  'STANDARD',
+  'CATALOG',
+  'FLOWS',
+  'ORDER_DETAILS',
+];
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -140,6 +147,9 @@ const buttonTypeLabels = computed(() => ({
   COPY_CODE: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.COPY_CODE'),
   CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.CATALOG'),
   FLOW: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.FLOW'),
+  ORDER_DETAILS: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.ORDER_DETAILS'
+  ),
 }));
 
 const isAuthentication = computed(() => form.category === 'AUTHENTICATION');
@@ -147,11 +157,15 @@ const isCatalog = computed(
   () => isMarketing.value && form.subtype === 'CATALOG'
 );
 const isFlow = computed(() => isMarketing.value && form.subtype === 'FLOWS');
+const isOrderDetails = computed(
+  () => isMarketing.value && form.subtype === 'ORDER_DETAILS'
+);
 
 const maxButtons = computed(() => {
   if (isAuthentication.value) return AUTH_MAX_BUTTONS;
   if (isCatalog.value) return CATALOG_MAX_BUTTONS;
   if (isFlow.value) return FLOW_MAX_BUTTONS;
+  if (isOrderDetails.value) return ORDER_DETAILS_MAX_BUTTONS;
   return MAX_BUTTONS;
 });
 
@@ -160,6 +174,7 @@ const buttonTypeOptions = computed(() => {
   if (isAuthentication.value) types = AUTH_BUTTON_TYPES;
   else if (isCatalog.value) types = CATALOG_BUTTON_TYPES;
   else if (isFlow.value) types = FLOW_BUTTON_TYPES;
+  else if (isOrderDetails.value) types = ORDER_DETAILS_BUTTON_TYPES;
 
   return types.map(type => ({
     value: type,
@@ -203,6 +218,14 @@ watch(isFlow, newIsFlow => {
         .filter(button => button.type === 'FLOW')
         .slice(0, FLOW_MAX_BUTTONS)
     : form.buttons.filter(button => button.type !== 'FLOW');
+});
+
+watch(isOrderDetails, newIsOrderDetails => {
+  form.buttons = newIsOrderDetails
+    ? form.buttons
+        .filter(button => button.type === 'ORDER_DETAILS')
+        .slice(0, ORDER_DETAILS_MAX_BUTTONS)
+    : form.buttons.filter(button => button.type !== 'ORDER_DETAILS');
 });
 
 const selectSubtype = subtype => {

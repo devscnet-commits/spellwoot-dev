@@ -2,13 +2,12 @@ class Whatsapp::MessageTemplateValidator
   NAME_REGEX = /\A[a-z0-9_]+\z/
   ALLOWED_CATEGORIES = %w[MARKETING UTILITY AUTHENTICATION].freeze
   # QUICK_REPLY, URL, PHONE_NUMBER and COPY_CODE are valid for both Marketing and Utility templates,
-  # so no category-conditional split is needed here yet. CATALOG and FLOW are Marketing-only,
-  # enforced by the builder UI (only offered under their matching subtype) and by
+  # so no category-conditional split is needed here yet. CATALOG, FLOW and ORDER_DETAILS are
+  # Marketing-only, enforced by the builder UI (only offered under their matching subtype) and by
   # EXCLUSIVE_BUTTON_TYPES below, since Meta requires each to be the template's only button.
-  # Order details and voice-call permission buttons are Marketing-only additions the builder
-  # doesn't support yet.
-  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW].freeze
-  EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW].freeze
+  # The voice-call permission button is a Marketing-only addition the builder doesn't support yet.
+  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS].freeze
+  EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW ORDER_DETAILS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024

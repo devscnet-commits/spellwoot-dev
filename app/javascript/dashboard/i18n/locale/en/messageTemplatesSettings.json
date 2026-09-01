@@ -139,7 +139,8 @@
             "PHONE_NUMBER": "Ligar para número",
             "COPY_CODE": "Copiar código de oferta",
             "CATALOG": "Ver catálogo",
-            "FLOW": "Abrir Flow"
+            "FLOW": "Abrir Flow",
+            "ORDER_DETAILS": "Revisar e pagar"
           },
           "FIELDS": {
             "TEXT": "Texto do botão",
