@@ -7,17 +7,45 @@ import { useStore } from 'dashboard/composables/store';
 
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
+import Banner from 'dashboard/components-next/banner/Banner.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 
+const CATEGORY_ICONS = {
+  MARKETING: 'i-lucide-megaphone',
+  UTILITY: 'i-lucide-bell',
+  AUTHENTICATION: 'i-lucide-shield-check',
+};
+
 const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;
+const CATALOG_MAX_BUTTONS = 1;
+const FLOW_MAX_BUTTONS = 1;
+const ORDER_DETAILS_MAX_BUTTONS = 1;
 const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
 const AUTH_BUTTON_TYPES = ['COPY_CODE'];
+const CATALOG_BUTTON_TYPES = ['CATALOG'];
+const FLOW_BUTTON_TYPES = ['FLOW'];
+const ORDER_DETAILS_BUTTON_TYPES = ['ORDER_DETAILS'];
 const AUTH_BODY_TEXT = '{{1}} é o seu código de verificação.';
+const MARKETING_SUBTYPES = [
+  'STANDARD',
+  'CATALOG',
+  'FLOWS',
+  'ORDER_DETAILS',
+  'CALL_PERMISSION_REQUEST',
+];
+const SELECTABLE_MARKETING_SUBTYPES = [
+  'STANDARD',
+  'CATALOG',
+  'FLOWS',
+  'ORDER_DETAILS',
+  'CALL_PERMISSION_REQUEST',
+];
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -41,6 +69,7 @@ const submitError = ref('');
 
 const form = reactive({
   category: 'MARKETING',
+  subtype: 'STANDARD',
   name: '',
   language: 'pt_BR',
   header: { type: 'NONE', text: '', handle: '', fileName: '' },
@@ -54,6 +83,7 @@ const bodySamples = reactive({});
 const categories = computed(() => [
   {
     id: 'MARKETING',
+    icon: CATEGORY_ICONS.MARKETING,
     label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.MARKETING.LABEL'),
     description: t(
       'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.MARKETING.DESCRIPTION'
@@ -61,6 +91,7 @@ const categories = computed(() => [
   },
   {
     id: 'UTILITY',
+    icon: CATEGORY_ICONS.UTILITY,
     label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.UTILITY.LABEL'),
     description: t(
       'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.UTILITY.DESCRIPTION'
@@ -68,6 +99,7 @@ const categories = computed(() => [
   },
   {
     id: 'AUTHENTICATION',
+    icon: CATEGORY_ICONS.AUTHENTICATION,
     label: t(
       'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.AUTHENTICATION.LABEL'
     ),
@@ -76,6 +108,45 @@ const categories = computed(() => [
     ),
   },
 ]);
+
+const isMarketing = computed(() => form.category === 'MARKETING');
+
+const subtypeLabels = computed(() => ({
+  STANDARD: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.STANDARD.LABEL'),
+  CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CATALOG.LABEL'),
+  FLOWS: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.FLOWS.LABEL'),
+  ORDER_DETAILS: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.ORDER_DETAILS.LABEL'
+  ),
+  CALL_PERMISSION_REQUEST: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CALL_PERMISSION_REQUEST.LABEL'
+  ),
+}));
+
+const subtypeDescriptions = computed(() => ({
+  STANDARD: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.STANDARD.DESCRIPTION'
+  ),
+  CATALOG: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CATALOG.DESCRIPTION'
+  ),
+  FLOWS: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.FLOWS.DESCRIPTION'),
+  ORDER_DETAILS: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.ORDER_DETAILS.DESCRIPTION'
+  ),
+  CALL_PERMISSION_REQUEST: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CALL_PERMISSION_REQUEST.DESCRIPTION'
+  ),
+}));
+
+const subtypes = computed(() =>
+  MARKETING_SUBTYPES.map(id => ({
+    id,
+    label: subtypeLabels.value[id],
+    description: subtypeDescriptions.value[id],
+    comingSoon: !SELECTABLE_MARKETING_SUBTYPES.includes(id),
+  }))
+);
 
 const buttonTypeLabels = computed(() => ({
   QUICK_REPLY: t(
@@ -86,20 +157,47 @@ const buttonTypeLabels = computed(() => ({
     'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.PHONE_NUMBER'
   ),
   COPY_CODE: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.COPY_CODE'),
+  CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.CATALOG'),
+  FLOW: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.FLOW'),
+  ORDER_DETAILS: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.ORDER_DETAILS'
+  ),
 }));
 
 const isAuthentication = computed(() => form.category === 'AUTHENTICATION');
-
-const maxButtons = computed(() =>
-  isAuthentication.value ? AUTH_MAX_BUTTONS : MAX_BUTTONS
+const isCatalog = computed(
+  () => isMarketing.value && form.subtype === 'CATALOG'
+);
+const isFlow = computed(() => isMarketing.value && form.subtype === 'FLOWS');
+const isOrderDetails = computed(
+  () => isMarketing.value && form.subtype === 'ORDER_DETAILS'
+);
+// CALL_PERMISSION_REQUEST is its own template component (a sibling of HEADER/BODY/FOOTER),
+// not a button — it has no BUTTONS section and only allows a TEXT (or no) header.
+const isCallPermissionRequest = computed(
+  () => isMarketing.value && form.subtype === 'CALL_PERMISSION_REQUEST'
 );
 
-const buttonTypeOptions = computed(() =>
-  (isAuthentication.value ? AUTH_BUTTON_TYPES : BUTTON_TYPES).map(type => ({
+const maxButtons = computed(() => {
+  if (isAuthentication.value) return AUTH_MAX_BUTTONS;
+  if (isCatalog.value) return CATALOG_MAX_BUTTONS;
+  if (isFlow.value) return FLOW_MAX_BUTTONS;
+  if (isOrderDetails.value) return ORDER_DETAILS_MAX_BUTTONS;
+  return MAX_BUTTONS;
+});
+
+const buttonTypeOptions = computed(() => {
+  let types = BUTTON_TYPES;
+  if (isAuthentication.value) types = AUTH_BUTTON_TYPES;
+  else if (isCatalog.value) types = CATALOG_BUTTON_TYPES;
+  else if (isFlow.value) types = FLOW_BUTTON_TYPES;
+  else if (isOrderDetails.value) types = ORDER_DETAILS_BUTTON_TYPES;
+
+  return types.map(type => ({
     value: type,
     label: buttonTypeLabels.value[type],
-  }))
-);
+  }));
+});
 
 const detectedVariables = computed(() => {
   const matches = form.body.matchAll(/\{\{(\d+)\}\}/g);
@@ -110,6 +208,8 @@ const detectedVariables = computed(() => {
 watch(
   () => form.category,
   newCategory => {
+    if (newCategory !== 'MARKETING') form.subtype = 'STANDARD';
+
     if (newCategory !== 'AUTHENTICATION') return;
 
     form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
@@ -120,6 +220,44 @@ watch(
       .slice(0, AUTH_MAX_BUTTONS);
   }
 );
+
+watch(isCatalog, newIsCatalog => {
+  form.buttons = newIsCatalog
+    ? form.buttons
+        .filter(button => button.type === 'CATALOG')
+        .slice(0, CATALOG_MAX_BUTTONS)
+    : form.buttons.filter(button => button.type !== 'CATALOG');
+});
+
+watch(isFlow, newIsFlow => {
+  form.buttons = newIsFlow
+    ? form.buttons
+        .filter(button => button.type === 'FLOW')
+        .slice(0, FLOW_MAX_BUTTONS)
+    : form.buttons.filter(button => button.type !== 'FLOW');
+});
+
+watch(isOrderDetails, newIsOrderDetails => {
+  form.buttons = newIsOrderDetails
+    ? form.buttons
+        .filter(button => button.type === 'ORDER_DETAILS')
+        .slice(0, ORDER_DETAILS_MAX_BUTTONS)
+    : form.buttons.filter(button => button.type !== 'ORDER_DETAILS');
+});
+
+watch(isCallPermissionRequest, newIsCallPermissionRequest => {
+  if (!newIsCallPermissionRequest) return;
+
+  form.buttons = [];
+  if (!['NONE', 'TEXT'].includes(form.header.type)) {
+    form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+  }
+});
+
+const selectSubtype = subtype => {
+  if (subtype.comingSoon) return;
+  form.subtype = subtype.id;
+};
 
 const goToStep2 = () => {
   currentStep.value = 2;
@@ -138,6 +276,8 @@ const addButton = type => {
     url: '',
     phone_number: '',
     example: '',
+    flow_id: '',
+    navigate_screen: '',
   });
 };
 
@@ -149,6 +289,7 @@ const buildTemplatePayload = () => ({
   name: form.name,
   category: form.category,
   language: form.language,
+  call_permission_request: isCallPermissionRequest.value || undefined,
   header:
     form.header.type === 'NONE'
       ? undefined
@@ -171,6 +312,9 @@ const buildTemplatePayload = () => ({
     example: ['COPY_CODE', 'URL'].includes(button.type)
       ? button.example || undefined
       : undefined,
+    flow_id: button.type === 'FLOW' ? button.flow_id : undefined,
+    navigate_screen:
+      button.type === 'FLOW' ? button.navigate_screen || undefined : undefined,
   })),
 });
 
@@ -221,7 +365,7 @@ const submitTemplate = async () => {
           </p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             v-for="category in categories"
             :key="category.id"
@@ -234,13 +378,70 @@ const submitTemplate = async () => {
             "
             @click="form.category = category.id"
           >
-            <span class="block font-semibold text-n-slate-12">
+            <span class="flex items-center gap-2 font-semibold text-n-slate-12">
+              <Icon :icon="category.icon" class="flex-shrink-0 size-4" />
               {{ category.label }}
             </span>
             <span class="block text-body-main text-n-slate-11 mt-1">
               {{ category.description }}
             </span>
           </button>
+        </div>
+
+        <Banner color="amber">
+          <div class="flex items-center gap-2">
+            <Icon icon="i-lucide-info" class="flex-shrink-0 size-4" />
+            <span>
+              {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.META_GUIDELINE') }}
+            </span>
+          </div>
+        </Banner>
+
+        <div v-if="isMarketing" class="space-y-2">
+          <h3 class="font-semibold text-n-slate-12">
+            {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.TITLE') }}
+          </h3>
+          <p class="text-body-main text-n-slate-11">
+            {{
+              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.DESCRIPTION')
+            }}
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              v-for="subtype in subtypes"
+              :key="subtype.id"
+              type="button"
+              class="text-left p-4 rounded-xl border transition-all"
+              :class="[
+                subtype.comingSoon
+                  ? 'opacity-50 cursor-not-allowed border-n-weak'
+                  : 'cursor-pointer',
+                !subtype.comingSoon && form.subtype === subtype.id
+                  ? 'border-n-brand bg-n-alpha-2'
+                  : 'border-n-weak hover:border-n-slate-6',
+              ]"
+              @click="selectSubtype(subtype)"
+            >
+              <span class="flex items-center gap-2">
+                <span class="font-semibold text-n-slate-12">
+                  {{ subtype.label }}
+                </span>
+                <span
+                  v-if="subtype.comingSoon"
+                  class="text-caption px-1.5 py-0.5 rounded-full bg-n-slate-3 text-n-slate-11"
+                >
+                  {{
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.COMING_SOON'
+                    )
+                  }}
+                </span>
+              </span>
+              <span class="block text-body-main text-n-slate-11 mt-1">
+                {{ subtype.description }}
+              </span>
+            </button>
+          </div>
         </div>
 
         <Button
@@ -280,6 +481,7 @@ const submitTemplate = async () => {
           v-if="!isAuthentication"
           v-model="form.header"
           :inbox-id="inboxId"
+          :text-only="isCallPermissionRequest"
         />
 
         <TextArea
@@ -331,7 +533,7 @@ const submitTemplate = async () => {
           show-character-count
         />
 
-        <div class="space-y-3">
+        <div v-if="!isCallPermissionRequest" class="space-y-3">
           <h3 class="font-semibold text-n-slate-12">
             {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
           </h3>
@@ -390,6 +592,30 @@ const submitTemplate = async () => {
               :label="
                 $t(
                   'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
+                )
+              "
+            />
+
+            <Input
+              v-if="button.type === 'FLOW'"
+              v-model="button.flow_id"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID'
+                )
+              "
+              :message="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
+                )
+              "
+            />
+            <Input
+              v-if="button.type === 'FLOW'"
+              v-model="button.navigate_screen"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
                 )
               "
             />

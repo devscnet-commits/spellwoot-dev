@@ -42,6 +42,7 @@
         "TITLE": "Escolha uma categoria",
         "DESCRIPTION": "A categoria determina para que o modelo pode ser usado e como a Meta faz a revisão.",
         "NEXT_BUTTON": "Próximo: Conteúdo",
+        "META_GUIDELINE": "Diretriz da Meta: Cada categoria possui regras e tarifas distintas na API Cloud do WhatsApp. Mensagens de Marketing exigem opt-in prévio dos destinatários.",
         "CATEGORIES": {
           "MARKETING": {
             "LABEL": "Marketing",
@@ -54,6 +55,31 @@
           "AUTHENTICATION": {
             "LABEL": "Autenticação",
             "DESCRIPTION": "Códigos únicos que permitem que os clientes acessem sua conta, como códigos de verificação e senhas de uso único."
+          }
+        },
+        "SUBTYPES": {
+          "TITLE": "Selecione o tipo para Marketing",
+          "DESCRIPTION": "O tipo determina os campos disponíveis no conteúdo do modelo.",
+          "COMING_SOON": "Em breve",
+          "STANDARD": {
+            "LABEL": "Padrão",
+            "DESCRIPTION": "Envie mensagens com mídia e botões personalizados para engajar seus clientes."
+          },
+          "CATALOG": {
+            "LABEL": "Catálogo",
+            "DESCRIPTION": "Envie mensagens para aumentar as vendas conectando seu catálogo de produtos."
+          },
+          "FLOWS": {
+            "LABEL": "Flows",
+            "DESCRIPTION": "Envie um formulário para coletar interesses dos clientes ou pedidos de horas marcadas ou fazer pesquisas."
+          },
+          "ORDER_DETAILS": {
+            "LABEL": "Detalhes do pedido",
+            "DESCRIPTION": "Envie mensagens que os clientes podem usar para fazer pagamentos para você."
+          },
+          "CALL_PERMISSION_REQUEST": {
+            "LABEL": "Solicitação de permissão para ligação",
+            "DESCRIPTION": "Pergunte aos clientes se você pode ligar para eles no WhatsApp."
           }
         }
       },
@@ -112,13 +138,19 @@
             "QUICK_REPLY": "Resposta rápida",
             "URL": "URL do site",
             "PHONE_NUMBER": "Ligar para número",
-            "COPY_CODE": "Copiar código de oferta"
+            "COPY_CODE": "Copiar código de oferta",
+            "CATALOG": "Ver catálogo",
+            "FLOW": "Abrir Flow",
+            "ORDER_DETAILS": "Revisar e pagar"
           },
           "FIELDS": {
             "TEXT": "Texto do botão",
             "URL": "URL",
             "PHONE_NUMBER": "Número de telefone",
-            "EXAMPLE_CODE": "Código de exemplo"
+            "EXAMPLE_CODE": "Código de exemplo",
+            "FLOW_ID": "ID do Flow",
+            "FLOW_ID_HINT": "ID do Flow já publicado no WhatsApp Manager.",
+            "NAVIGATE_SCREEN": "Tela inicial (opcional)"
           }
         }
       },

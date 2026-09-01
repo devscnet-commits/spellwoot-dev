@@ -2,10 +2,15 @@ class Whatsapp::MessageTemplateValidator
   NAME_REGEX = /\A[a-z0-9_]+\z/
   ALLOWED_CATEGORIES = %w[MARKETING UTILITY AUTHENTICATION].freeze
   # QUICK_REPLY, URL, PHONE_NUMBER and COPY_CODE are valid for both Marketing and Utility templates,
-  # so no category-conditional split is needed here yet. FLOW, CATALOG and voice-call permission
-  # buttons are Marketing-only additions the builder doesn't support until that UI ships.
-  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE].freeze
+  # so no category-conditional split is needed here yet. CATALOG, FLOW and ORDER_DETAILS are
+  # Marketing-only, enforced by the builder UI (only offered under their matching subtype) and by
+  # EXCLUSIVE_BUTTON_TYPES below, since Meta requires each to be the template's only button.
+  # call_permission_request (params[:call_permission_request]) isn't a button at all — it's a
+  # separate CALL_PERMISSION_REQUEST template component, validated by call_permission_request_error.
+  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS].freeze
+  EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW ORDER_DETAILS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
+  CALL_PERMISSION_REQUEST_HEADER_TYPES = %w[NONE TEXT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024
   MAX_FOOTER_LENGTH = 60
@@ -35,11 +40,26 @@ class Whatsapp::MessageTemplateValidator
       header_error,
       body_error,
       footer_error,
+      call_permission_request_error,
       *button_errors
     ].compact
   end
 
   private
+
+  def call_permission_request?
+    ActiveModel::Type::Boolean.new.cast(@params[:call_permission_request])
+  end
+
+  def call_permission_request_error
+    return unless call_permission_request?
+    return "A call permission request template's header must be TEXT or absent" unless CALL_PERMISSION_REQUEST_HEADER_TYPES.include?(header_type)
+    return "A call permission request template can't have buttons" if @params[:buttons].present?
+  end
+
+  def header_type
+    @params[:header]&.[](:type) || 'NONE'
+  end
 
   def header_error
     header = @params[:header]
@@ -104,7 +124,17 @@ class Whatsapp::MessageTemplateValidator
     buttons = @params[:buttons] || []
     return ["A template can have at most #{MAX_BUTTONS} buttons"] if buttons.size > MAX_BUTTONS
 
+    error = exclusive_button_error(buttons)
+    return [error] if error
+
     buttons.filter_map { |button| button_error(button) }
+  end
+
+  def exclusive_button_error(buttons)
+    exclusive_button = buttons.find { |button| EXCLUSIVE_BUTTON_TYPES.include?(button[:type]) }
+    return if exclusive_button.blank?
+
+    "A #{exclusive_button[:type]} button must be the template's only button" if buttons.size > 1
   end
 
   def button_error(button)
@@ -126,6 +156,8 @@ class Whatsapp::MessageTemplateValidator
       phone_number_error(button[:phone_number])
     when 'COPY_CODE'
       'Button example code is required' if button[:example].blank?
+    when 'FLOW'
+      'Button flow_id is required' if button[:flow_id].blank?
     end
   end
 

@@ -110,8 +110,13 @@ class Whatsapp::MessageTemplateService
       header_component(params[:header]),
       body_component(params),
       footer_component(params[:footer]),
-      buttons_component(params[:buttons])
+      buttons_component(params[:buttons]),
+      call_permission_request_component(params[:call_permission_request])
     ].compact
+  end
+
+  def call_permission_request_component(call_permission_request)
+    { type: 'CALL_PERMISSION_REQUEST' } if ActiveModel::Type::Boolean.new.cast(call_permission_request)
   end
 
   def header_component(header)
@@ -151,9 +156,21 @@ class Whatsapp::MessageTemplateService
       { type: 'PHONE_NUMBER', text: button[:text], phone_number: button[:phone_number] }
     when 'COPY_CODE'
       { type: 'COPY_CODE', example: button[:example] }
+    when 'CATALOG'
+      { type: 'CATALOG', text: button[:text] }
+    when 'FLOW'
+      build_flow_button(button)
+    when 'ORDER_DETAILS'
+      { type: 'ORDER_DETAILS', text: button[:text] }
     else
       { type: 'QUICK_REPLY', text: button[:text] }
     end
+  end
+
+  def build_flow_button(button)
+    flow_button = { type: 'FLOW', text: button[:text], flow_id: button[:flow_id], flow_action: 'navigate' }
+    flow_button[:navigate_screen] = button[:navigate_screen] if button[:navigate_screen].present?
+    flow_button
   end
 
   def build_url_button(button)

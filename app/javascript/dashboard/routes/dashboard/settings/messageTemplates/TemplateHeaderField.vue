@@ -10,8 +10,10 @@ import Button from 'dashboard/components-next/button/Button.vue';
 
 const props = defineProps({
   inboxId: { type: Number, required: true },
+  textOnly: { type: Boolean, default: false },
 });
 const HEADER_TYPES = ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'];
+const TEXT_ONLY_HEADER_TYPES = ['NONE', 'TEXT'];
 const ACCEPT_BY_TYPE = {
   IMAGE: 'image/jpeg,image/png',
   VIDEO: 'video/mp4',
@@ -39,7 +41,7 @@ const headerTypeLabels = computed(() => ({
 }));
 
 const headerTypeOptions = computed(() =>
-  HEADER_TYPES.map(type => ({
+  (props.textOnly ? TEXT_ONLY_HEADER_TYPES : HEADER_TYPES).map(type => ({
     value: type,
     label: headerTypeLabels.value[type],
   }))

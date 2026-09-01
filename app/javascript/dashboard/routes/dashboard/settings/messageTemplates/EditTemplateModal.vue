@@ -36,6 +36,8 @@ const normalizeButton = button => ({
   url: button.type === 'URL' ? button.url || '' : '',
   phone_number: button.type === 'PHONE_NUMBER' ? button.phone_number || '' : '',
   example: buttonExample(button),
+  flow_id: button.type === 'FLOW' ? button.flow_id || '' : '',
+  navigate_screen: button.type === 'FLOW' ? button.navigate_screen || '' : '',
 });
 
 const normalizeHeader = component => {
@@ -60,6 +62,7 @@ const headerComponent = findComponent('HEADER');
 const bodyComponent = findComponent('BODY');
 const footerComponent = findComponent('FOOTER');
 const buttonsComponent = findComponent('BUTTONS');
+const isCallPermissionRequest = !!findComponent('CALL_PERMISSION_REQUEST');
 
 const isSubmitting = ref(false);
 const submitError = ref('');
@@ -82,6 +85,11 @@ const buttonTypeLabels = computed(() => ({
     'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.PHONE_NUMBER'
   ),
   COPY_CODE: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.COPY_CODE'),
+  CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.CATALOG'),
+  FLOW: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.FLOW'),
+  ORDER_DETAILS: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.ORDER_DETAILS'
+  ),
 }));
 
 const buttonTypeOptions = computed(() =>
@@ -108,6 +116,7 @@ const removeButton = index => {
 
 const buildTemplatePayload = () => ({
   category: props.template.category,
+  call_permission_request: isCallPermissionRequest || undefined,
   header:
     form.header.type === 'NONE'
       ? undefined
@@ -130,6 +139,9 @@ const buildTemplatePayload = () => ({
     example: ['COPY_CODE', 'URL'].includes(button.type)
       ? button.example || undefined
       : undefined,
+    flow_id: button.type === 'FLOW' ? button.flow_id : undefined,
+    navigate_screen:
+      button.type === 'FLOW' ? button.navigate_screen || undefined : undefined,
   })),
 });
 
@@ -168,7 +180,11 @@ const submit = async () => {
       </p>
     </div>
 
-    <TemplateHeaderField v-model="form.header" :inbox-id="inboxId" />
+    <TemplateHeaderField
+      v-model="form.header"
+      :inbox-id="inboxId"
+      :text-only="isCallPermissionRequest"
+    />
 
     <TextArea
       v-model="form.body"
@@ -208,7 +224,7 @@ const submit = async () => {
       show-character-count
     />
 
-    <div class="space-y-3">
+    <div v-if="!isCallPermissionRequest" class="space-y-3">
       <h3 class="font-semibold text-n-slate-12">
         {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
       </h3>
@@ -260,6 +276,27 @@ const submit = async () => {
           :label="
             $t(
               'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
+            )
+          "
+        />
+        <Input
+          v-if="button.type === 'FLOW'"
+          v-model="button.flow_id"
+          :label="
+            $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID')
+          "
+          :message="
+            $t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
+            )
+          "
+        />
+        <Input
+          v-if="button.type === 'FLOW'"
+          v-model="button.navigate_screen"
+          :label="
+            $t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
             )
           "
         />
