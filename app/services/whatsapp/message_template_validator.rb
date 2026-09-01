@@ -5,10 +5,12 @@ class Whatsapp::MessageTemplateValidator
   # so no category-conditional split is needed here yet. CATALOG, FLOW and ORDER_DETAILS are
   # Marketing-only, enforced by the builder UI (only offered under their matching subtype) and by
   # EXCLUSIVE_BUTTON_TYPES below, since Meta requires each to be the template's only button.
-  # The voice-call permission button is a Marketing-only addition the builder doesn't support yet.
+  # call_permission_request (params[:call_permission_request]) isn't a button at all — it's a
+  # separate CALL_PERMISSION_REQUEST template component, validated by call_permission_request_error.
   ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS].freeze
   EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW ORDER_DETAILS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
+  CALL_PERMISSION_REQUEST_HEADER_TYPES = %w[NONE TEXT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024
   MAX_FOOTER_LENGTH = 60
@@ -38,11 +40,26 @@ class Whatsapp::MessageTemplateValidator
       header_error,
       body_error,
       footer_error,
+      call_permission_request_error,
       *button_errors
     ].compact
   end
 
   private
+
+  def call_permission_request?
+    ActiveModel::Type::Boolean.new.cast(@params[:call_permission_request])
+  end
+
+  def call_permission_request_error
+    return unless call_permission_request?
+    return "A call permission request template's header must be TEXT or absent" unless CALL_PERMISSION_REQUEST_HEADER_TYPES.include?(header_type)
+    return "A call permission request template can't have buttons" if @params[:buttons].present?
+  end
+
+  def header_type
+    @params[:header]&.[](:type) || 'NONE'
+  end
 
   def header_error
     header = @params[:header]

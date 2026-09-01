@@ -62,6 +62,7 @@ const headerComponent = findComponent('HEADER');
 const bodyComponent = findComponent('BODY');
 const footerComponent = findComponent('FOOTER');
 const buttonsComponent = findComponent('BUTTONS');
+const isCallPermissionRequest = !!findComponent('CALL_PERMISSION_REQUEST');
 
 const isSubmitting = ref(false);
 const submitError = ref('');
@@ -115,6 +116,7 @@ const removeButton = index => {
 
 const buildTemplatePayload = () => ({
   category: props.template.category,
+  call_permission_request: isCallPermissionRequest || undefined,
   header:
     form.header.type === 'NONE'
       ? undefined
@@ -178,7 +180,11 @@ const submit = async () => {
       </p>
     </div>
 
-    <TemplateHeaderField v-model="form.header" :inbox-id="inboxId" />
+    <TemplateHeaderField
+      v-model="form.header"
+      :inbox-id="inboxId"
+      :text-only="isCallPermissionRequest"
+    />
 
     <TextArea
       v-model="form.body"
@@ -218,7 +224,7 @@ const submit = async () => {
       show-character-count
     />
 
-    <div class="space-y-3">
+    <div v-if="!isCallPermissionRequest" class="space-y-3">
       <h3 class="font-semibold text-n-slate-12">
         {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
       </h3>

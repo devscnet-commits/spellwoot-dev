@@ -36,6 +36,7 @@ const SELECTABLE_MARKETING_SUBTYPES = [
   'CATALOG',
   'FLOWS',
   'ORDER_DETAILS',
+  'CALL_PERMISSION_REQUEST',
 ];
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
@@ -160,6 +161,11 @@ const isFlow = computed(() => isMarketing.value && form.subtype === 'FLOWS');
 const isOrderDetails = computed(
   () => isMarketing.value && form.subtype === 'ORDER_DETAILS'
 );
+// CALL_PERMISSION_REQUEST is its own template component (a sibling of HEADER/BODY/FOOTER),
+// not a button — it has no BUTTONS section and only allows a TEXT (or no) header.
+const isCallPermissionRequest = computed(
+  () => isMarketing.value && form.subtype === 'CALL_PERMISSION_REQUEST'
+);
 
 const maxButtons = computed(() => {
   if (isAuthentication.value) return AUTH_MAX_BUTTONS;
@@ -228,6 +234,15 @@ watch(isOrderDetails, newIsOrderDetails => {
     : form.buttons.filter(button => button.type !== 'ORDER_DETAILS');
 });
 
+watch(isCallPermissionRequest, newIsCallPermissionRequest => {
+  if (!newIsCallPermissionRequest) return;
+
+  form.buttons = [];
+  if (!['NONE', 'TEXT'].includes(form.header.type)) {
+    form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+  }
+});
+
 const selectSubtype = subtype => {
   if (subtype.comingSoon) return;
   form.subtype = subtype.id;
@@ -263,6 +278,7 @@ const buildTemplatePayload = () => ({
   name: form.name,
   category: form.category,
   language: form.language,
+  call_permission_request: isCallPermissionRequest.value || undefined,
   header:
     form.header.type === 'NONE'
       ? undefined
@@ -444,6 +460,7 @@ const submitTemplate = async () => {
           v-if="!isAuthentication"
           v-model="form.header"
           :inbox-id="inboxId"
+          :text-only="isCallPermissionRequest"
         />
 
         <TextArea
@@ -495,7 +512,7 @@ const submitTemplate = async () => {
           show-character-count
         />
 
-        <div class="space-y-3">
+        <div v-if="!isCallPermissionRequest" class="space-y-3">
           <h3 class="font-semibold text-n-slate-12">
             {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
           </h3>

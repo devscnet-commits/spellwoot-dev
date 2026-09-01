@@ -110,8 +110,13 @@ class Whatsapp::MessageTemplateService
       header_component(params[:header]),
       body_component(params),
       footer_component(params[:footer]),
-      buttons_component(params[:buttons])
+      buttons_component(params[:buttons]),
+      call_permission_request_component(params[:call_permission_request])
     ].compact
+  end
+
+  def call_permission_request_component(call_permission_request)
+    { type: 'CALL_PERMISSION_REQUEST' } if ActiveModel::Type::Boolean.new.cast(call_permission_request)
   end
 
   def header_component(header)
