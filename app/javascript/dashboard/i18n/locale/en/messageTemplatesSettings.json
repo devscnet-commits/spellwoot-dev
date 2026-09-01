@@ -1,144 +1,144 @@
 {
   "MESSAGE_TEMPLATES_MGMT": {
     "HEADER": "Templates",
-    "HEADER_BTN_TXT": "New template",
-    "DESCRIPTION": "Create and manage WhatsApp message templates. Every template must be approved by Meta before it can be sent to customers.",
-    "LOADING": "Fetching templates...",
+    "HEADER_BTN_TXT": "Novo modelo",
+    "DESCRIPTION": "Crie e gerencie modelos de mensagem do WhatsApp. Todo modelo precisa ser aprovado pela Meta antes de poder ser enviado aos clientes.",
+    "LOADING": "Buscando modelos...",
     "SELECT_INBOX": {
-      "LABEL": "WhatsApp inbox",
-      "PLACEHOLDER": "Select an inbox"
+      "LABEL": "Caixa de entrada do WhatsApp",
+      "PLACEHOLDER": "Selecione uma caixa de entrada"
     },
-    "NO_WHATSAPP_INBOX": "Connect a WhatsApp Cloud API inbox to create and manage message templates.",
-    "NO_INBOX_SELECTED": "Select a WhatsApp inbox above to see its templates.",
+    "NO_WHATSAPP_INBOX": "Conecte uma caixa de entrada WhatsApp Cloud API para criar e gerenciar modelos de mensagem.",
+    "NO_INBOX_SELECTED": "Selecione uma caixa de entrada do WhatsApp acima para ver os modelos dela.",
     "LIST": {
-      "404": "No templates found for this inbox yet.",
+      "404": "Nenhum modelo encontrado para esta caixa de entrada ainda.",
       "TABLE_HEADER": {
-        "NAME": "Name",
-        "CATEGORY": "Category",
+        "NAME": "Nome",
+        "CATEGORY": "Categoria",
         "STATUS": "Status",
-        "LANGUAGE": "Language",
-        "QUALITY": "Quality",
-        "ACTIONS": "Actions"
+        "LANGUAGE": "Idioma",
+        "QUALITY": "Qualidade",
+        "ACTIONS": "Ações"
       }
     },
     "STATUS": {
-      "APPROVED": "Approved",
-      "PENDING": "Pending",
-      "REJECTED": "Rejected",
-      "PAUSED": "Paused",
-      "DISABLED": "Disabled"
+      "APPROVED": "Aprovado",
+      "PENDING": "Pendente",
+      "REJECTED": "Rejeitado",
+      "PAUSED": "Pausado",
+      "DISABLED": "Desativado"
     },
     "QUALITY": {
-      "GREEN": "High",
-      "YELLOW": "Medium",
-      "RED": "Low",
-      "UNKNOWN": "Pending data"
+      "GREEN": "Alta",
+      "YELLOW": "Média",
+      "RED": "Baixa",
+      "UNKNOWN": "Aguardando dados"
     },
-    "FETCH_ERROR": "Could not fetch templates for this inbox.",
+    "FETCH_ERROR": "Não foi possível buscar os modelos desta caixa de entrada.",
     "CREATE": {
-      "BACK_BUTTON_LABEL": "Back to templates",
-      "HEADER": "New template",
+      "BACK_BUTTON_LABEL": "Voltar para Templates",
+      "HEADER": "Novo modelo",
       "STEP_1": {
-        "TITLE": "Choose a category",
-        "DESCRIPTION": "The category determines what the template can be used for and how Meta reviews it.",
-        "NEXT_BUTTON": "Next: Content",
+        "TITLE": "Escolha uma categoria",
+        "DESCRIPTION": "A categoria determina para que o modelo pode ser usado e como a Meta faz a revisão.",
+        "NEXT_BUTTON": "Próximo: Conteúdo",
         "CATEGORIES": {
           "MARKETING": {
             "LABEL": "Marketing",
-            "DESCRIPTION": "Promotions, offers, announcements and other messages meant to engage or sell to customers. Requires prior opt-in."
+            "DESCRIPTION": "Promoções, ofertas, anúncios e outras mensagens para engajar ou vender aos clientes. Exige opt-in prévio."
           },
           "UTILITY": {
-            "LABEL": "Utility",
-            "DESCRIPTION": "Order updates, account alerts and other non-promotional messages tied to a specific customer action or transaction."
+            "LABEL": "Utilidade",
+            "DESCRIPTION": "Atualizações de pedido, alertas de conta e outras mensagens não promocionais ligadas a uma ação ou transação específica do cliente."
           }
         }
       },
       "STEP_2": {
-        "TITLE": "Template content",
-        "BACK_BUTTON": "Back",
-        "SUBMIT_BUTTON": "Submit template",
+        "TITLE": "Conteúdo do modelo",
+        "BACK_BUTTON": "Voltar",
+        "SUBMIT_BUTTON": "Enviar modelo",
         "NAME": {
-          "LABEL": "Template name",
-          "PLACEHOLDER": "e.g. promo_summer_2026",
-          "HINT": "Lowercase letters, numbers and underscores only."
+          "LABEL": "Nome do modelo",
+          "PLACEHOLDER": "ex: promo_verao_2026",
+          "HINT": "Apenas letras minúsculas, números e underline."
         },
         "LANGUAGE": {
-          "LABEL": "Language",
-          "PLACEHOLDER": "Select a language"
+          "LABEL": "Idioma",
+          "PLACEHOLDER": "Selecione um idioma"
         },
         "HEADER": {
-          "TITLE": "Header (optional)",
-          "TYPE_LABEL": "Header type",
+          "TITLE": "Cabeçalho (opcional)",
+          "TYPE_LABEL": "Tipo de cabeçalho",
           "TYPES": {
-            "NONE": "None",
-            "TEXT": "Text",
-            "IMAGE": "Image",
-            "VIDEO": "Video",
-            "DOCUMENT": "Document"
+            "NONE": "Nenhum",
+            "TEXT": "Texto",
+            "IMAGE": "Imagem",
+            "VIDEO": "Vídeo",
+            "DOCUMENT": "Documento"
           },
-          "TEXT_LABEL": "Header text",
-          "TEXT_PLACEHOLDER": "Short header text",
-          "UPLOAD_LABEL": "Upload file",
-          "REPLACE_LABEL": "Replace file",
-          "UPLOADING": "Uploading...",
-          "UPLOADED": "Uploaded: {name}",
-          "UPLOAD_ERROR": "Could not upload the file."
+          "TEXT_LABEL": "Texto do cabeçalho",
+          "TEXT_PLACEHOLDER": "Texto curto do cabeçalho",
+          "UPLOAD_LABEL": "Enviar arquivo",
+          "REPLACE_LABEL": "Trocar arquivo",
+          "UPLOADING": "Enviando...",
+          "UPLOADED": "Enviado: {name}",
+          "UPLOAD_ERROR": "Não foi possível enviar o arquivo."
         },
         "BODY": {
-          "LABEL": "Body",
-          "PLACEHOLDER": "Write your message. Use {{1}}, {{2}}... to add variables.",
-          "ADD_VARIABLE": "Add variable"
+          "LABEL": "Corpo",
+          "PLACEHOLDER": "Escreva sua mensagem. Use {{1}}, {{2}}... para adicionar variáveis.",
+          "ADD_VARIABLE": "Adicionar variável"
         },
         "VARIABLES": {
-          "TITLE": "Sample values for variables",
-          "DESCRIPTION": "Meta uses these examples to review your template. They are not sent to customers.",
-          "PLACEHOLDER": "Sample value for {{variable}}"
+          "TITLE": "Valores de exemplo das variáveis",
+          "DESCRIPTION": "A Meta usa esses exemplos para revisar seu modelo. Eles não são enviados aos clientes.",
+          "PLACEHOLDER": "Valor de exemplo para {{variable}}"
         },
         "FOOTER": {
-          "LABEL": "Footer",
-          "PLACEHOLDER": "Optional footer text"
+          "LABEL": "Rodapé",
+          "PLACEHOLDER": "Texto de rodapé (opcional)"
         },
         "BUTTONS": {
-          "TITLE": "Buttons",
-          "ADD_BUTTON": "Add button",
-          "REMOVE_BUTTON": "Remove button",
-          "MAX_REACHED": "You've reached the maximum of {count} buttons.",
+          "TITLE": "Botões",
+          "ADD_BUTTON": "Adicionar botão",
+          "REMOVE_BUTTON": "Remover botão",
+          "MAX_REACHED": "Você atingiu o limite de {count} botões.",
           "TYPES": {
-            "QUICK_REPLY": "Quick reply",
-            "URL": "Website URL",
-            "PHONE_NUMBER": "Call phone number",
-            "COPY_CODE": "Copy offer code"
+            "QUICK_REPLY": "Resposta rápida",
+            "URL": "URL do site",
+            "PHONE_NUMBER": "Ligar para número",
+            "COPY_CODE": "Copiar código de oferta"
           },
           "FIELDS": {
-            "TEXT": "Button text",
+            "TEXT": "Texto do botão",
             "URL": "URL",
-            "PHONE_NUMBER": "Phone number",
-            "EXAMPLE_CODE": "Sample code"
+            "PHONE_NUMBER": "Número de telefone",
+            "EXAMPLE_CODE": "Código de exemplo"
           }
         }
       },
-      "SUCCESS_MESSAGE": "Template submitted to Meta for approval.",
-      "ERROR_MESSAGE": "Could not submit the template."
+      "SUCCESS_MESSAGE": "Modelo enviado para aprovação da Meta.",
+      "ERROR_MESSAGE": "Não foi possível enviar o modelo."
     },
     "EDIT": {
-      "TITLE": "Edit {name}",
-      "NOT_EDITABLE": "Only approved, rejected or paused templates can be edited",
-      "DESCRIPTION": "Editing replaces the template's content entirely and sends it back for Meta's review. The name, language and category can't be changed here.",
-      "CANCEL_BUTTON": "Cancel",
-      "SUBMIT_BUTTON": "Save changes",
-      "SUCCESS_MESSAGE": "Template updated and resubmitted to Meta for review.",
-      "ERROR_MESSAGE": "Could not update the template."
+      "TITLE": "Editar {name}",
+      "NOT_EDITABLE": "Só é possível editar modelos aprovados, rejeitados ou pausados",
+      "DESCRIPTION": "Editar substitui todo o conteúdo do modelo e envia de novo para revisão da Meta. Nome, idioma e categoria não podem ser alterados aqui.",
+      "CANCEL_BUTTON": "Cancelar",
+      "SUBMIT_BUTTON": "Salvar alterações",
+      "SUCCESS_MESSAGE": "Modelo atualizado e reenviado para revisão da Meta.",
+      "ERROR_MESSAGE": "Não foi possível atualizar o modelo."
     },
     "DELETE": {
-      "TITLE": "Delete template",
+      "TITLE": "Excluir modelo",
       "CONFIRM": {
-        "TITLE": "Delete this template?",
-        "MESSAGE": "This can't be undone. If the template is approved, you won't be able to reuse this name for 30 days.",
-        "YES": "Yes, delete",
-        "NO": "Cancel"
+        "TITLE": "Excluir este modelo?",
+        "MESSAGE": "Essa ação não pode ser desfeita. Se o modelo estiver aprovado, você não vai poder reutilizar esse nome por 30 dias.",
+        "YES": "Sim, excluir",
+        "NO": "Cancelar"
       },
-      "SUCCESS_MESSAGE": "Template deleted.",
-      "ERROR_MESSAGE": "Could not delete the template."
+      "SUCCESS_MESSAGE": "Modelo excluído.",
+      "ERROR_MESSAGE": "Não foi possível excluir o modelo."
     }
   }
 }
