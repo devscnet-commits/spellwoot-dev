@@ -18,6 +18,13 @@ const AUTH_MAX_BUTTONS = 1;
 const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
 const AUTH_BUTTON_TYPES = ['COPY_CODE'];
 const AUTH_BODY_TEXT = '{{1}} é o seu código de verificação.';
+const MARKETING_SUBTYPES = [
+  'STANDARD',
+  'CATALOG',
+  'FLOWS',
+  'ORDER_DETAILS',
+  'CALL_PERMISSION_REQUEST',
+];
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -41,6 +48,7 @@ const submitError = ref('');
 
 const form = reactive({
   category: 'MARKETING',
+  subtype: 'STANDARD',
   name: '',
   language: 'pt_BR',
   header: { type: 'NONE', text: '', handle: '', fileName: '' },
@@ -77,6 +85,45 @@ const categories = computed(() => [
   },
 ]);
 
+const isMarketing = computed(() => form.category === 'MARKETING');
+
+const subtypeLabels = computed(() => ({
+  STANDARD: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.STANDARD.LABEL'),
+  CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CATALOG.LABEL'),
+  FLOWS: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.FLOWS.LABEL'),
+  ORDER_DETAILS: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.ORDER_DETAILS.LABEL'
+  ),
+  CALL_PERMISSION_REQUEST: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CALL_PERMISSION_REQUEST.LABEL'
+  ),
+}));
+
+const subtypeDescriptions = computed(() => ({
+  STANDARD: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.STANDARD.DESCRIPTION'
+  ),
+  CATALOG: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CATALOG.DESCRIPTION'
+  ),
+  FLOWS: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.FLOWS.DESCRIPTION'),
+  ORDER_DETAILS: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.ORDER_DETAILS.DESCRIPTION'
+  ),
+  CALL_PERMISSION_REQUEST: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CALL_PERMISSION_REQUEST.DESCRIPTION'
+  ),
+}));
+
+const subtypes = computed(() =>
+  MARKETING_SUBTYPES.map(id => ({
+    id,
+    label: subtypeLabels.value[id],
+    description: subtypeDescriptions.value[id],
+    comingSoon: id !== 'STANDARD',
+  }))
+);
+
 const buttonTypeLabels = computed(() => ({
   QUICK_REPLY: t(
     'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.QUICK_REPLY'
@@ -110,6 +157,8 @@ const detectedVariables = computed(() => {
 watch(
   () => form.category,
   newCategory => {
+    if (newCategory !== 'MARKETING') form.subtype = 'STANDARD';
+
     if (newCategory !== 'AUTHENTICATION') return;
 
     form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
@@ -120,6 +169,11 @@ watch(
       .slice(0, AUTH_MAX_BUTTONS);
   }
 );
+
+const selectSubtype = subtype => {
+  if (subtype.comingSoon) return;
+  form.subtype = subtype.id;
+};
 
 const goToStep2 = () => {
   currentStep.value = 2;
@@ -241,6 +295,53 @@ const submitTemplate = async () => {
               {{ category.description }}
             </span>
           </button>
+        </div>
+
+        <div v-if="isMarketing" class="space-y-2">
+          <h3 class="font-semibold text-n-slate-12">
+            {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.TITLE') }}
+          </h3>
+          <p class="text-body-main text-n-slate-11">
+            {{
+              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.DESCRIPTION')
+            }}
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              v-for="subtype in subtypes"
+              :key="subtype.id"
+              type="button"
+              class="text-left p-4 rounded-xl border transition-all"
+              :class="[
+                subtype.comingSoon
+                  ? 'opacity-50 cursor-not-allowed border-n-weak'
+                  : 'cursor-pointer',
+                !subtype.comingSoon && form.subtype === subtype.id
+                  ? 'border-n-brand bg-n-alpha-2'
+                  : 'border-n-weak hover:border-n-slate-6',
+              ]"
+              @click="selectSubtype(subtype)"
+            >
+              <span class="flex items-center gap-2">
+                <span class="font-semibold text-n-slate-12">
+                  {{ subtype.label }}
+                </span>
+                <span
+                  v-if="subtype.comingSoon"
+                  class="text-caption px-1.5 py-0.5 rounded-full bg-n-slate-3 text-n-slate-11"
+                >
+                  {{
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.COMING_SOON'
+                    )
+                  }}
+                </span>
+              </span>
+              <span class="block text-body-main text-n-slate-11 mt-1">
+                {{ subtype.description }}
+              </span>
+            </button>
+          </div>
         </div>
 
         <Button
