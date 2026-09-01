@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
@@ -14,7 +14,10 @@ import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 
 const MAX_BUTTONS = 10;
+const AUTH_MAX_BUTTONS = 1;
 const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
+const AUTH_BUTTON_TYPES = ['COPY_CODE'];
+const AUTH_BODY_TEXT = '{{1}} é o seu código de verificação.';
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -85,8 +88,14 @@ const buttonTypeLabels = computed(() => ({
   COPY_CODE: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.COPY_CODE'),
 }));
 
+const isAuthentication = computed(() => form.category === 'AUTHENTICATION');
+
+const maxButtons = computed(() =>
+  isAuthentication.value ? AUTH_MAX_BUTTONS : MAX_BUTTONS
+);
+
 const buttonTypeOptions = computed(() =>
-  BUTTON_TYPES.map(type => ({
+  (isAuthentication.value ? AUTH_BUTTON_TYPES : BUTTON_TYPES).map(type => ({
     value: type,
     label: buttonTypeLabels.value[type],
   }))
@@ -98,6 +107,20 @@ const detectedVariables = computed(() => {
   return numbers.sort((a, b) => a - b);
 });
 
+watch(
+  () => form.category,
+  newCategory => {
+    if (newCategory !== 'AUTHENTICATION') return;
+
+    form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+    form.body = AUTH_BODY_TEXT;
+    form.footer = '';
+    form.buttons = form.buttons
+      .filter(button => button.type === 'COPY_CODE')
+      .slice(0, AUTH_MAX_BUTTONS);
+  }
+);
+
 const goToStep2 = () => {
   currentStep.value = 2;
 };
@@ -107,7 +130,7 @@ const goToStep1 = () => {
 };
 
 const addButton = type => {
-  if (form.buttons.length >= MAX_BUTTONS) return;
+  if (form.buttons.length >= maxButtons.value) return;
 
   form.buttons.push({
     type,
@@ -253,7 +276,11 @@ const submitTemplate = async () => {
           />
         </div>
 
-        <TemplateHeaderField v-model="form.header" :inbox-id="inboxId" />
+        <TemplateHeaderField
+          v-if="!isAuthentication"
+          v-model="form.header"
+          :inbox-id="inboxId"
+        />
 
         <TextArea
           v-model="form.body"
@@ -261,6 +288,12 @@ const submitTemplate = async () => {
           :placeholder="
             $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.PLACEHOLDER')
           "
+          :message="
+            isAuthentication
+              ? $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.AUTH_HINT')
+              : ''
+          "
+          :disabled="isAuthentication"
           :max-length="1024"
           show-character-count
         />
@@ -288,6 +321,7 @@ const submitTemplate = async () => {
         </div>
 
         <TextArea
+          v-if="!isAuthentication"
           v-model="form.footer"
           :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
           :placeholder="
@@ -362,12 +396,12 @@ const submitTemplate = async () => {
           </div>
 
           <p
-            v-if="form.buttons.length >= MAX_BUTTONS"
+            v-if="form.buttons.length >= maxButtons"
             class="text-body-main text-n-slate-11"
           >
             {{
               $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.MAX_REACHED', {
-                count: MAX_BUTTONS,
+                count: maxButtons,
               })
             }}
           </p>
