@@ -42,6 +42,7 @@
         "TITLE": "Escolha uma categoria",
         "DESCRIPTION": "A categoria determina para que o modelo pode ser usado e como a Meta faz a revisão.",
         "NEXT_BUTTON": "Próximo: Conteúdo",
+        "META_GUIDELINE": "Diretriz da Meta: Cada categoria possui regras e tarifas distintas na API Cloud do WhatsApp. Mensagens de Marketing exigem opt-in prévio dos destinatários.",
         "CATEGORIES": {
           "MARKETING": {
             "LABEL": "Marketing",

@@ -7,11 +7,19 @@ import { useStore } from 'dashboard/composables/store';
 
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
+import Banner from 'dashboard/components-next/banner/Banner.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
+
+const CATEGORY_ICONS = {
+  MARKETING: 'i-lucide-megaphone',
+  UTILITY: 'i-lucide-bell',
+  AUTHENTICATION: 'i-lucide-shield-check',
+};
 
 const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;
@@ -75,6 +83,7 @@ const bodySamples = reactive({});
 const categories = computed(() => [
   {
     id: 'MARKETING',
+    icon: CATEGORY_ICONS.MARKETING,
     label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.MARKETING.LABEL'),
     description: t(
       'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.MARKETING.DESCRIPTION'
@@ -82,6 +91,7 @@ const categories = computed(() => [
   },
   {
     id: 'UTILITY',
+    icon: CATEGORY_ICONS.UTILITY,
     label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.UTILITY.LABEL'),
     description: t(
       'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.UTILITY.DESCRIPTION'
@@ -89,6 +99,7 @@ const categories = computed(() => [
   },
   {
     id: 'AUTHENTICATION',
+    icon: CATEGORY_ICONS.AUTHENTICATION,
     label: t(
       'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.AUTHENTICATION.LABEL'
     ),
@@ -367,7 +378,8 @@ const submitTemplate = async () => {
             "
             @click="form.category = category.id"
           >
-            <span class="block font-semibold text-n-slate-12">
+            <span class="flex items-center gap-2 font-semibold text-n-slate-12">
+              <Icon :icon="category.icon" class="flex-shrink-0 size-4" />
               {{ category.label }}
             </span>
             <span class="block text-body-main text-n-slate-11 mt-1">
@@ -375,6 +387,15 @@ const submitTemplate = async () => {
             </span>
           </button>
         </div>
+
+        <Banner color="amber">
+          <div class="flex items-center gap-2">
+            <Icon icon="i-lucide-info" class="flex-shrink-0 size-4" />
+            <span>
+              {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.META_GUIDELINE') }}
+            </span>
+          </div>
+        </Banner>
 
         <div v-if="isMarketing" class="space-y-2">
           <h3 class="font-semibold text-n-slate-12">
