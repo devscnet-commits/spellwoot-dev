@@ -221,7 +221,7 @@ const submitTemplate = async () => {
           </p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             v-for="category in categories"
             :key="category.id"
