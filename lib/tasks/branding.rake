@@ -5,8 +5,8 @@ namespace :branding do
 
     {
       'LOGO_THUMBNAIL'    => "#{base_url}/brand-assets/favicon-conexi-ia.webp",
-      'LOGO'              => "#{base_url}/brand-assets/conexi-ia-branca.webp",
-      'LOGO_DARK'         => "#{base_url}/brand-assets/conexi-ia-cinza.webp",
+      'LOGO'              => "#{base_url}/brand-assets/conexi-ia-cinza.webp",
+      'LOGO_DARK'         => "#{base_url}/brand-assets/conexi-ia-branca.webp",
       'BRAND_NAME'        => 'Conexi IA',
       'INSTALLATION_NAME' => 'Conexi IA'
     }.each do |key, value|
