@@ -8,21 +8,28 @@ class Whatsapp::WebhookSetupService
 
   def perform
     validate_parameters!
-
-    # Register phone number if either condition is met:
-    # 1. Phone number is not verified (code_verification_status != 'VERIFIED')
-    # 2. Phone number needs registration (pending provisioning state)
-    register_phone_number if !phone_number_verified? || phone_number_needs_registration?
-
+    register_phone_number_if_needed
     setup_webhook
   end
 
+  # Used by the "Register webhook" action on the account health page. This must also register
+  # the phone number when needed (not just call setup_webhook) — a phone still in pending
+  # provisioning state (e.g. messaging limit tier shows "not available") will fail webhook
+  # subscription otherwise, which is exactly the stuck state this button is meant to fix.
   def register_callback
     validate_parameters!
+    register_phone_number_if_needed
     setup_webhook
   end
 
   private
+
+  # Register phone number if either condition is met:
+  # 1. Phone number is not verified (code_verification_status != 'VERIFIED')
+  # 2. Phone number needs registration (pending provisioning state)
+  def register_phone_number_if_needed
+    register_phone_number if !phone_number_verified? || phone_number_needs_registration?
+  end
 
   def validate_parameters!
     raise ArgumentError, 'Channel is required' if @channel.blank?
@@ -56,7 +63,7 @@ class Whatsapp::WebhookSetupService
   end
 
   def setup_webhook
-    callback_url = build_callback_url
+    callback_url = @channel.inbox.callback_webhook_url
     verify_token = @channel.provider_config['webhook_verify_token']
 
     @api_client.subscribe_waba_webhook(@waba_id, callback_url, verify_token)
@@ -64,13 +71,6 @@ class Whatsapp::WebhookSetupService
   rescue StandardError => e
     Rails.logger.error("[WHATSAPP] Webhook setup failed: #{e.message}")
     raise "Webhook setup failed: #{e.message}"
-  end
-
-  def build_callback_url
-    frontend_url = ENV.fetch('FRONTEND_URL', nil)
-    phone_number = @channel.phone_number
-
-    "#{frontend_url}/webhooks/whatsapp/#{phone_number}"
   end
 
   def phone_number_verified?
