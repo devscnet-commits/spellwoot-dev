@@ -50,6 +50,10 @@
           "UTILITY": {
             "LABEL": "Utilidade",
             "DESCRIPTION": "Atualizações de pedido, alertas de conta e outras mensagens não promocionais ligadas a uma ação ou transação específica do cliente."
+          },
+          "AUTHENTICATION": {
+            "LABEL": "Autenticação",
+            "DESCRIPTION": "Códigos únicos que permitem que os clientes acessem sua conta, como códigos de verificação e senhas de uso único."
           }
         }
       },

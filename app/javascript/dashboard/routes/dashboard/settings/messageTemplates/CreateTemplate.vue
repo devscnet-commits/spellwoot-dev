@@ -63,6 +63,15 @@ const categories = computed(() => [
       'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.UTILITY.DESCRIPTION'
     ),
   },
+  {
+    id: 'AUTHENTICATION',
+    label: t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.AUTHENTICATION.LABEL'
+    ),
+    description: t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.AUTHENTICATION.DESCRIPTION'
+    ),
+  },
 ]);
 
 const buttonTypeLabels = computed(() => ({
