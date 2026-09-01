@@ -17,7 +17,8 @@
         "CATEGORY": "Category",
         "STATUS": "Status",
         "LANGUAGE": "Language",
-        "QUALITY": "Quality"
+        "QUALITY": "Quality",
+        "ACTIONS": "Actions"
       }
     },
     "STATUS": {
@@ -100,6 +101,26 @@
       },
       "SUCCESS_MESSAGE": "Template submitted to Meta for approval.",
       "ERROR_MESSAGE": "Could not submit the template."
+    },
+    "EDIT": {
+      "TITLE": "Edit {name}",
+      "NOT_EDITABLE": "Only approved, rejected or paused templates can be edited",
+      "DESCRIPTION": "Editing replaces the template's content entirely and sends it back for Meta's review. The name, language and category can't be changed here.",
+      "CANCEL_BUTTON": "Cancel",
+      "SUBMIT_BUTTON": "Save changes",
+      "SUCCESS_MESSAGE": "Template updated and resubmitted to Meta for review.",
+      "ERROR_MESSAGE": "Could not update the template."
+    },
+    "DELETE": {
+      "TITLE": "Delete template",
+      "CONFIRM": {
+        "TITLE": "Delete this template?",
+        "MESSAGE": "This can't be undone. If the template is approved, you won't be able to reuse this name for 30 days.",
+        "YES": "Yes, delete",
+        "NO": "Cancel"
+      },
+      "SUCCESS_MESSAGE": "Template deleted.",
+      "ERROR_MESSAGE": "Could not delete the template."
     }
   }
 }

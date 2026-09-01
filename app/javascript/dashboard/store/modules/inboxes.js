@@ -374,6 +374,17 @@ export const actions = {
     const response = await InboxesAPI.getMessageTemplates(inboxId);
     return response.data;
   },
+  updateMessageTemplate: async (_, { inboxId, templateId, template }) => {
+    const response = await InboxesAPI.updateMessageTemplate(
+      inboxId,
+      templateId,
+      template
+    );
+    return response.data;
+  },
+  deleteMessageTemplate: async (_, { inboxId, templateName }) => {
+    await InboxesAPI.deleteMessageTemplate(inboxId, templateName);
+  },
   resetSecret: async ({ commit }, inboxId) => {
     try {
       const response = await InboxesAPI.resetSecret(inboxId);

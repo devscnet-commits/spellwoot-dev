@@ -15,8 +15,11 @@ class Whatsapp::MessageTemplateValidator
     body.to_s.scan(/\{\{(\d+)\}\}/).flatten.map(&:to_i).uniq.sort
   end
 
-  def initialize(params)
+  # require_name: false for edits — Meta's template update endpoint only accepts category and
+  # components, the name can't be changed after creation.
+  def initialize(params, require_name: true)
     @params = params
+    @require_name = require_name
   end
 
   def valid?
@@ -25,7 +28,7 @@ class Whatsapp::MessageTemplateValidator
 
   def errors
     @errors ||= [
-      name_error,
+      (name_error if @require_name),
       category_error,
       body_error,
       footer_error,

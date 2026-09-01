@@ -10,6 +10,7 @@ import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import EditTemplateModal from './EditTemplateModal.vue';
 import {
   BaseTable,
   BaseTableRow,
@@ -48,7 +49,16 @@ const tableHeaders = computed(() => [
   t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.STATUS'),
   t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.LANGUAGE'),
   t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.QUALITY'),
+  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.ACTIONS'),
 ]);
+
+const showEditModal = ref(false);
+const showDeleteModal = ref(false);
+const selectedTemplate = ref(null);
+const isDeleting = ref(false);
+
+const editableStatuses = ['APPROVED', 'REJECTED', 'PAUSED'];
+const canEdit = template => editableStatuses.includes(template.status);
 
 const statusLabels = computed(() => ({
   APPROVED: t('MESSAGE_TEMPLATES_MGMT.STATUS.APPROVED'),
@@ -95,6 +105,43 @@ const goToCreateTemplate = () => {
     name: 'message_templates_new',
     query: { inbox_id: selectedInboxId.value },
   });
+};
+
+const openEditModal = template => {
+  selectedTemplate.value = template;
+  showEditModal.value = true;
+};
+
+const closeEditModal = () => {
+  showEditModal.value = false;
+  selectedTemplate.value = null;
+};
+
+const openDeleteModal = template => {
+  selectedTemplate.value = template;
+  showDeleteModal.value = true;
+};
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false;
+  selectedTemplate.value = null;
+};
+
+const confirmDelete = async () => {
+  isDeleting.value = true;
+  try {
+    await store.dispatch('inboxes/deleteMessageTemplate', {
+      inboxId: selectedInboxId.value,
+      templateName: selectedTemplate.value.name,
+    });
+    useAlert(t('MESSAGE_TEMPLATES_MGMT.DELETE.SUCCESS_MESSAGE'));
+    closeDeleteModal();
+    fetchTemplates();
+  } catch (error) {
+    useAlert(t('MESSAGE_TEMPLATES_MGMT.DELETE.ERROR_MESSAGE'));
+  } finally {
+    isDeleting.value = false;
+  }
 };
 
 watch(selectedInboxId, fetchTemplates);
@@ -194,6 +241,33 @@ onMounted(() => {
                     {{ qualityLabel(template.quality) }}
                   </span>
                 </BaseTableCell>
+                <BaseTableCell align="end">
+                  <div class="flex gap-2 justify-end flex-shrink-0">
+                    <Button
+                      v-tooltip.top="
+                        canEdit(template)
+                          ? $t('MESSAGE_TEMPLATES_MGMT.EDIT.TITLE', {
+                              name: template.name,
+                            })
+                          : $t('MESSAGE_TEMPLATES_MGMT.EDIT.NOT_EDITABLE')
+                      "
+                      icon="i-lucide-pencil"
+                      variant="ghost"
+                      color="slate"
+                      size="xs"
+                      :disabled="!canEdit(template)"
+                      @click="openEditModal(template)"
+                    />
+                    <Button
+                      v-tooltip.top="$t('MESSAGE_TEMPLATES_MGMT.DELETE.TITLE')"
+                      icon="i-lucide-trash-2"
+                      variant="ghost"
+                      color="ruby"
+                      size="xs"
+                      @click="openDeleteModal(template)"
+                    />
+                  </div>
+                </BaseTableCell>
               </template>
             </BaseTableRow>
           </template>
@@ -205,5 +279,26 @@ onMounted(() => {
         </div>
       </template>
     </template>
+
+    <woot-modal v-model:show="showEditModal" :on-close="closeEditModal">
+      <EditTemplateModal
+        v-if="selectedTemplate"
+        :inbox-id="selectedInboxId"
+        :template="selectedTemplate"
+        @close="closeEditModal"
+        @updated="fetchTemplates"
+      />
+    </woot-modal>
+
+    <woot-delete-modal
+      v-model:show="showDeleteModal"
+      :on-close="closeDeleteModal"
+      :on-confirm="confirmDelete"
+      :title="$t('MESSAGE_TEMPLATES_MGMT.DELETE.CONFIRM.TITLE')"
+      :message="$t('MESSAGE_TEMPLATES_MGMT.DELETE.CONFIRM.MESSAGE')"
+      :message-value="selectedTemplate ? ` ${selectedTemplate.name}?` : ''"
+      :confirm-text="$t('MESSAGE_TEMPLATES_MGMT.DELETE.CONFIRM.YES')"
+      :reject-text="$t('MESSAGE_TEMPLATES_MGMT.DELETE.CONFIRM.NO')"
+    />
   </SettingsLayout>
 </template>

@@ -83,6 +83,23 @@ class Inboxes extends CacheEnabledApiClient {
   getMessageTemplates(inboxId) {
     return axios.get(`${this.url}/${inboxId}/message_templates`);
   }
+
+  // templateId here is the template's numeric Meta ID.
+  updateMessageTemplate(inboxId, templateId, template) {
+    return axios.patch(
+      `${this.url}/${inboxId}/message_templates/${templateId}`,
+      {
+        template,
+      }
+    );
+  }
+
+  // templateName here is the template's name (Meta deletes templates by name).
+  deleteMessageTemplate(inboxId, templateName) {
+    return axios.delete(
+      `${this.url}/${inboxId}/message_templates/${templateName}`
+    );
+  }
 }
 
 export default new Inboxes();
