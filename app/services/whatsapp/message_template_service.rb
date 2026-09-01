@@ -107,10 +107,21 @@ class Whatsapp::MessageTemplateService
 
   def build_components(params)
     [
+      header_component(params[:header]),
       body_component(params),
       footer_component(params[:footer]),
       buttons_component(params[:buttons])
     ].compact
+  end
+
+  def header_component(header)
+    return if header.blank? || header[:type].blank? || header[:type] == 'NONE'
+
+    if header[:type] == 'TEXT'
+      { type: 'HEADER', format: 'TEXT', text: header[:text] }
+    else
+      { type: 'HEADER', format: header[:type], example: { header_handle: [header[:handle]] } }
+    end
   end
 
   def body_component(params)

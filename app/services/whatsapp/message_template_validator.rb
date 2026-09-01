@@ -5,6 +5,8 @@ class Whatsapp::MessageTemplateValidator
   # so no category-conditional split is needed here yet. FLOW, CATALOG and voice-call permission
   # buttons are Marketing-only additions the builder doesn't support until that UI ships.
   ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE].freeze
+  ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
+  MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024
   MAX_FOOTER_LENGTH = 60
   MAX_BUTTON_TEXT_LENGTH = 25
@@ -30,6 +32,7 @@ class Whatsapp::MessageTemplateValidator
     @errors ||= [
       (name_error if @require_name),
       category_error,
+      header_error,
       body_error,
       footer_error,
       *button_errors
@@ -37,6 +40,24 @@ class Whatsapp::MessageTemplateValidator
   end
 
   private
+
+  def header_error
+    header = @params[:header]
+    return if header.blank? || header[:type].blank? || header[:type] == 'NONE'
+    return "Header type must be one of #{ALLOWED_HEADER_TYPES.join(', ')}" unless ALLOWED_HEADER_TYPES.include?(header[:type])
+
+    header[:type] == 'TEXT' ? header_text_error(header) : header_media_error(header)
+  end
+
+  def header_text_error(header)
+    text = header[:text].to_s
+    return 'Header text is required' if text.blank?
+    return "Header text must be #{MAX_HEADER_TEXT_LENGTH} characters or fewer" if text.length > MAX_HEADER_TEXT_LENGTH
+  end
+
+  def header_media_error(header)
+    'Header media is required — upload a file first' if header[:handle].blank?
+  end
 
   def name_error
     name = @params[:name].to_s

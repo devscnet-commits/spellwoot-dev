@@ -36,6 +36,14 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     render_template_delete_result(result)
   end
 
+  def media_upload
+    file = params[:file]
+    return render json: { error: 'File is required' }, status: :unprocessable_entity if file.blank?
+
+    result = Whatsapp::MediaUploadService.new(@inbox.channel).upload(file)
+    render_media_upload_result(result)
+  end
+
   private
 
   def fetch_inbox
@@ -53,6 +61,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   def extract_template_params
     params.require(:template).permit(
       :name, :category, :language, :body, :footer,
+      header: [:type, :text, :handle],
       body_sample_values: [],
       buttons: [:type, :text, :url, :phone_number, :example]
     ).to_h.symbolize_keys
@@ -61,6 +70,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   def extract_update_params
     params.require(:template).permit(
       :category, :body, :footer,
+      header: [:type, :text, :handle],
       body_sample_values: [],
       buttons: [:type, :text, :url, :phone_number, :example]
     ).to_h.symbolize_keys
@@ -107,6 +117,14 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
       head :no_content
     else
       render_service_error(result)
+    end
+  end
+
+  def render_media_upload_result(result)
+    if result[:success]
+      render json: { handle: result[:handle] }
+    else
+      render json: { error: result[:error] }, status: :unprocessable_entity
     end
   end
 

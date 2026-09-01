@@ -66,6 +66,24 @@
           "LABEL": "Language",
           "PLACEHOLDER": "Select a language"
         },
+        "HEADER": {
+          "TITLE": "Header (optional)",
+          "TYPE_LABEL": "Header type",
+          "TYPES": {
+            "NONE": "None",
+            "TEXT": "Text",
+            "IMAGE": "Image",
+            "VIDEO": "Video",
+            "DOCUMENT": "Document"
+          },
+          "TEXT_LABEL": "Header text",
+          "TEXT_PLACEHOLDER": "Short header text",
+          "UPLOAD_LABEL": "Upload file",
+          "REPLACE_LABEL": "Replace file",
+          "UPLOADING": "Uploading...",
+          "UPLOADED": "Uploaded: {name}",
+          "UPLOAD_ERROR": "Could not upload the file."
+        },
         "BODY": {
           "LABEL": "Body",
           "PLACEHOLDER": "Write your message. Use {{1}}, {{2}}... to add variables.",
