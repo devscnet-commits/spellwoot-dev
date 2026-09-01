@@ -91,7 +91,8 @@
         "BODY": {
           "LABEL": "Corpo",
           "PLACEHOLDER": "Escreva sua mensagem. Use {{1}}, {{2}}... para adicionar variáveis.",
-          "ADD_VARIABLE": "Adicionar variável"
+          "ADD_VARIABLE": "Adicionar variável",
+          "AUTH_HINT": "O conteúdo do corpo é definido pela Meta para modelos de Autenticação e não pode ser editado. Apenas o valor de exemplo do código é personalizável."
         },
         "VARIABLES": {
           "TITLE": "Valores de exemplo das variáveis",
