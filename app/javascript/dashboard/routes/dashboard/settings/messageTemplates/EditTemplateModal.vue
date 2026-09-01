@@ -8,6 +8,7 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import TemplateHeaderField from './TemplateHeaderField.vue';
 
 const props = defineProps({
   inboxId: { type: Number, required: true },
@@ -37,6 +38,25 @@ const normalizeButton = button => ({
   example: buttonExample(button),
 });
 
+const normalizeHeader = component => {
+  if (!component) return { type: 'NONE', text: '', handle: '', fileName: '' };
+  if (component.format === 'TEXT') {
+    return {
+      type: 'TEXT',
+      text: component.text || '',
+      handle: '',
+      fileName: '',
+    };
+  }
+  return {
+    type: component.format,
+    text: '',
+    handle: component.example?.header_handle?.[0] || '',
+    fileName: '',
+  };
+};
+
+const headerComponent = findComponent('HEADER');
 const bodyComponent = findComponent('BODY');
 const footerComponent = findComponent('FOOTER');
 const buttonsComponent = findComponent('BUTTONS');
@@ -45,6 +65,7 @@ const isSubmitting = ref(false);
 const submitError = ref('');
 
 const form = reactive({
+  header: normalizeHeader(headerComponent),
   body: bodyComponent?.text || '',
   footer: footerComponent?.text || '',
   buttons: (buttonsComponent?.buttons || []).map(normalizeButton),
@@ -87,6 +108,14 @@ const removeButton = index => {
 
 const buildTemplatePayload = () => ({
   category: props.template.category,
+  header:
+    form.header.type === 'NONE'
+      ? undefined
+      : {
+          type: form.header.type,
+          text: form.header.type === 'TEXT' ? form.header.text : undefined,
+          handle: form.header.type !== 'TEXT' ? form.header.handle : undefined,
+        },
   body: form.body,
   footer: form.footer || undefined,
   body_sample_values: detectedVariables.value.map(
@@ -138,6 +167,8 @@ const submit = async () => {
         {{ $t('MESSAGE_TEMPLATES_MGMT.EDIT.DESCRIPTION') }}
       </p>
     </div>
+
+    <TemplateHeaderField v-model="form.header" :inbox-id="inboxId" />
 
     <TextArea
       v-model="form.body"

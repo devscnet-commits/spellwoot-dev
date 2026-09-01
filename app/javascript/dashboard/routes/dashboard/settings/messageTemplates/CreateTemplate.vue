@@ -11,6 +11,7 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import TemplateHeaderField from './TemplateHeaderField.vue';
 
 const MAX_BUTTONS = 10;
 const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
@@ -39,6 +40,7 @@ const form = reactive({
   category: 'MARKETING',
   name: '',
   language: 'pt_BR',
+  header: { type: 'NONE', text: '', handle: '', fileName: '' },
   body: '',
   footer: '',
   buttons: [],
@@ -115,6 +117,14 @@ const buildTemplatePayload = () => ({
   name: form.name,
   category: form.category,
   language: form.language,
+  header:
+    form.header.type === 'NONE'
+      ? undefined
+      : {
+          type: form.header.type,
+          text: form.header.type === 'TEXT' ? form.header.text : undefined,
+          handle: form.header.type !== 'TEXT' ? form.header.handle : undefined,
+        },
   body: form.body,
   footer: form.footer || undefined,
   body_sample_values: detectedVariables.value.map(
@@ -233,6 +243,8 @@ const submitTemplate = async () => {
             "
           />
         </div>
+
+        <TemplateHeaderField v-model="form.header" :inbox-id="inboxId" />
 
         <TextArea
           v-model="form.body"

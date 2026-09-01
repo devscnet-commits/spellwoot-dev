@@ -385,6 +385,10 @@ export const actions = {
   deleteMessageTemplate: async (_, { inboxId, templateName }) => {
     await InboxesAPI.deleteMessageTemplate(inboxId, templateName);
   },
+  uploadTemplateMedia: async (_, { inboxId, file }) => {
+    const response = await InboxesAPI.uploadTemplateMedia(inboxId, file);
+    return response.data;
+  },
   resetSecret: async ({ commit }, inboxId) => {
     try {
       const response = await InboxesAPI.resetSecret(inboxId);

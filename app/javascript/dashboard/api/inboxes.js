@@ -100,6 +100,16 @@ class Inboxes extends CacheEnabledApiClient {
       `${this.url}/${inboxId}/message_templates/${templateName}`
     );
   }
+
+  uploadTemplateMedia(inboxId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axios.post(
+      `${this.url}/${inboxId}/message_templates/media_upload`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  }
 }
 
 export default new Inboxes();
