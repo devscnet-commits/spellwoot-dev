@@ -1,5 +1,7 @@
 <script>
 import SnackbarContainer from './components/SnackBar/Container.vue';
+import { LocalStorage } from 'shared/helpers/localStorage';
+import { LOCAL_STORAGE_KEYS } from 'dashboard/constants/localStorage';
 
 export default {
   components: { SnackbarContainer },
@@ -12,26 +14,28 @@ export default {
     this.setLocale(window.chatwootConfig.selectedLocale);
   },
   methods: {
+    isDarkMode(isOSOnDarkMode) {
+      const selectedColorScheme =
+        LocalStorage.get(LOCAL_STORAGE_KEYS.COLOR_SCHEME) || 'auto';
+      return (
+        (selectedColorScheme === 'auto' && isOSOnDarkMode) ||
+        selectedColorScheme === 'dark'
+      );
+    },
     setColorTheme() {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        this.theme = 'dark';
-        document.documentElement.classList.add('dark');
-      } else {
-        this.theme = 'light';
-        document.documentElement.classList.remove('dark');
-      }
+      const isDark = this.isDarkMode(
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+      );
+      this.theme = isDark ? 'dark' : 'light';
+      document.documentElement.classList.toggle('dark', isDark);
     },
     listenToThemeChanges() {
       const mql = window.matchMedia('(prefers-color-scheme: dark)');
 
       mql.onchange = e => {
-        if (e.matches) {
-          this.theme = 'dark';
-          document.documentElement.classList.add('dark');
-        } else {
-          this.theme = 'light';
-          document.documentElement.classList.remove('dark');
-        }
+        const isDark = this.isDarkMode(e.matches);
+        this.theme = isDark ? 'dark' : 'light';
+        document.documentElement.classList.toggle('dark', isDark);
       };
     },
     setLocale(locale) {
