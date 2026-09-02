@@ -118,7 +118,14 @@
           "LABEL": "Corpo",
           "PLACEHOLDER": "Escreva sua mensagem. Use {{1}}, {{2}}... para adicionar variáveis.",
           "ADD_VARIABLE": "Adicionar variável",
-          "AUTH_HINT": "O conteúdo do corpo é definido pela Meta para modelos de Autenticação e não pode ser editado. Apenas o valor de exemplo do código é personalizável."
+          "AUTH_HINT": "O conteúdo do corpo é definido pela Meta para modelos de Autenticação e não pode ser editado. Apenas o valor de exemplo do código é personalizável.",
+          "TOOLBAR": {
+            "BOLD": "Negrito",
+            "ITALIC": "Itálico",
+            "STRIKETHROUGH": "Riscado",
+            "CODE": "Monoespaçado",
+            "EMOJI": "Emoji"
+          }
         },
         "VARIABLES": {
           "TITLE": "Valores de exemplo das variáveis",
@@ -152,6 +159,13 @@
             "FLOW_ID_HINT": "ID do Flow já publicado no WhatsApp Manager.",
             "NAVIGATE_SCREEN": "Tela inicial (opcional)"
           }
+        },
+        "PREVIEW": {
+          "TITLE": "Prévia em tempo real",
+          "BUSINESS_NAME": "Sua Empresa",
+          "MEDIA_PLACEHOLDER": "Arquivo de mídia",
+          "BODY_PLACEHOLDER": "Escreva o corpo da mensagem para ver a prévia.",
+          "BUTTON_PLACEHOLDER": "Botão"
         }
       },
       "SUCCESS_MESSAGE": "Modelo enviado para aprovação da Meta.",

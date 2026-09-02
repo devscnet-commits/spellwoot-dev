@@ -9,6 +9,8 @@ import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
+import TemplateBodyField from './TemplateBodyField.vue';
+import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
 
 const props = defineProps({
   inboxId: { type: Number, required: true },
@@ -180,164 +182,158 @@ const submit = async () => {
       </p>
     </div>
 
-    <TemplateHeaderField
-      v-model="form.header"
-      :inbox-id="inboxId"
-      :text-only="isCallPermissionRequest"
-    />
+    <div class="flex flex-col items-start gap-6 lg:flex-row">
+      <div class="w-full space-y-4 lg:max-w-2xl">
+        <TemplateHeaderField
+          v-model="form.header"
+          :inbox-id="inboxId"
+          :text-only="isCallPermissionRequest"
+        />
 
-    <TextArea
-      v-model="form.body"
-      :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.LABEL')"
-      :placeholder="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.PLACEHOLDER')"
-      :max-length="1024"
-      show-character-count
-    />
+        <TemplateBodyField v-model="form.body" v-model:samples="bodySamples" />
 
-    <div v-if="detectedVariables.length" class="space-y-2">
-      <h3 class="font-semibold text-n-slate-12">
-        {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLES.TITLE') }}
-      </h3>
-      <p class="text-body-main text-n-slate-11">
-        {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLES.DESCRIPTION') }}
-      </p>
-      <Input
-        v-for="number in detectedVariables"
-        :key="number"
-        v-model="bodySamples[number]"
-        :label="`{{${number}}}`"
-        :placeholder="
-          $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLES.PLACEHOLDER', {
-            variable: number,
-          })
-        "
-      />
-    </div>
+        <TextArea
+          v-model="form.footer"
+          :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
+          :placeholder="
+            $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
+          "
+          :max-length="60"
+          show-character-count
+        />
 
-    <TextArea
-      v-model="form.footer"
-      :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
-      :placeholder="
-        $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
-      "
-      :max-length="60"
-      show-character-count
-    />
+        <div v-if="!isCallPermissionRequest" class="space-y-3">
+          <h3 class="font-semibold text-n-slate-12">
+            {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
+          </h3>
 
-    <div v-if="!isCallPermissionRequest" class="space-y-3">
-      <h3 class="font-semibold text-n-slate-12">
-        {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
-      </h3>
+          <div
+            v-for="(button, index) in form.buttons"
+            :key="index"
+            class="p-3 rounded-lg border border-n-weak space-y-2"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-body-main font-medium text-n-slate-12">
+                {{ buttonTypeLabels[button.type] }}
+              </span>
+              <Button
+                icon="i-lucide-trash-2"
+                variant="ghost"
+                color="ruby"
+                size="xs"
+                :label="
+                  $t(
+                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.REMOVE_BUTTON'
+                  )
+                "
+                @click="removeButton(index)"
+              />
+            </div>
 
-      <div
-        v-for="(button, index) in form.buttons"
-        :key="index"
-        class="p-3 rounded-lg border border-n-weak space-y-2"
-      >
-        <div class="flex items-center justify-between">
-          <span class="text-body-main font-medium text-n-slate-12">
-            {{ buttonTypeLabels[button.type] }}
-          </span>
-          <Button
-            icon="i-lucide-trash-2"
-            variant="ghost"
-            color="ruby"
-            size="xs"
-            :label="
-              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.REMOVE_BUTTON')
+            <Input
+              v-model="button.text"
+              :label="
+                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.TEXT')
+              "
+            />
+            <Input
+              v-if="button.type === 'URL'"
+              v-model="button.url"
+              :label="
+                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL')
+              "
+            />
+            <Input
+              v-if="button.type === 'PHONE_NUMBER'"
+              v-model="button.phone_number"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.PHONE_NUMBER'
+                )
+              "
+            />
+            <Input
+              v-if="button.type === 'COPY_CODE'"
+              v-model="button.example"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
+                )
+              "
+            />
+            <Input
+              v-if="button.type === 'FLOW'"
+              v-model="button.flow_id"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID'
+                )
+              "
+              :message="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
+                )
+              "
+            />
+            <Input
+              v-if="button.type === 'FLOW'"
+              v-model="button.navigate_screen"
+              :label="
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
+                )
+              "
+            />
+          </div>
+
+          <p
+            v-if="form.buttons.length >= MAX_BUTTONS"
+            class="text-body-main text-n-slate-11"
+          >
+            {{
+              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.MAX_REACHED', {
+                count: MAX_BUTTONS,
+              })
+            }}
+          </p>
+          <ComboBox
+            v-else
+            :options="buttonTypeOptions"
+            :placeholder="
+              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.ADD_BUTTON')
             "
-            @click="removeButton(index)"
+            @update:model-value="addButton"
           />
         </div>
 
-        <Input
-          v-model="button.text"
-          :label="
-            $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.TEXT')
-          "
-        />
-        <Input
-          v-if="button.type === 'URL'"
-          v-model="button.url"
-          :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL')"
-        />
-        <Input
-          v-if="button.type === 'PHONE_NUMBER'"
-          v-model="button.phone_number"
-          :label="
-            $t(
-              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.PHONE_NUMBER'
-            )
-          "
-        />
-        <Input
-          v-if="button.type === 'COPY_CODE'"
-          v-model="button.example"
-          :label="
-            $t(
-              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
-            )
-          "
-        />
-        <Input
-          v-if="button.type === 'FLOW'"
-          v-model="button.flow_id"
-          :label="
-            $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID')
-          "
-          :message="
-            $t(
-              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
-            )
-          "
-        />
-        <Input
-          v-if="button.type === 'FLOW'"
-          v-model="button.navigate_screen"
-          :label="
-            $t(
-              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
-            )
-          "
-        />
+        <p v-if="submitError" class="text-body-main text-n-ruby-9">
+          {{ submitError }}
+        </p>
+
+        <div class="flex items-center gap-3 justify-end">
+          <Button
+            :label="$t('MESSAGE_TEMPLATES_MGMT.EDIT.CANCEL_BUTTON')"
+            variant="outline"
+            color="slate"
+            @click="emit('close')"
+          />
+          <Button
+            :label="$t('MESSAGE_TEMPLATES_MGMT.EDIT.SUBMIT_BUTTON')"
+            :is-loading="isSubmitting"
+            @click="submit"
+          />
+        </div>
       </div>
 
-      <p
-        v-if="form.buttons.length >= MAX_BUTTONS"
-        class="text-body-main text-n-slate-11"
-      >
-        {{
-          $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.MAX_REACHED', {
-            count: MAX_BUTTONS,
-          })
-        }}
-      </p>
-      <ComboBox
-        v-else
-        :options="buttonTypeOptions"
-        :placeholder="
-          $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.ADD_BUTTON')
-        "
-        @update:model-value="addButton"
-      />
-    </div>
-
-    <p v-if="submitError" class="text-body-main text-n-ruby-9">
-      {{ submitError }}
-    </p>
-
-    <div class="flex items-center gap-3 justify-end">
-      <Button
-        :label="$t('MESSAGE_TEMPLATES_MGMT.EDIT.CANCEL_BUTTON')"
-        variant="outline"
-        color="slate"
-        @click="emit('close')"
-      />
-      <Button
-        :label="$t('MESSAGE_TEMPLATES_MGMT.EDIT.SUBMIT_BUTTON')"
-        :is-loading="isSubmitting"
-        @click="submit"
-      />
+      <div class="sticky hidden w-full top-4 lg:block lg:max-w-sm">
+        <TemplateWhatsAppPreview
+          :header="form.header"
+          :body="form.body"
+          :footer="form.footer"
+          :buttons="isCallPermissionRequest ? [] : form.buttons"
+          :samples="bodySamples"
+        />
+      </div>
     </div>
   </div>
 </template>
