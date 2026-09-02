@@ -5,7 +5,18 @@ class AutoAssignment::AgentAssignmentService
   pattr_initialize [:conversation!, :allowed_agent_ids!]
 
   def find_assignee
-    round_robin_manage_service.available_agent(allowed_agent_ids: allowed_online_agent_ids)
+    allowed_ids = allowed_online_agent_ids
+    assignee = round_robin_manage_service.available_agent(allowed_agent_ids: allowed_ids)
+
+    AgentAssignmentLog.record!(
+      inbox: conversation.inbox,
+      conversation: conversation,
+      eligible_agent_ids: allowed_ids.map(&:to_i),
+      available_agent_ids: allowed_ids.map(&:to_i),
+      assigned_agent_id: assignee&.id
+    )
+
+    assignee
   end
 
   def perform
