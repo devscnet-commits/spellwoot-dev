@@ -163,6 +163,8 @@
         "PREVIEW": {
           "TITLE": "Prévia em tempo real",
           "BUSINESS_NAME": "Sua Empresa",
+          "BUSINESS_SUBTITLE": "Conta comercial oficial",
+          "WHATSAPP_BADGE": "WhatsApp",
           "MEDIA_PLACEHOLDER": "Arquivo de mídia",
           "BODY_PLACEHOLDER": "Escreva o corpo da mensagem para ver a prévia.",
           "BUTTON_PLACEHOLDER": "Botão"
