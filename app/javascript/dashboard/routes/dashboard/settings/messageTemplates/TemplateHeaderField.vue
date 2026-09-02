@@ -80,9 +80,9 @@ const onFileSelected = async event => {
       fileName: file.name,
     };
   } catch (error) {
-    uploadError.value = t(
-      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.UPLOAD_ERROR'
-    );
+    uploadError.value =
+      error?.response?.data?.error ||
+      t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.UPLOAD_ERROR');
     useAlert(uploadError.value);
   } finally {
     isUploading.value = false;
