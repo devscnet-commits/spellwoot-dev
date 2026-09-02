@@ -55,6 +55,13 @@ periodic_assignment_job:
   class: 'AutoAssignment::PeriodicAssignmentJob'
   queue: scheduled_jobs
 
+# executed At every minute..
+# snapshots each account's agent presence (OnlineStatusTracker) for later online-time comparisons
+agent_presence_snapshot_job:
+  cron: '*/1 * * * *'
+  class: 'AgentPresenceSnapshotJob'
+  queue: scheduled_jobs
+
 # executed daily at 2230 UTC
 # removes old notifications (>1 month) and trims to 300 per user
 remove_old_notification_job:

@@ -73,13 +73,25 @@ class AutoAssignment::AssignmentService
   end
 
   def find_available_agent(conversation = nil)
-    agents = filter_agents_by_team(inbox.available_agents, conversation)
-    return nil if agents.nil?
+    eligible_agents = filter_agents_by_team(inbox.available_agents, conversation)
+    return nil if eligible_agents.nil?
 
-    agents = filter_agents_by_rate_limit(agents)
-    return nil if agents.empty?
+    available_agents = filter_agents_by_rate_limit(eligible_agents)
+    agent = available_agents.empty? ? nil : round_robin_selector.select_agent(available_agents)
 
-    round_robin_selector.select_agent(agents)
+    log_assignment_decision(conversation, eligible_agents, available_agents, agent)
+
+    agent
+  end
+
+  def log_assignment_decision(conversation, eligible_agents, available_agents, agent)
+    AgentAssignmentLog.record!(
+      inbox: inbox,
+      conversation: conversation,
+      eligible_agent_ids: eligible_agents.map(&:user_id),
+      available_agent_ids: available_agents.map(&:user_id),
+      assigned_agent_id: agent&.id
+    )
   end
 
   def filter_agents_by_team(agents, conversation)

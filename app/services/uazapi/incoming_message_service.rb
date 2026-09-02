@@ -22,6 +22,16 @@ class Uazapi::IncomingMessageService
 
     return unless message_data.present?
 
+    # WhatsApp group JIDs end in "@g.us" (vs a plain phone number for a 1:1 chat). Without
+    # this, a group message creates a real Contact/Conversation for the group and flows
+    # straight into auto-assignment — inflating an agent's lead count with something that
+    # was never a customer lead. Groups have no equivalent 1:1 customer to route to, so we
+    # drop them here rather than try to represent them as a contact.
+    if group_message?(message_data)
+      Rails.logger.info "[UAZAPI] Skipping group message from=#{message_data[:from]}"
+      return
+    end
+
     # A genuine message always has text or media; connection/status payloads have neither —
     # without this, they materialize a ghost contact and an empty conversation.
     if message_data[:body].blank? && message_data[:media_url].blank?
@@ -71,6 +81,10 @@ class Uazapi::IncomingMessageService
     return false if type.blank?
 
     NON_MESSAGE_EVENTS.any? { |non_message| type.include?(non_message) }
+  end
+
+  def group_message?(message_data)
+    message_data[:from].to_s.end_with?('@g.us')
   end
 
   def extract_message_data(params)
