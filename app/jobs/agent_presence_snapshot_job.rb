@@ -22,6 +22,8 @@ class AgentPresenceSnapshotJob < ApplicationJob
       { account_id: account.id, user_id: user_id.to_i, status: status, recorded_at: recorded_at }
     end
 
+    # rubocop:disable Rails/SkipsModelValidations
     AgentPresenceSnapshot.insert_all(rows)
+    # rubocop:enable Rails/SkipsModelValidations
   end
 end
