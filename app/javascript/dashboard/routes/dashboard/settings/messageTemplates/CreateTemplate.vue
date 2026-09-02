@@ -46,6 +46,10 @@ const SELECTABLE_MARKETING_SUBTYPES = [
   'ORDER_DETAILS',
   'CALL_PERMISSION_REQUEST',
 ];
+// Meta only offers multiple template structures under Marketing — Utility and Authentication
+// templates always use the standard header/body/footer/button layout, so their "type" section
+// just shows Padrão, already selected, for visual consistency with the Marketing tab.
+const SINGLE_STANDARD_SUBTYPE = ['STANDARD'];
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -139,13 +143,27 @@ const subtypeDescriptions = computed(() => ({
   ),
 }));
 
+const categorySubtypeIds = computed(() =>
+  isMarketing.value ? MARKETING_SUBTYPES : SINGLE_STANDARD_SUBTYPE
+);
+
 const subtypes = computed(() =>
-  MARKETING_SUBTYPES.map(id => ({
+  categorySubtypeIds.value.map(id => ({
     id,
     label: subtypeLabels.value[id],
     description: subtypeDescriptions.value[id],
     comingSoon: !SELECTABLE_MARKETING_SUBTYPES.includes(id),
   }))
+);
+
+const currentCategoryLabel = computed(
+  () => categories.value.find(category => category.id === form.category)?.label
+);
+
+const subtypesSectionTitle = computed(() =>
+  t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.TITLE', {
+    category: currentCategoryLabel.value,
+  })
 );
 
 const buttonTypeLabels = computed(() => ({
@@ -397,9 +415,9 @@ const submitTemplate = async () => {
           </div>
         </Banner>
 
-        <div v-if="isMarketing" class="space-y-2">
+        <div class="space-y-2">
           <h3 class="font-semibold text-n-slate-12">
-            {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.TITLE') }}
+            {{ subtypesSectionTitle }}
           </h3>
           <p class="text-body-main text-n-slate-11">
             {{
