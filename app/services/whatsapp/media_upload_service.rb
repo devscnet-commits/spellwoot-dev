@@ -14,19 +14,24 @@ class Whatsapp::MediaUploadService
   def upload(file)
     return { success: false, error: "Unsupported file type: #{file.content_type}" } unless ALLOWED_FILE_TYPES.include?(file.content_type)
 
-    session_id = start_upload_session(file)
-    return { success: false, error: 'Could not start upload session with Meta' } if session_id.blank?
+    session_response = start_upload_session(file)
+    return upload_failure('Could not start upload session with Meta', session_response) unless session_response.success?
 
-    handle = upload_file_bytes(session_id, file)
-    return { success: false, error: 'Could not upload file to Meta' } if handle.blank?
+    upload_response = upload_file_bytes(session_response['id'], file)
+    return upload_failure('Could not upload file to Meta', upload_response) unless upload_response.success?
 
-    { success: true, handle: handle }
+    { success: true, handle: upload_response['h'] }
   end
 
   private
 
+  def upload_failure(error, response)
+    Rails.logger.error "[WHATSAPP] #{error}: #{response.code} - #{response.body}"
+    { success: false, error: error, response_body: response.body }
+  end
+
   def start_upload_session(file)
-    response = HTTParty.post(
+    HTTParty.post(
       "#{api_base_path}/#{api_version}/#{app_id}/uploads",
       query: {
         file_name: file.original_filename,
@@ -35,28 +40,14 @@ class Whatsapp::MediaUploadService
         access_token: access_token
       }
     )
-
-    unless response.success?
-      Rails.logger.error "[WHATSAPP] Media upload session start failed: #{response.code} - #{response.body}"
-      return nil
-    end
-
-    response['id']
   end
 
   def upload_file_bytes(session_id, file)
-    response = HTTParty.post(
+    HTTParty.post(
       "#{api_base_path}/#{api_version}/#{session_id}",
       headers: { 'Authorization' => "OAuth #{access_token}", 'file_offset' => '0' },
       body: file.read
     )
-
-    unless response.success?
-      Rails.logger.error "[WHATSAPP] Media upload failed: #{response.code} - #{response.body}"
-      return nil
-    end
-
-    response['h']
   end
 
   def app_id

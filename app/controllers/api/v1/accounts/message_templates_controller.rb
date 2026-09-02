@@ -124,7 +124,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     if result[:success]
       render json: { handle: result[:handle] }
     else
-      render json: { error: result[:error] }, status: :unprocessable_entity
+      render_service_error(result)
     end
   end
 

@@ -16,6 +16,11 @@ const props = defineProps({
 
 const { t } = useI18n();
 
+const currentTime = new Date().toLocaleTimeString('pt-BR', {
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 const HEADER_MEDIA_ICONS = {
   IMAGE: 'i-lucide-image',
   VIDEO: 'i-lucide-video',
@@ -45,13 +50,49 @@ const BUTTON_ICONS = {
     <h3 class="font-semibold text-n-slate-12">
       {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.TITLE') }}
     </h3>
-    <div class="overflow-hidden border rounded-2xl border-n-weak bg-n-solid-1">
+    <div
+      class="overflow-hidden border rounded-[28px] border-n-weak bg-n-solid-1"
+    >
       <div
-        class="flex items-center gap-2 px-4 py-3 text-white bg-n-teal-11 dark:bg-n-teal-9"
+        class="flex items-center justify-between px-4 pt-2 pb-1 text-[10px] font-medium text-n-slate-12"
       >
-        <span class="i-lucide-message-circle flex-shrink-0 size-5" />
-        <span class="text-sm font-medium truncate">
-          {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.BUSINESS_NAME') }}
+        <span>{{ currentTime }}</span>
+        <div class="flex items-center gap-1">
+          <span class="i-lucide-signal-high size-3" />
+          <span class="i-lucide-wifi size-3" />
+          <span class="i-lucide-battery-full size-3" />
+        </div>
+      </div>
+
+      <div
+        class="flex items-center gap-2 px-4 py-2.5 text-white bg-n-teal-11 dark:bg-n-teal-9"
+      >
+        <span
+          class="flex items-center justify-center flex-shrink-0 rounded-full bg-white/20 size-8"
+        >
+          <span class="i-lucide-store size-4" />
+        </span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1">
+            <span class="text-sm font-medium truncate">
+              {{
+                t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.BUSINESS_NAME')
+              }}
+            </span>
+            <span class="i-lucide-badge-check flex-shrink-0 size-3.5" />
+          </div>
+          <p class="text-[11px] text-white/80 truncate">
+            {{
+              t(
+                'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.BUSINESS_SUBTITLE'
+              )
+            }}
+          </p>
+        </div>
+        <span
+          class="flex-shrink-0 px-2 py-0.5 text-[10px] border rounded-full border-white/30"
+        >
+          {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.WHATSAPP_BADGE') }}
         </span>
       </div>
 
@@ -94,6 +135,13 @@ const BUTTON_ICONS = {
 
           <div v-if="footer" class="text-xs text-n-slate-10">
             {{ footer }}
+          </div>
+
+          <div
+            class="flex items-center justify-end gap-1 text-[10px] text-n-slate-10"
+          >
+            <span>{{ currentTime }}</span>
+            <span class="i-lucide-check-check size-3 text-n-blue-9" />
           </div>
         </div>
 
