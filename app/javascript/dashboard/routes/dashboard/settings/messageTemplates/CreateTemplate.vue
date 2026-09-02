@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
-import { useStore } from 'dashboard/composables/store';
+import { useStore, useStoreGetters } from 'dashboard/composables/store';
 
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
@@ -17,6 +17,7 @@ import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 import TemplateBodyField from './TemplateBodyField.vue';
 import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
+import TemplateSubmitConfirmModal from './TemplateSubmitConfirmModal.vue';
 
 const CATEGORY_ICONS = {
   MARKETING: 'i-lucide-megaphone',
@@ -64,6 +65,7 @@ const LANGUAGES = [
 ];
 
 const store = useStore();
+const getters = useStoreGetters();
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
@@ -73,6 +75,7 @@ const inboxId = Number(route.query.inbox_id);
 const currentStep = ref(1);
 const isSubmitting = ref(false);
 const submitError = ref('');
+const showConfirmModal = ref(false);
 
 const form = reactive({
   category: 'MARKETING',
@@ -162,6 +165,12 @@ const subtypes = computed(() =>
 const currentCategoryLabel = computed(
   () => categories.value.find(category => category.id === form.category)?.label
 );
+
+const currentLanguageLabel = computed(
+  () => LANGUAGES.find(language => language.value === form.language)?.label
+);
+
+const currentInbox = computed(() => getters['inboxes/getInbox'].value(inboxId));
 
 const subtypesSectionTitle = computed(() =>
   t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.TITLE', {
@@ -673,8 +682,7 @@ const submitTemplate = async () => {
                 :label="
                   $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.SUBMIT_BUTTON')
                 "
-                :is-loading="isSubmitting"
-                @click="submitTemplate"
+                @click="showConfirmModal = true"
               />
             </div>
           </div>
@@ -691,5 +699,26 @@ const submitTemplate = async () => {
         </div>
       </div>
     </template>
+
+    <woot-modal
+      v-model:show="showConfirmModal"
+      :on-close="() => (showConfirmModal = false)"
+    >
+      <TemplateSubmitConfirmModal
+        :inbox-name="currentInbox?.name"
+        :inbox-phone-number="currentInbox?.phone_number"
+        :name="form.name"
+        :category-label="currentCategoryLabel"
+        :language-label="currentLanguageLabel"
+        :body="form.body"
+        :footer="isAuthentication ? '' : form.footer"
+        :samples="bodySamples"
+        :buttons="isCallPermissionRequest ? [] : form.buttons"
+        :button-type-labels="buttonTypeLabels"
+        :is-submitting="isSubmitting"
+        @cancel="showConfirmModal = false"
+        @confirm="submitTemplate"
+      />
+    </woot-modal>
   </SettingsLayout>
 </template>
