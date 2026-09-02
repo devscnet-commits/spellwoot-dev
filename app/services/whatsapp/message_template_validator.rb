@@ -53,8 +53,8 @@ class Whatsapp::MessageTemplateValidator
 
   def call_permission_request_error
     return unless call_permission_request?
-    return "A call permission request template's header must be TEXT or absent" unless CALL_PERMISSION_REQUEST_HEADER_TYPES.include?(header_type)
-    return "A call permission request template can't have buttons" if @params[:buttons].present?
+    return 'O cabeçalho de um modelo de solicitação de permissão de ligação deve ser Texto ou estar ausente' unless CALL_PERMISSION_REQUEST_HEADER_TYPES.include?(header_type)
+    return 'Um modelo de solicitação de permissão de ligação não pode ter botões' if @params[:buttons].present?
   end
 
   def header_type
@@ -64,38 +64,38 @@ class Whatsapp::MessageTemplateValidator
   def header_error
     header = @params[:header]
     return if header.blank? || header[:type].blank? || header[:type] == 'NONE'
-    return "Header type must be one of #{ALLOWED_HEADER_TYPES.join(', ')}" unless ALLOWED_HEADER_TYPES.include?(header[:type])
+    return "O tipo de cabeçalho deve ser um dos seguintes: #{ALLOWED_HEADER_TYPES.join(', ')}" unless ALLOWED_HEADER_TYPES.include?(header[:type])
 
     header[:type] == 'TEXT' ? header_text_error(header) : header_media_error(header)
   end
 
   def header_text_error(header)
     text = header[:text].to_s
-    return 'Header text is required' if text.blank?
-    return "Header text must be #{MAX_HEADER_TEXT_LENGTH} characters or fewer" if text.length > MAX_HEADER_TEXT_LENGTH
+    return 'O texto do cabeçalho é obrigatório' if text.blank?
+    return "O texto do cabeçalho deve ter no máximo #{MAX_HEADER_TEXT_LENGTH} caracteres" if text.length > MAX_HEADER_TEXT_LENGTH
   end
 
   def header_media_error(header)
-    'Header media is required — upload a file first' if header[:handle].blank?
+    'A mídia do cabeçalho é obrigatória — envie um arquivo primeiro' if header[:handle].blank?
   end
 
   def name_error
     name = @params[:name].to_s
-    return 'Name is required' if name.blank?
-    return 'Name must contain only lowercase letters, numbers, and underscores' unless name.match?(NAME_REGEX)
+    return 'O nome é obrigatório' if name.blank?
+    return 'O nome deve conter apenas letras minúsculas, números e underline' unless name.match?(NAME_REGEX)
   end
 
   def category_error
     return if ALLOWED_CATEGORIES.include?(@params[:category])
 
-    "Category must be one of #{ALLOWED_CATEGORIES.join(', ')}"
+    "A categoria deve ser uma das seguintes: #{ALLOWED_CATEGORIES.join(', ')}"
   end
 
   def body_error
     body = @params[:body].to_s
-    return 'Body is required' if body.blank?
-    return "Body must be #{MAX_BODY_LENGTH} characters or fewer" if body.length > MAX_BODY_LENGTH
-    return 'Body cannot start or end with a variable' if dangling_variable?(body)
+    return 'O corpo da mensagem é obrigatório' if body.blank?
+    return "O corpo da mensagem deve ter no máximo #{MAX_BODY_LENGTH} caracteres" if body.length > MAX_BODY_LENGTH
+    return 'O corpo da mensagem não pode começar ou terminar com uma variável' if dangling_variable?(body)
 
     variable_sample_error(body)
   end
@@ -107,22 +107,22 @@ class Whatsapp::MessageTemplateValidator
   def variable_sample_error(body)
     numbers = self.class.body_variable_numbers(body)
     return if numbers.empty?
-    return 'Variables must be sequential starting at {{1}} (e.g. {{1}}, {{2}})' unless numbers == (1..numbers.size).to_a
+    return 'As variáveis devem ser sequenciais a partir de {{1}} (ex: {{1}}, {{2}})' unless numbers == (1..numbers.size).to_a
 
     sample_values = @params[:body_sample_values] || []
-    return "Provide a sample value for each variable (#{numbers.size} expected)" if sample_values.size != numbers.size
-    return 'Sample values cannot be blank' if sample_values.any?(&:blank?)
+    return "Informe um valor de exemplo para cada variável (#{numbers.size} esperado(s))" if sample_values.size != numbers.size
+    return 'Os valores de exemplo não podem ficar em branco' if sample_values.any?(&:blank?)
   end
 
   def footer_error
     footer = @params[:footer]
     return if footer.blank?
-    return "Footer must be #{MAX_FOOTER_LENGTH} characters or fewer" if footer.length > MAX_FOOTER_LENGTH
+    return "O rodapé deve ter no máximo #{MAX_FOOTER_LENGTH} caracteres" if footer.length > MAX_FOOTER_LENGTH
   end
 
   def button_errors
     buttons = @params[:buttons] || []
-    return ["A template can have at most #{MAX_BUTTONS} buttons"] if buttons.size > MAX_BUTTONS
+    return ["Um modelo pode ter no máximo #{MAX_BUTTONS} botões"] if buttons.size > MAX_BUTTONS
 
     error = exclusive_button_error(buttons)
     return [error] if error
@@ -134,16 +134,16 @@ class Whatsapp::MessageTemplateValidator
     exclusive_button = buttons.find { |button| EXCLUSIVE_BUTTON_TYPES.include?(button[:type]) }
     return if exclusive_button.blank?
 
-    "A #{exclusive_button[:type]} button must be the template's only button" if buttons.size > 1
+    "Um botão do tipo #{exclusive_button[:type]} precisa ser o único botão do modelo" if buttons.size > 1
   end
 
   def button_error(button)
     type = button[:type]
-    return "Button type #{type} is not supported" unless ALLOWED_BUTTON_TYPES.include?(type)
+    return "O tipo de botão #{type} não é suportado" unless ALLOWED_BUTTON_TYPES.include?(type)
 
     text = button[:text].to_s
-    return "Button text is required for #{type} buttons" if text.blank?
-    return "Button text must be #{MAX_BUTTON_TEXT_LENGTH} characters or fewer" if text.length > MAX_BUTTON_TEXT_LENGTH
+    return "O texto do botão é obrigatório para botões do tipo #{type}" if text.blank?
+    return "O texto do botão deve ter no máximo #{MAX_BUTTON_TEXT_LENGTH} caracteres" if text.length > MAX_BUTTON_TEXT_LENGTH
 
     button_field_error(button)
   end
@@ -151,18 +151,18 @@ class Whatsapp::MessageTemplateValidator
   def button_field_error(button)
     case button[:type]
     when 'URL'
-      'Button URL is required' if button[:url].blank?
+      'A URL do botão é obrigatória' if button[:url].blank?
     when 'PHONE_NUMBER'
       phone_number_error(button[:phone_number])
     when 'COPY_CODE'
-      'Button example code is required' if button[:example].blank?
+      'O código de exemplo do botão é obrigatório' if button[:example].blank?
     when 'FLOW'
-      'Button flow_id is required' if button[:flow_id].blank?
+      'O ID do Flow do botão é obrigatório' if button[:flow_id].blank?
     end
   end
 
   def phone_number_error(phone_number)
-    return 'Button phone number is required' if phone_number.blank?
-    return "Button phone number must be #{MAX_BUTTON_PHONE_LENGTH} characters or fewer" if phone_number.length > MAX_BUTTON_PHONE_LENGTH
+    return 'O número de telefone do botão é obrigatório' if phone_number.blank?
+    return "O número de telefone do botão deve ter no máximo #{MAX_BUTTON_PHONE_LENGTH} caracteres" if phone_number.length > MAX_BUTTON_PHONE_LENGTH
   end
 end

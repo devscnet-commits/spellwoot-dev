@@ -8,7 +8,7 @@ class Whatsapp::MessageTemplateService
 
   def create_template(params)
     validator = Whatsapp::MessageTemplateValidator.new(params)
-    return { success: false, error: validator.errors.join(', ') } unless validator.valid?
+    return { success: false, error: validator.errors.join('; ') } unless validator.valid?
 
     response = send_template_creation_request(build_request_body(params))
     process_response(response, params)
@@ -29,7 +29,7 @@ class Whatsapp::MessageTemplateService
   # (Meta enforces this itself, we don't duplicate that check here).
   def update_template(template_id, params)
     validator = Whatsapp::MessageTemplateValidator.new(params, require_name: false)
-    return { success: false, error: validator.errors.join(', ') } unless validator.valid?
+    return { success: false, error: validator.errors.join('; ') } unless validator.valid?
 
     response = send_template_update_request(template_id, build_update_body(params))
     process_update_response(response)
