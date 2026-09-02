@@ -170,6 +170,20 @@
           "BUTTON_PLACEHOLDER": "Botão"
         }
       },
+      "CONFIRM": {
+        "TITLE": "Confirmar envio do modelo",
+        "SUBTITLE": "Revise o resumo abaixo antes de submeter o modelo",
+        "DESTINATION_INBOX": "Caixa de entrada de destino",
+        "NAME_LABEL": "Nome do modelo",
+        "CATEGORY_LANGUAGE_LABEL": "Categoria & idioma",
+        "MESSAGE_TEXT_LABEL": "Texto da mensagem",
+        "BUTTONS_LABEL": "Botões ({count})",
+        "BUTTON_URL_DETAIL": "URL: {url}",
+        "BUTTON_PHONE_DETAIL": "Telefone: {phone}",
+        "BUTTON_CODE_DETAIL": "Código: {code}",
+        "BACK_BUTTON": "Continuar editando",
+        "CONFIRM_BUTTON": "Confirmar"
+      },
       "SUCCESS_MESSAGE": "Modelo enviado para aprovação da Meta.",
       "ERROR_MESSAGE": "Não foi possível enviar o modelo."
     },

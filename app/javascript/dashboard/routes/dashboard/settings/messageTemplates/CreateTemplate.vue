@@ -3,12 +3,13 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
-import { useStore } from 'dashboard/composables/store';
+import { useStore, useStoreGetters } from 'dashboard/composables/store';
 
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import Banner from 'dashboard/components-next/banner/Banner.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import CardLayout from 'dashboard/components-next/CardLayout.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
@@ -16,6 +17,7 @@ import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 import TemplateBodyField from './TemplateBodyField.vue';
 import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
+import TemplateSubmitConfirmModal from './TemplateSubmitConfirmModal.vue';
 
 const CATEGORY_ICONS = {
   MARKETING: 'i-lucide-megaphone',
@@ -63,6 +65,7 @@ const LANGUAGES = [
 ];
 
 const store = useStore();
+const getters = useStoreGetters();
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
@@ -72,6 +75,7 @@ const inboxId = Number(route.query.inbox_id);
 const currentStep = ref(1);
 const isSubmitting = ref(false);
 const submitError = ref('');
+const showConfirmModal = ref(false);
 
 const form = reactive({
   category: 'MARKETING',
@@ -161,6 +165,12 @@ const subtypes = computed(() =>
 const currentCategoryLabel = computed(
   () => categories.value.find(category => category.id === form.category)?.label
 );
+
+const currentLanguageLabel = computed(
+  () => LANGUAGES.find(language => language.value === form.language)?.label
+);
+
+const currentInbox = computed(() => getters['inboxes/getInbox'].value(inboxId));
 
 const subtypesSectionTitle = computed(() =>
   t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.TITLE', {
@@ -477,66 +487,72 @@ const submitTemplate = async () => {
 
         <div class="flex flex-col items-start gap-6 lg:flex-row">
           <div class="w-full space-y-6 lg:max-w-2xl">
-            <Input
-              v-model="form.name"
-              :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.LABEL')"
-              :placeholder="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.PLACEHOLDER')
-              "
-              :message="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.HINT')"
-            />
-
-            <div>
-              <label class="text-body-main text-n-slate-11">
-                {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.LABEL') }}
-              </label>
-              <ComboBox
-                v-model="form.language"
-                :options="LANGUAGES"
+            <CardLayout>
+              <Input
+                v-model="form.name"
+                :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.LABEL')"
                 :placeholder="
-                  $t(
-                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.PLACEHOLDER'
-                  )
+                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.PLACEHOLDER')
                 "
+                :message="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.HINT')"
               />
-            </div>
 
-            <TemplateHeaderField
-              v-if="!isAuthentication"
-              v-model="form.header"
-              :inbox-id="inboxId"
-              :text-only="isCallPermissionRequest"
-            />
+              <div>
+                <label class="text-body-main text-n-slate-11">
+                  {{
+                    $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.LABEL')
+                  }}
+                </label>
+                <ComboBox
+                  v-model="form.language"
+                  :options="LANGUAGES"
+                  :placeholder="
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.PLACEHOLDER'
+                    )
+                  "
+                />
+              </div>
+            </CardLayout>
 
-            <TemplateBodyField
-              v-if="!isAuthentication"
-              v-model="form.body"
-              v-model:samples="bodySamples"
-            />
-            <TextArea
-              v-else
-              v-model="form.body"
-              :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.LABEL')"
-              :message="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.AUTH_HINT')
-              "
-              disabled
-              :max-length="1024"
-              show-character-count
-            />
+            <CardLayout>
+              <TemplateHeaderField
+                v-if="!isAuthentication"
+                v-model="form.header"
+                :inbox-id="inboxId"
+                :text-only="isCallPermissionRequest"
+              />
 
-            <TextArea
-              v-if="!isAuthentication"
-              v-model="form.footer"
-              :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
-              :placeholder="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
-              "
-              :max-length="60"
-              show-character-count
-            />
+              <TemplateBodyField
+                v-if="!isAuthentication"
+                v-model="form.body"
+                v-model:samples="bodySamples"
+              />
+              <TextArea
+                v-else
+                v-model="form.body"
+                :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.LABEL')"
+                :message="
+                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.AUTH_HINT')
+                "
+                disabled
+                :max-length="1024"
+                show-character-count
+              />
 
-            <div v-if="!isCallPermissionRequest" class="space-y-3">
+              <TextArea
+                v-if="!isAuthentication"
+                v-model="form.footer"
+                :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
+                :placeholder="
+                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
+                "
+                :max-length="60"
+                show-character-count
+              />
+            </CardLayout>
+
+            <CardLayout v-if="!isCallPermissionRequest">
               <h3 class="font-semibold text-n-slate-12">
                 {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
               </h3>
@@ -649,7 +665,7 @@ const submitTemplate = async () => {
                 "
                 @update:model-value="addButton"
               />
-            </div>
+            </CardLayout>
 
             <p v-if="submitError" class="text-body-main text-n-ruby-9">
               {{ submitError }}
@@ -666,8 +682,7 @@ const submitTemplate = async () => {
                 :label="
                   $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.SUBMIT_BUTTON')
                 "
-                :is-loading="isSubmitting"
-                @click="submitTemplate"
+                @click="showConfirmModal = true"
               />
             </div>
           </div>
@@ -684,5 +699,26 @@ const submitTemplate = async () => {
         </div>
       </div>
     </template>
+
+    <woot-modal
+      v-model:show="showConfirmModal"
+      :on-close="() => (showConfirmModal = false)"
+    >
+      <TemplateSubmitConfirmModal
+        :inbox-name="currentInbox?.name"
+        :inbox-phone-number="currentInbox?.phone_number"
+        :name="form.name"
+        :category-label="currentCategoryLabel"
+        :language-label="currentLanguageLabel"
+        :body="form.body"
+        :footer="isAuthentication ? '' : form.footer"
+        :samples="bodySamples"
+        :buttons="isCallPermissionRequest ? [] : form.buttons"
+        :button-type-labels="buttonTypeLabels"
+        :is-submitting="isSubmitting"
+        @cancel="showConfirmModal = false"
+        @confirm="submitTemplate"
+      />
+    </woot-modal>
   </SettingsLayout>
 </template>

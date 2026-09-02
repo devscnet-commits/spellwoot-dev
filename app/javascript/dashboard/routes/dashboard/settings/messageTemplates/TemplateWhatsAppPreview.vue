@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { renderWhatsAppMarkdown } from './whatsappMarkdown';
+import { BUTTON_ICONS } from './templateButtonIcons';
 
 const props = defineProps({
   header: {
@@ -34,15 +35,6 @@ const isMediaHeader = computed(() =>
 const renderedBody = computed(() =>
   renderWhatsAppMarkdown(props.body, props.samples)
 );
-
-const BUTTON_ICONS = {
-  URL: 'i-lucide-external-link',
-  PHONE_NUMBER: 'i-lucide-phone',
-  COPY_CODE: 'i-lucide-copy',
-  CATALOG: 'i-lucide-shopping-bag',
-  FLOW: 'i-lucide-list',
-  ORDER_DETAILS: 'i-lucide-receipt',
-};
 </script>
 
 <template>

@@ -5,6 +5,7 @@ import { useAlert } from 'dashboard/composables';
 import { useStore } from 'dashboard/composables/store';
 
 import Button from 'dashboard/components-next/button/Button.vue';
+import CardLayout from 'dashboard/components-next/CardLayout.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
@@ -183,26 +184,31 @@ const submit = async () => {
     </div>
 
     <div class="flex flex-col items-start gap-6 lg:flex-row">
-      <div class="w-full space-y-4 lg:max-w-2xl">
-        <TemplateHeaderField
-          v-model="form.header"
-          :inbox-id="inboxId"
-          :text-only="isCallPermissionRequest"
-        />
+      <div class="w-full space-y-6 lg:max-w-2xl">
+        <CardLayout>
+          <TemplateHeaderField
+            v-model="form.header"
+            :inbox-id="inboxId"
+            :text-only="isCallPermissionRequest"
+          />
 
-        <TemplateBodyField v-model="form.body" v-model:samples="bodySamples" />
+          <TemplateBodyField
+            v-model="form.body"
+            v-model:samples="bodySamples"
+          />
 
-        <TextArea
-          v-model="form.footer"
-          :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
-          :placeholder="
-            $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
-          "
-          :max-length="60"
-          show-character-count
-        />
+          <TextArea
+            v-model="form.footer"
+            :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
+            :placeholder="
+              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
+            "
+            :max-length="60"
+            show-character-count
+          />
+        </CardLayout>
 
-        <div v-if="!isCallPermissionRequest" class="space-y-3">
+        <CardLayout v-if="!isCallPermissionRequest">
           <h3 class="font-semibold text-n-slate-12">
             {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
           </h3>
@@ -304,7 +310,7 @@ const submit = async () => {
             "
             @update:model-value="addButton"
           />
-        </div>
+        </CardLayout>
 
         <p v-if="submitError" class="text-body-main text-n-ruby-9">
           {{ submitError }}
