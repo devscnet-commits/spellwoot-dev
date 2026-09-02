@@ -58,7 +58,7 @@
           }
         },
         "SUBTYPES": {
-          "TITLE": "Selecione o tipo para Marketing",
+          "TITLE": "Selecione o tipo para {category}",
           "DESCRIPTION": "O tipo determina os campos disponíveis no conteúdo do modelo.",
           "COMING_SOON": "Em breve",
           "STANDARD": {
