@@ -136,6 +136,11 @@ onMounted(() => {
     textareaRef.value?.focus();
   }
 });
+
+defineExpose({
+  focus: () => textareaRef.value?.focus(),
+  getEl: () => textareaRef.value,
+});
 </script>
 
 <template>
