@@ -9,6 +9,7 @@ import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import Banner from 'dashboard/components-next/banner/Banner.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import CardLayout from 'dashboard/components-next/CardLayout.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
@@ -477,66 +478,72 @@ const submitTemplate = async () => {
 
         <div class="flex flex-col items-start gap-6 lg:flex-row">
           <div class="w-full space-y-6 lg:max-w-2xl">
-            <Input
-              v-model="form.name"
-              :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.LABEL')"
-              :placeholder="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.PLACEHOLDER')
-              "
-              :message="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.HINT')"
-            />
-
-            <div>
-              <label class="text-body-main text-n-slate-11">
-                {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.LABEL') }}
-              </label>
-              <ComboBox
-                v-model="form.language"
-                :options="LANGUAGES"
+            <CardLayout>
+              <Input
+                v-model="form.name"
+                :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.LABEL')"
                 :placeholder="
-                  $t(
-                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.PLACEHOLDER'
-                  )
+                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.PLACEHOLDER')
                 "
+                :message="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.NAME.HINT')"
               />
-            </div>
 
-            <TemplateHeaderField
-              v-if="!isAuthentication"
-              v-model="form.header"
-              :inbox-id="inboxId"
-              :text-only="isCallPermissionRequest"
-            />
+              <div>
+                <label class="text-body-main text-n-slate-11">
+                  {{
+                    $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.LABEL')
+                  }}
+                </label>
+                <ComboBox
+                  v-model="form.language"
+                  :options="LANGUAGES"
+                  :placeholder="
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.LANGUAGE.PLACEHOLDER'
+                    )
+                  "
+                />
+              </div>
+            </CardLayout>
 
-            <TemplateBodyField
-              v-if="!isAuthentication"
-              v-model="form.body"
-              v-model:samples="bodySamples"
-            />
-            <TextArea
-              v-else
-              v-model="form.body"
-              :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.LABEL')"
-              :message="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.AUTH_HINT')
-              "
-              disabled
-              :max-length="1024"
-              show-character-count
-            />
+            <CardLayout>
+              <TemplateHeaderField
+                v-if="!isAuthentication"
+                v-model="form.header"
+                :inbox-id="inboxId"
+                :text-only="isCallPermissionRequest"
+              />
 
-            <TextArea
-              v-if="!isAuthentication"
-              v-model="form.footer"
-              :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
-              :placeholder="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
-              "
-              :max-length="60"
-              show-character-count
-            />
+              <TemplateBodyField
+                v-if="!isAuthentication"
+                v-model="form.body"
+                v-model:samples="bodySamples"
+              />
+              <TextArea
+                v-else
+                v-model="form.body"
+                :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.LABEL')"
+                :message="
+                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.AUTH_HINT')
+                "
+                disabled
+                :max-length="1024"
+                show-character-count
+              />
 
-            <div v-if="!isCallPermissionRequest" class="space-y-3">
+              <TextArea
+                v-if="!isAuthentication"
+                v-model="form.footer"
+                :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.LABEL')"
+                :placeholder="
+                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.FOOTER.PLACEHOLDER')
+                "
+                :max-length="60"
+                show-character-count
+              />
+            </CardLayout>
+
+            <CardLayout v-if="!isCallPermissionRequest">
               <h3 class="font-semibold text-n-slate-12">
                 {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
               </h3>
@@ -649,7 +656,7 @@ const submitTemplate = async () => {
                 "
                 @update:model-value="addButton"
               />
-            </div>
+            </CardLayout>
 
             <p v-if="submitError" class="text-body-main text-n-ruby-9">
               {{ submitError }}
