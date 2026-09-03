@@ -312,6 +312,7 @@ const confirmDeactivation = () => {
         :type="currentAgent.role"
         :email="currentAgent.email"
         :receives-assignments="currentAgent.receives_assignments !== false"
+        :availability-status="currentAgent.availability_status"
         :custom-role-id="currentAgent.custom_role_id"
         @close="hideEditPopup"
       />

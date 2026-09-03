@@ -97,6 +97,10 @@
           "LABEL": "Receives automatic assignments",
           "DESCRIPTION": "When enabled, this agent participates in the automatic assignment queue"
         },
+        "AVAILABILITY": {
+          "LABEL": "Status",
+          "DESCRIPTION": "Manually set this agent's status. Overrides what they set themselves."
+        },
         "SUBMIT": "Edit Agent"
       },
       "BUTTON_TEXT": "Edit",

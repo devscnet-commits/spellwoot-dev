@@ -245,38 +245,40 @@ export default {
       :description="$t('INBOX_MGMT.BUSINESS_HOURS.TOGGLE_HELP')"
     />
 
-    <template v-if="isBusinessHoursEnabled">
-      <!-- Status badge -->
-      <div
-        v-if="inboxStatus && inboxStatus.status !== 'disabled'"
-        class="flex items-center gap-3 rounded-xl px-4 py-3 outline outline-1 -outline-offset-1 outline-n-weak"
-      >
-        <span
-          class="inline-flex items-center gap-1.5 text-label-small font-medium px-2 py-1 rounded-lg"
-          :class="statusColor"
+    <!-- O form (e o botão Salvar) fica sempre montado, mesmo com o toggle desligado -- senão não tem
+         como salvar o desligamento em si (o toggle só muda estado local, quem grava é o submit). -->
+    <form class="flex flex-col gap-4" @submit.prevent="updateInbox">
+      <template v-if="isBusinessHoursEnabled">
+        <!-- Status badge -->
+        <div
+          v-if="inboxStatus && inboxStatus.status !== 'disabled'"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 outline outline-1 -outline-offset-1 outline-n-weak"
         >
-          <span class="size-2 rounded-full bg-current opacity-70" />
-          {{ statusLabel }}
-        </span>
-        <span v-if="statusSubtext" class="text-body-main text-n-slate-11">{{ statusSubtext }}</span>
-      </div>
+          <span
+            class="inline-flex items-center gap-1.5 text-label-small font-medium px-2 py-1 rounded-lg"
+            :class="statusColor"
+          >
+            <span class="size-2 rounded-full bg-current opacity-70" />
+            {{ statusLabel }}
+          </span>
+          <span v-if="statusSubtext" class="text-body-main text-n-slate-11">{{ statusSubtext }}</span>
+        </div>
 
-      <!-- Sub-tabs -->
-      <div class="flex items-center gap-1 border-b border-n-weak">
-        <button
-          v-for="tab in ['hours', 'holidays', 'exceptions', 'messages']"
-          :key="tab"
-          class="px-4 py-2 text-body-main font-medium transition-colors border-b-2 -mb-px"
-          :class="activeTab === tab
-            ? 'border-n-blue-9 text-n-blue-9'
-            : 'border-transparent text-n-slate-10 hover:text-n-slate-12'"
-          @click="activeTab = tab"
-        >
-          {{ $t(`INBOX_MGMT.BUSINESS_HOURS.TABS.${tab.toUpperCase()}`) }}
-        </button>
-      </div>
+        <!-- Sub-tabs -->
+        <div class="flex items-center gap-1 border-b border-n-weak">
+          <button
+            v-for="tab in ['hours', 'holidays', 'exceptions', 'messages']"
+            :key="tab"
+            class="px-4 py-2 text-body-main font-medium transition-colors border-b-2 -mb-px"
+            :class="activeTab === tab
+              ? 'border-n-blue-9 text-n-blue-9'
+              : 'border-transparent text-n-slate-10 hover:text-n-slate-12'"
+            @click="activeTab = tab"
+          >
+            {{ $t(`INBOX_MGMT.BUSINESS_HOURS.TABS.${tab.toUpperCase()}`) }}
+          </button>
+        </div>
 
-      <form class="flex flex-col gap-4" @submit.prevent="updateInbox">
         <!-- Tab: Horário Comercial -->
         <template v-if="activeTab === 'hours'">
           <p class="text-body-main text-n-slate-11 -mt-1">
@@ -368,20 +370,20 @@ export default {
             {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT_WARNING') }}
           </p>
         </div>
+      </template>
 
-        <div class="flex justify-end py-2">
-          <NextButton
-            type="submit"
-            :label="isDirty
-              ? $t('INBOX_MGMT.BUSINESS_HOURS.UPDATE')
-              : $t('INBOX_MGMT.BUSINESS_HOURS.SAVED')"
-            :is-loading="uiFlags.isUpdating"
-            :disabled="hasError
-              || (replicationScope === 'selected' && !selectedInboxIds.length)
-              || (replicationScope === 'this' && !isDirty)"
-          />
-        </div>
-      </form>
-    </template>
+      <div class="flex justify-end py-2">
+        <NextButton
+          type="submit"
+          :label="isDirty
+            ? $t('INBOX_MGMT.BUSINESS_HOURS.UPDATE')
+            : $t('INBOX_MGMT.BUSINESS_HOURS.SAVED')"
+          :is-loading="uiFlags.isUpdating"
+          :disabled="hasError
+            || (replicationScope === 'selected' && !selectedInboxIds.length)
+            || (replicationScope === 'this' && !isDirty)"
+        />
+      </div>
+    </form>
   </div>
 </template>
