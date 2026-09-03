@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
 import { useStore, useStoreGetters } from 'dashboard/composables/store';
+import { INBOX_TYPES } from 'dashboard/helper/inbox';
 
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
@@ -58,6 +59,12 @@ const LANGUAGES = [
   { value: 'it', label: 'Italiano' },
   { value: 'de', label: 'Deutsch' },
 ];
+const INBOX_AVATAR_CLASSES = [
+  'bg-n-teal-9',
+  'bg-n-blue-9',
+  'bg-n-violet-9',
+  'bg-n-amber-9',
+];
 
 const store = useStore();
 const getters = useStoreGetters();
@@ -65,7 +72,23 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 
-const inboxId = Number(route.query.inbox_id);
+const whatsAppCloudInboxes = computed(() =>
+  (getters['inboxes/getInboxes'].value || []).filter(
+    inbox =>
+      inbox.channel_type === INBOX_TYPES.WHATSAPP &&
+      inbox.provider === 'whatsapp_cloud'
+  )
+);
+
+const queryInboxId = Number(route.query.inbox_id);
+const inboxId = ref(
+  whatsAppCloudInboxes.value.some(inbox => inbox.id === queryInboxId)
+    ? queryInboxId
+    : whatsAppCloudInboxes.value[0]?.id
+);
+
+const inboxAvatarClass = index =>
+  INBOX_AVATAR_CLASSES[index % INBOX_AVATAR_CLASSES.length];
 
 const currentStep = ref(1);
 const isSubmitting = ref(false);
@@ -165,7 +188,20 @@ const currentLanguageLabel = computed(
   () => LANGUAGES.find(language => language.value === form.language)?.label
 );
 
-const currentInbox = computed(() => getters['inboxes/getInbox'].value(inboxId));
+const currentInbox = computed(() =>
+  getters['inboxes/getInbox'].value(inboxId.value)
+);
+
+const currentInboxSummary = computed(() => {
+  if (!currentInbox.value?.name) return '';
+  if (!currentInbox.value.phone_number) return currentInbox.value.name;
+
+  return `${currentInbox.value.name} · ${currentInbox.value.phone_number}`;
+});
+
+const currentCategorySubtypeSummary = computed(
+  () => `${currentCategoryLabel.value} · ${subtypeLabels.value[form.subtype]}`
+);
 
 const subtypesSectionTitle = computed(() =>
   t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.TITLE', {
@@ -209,6 +245,31 @@ const maxButtons = computed(() => {
   if (isFlow.value) return FLOW_MAX_BUTTONS;
   if (isOrderDetails.value) return ORDER_DETAILS_MAX_BUTTONS;
   return MAX_BUTTONS;
+});
+
+// Derived from the same category/subtype rules that drive the form itself,
+// rather than hand-written per subtype, so it can't drift from what's
+// actually editable.
+const customizableAreas = computed(() => {
+  const areas = [];
+  if (isAuthentication.value) {
+    areas.push(
+      t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_CODE_SAMPLE')
+    );
+  } else {
+    areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER'));
+    areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_BODY'));
+    areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_FOOTER'));
+  }
+  if (!isCallPermissionRequest.value) {
+    areas.push(
+      t(
+        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_BUTTONS',
+        maxButtons.value
+      )
+    );
+  }
+  return areas.join(', ');
 });
 
 const buttonTypeOptions = computed(() => {
@@ -349,13 +410,13 @@ const submitTemplate = async () => {
 
   try {
     await store.dispatch('inboxes/createMessageTemplate', {
-      inboxId,
+      inboxId: inboxId.value,
       template: buildTemplatePayload(),
     });
     useAlert(t('MESSAGE_TEMPLATES_MGMT.CREATE.SUCCESS_MESSAGE'));
     router.push({
       name: 'message_templates_list',
-      query: { inbox_id: inboxId },
+      query: { inbox_id: inboxId.value },
     });
   } catch (error) {
     submitError.value =
@@ -389,6 +450,65 @@ const submitTemplate = async () => {
             {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.DESCRIPTION') }}
           </p>
         </div>
+
+        <CardLayout v-if="whatsAppCloudInboxes.length">
+          <div class="flex items-center justify-between w-full">
+            <div>
+              <h3 class="flex items-center gap-2 font-semibold text-n-slate-12">
+                <Icon icon="i-lucide-inbox" class="flex-shrink-0 size-4" />
+                {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.TITLE') }}
+              </h3>
+              <p class="mt-1 text-body-main text-n-slate-11">
+                {{
+                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.DESCRIPTION')
+                }}
+              </p>
+            </div>
+            <span
+              class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-n-slate-3 text-n-slate-11"
+            >
+              {{
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.ACTIVE_COUNT',
+                  whatsAppCloudInboxes.length
+                )
+              }}
+            </span>
+          </div>
+
+          <div class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              v-for="(inbox, index) in whatsAppCloudInboxes"
+              :key="inbox.id"
+              type="button"
+              class="flex items-start gap-3 p-3 text-left border rounded-xl transition-all"
+              :class="
+                inboxId === inbox.id
+                  ? 'border-n-brand bg-n-alpha-2'
+                  : 'border-n-weak hover:border-n-slate-6'
+              "
+              @click="inboxId = inbox.id"
+            >
+              <span
+                class="flex items-center justify-center flex-shrink-0 text-sm font-semibold text-white rounded-full size-8"
+                :class="inboxAvatarClass(index)"
+              >
+                {{ inbox.name.charAt(0).toUpperCase() }}
+              </span>
+              <span class="min-w-0">
+                <span class="block font-medium truncate text-n-slate-12">
+                  {{ inbox.name }}
+                </span>
+                <span
+                  v-if="inbox.phone_number"
+                  class="block text-xs text-n-slate-10"
+                >
+                  {{ inbox.phone_number }}
+                </span>
+              </span>
+            </button>
+          </div>
+        </CardLayout>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
@@ -682,7 +802,20 @@ const submitTemplate = async () => {
             </div>
           </div>
 
-          <div class="sticky hidden w-full top-4 lg:block lg:max-w-sm">
+          <div
+            class="sticky hidden w-full space-y-3 top-4 lg:block lg:max-w-sm"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs truncate text-n-slate-10">
+                {{ currentInboxSummary }}
+              </span>
+              <span
+                class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-n-blue-3 text-n-blue-11"
+              >
+                {{ currentCategorySubtypeSummary }}
+              </span>
+            </div>
+
             <TemplateWhatsAppPreview
               :header="form.header"
               :body="form.body"
@@ -690,6 +823,33 @@ const submitTemplate = async () => {
               :buttons="isCallPermissionRequest ? [] : form.buttons"
               :samples="bodySamples"
             />
+
+            <div
+              class="p-4 space-y-2 border rounded-xl border-n-weak bg-n-solid-2"
+            >
+              <h3 class="flex items-center gap-2 font-semibold text-n-slate-12">
+                <span class="i-lucide-sparkles size-4 text-n-blue-9" />
+                {{
+                  $t(
+                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.IDEAL_FOR_TITLE'
+                  )
+                }}
+              </h3>
+              <p class="text-body-main text-n-slate-11">
+                {{ subtypeDescriptions[form.subtype] }}
+              </p>
+
+              <div class="pt-2 mt-2 border-t border-n-weak">
+                <p class="mb-1 text-xs font-medium uppercase text-n-slate-10">
+                  {{
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CUSTOMIZABLE_AREAS_TITLE'
+                    )
+                  }}
+                </p>
+                <p class="text-xs text-n-slate-11">{{ customizableAreas }}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
