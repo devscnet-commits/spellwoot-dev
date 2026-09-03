@@ -138,8 +138,19 @@ const rejectedReasonLabel = template =>
       template.rejected_reason
     : t('MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.NONE');
 
+// The "all" option's label is prefixed with the filter's own name (e.g.
+// "Caixa: Todas") since, collapsed, four "Todas"/"Todos" dropdowns would
+// otherwise be indistinguishable from one another.
+const allOptionLabel = (labelKey, allKey) => `${t(labelKey)}: ${t(allKey)}`;
+
 const inboxOptions = computed(() => [
-  { value: ALL, label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.INBOX_ALL') },
+  {
+    value: ALL,
+    label: allOptionLabel(
+      'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.INBOX_LABEL',
+      'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.INBOX_ALL'
+    ),
+  },
   ...whatsAppCloudInboxes.value.map(inbox => ({
     value: inbox.id,
     label: inbox.name,
@@ -147,12 +158,24 @@ const inboxOptions = computed(() => [
 ]);
 
 const categoryOptions = computed(() => [
-  { value: ALL, label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.CATEGORY_ALL') },
+  {
+    value: ALL,
+    label: allOptionLabel(
+      'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.CATEGORY_LABEL',
+      'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.CATEGORY_ALL'
+    ),
+  },
   ...CATEGORY_IDS.map(id => ({ value: id, label: categoryLabel(id) })),
 ]);
 
 const statusOptions = computed(() => [
-  { value: ALL, label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.STATUS_ALL') },
+  {
+    value: ALL,
+    label: allOptionLabel(
+      'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.STATUS_LABEL',
+      'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.STATUS_ALL'
+    ),
+  },
   ...STATUS_IDS.map(id => ({ value: id, label: statusLabel(id) })),
 ]);
 
@@ -163,7 +186,10 @@ const languageOptions = computed(() => {
   return [
     {
       value: ALL,
-      label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.LANGUAGE_ALL'),
+      label: allOptionLabel(
+        'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.LANGUAGE_LABEL',
+        'MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.LANGUAGE_ALL'
+      ),
     },
     ...languages.sort().map(language => ({ value: language, label: language })),
   ];
@@ -431,27 +457,27 @@ onMounted(() => {
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
           <Input
             v-model="searchQuery"
-            class="lg:max-w-xs"
+            class="lg:flex-1"
             :placeholder="$t('MESSAGE_TEMPLATES_MGMT.LIST.SEARCH_PLACEHOLDER')"
           />
           <ComboBox
             v-model="inboxFilter"
-            class="lg:w-48"
+            class="lg:flex-1"
             :options="inboxOptions"
           />
           <ComboBox
             v-model="categoryFilter"
-            class="lg:w-40"
+            class="lg:flex-1"
             :options="categoryOptions"
           />
           <ComboBox
             v-model="languageFilter"
-            class="lg:w-36"
+            class="lg:flex-1"
             :options="languageOptions"
           />
           <ComboBox
             v-model="statusFilter"
-            class="lg:w-36"
+            class="lg:flex-1"
             :options="statusOptions"
           />
         </div>
