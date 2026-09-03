@@ -95,11 +95,11 @@ RSpec.describe Enterprise::AutoAssignment::AssignmentService, type: :service do
 
       before do
         capacity_policy.update!(exclusion_rules: {
-                                  'exclude_older_than_hours' => 24
+                                  'exclude_older_than_minutes' => 24 * 60
                                 })
       end
 
-      it 'excludes conversations older than specified hours' do
+      it 'excludes conversations older than specified age' do
         assigned_count = assignment_service.perform_bulk_assignment(limit: 10)
 
         # Only recent conversation should be assigned
@@ -110,7 +110,7 @@ RSpec.describe Enterprise::AutoAssignment::AssignmentService, type: :service do
 
       it 'handles different time thresholds' do
         capacity_policy.update!(exclusion_rules: {
-                                  'exclude_older_than_hours' => 2
+                                  'exclude_older_than_minutes' => 2 * 60
                                 })
 
         assigned_count = assignment_service.perform_bulk_assignment(limit: 10)
@@ -135,7 +135,7 @@ RSpec.describe Enterprise::AutoAssignment::AssignmentService, type: :service do
 
         capacity_policy.update!(exclusion_rules: {
                                   'excluded_labels' => [label1.title],
-                                  'exclude_older_than_hours' => 24
+                                  'exclude_older_than_minutes' => 24 * 60
                                 })
 
         assigned_count = assignment_service.perform_bulk_assignment(limit: 10)
