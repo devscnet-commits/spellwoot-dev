@@ -22,10 +22,14 @@ module AssignmentHandler
 
   def find_assignee_from_team
     return if team&.allow_auto_assign.blank?
-    # AutoAssignmentHandler (a atribuição normal da caixa) já respeita os dois; esta, por
-    # ser um caminho separado (dispara quando team_id muda, ex: integração externa setando o
-    # time), não respeitava -- por isso uma caixa marcada como fechada/fora do expediente
-    # continuava recebendo atribuição sempre que o time era setado.
+
+    # V2: AutoAssignment::AssignmentService#filter_agents_by_team already restricts candidates
+    # to team members and applies the account's assignment policy (fair distribution limit,
+    # capacity limits, exclusion rules, balanced/round-robin). Assigning eagerly here would
+    # bypass all of that, so leave assignee blank and let AutoAssignmentHandler's after_save
+    # dispatch the policy-aware job instead (see run_auto_assignment's team_id branch).
+    return if inbox.auto_assignment_v2_enabled?
+
     return unless inbox.enable_auto_assignment?
     return if inbox.out_of_office?
 

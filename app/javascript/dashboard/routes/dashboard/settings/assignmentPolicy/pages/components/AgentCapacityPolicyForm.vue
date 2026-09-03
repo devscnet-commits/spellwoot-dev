@@ -18,7 +18,7 @@ const props = defineProps({
       enabled: false,
       exclusionRules: {
         excludedLabels: [],
-        excludeOlderThanHours: null,
+        excludeOlderThanMinutes: null,
       },
       inboxCapacityLimits: [],
     }),
@@ -80,7 +80,7 @@ const state = reactive({
   description: '',
   exclusionRules: {
     excludedLabels: [],
-    excludeOlderThanHours: null,
+    excludeOlderThanMinutes: null,
   },
   inboxCapacityLimits: [],
   localUsers: [], // only used in CREATE mode
@@ -180,7 +180,7 @@ const resetForm = () => {
   Object.assign(state, {
     name: '',
     description: '',
-    exclusionRules: { excludedLabels: [], excludeOlderThanHours: null },
+    exclusionRules: { excludedLabels: [], excludeOlderThanMinutes: null },
     inboxCapacityLimits: [],
     localUsers: [],
   });
@@ -232,7 +232,7 @@ defineExpose({ resetForm });
       />
       <ExclusionRules
         v-model:excluded-labels="state.exclusionRules.excludedLabels"
-        v-model:exclude-older-than-minutes="state.exclusionRules.excludeOlderThanHours"
+        v-model:exclude-older-than-minutes="state.exclusionRules.excludeOlderThanMinutes"
         :tags-list="labelList"
       />
 

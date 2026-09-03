@@ -105,7 +105,7 @@ RSpec.describe 'Agent Capacity Policies API', type: :request do
             description: 'Test Description',
             exclusion_rules: {
               excluded_labels: %w[urgent spam],
-              exclude_older_than_hours: 24
+              exclude_older_than_minutes: 24 * 60
             }
           }
         }
@@ -120,7 +120,7 @@ RSpec.describe 'Agent Capacity Policies API', type: :request do
         expect(response.parsed_body['description']).to eq('Test Description')
         expect(response.parsed_body['exclusion_rules']).to eq({
                                                                 'excluded_labels' => %w[urgent spam],
-                                                                'exclude_older_than_hours' => 24
+                                                                'exclude_older_than_minutes' => 24 * 60
                                                               })
       end
 
@@ -178,7 +178,7 @@ RSpec.describe 'Agent Capacity Policies API', type: :request do
           agent_capacity_policy: {
             exclusion_rules: {
               excluded_labels: %w[vip priority],
-              exclude_older_than_hours: 48
+              exclude_older_than_minutes: 48 * 60
             }
           }
         }
@@ -191,7 +191,7 @@ RSpec.describe 'Agent Capacity Policies API', type: :request do
         expect(response).to have_http_status(:success)
         expect(response.parsed_body['exclusion_rules']).to eq({
                                                                 'excluded_labels' => %w[vip priority],
-                                                                'exclude_older_than_hours' => 48
+                                                                'exclude_older_than_minutes' => 48 * 60
                                                               })
       end
     end
