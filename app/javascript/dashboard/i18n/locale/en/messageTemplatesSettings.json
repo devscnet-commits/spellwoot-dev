@@ -11,15 +11,51 @@
     "NO_WHATSAPP_INBOX": "Conecte uma caixa de entrada WhatsApp Cloud API para criar e gerenciar modelos de mensagem.",
     "NO_INBOX_SELECTED": "Selecione uma caixa de entrada do WhatsApp acima para ver os modelos dela.",
     "LIST": {
-      "404": "Nenhum modelo encontrado para esta caixa de entrada ainda.",
+      "404": "Nenhum modelo encontrado.",
+      "STATS": {
+        "TOTAL": "Total de modelos",
+        "TOTAL_SUBTITLE": "Em {count} caixa de entrada | Em {count} caixas de entrada",
+        "APPROVED": "Aprovados",
+        "APPROVED_SUBTITLE": "Prontos para envio",
+        "PENDING": "Em análise",
+        "PENDING_SUBTITLE": "Aguardando aprovação da Meta"
+      },
+      "GUIDELINE": {
+        "TITLE": "Diretrizes de Qualidade e Entrega Meta WhatsApp Cloud API",
+        "DESCRIPTION": "Mantenha a classificação de qualidade como Alta enviando mensagens relevantes com opt-in explícito. Utilize variáveis personalizadas e botões de ação para melhorar a taxa de resposta."
+      },
+      "SEARCH_PLACEHOLDER": "Pesquisar por nome ou conteúdo...",
+      "FILTERS": {
+        "INBOX_LABEL": "Caixa",
+        "INBOX_ALL": "Todas",
+        "CATEGORY_LABEL": "Categoria",
+        "CATEGORY_ALL": "Todas",
+        "LANGUAGE_LABEL": "Idioma",
+        "LANGUAGE_ALL": "Todos",
+        "STATUS_LABEL": "Status",
+        "STATUS_ALL": "Todos"
+      },
+      "SYNCED_WITH_META": "Sincronizado com WhatsApp Cloud API",
+      "RESULTS_COUNT": "{count} modelo de mensagem exibido | {count} modelos de mensagem exibidos",
+      "BUTTON_COUNT": "{count} botão | {count} botões",
+      "REJECTED_REASON": {
+        "NONE": "Nenhum",
+        "ABUSIVE_CONTENT": "Conteúdo abusivo",
+        "INVALID_FORMAT": "Formato inválido",
+        "SCAM": "Suspeita de golpe",
+        "TAG_CONTENT_MISMATCH": "Categoria não corresponde ao conteúdo",
+        "PROMOTIONAL": "Conteúdo promocional em categoria não permitida",
+        "INCORRECT_CATEGORY": "Categoria incorreta"
+      },
       "TABLE_HEADER": {
         "NAME": "Nome",
         "CATEGORY": "Categoria",
-        "STATUS": "Status",
+        "STATUS_QUALITY": "Status / Qualidade",
         "LANGUAGE": "Idioma",
-        "QUALITY": "Qualidade",
+        "BLOCK_REASON": "Motivo bloqueio",
         "ACTIONS": "Ações"
-      }
+      },
+      "PREVIEW_TITLE": "Prévia do modelo"
     },
     "STATUS": {
       "APPROVED": "Aprovado",
@@ -43,6 +79,11 @@
         "DESCRIPTION": "A categoria determina para que o modelo pode ser usado e como a Meta faz a revisão.",
         "NEXT_BUTTON": "Próximo: Conteúdo",
         "META_GUIDELINE": "Diretriz da Meta: Cada categoria possui regras e tarifas distintas na API Cloud do WhatsApp. Mensagens de Marketing exigem opt-in prévio dos destinatários.",
+        "INBOX": {
+          "TITLE": "Caixa de entrada de destino",
+          "DESCRIPTION": "Defina qual caixa de entrada e canal do WhatsApp receberá e poderá enviar este modelo.",
+          "ACTIVE_COUNT": "{count} canal ativo | {count} canais ativos"
+        },
         "CATEGORIES": {
           "MARKETING": {
             "LABEL": "Marketing",
@@ -80,7 +121,14 @@
           "CALL_PERMISSION_REQUEST": {
             "LABEL": "Solicitação de permissão para ligação",
             "DESCRIPTION": "Pergunte aos clientes se você pode ligar para eles no WhatsApp."
-          }
+          },
+          "IDEAL_FOR_TITLE": "Este modelo é ideal para",
+          "CUSTOMIZABLE_AREAS_TITLE": "Áreas que você pode personalizar",
+          "AREA_HEADER": "cabeçalho (texto ou mídia)",
+          "AREA_BODY": "corpo dinâmico com variáveis",
+          "AREA_FOOTER": "rodapé",
+          "AREA_CODE_SAMPLE": "valor de exemplo do código",
+          "AREA_BUTTONS": "até {count} botão de ação ou resposta rápida | até {count} botões de ação ou resposta rápida"
         }
       },
       "STEP_2": {

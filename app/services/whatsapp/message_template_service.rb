@@ -17,7 +17,7 @@ class Whatsapp::MessageTemplateService
   def list_templates
     response = HTTParty.get(
       "#{business_account_path}/message_templates",
-      query: { fields: 'id,name,category,status,language,quality_score,components' },
+      query: { fields: 'id,name,category,status,language,quality_score,components,rejected_reason' },
       headers: api_headers
     )
     process_list_response(response)
@@ -92,8 +92,16 @@ class Whatsapp::MessageTemplateService
       status: template['status'],
       language: template['language'],
       quality: template.dig('quality_score', 'score'),
-      components: template['components']
+      components: template['components'],
+      rejected_reason: normalized_rejected_reason(template['rejected_reason'])
     }
+  end
+
+  # Meta returns the literal string "NONE" instead of omitting the field when there's no reason.
+  def normalized_rejected_reason(rejected_reason)
+    return nil if rejected_reason.blank? || rejected_reason == 'NONE'
+
+    rejected_reason
   end
 
   def build_request_body(params)

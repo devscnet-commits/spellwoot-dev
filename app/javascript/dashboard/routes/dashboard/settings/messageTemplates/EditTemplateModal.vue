@@ -12,6 +12,11 @@ import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 import TemplateBodyField from './TemplateBodyField.vue';
 import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
+import {
+  findComponent,
+  normalizeTemplateHeader,
+  normalizeTemplateButton,
+} from './templateComponents';
 
 const props = defineProps({
   inboxId: { type: Number, required: true },
@@ -24,57 +29,23 @@ const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
 const store = useStore();
 const { t } = useI18n();
 
-const findComponent = type =>
-  (props.template.components || []).find(component => component.type === type);
-
-const buttonExample = button => {
-  if (button.type === 'COPY_CODE') return button.example || '';
-  if (button.type === 'URL' && button.example?.length) return button.example[0];
-  return '';
-};
-
-const normalizeButton = button => ({
-  type: button.type,
-  text: button.text || '',
-  url: button.type === 'URL' ? button.url || '' : '',
-  phone_number: button.type === 'PHONE_NUMBER' ? button.phone_number || '' : '',
-  example: buttonExample(button),
-  flow_id: button.type === 'FLOW' ? button.flow_id || '' : '',
-  navigate_screen: button.type === 'FLOW' ? button.navigate_screen || '' : '',
-});
-
-const normalizeHeader = component => {
-  if (!component) return { type: 'NONE', text: '', handle: '', fileName: '' };
-  if (component.format === 'TEXT') {
-    return {
-      type: 'TEXT',
-      text: component.text || '',
-      handle: '',
-      fileName: '',
-    };
-  }
-  return {
-    type: component.format,
-    text: '',
-    handle: component.example?.header_handle?.[0] || '',
-    fileName: '',
-  };
-};
-
-const headerComponent = findComponent('HEADER');
-const bodyComponent = findComponent('BODY');
-const footerComponent = findComponent('FOOTER');
-const buttonsComponent = findComponent('BUTTONS');
-const isCallPermissionRequest = !!findComponent('CALL_PERMISSION_REQUEST');
+const headerComponent = findComponent(props.template.components, 'HEADER');
+const bodyComponent = findComponent(props.template.components, 'BODY');
+const footerComponent = findComponent(props.template.components, 'FOOTER');
+const buttonsComponent = findComponent(props.template.components, 'BUTTONS');
+const isCallPermissionRequest = !!findComponent(
+  props.template.components,
+  'CALL_PERMISSION_REQUEST'
+);
 
 const isSubmitting = ref(false);
 const submitError = ref('');
 
 const form = reactive({
-  header: normalizeHeader(headerComponent),
+  header: normalizeTemplateHeader(headerComponent),
   body: bodyComponent?.text || '',
   footer: footerComponent?.text || '',
-  buttons: (buttonsComponent?.buttons || []).map(normalizeButton),
+  buttons: (buttonsComponent?.buttons || []).map(normalizeTemplateButton),
 });
 
 const bodySamples = reactive({});
