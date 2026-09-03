@@ -11,7 +11,12 @@ module AutoAssignmentHandler
   def run_auto_assignment
     # Assignment V2: Also trigger assignment when conversation is resolved or snoozed,
     # bypassing the open-only condition so the AssignmentJob can redistribute capacity.
-    return unless conversation_status_changed_to_open? || conversation_status_changed_to_resolved_or_snoozed?
+    # Also trigger when team_id changes on a V2 inbox (e.g. an external integration routing
+    # a conversation to a team) — AssignmentHandler#find_assignee_from_team deliberately
+    # skips assigning in that case so this policy-aware path handles it instead.
+    return unless conversation_status_changed_to_open? ||
+                  conversation_status_changed_to_resolved_or_snoozed? ||
+                  (saved_change_to_team_id? && inbox.auto_assignment_v2_enabled?)
     return unless should_run_auto_assignment?
 
     if inbox.auto_assignment_v2_enabled?
