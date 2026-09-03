@@ -11,15 +11,51 @@
     "NO_WHATSAPP_INBOX": "Conecte uma caixa de entrada WhatsApp Cloud API para criar e gerenciar modelos de mensagem.",
     "NO_INBOX_SELECTED": "Selecione uma caixa de entrada do WhatsApp acima para ver os modelos dela.",
     "LIST": {
-      "404": "Nenhum modelo encontrado para esta caixa de entrada ainda.",
+      "404": "Nenhum modelo encontrado.",
+      "STATS": {
+        "TOTAL": "Total de modelos",
+        "TOTAL_SUBTITLE": "Em {count} caixa de entrada | Em {count} caixas de entrada",
+        "APPROVED": "Aprovados",
+        "APPROVED_SUBTITLE": "Prontos para envio",
+        "PENDING": "Em análise",
+        "PENDING_SUBTITLE": "Aguardando aprovação da Meta"
+      },
+      "GUIDELINE": {
+        "TITLE": "Diretrizes de Qualidade e Entrega Meta WhatsApp Cloud API",
+        "DESCRIPTION": "Mantenha a classificação de qualidade como Alta enviando mensagens relevantes com opt-in explícito. Utilize variáveis personalizadas e botões de ação para melhorar a taxa de resposta."
+      },
+      "SEARCH_PLACEHOLDER": "Pesquisar por nome ou conteúdo...",
+      "FILTERS": {
+        "INBOX_LABEL": "Caixa",
+        "INBOX_ALL": "Todas",
+        "CATEGORY_LABEL": "Categoria",
+        "CATEGORY_ALL": "Todas",
+        "LANGUAGE_LABEL": "Idioma",
+        "LANGUAGE_ALL": "Todos",
+        "STATUS_LABEL": "Status",
+        "STATUS_ALL": "Todos"
+      },
+      "SYNCED_WITH_META": "Sincronizado com WhatsApp Cloud API",
+      "RESULTS_COUNT": "{count} modelo de mensagem exibido | {count} modelos de mensagem exibidos",
+      "BUTTON_COUNT": "{count} botão | {count} botões",
+      "REJECTED_REASON": {
+        "NONE": "Nenhum",
+        "ABUSIVE_CONTENT": "Conteúdo abusivo",
+        "INVALID_FORMAT": "Formato inválido",
+        "SCAM": "Suspeita de golpe",
+        "TAG_CONTENT_MISMATCH": "Categoria não corresponde ao conteúdo",
+        "PROMOTIONAL": "Conteúdo promocional em categoria não permitida",
+        "INCORRECT_CATEGORY": "Categoria incorreta"
+      },
       "TABLE_HEADER": {
         "NAME": "Nome",
         "CATEGORY": "Categoria",
-        "STATUS": "Status",
+        "STATUS_QUALITY": "Status / Qualidade",
         "LANGUAGE": "Idioma",
-        "QUALITY": "Qualidade",
+        "BLOCK_REASON": "Motivo bloqueio",
         "ACTIONS": "Ações"
-      }
+      },
+      "PREVIEW_TITLE": "Prévia do modelo"
     },
     "STATUS": {
       "APPROVED": "Aprovado",

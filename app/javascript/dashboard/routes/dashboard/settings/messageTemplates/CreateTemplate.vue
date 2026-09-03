@@ -18,12 +18,7 @@ import TemplateHeaderField from './TemplateHeaderField.vue';
 import TemplateBodyField from './TemplateBodyField.vue';
 import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
 import TemplateSubmitConfirmModal from './TemplateSubmitConfirmModal.vue';
-
-const CATEGORY_ICONS = {
-  MARKETING: 'i-lucide-megaphone',
-  UTILITY: 'i-lucide-bell',
-  AUTHENTICATION: 'i-lucide-shield-check',
-};
+import { CATEGORY_ICONS } from './templateCategoryIcons';
 
 const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;

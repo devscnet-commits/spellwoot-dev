@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
@@ -10,12 +10,34 @@ import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import Icon from 'dashboard/components-next/icon/Icon.vue';
+import Input from 'dashboard/components-next/input/Input.vue';
 import EditTemplateModal from './EditTemplateModal.vue';
+import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
+import { CATEGORY_ICONS } from './templateCategoryIcons';
+import { findComponent, templateToPreviewProps } from './templateComponents';
 import {
   BaseTable,
   BaseTableRow,
   BaseTableCell,
 } from 'dashboard/components-next/table';
+
+const ALL = 'ALL';
+const CATEGORY_IDS = ['MARKETING', 'UTILITY', 'AUTHENTICATION'];
+const STATUS_IDS = ['APPROVED', 'PENDING', 'REJECTED', 'PAUSED', 'DISABLED'];
+const STATUS_BADGE_CLASSES = {
+  APPROVED: 'bg-n-teal-3 text-n-teal-11',
+  PENDING: 'bg-n-amber-3 text-n-amber-11',
+  REJECTED: 'bg-n-ruby-3 text-n-ruby-11',
+  PAUSED: 'bg-n-slate-3 text-n-slate-11',
+  DISABLED: 'bg-n-slate-3 text-n-slate-11',
+};
+const QUALITY_DOT_CLASSES = {
+  GREEN: 'bg-n-teal-9',
+  YELLOW: 'bg-n-amber-9',
+  RED: 'bg-n-ruby-9',
+  UNKNOWN: 'bg-n-slate-8',
+};
 
 const getters = useStoreGetters();
 const store = useStore();
@@ -23,10 +45,24 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 
-const selectedInboxId = ref(null);
 const templates = ref([]);
 const isFetchingTemplates = ref(false);
-const fetchError = ref('');
+const isGuidelineDismissed = ref(false);
+
+const searchQuery = ref('');
+const inboxFilter = ref(ALL);
+const categoryFilter = ref(ALL);
+const languageFilter = ref(ALL);
+const statusFilter = ref(ALL);
+
+const showPreviewModal = ref(false);
+const showEditModal = ref(false);
+const showDeleteModal = ref(false);
+const selectedTemplate = ref(null);
+const isDeleting = ref(false);
+
+const editableStatuses = ['APPROVED', 'REJECTED', 'PAUSED'];
+const canEdit = template => editableStatuses.includes(template.status);
 
 const whatsAppCloudInboxes = computed(() =>
   (getters['inboxes/getInboxes'].value || []).filter(
@@ -35,30 +71,6 @@ const whatsAppCloudInboxes = computed(() =>
       inbox.provider === 'whatsapp_cloud'
   )
 );
-
-const inboxOptions = computed(() =>
-  whatsAppCloudInboxes.value.map(inbox => ({
-    label: `${inbox.name} (${inbox.phone_number || inbox.name})`,
-    value: inbox.id,
-  }))
-);
-
-const tableHeaders = computed(() => [
-  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.NAME'),
-  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.CATEGORY'),
-  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.STATUS'),
-  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.LANGUAGE'),
-  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.QUALITY'),
-  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.ACTIONS'),
-]);
-
-const showEditModal = ref(false);
-const showDeleteModal = ref(false);
-const selectedTemplate = ref(null);
-const isDeleting = ref(false);
-
-const editableStatuses = ['APPROVED', 'REJECTED', 'PAUSED'];
-const canEdit = template => editableStatuses.includes(template.status);
 
 const statusLabels = computed(() => ({
   APPROVED: t('MESSAGE_TEMPLATES_MGMT.STATUS.APPROVED'),
@@ -75,37 +87,201 @@ const qualityLabels = computed(() => ({
   UNKNOWN: t('MESSAGE_TEMPLATES_MGMT.QUALITY.UNKNOWN'),
 }));
 
+const categoryLabels = computed(() => ({
+  MARKETING: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.MARKETING.LABEL'
+  ),
+  UTILITY: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.UTILITY.LABEL'),
+  AUTHENTICATION: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORIES.AUTHENTICATION.LABEL'
+  ),
+}));
+
+const rejectedReasonLabels = computed(() => ({
+  ABUSIVE_CONTENT: t(
+    'MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.ABUSIVE_CONTENT'
+  ),
+  INVALID_FORMAT: t(
+    'MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.INVALID_FORMAT'
+  ),
+  SCAM: t('MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.SCAM'),
+  TAG_CONTENT_MISMATCH: t(
+    'MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.TAG_CONTENT_MISMATCH'
+  ),
+  PROMOTIONAL: t('MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.PROMOTIONAL'),
+  INCORRECT_CATEGORY: t(
+    'MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.INCORRECT_CATEGORY'
+  ),
+}));
+
 const statusLabel = status => statusLabels.value[status] || status;
 const qualityLabel = quality => qualityLabels.value[quality] || '--';
+const categoryLabel = category => categoryLabels.value[category] || category;
+const statusBadgeClass = status =>
+  STATUS_BADGE_CLASSES[status] || STATUS_BADGE_CLASSES.PAUSED;
+const qualityDotClass = quality =>
+  QUALITY_DOT_CLASSES[quality] || QUALITY_DOT_CLASSES.UNKNOWN;
+const buttonCount = template =>
+  (findComponent(template.components, 'BUTTONS')?.buttons || []).length;
+const templateSubtitle = template => {
+  const count = buttonCount(template);
+  if (!count) return template.sourceInbox.name;
 
-const fetchTemplates = async () => {
-  if (!selectedInboxId.value) {
+  return `${template.sourceInbox.name} · ${t(
+    'MESSAGE_TEMPLATES_MGMT.LIST.BUTTON_COUNT',
+    count
+  )}`;
+};
+const rejectedReasonLabel = template =>
+  template.rejected_reason
+    ? rejectedReasonLabels.value[template.rejected_reason] ||
+      template.rejected_reason
+    : t('MESSAGE_TEMPLATES_MGMT.LIST.REJECTED_REASON.NONE');
+
+const inboxOptions = computed(() => [
+  { value: ALL, label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.INBOX_ALL') },
+  ...whatsAppCloudInboxes.value.map(inbox => ({
+    value: inbox.id,
+    label: inbox.name,
+  })),
+]);
+
+const categoryOptions = computed(() => [
+  { value: ALL, label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.CATEGORY_ALL') },
+  ...CATEGORY_IDS.map(id => ({ value: id, label: categoryLabel(id) })),
+]);
+
+const statusOptions = computed(() => [
+  { value: ALL, label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.STATUS_ALL') },
+  ...STATUS_IDS.map(id => ({ value: id, label: statusLabel(id) })),
+]);
+
+const languageOptions = computed(() => {
+  const languages = [
+    ...new Set(templates.value.map(template => template.language)),
+  ];
+  return [
+    {
+      value: ALL,
+      label: t('MESSAGE_TEMPLATES_MGMT.LIST.FILTERS.LANGUAGE_ALL'),
+    },
+    ...languages.sort().map(language => ({ value: language, label: language })),
+  ];
+});
+
+const tableHeaders = computed(() => [
+  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.NAME'),
+  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.CATEGORY'),
+  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.LANGUAGE'),
+  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.STATUS_QUALITY'),
+  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.BLOCK_REASON'),
+  t('MESSAGE_TEMPLATES_MGMT.LIST.TABLE_HEADER.ACTIONS'),
+]);
+
+const stats = computed(() => ({
+  total: templates.value.length,
+  inboxCount: new Set(templates.value.map(template => template.sourceInbox.id))
+    .size,
+  approved: templates.value.filter(template => template.status === 'APPROVED')
+    .length,
+  pending: templates.value.filter(template => template.status === 'PENDING')
+    .length,
+}));
+
+const filteredTemplates = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+
+  return templates.value.filter(template => {
+    if (
+      inboxFilter.value !== ALL &&
+      template.sourceInbox.id !== inboxFilter.value
+    ) {
+      return false;
+    }
+    if (
+      categoryFilter.value !== ALL &&
+      template.category !== categoryFilter.value
+    ) {
+      return false;
+    }
+    if (
+      languageFilter.value !== ALL &&
+      template.language !== languageFilter.value
+    ) {
+      return false;
+    }
+    if (statusFilter.value !== ALL && template.status !== statusFilter.value) {
+      return false;
+    }
+    if (!query) return true;
+
+    const bodyText = findComponent(template.components, 'BODY')?.text || '';
+    return (
+      template.name.toLowerCase().includes(query) ||
+      bodyText.toLowerCase().includes(query)
+    );
+  });
+});
+
+const createTargetInboxId = computed(() =>
+  inboxFilter.value !== ALL
+    ? inboxFilter.value
+    : whatsAppCloudInboxes.value[0]?.id
+);
+
+const fetchAllTemplates = async () => {
+  if (!whatsAppCloudInboxes.value.length) {
     templates.value = [];
     return;
   }
 
   isFetchingTemplates.value = true;
-  fetchError.value = '';
 
-  try {
-    const response = await store.dispatch('inboxes/getMessageTemplates', {
-      inboxId: selectedInboxId.value,
-    });
-    templates.value = response.templates || [];
-  } catch (error) {
-    fetchError.value = t('MESSAGE_TEMPLATES_MGMT.FETCH_ERROR');
-    useAlert(fetchError.value);
-  } finally {
-    isFetchingTemplates.value = false;
+  const results = await Promise.allSettled(
+    whatsAppCloudInboxes.value.map(async inbox => {
+      const response = await store.dispatch('inboxes/getMessageTemplates', {
+        inboxId: inbox.id,
+      });
+      return (response.templates || []).map(template => ({
+        ...template,
+        sourceInbox: inbox,
+      }));
+    })
+  );
+
+  templates.value = results
+    .filter(result => result.status === 'fulfilled')
+    .flatMap(result => result.value);
+
+  if (results.some(result => result.status === 'rejected')) {
+    useAlert(t('MESSAGE_TEMPLATES_MGMT.FETCH_ERROR'));
   }
+
+  isFetchingTemplates.value = false;
 };
 
 const goToCreateTemplate = () => {
   router.push({
     name: 'message_templates_new',
-    query: { inbox_id: selectedInboxId.value },
+    query: { inbox_id: createTargetInboxId.value },
   });
 };
+
+const openPreviewModal = template => {
+  selectedTemplate.value = template;
+  showPreviewModal.value = true;
+};
+
+const closePreviewModal = () => {
+  showPreviewModal.value = false;
+  selectedTemplate.value = null;
+};
+
+const previewProps = computed(() =>
+  selectedTemplate.value
+    ? templateToPreviewProps(selectedTemplate.value.components)
+    : null
+);
 
 const openEditModal = template => {
   selectedTemplate.value = template;
@@ -131,12 +307,12 @@ const confirmDelete = async () => {
   isDeleting.value = true;
   try {
     await store.dispatch('inboxes/deleteMessageTemplate', {
-      inboxId: selectedInboxId.value,
+      inboxId: selectedTemplate.value.sourceInbox.id,
       templateName: selectedTemplate.value.name,
     });
     useAlert(t('MESSAGE_TEMPLATES_MGMT.DELETE.SUCCESS_MESSAGE'));
     closeDeleteModal();
-    fetchTemplates();
+    fetchAllTemplates();
   } catch (error) {
     useAlert(t('MESSAGE_TEMPLATES_MGMT.DELETE.ERROR_MESSAGE'));
   } finally {
@@ -144,19 +320,14 @@ const confirmDelete = async () => {
   }
 };
 
-watch(selectedInboxId, fetchTemplates);
-
 onMounted(() => {
-  if (!inboxOptions.value.length) return;
-
   const queryInboxId = Number(route.query.inbox_id);
-  const isValidQueryInbox = inboxOptions.value.some(
-    option => option.value === queryInboxId
+  const isValidQueryInbox = whatsAppCloudInboxes.value.some(
+    inbox => inbox.id === queryInboxId
   );
+  if (isValidQueryInbox) inboxFilter.value = queryInboxId;
 
-  selectedInboxId.value = isValidQueryInbox
-    ? queryInboxId
-    : inboxOptions.value[0].value;
+  fetchAllTemplates();
 });
 </script>
 
@@ -164,10 +335,6 @@ onMounted(() => {
   <SettingsLayout
     :is-loading="isFetchingTemplates"
     :loading-message="$t('MESSAGE_TEMPLATES_MGMT.LOADING')"
-    :no-records-found="
-      !!selectedInboxId && !isFetchingTemplates && !templates.length
-    "
-    :no-records-message="$t('MESSAGE_TEMPLATES_MGMT.LIST.404')"
   >
     <template #header>
       <BaseSettingsHeader
@@ -179,7 +346,7 @@ onMounted(() => {
           <Button
             :label="$t('MESSAGE_TEMPLATES_MGMT.HEADER_BTN_TXT')"
             size="sm"
-            :disabled="!selectedInboxId"
+            :disabled="!whatsAppCloudInboxes.length"
             @click="goToCreateTemplate"
           />
         </template>
@@ -191,44 +358,146 @@ onMounted(() => {
           {{ $t('MESSAGE_TEMPLATES_MGMT.NO_WHATSAPP_INBOX') }}
         </p>
       </div>
-      <template v-else>
-        <div class="max-w-sm p-4 pb-0">
-          <label class="text-body-main text-n-slate-11">
-            {{ $t('MESSAGE_TEMPLATES_MGMT.SELECT_INBOX.LABEL') }}
-          </label>
-          <ComboBox
-            v-model="selectedInboxId"
-            :options="inboxOptions"
-            :placeholder="$t('MESSAGE_TEMPLATES_MGMT.SELECT_INBOX.PLACEHOLDER')"
+
+      <div v-else class="p-4 space-y-4">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div class="p-4 border rounded-xl border-n-weak bg-n-solid-2">
+            <p class="font-medium uppercase text-caption text-n-slate-10">
+              {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.STATS.TOTAL') }}
+            </p>
+            <p class="mt-1 text-2xl font-semibold text-n-slate-12">
+              {{ stats.total }}
+            </p>
+            <p class="mt-1 text-xs text-n-slate-10">
+              {{
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.LIST.STATS.TOTAL_SUBTITLE',
+                  stats.inboxCount
+                )
+              }}
+            </p>
+          </div>
+          <div class="p-4 border rounded-xl border-n-teal-4 bg-n-teal-2">
+            <p class="font-medium uppercase text-caption text-n-teal-11">
+              {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.STATS.APPROVED') }}
+            </p>
+            <p class="mt-1 text-2xl font-semibold text-n-teal-11">
+              {{ stats.approved }}
+            </p>
+            <p class="mt-1 text-xs text-n-teal-11">
+              {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.STATS.APPROVED_SUBTITLE') }}
+            </p>
+          </div>
+          <div class="p-4 border rounded-xl border-n-amber-4 bg-n-amber-2">
+            <p class="font-medium uppercase text-caption text-n-amber-11">
+              {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.STATS.PENDING') }}
+            </p>
+            <p class="mt-1 text-2xl font-semibold text-n-amber-11">
+              {{ stats.pending }}
+            </p>
+            <p class="mt-1 text-xs text-n-amber-11">
+              {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.STATS.PENDING_SUBTITLE') }}
+            </p>
+          </div>
+        </div>
+
+        <div
+          v-if="!isGuidelineDismissed"
+          class="flex items-start justify-between gap-3 p-3 border rounded-xl bg-n-blue-2 border-n-blue-4"
+        >
+          <div class="flex items-start gap-2">
+            <Icon
+              icon="i-lucide-info"
+              class="flex-shrink-0 mt-0.5 size-4 text-n-blue-11"
+            />
+            <div>
+              <p class="font-medium text-n-blue-11">
+                {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.GUIDELINE.TITLE') }}
+              </p>
+              <p class="text-xs text-n-blue-11">
+                {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.GUIDELINE.DESCRIPTION') }}
+              </p>
+            </div>
+          </div>
+          <Button
+            icon="i-lucide-x"
+            variant="ghost"
+            color="blue"
+            size="xs"
+            @click="isGuidelineDismissed = true"
           />
         </div>
 
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <Input
+            v-model="searchQuery"
+            class="lg:max-w-xs"
+            :placeholder="$t('MESSAGE_TEMPLATES_MGMT.LIST.SEARCH_PLACEHOLDER')"
+          />
+          <ComboBox
+            v-model="inboxFilter"
+            class="lg:w-48"
+            :options="inboxOptions"
+          />
+          <ComboBox
+            v-model="categoryFilter"
+            class="lg:w-40"
+            :options="categoryOptions"
+          />
+          <ComboBox
+            v-model="languageFilter"
+            class="lg:w-36"
+            :options="languageOptions"
+          />
+          <ComboBox
+            v-model="statusFilter"
+            class="lg:w-36"
+            :options="statusOptions"
+          />
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-n-slate-10">
+          <span>
+            {{
+              $t(
+                'MESSAGE_TEMPLATES_MGMT.LIST.RESULTS_COUNT',
+                filteredTemplates.length
+              )
+            }}
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="i-lucide-refresh-cw size-3" />
+            {{ $t('MESSAGE_TEMPLATES_MGMT.LIST.SYNCED_WITH_META') }}
+          </span>
+        </div>
+
         <BaseTable
-          v-if="selectedInboxId"
           :headers="tableHeaders"
-          :items="templates"
+          :items="filteredTemplates"
           :no-data-message="$t('MESSAGE_TEMPLATES_MGMT.LIST.404')"
         >
           <template #row="{ items }">
             <BaseTableRow
               v-for="template in items"
-              :key="template.id"
+              :key="`${template.sourceInbox.id}-${template.id}`"
               :item="template"
             >
               <template #default>
                 <BaseTableCell>
-                  <span class="text-body-main text-n-slate-12">
-                    {{ template.name }}
-                  </span>
+                  <p class="font-medium text-n-slate-12">{{ template.name }}</p>
+                  <p class="text-xs text-n-slate-10">
+                    {{ templateSubtitle(template) }}
+                  </p>
                 </BaseTableCell>
                 <BaseTableCell>
-                  <span class="text-body-main text-n-slate-11">
-                    {{ template.category }}
-                  </span>
-                </BaseTableCell>
-                <BaseTableCell>
-                  <span class="text-body-main text-n-slate-11">
-                    {{ statusLabel(template.status) }}
+                  <span
+                    class="flex items-center gap-1.5 text-body-main text-n-slate-11"
+                  >
+                    <Icon
+                      :icon="CATEGORY_ICONS[template.category]"
+                      class="flex-shrink-0 size-4"
+                    />
+                    {{ categoryLabel(template.category) }}
                   </span>
                 </BaseTableCell>
                 <BaseTableCell>
@@ -237,12 +506,39 @@ onMounted(() => {
                   </span>
                 </BaseTableCell>
                 <BaseTableCell>
-                  <span class="text-body-main text-n-slate-11">
+                  <span
+                    class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full"
+                    :class="statusBadgeClass(template.status)"
+                  >
+                    {{ statusLabel(template.status) }}
+                  </span>
+                  <div
+                    class="flex items-center gap-1 mt-1 text-xs text-n-slate-10"
+                  >
+                    <span
+                      class="rounded-full size-1.5"
+                      :class="qualityDotClass(template.quality)"
+                    />
                     {{ qualityLabel(template.quality) }}
+                  </div>
+                </BaseTableCell>
+                <BaseTableCell>
+                  <span class="text-body-main text-n-slate-11">
+                    {{ rejectedReasonLabel(template) }}
                   </span>
                 </BaseTableCell>
                 <BaseTableCell align="end">
-                  <div class="flex gap-2 justify-end flex-shrink-0">
+                  <div class="flex justify-end flex-shrink-0 gap-2">
+                    <Button
+                      v-tooltip.top="
+                        $t('MESSAGE_TEMPLATES_MGMT.LIST.PREVIEW_TITLE')
+                      "
+                      icon="i-lucide-eye"
+                      variant="ghost"
+                      color="slate"
+                      size="xs"
+                      @click="openPreviewModal(template)"
+                    />
                     <Button
                       v-tooltip.top="
                         canEdit(template)
@@ -272,21 +568,22 @@ onMounted(() => {
             </BaseTableRow>
           </template>
         </BaseTable>
-        <div v-else class="p-4">
-          <p class="text-n-slate-11 text-body-main">
-            {{ $t('MESSAGE_TEMPLATES_MGMT.NO_INBOX_SELECTED') }}
-          </p>
-        </div>
-      </template>
+      </div>
     </template>
+
+    <woot-modal v-model:show="showPreviewModal" :on-close="closePreviewModal">
+      <div v-if="previewProps" class="p-6">
+        <TemplateWhatsAppPreview v-bind="previewProps" />
+      </div>
+    </woot-modal>
 
     <woot-modal v-model:show="showEditModal" :on-close="closeEditModal">
       <EditTemplateModal
         v-if="selectedTemplate"
-        :inbox-id="selectedInboxId"
+        :inbox-id="selectedTemplate.sourceInbox.id"
         :template="selectedTemplate"
         @close="closeEditModal"
-        @updated="fetchTemplates"
+        @updated="fetchAllTemplates"
       />
     </woot-modal>
 
