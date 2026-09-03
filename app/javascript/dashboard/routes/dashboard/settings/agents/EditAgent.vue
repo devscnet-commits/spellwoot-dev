@@ -29,6 +29,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  availabilityStatus: {
+    type: String,
+    default: 'online',
+  },
   provider: {
     type: String,
     default: '',
@@ -46,6 +50,8 @@ const { t } = useI18n();
 
 const agentName = ref(props.name);
 const agentReceivesAssignments = ref(props.receivesAssignments);
+const agentAvailability = ref(props.availabilityStatus);
+const availabilityOptions = ['online', 'busy', 'offline'];
 const selectedRoleId = ref(props.customRoleId || props.type);
 const agentCredentials = ref({ email: props.email });
 
@@ -104,6 +110,7 @@ const editAgent = async () => {
       id: props.id,
       name: agentName.value,
       receives_assignments: agentReceivesAssignments.value,
+      availability: agentAvailability.value,
     };
 
     if (selectedRole.value.name.startsWith('custom_')) {
@@ -175,6 +182,20 @@ const resetPassword = async () => {
           type="checkbox"
           class="mt-1 flex-shrink-0"
         />
+      </div>
+
+      <div class="w-full">
+        <label>
+          {{ $t('AGENT_MGMT.EDIT.FORM.AVAILABILITY.LABEL') }}
+          <select v-model="agentAvailability">
+            <option v-for="status in availabilityOptions" :key="status" :value="status">
+              {{ $t(`PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.${status.toUpperCase()}`) }}
+            </option>
+          </select>
+          <span class="text-xs text-n-slate-11">
+            {{ $t('AGENT_MGMT.EDIT.FORM.AVAILABILITY.DESCRIPTION') }}
+          </span>
+        </label>
       </div>
 
       <div class="flex flex-row justify-start w-full gap-2 px-0 py-2">

@@ -22,6 +22,12 @@ module AssignmentHandler
 
   def find_assignee_from_team
     return if team&.allow_auto_assign.blank?
+    # AutoAssignmentHandler (a atribuição normal da caixa) já respeita os dois; esta, por
+    # ser um caminho separado (dispara quando team_id muda, ex: integração externa setando o
+    # time), não respeitava -- por isso uma caixa marcada como fechada/fora do expediente
+    # continuava recebendo atribuição sempre que o time era setado.
+    return unless inbox.enable_auto_assignment?
+    return if inbox.out_of_office?
 
     team_members_with_capacity = inbox.member_ids_with_assignment_capacity & team.members.ids
     ::AutoAssignment::AgentAssignmentService.new(conversation: self, allowed_agent_ids: team_members_with_capacity).find_assignee
