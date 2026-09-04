@@ -67,7 +67,9 @@ module Enterprise::AutoAssignment::AssignmentService
 
   # Override to apply exclusion rules
   def unassigned_conversations(limit)
-    scope = inbox.conversations.unassigned.open
+    # Same scope as the OSS path (open + team-routed pending), so the Enterprise override
+    # doesn't quietly drop the pending team-routed leads it adds.
+    scope = assignable_scope
 
     # Apply exclusion rules from capacity policy or assignment policy
     scope = apply_exclusion_rules(scope)

@@ -17,12 +17,20 @@ class AutoAssignment::RateLimiter
 
   private
 
+  # Defaults must match the assignment_policies column defaults (100 per 3600s), which is also
+  # what the settings screen advertises ("Defaults to 100 per hour"). They used to be 5 per
+  # 5 minutes, so an inbox with no assignment policy silently throttled every agent to 5
+  # conversations per 5 minutes — during a burst the whole team went "over limit" and the
+  # conversations were left unassigned.
+  DEFAULT_LIMIT = 100
+  DEFAULT_WINDOW = 1.hour.to_i
+
   def limit
-    config&.fair_distribution_limit.present? ? config.fair_distribution_limit.to_i : 5
+    config&.fair_distribution_limit.present? ? config.fair_distribution_limit.to_i : DEFAULT_LIMIT
   end
 
   def window
-    config&.fair_distribution_window&.to_i || 5.minutes.to_i
+    config&.fair_distribution_window&.to_i || DEFAULT_WINDOW
   end
 
   def config

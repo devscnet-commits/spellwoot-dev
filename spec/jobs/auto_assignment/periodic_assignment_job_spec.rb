@@ -23,7 +23,7 @@ RSpec.describe AutoAssignment::PeriodicAssignmentJob, type: :job do
         before do
           inbox_relation = instance_double(ActiveRecord::Relation)
           allow(account).to receive(:inboxes).and_return(inbox_relation)
-          allow(inbox_relation).to receive(:joins).with(:assignment_policy).and_return(inbox_relation)
+          allow(inbox_relation).to receive(:where).with(enable_auto_assignment: true).and_return(inbox_relation)
           allow(inbox_relation).to receive(:find_in_batches).and_yield([inbox])
         end
 
@@ -46,7 +46,7 @@ RSpec.describe AutoAssignment::PeriodicAssignmentJob, type: :job do
 
           inbox_relation2 = instance_double(ActiveRecord::Relation)
           allow(account2).to receive(:inboxes).and_return(inbox_relation2)
-          allow(inbox_relation2).to receive(:joins).with(:assignment_policy).and_return(inbox_relation2)
+          allow(inbox_relation2).to receive(:where).with(enable_auto_assignment: true).and_return(inbox_relation2)
           allow(inbox_relation2).to receive(:find_in_batches).and_yield([inbox2])
 
           allow(Account).to receive(:find_in_batches).and_yield([account]).and_yield([account2])
@@ -98,7 +98,7 @@ RSpec.describe AutoAssignment::PeriodicAssignmentJob, type: :job do
 
           inbox_relation = instance_double(ActiveRecord::Relation)
           allow(acc).to receive(:inboxes).and_return(inbox_relation)
-          allow(inbox_relation).to receive(:joins).with(:assignment_policy).and_return(inbox_relation)
+          allow(inbox_relation).to receive(:where).with(enable_auto_assignment: true).and_return(inbox_relation)
           allow(inbox_relation).to receive(:find_in_batches).and_yield([inb])
 
           accounts << acc

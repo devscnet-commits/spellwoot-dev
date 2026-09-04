@@ -1,5 +1,5 @@
 class Internal::RemoveOrphanConversationsService
-  def initialize(account: nil, days: 1)
+  def initialize(account: nil, days: nil)
     @account = account
     @days = days
   end
@@ -25,7 +25,11 @@ class Internal::RemoveOrphanConversationsService
 
   def build_orphan_conversations_query
     base = @account ? @account.conversations : Conversation.all
-    base = base.where('conversations.last_activity_at > ?', @days.days.ago)
+    # `days` is an optional bound for ad-hoc runs. It used to default to 1, so an orphan was
+    # only collected while its last activity stayed inside a 24h window — anything older (or
+    # with no last_activity_at at all) was skipped on every subsequent run and stayed in the
+    # agent's inbox forever.
+    base = base.where('conversations.last_activity_at > ?', @days.days.ago) if @days
     base = base.left_outer_joins(:contact, :inbox)
 
     # Find conversations whose associated contact or inbox record is missing
