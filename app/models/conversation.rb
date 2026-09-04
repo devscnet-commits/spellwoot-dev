@@ -142,6 +142,7 @@ class Conversation < ApplicationRecord
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status
   before_create :ensure_waiting_since
+  before_create :assign_default_team_from_inbox
 
   after_update_commit :execute_after_update_commit_callbacks
   after_create_commit :notify_conversation_creation
@@ -303,6 +304,18 @@ class Conversation < ApplicationRecord
 
   def ensure_waiting_since
     self.waiting_since = created_at
+  end
+
+  # O campo "Times" em Configurações da Caixa > Colaboradores (inbox.teams, via team_inboxes) só
+  # decidia visibilidade/permissão até aqui — nunca atribuía a conversa a um time sozinho. Isso
+  # dependia de uma automação externa (n8n + Bitrix) que hoje está desligada, deixando conversas
+  # novas sem team_id e, por consequência, sem cair na distribuição automática entre os agentes do
+  # time. Com exatamente um time vinculado à caixa, a atribuição é inequívoca — replica aqui.
+  def assign_default_team_from_inbox
+    return if team_id.present?
+
+    inbox_teams = inbox.teams
+    self.team_id = inbox_teams.first.id if inbox_teams.one?
   end
 
   def validate_additional_attributes
