@@ -306,16 +306,17 @@ class Conversation < ApplicationRecord
     self.waiting_since = created_at
   end
 
-  # O campo "Times" em Configurações da Caixa > Colaboradores (inbox.teams, via team_inboxes) só
-  # decidia visibilidade/permissão até aqui — nunca atribuía a conversa a um time sozinho. Isso
-  # dependia de uma automação externa (n8n + Bitrix) que hoje está desligada, deixando conversas
-  # novas sem team_id e, por consequência, sem cair na distribuição automática entre os agentes do
-  # time. Com exatamente um time vinculado à caixa, a atribuição é inequívoca — replica aqui.
+  # Regra combinada com a Jaqueline (04/09): lead chegou -> tem IA live ou bot vinculado à caixa? Se
+  # sim, a conversa pertence a eles até o handoff (ver ai_pending_handoff?/active_bot? — não pular na
+  # frente deles aqui). Se não, cai no time padrão da caixa, que então segue as políticas normais de
+  # atribuição (rate limit, capacidade, round-robin/balanced). Antes disso dependia inteiramente de
+  # uma automação externa (n8n + Bitrix) que hoje está desligada — sem IA nem n8n rodando, nada
+  # setava team_id e a conversa nunca entrava na distribuição automática entre agentes.
   def assign_default_team_from_inbox
     return if team_id.present?
+    return if ai_assistant_active? || inbox.active_bot?
 
-    inbox_teams = inbox.teams
-    self.team_id = inbox_teams.first.id if inbox_teams.one?
+    self.team_id = inbox.default_team_id
   end
 
   def validate_additional_attributes
