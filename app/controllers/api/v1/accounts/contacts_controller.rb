@@ -105,7 +105,12 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
                           :unprocessable_entity)
     end
 
-    @contact.destroy!
+    # Deleting through the job purges conversations/contact_inboxes in-line (with destroy!)
+    # before the contact row goes away. Calling @contact.destroy! directly relied on
+    # dependent: :destroy_async, whose job destroys each conversation with a plain #destroy —
+    # a failure there is silent and leaves the conversation behind with no contact, which is
+    # exactly the orphan conversation the agents see in the inbox.
+    ::DeleteObjectJob.perform_later(@contact, Current.user, request.ip)
     head :ok
   end
 

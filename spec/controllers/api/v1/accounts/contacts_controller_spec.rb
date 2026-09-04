@@ -731,13 +731,19 @@ RSpec.describe 'Contacts API', type: :request do
 
       it 'deletes the contact for administrator user' do
         allow(OnlineStatusTracker).to receive(:get_presence).and_return(false)
-        delete "/api/v1/accounts/#{account.id}/contacts/#{contact.id}",
-               headers: admin.create_new_auth_token
+        conversation_id = conversation.id
+
+        perform_enqueued_jobs(only: DeleteObjectJob) do
+          delete "/api/v1/accounts/#{account.id}/contacts/#{contact.id}",
+                 headers: admin.create_new_auth_token
+        end
 
         expect(contact.conversations).to be_empty
         expect(contact.inboxes).to be_empty
         expect(contact.contact_inboxes).to be_empty
         expect(contact.csat_survey_responses).to be_empty
+        # the conversation must go with the contact, not linger without one
+        expect(Conversation.where(id: conversation_id)).to be_empty
         expect { contact.reload }.to raise_error(ActiveRecord::RecordNotFound)
         expect(response).to have_http_status(:success)
       end
