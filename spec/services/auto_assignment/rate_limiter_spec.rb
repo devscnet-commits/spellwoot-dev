@@ -59,10 +59,12 @@ RSpec.describe AutoAssignment::RateLimiter do
         allow(inbox).to receive(:assignment_policy).and_return(nil)
       end
 
-      it 'still tracks the assignment with default window' do
-        expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
-        expect(Redis::Alfred).to receive(:set).with(expected_key, conversation.id.to_s, ex: 1.hour.to_i)
-        rate_limiter.track_assignment(conversation)
+      it 'still tracks the assignment with default window, expiring at the window boundary' do
+        travel_to(Time.zone.now.beginning_of_day) do
+          expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
+          expect(Redis::Alfred).to receive(:set).with(expected_key, conversation.id.to_s, ex: 1.hour.to_i)
+          rate_limiter.track_assignment(conversation)
+        end
       end
     end
 
@@ -77,14 +79,25 @@ RSpec.describe AutoAssignment::RateLimiter do
         allow(inbox).to receive(:assignment_policy).and_return(assignment_policy)
       end
 
-      it 'creates a Redis key with correct expiry' do
-        expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
-        expect(Redis::Alfred).to receive(:set).with(
-          expected_key,
-          conversation.id.to_s,
-          ex: 3600
-        )
-        rate_limiter.track_assignment(conversation)
+      it 'expires exactly at the clock-hour boundary when tracked right on the hour' do
+        travel_to(Time.zone.now.beginning_of_day) do
+          expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
+          expect(Redis::Alfred).to receive(:set).with(
+            expected_key,
+            conversation.id.to_s,
+            ex: 3600
+          )
+          rate_limiter.track_assignment(conversation)
+        end
+      end
+
+      it 'resets at the NEXT clock-hour boundary, not a full window after tracking (fixed clock window, not sliding)' do
+        travel_to(Time.zone.now.beginning_of_day + 45.minutes) do
+          expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
+          # Tracked at :45 -> only 15 min left until the hour resets, not a fresh 3600s from now.
+          expect(Redis::Alfred).to receive(:set).with(expected_key, conversation.id.to_s, ex: 15.minutes.to_i)
+          rate_limiter.track_assignment(conversation)
+        end
       end
     end
   end
@@ -132,14 +145,16 @@ RSpec.describe AutoAssignment::RateLimiter do
         allow(inbox).to receive(:assignment_policy).and_return(assignment_policy)
       end
 
-      it 'uses the custom window value' do
-        expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
-        expect(Redis::Alfred).to receive(:set).with(
-          expected_key,
-          conversation.id.to_s,
-          ex: 7200
-        )
-        rate_limiter.track_assignment(conversation)
+      it 'uses the custom window value, aligned to the clock' do
+        travel_to(Time.zone.now.beginning_of_day) do
+          expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
+          expect(Redis::Alfred).to receive(:set).with(
+            expected_key,
+            conversation.id.to_s,
+            ex: 7200
+          )
+          rate_limiter.track_assignment(conversation)
+        end
       end
     end
 
@@ -154,14 +169,16 @@ RSpec.describe AutoAssignment::RateLimiter do
         allow(inbox).to receive(:assignment_policy).and_return(assignment_policy)
       end
 
-      it 'uses the default window value of 1 hour' do
-        expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
-        expect(Redis::Alfred).to receive(:set).with(
-          expected_key,
-          conversation.id.to_s,
-          ex: 1.hour.to_i
-        )
-        rate_limiter.track_assignment(conversation)
+      it 'uses the default window value of 1 hour, aligned to the clock' do
+        travel_to(Time.zone.now.beginning_of_day) do
+          expected_key = format(Redis::RedisKeys::ASSIGNMENT_KEY, inbox_id: inbox.id, agent_id: agent.id, conversation_id: conversation.id)
+          expect(Redis::Alfred).to receive(:set).with(
+            expected_key,
+            conversation.id.to_s,
+            ex: 1.hour.to_i
+          )
+          rate_limiter.track_assignment(conversation)
+        end
       end
     end
   end
