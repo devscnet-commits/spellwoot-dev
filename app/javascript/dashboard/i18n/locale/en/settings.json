@@ -1007,14 +1007,14 @@
           "ADD_BUTTON": "Add inbox",
           "FIELD": {
             "SELECT_INBOX": "Select inbox",
-            "MAX_CONVERSATIONS": "Max conversations",
+            "MAX_CONVERSATIONS": "Max new conversations per window",
             "SET_LIMIT": "Set limit"
           },
           "EMPTY_STATE": "No inbox limit set"
         },
         "EXCLUSION_RULES": {
           "LABEL": "Exclusion rules",
-          "DESCRIPTION": "Conversations that satisfy the following conditions would not count towards agent capacity",
+          "DESCRIPTION": "Conversations that satisfy the following conditions are skipped by automatic assignment",
           "TAGS": {
             "LABEL": "Exclude conversations tagged with specific labels",
             "ADD_TAG": "add tag",

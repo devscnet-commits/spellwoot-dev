@@ -14,12 +14,13 @@ class Enterprise::AutoAssignment::CapacityService
     # If no specific limit for this inbox, agent has unlimited capacity for this inbox
     return true unless inbox_limit
 
-    # Count current open conversations for this agent in this inbox
-    current_count = user.assigned_conversations
-                        .where(inbox: inbox, status: :open)
-                        .count
+    # Count how many conversations this agent RECEIVED in the policy's window, not how many
+    # they currently have open. An agent who leaves conversations open (a long-running chat, a
+    # lead that never got closed) shouldn't stop receiving new ones -- the limit is about the
+    # rate of intake, which is what fair distribution means here. Reuses the same Redis
+    # tracking (and window) the fair distribution limit already uses.
+    received_in_window = AutoAssignment::RateLimiter.new(inbox: inbox, agent: user).current_count
 
-    # Agent has capacity if current count is below the limit
-    current_count < inbox_limit.conversation_limit
+    received_in_window < inbox_limit.conversation_limit
   end
 end
