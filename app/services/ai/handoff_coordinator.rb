@@ -317,10 +317,22 @@ class Ai::HandoffCoordinator
     candidate_ids = fallback_candidate_ids(team_id)
     return alert_no_assignable_member(team_id) if candidate_ids.empty?
 
-    with_capacity = @conversation.inbox.member_ids_with_assignment_capacity & candidate_ids
-    assignee_id = with_capacity.first || candidate_ids.first
+    inbox_member_ids = @conversation.inbox.member_ids_with_assignment_capacity & candidate_ids
+    assignee_id = pick_fallback_assignee(inbox_member_ids.presence || candidate_ids)
     @conversation.update!(assignee_id: assignee_id)
     emit('handoff.assigned_fallback', { assignee_id: assignee_id, team_id: team_id })
+  end
+
+  # Antes era candidate_ids.first — determinístico, então TODO handoff que caía na rede de segurança
+  # ia para a mesma pessoa (a primeira da lista), acumulando desequilíbrio invisível. Usa a fila de
+  # rodízio da caixa, a mesma da atribuição normal, para que esses handoffs também avancem a rotação.
+  # Quem está fora da fila (não elegível para atribuição) cai num sorteio em vez de um fixo — esta é
+  # a rede de segurança, então alguém precisa levar a conversa de qualquer jeito.
+  def pick_fallback_assignee(candidate_ids)
+    round_robin = AutoAssignment::InboxRoundRobinService.new(inbox: @conversation.inbox)
+    agent = round_robin.available_agent(allowed_agent_ids: candidate_ids.map(&:to_s))
+
+    agent&.id || candidate_ids.sample
   end
 
   # Sem NENHUM membro atribuível: a conversa ficaria parada, sem dono e sem ninguém sabendo. Torna o
