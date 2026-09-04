@@ -56,9 +56,11 @@ RSpec.describe Enterprise::AutoAssignment::CapacityService, type: :service do
     account.enable_features('assignment_v2', 'advanced_assignment')
     account.save!
 
-    # Create existing assignments for agent_at_capacity (at limit)
+    # Bring agent_at_capacity to the limit by recording 3 assignments in the policy window.
+    # Capacity is about intake rate, not how many conversations are currently open.
     3.times do
-      create(:conversation, inbox: inbox, assignee: agent_at_capacity, status: :open)
+      conversation = create(:conversation, inbox: inbox, assignee: agent_at_capacity, status: :open)
+      AutoAssignment::RateLimiter.new(inbox: inbox, agent: agent_at_capacity).track_assignment(conversation)
     end
   end
 
@@ -83,6 +85,14 @@ RSpec.describe Enterprise::AutoAssignment::CapacityService, type: :service do
       expect(capacity_service.agent_has_capacity?(agent_with_capacity, inbox)).to be true
       expect(capacity_service.agent_has_capacity?(agent_without_capacity, inbox)).to be true
       expect(capacity_service.agent_has_capacity?(agent_at_capacity, inbox)).to be false
+    end
+
+    it 'keeps capacity for an agent sitting on many open conversations they never closed' do
+      # A backlog of open conversations is not a reason to stop sending an agent new ones --
+      # the limit is about how many they receive per window, not how many they leave open.
+      10.times { create(:conversation, inbox: inbox, assignee: agent_with_capacity, status: :open) }
+
+      expect(described_class.new.agent_has_capacity?(agent_with_capacity, inbox)).to be true
     end
   end
 
@@ -114,10 +124,10 @@ RSpec.describe Enterprise::AutoAssignment::CapacityService, type: :service do
       expect(capacity_service.agent_has_capacity?(excluded_agent, inbox)).to be false
     end
 
-    it 'denies capacity even when agent has no existing conversations' do
+    it 'denies capacity even when agent received nothing in the window' do
       capacity_service = described_class.new
-      # Agent has 0 open conversations but limit is 0, so 0 < 0 is false
-      expect(excluded_agent.assigned_conversations.where(inbox: inbox, status: :open).count).to eq(0)
+      # Agent received 0 conversations in the window but the limit is 0, so 0 < 0 is false
+      expect(AutoAssignment::RateLimiter.new(inbox: inbox, agent: excluded_agent).current_count).to eq(0)
       expect(capacity_service.agent_has_capacity?(excluded_agent, inbox)).to be false
     end
 
@@ -156,8 +166,11 @@ RSpec.describe Enterprise::AutoAssignment::CapacityService, type: :service do
     end
 
     it 'returns false when all agents are at capacity' do
-      # Fill up remaining agents
-      3.times { create(:conversation, inbox: inbox, assignee: agent_with_capacity, status: :open) }
+      # Fill up remaining agents' intake for the window
+      3.times do
+        conversation = create(:conversation, inbox: inbox, assignee: agent_with_capacity, status: :open)
+        AutoAssignment::RateLimiter.new(inbox: inbox, agent: agent_with_capacity).track_assignment(conversation)
+      end
 
       # agent_without_capacity has no limit, so should still be available
       conversation2 = create(:conversation, inbox: inbox, assignee: nil, status: :open)

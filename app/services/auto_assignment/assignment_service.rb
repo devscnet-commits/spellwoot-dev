@@ -18,6 +18,17 @@ class AutoAssignment::AssignmentService
     assigned_count
   end
 
+  # Assign a single already-known conversation immediately, applying the same policy as
+  # bulk assignment (team filter, fair distribution limit, capacity, balanced/round-robin).
+  # Unlike perform_bulk_assignment, this doesn't require conversation.status == 'open' --
+  # used when an external integration routes a conversation to a team, which can still be
+  # pending (e.g. a bot-captured lead) and should reach a human right away regardless.
+  def assign_conversation_now(conversation)
+    return false if conversation.assignee_id.present?
+
+    with_assignment_lock { assign_available_agent(conversation) }
+  end
+
   private
 
   ASSIGNMENT_LOCK_TIMEOUT = 5.seconds
