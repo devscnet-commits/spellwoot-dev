@@ -65,12 +65,24 @@ class AutoAssignment::AssignmentService
   end
 
   def assignable?(conversation)
-    conversation.status == 'open' &&
-      conversation.assignee_id.nil?
+    return false if conversation.assignee_id.present?
+
+    conversation.status == 'open' ||
+      (conversation.status == 'pending' && conversation.team_id.present?)
+  end
+
+  # Open conversations, plus team-routed ones still sitting in `pending`. AutoAssignmentHandler
+  # assigns those the moment the team is set, but that single attempt is all they ever got: if
+  # no agent was available right then (all over the limit, none online), nothing retried them
+  # because this scan was open-only. Pending conversations *without* a team stay out — those
+  # still belong to the bot.
+  def assignable_scope
+    unassigned = inbox.conversations.unassigned
+    unassigned.open.or(unassigned.pending.where.not(team_id: nil))
   end
 
   def unassigned_conversations(limit)
-    scope = inbox.conversations.unassigned.open
+    scope = assignable_scope
 
     # Apply conversation priority using assignment policy if available
     policy = inbox.assignment_policy
