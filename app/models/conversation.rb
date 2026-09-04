@@ -131,6 +131,12 @@ class Conversation < ApplicationRecord
   # Sem delete_all in-line, deletar a conversa — ou o contato em cascata — trava na constraint (a FK
   # também é ON DELETE CASCADE no banco como defesa em profundidade). Corrige o bug de conversa órfã.
   has_many :ai_handoff_summaries, class_name: 'Ai::HandoffSummary', dependent: :delete_all
+  # Idem: agent_assignment_logs (log de decisão do auto-assign) também tem FK NOT NULL para
+  # conversations, sem cascade no banco. Faltou quando a tabela foi criada — confirmado em produção:
+  # excluir um contato com uma conversa registrada aqui estourava PG::ForeignKeyViolation dentro do
+  # DeleteObjectJob, então nem a conversa nem o contato eram apagados (o job falhava e o registro
+  # "voltava" porque nunca tinha saído do banco).
+  has_many :agent_assignment_logs, dependent: :delete_all
   belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset

@@ -66,6 +66,12 @@ module Chatwoot
     # FIX ME : fixes breakage of installation config. we need to migrate.
     config.active_record.yaml_column_permitted_classes = [ActiveSupport::HashWithIndifferentAccess]
 
+    # Usa structure.sql (pg_dump) em vez de schema.rb: preserva 100% do pgvector
+    # (extensão vector + índices ivfflat/hnsw com opclass), que o dumper Ruby não round-trip.
+    # Removida sem querer em 6297ccdf; sem isso, `rails db:migrate` local volta a escrever em
+    # schema.rb (que ficou parado na versão de abril) em vez de manter structure.sql em dia.
+    config.active_record.schema_format = :sql
+
     # Disable PDF/video preview generation as we don't use them
     config.active_storage.previewers = []
 
