@@ -353,7 +353,7 @@ export default {
           <SocialIcons :social-profiles="socialProfiles" />
         </div>
       </div>
-      <div class="flex items-center w-full mt-0.5 gap-2">
+      <div v-if="contact.id" class="flex items-center w-full mt-0.5 gap-2">
         <ComposeConversation
           :contact-id="String(contact.id)"
           is-modal
