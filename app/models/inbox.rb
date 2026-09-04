@@ -74,6 +74,7 @@ class Inbox < ApplicationRecord
   has_many :members, through: :inbox_members, source: :user
   has_many :team_inboxes, dependent: :destroy_async
   has_many :teams, through: :team_inboxes
+  belongs_to :default_team, class_name: 'Team', optional: true
   has_many :conversations, dependent: :destroy_async
   has_many :messages, dependent: :destroy_async
 

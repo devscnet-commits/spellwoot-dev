@@ -40,6 +40,8 @@ const isAgentListUpdating = ref(false);
 const savedAgentsState = ref('');
 const enableAutoAssignment = ref(false);
 const maxAssignmentLimit = ref(null);
+const defaultTeamId = ref(null);
+const isUpdatingDefaultTeam = ref(false);
 const assignmentPolicy = ref(null);
 const isLoadingPolicy = ref(false);
 const isDeletingPolicy = ref(false);
@@ -337,6 +339,22 @@ const closePolicyDropdown = () => {
   showPolicyDropdown.value = false;
 };
 
+const updateDefaultTeam = async teamId => {
+  isUpdatingDefaultTeam.value = true;
+  try {
+    await store.dispatch('inboxes/updateInbox', {
+      id: props.inbox.id,
+      formData: false,
+      default_team_id: teamId,
+    });
+    useAlert(t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
+  } catch (error) {
+    useAlert(t('INBOX_MGMT.EDIT.API.ERROR_MESSAGE'));
+  } finally {
+    isUpdatingDefaultTeam.value = false;
+  }
+};
+
 const handleToggleAutoAssignment = async val => {
   enableAutoAssignment.value = val;
   try {
@@ -441,6 +459,7 @@ const setDefaults = () => {
   enableAutoAssignment.value = props.inbox.enable_auto_assignment;
   maxAssignmentLimit.value =
     props.inbox.auto_assignment_config?.max_assignment_limit || null;
+  defaultTeamId.value = props.inbox.default_team_id || null;
   fetchAttachedAgents();
   if (showAdvancedAssignmentUI.value) {
     fetchAssignmentPolicy();
@@ -489,7 +508,7 @@ onMounted(() => {
               <p
                 class="px-3 pt-2 pb-1 text-xs font-medium uppercase text-n-slate-10"
               >
-                Adicionar time inteiro
+                {{ $t('INBOX_MGMT.SETTINGS_POPUP.ADD_TEAM_SHORTCUT_LABEL') }}
               </p>
               <button
                 v-for="team in addableTeams"
@@ -507,7 +526,7 @@ onMounted(() => {
               v-if="addableAgents.length"
               class="px-3 pt-2 pb-1 text-xs font-medium uppercase text-n-slate-10"
             >
-              Agentes
+              {{ $t('INBOX_MGMT.SETTINGS_POPUP.AGENTS_LABEL') }}
             </p>
             <button
               v-for="agent in addableAgents"
@@ -524,7 +543,7 @@ onMounted(() => {
             v-else-if="showAddDropdown && addSearch"
             class="absolute z-10 mt-1 w-full rounded-lg border border-n-weak bg-n-solid-1 shadow-lg px-3 py-3 text-sm text-n-slate-10"
           >
-            Nenhum agente ou time encontrado
+            {{ $t('INBOX_MGMT.SETTINGS_POPUP.NO_AGENT_OR_TEAM_FOUND') }}
           </div>
         </div>
 
@@ -533,12 +552,12 @@ onMounted(() => {
           <div
             class="flex items-center px-3 py-2 bg-n-slate-2 border-b border-n-weak"
           >
-            <span class="text-xs font-medium text-n-slate-11 flex-1"
-              >Agente</span
-            >
-            <span class="text-xs font-medium text-n-slate-11 w-36 text-center"
-              >Receber atendimentos</span
-            >
+            <span class="text-xs font-medium text-n-slate-11 flex-1">{{
+              $t('INBOX_MGMT.SETTINGS_POPUP.TABLE_HEADER_AGENT')
+            }}</span>
+            <span class="text-xs font-medium text-n-slate-11 w-36 text-center">
+              {{ $t('INBOX_MGMT.SETTINGS_POPUP.TABLE_HEADER_ELIGIBLE') }}
+            </span>
             <span class="w-16" />
           </div>
           <div class="max-h-64 overflow-y-auto">
@@ -563,11 +582,11 @@ onMounted(() => {
               <button
                 type="button"
                 class="w-16 flex items-center justify-center gap-1 text-xs text-n-slate-11 hover:text-n-ruby-11 transition-colors"
-                title="Remover agente da caixa"
+                :title="$t('INBOX_MGMT.SETTINGS_POPUP.REMOVE_AGENT_TITLE')"
                 @click="removeAgent(agent.id)"
               >
                 <span class="i-lucide-trash-2 size-3.5 shrink-0" />
-                Remover
+                {{ $t('INBOX_MGMT.SETTINGS_POPUP.REMOVE') }}
               </button>
             </div>
 
@@ -575,7 +594,7 @@ onMounted(() => {
               v-if="memberAgents.length === 0"
               class="px-3 py-5 text-sm text-n-slate-10 text-center"
             >
-              Nenhum agente adicionado. Use o campo acima para adicionar.
+              {{ $t('INBOX_MGMT.SETTINGS_POPUP.NO_AGENTS_ADDED') }}
             </div>
           </div>
         </div>
@@ -584,8 +603,8 @@ onMounted(() => {
           {{ memberAgents.length }}
           {{
             memberAgents.length === 1
-              ? 'agente nesta caixa'
-              : 'agentes nesta caixa'
+              ? $t('INBOX_MGMT.SETTINGS_POPUP.AGENT_COUNT_SINGULAR')
+              : $t('INBOX_MGMT.SETTINGS_POPUP.AGENT_COUNT_PLURAL')
           }}
         </p>
       </div>
@@ -604,6 +623,27 @@ onMounted(() => {
         </div>
       </template>
     </SettingsFieldSection>
+
+    <SettingsFieldSection
+      :label="$t('INBOX_MGMT.SETTINGS_POPUP.DEFAULT_TEAM')"
+      :help-text="$t('INBOX_MGMT.SETTINGS_POPUP.DEFAULT_TEAM_SUB_TEXT')"
+      class="mt-6"
+    >
+      <select
+        v-model="defaultTeamId"
+        :disabled="isUpdatingDefaultTeam"
+        class="reset-base w-full max-w-sm rounded-lg border border-n-weak bg-n-solid-1 px-3 py-2 text-sm text-n-slate-12"
+        @change="updateDefaultTeam(defaultTeamId)"
+      >
+        <option :value="null">
+          {{ $t('INBOX_MGMT.SETTINGS_POPUP.DEFAULT_TEAM_NONE_OPTION') }}
+        </option>
+        <option v-for="team in teamsList" :key="team.id" :value="team.id">
+          {{ team.name }}
+        </option>
+      </select>
+    </SettingsFieldSection>
+
     <SettingsAccordion
       :title="$t('INBOX_MGMT.SETTINGS_POPUP.AGENT_ASSIGNMENT')"
       class="mt-6"

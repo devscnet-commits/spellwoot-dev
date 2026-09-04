@@ -142,6 +142,7 @@ class Conversation < ApplicationRecord
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status
   before_create :ensure_waiting_since
+  before_create :assign_default_team_from_inbox
 
   after_update_commit :execute_after_update_commit_callbacks
   after_create_commit :notify_conversation_creation
@@ -303,6 +304,19 @@ class Conversation < ApplicationRecord
 
   def ensure_waiting_since
     self.waiting_since = created_at
+  end
+
+  # Regra combinada com a Jaqueline (04/09): lead chegou -> tem IA live ou bot vinculado à caixa? Se
+  # sim, a conversa pertence a eles até o handoff (ver ai_pending_handoff?/active_bot? — não pular na
+  # frente deles aqui). Se não, cai no time padrão da caixa, que então segue as políticas normais de
+  # atribuição (rate limit, capacidade, round-robin/balanced). Antes disso dependia inteiramente de
+  # uma automação externa (n8n + Bitrix) que hoje está desligada — sem IA nem n8n rodando, nada
+  # setava team_id e a conversa nunca entrava na distribuição automática entre agentes.
+  def assign_default_team_from_inbox
+    return if team_id.present?
+    return if ai_assistant_active? || inbox.active_bot?
+
+    self.team_id = inbox.default_team_id
   end
 
   def validate_additional_attributes
