@@ -26,7 +26,15 @@ class AutoAssignment::AssignmentService
   def assign_conversation_now(conversation)
     return false if conversation.assignee_id.present?
 
-    with_assignment_lock { assign_available_agent(conversation) }
+    assigned = with_assignment_lock { assign_available_agent(conversation) }
+    # A burst of leads landing on the same inbox at nearly the same instant (the normal
+    # pattern for paid-ads traffic) means most of them lose the single-shot Redis lock
+    # (Redis::LockManager#lock does one SET NX, no wait/retry) and silently give up here --
+    # confirmed live on 04/09: several conversations sat with a team but no agent for minutes,
+    # until the periodic sweep (AutoAssignment::PeriodicAssignmentJob) eventually caught them.
+    # Retry through the same bulk path right away instead of waiting for that next cycle.
+    AutoAssignment::AssignmentJob.perform_later(inbox_id: inbox.id) unless assigned
+    assigned
   end
 
   private
