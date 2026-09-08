@@ -15,6 +15,7 @@ defineProps({
   samples: { type: Object, default: () => ({}) },
   idealForDescription: { type: String, default: '' },
   customizableAreas: { type: String, default: '' },
+  showLivePreviewNote: { type: Boolean, default: false },
 });
 
 const { t } = useI18n();
@@ -38,6 +39,27 @@ const { t } = useI18n();
       :buttons="buttons"
       :samples="samples"
     />
+
+    <div
+      v-if="showLivePreviewNote"
+      class="flex items-start gap-2 p-3 border rounded-lg border-n-teal-6 bg-n-teal-2 dark:bg-n-teal-3"
+    >
+      <span
+        class="flex-shrink-0 mt-0.5 size-4 i-lucide-check-circle-2 text-n-teal-11"
+      />
+      <p class="text-body-main text-n-teal-12">
+        <span class="font-semibold">
+          {{
+            t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.LIVE_NOTE_TITLE')
+          }}:
+        </span>
+        {{
+          t(
+            'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.LIVE_NOTE_DESCRIPTION'
+          )
+        }}
+      </p>
+    </div>
 
     <div class="p-4 space-y-2 border rounded-xl border-n-weak bg-n-solid-2">
       <h3 class="flex items-center gap-2 font-semibold text-n-slate-12">
