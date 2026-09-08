@@ -1,6 +1,11 @@
 class OnlineStatusTracker
   # NOTE: You can customise the environment variable to keep your agents/contacts as online for longer
-  PRESENCE_DURATION = ENV.fetch('PRESENCE_DURATION', 20).to_i.seconds
+  # Confirmed live on 08/09: the frontend heartbeat (BaseActionCableConnector#PRESENCE_INTERVAL) pings
+  # every 20s, same as this window used to be -- zero slack, so any hiccup (network latency, a
+  # backgrounded/throttled tab, a WebSocket reconnect) flips the agent to "offline" until the next
+  # ping lands. That made auto-assignment skip online agents essentially at random, and starved the
+  # round-robin queue. Match the margin already used below for contacts (window > ping interval).
+  PRESENCE_DURATION = ENV.fetch('PRESENCE_DURATION', 60).to_i.seconds
   # Widget pings every 60s, so contacts need a longer presence window
   CONTACT_PRESENCE_DURATION = ENV.fetch('CONTACT_PRESENCE_DURATION', 90).to_i.seconds
 
