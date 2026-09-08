@@ -17,6 +17,7 @@ import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 import TemplateBodyField from './TemplateBodyField.vue';
+import TemplateButtonsField from './TemplateButtonsField.vue';
 import TemplatePreviewSidebar from './TemplatePreviewSidebar.vue';
 import TemplateSubmitConfirmModal from './TemplateSubmitConfirmModal.vue';
 import { CATEGORY_ICONS } from './templateCategoryIcons';
@@ -359,24 +360,6 @@ const goToStep1 = () => {
   currentStep.value = 1;
 };
 
-const addButton = type => {
-  if (form.buttons.length >= maxButtons.value) return;
-
-  form.buttons.push({
-    type,
-    text: '',
-    url: '',
-    phone_number: '',
-    example: '',
-    flow_id: '',
-    navigate_screen: '',
-  });
-};
-
-const removeButton = index => {
-  form.buttons.splice(index, 1);
-};
-
 const buildTemplatePayload = () => ({
   name: form.name,
   category: form.category,
@@ -708,117 +691,11 @@ const submitTemplate = async () => {
             </CardLayout>
 
             <CardLayout v-if="!isCallPermissionRequest">
-              <h3 class="font-semibold text-n-slate-12">
-                {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
-              </h3>
-
-              <div
-                v-for="(button, index) in form.buttons"
-                :key="index"
-                class="p-3 rounded-lg border border-n-weak space-y-2"
-              >
-                <div class="flex items-center justify-between">
-                  <span class="text-body-main font-medium text-n-slate-12">
-                    {{ buttonTypeLabels[button.type] }}
-                  </span>
-                  <Button
-                    icon="i-lucide-trash-2"
-                    variant="ghost"
-                    color="ruby"
-                    size="xs"
-                    :label="
-                      $t(
-                        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.REMOVE_BUTTON'
-                      )
-                    "
-                    @click="removeButton(index)"
-                  />
-                </div>
-
-                <Input
-                  v-model="button.text"
-                  :label="
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.TEXT'
-                    )
-                  "
-                />
-
-                <Input
-                  v-if="button.type === 'URL'"
-                  v-model="button.url"
-                  :label="
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL'
-                    )
-                  "
-                />
-
-                <Input
-                  v-if="button.type === 'PHONE_NUMBER'"
-                  v-model="button.phone_number"
-                  :label="
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.PHONE_NUMBER'
-                    )
-                  "
-                />
-
-                <Input
-                  v-if="button.type === 'COPY_CODE'"
-                  v-model="button.example"
-                  :label="
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
-                    )
-                  "
-                />
-
-                <Input
-                  v-if="button.type === 'FLOW'"
-                  v-model="button.flow_id"
-                  :label="
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID'
-                    )
-                  "
-                  :message="
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
-                    )
-                  "
-                />
-                <Input
-                  v-if="button.type === 'FLOW'"
-                  v-model="button.navigate_screen"
-                  :label="
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
-                    )
-                  "
-                />
-              </div>
-
-              <p
-                v-if="form.buttons.length >= maxButtons"
-                class="text-body-main text-n-slate-11"
-              >
-                {{
-                  $t(
-                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.MAX_REACHED',
-                    {
-                      count: maxButtons,
-                    }
-                  )
-                }}
-              </p>
-              <ComboBox
-                v-else
-                :options="buttonTypeOptions"
-                :placeholder="
-                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.ADD_BUTTON')
-                "
-                @update:model-value="addButton"
+              <TemplateButtonsField
+                v-model="form.buttons"
+                :button-type-options="buttonTypeOptions"
+                :button-type-labels="buttonTypeLabels"
+                :max-buttons="maxButtons"
               />
             </CardLayout>
 
@@ -852,6 +729,7 @@ const submitTemplate = async () => {
             :samples="bodySamples"
             :ideal-for-description="subtypeDescriptions[form.subtype]"
             :customizable-areas="customizableAreas"
+            show-live-preview-note
           />
         </div>
       </div>

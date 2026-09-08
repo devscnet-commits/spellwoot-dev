@@ -188,6 +188,8 @@
         },
         "BUTTONS": {
           "TITLE": "Botões",
+          "OPTIONAL_BADGE": "Opcional",
+          "DESCRIPTION": "Crie botões que permitam que os clientes respondam à sua mensagem ou realizem uma ação. É possível adicionar até {count} botões.",
           "ADD_BUTTON": "Adicionar botão",
           "REMOVE_BUTTON": "Remover botão",
           "MAX_REACHED": "Você atingiu o limite de {count} botões.",
@@ -201,10 +203,10 @@
             "ORDER_DETAILS": "Revisar e pagar"
           },
           "FIELDS": {
-            "TEXT": "Texto do botão",
-            "URL": "URL",
+            "TEXT": "Texto do botão (máx {count} car.)",
+            "URL": "URL de destino",
             "PHONE_NUMBER": "Número de telefone",
-            "EXAMPLE_CODE": "Código de exemplo",
+            "EXAMPLE_CODE": "Código promocional de amostra",
             "FLOW_ID": "ID do Flow",
             "FLOW_ID_HINT": "ID do Flow já publicado no WhatsApp Manager.",
             "NAVIGATE_SCREEN": "Tela inicial (opcional)"
@@ -217,7 +219,9 @@
           "WHATSAPP_BADGE": "WhatsApp",
           "MEDIA_PLACEHOLDER": "Arquivo de mídia",
           "BODY_PLACEHOLDER": "Escreva o corpo da mensagem para ver a prévia.",
-          "BUTTON_PLACEHOLDER": "Botão"
+          "BUTTON_PLACEHOLDER": "Botão",
+          "LIVE_NOTE_TITLE": "Prévia em tempo real",
+          "LIVE_NOTE_DESCRIPTION": "Todas as alterações no texto, cabeçalho, variáveis e botões são refletidas instantaneamente no celular ao lado."
         }
       },
       "CONFIRM": {

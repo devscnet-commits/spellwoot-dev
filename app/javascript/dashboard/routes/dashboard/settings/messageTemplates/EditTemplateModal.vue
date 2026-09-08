@@ -6,11 +6,10 @@ import { useStore } from 'dashboard/composables/store';
 
 import Button from 'dashboard/components-next/button/Button.vue';
 import CardLayout from 'dashboard/components-next/CardLayout.vue';
-import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
-import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 import TemplateBodyField from './TemplateBodyField.vue';
+import TemplateButtonsField from './TemplateButtonsField.vue';
 import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
 import {
   findComponent,
@@ -78,15 +77,6 @@ const detectedVariables = computed(() => {
   const numbers = [...new Set([...matches].map(match => Number(match[1])))];
   return numbers.sort((a, b) => a - b);
 });
-
-const addButton = type => {
-  if (form.buttons.length >= MAX_BUTTONS) return;
-  form.buttons.push({ type, text: '', url: '', phone_number: '', example: '' });
-};
-
-const removeButton = index => {
-  form.buttons.splice(index, 1);
-};
 
 const buildTemplatePayload = () => ({
   category: props.template.category,
@@ -180,106 +170,11 @@ const submit = async () => {
         </CardLayout>
 
         <CardLayout v-if="!isCallPermissionRequest">
-          <h3 class="font-semibold text-n-slate-12">
-            {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TITLE') }}
-          </h3>
-
-          <div
-            v-for="(button, index) in form.buttons"
-            :key="index"
-            class="p-3 rounded-lg border border-n-weak space-y-2"
-          >
-            <div class="flex items-center justify-between">
-              <span class="text-body-main font-medium text-n-slate-12">
-                {{ buttonTypeLabels[button.type] }}
-              </span>
-              <Button
-                icon="i-lucide-trash-2"
-                variant="ghost"
-                color="ruby"
-                size="xs"
-                :label="
-                  $t(
-                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.REMOVE_BUTTON'
-                  )
-                "
-                @click="removeButton(index)"
-              />
-            </div>
-
-            <Input
-              v-model="button.text"
-              :label="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.TEXT')
-              "
-            />
-            <Input
-              v-if="button.type === 'URL'"
-              v-model="button.url"
-              :label="
-                $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL')
-              "
-            />
-            <Input
-              v-if="button.type === 'PHONE_NUMBER'"
-              v-model="button.phone_number"
-              :label="
-                $t(
-                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.PHONE_NUMBER'
-                )
-              "
-            />
-            <Input
-              v-if="button.type === 'COPY_CODE'"
-              v-model="button.example"
-              :label="
-                $t(
-                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE'
-                )
-              "
-            />
-            <Input
-              v-if="button.type === 'FLOW'"
-              v-model="button.flow_id"
-              :label="
-                $t(
-                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID'
-                )
-              "
-              :message="
-                $t(
-                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
-                )
-              "
-            />
-            <Input
-              v-if="button.type === 'FLOW'"
-              v-model="button.navigate_screen"
-              :label="
-                $t(
-                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
-                )
-              "
-            />
-          </div>
-
-          <p
-            v-if="form.buttons.length >= MAX_BUTTONS"
-            class="text-body-main text-n-slate-11"
-          >
-            {{
-              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.MAX_REACHED', {
-                count: MAX_BUTTONS,
-              })
-            }}
-          </p>
-          <ComboBox
-            v-else
-            :options="buttonTypeOptions"
-            :placeholder="
-              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.ADD_BUTTON')
-            "
-            @update:model-value="addButton"
+          <TemplateButtonsField
+            v-model="form.buttons"
+            :button-type-options="buttonTypeOptions"
+            :button-type-labels="buttonTypeLabels"
+            :max-buttons="MAX_BUTTONS"
           />
         </CardLayout>
 
@@ -302,7 +197,7 @@ const submit = async () => {
         </div>
       </div>
 
-      <div class="sticky hidden w-full top-4 lg:block lg:max-w-sm">
+      <div class="sticky hidden w-full space-y-3 top-4 lg:block lg:max-w-sm">
         <TemplateWhatsAppPreview
           :header="form.header"
           :body="form.body"
@@ -310,6 +205,27 @@ const submit = async () => {
           :buttons="isCallPermissionRequest ? [] : form.buttons"
           :samples="bodySamples"
         />
+        <div
+          class="flex items-start gap-2 p-3 border rounded-lg border-n-teal-6 bg-n-teal-2 dark:bg-n-teal-3"
+        >
+          <span
+            class="flex-shrink-0 mt-0.5 size-4 i-lucide-check-circle-2 text-n-teal-11"
+          />
+          <p class="text-body-main text-n-teal-12">
+            <span class="font-semibold">
+              {{
+                $t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.LIVE_NOTE_TITLE'
+                )
+              }}:
+            </span>
+            {{
+              $t(
+                'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.PREVIEW.LIVE_NOTE_DESCRIPTION'
+              )
+            }}
+          </p>
+        </div>
       </div>
     </div>
   </div>

@@ -629,19 +629,24 @@ onMounted(() => {
       :help-text="$t('INBOX_MGMT.SETTINGS_POPUP.DEFAULT_TEAM_SUB_TEXT')"
       class="mt-6"
     >
-      <select
-        v-model="defaultTeamId"
-        :disabled="isUpdatingDefaultTeam"
-        class="reset-base w-full max-w-sm rounded-lg border border-n-weak bg-n-solid-1 px-3 py-2 text-sm text-n-slate-12"
-        @change="updateDefaultTeam(defaultTeamId)"
-      >
-        <option :value="null">
-          {{ $t('INBOX_MGMT.SETTINGS_POPUP.DEFAULT_TEAM_NONE_OPTION') }}
-        </option>
-        <option v-for="team in teamsList" :key="team.id" :value="team.id">
-          {{ team.name }}
-        </option>
-      </select>
+      <div class="relative w-full max-w-sm">
+        <select
+          v-model="defaultTeamId"
+          :disabled="isUpdatingDefaultTeam"
+          class="reset-base w-full appearance-none rounded-lg border border-n-weak bg-n-solid-1 py-2 pl-3 pr-8 text-sm text-n-slate-12"
+          @change="updateDefaultTeam(defaultTeamId)"
+        >
+          <option :value="null">
+            {{ $t('INBOX_MGMT.SETTINGS_POPUP.DEFAULT_TEAM_NONE_OPTION') }}
+          </option>
+          <option v-for="team in teamsList" :key="team.id" :value="team.id">
+            {{ team.name }}
+          </option>
+        </select>
+        <span
+          class="i-lucide-chevron-down pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-n-slate-10"
+        />
+      </div>
     </SettingsFieldSection>
 
     <SettingsAccordion
