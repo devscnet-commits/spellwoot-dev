@@ -60,6 +60,10 @@ const LANGUAGES = [
   { value: 'it', label: 'Italiano' },
   { value: 'de', label: 'Deutsch' },
 ];
+// Mirrors Whatsapp::MessageTemplateValidator#name_error / #body_error — the two required-field
+// checks worth catching client-side so the user isn't sent through the confirm modal only to
+// bounce back to the same form. The rest of the backend's validation stays server-side only.
+const NAME_REGEX = /^[a-z0-9_]+$/;
 const INBOX_AVATAR_CLASSES = [
   'bg-n-teal-9',
   'bg-n-blue-9',
@@ -408,6 +412,36 @@ const buildTemplatePayload = () => ({
   })),
 });
 
+const requiredFieldErrors = () => {
+  const errors = [];
+  if (!form.name.trim()) {
+    errors.push(
+      t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.NAME_REQUIRED')
+    );
+  } else if (!NAME_REGEX.test(form.name)) {
+    errors.push(
+      t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.NAME_FORMAT')
+    );
+  }
+  if (!isAuthentication.value && !form.body.trim()) {
+    errors.push(
+      t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_REQUIRED')
+    );
+  }
+  return errors;
+};
+
+const openConfirmModal = () => {
+  const errors = requiredFieldErrors();
+  if (errors.length) {
+    submitError.value = errors.join('; ');
+    useAlert(submitError.value);
+    return;
+  }
+  submitError.value = '';
+  showConfirmModal.value = true;
+};
+
 const submitTemplate = async () => {
   isSubmitting.value = true;
   submitError.value = '';
@@ -729,7 +763,7 @@ const submitTemplate = async () => {
                 :label="
                   $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.SUBMIT_BUTTON')
                 "
-                @click="showConfirmModal = true"
+                @click="openConfirmModal"
               />
             </div>
           </div>

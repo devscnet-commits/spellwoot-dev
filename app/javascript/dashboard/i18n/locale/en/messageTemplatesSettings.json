@@ -222,6 +222,11 @@
           "BUTTON_PLACEHOLDER": "Botão",
           "LIVE_NOTE_TITLE": "Prévia em tempo real",
           "LIVE_NOTE_DESCRIPTION": "Todas as alterações no texto, cabeçalho, variáveis e botões são refletidas instantaneamente no celular ao lado."
+        },
+        "VALIDATION": {
+          "NAME_REQUIRED": "O nome é obrigatório",
+          "NAME_FORMAT": "O nome deve conter apenas letras minúsculas, números e underline",
+          "BODY_REQUIRED": "O corpo da mensagem é obrigatório"
         }
       },
       "CONFIRM": {
