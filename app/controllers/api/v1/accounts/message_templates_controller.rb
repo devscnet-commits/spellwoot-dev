@@ -13,6 +13,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     template_params = extract_template_params
     service = Whatsapp::MessageTemplateService.new(@inbox.channel)
     result = service.create_template(template_params)
+    @inbox.channel.sync_templates if result[:success]
     render_template_creation_result(result)
   rescue ActionController::ParameterMissing
     render json: { error: 'Template parameters are required' }, status: :unprocessable_entity
@@ -24,6 +25,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     template_params = extract_update_params
     service = Whatsapp::MessageTemplateService.new(@inbox.channel)
     result = service.update_template(params[:id], template_params)
+    @inbox.channel.sync_templates if result[:success]
     render_template_update_result(result)
   rescue ActionController::ParameterMissing
     render json: { error: 'Template parameters are required' }, status: :unprocessable_entity
@@ -33,6 +35,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   def destroy
     service = Whatsapp::MessageTemplateService.new(@inbox.channel)
     result = service.delete_template(params[:id])
+    @inbox.channel.sync_templates if result[:success]
     render_template_delete_result(result)
   end
 
