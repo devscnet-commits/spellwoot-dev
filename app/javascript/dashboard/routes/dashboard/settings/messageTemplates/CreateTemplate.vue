@@ -17,7 +17,7 @@ import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import TemplateHeaderField from './TemplateHeaderField.vue';
 import TemplateBodyField from './TemplateBodyField.vue';
-import TemplateWhatsAppPreview from './TemplateWhatsAppPreview.vue';
+import TemplatePreviewSidebar from './TemplatePreviewSidebar.vue';
 import TemplateSubmitConfirmModal from './TemplateSubmitConfirmModal.vue';
 import { CATEGORY_ICONS } from './templateCategoryIcons';
 
@@ -182,6 +182,12 @@ const subtypes = computed(() =>
 
 const currentCategoryLabel = computed(
   () => categories.value.find(category => category.id === form.category)?.label
+);
+
+const currentCategoryDescription = computed(
+  () =>
+    categories.value.find(category => category.id === form.category)
+      ?.description
 );
 
 const currentLanguageLabel = computed(
@@ -441,8 +447,8 @@ const submitTemplate = async () => {
       />
     </template>
     <template #body>
-      <div v-if="currentStep === 1" class="p-4 max-w-2xl space-y-4">
-        <div>
+      <div v-if="currentStep === 1" class="p-4">
+        <div class="mb-4">
           <h2 class="text-heading-2 text-n-slate-12">
             {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.TITLE') }}
           </h2>
@@ -451,148 +457,182 @@ const submitTemplate = async () => {
           </p>
         </div>
 
-        <CardLayout v-if="whatsAppCloudInboxes.length">
-          <div class="flex items-center justify-between w-full">
-            <div>
-              <h3 class="flex items-center gap-2 font-semibold text-n-slate-12">
-                <Icon icon="i-lucide-inbox" class="flex-shrink-0 size-4" />
-                {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.TITLE') }}
-              </h3>
-              <p class="mt-1 text-body-main text-n-slate-11">
-                {{
-                  $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.DESCRIPTION')
-                }}
-              </p>
-            </div>
-            <span
-              class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-n-slate-3 text-n-slate-11"
-            >
-              {{
-                $t(
-                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.ACTIVE_COUNT',
-                  whatsAppCloudInboxes.length
-                )
-              }}
-            </span>
-          </div>
-
-          <div class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
-            <button
-              v-for="(inbox, index) in whatsAppCloudInboxes"
-              :key="inbox.id"
-              type="button"
-              class="flex items-start gap-3 p-3 text-left border rounded-xl transition-all"
-              :class="
-                inboxId === inbox.id
-                  ? 'border-n-brand bg-n-alpha-2'
-                  : 'border-n-weak hover:border-n-slate-6'
-              "
-              @click="inboxId = inbox.id"
-            >
-              <span
-                class="flex items-center justify-center flex-shrink-0 text-sm font-semibold text-white rounded-full size-8"
-                :class="inboxAvatarClass(index)"
-              >
-                {{ inbox.name.charAt(0).toUpperCase() }}
-              </span>
-              <span class="min-w-0">
-                <span class="block font-medium truncate text-n-slate-12">
-                  {{ inbox.name }}
-                </span>
+        <div class="flex flex-col items-start gap-6 lg:flex-row">
+          <div class="w-full space-y-4 lg:max-w-2xl">
+            <CardLayout v-if="whatsAppCloudInboxes.length">
+              <div class="flex items-center justify-between w-full">
+                <div>
+                  <h3
+                    class="flex items-center gap-2 font-semibold text-n-slate-12"
+                  >
+                    <Icon icon="i-lucide-inbox" class="flex-shrink-0 size-4" />
+                    {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.TITLE') }}
+                  </h3>
+                  <p class="mt-1 text-body-main text-n-slate-11">
+                    {{
+                      $t(
+                        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.DESCRIPTION'
+                      )
+                    }}
+                  </p>
+                </div>
                 <span
-                  v-if="inbox.phone_number"
-                  class="block text-xs text-n-slate-10"
-                >
-                  {{ inbox.phone_number }}
-                </span>
-              </span>
-            </button>
-          </div>
-        </CardLayout>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <button
-            v-for="category in categories"
-            :key="category.id"
-            type="button"
-            class="text-left p-4 rounded-xl border transition-all"
-            :class="
-              form.category === category.id
-                ? 'border-n-brand bg-n-alpha-2'
-                : 'border-n-weak hover:border-n-slate-6'
-            "
-            @click="form.category = category.id"
-          >
-            <span class="flex items-center gap-2 font-semibold text-n-slate-12">
-              <Icon :icon="category.icon" class="flex-shrink-0 size-4" />
-              {{ category.label }}
-            </span>
-            <span class="block text-body-main text-n-slate-11 mt-1">
-              {{ category.description }}
-            </span>
-          </button>
-        </div>
-
-        <Banner color="amber">
-          <div class="flex items-center gap-2">
-            <Icon icon="i-lucide-info" class="flex-shrink-0 size-4" />
-            <span>
-              {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.META_GUIDELINE') }}
-            </span>
-          </div>
-        </Banner>
-
-        <div class="space-y-2">
-          <h3 class="font-semibold text-n-slate-12">
-            {{ subtypesSectionTitle }}
-          </h3>
-          <p class="text-body-main text-n-slate-11">
-            {{
-              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.DESCRIPTION')
-            }}
-          </p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              v-for="subtype in subtypes"
-              :key="subtype.id"
-              type="button"
-              class="text-left p-4 rounded-xl border transition-all"
-              :class="[
-                subtype.comingSoon
-                  ? 'opacity-50 cursor-not-allowed border-n-weak'
-                  : 'cursor-pointer',
-                !subtype.comingSoon && form.subtype === subtype.id
-                  ? 'border-n-brand bg-n-alpha-2'
-                  : 'border-n-weak hover:border-n-slate-6',
-              ]"
-              @click="selectSubtype(subtype)"
-            >
-              <span class="flex items-center gap-2">
-                <span class="font-semibold text-n-slate-12">
-                  {{ subtype.label }}
-                </span>
-                <span
-                  v-if="subtype.comingSoon"
-                  class="text-caption px-1.5 py-0.5 rounded-full bg-n-slate-3 text-n-slate-11"
+                  class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-n-slate-3 text-n-slate-11"
                 >
                   {{
                     $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.COMING_SOON'
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.INBOX.ACTIVE_COUNT',
+                      whatsAppCloudInboxes.length
                     )
                   }}
                 </span>
-              </span>
-              <span class="block text-body-main text-n-slate-11 mt-1">
-                {{ subtype.description }}
-              </span>
-            </button>
-          </div>
-        </div>
+              </div>
 
-        <Button
-          :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.NEXT_BUTTON')"
-          @click="goToStep2"
-        />
+              <div class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  v-for="(inbox, index) in whatsAppCloudInboxes"
+                  :key="inbox.id"
+                  type="button"
+                  class="flex items-start gap-3 p-3 text-left border rounded-xl transition-all"
+                  :class="
+                    inboxId === inbox.id
+                      ? 'border-n-brand bg-n-alpha-2'
+                      : 'border-n-weak hover:border-n-slate-6'
+                  "
+                  @click="inboxId = inbox.id"
+                >
+                  <span
+                    class="flex items-center justify-center flex-shrink-0 text-sm font-semibold text-white rounded-full size-8"
+                    :class="inboxAvatarClass(index)"
+                  >
+                    {{ inbox.name.charAt(0).toUpperCase() }}
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block font-medium truncate text-n-slate-12">
+                      {{ inbox.name }}
+                    </span>
+                    <span
+                      v-if="inbox.phone_number"
+                      class="block text-xs text-n-slate-10"
+                    >
+                      {{ inbox.phone_number }}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </CardLayout>
+
+            <div>
+              <h3 class="mb-1 font-semibold text-n-slate-12">
+                {{ $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORY_TITLE') }}
+              </h3>
+              <p class="mb-2 text-body-main text-n-slate-11">
+                {{
+                  $t(
+                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.CATEGORY_DESCRIPTION'
+                  )
+                }}
+              </p>
+              <div class="flex gap-1 border-b border-n-weak">
+                <button
+                  v-for="category in categories"
+                  :key="category.id"
+                  type="button"
+                  class="flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
+                  :class="[
+                    form.category === category.id
+                      ? 'border-n-brand text-n-brand'
+                      : 'border-transparent text-n-slate-11 hover:text-n-slate-12',
+                  ]"
+                  @click="form.category = category.id"
+                >
+                  <Icon :icon="category.icon" class="flex-shrink-0 size-4" />
+                  {{ category.label }}
+                </button>
+              </div>
+              <p class="mt-2 text-body-main text-n-slate-11">
+                {{ currentCategoryDescription }}
+              </p>
+            </div>
+
+            <Banner color="amber">
+              <div class="flex items-center gap-2">
+                <Icon icon="i-lucide-info" class="flex-shrink-0 size-4" />
+                <span>
+                  {{
+                    $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.META_GUIDELINE')
+                  }}
+                </span>
+              </div>
+            </Banner>
+
+            <div class="space-y-2">
+              <h3 class="font-semibold text-n-slate-12">
+                {{ subtypesSectionTitle }}
+              </h3>
+              <p class="text-body-main text-n-slate-11">
+                {{
+                  $t(
+                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.DESCRIPTION'
+                  )
+                }}
+              </p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  v-for="subtype in subtypes"
+                  :key="subtype.id"
+                  type="button"
+                  class="text-left p-4 rounded-xl border transition-all"
+                  :class="[
+                    subtype.comingSoon
+                      ? 'opacity-50 cursor-not-allowed border-n-weak'
+                      : 'cursor-pointer',
+                    !subtype.comingSoon && form.subtype === subtype.id
+                      ? 'border-n-brand bg-n-alpha-2'
+                      : 'border-n-weak hover:border-n-slate-6',
+                  ]"
+                  @click="selectSubtype(subtype)"
+                >
+                  <span class="flex items-center gap-2">
+                    <span class="font-semibold text-n-slate-12">
+                      {{ subtype.label }}
+                    </span>
+                    <span
+                      v-if="subtype.comingSoon"
+                      class="text-caption px-1.5 py-0.5 rounded-full bg-n-slate-3 text-n-slate-11"
+                    >
+                      {{
+                        $t(
+                          'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.COMING_SOON'
+                        )
+                      }}
+                    </span>
+                  </span>
+                  <span class="block text-body-main text-n-slate-11 mt-1">
+                    {{ subtype.description }}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <Button
+              :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.NEXT_BUTTON')"
+              @click="goToStep2"
+            />
+          </div>
+
+          <TemplatePreviewSidebar
+            :inbox-summary="currentInboxSummary"
+            :category-subtype-summary="currentCategorySubtypeSummary"
+            :header="form.header"
+            :body="form.body"
+            :footer="isAuthentication ? '' : form.footer"
+            :buttons="isCallPermissionRequest ? [] : form.buttons"
+            :samples="bodySamples"
+            :ideal-for-description="subtypeDescriptions[form.subtype]"
+            :customizable-areas="customizableAreas"
+          />
+        </div>
       </div>
 
       <div v-else class="p-4">
@@ -802,55 +842,17 @@ const submitTemplate = async () => {
             </div>
           </div>
 
-          <div
-            class="sticky hidden w-full space-y-3 top-4 lg:block lg:max-w-sm"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-xs truncate text-n-slate-10">
-                {{ currentInboxSummary }}
-              </span>
-              <span
-                class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-n-blue-3 text-n-blue-11"
-              >
-                {{ currentCategorySubtypeSummary }}
-              </span>
-            </div>
-
-            <TemplateWhatsAppPreview
-              :header="form.header"
-              :body="form.body"
-              :footer="isAuthentication ? '' : form.footer"
-              :buttons="isCallPermissionRequest ? [] : form.buttons"
-              :samples="bodySamples"
-            />
-
-            <div
-              class="p-4 space-y-2 border rounded-xl border-n-weak bg-n-solid-2"
-            >
-              <h3 class="flex items-center gap-2 font-semibold text-n-slate-12">
-                <span class="i-lucide-sparkles size-4 text-n-blue-9" />
-                {{
-                  $t(
-                    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.IDEAL_FOR_TITLE'
-                  )
-                }}
-              </h3>
-              <p class="text-body-main text-n-slate-11">
-                {{ subtypeDescriptions[form.subtype] }}
-              </p>
-
-              <div class="pt-2 mt-2 border-t border-n-weak">
-                <p class="mb-1 text-xs font-medium uppercase text-n-slate-10">
-                  {{
-                    $t(
-                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CUSTOMIZABLE_AREAS_TITLE'
-                    )
-                  }}
-                </p>
-                <p class="text-xs text-n-slate-11">{{ customizableAreas }}</p>
-              </div>
-            </div>
-          </div>
+          <TemplatePreviewSidebar
+            :inbox-summary="currentInboxSummary"
+            :category-subtype-summary="currentCategorySubtypeSummary"
+            :header="form.header"
+            :body="form.body"
+            :footer="isAuthentication ? '' : form.footer"
+            :buttons="isCallPermissionRequest ? [] : form.buttons"
+            :samples="bodySamples"
+            :ideal-for-description="subtypeDescriptions[form.subtype]"
+            :customizable-areas="customizableAreas"
+          />
         </div>
       </div>
     </template>
