@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onActivated, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
@@ -81,12 +81,14 @@ const whatsAppCloudInboxes = computed(() =>
   )
 );
 
-const queryInboxId = Number(route.query.inbox_id);
-const inboxId = ref(
-  whatsAppCloudInboxes.value.some(inbox => inbox.id === queryInboxId)
+const resolveInboxId = () => {
+  const queryInboxId = Number(route.query.inbox_id);
+  return whatsAppCloudInboxes.value.some(inbox => inbox.id === queryInboxId)
     ? queryInboxId
-    : whatsAppCloudInboxes.value[0]?.id
-);
+    : whatsAppCloudInboxes.value[0]?.id;
+};
+
+const inboxId = ref(resolveInboxId());
 
 const inboxAvatarClass = index =>
   INBOX_AVATAR_CLASSES[index % INBOX_AVATAR_CLASSES.length];
@@ -96,7 +98,7 @@ const isSubmitting = ref(false);
 const submitError = ref('');
 const showConfirmModal = ref(false);
 
-const form = reactive({
+const initialFormState = () => ({
   category: 'MARKETING',
   subtype: 'STANDARD',
   name: '',
@@ -107,7 +109,20 @@ const form = reactive({
   buttons: [],
 });
 
+const form = reactive(initialFormState());
 const bodySamples = reactive({});
+
+// SettingsWrapper keeps this route's component instance alive (keep-alive keyed by the
+// unparameterized path), so leaving mid-wizard and clicking "New template" again would
+// otherwise resume the previous, unfinished draft instead of starting a blank one.
+onActivated(() => {
+  inboxId.value = resolveInboxId();
+  currentStep.value = 1;
+  Object.assign(form, initialFormState());
+  Object.keys(bodySamples).forEach(key => delete bodySamples[key]);
+  submitError.value = '';
+  showConfirmModal.value = false;
+});
 
 const categories = computed(() => [
   {
