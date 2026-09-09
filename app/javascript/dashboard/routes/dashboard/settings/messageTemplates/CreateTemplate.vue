@@ -745,6 +745,7 @@ const submitTemplate = async () => {
                 :button-type-options="buttonTypeOptions"
                 :button-type-labels="buttonTypeLabels"
                 :max-buttons="maxButtons"
+                :is-authentication="isAuthentication"
               />
             </CardLayout>
 

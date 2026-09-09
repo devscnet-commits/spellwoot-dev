@@ -11,6 +11,10 @@ const props = defineProps({
   buttonTypeOptions: { type: Array, default: () => [] },
   buttonTypeLabels: { type: Object, default: () => ({}) },
   maxButtons: { type: Number, default: 10 },
+  // The AUTHENTICATION category's COPY_CODE button is Meta's OTP button under the hood — fixed
+  // text ("Copy Code"), no sample code — unlike the same button type used for a Marketing promo
+  // code, where both are user-editable. Same UI type, different rules depending on category.
+  isAuthentication: { type: Boolean, default: false },
 });
 
 const buttons = defineModel({ type: Array, default: () => [] });
@@ -19,6 +23,10 @@ const BUTTON_TEXT_MAX_LENGTH = 25;
 // Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
 // custom one, so there's nothing to let the user edit here.
 const FIXED_TEXT_BUTTON_TYPES = ['CATALOG', 'ORDER_DETAILS'];
+
+const hasFixedText = button =>
+  FIXED_TEXT_BUTTON_TYPES.includes(button.type) ||
+  (button.type === 'COPY_CODE' && props.isAuthentication);
 
 const { t } = useI18n();
 const isAddMenuOpen = ref(false);
@@ -125,7 +133,7 @@ const removeButton = index => {
       </div>
 
       <Input
-        v-if="!FIXED_TEXT_BUTTON_TYPES.includes(button.type)"
+        v-if="!hasFixedText(button)"
         v-model="button.text"
         :label="
           t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.TEXT', {
@@ -153,7 +161,7 @@ const removeButton = index => {
       />
 
       <Input
-        v-if="button.type === 'COPY_CODE'"
+        v-if="button.type === 'COPY_CODE' && !isAuthentication"
         v-model="button.example"
         :label="
           t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.EXAMPLE_CODE')

@@ -149,13 +149,19 @@ class Whatsapp::MessageTemplateValidator
   def button_error(button)
     type = button[:type]
     return "O tipo de botão #{type} não é suportado" unless ALLOWED_BUTTON_TYPES.include?(type)
-    return button_field_error(button) if FIXED_TEXT_BUTTON_TYPES.include?(type)
+    return button_field_error(button) if fixed_text_button?(button)
 
     text = button[:text].to_s
     return "O texto do botão é obrigatório para botões do tipo #{type}" if text.blank?
     return "O texto do botão deve ter no máximo #{MAX_BUTTON_TEXT_LENGTH} caracteres" if text.length > MAX_BUTTON_TEXT_LENGTH
 
     button_field_error(button)
+  end
+
+  # The AUTHENTICATION category's COPY_CODE button is Meta's OTP button — fixed text, no sample
+  # code — unlike the same button type used for a Marketing promo code, which is user-editable.
+  def fixed_text_button?(button)
+    FIXED_TEXT_BUTTON_TYPES.include?(button[:type]) || (button[:type] == 'COPY_CODE' && @params[:category] == 'AUTHENTICATION')
   end
 
   def button_field_error(button)
@@ -165,6 +171,8 @@ class Whatsapp::MessageTemplateValidator
     when 'PHONE_NUMBER'
       phone_number_error(button[:phone_number])
     when 'COPY_CODE'
+      return if @params[:category] == 'AUTHENTICATION'
+
       'O código de exemplo do botão é obrigatório' if button[:example].blank?
     when 'FLOW'
       'O ID do Flow do botão é obrigatório' if button[:flow_id].blank?

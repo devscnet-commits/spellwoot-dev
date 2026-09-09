@@ -117,8 +117,8 @@ class Whatsapp::MessageTemplateService
     [
       header_component(params[:header]),
       body_component(params),
-      footer_component(params[:footer]),
-      buttons_component(params[:buttons]),
+      footer_component(params[:footer], params[:category]),
+      buttons_component(params[:buttons], params[:category]),
       call_permission_request_component(params[:call_permission_request])
     ].compact
   end
@@ -148,26 +148,32 @@ class Whatsapp::MessageTemplateService
     component
   end
 
-  def footer_component(footer)
+  # Meta requires a FOOTER component on AUTHENTICATION templates (it's where the code-expiration
+  # notice goes), even though there's no user-editable footer text for that category.
+  def footer_component(footer, category)
+    return { type: 'FOOTER' } if category == 'AUTHENTICATION'
     return if footer.blank?
 
     { type: 'FOOTER', text: footer }
   end
 
-  def buttons_component(buttons)
+  def buttons_component(buttons, category)
     return if buttons.blank?
 
-    { type: 'BUTTONS', buttons: buttons.map { |button| build_button(button) } }
+    { type: 'BUTTONS', buttons: buttons.map { |button| build_button(button, category) } }
   end
 
-  def build_button(button)
+  def build_button(button, category)
     case button[:type]
     when 'URL'
       build_url_button(button)
     when 'PHONE_NUMBER'
       { type: 'PHONE_NUMBER', text: button[:text], phone_number: button[:phone_number] }
     when 'COPY_CODE'
-      { type: 'COPY_CODE', example: button[:example] }
+      # AUTHENTICATION's "copy the code" button is a different Meta shape (OTP/otp_type) from the
+      # generic "copy this promo code" button MARKETING/UTILITY templates use — same UI type,
+      # different wire format. No `example` here: Meta renders the OTP itself, it isn't a sample.
+      category == 'AUTHENTICATION' ? { type: 'OTP', otp_type: 'COPY_CODE', text: 'Copy Code' } : { type: 'COPY_CODE', example: button[:example] }
     when 'CATALOG'
       # Meta fixes the button text for CATALOG ("View catalog") and rejects a custom one.
       { type: 'CATALOG' }
