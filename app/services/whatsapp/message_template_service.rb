@@ -173,7 +173,7 @@ class Whatsapp::MessageTemplateService
       # AUTHENTICATION's "copy the code" button is a different Meta shape (OTP/otp_type) from the
       # generic "copy this promo code" button MARKETING/UTILITY templates use — same UI type,
       # different wire format. No `example` here: Meta renders the OTP itself, it isn't a sample.
-      category == 'AUTHENTICATION' ? { type: 'OTP', otp_type: 'COPY_CODE', text: 'Copy Code' } : { type: 'COPY_CODE', example: button[:example] }
+      category == 'AUTHENTICATION' ? { type: 'OTP', otp_type: 'COPY_CODE' } : { type: 'COPY_CODE', example: button[:example] }
     when 'CATALOG'
       # Meta fixes the button text for CATALOG ("View catalog") and rejects a custom one.
       { type: 'CATALOG' }
