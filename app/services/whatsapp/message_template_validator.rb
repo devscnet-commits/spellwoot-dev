@@ -9,6 +9,9 @@ class Whatsapp::MessageTemplateValidator
   # separate CALL_PERMISSION_REQUEST template component, validated by call_permission_request_error.
   ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS].freeze
   EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW ORDER_DETAILS].freeze
+  # Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
+  # custom one — skip the required-text check for them (button_field_error is a no-op for both).
+  FIXED_TEXT_BUTTON_TYPES = %w[CATALOG ORDER_DETAILS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   CALL_PERMISSION_REQUEST_HEADER_TYPES = %w[NONE TEXT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
@@ -92,6 +95,8 @@ class Whatsapp::MessageTemplateValidator
   end
 
   def body_error
+    return if @params[:category] == 'AUTHENTICATION'
+
     body = @params[:body].to_s
     return 'O corpo da mensagem é obrigatório' if body.blank?
     return "O corpo da mensagem deve ter no máximo #{MAX_BODY_LENGTH} caracteres" if body.length > MAX_BODY_LENGTH
@@ -100,8 +105,12 @@ class Whatsapp::MessageTemplateValidator
     variable_sample_error(body)
   end
 
+  # Meta treats a variable as "leading/trailing" even with punctuation stuck to it (e.g. "...{{2}}."
+  # is still rejected as trailing) — confirmed live against the real Graph API, which rejects that
+  # shape with error_subcode 2388299 "Leading or Trailing Params Not Allowed" even though it doesn't
+  # literally end the string. Match that by allowing punctuation/whitespace around the variable.
   def dangling_variable?(body)
-    body.match?(/\A\{\{\d+\}\}/) || body.match?(/\{\{\d+\}\}\z/)
+    body.match?(/\A[[:punct:]\s]*\{\{\d+\}\}/) || body.match?(/\{\{\d+\}\}[[:punct:]\s]*\z/)
   end
 
   def variable_sample_error(body)
@@ -140,12 +149,19 @@ class Whatsapp::MessageTemplateValidator
   def button_error(button)
     type = button[:type]
     return "O tipo de botão #{type} não é suportado" unless ALLOWED_BUTTON_TYPES.include?(type)
+    return button_field_error(button) if fixed_text_button?(button)
 
     text = button[:text].to_s
     return "O texto do botão é obrigatório para botões do tipo #{type}" if text.blank?
     return "O texto do botão deve ter no máximo #{MAX_BUTTON_TEXT_LENGTH} caracteres" if text.length > MAX_BUTTON_TEXT_LENGTH
 
     button_field_error(button)
+  end
+
+  # The AUTHENTICATION category's COPY_CODE button is Meta's OTP button — fixed text, no sample
+  # code — unlike the same button type used for a Marketing promo code, which is user-editable.
+  def fixed_text_button?(button)
+    FIXED_TEXT_BUTTON_TYPES.include?(button[:type]) || (button[:type] == 'COPY_CODE' && @params[:category] == 'AUTHENTICATION')
   end
 
   def button_field_error(button)
@@ -155,6 +171,8 @@ class Whatsapp::MessageTemplateValidator
     when 'PHONE_NUMBER'
       phone_number_error(button[:phone_number])
     when 'COPY_CODE'
+      return if @params[:category] == 'AUTHENTICATION'
+
       'O código de exemplo do botão é obrigatório' if button[:example].blank?
     when 'FLOW'
       'O ID do Flow do botão é obrigatório' if button[:flow_id].blank?

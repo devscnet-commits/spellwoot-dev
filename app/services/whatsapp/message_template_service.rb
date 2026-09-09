@@ -117,8 +117,8 @@ class Whatsapp::MessageTemplateService
     [
       header_component(params[:header]),
       body_component(params),
-      footer_component(params[:footer]),
-      buttons_component(params[:buttons]),
+      footer_component(params[:footer], params[:category]),
+      buttons_component(params[:buttons], params[:category]),
       call_permission_request_component(params[:call_permission_request])
     ].compact
   end
@@ -137,39 +137,51 @@ class Whatsapp::MessageTemplateService
     end
   end
 
+  # Meta auto-generates the body for AUTHENTICATION templates (the code delivery text isn't
+  # user-editable) and rejects a BODY component that includes a `text` field for that category.
   def body_component(params)
+    return { type: 'BODY' } if params[:category] == 'AUTHENTICATION'
+
     component = { type: 'BODY', text: params[:body] }
     sample_values = params[:body_sample_values]
     component[:example] = { body_text: [sample_values] } if sample_values.present?
     component
   end
 
-  def footer_component(footer)
+  # Meta requires a FOOTER component on AUTHENTICATION templates (it's where the code-expiration
+  # notice goes), even though there's no user-editable footer text for that category.
+  def footer_component(footer, category)
+    return { type: 'FOOTER' } if category == 'AUTHENTICATION'
     return if footer.blank?
 
     { type: 'FOOTER', text: footer }
   end
 
-  def buttons_component(buttons)
+  def buttons_component(buttons, category)
     return if buttons.blank?
 
-    { type: 'BUTTONS', buttons: buttons.map { |button| build_button(button) } }
+    { type: 'BUTTONS', buttons: buttons.map { |button| build_button(button, category) } }
   end
 
-  def build_button(button)
+  def build_button(button, category)
     case button[:type]
     when 'URL'
       build_url_button(button)
     when 'PHONE_NUMBER'
       { type: 'PHONE_NUMBER', text: button[:text], phone_number: button[:phone_number] }
     when 'COPY_CODE'
-      { type: 'COPY_CODE', example: button[:example] }
+      # AUTHENTICATION's "copy the code" button is a different Meta shape (OTP/otp_type) from the
+      # generic "copy this promo code" button MARKETING/UTILITY templates use — same UI type,
+      # different wire format. No `example` here: Meta renders the OTP itself, it isn't a sample.
+      category == 'AUTHENTICATION' ? { type: 'OTP', otp_type: 'COPY_CODE' } : { type: 'COPY_CODE', example: button[:example] }
     when 'CATALOG'
-      { type: 'CATALOG', text: button[:text] }
+      # The field is required, but Meta rejects any value other than this exact fixed text.
+      { type: 'CATALOG', text: 'View catalog' }
     when 'FLOW'
       build_flow_button(button)
     when 'ORDER_DETAILS'
-      { type: 'ORDER_DETAILS', text: button[:text] }
+      # Same as CATALOG — required field, fixed value.
+      { type: 'ORDER_DETAILS', text: 'Copy Pix code' }
     else
       { type: 'QUICK_REPLY', text: button[:text] }
     end

@@ -7,6 +7,7 @@ class RoomChannel < ApplicationCable::Channel
     ensure_stream
     update_subscription
     broadcast_presence
+    trigger_pending_assignments
   end
 
   def update_presence
@@ -33,6 +34,18 @@ class RoomChannel < ApplicationCable::Channel
     return if @current_account.blank?
 
     ::OnlineStatusTracker.update_presence(@current_account.id, @current_user.class.name, @current_user.id)
+  end
+
+  # An agent connecting (login, tab reopen, reconnect) can leave conversations that arrived while
+  # everyone was offline/out of office waiting up to 30 minutes for AutoAssignment::PeriodicAssignmentJob
+  # to notice. Nudge assignment for that agent's own inboxes right away instead of waiting on the timer.
+  # Runs once per connection (subscribed), not on every presence heartbeat (update_presence).
+  def trigger_pending_assignments
+    return unless @current_user.is_a?(User)
+
+    @current_user.inboxes.where(account_id: @current_account.id, enable_auto_assignment: true).find_each do |inbox|
+      AutoAssignment::AssignmentJob.perform_later(inbox_id: inbox.id) if inbox.auto_assignment_v2_enabled?
+    end
   end
 
   def pubsub_token
