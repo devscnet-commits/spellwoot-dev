@@ -137,7 +137,11 @@ class Whatsapp::MessageTemplateService
     end
   end
 
+  # Meta auto-generates the body for AUTHENTICATION templates (the code delivery text isn't
+  # user-editable) and rejects a BODY component that includes a `text` field for that category.
   def body_component(params)
+    return { type: 'BODY' } if params[:category] == 'AUTHENTICATION'
+
     component = { type: 'BODY', text: params[:body] }
     sample_values = params[:body_sample_values]
     component[:example] = { body_text: [sample_values] } if sample_values.present?
@@ -165,11 +169,13 @@ class Whatsapp::MessageTemplateService
     when 'COPY_CODE'
       { type: 'COPY_CODE', example: button[:example] }
     when 'CATALOG'
-      { type: 'CATALOG', text: button[:text] }
+      # Meta fixes the button text for CATALOG ("View catalog") and rejects a custom one.
+      { type: 'CATALOG' }
     when 'FLOW'
       build_flow_button(button)
     when 'ORDER_DETAILS'
-      { type: 'ORDER_DETAILS', text: button[:text] }
+      # Same as CATALOG — Meta fixes the button text ("Copy Pix code") here too.
+      { type: 'ORDER_DETAILS' }
     else
       { type: 'QUICK_REPLY', text: button[:text] }
     end

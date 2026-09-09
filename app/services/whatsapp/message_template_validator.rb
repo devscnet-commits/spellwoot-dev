@@ -9,6 +9,9 @@ class Whatsapp::MessageTemplateValidator
   # separate CALL_PERMISSION_REQUEST template component, validated by call_permission_request_error.
   ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS].freeze
   EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW ORDER_DETAILS].freeze
+  # Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
+  # custom one — skip the required-text check for them (button_field_error is a no-op for both).
+  FIXED_TEXT_BUTTON_TYPES = %w[CATALOG ORDER_DETAILS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   CALL_PERMISSION_REQUEST_HEADER_TYPES = %w[NONE TEXT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
@@ -92,6 +95,8 @@ class Whatsapp::MessageTemplateValidator
   end
 
   def body_error
+    return if @params[:category] == 'AUTHENTICATION'
+
     body = @params[:body].to_s
     return 'O corpo da mensagem é obrigatório' if body.blank?
     return "O corpo da mensagem deve ter no máximo #{MAX_BODY_LENGTH} caracteres" if body.length > MAX_BODY_LENGTH
@@ -144,6 +149,7 @@ class Whatsapp::MessageTemplateValidator
   def button_error(button)
     type = button[:type]
     return "O tipo de botão #{type} não é suportado" unless ALLOWED_BUTTON_TYPES.include?(type)
+    return button_field_error(button) if FIXED_TEXT_BUTTON_TYPES.include?(type)
 
     text = button[:text].to_s
     return "O texto do botão é obrigatório para botões do tipo #{type}" if text.blank?

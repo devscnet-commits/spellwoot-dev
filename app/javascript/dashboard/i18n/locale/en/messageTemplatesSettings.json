@@ -192,6 +192,7 @@
           "DESCRIPTION": "Crie botões que permitam que os clientes respondam à sua mensagem ou realizem uma ação. É possível adicionar até {count} botões.",
           "ADD_BUTTON": "Adicionar botão",
           "REMOVE_BUTTON": "Remover botão",
+          "FIXED_TEXT_HINT": "O texto deste botão é definido automaticamente pela Meta e não pode ser alterado.",
           "MAX_REACHED": "Você atingiu o limite de {count} botões.",
           "TYPES": {
             "QUICK_REPLY": "Resposta rápida",

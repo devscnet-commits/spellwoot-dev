@@ -16,6 +16,9 @@ const props = defineProps({
 const buttons = defineModel({ type: Array, default: () => [] });
 
 const BUTTON_TEXT_MAX_LENGTH = 25;
+// Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
+// custom one, so there's nothing to let the user edit here.
+const FIXED_TEXT_BUTTON_TYPES = ['CATALOG', 'ORDER_DETAILS'];
 
 const { t } = useI18n();
 const isAddMenuOpen = ref(false);
@@ -122,6 +125,7 @@ const removeButton = index => {
       </div>
 
       <Input
+        v-if="!FIXED_TEXT_BUTTON_TYPES.includes(button.type)"
         v-model="button.text"
         :label="
           t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.TEXT', {
@@ -130,6 +134,9 @@ const removeButton = index => {
         "
         :max-length="BUTTON_TEXT_MAX_LENGTH"
       />
+      <p v-else class="text-caption text-n-slate-10">
+        {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIXED_TEXT_HINT') }}
+      </p>
 
       <Input
         v-if="button.type === 'URL'"
