@@ -100,8 +100,12 @@ class Whatsapp::MessageTemplateValidator
     variable_sample_error(body)
   end
 
+  # Meta treats a variable as "leading/trailing" even with punctuation stuck to it (e.g. "...{{2}}."
+  # is still rejected as trailing) — confirmed live against the real Graph API, which rejects that
+  # shape with error_subcode 2388299 "Leading or Trailing Params Not Allowed" even though it doesn't
+  # literally end the string. Match that by allowing punctuation/whitespace around the variable.
   def dangling_variable?(body)
-    body.match?(/\A\{\{\d+\}\}/) || body.match?(/\{\{\d+\}\}\z/)
+    body.match?(/\A[[:punct:]\s]*\{\{\d+\}\}/) || body.match?(/\{\{\d+\}\}[[:punct:]\s]*\z/)
   end
 
   def variable_sample_error(body)
