@@ -18,7 +18,11 @@ class DeleteObjectJob < ApplicationJob
   def heavy_associations
     {
       Account => %i[conversations contacts inboxes reporting_events],
-      Inbox => %i[conversations contact_inboxes reporting_events working_periods working_hours inbox_holidays inbox_exceptions],
+      # team_inboxes has a real DB foreign key on inbox_id; Inbox's `dependent: :destroy_async`
+      # only schedules that cleanup for later, so destroy! hits the same FK-violation-then-silently-
+      # fails-and-the-record-never-actually-goes-away bug already fixed for contacts/conversations
+      # and agent_assignment_logs — any inbox that belongs to a team couldn't be deleted.
+      Inbox => %i[conversations contact_inboxes reporting_events working_periods working_hours inbox_holidays inbox_exceptions team_inboxes],
       User => %i[agent_schedules],
       Contact => %i[conversations contact_inboxes]
     }.freeze
