@@ -175,13 +175,13 @@ class Whatsapp::MessageTemplateService
       # different wire format. No `example` here: Meta renders the OTP itself, it isn't a sample.
       category == 'AUTHENTICATION' ? { type: 'OTP', otp_type: 'COPY_CODE' } : { type: 'COPY_CODE', example: button[:example] }
     when 'CATALOG'
-      # Meta fixes the button text for CATALOG ("View catalog") and rejects a custom one.
-      { type: 'CATALOG' }
+      # The field is required, but Meta rejects any value other than this exact fixed text.
+      { type: 'CATALOG', text: 'View catalog' }
     when 'FLOW'
       build_flow_button(button)
     when 'ORDER_DETAILS'
-      # Same as CATALOG — Meta fixes the button text ("Copy Pix code") here too.
-      { type: 'ORDER_DETAILS' }
+      # Same as CATALOG — required field, fixed value.
+      { type: 'ORDER_DETAILS', text: 'Copy Pix code' }
     else
       { type: 'QUICK_REPLY', text: button[:text] }
     end
