@@ -67,7 +67,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
       header: [:type, :text, :handle],
       body_sample_values: [],
       buttons: [:type, :text, :url, :phone_number, :example]
-    ).to_h.symbolize_keys
+    ).to_h.deep_symbolize_keys
   end
 
   def extract_update_params
@@ -76,7 +76,7 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
       header: [:type, :text, :handle],
       body_sample_values: [],
       buttons: [:type, :text, :url, :phone_number, :example]
-    ).to_h.symbolize_keys
+    ).to_h.deep_symbolize_keys
   end
 
   def render_template_list_result(result)
