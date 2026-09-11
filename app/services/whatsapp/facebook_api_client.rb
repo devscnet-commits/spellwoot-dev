@@ -76,7 +76,13 @@ class Whatsapp::FacebookApiClient
       headers: request_headers
     )
 
-    handle_response(response, 'App subscription to WABA failed')
+    data = handle_response(response, 'App subscription to WABA failed')
+    # This endpoint returns HTTP 200 with { "success": false } instead of an error status
+    # when the app isn't allowed to subscribe (e.g. token missing whatsapp_business_management
+    # permission, or the app isn't linked to this WABA) — check the body, not just the status.
+    raise "App subscription to WABA failed: #{response.body}" unless data['success']
+
+    data
   end
 
   def override_waba_callback(waba_id, callback_url, verify_token)
