@@ -14,13 +14,26 @@ class Whatsapp::MessageTemplateService
     process_response(response, params)
   end
 
+  # Meta paginates this endpoint (25 items/page by default) — without following `paging.next`,
+  # any WABA with more than one page of templates would silently never show the rest (including
+  # anything created after the first page filled up).
   def list_templates
-    response = HTTParty.get(
-      "#{business_account_path}/message_templates",
-      query: { fields: 'id,name,category,status,language,quality_score,components,rejected_reason' },
-      headers: api_headers
-    )
-    process_list_response(response)
+    url = "#{business_account_path}/message_templates"
+    query = { fields: 'id,name,category,status,language,quality_score,components,rejected_reason', limit: 100 }
+    templates = []
+
+    loop do
+      response = HTTParty.get(url, query: query, headers: api_headers)
+      return process_list_response(response) unless response.success?
+
+      templates.concat(response['data'] || [])
+      url = response.dig('paging', 'next')
+      break unless url
+
+      query = {}
+    end
+
+    { success: true, templates: templates.map { |template| format_template(template) } }
   end
 
   # Meta's template update endpoint is POST /<TEMPLATE_ID> — a different path shape than creation
@@ -213,7 +226,7 @@ class Whatsapp::MessageTemplateService
         success: true,
         template_id: response['id'],
         template_name: params[:name],
-        status: TEMPLATE_STATUS_PENDING,
+        status: response['status'] || TEMPLATE_STATUS_PENDING,
         language: params[:language]
       }
     else
