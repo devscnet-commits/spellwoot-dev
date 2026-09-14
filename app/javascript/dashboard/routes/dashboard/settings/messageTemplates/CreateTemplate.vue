@@ -319,17 +319,24 @@ const detectedVariables = computed(() => {
 
 watch(
   () => form.category,
-  newCategory => {
+  (newCategory, oldCategory) => {
     if (newCategory !== 'MARKETING') form.subtype = 'STANDARD';
 
-    if (newCategory !== 'AUTHENTICATION') return;
-
-    form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
-    form.body = AUTH_BODY_TEXT;
-    form.footer = '';
-    form.buttons = form.buttons
-      .filter(button => button.type === 'COPY_CODE')
-      .slice(0, AUTH_MAX_BUTTONS);
+    if (newCategory === 'AUTHENTICATION') {
+      form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+      form.body = AUTH_BODY_TEXT;
+      form.footer = '';
+      form.buttons = form.buttons
+        .filter(button => button.type === 'COPY_CODE')
+        .slice(0, AUTH_MAX_BUTTONS);
+    } else if (oldCategory === 'AUTHENTICATION') {
+      // Leaving Authentication: clear the fields it auto-filled (and disabled editing
+      // of) so they don't silently carry stale auth content into Marketing/Utility.
+      form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+      form.body = '';
+      form.footer = '';
+      form.buttons = [];
+    }
   }
 );
 

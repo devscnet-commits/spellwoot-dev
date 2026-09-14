@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onActivated, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
@@ -346,13 +346,21 @@ const confirmDelete = async () => {
   }
 };
 
-onMounted(() => {
+const syncInboxFilterFromQuery = () => {
   const queryInboxId = Number(route.query.inbox_id);
   const isValidQueryInbox = whatsAppCloudInboxes.value.some(
     inbox => inbox.id === queryInboxId
   );
   if (isValidQueryInbox) inboxFilter.value = queryInboxId;
+};
 
+// SettingsWrapper keeps this route's component instance alive (keep-alive), and
+// onActivated already fires on the initial mount for keep-alive'd components, so
+// this alone covers both first load and returning here (e.g. after creating a
+// template) — without it, returning left stale template data on screen that no
+// longer matched Meta.
+onActivated(() => {
+  syncInboxFilterFromQuery();
   fetchAllTemplates();
 });
 </script>
