@@ -42,6 +42,12 @@ class ActionService
 
   def assign_agent(agent_ids = [])
     return @conversation.update!(assignee_id: nil) if agent_ids[0] == 'nil'
+    # An inbox with a live AI agent bound to it should get first shot at the conversation —
+    # auto-assigning a human here (e.g. a lead-distribution rule pinning a CRM owner) used to
+    # silence the AI via Ai::ReplyPolicy's old assignee_id check. That check no longer blocks on
+    # assignment alone, but skipping the assignment itself avoids prematurely pinging/notifying a
+    # human and matches inboxes where AI and automation-based routing coexist (found live 14/09).
+    return if Ai::AgentInbox.live.where(inbox_id: @conversation.inbox_id).exists?
 
     agent_ids = [last_responding_agent_id] if agent_ids[0] == 'last_responding_agent'
     return unless agent_belongs_to_inbox?(agent_ids)
