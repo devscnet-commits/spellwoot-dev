@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onActivated, ref } from 'vue';
+import { computed, onActivated, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAlert } from 'dashboard/composables';
@@ -360,6 +360,16 @@ const syncInboxFilterFromQuery = () => {
 // template) — without it, returning left stale template data on screen that no
 // longer matched Meta.
 onActivated(() => {
+  syncInboxFilterFromQuery();
+  fetchAllTemplates();
+});
+
+// On a hard page load, the global inbox list can still be empty at the moment
+// onActivated fires (it's fetched separately, asynchronously). fetchAllTemplates
+// bails out to an empty list when there are no known WhatsApp inboxes yet, and
+// nothing re-ran it once the inbox list actually arrived — leaving the page
+// stuck showing 0 templates. Refetch whenever the inbox list itself changes.
+watch(whatsAppCloudInboxes, () => {
   syncInboxFilterFromQuery();
   fetchAllTemplates();
 });
