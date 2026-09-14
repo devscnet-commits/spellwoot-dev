@@ -16,9 +16,12 @@ class Ai::ReplyPolicy
   # existia ANTES deste turno começar — só o Gateway decide quando é seguro (ver @acts_live).
   def self.allowed?(mode:, agent:, conversation:, bypass_handoff: false)
     return false unless acts_live?(mode, agent)
-    # Convive com o roteamento humano: se um agente já assumiu (assignee), a IA observa mas
-    # NÃO envia (resposta/ferramenta/handoff) — não fala por cima do humano. Shadow segue observando.
-    return false if !bypass_handoff && conversation.assignee_id.present?
+    # Convive com o roteamento humano: uma vez que um humano de verdade já respondeu nessa
+    # conversa, a IA observa mas NÃO envia (resposta/ferramenta/handoff) — não fala por cima do
+    # humano. Shadow segue observando. NÃO usamos assignee_id sozinho aqui — regras de automação
+    # (ex: distribuição de leads pra registrar dono no CRM) atribuem a conversa a um agente sem
+    # nenhum humano ter de fato participado ainda, e isso não deve calar a IA (achado 14/09).
+    return false if !bypass_handoff && human_engaged?(conversation)
     # Já entregue a um humano (handoff): a IA sai de cena mesmo antes de a atribuição concluir.
     return false if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
 
@@ -49,7 +52,7 @@ class Ai::ReplyPolicy
   def self.skip_reason(mode:, agent:, conversation:, bypass_handoff: false)
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, agent)
-    return 'human_assigned' if !bypass_handoff && conversation.assignee_id.present?
+    return 'human_engaged' if !bypass_handoff && human_engaged?(conversation)
     return 'handed_off' if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
 
     behavior = agent.behavior.to_h
@@ -58,6 +61,13 @@ class Ai::ReplyPolicy
     return 'outside_business_hours' if outside_business_hours?(behavior, conversation)
 
     'canary_label_absent'
+  end
+
+  # A real Chatwoot agent's outgoing message has sender_type "User" — the AI's own replies go out
+  # with no sender (Ai::ActionDispatcher#send_message), and other bots use "AgentBot"/
+  # "Captain::Assistant", so this only catches an actual person having typed into the conversation.
+  def self.human_engaged?(conversation)
+    conversation.messages.outgoing.where(sender_type: 'User').exists?
   end
 
   # When the toggle is on, respect the inbox's configured working hours: stay silent when closed.

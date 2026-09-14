@@ -46,7 +46,10 @@ class Ai::FollowupConversationJob < ApplicationJob
     if conversation.nil? || ELIGIBLE_STATUSES.exclude?(conversation&.status)
       return log_skip(conversation_id, 'not_eligible_status', status: conversation&.status)
     end
-    return log_skip(conversation_id, 'human_assigned') if conversation.assignee_id.present?
+    # assignee_id alone isn't "a human took over" — automation rules (e.g. lead distribution for
+    # CRM ownership) assign the conversation with no human having actually replied yet, and that
+    # shouldn't silence the AI. See Ai::ReplyPolicy#human_engaged? (found live 14/09).
+    return log_skip(conversation_id, 'human_engaged') if Ai::ReplyPolicy.human_engaged?(conversation)
 
     binding = resolved_binding(conversation)
     return log_skip(conversation_id, 'no_live_binding') if binding.nil?
@@ -116,7 +119,7 @@ class Ai::FollowupConversationJob < ApplicationJob
     unless awaiting_customer?(conversation)
       return log_skip(conversation.id, 'last_message_is_customers', agent_id: agent.id)
     end
-    return log_skip(conversation.id, 'human_assigned') if conversation.assignee_id.present? # a human already took over
+    return log_skip(conversation.id, 'human_engaged') if Ai::ReplyPolicy.human_engaged?(conversation) # a human already replied
     # Já entregue a um humano (handoff): a IA/follow-up saem de cena — não retomam nem finalizam.
     return log_skip(conversation.id, 'ai_handoff') if conversation.additional_attributes.to_h['ai_handoff']
     return log_skip(conversation.id, 'already_acted_this_silence') if acted?(conversation) # terminal action already fired
