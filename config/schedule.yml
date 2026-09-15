@@ -62,6 +62,15 @@ agent_presence_snapshot_job:
   class: 'AgentPresenceSnapshotJob'
   queue: scheduled_jobs
 
+# executed every minute
+# the only thing that runs the AI follow-up / close rules: it scans idle conversations an AI still
+# owns and enqueues Ai::FollowupConversationJob per conversation. Delays are configured in minutes
+# (the sweep's own floor is 1 minute), so anything slower would round the admin's setting up.
+ai_followup_sweep_job:
+  cron: '*/1 * * * *'
+  class: 'Ai::FollowupSweepJob'
+  queue: scheduled_jobs
+
 # executed daily at 2230 UTC
 # removes old notifications (>1 month) and trims to 300 per user
 remove_old_notification_job:
