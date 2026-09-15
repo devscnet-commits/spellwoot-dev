@@ -25,6 +25,9 @@ class AutoAssignment::AssignmentService
   # pending (e.g. a bot-captured lead) and should reach a human right away regardless.
   def assign_conversation_now(conversation)
     return false if conversation.assignee_id.present?
+    # The AI owns the conversation until it hands off (ai_handoff), so don't pull a human in
+    # underneath it. Same guard as #assignable? — this path skips that predicate on purpose.
+    return false if conversation.ai_pending_handoff?
 
     assigned = with_assignment_lock { assign_available_agent(conversation) }
     # A burst of leads landing on the same inbox at nearly the same instant (the normal
@@ -74,6 +77,11 @@ class AutoAssignment::AssignmentService
 
   def assignable?(conversation)
     return false if conversation.assignee_id.present?
+    # A conversation a live AI agent is still handling belongs to it until the handoff flips
+    # ai_handoff (Ai::HandoffCoordinator#mark_handed_off, which runs before it asks for an agent).
+    # Without this, the policy sweep assigns a human on top of the AI — which is what the
+    # "Atribuído a X por Automation System via <política>" activity on AI inboxes actually was.
+    return false if conversation.ai_pending_handoff?
 
     conversation.status == 'open' ||
       (conversation.status == 'pending' && conversation.team_id.present?)

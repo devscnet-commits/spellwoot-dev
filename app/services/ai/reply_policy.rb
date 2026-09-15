@@ -66,8 +66,11 @@ class Ai::ReplyPolicy
   # A real Chatwoot agent's outgoing message has sender_type "User" — the AI's own replies go out
   # with no sender (Ai::ActionDispatcher#send_message), and other bots use "AgentBot"/
   # "Captain::Assistant", so this only catches an actual person having typed into the conversation.
+  # private: false is essential (same filter as ActionService#last_responding_agent_id): integrations
+  # post internal notes as a User — a Bitrix "Negócio registrado" note silenced the AI on every paid
+  # lead until this was added (found live 15/09). A note isn't talking to the customer.
   def self.human_engaged?(conversation)
-    conversation.messages.outgoing.where(sender_type: 'User').exists?
+    conversation.messages.outgoing.where(sender_type: 'User', private: false).exists?
   end
 
   # When the toggle is on, respect the inbox's configured working hours: stay silent when closed.
