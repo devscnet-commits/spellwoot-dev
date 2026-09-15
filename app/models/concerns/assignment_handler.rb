@@ -52,11 +52,12 @@ module AssignmentHandler
 
   def process_assignment_activities
     user_name = Current.user.name if Current.user.present?
-    if saved_change_to_team_id?
-      create_team_change_activity(user_name)
-    elsif saved_change_to_assignee_id?
-      create_assignee_change_activity(user_name)
-    end
+    # Independent ifs, not if/elsif: a single save can change both (an integration syncing team and
+    # owner together, a macro doing both). With elsif, only the team activity was recorded and the
+    # assignee change vanished from the timeline — which is exactly why conversations appeared to
+    # lose their agent with no trace, and agents couldn't tell what kept taking theirs away.
+    create_team_change_activity(user_name) if saved_change_to_team_id?
+    create_assignee_change_activity(user_name) if saved_change_to_assignee_id?
   end
 
   def self_assign?(assignee_id)

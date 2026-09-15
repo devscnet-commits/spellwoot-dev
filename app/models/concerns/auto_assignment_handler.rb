@@ -16,7 +16,8 @@ module AutoAssignmentHandler
     # skips assigning in that case so this policy-aware path handles it instead.
     return unless conversation_status_changed_to_open? ||
                   conversation_status_changed_to_resolved_or_snoozed? ||
-                  team_assignment_trigger?
+                  team_assignment_trigger? ||
+                  became_unassigned?
     return unless should_run_auto_assignment?
 
     if inbox.auto_assignment_v2_enabled?
@@ -38,6 +39,15 @@ module AutoAssignmentHandler
 
   def team_assignment_trigger?
     saved_change_to_team_id? && inbox.auto_assignment_v2_enabled?
+  end
+
+  # Losing the assignee on an already-open conversation changed nothing here, so an agent
+  # unassigning themselves left the conversation waiting for the next periodic sweep — up to
+  # ~30 minutes with the customer already in the queue (measured live 15/09: 40 min).
+  # Assigning a new assignee also touches assignee_id, hence the nil check: only the
+  # transition *to* unassigned re-triggers, so this can't loop with the assignment it causes.
+  def became_unassigned?
+    saved_change_to_assignee_id? && assignee_id.nil?
   end
 
   def conversation_status_changed_to_resolved_or_snoozed?
