@@ -10,6 +10,7 @@ class AsyncDispatcher < BaseDispatcher
 
   def listeners
     [
+      Ai::GatewayListener.instance,
       AutomationRuleListener.instance,
       CampaignListener.instance,
       CsatSurveyListener.instance,
