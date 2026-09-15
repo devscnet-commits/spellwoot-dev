@@ -71,6 +71,14 @@ ai_followup_sweep_job:
   class: 'Ai::FollowupSweepJob'
   queue: scheduled_jobs
 
+# executed daily at 0330 UTC
+# LGPD retention: hard-deletes ai_events past Ai::EventsRetentionJob::RETENTION_PERIOD. Nothing
+# scheduled it, so the retention policy the job implements was never actually enforced.
+ai_events_retention_job:
+  cron: '30 3 * * *'
+  class: 'Ai::EventsRetentionJob'
+  queue: scheduled_jobs
+
 # executed daily at 2230 UTC
 # removes old notifications (>1 month) and trims to 300 per user
 remove_old_notification_job:
