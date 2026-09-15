@@ -20,16 +20,20 @@ module AssigneeActivityMessageHandler
   end
 
   def activity_message_owner(user_name)
-    if !user_name && Current.executed_by.present?
-      user_name = case Current.executed_by
-                  when AssignmentPolicy
-                    I18n.t('auto_assignment.policy_actor', policy_name: Current.executed_by.name)
-                  when Inbox
-                    I18n.t('auto_assignment.default_policy_name')
-                  else
-                    I18n.t('automation.system_name')
-                  end
+    return user_name if user_name
+
+    case Current.executed_by
+    when AssignmentPolicy
+      I18n.t('auto_assignment.policy_actor', policy_name: Current.executed_by.name)
+    when Inbox
+      I18n.t('auto_assignment.default_policy_name')
+    when nil
+      # No actor at all (a background write). This used to return nil, and the caller drops the
+      # activity entirely — so a conversation could lose its agent with nothing in the timeline,
+      # which is precisely the "it unassigns itself" agents report and what made it undiagnosable.
+      I18n.t('auto_assignment.unknown_actor')
+    else
+      I18n.t('automation.system_name')
     end
-    user_name
   end
 end

@@ -468,6 +468,7 @@ en:
   auto_assignment:
     default_policy_name: 'Default Policy'
     policy_actor: 'Automation System via %{policy_name}'
+    unknown_actor: 'Sistema'
   automation:
     system_name: 'Automation System'
   crm:
