@@ -407,8 +407,22 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     save_handoff_summary(conversation)
     coordinator = step_handoff_coordinator(conversation, agent)
     team_id = coordinator.human_team_id({ 'handoff_target' => arguments['handoff_target'].to_s })
-    Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL, conversation: conversation,
-                                   input: { 'unassign' => true, 'team_id' => team_id })
+    # MESMA guarda do Achado 2.3 em #execute_step_conclusion (handoff_human), que faltava aqui: com a
+    # conversa JÁ entregue (ai_handoff), pular TAMBÉM o "unassign". O modelo pede transferir_humano de
+    # novo a cada turno, justamente porque segue conversando com quem já está atendendo; sem a guarda,
+    # o unassign zera o assignee e o assign_human logo abaixo vira no-op pelo MESMO ai_handoff
+    # (handoff_coordinator.rb:256), deixando a conversa sem dono — e sem atividade na timeline, porque
+    # a escrita é de fundo, sem Current.user. A varredura da política então entrega a OUTRA pessoa da
+    # fila, tirando-a de quem já estava atendendo.
+    #
+    # Medido ao vivo (15/09, conta 3): conv 42097 perdeu a responsável 24s depois da mensagem do
+    # cliente; conv 42138 recebeu a Bruna às 20:10:31 (com handoff.assigned) e passou ao Anderson às
+    # 20:12:44 — e o segundo handoff NÃO emitiu handoff.assigned, que é a assinatura dos dois passos se
+    # contradizendo. 193 atribuições pela política em 24h, 18 conversas trocando de dono mais de uma vez.
+    unless conversation.additional_attributes.to_h['ai_handoff']
+      Ai::CapabilityRegistry.execute(Ai::PythonOrchestratorClient::TRANSFER_TOOL, conversation: conversation,
+                                     input: { 'unassign' => true, 'team_id' => team_id })
+    end
     coordinator.assign_human(team_id, reason: 'model_requested')
     { result: { 'transferred' => true, 'team_id' => team_id }, status: 'executed', error: nil }
   end
