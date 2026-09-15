@@ -1266,6 +1266,18 @@
       "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
       "DELETE_ERROR": "Falha ao remover política de atribuição",
       "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
+    },
+    "AI_PRIORITIES": {
+      "TITLE": "Prioridade entre IAs",
+      "DESC": "Quando mais de uma IA atende esta caixa, apenas uma responde por conversa. A primeira da lista é a padrão; use as setas para reordenar.",
+      "EMPTY": "Nenhuma IA atende esta caixa. Vincule um agente em Agentes IA → agente → Atendimentos e transferências.",
+      "DEFAULT_BADGE": "Padrão",
+      "MODE_LIVE": "Ao vivo",
+      "MODE_SHADOW": "Sombra (só observa)",
+      "TIE_WARNING": "Há empate na prioridade: salve a ordem acima para definir qual IA responde.",
+      "SUBMIT": "Salvar ordem",
+      "SUCCESS": "Prioridade das IAs atualizada.",
+      "ERROR": "Não foi possível salvar a prioridade das IAs."
     }
   }
 }
