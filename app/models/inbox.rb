@@ -75,6 +75,10 @@ class Inbox < ApplicationRecord
   has_many :team_inboxes, dependent: :destroy_async
   has_many :teams, through: :team_inboxes
   belongs_to :default_team, class_name: 'Team', optional: true
+  # delete_all, not destroy_async: these are plain config rows with no callbacks, and leaving them
+  # behind orphans the AI setup — a deleted-and-recreated inbox comes back with a new id, so the
+  # agent silently stops attending it while the old bindings still report "IA ativa" (found live 15/09).
+  has_many :ai_agent_inboxes, class_name: 'Ai::AgentInbox', dependent: :delete_all
   has_many :conversations, dependent: :destroy_async
   has_many :messages, dependent: :destroy_async
 
