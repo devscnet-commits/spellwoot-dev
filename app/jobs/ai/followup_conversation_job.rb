@@ -178,9 +178,22 @@ class Ai::FollowupConversationJob < ApplicationJob
 
   # --- Action after the last attempt + inactivity window -----------------------
 
+  # A janela de inatividade é contada a partir da ÚLTIMA tentativa de follow-up enviada. Quando o
+  # comportamento existe mas não tem tentativas (`attempts` vazio), `sent` é vazio e `last_send` era
+  # nil — o guard abaixo nunca disparava e a ação (padrão: 'assign') rodava no primeiro sweep em que a
+  # conversa estivesse parada há Ai::FollowupSweepJob::MIN_QUIET (1 minuto), jogando fora o "Tempo de
+  # inatividade" que o admin configurou na tela de Finalização.
+  #
+  # Medido em produção (15/09): agente "Maya - Vendas" com 10 minutos configurados; conv 42144 teve a
+  # resposta da IA às 20:59:11 e foi entregue a um humano às 21:01:17 (followup.action action=assign),
+  # silenciando a IA (ai_handoff) antes de o cliente responder, às 21:02:46.
+  #
+  # Sem tentativa enviada, o silêncio começa na última mensagem real da conversa — que #awaiting_customer?
+  # já garante ser nossa. É exatamente a âncora que a função irmã #maybe_run_fallback usa para o caso
+  # "sem follow-up configurado", e o mesmo padrão de fallback encadeado que #maybe_send_attempt já tem.
   def maybe_run_action(agent, behavior, inbox, conversation, account_id, sent)
     inactivity = inactivity_minutes(agent)
-    last_send = sent.maximum(:created_at)
+    last_send = sent.maximum(:created_at) || quiet_since(conversation)
     return if last_send && last_send > inactivity.minutes.ago # still inside the inactivity window
 
     run_action(behavior['no_response_action'].to_s, agent, inbox, conversation, account_id)
