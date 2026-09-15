@@ -30,6 +30,17 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.get(`${this.url}/${inboxId}/agent_bot`);
   }
 
+  getAiAgentPriorities(inboxId) {
+    return axios.get(`${this.url}/${inboxId}/ai_agent_priorities`);
+  }
+
+  // priorities: [{ agent_id, priority }]
+  updateAiAgentPriorities(inboxId, priorities) {
+    return axios.patch(`${this.url}/${inboxId}/ai_agent_priorities`, {
+      priorities,
+    });
+  }
+
   setAgentBot(inboxId, botId) {
     return axios.post(`${this.url}/${inboxId}/set_agent_bot`, {
       agent_bot: botId,

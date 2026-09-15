@@ -24,6 +24,7 @@ import ConfigurationPage from './settingsPage/ConfigurationPage.vue';
 import CustomerSatisfactionPage from './settingsPage/CustomerSatisfactionPage.vue';
 import CollaboratorsPage from './settingsPage/CollaboratorsPage.vue';
 import BotConfiguration from './components/BotConfiguration.vue';
+import AiAgentPriorities from './components/AiAgentPriorities.vue';
 import AccountHealth from './components/AccountHealth.vue';
 import { FEATURE_FLAGS } from '../../../../featureFlags';
 import SenderNameExamplePreview from './components/SenderNameExamplePreview.vue';
@@ -44,6 +45,7 @@ import { copyTextToClipboard } from 'shared/helpers/clipboard';
 export default {
   components: {
     BotConfiguration,
+    AiAgentPriorities,
     CollaboratorsPage,
     ConfigurationPage,
     CustomerSatisfactionPage,
@@ -1298,6 +1300,7 @@ export default {
         </div>
         <div v-if="selectedTabKey === 'bot-configuration'">
           <BotConfiguration :inbox="inbox" />
+          <AiAgentPriorities :inbox="inbox" />
         </div>
         <div v-if="selectedTabKey === 'whatsapp-health'">
           <AccountHealth
