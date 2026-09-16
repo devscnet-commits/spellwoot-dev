@@ -12,6 +12,8 @@ const props = defineProps({
   inboxId: { type: Number, required: true },
   textOnly: { type: Boolean, default: false },
 });
+// Same cap the backend validator applies to the header's TEXT component.
+const HEADER_TEXT_MAX_LENGTH = 60;
 const HEADER_TYPES = ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'];
 const TEXT_ONLY_HEADER_TYPES = ['NONE', 'TEXT'];
 const ACCEPT_BY_TYPE = {
@@ -108,7 +110,12 @@ const onFileSelected = async event => {
     <Input
       v-if="header.type === 'TEXT'"
       :model-value="header.text"
-      :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.TEXT_LABEL')"
+      :label="
+        $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.TEXT_LABEL', {
+          count: HEADER_TEXT_MAX_LENGTH,
+        })
+      "
+      :maxlength="HEADER_TEXT_MAX_LENGTH"
       :placeholder="
         $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.TEXT_PLACEHOLDER')
       "

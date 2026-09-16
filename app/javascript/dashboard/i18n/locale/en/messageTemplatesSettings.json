@@ -177,7 +177,7 @@
             "VIDEO": "Vídeo",
             "DOCUMENT": "Documento"
           },
-          "TEXT_LABEL": "Texto do cabeçalho",
+          "TEXT_LABEL": "Texto do cabeçalho (máx {count} car.)",
           "TEXT_PLACEHOLDER": "Texto curto do cabeçalho",
           "UPLOAD_LABEL": "Enviar arquivo",
           "REPLACE_LABEL": "Trocar arquivo",
