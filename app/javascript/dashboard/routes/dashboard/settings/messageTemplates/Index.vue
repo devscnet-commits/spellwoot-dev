@@ -635,6 +635,7 @@ watch(whatsAppCloudInboxes, () => {
       v-model:show="showDeleteModal"
       :on-close="closeDeleteModal"
       :on-confirm="confirmDelete"
+      :is-loading="isDeleting"
       :title="$t('MESSAGE_TEMPLATES_MGMT.DELETE.CONFIRM.TITLE')"
       :message="$t('MESSAGE_TEMPLATES_MGMT.DELETE.CONFIRM.MESSAGE')"
       :message-value="selectedTemplate ? ` ${selectedTemplate.name}?` : ''"
