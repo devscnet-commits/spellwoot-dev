@@ -297,15 +297,6 @@ const SOURCE_LABELS = {
 const FORCE_ENV_MANAGED = false;
 const isEnvManaged = provider => FORCE_ENV_MANAGED || provider.managedByEnv;
 
-const getConfigSource = providerKey => {
-  const sources = state[providerKey].sources;
-  if (!sources || Object.keys(sources).length === 0) return null;
-  const values = Object.values(sources);
-  if (values.some(v => v === 'account')) return 'account';
-  if (values.some(v => v === 'global')) return 'global';
-  return 'env';
-};
-
 // State per provider
 const state = reactive(
   Object.fromEntries(
@@ -332,14 +323,17 @@ const state = reactive(
   )
 );
 
+const getConfigSource = providerKey => {
+  const sources = state[providerKey].sources;
+  if (!sources || Object.keys(sources).length === 0) return null;
+  const values = Object.values(sources);
+  if (values.some(v => v === 'account')) return 'account';
+  if (values.some(v => v === 'global')) return 'global';
+  return 'env';
+};
+
 // Load every editable provider's status on entry so the Configurado badges show
 // without having to expand each card.
-onMounted(() => {
-  visibleProviders.value.forEach(provider => {
-    if (!isEnvManaged(provider)) loadProvider(provider.key);
-  });
-});
-
 const loadProvider = async providerKey => {
   const s = state[providerKey];
   s.loading = true;
@@ -359,6 +353,12 @@ const loadProvider = async providerKey => {
     s.loading = false;
   }
 };
+
+onMounted(() => {
+  visibleProviders.value.forEach(provider => {
+    if (!isEnvManaged(provider)) loadProvider(provider.key);
+  });
+});
 
 const loadInstances = async providerKey => {
   const s = state[providerKey];
@@ -559,7 +559,7 @@ const providerBadge = providerKey => {
           v-if="state[provider.key].loading"
           class="text-body-small text-n-slate-11 py-2"
         >
-          Carregando...
+          {{ $t('INTEGRATION_SETTINGS.HUB.LOADING') }}
         </div>
 
         <!-- Managed by environment variables (read-only) -->
@@ -572,13 +572,10 @@ const providerBadge = providerKey => {
           />
           <div class="flex flex-col gap-1 text-body-small text-n-slate-11">
             <p class="font-medium text-n-slate-12">
-              Esta instalação utiliza configuração por variáveis de ambiente.
+              {{ $t('INTEGRATION_SETTINGS.HUB.ENV_MANAGED_TITLE') }}
             </p>
-            <p>As credenciais são gerenciadas pelo servidor.</p>
-            <p>
-              A configuração via interface será disponibilizada em uma versão
-              futura.
-            </p>
+            <p>{{ $t('INTEGRATION_SETTINGS.HUB.ENV_MANAGED_CREDENTIALS') }}</p>
+            <p>{{ $t('INTEGRATION_SETTINGS.HUB.ENV_MANAGED_FUTURE') }}</p>
           </div>
         </div>
 
@@ -591,7 +588,9 @@ const providerBadge = providerKey => {
             <span
               class="i-lucide-database w-3.5 h-3.5 text-n-slate-9 shrink-0"
             />
-            <span class="text-n-slate-11 shrink-0">Fonte da configuração:</span>
+            <span class="text-n-slate-11 shrink-0">
+              {{ $t('INTEGRATION_SETTINGS.HUB.CONFIG_SOURCE') }}
+            </span>
             <span
               class="text-xs px-2 py-0.5 rounded-full font-medium"
               :class="[SOURCE_LABELS[getConfigSource(provider.key)]?.color]"
@@ -602,15 +601,15 @@ const providerBadge = providerKey => {
               v-if="getConfigSource(provider.key) === 'env'"
               class="text-xs text-n-slate-10 truncate"
             >
-              — variáveis de ambiente do servidor
+              {{ $t('INTEGRATION_SETTINGS.HUB.CONFIG_SOURCE_ENV') }}
             </span>
           </div>
 
           <!-- Enabled toggle -->
           <div class="flex items-center justify-between">
-            <span class="text-body-small font-medium text-n-slate-12"
-              >Ativar integração</span
-            >
+            <span class="text-body-small font-medium text-n-slate-12">{{
+              $t('INTEGRATION_SETTINGS.HUB.ENABLE_INTEGRATION')
+            }}</span>
             <label class="flex items-center gap-2 cursor-pointer">
               <input
                 v-model="state[provider.key].enabled"
@@ -651,7 +650,7 @@ const providerBadge = providerKey => {
                   class="text-xs text-n-ruby-11 hover:underline"
                   @click="resetField(field, state[provider.key])"
                 >
-                  Redefinir
+                  {{ $t('INTEGRATION_SETTINGS.HUB.RESET_FIELD') }}
                 </button>
                 <!-- Help link -->
                 <a
@@ -661,7 +660,7 @@ const providerBadge = providerKey => {
                   rel="noopener noreferrer"
                   class="text-xs text-n-blue-11 hover:underline"
                 >
-                  Como encontrar?
+                  {{ $t('INTEGRATION_SETTINGS.HUB.WHERE_TO_FIND') }}
                 </a>
               </div>
             </div>
@@ -737,13 +736,13 @@ const providerBadge = providerKey => {
             class="flex flex-col gap-2 pt-2 border-t border-n-weak/50"
           >
             <div class="flex items-center justify-between">
-              <span class="text-body-small font-medium text-n-slate-12"
-                >Instâncias sincronizadas</span
-              >
+              <span class="text-body-small font-medium text-n-slate-12">{{
+                $t('INTEGRATION_SETTINGS.HUB.SYNCED_INSTANCES')
+              }}</span>
               <span
                 v-if="state[provider.key].loadingInstances"
                 class="text-xs text-n-slate-11"
-                >Carregando...</span
+                >{{ $t('INTEGRATION_SETTINGS.HUB.LOADING') }}</span
               >
             </div>
             <div
@@ -753,16 +752,17 @@ const providerBadge = providerKey => {
               "
               class="text-xs text-n-slate-11 py-1"
             >
-              Nenhuma instância sincronizada. Clique em "Sincronizar Instâncias"
-              para buscar as instâncias disponíveis.
+              {{ $t('INTEGRATION_SETTINGS.HUB.NO_INSTANCES') }}
             </div>
             <div v-else class="flex flex-col gap-1">
               <div
                 class="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-n-slate-11 px-1"
               >
-                <span>Instância</span>
-                <span>Número</span>
-                <span>Status</span>
+                <span>{{
+                  $t('INTEGRATION_SETTINGS.HUB.COLUMN_INSTANCE')
+                }}</span>
+                <span>{{ $t('INTEGRATION_SETTINGS.HUB.COLUMN_NUMBER') }}</span>
+                <span>{{ $t('INTEGRATION_SETTINGS.HUB.COLUMN_STATUS') }}</span>
               </div>
               <div
                 v-for="inst in state[provider.key].instances"
@@ -819,7 +819,8 @@ const providerBadge = providerKey => {
               v-if="state[provider.key].syncResult.webhookUrl"
               class="text-xs font-mono opacity-80 break-all"
             >
-              Webhook: {{ state[provider.key].syncResult.webhookUrl }}
+              {{ $t('INTEGRATION_SETTINGS.HUB.WEBHOOK') }}
+              {{ state[provider.key].syncResult.webhookUrl }}
             </div>
           </div>
 

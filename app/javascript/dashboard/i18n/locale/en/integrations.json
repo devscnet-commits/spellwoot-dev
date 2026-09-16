@@ -386,6 +386,23 @@
         "CONFIRM": "Yes, delete",
         "CANCEL": "Cancel"
       }
+    },
+    "HUB": {
+      "LOADING": "Carregando...",
+      "ENV_MANAGED_TITLE": "Esta instalação utiliza configuração por variáveis de ambiente.",
+      "ENV_MANAGED_CREDENTIALS": "As credenciais são gerenciadas pelo servidor.",
+      "ENV_MANAGED_FUTURE": "A configuração via interface será disponibilizada em uma versão futura.",
+      "CONFIG_SOURCE": "Fonte da configuração:",
+      "CONFIG_SOURCE_ENV": "— variáveis de ambiente do servidor",
+      "ENABLE_INTEGRATION": "Ativar integração",
+      "RESET_FIELD": "Redefinir",
+      "WHERE_TO_FIND": "Como encontrar?",
+      "SYNCED_INSTANCES": "Instâncias sincronizadas",
+      "NO_INSTANCES": "Nenhuma instância sincronizada. Clique em \"Sincronizar Instâncias\" para buscar as instâncias disponíveis.",
+      "COLUMN_INSTANCE": "Instância",
+      "COLUMN_NUMBER": "Número",
+      "COLUMN_STATUS": "Status",
+      "WEBHOOK": "Webhook:"
     }
   },
   "CAPTAIN": {
@@ -790,7 +807,6 @@
         "SUCCESS_MESSAGE": "The document has been successfully deleted",
         "ERROR_MESSAGE": "There was an error deleting the document, please try again."
       },
-
       "OPTIONS": {
         "VIEW_RELATED_RESPONSES": "View Related Responses",
         "DELETE_DOCUMENT": "Delete Document"

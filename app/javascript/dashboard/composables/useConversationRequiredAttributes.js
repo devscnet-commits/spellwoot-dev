@@ -6,7 +6,6 @@ import {
   ATTRIBUTE_TYPES,
   SYSTEM_CONDITION_FIELDS,
   SYSTEM_OUTCOME_FIELD,
-  OUTCOME_TO_SYSTEM_VALUE,
   matchesConditionValue,
   isAttrVisible,
 } from 'dashboard/components-next/ConversationWorkflow/constants';

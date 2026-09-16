@@ -121,7 +121,13 @@ const handleConfirm = () => {
           <p class="text-body-para font-medium text-n-slate-12">
             {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.ALWAYS') }}
           </p>
-          <p class="text-xs text-n-slate-11">Sempre exigido ao resolver</p>
+          <p class="text-xs text-n-slate-11">
+            {{
+              $t(
+                'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE_PICKER.ALWAYS_HINT'
+              )
+            }}
+          </p>
         </div>
       </label>
 
@@ -134,7 +140,11 @@ const handleConfirm = () => {
             }}
           </p>
           <p class="text-xs text-n-slate-11">
-            Exigido apenas quando uma condição for atendida
+            {{
+              $t(
+                'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE_PICKER.CONDITIONAL_HINT'
+              )
+            }}
           </p>
         </div>
       </label>
@@ -145,7 +155,11 @@ const handleConfirm = () => {
       <!-- Field selector -->
       <div class="flex flex-col gap-1.5">
         <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">
-          Quando o campo
+          {{
+            $t(
+              'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE_PICKER.WHEN_FIELD'
+            )
+          }}
         </p>
         <select
           v-model="conditionField"
@@ -183,11 +197,18 @@ const handleConfirm = () => {
       <!-- Value selection -->
       <div v-if="conditionField" class="flex flex-col gap-2">
         <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">
-          For igual a
-          <span
-v-if="isMultiSelectMode" class="normal-case font-normal"
-            >(selecione um ou mais)</span
-          >
+          {{
+            $t(
+              'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE_PICKER.IS_EQUAL_TO'
+            )
+          }}
+          <span v-if="isMultiSelectMode" class="normal-case font-normal">
+            {{
+              $t(
+                'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE_PICKER.MULTI_SELECT_HINT'
+              )
+            }}
+          </span>
         </p>
 
         <!-- Styled chips for LIST / system fields -->
@@ -255,11 +276,19 @@ v-if="isMultiSelectMode" class="normal-case font-normal"
           class="i-lucide-info w-3.5 h-3.5 mt-0.5 shrink-0 text-n-slate-9"
         />
         <span>
-          Obrigatório quando
+          {{
+            $t(
+              'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE_PICKER.SUMMARY_PREFIX'
+            )
+          }}
           <strong class="text-n-slate-12">{{
             selectedConditionAttr?.label
           }}</strong>
-          for
+          {{
+            $t(
+              'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE_PICKER.SUMMARY_JOINER'
+            )
+          }}
           <strong class="text-n-slate-12">
             {{ conditionValues.map(v => valueLabel(v)).join(' ou ') }}
           </strong>

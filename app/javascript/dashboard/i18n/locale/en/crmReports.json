@@ -1,0 +1,65 @@
+{
+  "CRM_REPORTS": {
+    "COMMON": {
+      "APPLY": "Aplicar",
+      "UNTIL": "até",
+      "ALL_INBOXES": "Todas as caixas",
+      "ALL_AGENTS": "Todos os agentes",
+      "LOADING": "Carregando...",
+      "NO_DATA_PERIOD": "Nenhum dado no período",
+      "NO_DATA_FILTERS": "Sem dados para o período e filtros selecionados.",
+      "EXPORT_CSV": "CSV",
+      "PCT_OF_TOTAL_SUFFIX": "% do total",
+      "COLUMN_PCT_OF_TOTAL": "% do total",
+      "COLUMN_TOTAL": "Total",
+      "COLUMN_REVENUE": "Receita",
+      "FULL_PERCENT": "100%"
+    },
+    "LEADS": {
+      "TITLE": "Relatório de Leads",
+      "DESCRIPTION": "Visão CRM de leads por resultado, agente, caixa e canal",
+      "ALL_TEAMS": "Todas as equipes",
+      "TOTAL": "Total",
+      "ATTENDED": "Atendidos",
+      "WON": "Ganhos",
+      "LOST": "Perdidos",
+      "OPEN": "Em Aberto",
+      "CLOSED_BY_AI": "Fechados IA",
+      "CONVERSION": "Conversão",
+      "CONVERSION_FORMULA": "ganhos / (ganhos+perdidos)",
+      "REOPENINGS": "Reaberturas",
+      "REVENUE": "Receita",
+      "AVG_TICKET": "ticket médio:",
+      "FUNNEL_TITLE": "Funil de Conversão",
+      "RECEIVED": "Recebidos"
+    },
+    "MARKETING": {
+      "TITLE": "Relatório de Marketing",
+      "DESCRIPTION": "Leads originados via Meta Ads (Click-to-WhatsApp)",
+      "SCOPE_NOTE": "Apenas conversas originadas por anúncios Meta Ads (Click-to-WhatsApp). Os totais aqui são um subconjunto do Relatório de Leads.",
+      "META_LEADS": "Leads Meta",
+      "ATTENDED": "Atendidos",
+      "WON": "Ganhos",
+      "LOST": "Perdidos",
+      "OPEN": "Em Aberto",
+      "CONVERSION": "Conversão",
+      "CONVERSION_FORMULA": "ganhos / (ganhos+perdidos)",
+      "REOPENINGS": "Reaberturas",
+      "REVENUE": "Receita",
+      "AVG_TICKET": "ticket médio:",
+      "FUNNEL_TITLE": "Funil Meta Ads"
+    },
+    "SCHEDULE": {
+      "TITLE": "Relatório de Horários",
+      "DESCRIPTION": "Distribuição de conversas, tempos de resposta e atividade por hora do dia",
+      "ALL_TEAMS": "Todos os times",
+      "VOLUME_DESCRIPTION": "Quantidade de conversas iniciadas por hora do dia",
+      "RESPONSE_DESCRIPTION": "Tempo médio de primeira resposta por hora do dia",
+      "AGENT_DESCRIPTION": "Conversas atribuídas por agente e faixa horária",
+      "COLUMN_HOUR": "Horário",
+      "COLUMN_CONVERSATIONS": "Conversas",
+      "COLUMN_AVG_FIRST_RESPONSE": "Tempo médio 1ª resposta",
+      "COLUMN_AGENT": "Agente"
+    }
+  }
+}

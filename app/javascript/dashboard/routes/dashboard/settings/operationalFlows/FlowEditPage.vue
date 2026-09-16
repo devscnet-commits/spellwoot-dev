@@ -252,6 +252,27 @@ const removeRequirement = index => {
   if (removed?.id) removedRequirementIds.value.push(removed.id);
 };
 
+// A Purchase needs its value at closing time: when a state sends Purchase with a value attribute,
+// make that attribute a closing requirement for the state so the agent is asked when resolving.
+const withValueRequirements = rows => {
+  const present = new Set(
+    // _destroy é a chave de nested attributes do Rails, não um nome nosso para renomear.
+    // eslint-disable-next-line no-underscore-dangle
+    rows.filter(r => !r._destroy).map(r => r.attribute_key)
+  );
+  states.value.forEach(state => {
+    if (state.meta_event_type !== 'Purchase' || !state.meta_value_attr) return;
+    if (present.has(state.meta_value_attr)) return;
+    rows.push({
+      attribute_key: state.meta_value_attr,
+      condition: { when: { canonical_key: state.canonical_key } },
+      sort_order: rows.length,
+    });
+    present.add(state.meta_value_attr);
+  });
+  return rows;
+};
+
 const buildRequirementsAttributes = () => {
   const rows = [];
   requirements.value.forEach((requirement, sortOrder) => {
@@ -270,25 +291,6 @@ const buildRequirementsAttributes = () => {
   });
   removedRequirementIds.value.forEach(id => rows.push({ id, _destroy: true }));
   return withValueRequirements(rows);
-};
-
-// A Purchase needs its value at closing time: when a state sends Purchase with a value attribute,
-// make that attribute a closing requirement for the state so the agent is asked when resolving.
-const withValueRequirements = rows => {
-  const present = new Set(
-    rows.filter(r => !r._destroy).map(r => r.attribute_key)
-  );
-  states.value.forEach(state => {
-    if (state.meta_event_type !== 'Purchase' || !state.meta_value_attr) return;
-    if (present.has(state.meta_value_attr)) return;
-    rows.push({
-      attribute_key: state.meta_value_attr,
-      condition: { when: { canonical_key: state.canonical_key } },
-      sort_order: rows.length,
-    });
-    present.add(state.meta_value_attr);
-  });
-  return rows;
 };
 
 const isValid = computed(

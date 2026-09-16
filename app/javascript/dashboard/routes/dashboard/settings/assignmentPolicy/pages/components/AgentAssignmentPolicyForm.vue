@@ -267,10 +267,16 @@ defineExpose({ resetForm });
       <div class="pt-4 flex flex-col gap-3">
         <div class="flex flex-col gap-0.5">
           <label class="text-sm font-medium text-n-slate-12">
-            Caixas de entrada vinculadas
+            {{
+              $t(
+                'ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.INBOX_SECTION.LABEL'
+              )
+            }}
           </label>
           <p class="text-sm text-n-slate-10">
-            Selecione as caixas de entrada que participarão desta política.
+            {{
+              $t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.INBOX_SECTION.HINT')
+            }}
           </p>
         </div>
 
@@ -281,7 +287,13 @@ defineExpose({ resetForm });
             class="flex items-center justify-between w-full px-3 py-2 text-sm rounded-lg border border-n-weak bg-n-solid-2 text-n-slate-12 hover:border-n-brand transition-colors focus:outline-none focus:border-n-brand"
             @click="isDropdownOpen = !isDropdownOpen"
           >
-            <span class="text-n-slate-9">Selecionar caixas de entrada</span>
+            <span class="text-n-slate-9">
+              {{
+                $t(
+                  'ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.INBOX_SECTION.SELECT_PLACEHOLDER'
+                )
+              }}
+            </span>
             <span
               class="i-lucide-chevron-down size-4 text-n-slate-9 transition-transform duration-200"
               :class="{ 'rotate-180': isDropdownOpen }"
@@ -306,7 +318,11 @@ defineExpose({ resetForm });
               v-if="isInboxLoading"
               class="px-3 py-4 text-sm text-n-slate-10 text-center"
             >
-              Carregando caixas de entrada...
+              {{
+                $t(
+                  'ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.INBOX_SECTION.LOADING'
+                )
+              }}
             </div>
 
             <!-- Inbox list -->
@@ -356,7 +372,11 @@ defineExpose({ resetForm });
           </span>
         </div>
 
-        <p v-else class="text-sm text-n-slate-10">Nenhuma caixa vinculada.</p>
+        <p v-else class="text-sm text-n-slate-10">
+          {{
+            $t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.INBOX_SECTION.EMPTY')
+          }}
+        </p>
       </div>
 
       <!-- 3. Ordem de atribuição -->

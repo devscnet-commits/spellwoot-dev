@@ -38,6 +38,7 @@ import snooze from './snooze.json';
 import stickersMgmt from './stickersMgmt.json';
 import teamsSettings from './teamsSettings.json';
 import operationalFlowsSettings from './operationalFlowsSettings.json';
+import crmReports from './crmReports.json';
 import whatsappTemplates from './whatsappTemplates.json';
 import messageTemplatesSettings from './messageTemplatesSettings.json';
 import contentTemplates from './contentTemplates.json';
@@ -85,6 +86,7 @@ export default {
   ...stickersMgmt,
   ...teamsSettings,
   ...operationalFlowsSettings,
+  ...crmReports,
   ...whatsappTemplates,
   ...messageTemplatesSettings,
   ...contentTemplates,
