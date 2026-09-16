@@ -119,7 +119,10 @@ const availableAgents = computed(() => {
 });
 
 const totalCapacity = computed(() =>
-  state.inboxCapacityLimits.reduce((sum, l) => sum + (l.conversationLimit || 0), 0)
+  state.inboxCapacityLimits.reduce(
+    (sum, l) => sum + (l.conversationLimit || 0),
+    0
+  )
 );
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -133,7 +136,7 @@ const handleValidationChange = validation => {
 const handleAddInboxLimit = limit => {
   if (isCreate.value) {
     state.inboxCapacityLimits.push({
-      id: limit.inboxId,       // use inboxId as temp key (no DB id yet)
+      id: limit.inboxId, // use inboxId as temp key (no DB id yet)
       inboxId: limit.inboxId,
       conversationLimit: limit.conversationLimit,
     });
@@ -232,7 +235,9 @@ defineExpose({ resetForm });
       />
       <ExclusionRules
         v-model:excluded-labels="state.exclusionRules.excludedLabels"
-        v-model:exclude-older-than-minutes="state.exclusionRules.excludeOlderThanMinutes"
+        v-model:exclude-older-than-minutes="
+          state.exclusionRules.excludeOlderThanMinutes
+        "
         :tags-list="labelList"
       />
 
@@ -259,7 +264,9 @@ defineExpose({ resetForm });
           </div>
           <AddDataDropdown
             :label="t(`${BASE_KEY}.FORM.USERS.ADD_BUTTON`)"
-            :search-placeholder="t(`${BASE_KEY}.FORM.USERS.DROPDOWN.SEARCH_PLACEHOLDER`)"
+            :search-placeholder="
+              t(`${BASE_KEY}.FORM.USERS.DROPDOWN.SEARCH_PLACEHOLDER`)
+            "
             :items="availableAgents"
             @add="handleAddUser"
           />
@@ -279,13 +286,23 @@ defineExpose({ resetForm });
         </p>
         <div class="flex flex-wrap gap-4 text-sm text-n-slate-11">
           <span>
-            {{ t(`${BASE_KEY}.FORM.SUMMARY.INBOXES`, { count: state.inboxCapacityLimits.length }) }}
+            {{
+              t(`${BASE_KEY}.FORM.SUMMARY.INBOXES`, {
+                count: state.inboxCapacityLimits.length,
+              })
+            }}
           </span>
           <span>
-            {{ t(`${BASE_KEY}.FORM.SUMMARY.AGENTS`, { count: state.localUsers.length }) }}
+            {{
+              t(`${BASE_KEY}.FORM.SUMMARY.AGENTS`, {
+                count: state.localUsers.length,
+              })
+            }}
           </span>
           <span>
-            {{ t(`${BASE_KEY}.FORM.SUMMARY.CAPACITY`, { total: totalCapacity }) }}
+            {{
+              t(`${BASE_KEY}.FORM.SUMMARY.CAPACITY`, { total: totalCapacity })
+            }}
           </span>
         </div>
       </div>
@@ -294,7 +311,9 @@ defineExpose({ resetForm });
     <Button
       type="submit"
       :label="buttonLabel"
-      :disabled="!validationState.isValid || isLoading || (!isCreate && !isDirty)"
+      :disabled="
+        !validationState.isValid || isLoading || (!isCreate && !isDirty)
+      "
       :is-loading="isLoading"
     />
   </form>

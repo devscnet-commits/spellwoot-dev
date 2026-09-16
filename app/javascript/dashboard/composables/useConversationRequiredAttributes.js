@@ -95,7 +95,10 @@ export function useConversationRequiredAttributes() {
 
   // systemContext: optional dict with system field values (e.g. __resultado_conversa__)
   // derived from additional_attributes, since system fields are not in custom_attributes
-  const checkMissingAttributes = (conversationCustomAttributes = {}, systemContext = {}) => {
+  const checkMissingAttributes = (
+    conversationCustomAttributes = {},
+    systemContext = {}
+  ) => {
     if (!requiredAttributes.value.length) {
       return { hasMissing: false, missing: [] };
     }

@@ -40,7 +40,11 @@ const emptyDay = day => ({ day, enabled: false, periods: [] });
 export const defaultDaySlots = () =>
   [0, 1, 2, 3, 4, 5, 6].map(d => {
     if (d === 0 || d === 6) return emptyDay(d);
-    return { day: d, enabled: true, periods: [{ from: '09:00 AM', to: '06:00 PM' }] };
+    return {
+      day: d,
+      enabled: true,
+      periods: [{ from: '09:00 AM', to: '06:00 PM' }],
+    };
   });
 
 // Parse API working_periods array into day-indexed slots
@@ -111,12 +115,25 @@ export const computeInboxStatus = (
   if (exception) {
     if (exception.closed) return { status: 'closed', nextOpen: null };
     todayPeriods = (exception.periods || []).map(p => ({
-      start: new Date(todayYear, now.getMonth(), todayDay, p.start_hour, p.start_minutes),
-      end: new Date(todayYear, now.getMonth(), todayDay, p.end_hour, p.end_minutes),
+      start: new Date(
+        todayYear,
+        now.getMonth(),
+        todayDay,
+        p.start_hour,
+        p.start_minutes
+      ),
+      end: new Date(
+        todayYear,
+        now.getMonth(),
+        todayDay,
+        p.end_hour,
+        p.end_minutes
+      ),
     }));
   } else {
     const isHoliday = holidays.some(h => {
-      if (!h.recurring && h.holiday_year && h.holiday_year !== todayYear) return false;
+      if (!h.recurring && h.holiday_year && h.holiday_year !== todayYear)
+        return false;
       return h.holiday_month === todayMonth && h.holiday_day === todayDay;
     });
     if (isHoliday) return { status: 'holiday' };
@@ -154,21 +171,39 @@ export const computeInboxStatus = (
 // ── Timezone helpers ──────────────────────────────────────────────────────────
 
 export const timeZoneOptions = () =>
-  Object.keys(timeZoneData).map(key => ({ label: key, value: timeZoneData[key] }));
+  Object.keys(timeZoneData).map(key => ({
+    label: key,
+    value: timeZoneData[key],
+  }));
 
 // ── Legacy single-period helpers (kept for backward compat) ──────────────────
 
-const emptySlotLegacy = day => ({ day, from: '', to: '', valid: false, openAllDay: false, hasLunchBreak: false, lunchFrom: '', lunchTo: '' });
+const emptySlotLegacy = day => ({
+  day,
+  from: '',
+  to: '',
+  valid: false,
+  openAllDay: false,
+  hasLunchBreak: false,
+  lunchFrom: '',
+  lunchTo: '',
+});
 export const defaultTimeSlot = [0, 1, 2, 3, 4, 5, 6].map(emptySlotLegacy);
 
 export const timeSlotParse = timeSlots =>
   timeSlots.map(slot => {
     const {
-      day_of_week: day, open_hour: openHour, open_minutes: openMinutes,
-      close_hour: closeHour, close_minutes: closeMinutes,
-      closed_all_day: closedAllDay, open_all_day: openAllDay,
-      has_lunch_break: hasLunchBreak, lunch_start_hour: lunchStartHour,
-      lunch_start_minutes: lunchStartMinutes, lunch_end_hour: lunchEndHour,
+      day_of_week: day,
+      open_hour: openHour,
+      open_minutes: openMinutes,
+      close_hour: closeHour,
+      close_minutes: closeMinutes,
+      closed_all_day: closedAllDay,
+      open_all_day: openAllDay,
+      has_lunch_break: hasLunchBreak,
+      lunch_start_hour: lunchStartHour,
+      lunch_start_minutes: lunchStartMinutes,
+      lunch_end_hour: lunchEndHour,
       lunch_end_minutes: lunchEndMinutes,
     } = slot;
     return {
@@ -178,34 +213,59 @@ export const timeSlotParse = timeSlots =>
       valid: !closedAllDay,
       openAllDay: Boolean(openAllDay),
       hasLunchBreak: Boolean(hasLunchBreak),
-      lunchFrom: hasLunchBreak && lunchStartHour != null ? getTime(lunchStartHour, lunchStartMinutes ?? 0) : '',
-      lunchTo: hasLunchBreak && lunchEndHour != null ? getTime(lunchEndHour, lunchEndMinutes ?? 0) : '',
+      lunchFrom:
+        hasLunchBreak && lunchStartHour != null
+          ? getTime(lunchStartHour, lunchStartMinutes ?? 0)
+          : '',
+      lunchTo:
+        hasLunchBreak && lunchEndHour != null
+          ? getTime(lunchEndHour, lunchEndMinutes ?? 0)
+          : '',
     };
   });
 
 export const timeSlotTransform = timeSlots =>
   timeSlots.map(slot => {
     const closed = slot.openAllDay ? false : !(slot.to && slot.from);
-    let openHour = '', openMinutes = '', closeHour = '', closeMinutes = '';
+    let openHour = '';
+    let openMinutes = '';
+    let closeHour = '';
+    let closeMinutes = '';
     if (!closed) {
       const fromDate = parse(slot.from, 'hh:mm a', new Date());
       const toDate = parse(slot.to, 'hh:mm a', new Date());
-      openHour = getHours(fromDate); openMinutes = getMinutes(fromDate);
-      closeHour = getHours(toDate); closeMinutes = getMinutes(toDate);
+      openHour = getHours(fromDate);
+      openMinutes = getMinutes(fromDate);
+      closeHour = getHours(toDate);
+      closeMinutes = getMinutes(toDate);
     }
-    const hasLunchBreak = Boolean(slot.hasLunchBreak && slot.lunchFrom && slot.lunchTo);
-    let lunchStartHour = null, lunchStartMinutes = null, lunchEndHour = null, lunchEndMinutes = null;
+    const hasLunchBreak = Boolean(
+      slot.hasLunchBreak && slot.lunchFrom && slot.lunchTo
+    );
+    let lunchStartHour = null;
+    let lunchStartMinutes = null;
+    let lunchEndHour = null;
+    let lunchEndMinutes = null;
     if (hasLunchBreak) {
       const lf = parse(slot.lunchFrom, 'hh:mm a', new Date());
       const lt = parse(slot.lunchTo, 'hh:mm a', new Date());
-      lunchStartHour = getHours(lf); lunchStartMinutes = getMinutes(lf);
-      lunchEndHour = getHours(lt); lunchEndMinutes = getMinutes(lt);
+      lunchStartHour = getHours(lf);
+      lunchStartMinutes = getMinutes(lf);
+      lunchEndHour = getHours(lt);
+      lunchEndMinutes = getMinutes(lt);
     }
     return {
-      day_of_week: slot.day, closed_all_day: closed,
-      open_hour: openHour, open_minutes: openMinutes, close_hour: closeHour, close_minutes: closeMinutes,
-      open_all_day: slot.openAllDay, has_lunch_break: hasLunchBreak,
-      lunch_start_hour: lunchStartHour, lunch_start_minutes: lunchStartMinutes,
-      lunch_end_hour: lunchEndHour, lunch_end_minutes: lunchEndMinutes,
+      day_of_week: slot.day,
+      closed_all_day: closed,
+      open_hour: openHour,
+      open_minutes: openMinutes,
+      close_hour: closeHour,
+      close_minutes: closeMinutes,
+      open_all_day: slot.openAllDay,
+      has_lunch_break: hasLunchBreak,
+      lunch_start_hour: lunchStartHour,
+      lunch_start_minutes: lunchStartMinutes,
+      lunch_end_hour: lunchEndHour,
+      lunch_end_minutes: lunchEndMinutes,
     };
   });

@@ -3,12 +3,16 @@ import WootMessageEditor from 'dashboard/components/widgets/WootWriter/Editor.vu
 
 defineProps({
   outOfOfficeMessage: { type: String, default: '' },
-  intervalMessage:    { type: String, default: '' },
-  holidayMessage:     { type: String, default: '' },
+  intervalMessage: { type: String, default: '' },
+  holidayMessage: { type: String, default: '' },
   isRichEditorEnabled: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(['update:outOfOfficeMessage', 'update:intervalMessage', 'update:holidayMessage']);
+const emit = defineEmits([
+  'update:outOfOfficeMessage',
+  'update:intervalMessage',
+  'update:holidayMessage',
+]);
 </script>
 
 <template>
@@ -57,7 +61,9 @@ const emit = defineEmits(['update:outOfOfficeMessage', 'update:intervalMessage',
         :model-value="intervalMessage"
         enable-variables
         is-format-mode
-        :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.MESSAGES.INTERVAL_PLACEHOLDER')"
+        :placeholder="
+          $t('INBOX_MGMT.BUSINESS_HOURS.MESSAGES.INTERVAL_PLACEHOLDER')
+        "
         :min-height="3"
         @update:model-value="v => emit('update:intervalMessage', v)"
       />
@@ -86,7 +92,9 @@ const emit = defineEmits(['update:outOfOfficeMessage', 'update:intervalMessage',
         :model-value="holidayMessage"
         enable-variables
         is-format-mode
-        :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.MESSAGES.HOLIDAY_PLACEHOLDER')"
+        :placeholder="
+          $t('INBOX_MGMT.BUSINESS_HOURS.MESSAGES.HOLIDAY_PLACEHOLDER')
+        "
         :min-height="3"
         @update:model-value="v => emit('update:holidayMessage', v)"
       />

@@ -96,7 +96,10 @@ export const actions = {
   deactivate: async ({ commit }, agentId) => {
     try {
       await AgentAPI.deactivate(agentId);
-      commit(types.default.UPDATE_AGENT_ACTIVE_STATUS, { id: agentId, active: false });
+      commit(types.default.UPDATE_AGENT_ACTIVE_STATUS, {
+        id: agentId,
+        active: false,
+      });
     } catch (error) {
       throw new Error(error);
     }
@@ -104,7 +107,10 @@ export const actions = {
   reactivate: async ({ commit }, agentId) => {
     try {
       await AgentAPI.reactivate(agentId);
-      commit(types.default.UPDATE_AGENT_ACTIVE_STATUS, { id: agentId, active: true });
+      commit(types.default.UPDATE_AGENT_ACTIVE_STATUS, {
+        id: agentId,
+        active: true,
+      });
     } catch (error) {
       throw new Error(error);
     }

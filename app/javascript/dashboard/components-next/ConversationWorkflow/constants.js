@@ -79,7 +79,11 @@ const requirementApplies = (condition = {}, canonicalKey, polarity) => {
 // Maps a closing flow's per-flow requirements to the attribute-definition shape the outcome modal
 // renders, keeping only the ones that apply to the chosen resolution state. "if" conditions are
 // mapped to the conditional rule shape so the modal shows/hides them as the trigger value changes.
-export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => {
+export const flowRequiredAttributes = (
+  flow,
+  canonicalKey,
+  attributeOptions
+) => {
   const requirements = flow?.closing_requirements || [];
   if (!requirements.length) return [];
 
@@ -109,4 +113,3 @@ export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => 
     })
     .filter(Boolean);
 };
-
