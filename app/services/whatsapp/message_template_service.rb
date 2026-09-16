@@ -117,13 +117,18 @@ class Whatsapp::MessageTemplateService
     rejected_reason
   end
 
+  # sub_category identifies the handful of Meta template types that share the plain
+  # header/body/footer shape but behave differently on send — ORDER_STATUS is the first one we
+  # support. Omitted when blank so every other template's payload stays byte-identical.
   def build_request_body(params)
-    {
+    body = {
       name: params[:name],
       language: params[:language],
       category: params[:category],
       components: build_components(params)
     }
+    body[:sub_category] = params[:sub_category] if params[:sub_category].present?
+    body
   end
 
   def build_components(params)

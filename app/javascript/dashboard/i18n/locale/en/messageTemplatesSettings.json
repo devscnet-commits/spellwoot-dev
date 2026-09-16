@@ -147,7 +147,11 @@
           "AREA_BUTTON_FLOW": "1 botão Abrir Flow",
           "AREA_BUTTON_CATALOG": "1 botão Ver catálogo (texto fixo)",
           "AREA_BUTTON_ORDER_DETAILS": "1 botão de pagamento (texto fixo)",
-          "AREA_BUTTON_COPY_CODE": "1 botão Copiar código"
+          "AREA_BUTTON_COPY_CODE": "1 botão Copiar código",
+          "ORDER_STATUS": {
+            "LABEL": "Status do pedido",
+            "DESCRIPTION": "Envie mensagens para informar os clientes sobre o andamento de pedidos."
+          }
         }
       },
       "STEP_2": {

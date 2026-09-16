@@ -46,7 +46,13 @@ const SUBTYPES_BY_CATEGORY = {
     'ORDER_DETAILS',
     'CALL_PERMISSION_REQUEST',
   ],
-  UTILITY: ['STANDARD', 'FLOWS', 'ORDER_DETAILS', 'CALL_PERMISSION_REQUEST'],
+  UTILITY: [
+    'STANDARD',
+    'FLOWS',
+    'ORDER_STATUS',
+    'ORDER_DETAILS',
+    'CALL_PERMISSION_REQUEST',
+  ],
   AUTHENTICATION: ['STANDARD'],
 };
 // Everything listed above is implemented; the flag stays so an unreleased type can be shown as
@@ -55,6 +61,7 @@ const SELECTABLE_SUBTYPES = [
   'STANDARD',
   'CATALOG',
   'FLOWS',
+  'ORDER_STATUS',
   'ORDER_DETAILS',
   'CALL_PERMISSION_REQUEST',
 ];
@@ -269,6 +276,10 @@ const isCatalog = computed(
 );
 const isFlow = computed(() => form.subtype === 'FLOWS');
 const isOrderDetails = computed(() => form.subtype === 'ORDER_DETAILS');
+// Meta's order status template is the leanest shape there is: BODY and an optional FOOTER, no
+// header and no buttons at all. It's also the only subtype identified by `sub_category` on the
+// creation payload rather than by its components.
+const isOrderStatus = computed(() => form.subtype === 'ORDER_STATUS');
 // CALL_PERMISSION_REQUEST is its own template component (a sibling of HEADER/BODY/FOOTER),
 // not a button — it has no BUTTONS section and only allows a TEXT (or no) header.
 const isCallPermissionRequest = computed(
@@ -305,17 +316,19 @@ const customizableAreas = computed(() => {
       t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_CODE_SAMPLE')
     );
   } else {
-    areas.push(
-      t(
-        isCallPermissionRequest.value
-          ? 'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER_TEXT_ONLY'
-          : 'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER'
-      )
-    );
+    if (!isOrderStatus.value) {
+      areas.push(
+        t(
+          isCallPermissionRequest.value
+            ? 'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER_TEXT_ONLY'
+            : 'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER'
+        )
+      );
+    }
     areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_BODY'));
     areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_FOOTER'));
   }
-  if (!isCallPermissionRequest.value) {
+  if (!isCallPermissionRequest.value && !isOrderStatus.value) {
     areas.push(
       fixedButtonAreaKey.value
         ? t(
@@ -399,6 +412,13 @@ watch(isOrderDetails, newIsOrderDetails => {
     : form.buttons.filter(button => button.type !== 'ORDER_DETAILS');
 });
 
+watch(isOrderStatus, newIsOrderStatus => {
+  if (!newIsOrderStatus) return;
+
+  form.buttons = [];
+  form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+});
+
 watch(isCallPermissionRequest, newIsCallPermissionRequest => {
   if (!newIsCallPermissionRequest) return;
 
@@ -425,6 +445,7 @@ const buildTemplatePayload = () => ({
   name: form.name,
   category: form.category,
   language: form.language,
+  sub_category: isOrderStatus.value ? 'ORDER_STATUS' : undefined,
   call_permission_request: isCallPermissionRequest.value || undefined,
   header:
     form.header.type === 'NONE'
@@ -746,7 +767,7 @@ const submitTemplate = async () => {
 
             <CardLayout>
               <TemplateHeaderField
-                v-if="!isAuthentication"
+                v-if="!isAuthentication && !isOrderStatus"
                 v-model="form.header"
                 :inbox-id="inboxId"
                 :text-only="isCallPermissionRequest"
@@ -781,7 +802,7 @@ const submitTemplate = async () => {
               />
             </CardLayout>
 
-            <CardLayout v-if="!isCallPermissionRequest">
+            <CardLayout v-if="!isCallPermissionRequest && !isOrderStatus">
               <TemplateButtonsField
                 v-model="form.buttons"
                 :button-type-options="buttonTypeOptions"

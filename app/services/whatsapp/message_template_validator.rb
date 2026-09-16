@@ -12,6 +12,9 @@ class Whatsapp::MessageTemplateValidator
   # Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
   # custom one — skip the required-text check for them (button_field_error is a no-op for both).
   FIXED_TEXT_BUTTON_TYPES = %w[CATALOG ORDER_DETAILS].freeze
+  # Meta rejects an unknown sub_category with a generic error, so screen it here to give the user
+  # something actionable instead. ORDER_STATUS is the only one the builder offers today.
+  ALLOWED_SUB_CATEGORIES = %w[ORDER_STATUS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   CALL_PERMISSION_REQUEST_HEADER_TYPES = %w[NONE TEXT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
@@ -40,6 +43,7 @@ class Whatsapp::MessageTemplateValidator
     @errors ||= [
       (name_error if @require_name),
       category_error,
+      sub_category_error,
       header_error,
       body_error,
       footer_error,
@@ -92,6 +96,18 @@ class Whatsapp::MessageTemplateValidator
     return if ALLOWED_CATEGORIES.include?(@params[:category])
 
     "A categoria deve ser uma das seguintes: #{ALLOWED_CATEGORIES.join(', ')}"
+  end
+
+  def sub_category_error
+    sub_category = @params[:sub_category]
+    return if sub_category.blank?
+    return "O tipo #{sub_category} não é suportado" unless ALLOWED_SUB_CATEGORIES.include?(sub_category)
+
+    'Um modelo de status do pedido deve ter apenas corpo e rodapé, sem cabeçalho e sem botões' if order_status_extra_components?
+  end
+
+  def order_status_extra_components?
+    header_type != 'NONE' || @params[:buttons].present?
   end
 
   def body_error
