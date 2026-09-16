@@ -47,6 +47,12 @@ class Whatsapp::FlowCatalog
     TEMPLATES.fetch(key)[:category]
   end
 
+  # A Meta exige navigate_screen no botão FLOW e recusa o template sem ele (subcode 2388202).
+  # Como o Flow é nosso, sabemos a tela de entrada e não precisamos pedir isso ao admin.
+  def self.screen_id_for(key)
+    TEMPLATES.fetch(key)[:screen_id]
+  end
+
   # `heading` e `submit_label` vêm da tela para o admin escrever com as palavras dele; só o
   # esqueleto é nosso. Nenhum dos dois pode chegar vazio: a Meta recusa string vazia desde a 6.0.
   def self.build_flow_json(key, heading:, submit_label:)

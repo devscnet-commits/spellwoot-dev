@@ -65,7 +65,7 @@ class Whatsapp::MessageTemplateService
       publish: true
     }
     response = HTTParty.post("#{business_account_path}/flows", headers: api_headers, body: body.to_json)
-    process_flow_creation_response(response)
+    process_flow_creation_response(response, Whatsapp::FlowCatalog.screen_id_for(key))
   end
 
   # Meta's template update endpoint is POST /<TEMPLATE_ID> — a different path shape than creation
@@ -133,10 +133,10 @@ class Whatsapp::MessageTemplateService
 
   # Meta answers 200 with `validation_errors` when the Flow JSON itself is wrong, so success is not
   # enough on its own — surfacing the first validation message beats a generic failure.
-  def process_flow_creation_response(response)
+  def process_flow_creation_response(response, screen_id)
     validation_errors = response['validation_errors']
     if response.success? && validation_errors.blank?
-      return { success: true, flow: { id: response['id'], name: response['name'] } }
+      return { success: true, flow: { id: response['id'], name: response['name'], screen_id: screen_id } }
     end
 
     Rails.logger.error "[WHATSAPP] Flow creation failed: #{response.code} - #{response.body}"
