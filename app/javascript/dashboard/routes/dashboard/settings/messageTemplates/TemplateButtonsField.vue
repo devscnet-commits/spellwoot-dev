@@ -76,6 +76,58 @@ const flowsEmptyState = computed(() =>
 // Sem Flow selecionável não existe template de Flow: a Meta recusa, e antes disso o nosso próprio
 // validador recusa com "O ID do Flow é obrigatório", que não diz ao admin o que fazer. Avisar aqui,
 // no campo, enquanto ele ainda pode trocar de tipo de modelo.
+// Criar o Flow aqui dentro: a conta sem Flow nenhum era um beco sem saída, e mandar o admin para
+// o WhatsApp Manager no meio da criação de um modelo é trocar um problema por outro. Painel inline,
+// não modal, porque este componente já roda dentro do modal de edição.
+const FLOW_TEMPLATE_KEYS = ['LEAD_CAPTURE', 'APPOINTMENT', 'SURVEY'];
+
+const isCreatingPanelOpen = ref(false);
+const isCreatingFlow = ref(false);
+const createFlowError = ref('');
+const newFlow = ref({ key: 'LEAD_CAPTURE', name: '', submitLabel: '' });
+
+const flowTemplateOptions = computed(() =>
+  FLOW_TEMPLATE_KEYS.map(key => ({
+    value: key,
+    label: t(
+      `MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_TEMPLATES.${key}`
+    ),
+  }))
+);
+
+const openCreatePanel = () => {
+  createFlowError.value = '';
+  newFlow.value = { key: 'LEAD_CAPTURE', name: '', submitLabel: '' };
+  isCreatingPanelOpen.value = true;
+};
+
+const createFlow = async button => {
+  if (!newFlow.value.name.trim()) return;
+
+  isCreatingFlow.value = true;
+  createFlowError.value = '';
+  try {
+    const { data } = await InboxesAPI.createTemplateFlow(props.inboxId, {
+      key: newFlow.value.key,
+      name: newFlow.value.name.trim(),
+      heading: newFlow.value.name.trim(),
+      submit_label: newFlow.value.submitLabel.trim() || undefined,
+    });
+    // Entra na lista já selecionável e escolhido: o admin pediu este Flow, não vai querer procurá-lo.
+    flows.value = [...flows.value, { ...data.flow, selectable: true }];
+    button.flow_id = String(data.flow.id);
+    isCreatingPanelOpen.value = false;
+  } catch (error) {
+    createFlowError.value =
+      error?.response?.data?.error ||
+      t(
+        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_CREATE_ERROR'
+      );
+  } finally {
+    isCreatingFlow.value = false;
+  }
+};
+
 const hasNoSelectableFlow = computed(
   () =>
     !isLoadingFlows.value &&
@@ -262,6 +314,83 @@ const removeButton = index => {
                 )
           "
         />
+
+        <Button
+          v-if="!isCreatingPanelOpen"
+          :label="
+            t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_CREATE')
+          "
+          icon="i-lucide-plus"
+          variant="ghost"
+          size="sm"
+          class="self-start"
+          @click="openCreatePanel"
+        />
+
+        <div
+          v-else
+          class="p-3 space-y-3 border rounded-lg border-n-weak bg-n-alpha-black2"
+        >
+          <p class="text-body-main text-n-slate-11">
+            {{
+              t(
+                'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_CREATE_HINT'
+              )
+            }}
+          </p>
+          <div class="flex flex-col gap-1">
+            <label class="mb-0.5 text-heading-3 text-n-slate-12">
+              {{
+                t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_TEMPLATE'
+                )
+              }}
+            </label>
+            <ComboBox v-model="newFlow.key" :options="flowTemplateOptions" />
+          </div>
+          <Input
+            v-model="newFlow.name"
+            :label="
+              t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_NAME')
+            "
+          />
+          <Input
+            v-model="newFlow.submitLabel"
+            :label="
+              t(
+                'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_SUBMIT_LABEL'
+              )
+            "
+          />
+          <p v-if="createFlowError" class="text-body-main text-n-ruby-9">
+            {{ createFlowError }}
+          </p>
+          <div class="flex items-center gap-2">
+            <Button
+              :label="
+                t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_CREATE_CONFIRM'
+                )
+              "
+              size="sm"
+              :is-loading="isCreatingFlow"
+              :disabled="isCreatingFlow || !newFlow.name.trim()"
+              @click="createFlow(button)"
+            />
+            <Button
+              :label="
+                t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_CREATE_CANCEL'
+                )
+              "
+              faded
+              slate
+              size="sm"
+              :disabled="isCreatingFlow"
+              @click="isCreatingPanelOpen = false"
+            />
+          </div>
+        </div>
       </div>
       <Input
         v-if="button.type === 'FLOW'"

@@ -117,6 +117,14 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.get(`${this.url}/${inboxId}/message_templates/flows`);
   }
 
+  // Cria e publica um Flow a partir de um modelo pronto do catálogo.
+  createTemplateFlow(inboxId, payload) {
+    return axios.post(
+      `${this.url}/${inboxId}/message_templates/flows`,
+      payload
+    );
+  }
+
   uploadTemplateMedia(inboxId, file) {
     const formData = new FormData();
     formData.append('file', file);

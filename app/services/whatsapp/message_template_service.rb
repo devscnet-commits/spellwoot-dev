@@ -55,6 +55,19 @@ class Whatsapp::MessageTemplateService
     { success: true, flows: (response['data'] || []).map { |flow| format_flow(flow) } }
   end
 
+  # Creates the Flow already published: Meta accepts flow_json + publish in one call, and a draft
+  # Flow is useless here — the template creation that follows would reject it.
+  def create_flow(key:, name:, heading:, submit_label:)
+    body = {
+      name: name,
+      categories: [Whatsapp::FlowCatalog.category_for(key)],
+      flow_json: Whatsapp::FlowCatalog.build_flow_json(key, heading: heading, submit_label: submit_label),
+      publish: true
+    }
+    response = HTTParty.post("#{business_account_path}/flows", headers: api_headers, body: body.to_json)
+    process_flow_creation_response(response)
+  end
+
   # Meta's template update endpoint is POST /<TEMPLATE_ID> — a different path shape than creation
   # (which posts to the WABA) — and only accepts category/components/time-to-live. Editing an
   # approved template re-triggers review; only APPROVED/REJECTED/PAUSED templates can be edited
@@ -116,6 +129,24 @@ class Whatsapp::MessageTemplateService
       status: flow['status'],
       selectable: flow['status'] == 'PUBLISHED'
     }
+  end
+
+  # Meta answers 200 with `validation_errors` when the Flow JSON itself is wrong, so success is not
+  # enough on its own — surfacing the first validation message beats a generic failure.
+  def process_flow_creation_response(response)
+    validation_errors = response['validation_errors']
+    if response.success? && validation_errors.blank?
+      return { success: true, flow: { id: response['id'], name: response['name'] } }
+    end
+
+    Rails.logger.error "[WHATSAPP] Flow creation failed: #{response.code} - #{response.body}"
+    { success: false, error: flow_creation_error(response, validation_errors) }
+  end
+
+  def flow_creation_error(response, validation_errors)
+    return validation_errors.first['message'] if validation_errors.present?
+
+    response.dig('error', 'error_user_msg') || response.dig('error', 'message') || 'Failed to create flow'
   end
 
   def process_list_response(response)
