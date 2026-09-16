@@ -175,6 +175,7 @@ const submit = async () => {
             :button-type-options="buttonTypeOptions"
             :button-type-labels="buttonTypeLabels"
             :max-buttons="MAX_BUTTONS"
+            :inbox-id="inboxId"
           />
         </CardLayout>
 

@@ -309,7 +309,10 @@ Rails.application.routes.draw do
             end
 
             resources :message_templates, only: [:index, :create, :update, :destroy] do
-              post :media_upload, on: :collection
+              collection do
+                post :media_upload
+                get :flows
+              end
             end
           end
           resources :uazapi_inboxes, only: [:create] do

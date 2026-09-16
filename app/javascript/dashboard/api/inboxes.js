@@ -112,6 +112,11 @@ class Inboxes extends CacheEnabledApiClient {
     );
   }
 
+  // Flows published on the WABA, for the FLOW button picker.
+  getTemplateFlows(inboxId) {
+    return axios.get(`${this.url}/${inboxId}/message_templates/flows`);
+  }
+
   uploadTemplateMedia(inboxId, file) {
     const formData = new FormData();
     formData.append('file', file);
