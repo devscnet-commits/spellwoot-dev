@@ -36,6 +36,25 @@ class Whatsapp::MessageTemplateService
     { success: true, templates: templates.map { |template| format_template(template) } }
   end
 
+  # The FLOW button needs the numeric ID of a Flow that already exists on the WABA. Asking an admin
+  # to copy it out of WhatsApp Manager by hand meant any typo only surfaced ~10s later, as Meta's
+  # useless generic "An unknown error has occurred" (OAuthException code 1). Listing them lets the
+  # form offer the real ones — and an empty list is itself the answer: this WABA has no Flows yet.
+  def list_flows
+    response = HTTParty.get(
+      "#{business_account_path}/flows",
+      query: { fields: 'id,name,status,categories' },
+      headers: api_headers
+    )
+
+    unless response.success?
+      Rails.logger.error "[WHATSAPP] Flow list fetch failed: #{response.code} - #{response.body}"
+      return { success: false, error: 'Failed to fetch flows', response_body: response.body }
+    end
+
+    { success: true, flows: (response['data'] || []).map { |flow| format_flow(flow) } }
+  end
+
   # Meta's template update endpoint is POST /<TEMPLATE_ID> — a different path shape than creation
   # (which posts to the WABA) — and only accepts category/components/time-to-live. Editing an
   # approved template re-triggers review; only APPROVED/REJECTED/PAUSED templates can be edited
@@ -86,6 +105,17 @@ class Whatsapp::MessageTemplateService
       Rails.logger.error "[WHATSAPP] Template delete failed: #{response.code} - #{response.body}"
       { success: false, error: 'Template delete failed', response_body: response.body }
     end
+  end
+
+  # Only published Flows can be attached to a template: a draft one is rejected by Meta at
+  # creation time, so surfacing it in the picker would just reproduce the error we are removing.
+  def format_flow(flow)
+    {
+      id: flow['id'],
+      name: flow['name'],
+      status: flow['status'],
+      selectable: flow['status'] == 'PUBLISHED'
+    }
   end
 
   def process_list_response(response)

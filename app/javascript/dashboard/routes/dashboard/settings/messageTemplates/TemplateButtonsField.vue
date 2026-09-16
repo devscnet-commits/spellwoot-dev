@@ -1,10 +1,12 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { vOnClickOutside } from '@vueuse/components';
 
+import InboxesAPI from 'dashboard/api/inboxes';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
+import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import DropdownMenu from 'dashboard/components-next/dropdown-menu/DropdownMenu.vue';
 
 const props = defineProps({
@@ -15,6 +17,7 @@ const props = defineProps({
   // text ("Copy Code"), no sample code — unlike the same button type used for a Marketing promo
   // code, where both are user-editable. Same UI type, different rules depending on category.
   isAuthentication: { type: Boolean, default: false },
+  inboxId: { type: Number, default: null },
 });
 
 const buttons = defineModel({ type: Array, default: () => [] });
@@ -38,6 +41,51 @@ const hasFixedText = button =>
 
 const { t } = useI18n();
 const isAddMenuOpen = ref(false);
+
+// Meta only accepts the numeric ID of a Flow that already exists on the WABA. Typing it by hand
+// meant a wrong value only surfaced ~10s later as Meta's generic "An unknown error has occurred",
+// with nothing pointing at this field — so the ids come from the account instead.
+const flows = ref([]);
+const isLoadingFlows = ref(false);
+const hasFlowsError = ref(false);
+
+const hasFlowButton = computed(() =>
+  buttons.value.some(button => button.type === 'FLOW')
+);
+
+const flowOptions = computed(() =>
+  flows.value
+    .filter(flow => flow.selectable)
+    .map(flow => ({ value: String(flow.id), label: flow.name }))
+);
+
+const flowsEmptyState = computed(() => {
+  if (isLoadingFlows.value)
+    return t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOWS_LOADING'
+    );
+  if (hasFlowsError.value)
+    return t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOWS_ERROR');
+  return t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOWS_EMPTY');
+});
+
+const fetchFlows = async () => {
+  if (!props.inboxId || isLoadingFlows.value || flows.value.length) return;
+
+  isLoadingFlows.value = true;
+  hasFlowsError.value = false;
+  try {
+    const { data } = await InboxesAPI.getTemplateFlows(props.inboxId);
+    flows.value = data.flows || [];
+  } catch {
+    hasFlowsError.value = true;
+  } finally {
+    isLoadingFlows.value = false;
+  }
+};
+
+// Only hit the API once a Flow button actually exists — most templates never use one.
+watch(hasFlowButton, hasFlow => hasFlow && fetchFlows(), { immediate: true });
 
 const addMenuItems = () =>
   props.buttonTypeOptions.map(option => ({
@@ -177,22 +225,38 @@ const removeButton = index => {
         "
       />
 
-      <Input
-        v-if="button.type === 'FLOW'"
-        v-model="button.flow_id"
-        :label="
-          t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID')
-        "
-        :message="
-          t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT')
-        "
-      />
+      <div v-if="button.type === 'FLOW'" class="flex flex-col gap-1">
+        <label class="mb-0.5 text-heading-3 text-n-slate-12">
+          {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID') }}
+        </label>
+        <ComboBox
+          v-model="button.flow_id"
+          :options="flowOptions"
+          :disabled="isLoadingFlows"
+          :placeholder="
+            t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_PLACEHOLDER'
+            )
+          "
+          :empty-state="flowsEmptyState"
+          :message="
+            t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
+            )
+          "
+        />
+      </div>
       <Input
         v-if="button.type === 'FLOW'"
         v-model="button.navigate_screen"
         :label="
           t(
             'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN'
+          )
+        "
+        :message="
+          t(
+            'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN_HINT'
           )
         "
       />

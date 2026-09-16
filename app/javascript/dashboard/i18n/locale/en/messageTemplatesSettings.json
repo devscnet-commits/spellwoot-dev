@@ -231,6 +231,11 @@
             "PHONE_NUMBER": "Número de telefone",
             "EXAMPLE_CODE": "Código promocional de amostra",
             "FLOW_ID": "ID do Flow",
+            "FLOW_PLACEHOLDER": "Selecione um Flow publicado",
+            "FLOWS_LOADING": "Carregando Flows...",
+            "FLOWS_EMPTY": "Nenhum Flow publicado nesta conta. Crie e publique um no WhatsApp Manager.",
+            "FLOWS_ERROR": "Não foi possível carregar os Flows desta conta.",
+            "NAVIGATE_SCREEN_HINT": "Nome exato de uma tela do Flow. Deixe vazio para abrir na primeira tela.",
             "FLOW_ID_HINT": "ID do Flow já publicado no WhatsApp Manager.",
             "NAVIGATE_SCREEN": "Tela inicial (opcional)"
           }

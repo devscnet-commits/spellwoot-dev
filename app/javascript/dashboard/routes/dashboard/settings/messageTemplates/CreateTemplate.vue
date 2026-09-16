@@ -831,6 +831,7 @@ const submitTemplate = async () => {
                 :button-type-labels="buttonTypeLabels"
                 :max-buttons="maxButtons"
                 :is-authentication="isAuthentication"
+                :inbox-id="inboxId"
               />
             </CardLayout>
 

@@ -9,6 +9,18 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     render_template_list_result(result)
   end
 
+  # Feeds the Flow button picker. Kept read-only and scoped to the inbox like every other action
+  # here, so it inherits the same account/policy checks from fetch_inbox.
+  def flows
+    result = Whatsapp::MessageTemplateService.new(@inbox.channel).list_flows
+
+    if result[:success]
+      render json: { flows: result[:flows] }
+    else
+      render json: { error: result[:error] }, status: :unprocessable_entity
+    end
+  end
+
   def create
     template_params = extract_template_params
     service = Whatsapp::MessageTemplateService.new(@inbox.channel)
