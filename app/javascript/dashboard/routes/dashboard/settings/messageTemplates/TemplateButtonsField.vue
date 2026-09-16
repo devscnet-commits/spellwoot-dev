@@ -59,15 +59,29 @@ const flowOptions = computed(() =>
     .map(flow => ({ value: String(flow.id), label: flow.name }))
 );
 
-const flowsEmptyState = computed(() => {
-  if (isLoadingFlows.value)
-    return t(
-      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOWS_LOADING'
-    );
-  if (hasFlowsError.value)
-    return t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOWS_ERROR');
-  return t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOWS_EMPTY');
+// "Nenhum Flow" e "tem Flow, mas em rascunho" pedem ações diferentes do admin — criar um, ou
+// publicar o que já existe. Dizer sempre a primeira manda quem já tem rascunho para o lugar errado.
+const flowsStateKey = computed(() => {
+  if (isLoadingFlows.value) return 'FLOWS_LOADING';
+  if (hasFlowsError.value) return 'FLOWS_ERROR';
+  return flows.value.length ? 'FLOWS_NONE_PUBLISHED' : 'FLOWS_EMPTY';
 });
+
+const flowsEmptyState = computed(() =>
+  t(
+    `MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.${flowsStateKey.value}`
+  )
+);
+
+// Sem Flow selecionável não existe template de Flow: a Meta recusa, e antes disso o nosso próprio
+// validador recusa com "O ID do Flow é obrigatório", que não diz ao admin o que fazer. Avisar aqui,
+// no campo, enquanto ele ainda pode trocar de tipo de modelo.
+const hasNoSelectableFlow = computed(
+  () =>
+    !isLoadingFlows.value &&
+    !hasFlowsError.value &&
+    flowOptions.value.length === 0
+);
 
 const fetchFlows = async () => {
   if (!props.inboxId || isLoadingFlows.value || flows.value.length) return;
@@ -239,10 +253,13 @@ const removeButton = index => {
             )
           "
           :empty-state="flowsEmptyState"
+          :has-error="hasNoSelectableFlow"
           :message="
-            t(
-              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
-            )
+            hasNoSelectableFlow
+              ? flowsEmptyState
+              : t(
+                  'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.FLOW_ID_HINT'
+                )
           "
         />
       </div>
