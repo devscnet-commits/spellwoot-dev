@@ -10,6 +10,9 @@ defineProps({
   messageValue: { type: String, default: '' },
   confirmText: { type: String, default: '' },
   rejectText: { type: String, default: '' },
+  // Deleting can take several seconds when it round-trips to an external provider. Without a
+  // busy state the dialog just sits there and people click Confirm again, firing the call twice.
+  isLoading: { type: Boolean, default: false },
 });
 
 const show = defineModel('show', { type: Boolean, default: false });
@@ -23,8 +26,22 @@ const show = defineModel('show', { type: Boolean, default: false });
       :header-content-value="messageValue"
     />
     <div class="flex items-center justify-end gap-2 p-8">
-      <Button faded slate type="reset" :label="rejectText" @click="onClose" />
-      <Button ruby type="submit" :label="confirmText" @click="onConfirm" />
+      <Button
+        faded
+        slate
+        type="reset"
+        :label="rejectText"
+        :disabled="isLoading"
+        @click="onClose"
+      />
+      <Button
+        ruby
+        type="submit"
+        :label="confirmText"
+        :is-loading="isLoading"
+        :disabled="isLoading"
+        @click="onConfirm"
+      />
     </div>
   </Modal>
 </template>

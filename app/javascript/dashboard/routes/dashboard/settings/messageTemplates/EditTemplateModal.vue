@@ -192,6 +192,7 @@ const submit = async () => {
           <Button
             :label="$t('MESSAGE_TEMPLATES_MGMT.EDIT.SUBMIT_BUTTON')"
             :is-loading="isSubmitting"
+            :disabled="isSubmitting"
             @click="submit"
           />
         </div>
