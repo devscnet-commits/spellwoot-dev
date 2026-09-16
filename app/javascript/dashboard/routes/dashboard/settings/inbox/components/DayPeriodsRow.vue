@@ -7,10 +7,10 @@ import NextButton from 'dashboard/components-next/button/Button.vue';
 const props = defineProps({
   dayName: { type: String, required: true },
   dayIndex: { type: Number, required: true },
-  slot: { type: Object, required: true }, // { day, enabled, periods: [{from, to}] }
+  daySlot: { type: Object, required: true }, // { day, enabled, periods: [{from, to}] }
 });
 
-const emit = defineEmits(['update', 'copy-to']);
+const emit = defineEmits(['update', 'copyTo']);
 
 const timeSlots = generateTimeSlots(30);
 
@@ -41,37 +41,37 @@ const showCustom = ref(false);
 const customDays = ref([]);
 
 const enabled = computed({
-  get: () => props.slot.enabled,
+  get: () => props.daySlot.enabled,
   set: val =>
     emit('update', {
-      ...props.slot,
+      ...props.daySlot,
       enabled: val,
       periods:
-        val && !props.slot.periods.length
+        val && !props.daySlot.periods.length
           ? [{ from: '09:00 AM', to: '06:00 PM' }]
-          : props.slot.periods,
+          : props.daySlot.periods,
     }),
 });
 
 function updatePeriod(idx, field, value) {
-  const periods = props.slot.periods.map((p, i) =>
+  const periods = props.daySlot.periods.map((p, i) =>
     i === idx ? { ...p, [field]: value } : p
   );
-  emit('update', { ...props.slot, periods });
+  emit('update', { ...props.daySlot, periods });
 }
 
 function addPeriod() {
-  const last = props.slot.periods[props.slot.periods.length - 1];
+  const last = props.daySlot.periods[props.daySlot.periods.length - 1];
   const next = last
     ? { from: last.to, to: '' }
     : { from: '09:00 AM', to: '06:00 PM' };
-  emit('update', { ...props.slot, periods: [...props.slot.periods, next] });
+  emit('update', { ...props.daySlot, periods: [...props.daySlot.periods, next] });
 }
 
 function removePeriod(idx) {
   emit('update', {
-    ...props.slot,
-    periods: props.slot.periods.filter((_, i) => i !== idx),
+    ...props.daySlot,
+    periods: props.daySlot.periods.filter((_, i) => i !== idx),
   });
 }
 
@@ -88,7 +88,7 @@ function applyCopy(option) {
       all: [0, 1, 2, 3, 4, 5, 6],
       weekend: [0, 6],
     }[option] || [];
-  emit('copy-to', {
+  emit('copyTo', {
     from: props.dayIndex,
     to: targets.filter(d => d !== props.dayIndex),
   });
@@ -96,7 +96,7 @@ function applyCopy(option) {
 }
 
 function applyCustomCopy() {
-  emit('copy-to', { from: props.dayIndex, to: customDays.value });
+  emit('copyTo', { from: props.dayIndex, to: customDays.value });
   showCustom.value = false;
 }
 
@@ -125,7 +125,7 @@ function hasError(p) {
       <div class="flex-1 flex flex-col gap-1.5">
         <template v-if="enabled">
           <div
-            v-for="(period, idx) in slot.periods"
+            v-for="(period, idx) in daySlot.periods"
             :key="idx"
             class="flex items-center gap-2"
           >
@@ -158,7 +158,7 @@ class="text-n-slate-11 text-sm" :class="{ 'mt-5': idx === 0 }"
               />
             </div>
             <button
-              v-if="slot.periods.length > 1"
+              v-if="daySlot.periods.length > 1"
               type="button"
               class="text-n-slate-10 hover:text-n-ruby-9 transition-colors"
               @click="removePeriod(idx)"

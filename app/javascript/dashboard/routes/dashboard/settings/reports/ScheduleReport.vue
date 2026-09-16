@@ -45,29 +45,6 @@ const TABS = [
   { id: 'agent', label: 'Agente × Hora', icon: 'i-lucide-user' },
 ];
 
-const applyPreset = id => {
-  selectedPreset.value = id;
-  const now = new Date();
-  if (id === 'today') {
-    since.value = getUnixStartOfDay(now);
-    until.value = getUnixEndOfDay(now);
-  } else if (id === 'yesterday') {
-    const y = subDays(now, 1);
-    since.value = getUnixStartOfDay(y);
-    until.value = getUnixEndOfDay(y);
-  } else if (typeof id === 'number') {
-    since.value = getUnixStartOfDay(subDays(now, id - 1));
-    until.value = getUnixEndOfDay(now);
-  }
-  if (id !== 'custom') fetchData();
-};
-
-const applyCustom = () => {
-  since.value = getUnixStartOfDay(new Date(customSince.value));
-  until.value = getUnixEndOfDay(new Date(customUntil.value));
-  fetchData();
-};
-
 const buildParams = () => {
   const p = { since: since.value, until: until.value };
   if (filterInboxId.value) p.inbox_id = filterInboxId.value;
@@ -91,6 +68,29 @@ const fetchData = async () => {
   } finally {
     isLoading.value = false;
   }
+};
+
+const applyCustom = () => {
+  since.value = getUnixStartOfDay(new Date(customSince.value));
+  until.value = getUnixEndOfDay(new Date(customUntil.value));
+  fetchData();
+};
+
+const applyPreset = id => {
+  selectedPreset.value = id;
+  const now = new Date();
+  if (id === 'today') {
+    since.value = getUnixStartOfDay(now);
+    until.value = getUnixEndOfDay(now);
+  } else if (id === 'yesterday') {
+    const y = subDays(now, 1);
+    since.value = getUnixStartOfDay(y);
+    until.value = getUnixEndOfDay(y);
+  } else if (typeof id === 'number') {
+    since.value = getUnixStartOfDay(subDays(now, id - 1));
+    until.value = getUnixEndOfDay(now);
+  }
+  if (id !== 'custom') fetchData();
 };
 
 // Pre-fill all 24 hours so bars always render
@@ -128,7 +128,7 @@ const agentNames = computed(() =>
 const agentHourMatrix = computed(() => {
   return agentNames.value.map(name => {
     const row = { agent: name };
-    for (let h = 0; h < 24; h++) {
+    for (let h = 0; h < 24; h += 1) {
       const found = agentByHour.value.find(
         r => r.agent === name && r.hour === h
       );
@@ -159,8 +159,8 @@ const setSort = key => {
 
 const fmtHour = h => {
   const suffix = h < 12 ? 'AM' : 'PM';
-  const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${display}${suffix}`;
+  const hour12 = h % 12;
+  return `${hour12 === 0 ? 12 : hour12}${suffix}`;
 };
 
 const fmtDuration = secs => {

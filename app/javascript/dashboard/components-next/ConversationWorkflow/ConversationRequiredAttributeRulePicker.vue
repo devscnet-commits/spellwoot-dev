@@ -89,12 +89,12 @@ const handleConfirm = () => {
   const config = { key: props.attribute.value, rule: rule.value };
   if (rule.value === 'conditional') {
     config.condition_field = conditionField.value;
-    config.condition_value =
-      isMultiSelectMode.value && conditionValues.value.length === 1
-        ? conditionValues.value[0]
-        : isMultiSelectMode.value
-          ? [...conditionValues.value]
-          : conditionValues.value[0] || '';
+    const [firstValue = ''] = conditionValues.value;
+    const keepsList =
+      isMultiSelectMode.value && conditionValues.value.length !== 1;
+    config.condition_value = keepsList
+      ? [...conditionValues.value]
+      : firstValue;
   }
   emit('confirm', config);
 };

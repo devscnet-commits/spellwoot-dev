@@ -347,7 +347,7 @@ export default {
             <DayPeriodsRow
               v-for="slot in daySlots"
               :key="slot.day"
-              :slot="slot"
+              :day-slot="slot"
               :day-name="DAY_NAMES[slot.day]"
               :day-index="slot.day"
               @update="newSlot => onSlotUpdate(slot.day, newSlot)"

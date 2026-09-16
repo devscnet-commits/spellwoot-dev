@@ -93,7 +93,7 @@ const pad2 = n => String(n).padStart(2, '0');
 export const computeInboxStatus = (
   daySlots,
   timezone,
-  holidays = [],
+  holidays,
   workingHoursEnabled,
   exceptions = []
 ) => {
@@ -153,10 +153,9 @@ export const computeInboxStatus = (
   }
 
   // Inside an open period?
-  for (const p of todayPeriods) {
-    if (now >= p.start && now <= p.end) {
-      return { status: 'open', until: p.end };
-    }
+  const openPeriod = todayPeriods.find(p => now >= p.start && now <= p.end);
+  if (openPeriod) {
+    return { status: 'open', until: openPeriod.end };
   }
 
   // Between periods (interval)?

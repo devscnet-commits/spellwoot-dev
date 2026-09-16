@@ -77,28 +77,6 @@ const CHANNEL_LABELS = {
 
 const channelLabel = type => CHANNEL_LABELS[type] || type || '—';
 
-const selectPreset = id => {
-  selectedPreset.value = id;
-  if (id === 'today') {
-    since.value = getUnixStartOfDay(new Date());
-    until.value = getUnixEndOfDay(new Date());
-  } else if (id === 'yesterday') {
-    const y = subDays(new Date(), 1);
-    since.value = getUnixStartOfDay(y);
-    until.value = getUnixEndOfDay(y);
-  } else if (typeof id === 'number') {
-    since.value = getUnixStartOfDay(subDays(new Date(), id - 1));
-    until.value = getUnixEndOfDay(new Date());
-  }
-  if (id !== 'custom') fetchData();
-};
-
-const applyCustomRange = () => {
-  since.value = getUnixStartOfDay(new Date(customSince.value));
-  until.value = getUnixEndOfDay(new Date(customUntil.value));
-  fetchData();
-};
-
 const showRevenue = computed(() => (summary.value.revenue || 0) > 0);
 
 const avgTicket = computed(() => {
@@ -225,6 +203,28 @@ const fetchData = async () => {
   } finally {
     isLoading.value = false;
   }
+};
+
+const selectPreset = id => {
+  selectedPreset.value = id;
+  if (id === 'today') {
+    since.value = getUnixStartOfDay(new Date());
+    until.value = getUnixEndOfDay(new Date());
+  } else if (id === 'yesterday') {
+    const y = subDays(new Date(), 1);
+    since.value = getUnixStartOfDay(y);
+    until.value = getUnixEndOfDay(y);
+  } else if (typeof id === 'number') {
+    since.value = getUnixStartOfDay(subDays(new Date(), id - 1));
+    until.value = getUnixEndOfDay(new Date());
+  }
+  if (id !== 'custom') fetchData();
+};
+
+const applyCustomRange = () => {
+  since.value = getUnixStartOfDay(new Date(customSince.value));
+  until.value = getUnixEndOfDay(new Date(customUntil.value));
+  fetchData();
 };
 
 onMounted(fetchData);
@@ -476,8 +476,7 @@ onMounted(fetchData);
             <div class="flex flex-col items-center gap-2 flex-1 min-w-[100px]">
               <span class="text-xs text-n-slate-11 font-medium">Leads Meta</span>
               <div
-                class="w-full rounded-t-md bg-n-brand-9/20 border border-n-brand-9/40 flex items-end justify-center"
-                style="height: 80px"
+                class="w-full h-20 rounded-t-md bg-n-brand-9/20 border border-n-brand-9/40 flex items-end justify-center"
               >
                 <span class="text-xs font-bold text-n-brand-11 mb-2">100%</span>
               </div>

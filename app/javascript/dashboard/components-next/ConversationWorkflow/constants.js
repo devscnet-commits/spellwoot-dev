@@ -66,7 +66,8 @@ export const isAttrVisible = (attr, formValues) => {
 
 // Whether a closing requirement applies to the chosen resolution state. "if attribute = value"
 // conditions pass through here: their evaluation is value-based and happens live in the modal.
-const requirementApplies = (condition = {}, canonicalKey, polarity) => {
+const requirementApplies = (condition, canonicalKey, polarity) => {
+  if (!condition) return true;
   if (condition.if) return true;
   if (condition.always) return true;
   const when = condition.when;

@@ -85,28 +85,6 @@ const CHANNEL_LABELS = {
 
 const channelLabel = type => CHANNEL_LABELS[type] || type || '—';
 
-const selectPreset = id => {
-  selectedPreset.value = id;
-  if (id === 'today') {
-    since.value = getUnixStartOfDay(new Date());
-    until.value = getUnixEndOfDay(new Date());
-  } else if (id === 'yesterday') {
-    const y = subDays(new Date(), 1);
-    since.value = getUnixStartOfDay(y);
-    until.value = getUnixEndOfDay(y);
-  } else if (typeof id === 'number') {
-    since.value = getUnixStartOfDay(subDays(new Date(), id - 1));
-    until.value = getUnixEndOfDay(new Date());
-  }
-  if (id !== 'custom') fetchData();
-};
-
-const applyCustomRange = () => {
-  since.value = getUnixStartOfDay(new Date(customSince.value));
-  until.value = getUnixEndOfDay(new Date(customUntil.value));
-  fetchData();
-};
-
 const showRevenue = computed(() => (summary.value.revenue || 0) > 0);
 
 const avgTicket = computed(() => {
@@ -232,6 +210,28 @@ const fetchData = async () => {
   }
 };
 
+const selectPreset = id => {
+  selectedPreset.value = id;
+  if (id === 'today') {
+    since.value = getUnixStartOfDay(new Date());
+    until.value = getUnixEndOfDay(new Date());
+  } else if (id === 'yesterday') {
+    const y = subDays(new Date(), 1);
+    since.value = getUnixStartOfDay(y);
+    until.value = getUnixEndOfDay(y);
+  } else if (typeof id === 'number') {
+    since.value = getUnixStartOfDay(subDays(new Date(), id - 1));
+    until.value = getUnixEndOfDay(new Date());
+  }
+  if (id !== 'custom') fetchData();
+};
+
+const applyCustomRange = () => {
+  since.value = getUnixStartOfDay(new Date(customSince.value));
+  until.value = getUnixEndOfDay(new Date(customUntil.value));
+  fetchData();
+};
+
 onMounted(fetchData);
 </script>
 
@@ -348,7 +348,8 @@ onMounted(fetchData);
               <span class="i-lucide-users w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Total</span>
+                >Total</span
+              >
             </div>
             <span class="text-2xl font-bold text-n-slate-12">{{
               summary.total || 0
@@ -362,12 +363,15 @@ onMounted(fetchData);
               <span class="i-lucide-headphones w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Atendidos</span>
+                >Atendidos</span
+              >
             </div>
             <span class="text-2xl font-bold text-n-slate-12">{{
               summary.attended || 0
             }}</span>
-            <span class="text-xs text-n-slate-10">{{ funnelPct(summary.attended, summary.total) }}% do total</span>
+            <span class="text-xs text-n-slate-10"
+              >{{ funnelPct(summary.attended, summary.total) }}% do total</span
+            >
           </div>
 
           <div
@@ -377,7 +381,8 @@ onMounted(fetchData);
               <span class="i-lucide-circle-check w-4 h-4 text-n-teal-11" />
               <span
                 class="text-xs font-medium text-n-teal-11 uppercase tracking-wide"
-                >Ganhos</span>
+                >Ganhos</span
+              >
             </div>
             <span class="text-2xl font-bold text-n-teal-11">{{
               summary.won || 0
@@ -391,7 +396,8 @@ onMounted(fetchData);
               <span class="i-lucide-circle-x w-4 h-4 text-n-ruby-11" />
               <span
                 class="text-xs font-medium text-n-ruby-11 uppercase tracking-wide"
-                >Perdidos</span>
+                >Perdidos</span
+              >
             </div>
             <span class="text-2xl font-bold text-n-ruby-11">{{
               summary.lost || 0
@@ -405,7 +411,8 @@ onMounted(fetchData);
               <span class="i-lucide-clock w-4 h-4 text-n-amber-11" />
               <span
                 class="text-xs font-medium text-n-amber-11 uppercase tracking-wide"
-                >Em Aberto</span>
+                >Em Aberto</span
+              >
             </div>
             <span class="text-2xl font-bold text-n-amber-11">{{
               summary.open || 0
@@ -419,7 +426,8 @@ onMounted(fetchData);
               <span class="i-lucide-bot w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Fechados IA</span>
+                >Fechados IA</span
+              >
             </div>
             <span class="text-2xl font-bold text-n-slate-11">{{
               summary.ai_closed || 0
@@ -433,7 +441,8 @@ onMounted(fetchData);
               <span class="i-lucide-percent w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Conversão</span>
+                >Conversão</span
+              >
             </div>
             <span
               class="text-2xl font-bold"
@@ -447,7 +456,9 @@ onMounted(fetchData);
             >
               {{ summary.conversion_rate || 0 }}%
             </span>
-            <span class="text-xs text-n-slate-10">ganhos / (ganhos+perdidos)</span>
+            <span class="text-xs text-n-slate-10"
+              >ganhos / (ganhos+perdidos)</span
+            >
           </div>
 
           <div
@@ -457,7 +468,8 @@ onMounted(fetchData);
               <span class="i-lucide-refresh-cw w-4 h-4 text-n-amber-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Reaberturas</span>
+                >Reaberturas</span
+              >
             </div>
             <span class="text-2xl font-bold text-n-slate-12">{{
               summary.reopened || 0
@@ -484,12 +496,15 @@ onMounted(fetchData);
               <span class="i-lucide-circle-dollar-sign w-4 h-4 text-n-teal-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Receita</span>
+                >Receita</span
+              >
             </div>
             <span class="text-xl font-bold text-n-teal-11 leading-tight">{{
               fmtCurrency(summary.revenue)
             }}</span>
-            <span class="text-xs text-n-slate-10">ticket médio: {{ fmtCurrency(avgTicket) }}</span>
+            <span class="text-xs text-n-slate-10"
+              >ticket médio: {{ fmtCurrency(avgTicket) }}</span
+            >
           </div>
         </div>
 
@@ -506,8 +521,7 @@ onMounted(fetchData);
             <div class="flex flex-col items-center gap-2 flex-1 min-w-[100px]">
               <span class="text-xs text-n-slate-11 font-medium">Recebidos</span>
               <div
-                class="w-full rounded-t-md bg-n-brand-9/20 border border-n-brand-9/40 flex items-end justify-center"
-                style="height: 80px"
+                class="w-full h-20 rounded-t-md bg-n-brand-9/20 border border-n-brand-9/40 flex items-end justify-center"
               >
                 <span class="text-xs font-bold text-n-brand-11 mb-2">100%</span>
               </div>
@@ -527,7 +541,9 @@ onMounted(fetchData);
                 class="w-full rounded-t-md bg-n-amber-9/20 border border-n-amber-9/40 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.attended, summary.total) * 0.8)}px`"
               >
-                <span class="text-xs font-bold text-n-amber-11 mb-2">{{ funnelPct(summary.attended, summary.total) }}%</span>
+                <span class="text-xs font-bold text-n-amber-11 mb-2"
+                  >{{ funnelPct(summary.attended, summary.total) }}%</span
+                >
               </div>
               <span class="text-lg font-bold text-n-slate-12">{{
                 summary.attended || 0
@@ -545,7 +561,9 @@ onMounted(fetchData);
                 class="w-full rounded-t-md bg-n-teal-9/20 border border-n-teal-9/40 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.won, summary.total) * 0.8)}px`"
               >
-                <span class="text-xs font-bold text-n-teal-11 mb-2">{{ funnelPct(summary.won, summary.total) }}%</span>
+                <span class="text-xs font-bold text-n-teal-11 mb-2"
+                  >{{ funnelPct(summary.won, summary.total) }}%</span
+                >
               </div>
               <span class="text-lg font-bold text-n-teal-11">{{
                 summary.won || 0
@@ -563,7 +581,9 @@ onMounted(fetchData);
                 class="w-full rounded-t-md bg-n-ruby-9/20 border border-n-ruby-9/40 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.lost, summary.total) * 0.8)}px`"
               >
-                <span class="text-xs font-bold text-n-ruby-11 mb-2">{{ funnelPct(summary.lost, summary.total) }}%</span>
+                <span class="text-xs font-bold text-n-ruby-11 mb-2"
+                  >{{ funnelPct(summary.lost, summary.total) }}%</span
+                >
               </div>
               <span class="text-lg font-bold text-n-ruby-11">{{
                 summary.lost || 0
@@ -581,7 +601,9 @@ onMounted(fetchData);
                 class="w-full rounded-t-md bg-n-amber-9/10 border border-n-amber-9/30 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.open, summary.total) * 0.8)}px`"
               >
-                <span class="text-xs font-bold text-n-amber-11 mb-2">{{ funnelPct(summary.open, summary.total) }}%</span>
+                <span class="text-xs font-bold text-n-amber-11 mb-2"
+                  >{{ funnelPct(summary.open, summary.total) }}%</span
+                >
               </div>
               <span class="text-lg font-bold text-n-amber-11">{{
                 summary.open || 0
