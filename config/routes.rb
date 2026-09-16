@@ -312,6 +312,7 @@ Rails.application.routes.draw do
               collection do
                 post :media_upload
                 get :flows
+                post :flows, action: :create_flow
               end
             end
           end

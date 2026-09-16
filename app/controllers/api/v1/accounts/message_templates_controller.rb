@@ -21,6 +21,23 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
     end
   end
 
+  # Cria e publica um Flow a partir de um modelo do catálogo, para o admin não precisar sair
+  # daqui só porque a conta ainda não tem nenhum Flow.
+  def create_flow
+    attrs = flow_params
+    return render json: { error: 'O nome do Flow é obrigatório' }, status: :unprocessable_entity if attrs[:name].blank?
+
+    result = Whatsapp::MessageTemplateService.new(@inbox.channel).create_flow(**attrs)
+
+    if result[:success]
+      render json: { flow: result[:flow] }
+    else
+      render json: { error: result[:error] }, status: :unprocessable_entity
+    end
+  rescue KeyError
+    render json: { error: 'Modelo de Flow desconhecido' }, status: :unprocessable_entity
+  end
+
   def create
     template_params = extract_template_params
     service = Whatsapp::MessageTemplateService.new(@inbox.channel)
@@ -60,6 +77,16 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   end
 
   private
+
+  def flow_params
+    permitted = params.permit(:key, :name, :heading, :submit_label)
+    {
+      key: permitted[:key].to_s,
+      name: permitted[:name].to_s,
+      heading: permitted[:heading].presence || permitted[:name].to_s,
+      submit_label: permitted[:submit_label].presence || 'Enviar'
+    }
+  end
 
   def fetch_inbox
     @inbox = Current.account.inboxes.find(params[:inbox_id])
