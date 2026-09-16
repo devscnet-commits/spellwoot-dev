@@ -41,6 +41,7 @@ import sla from './sla.json';
 import snooze from './snooze.json';
 import teamsSettings from './teamsSettings.json';
 import operationalFlowsSettings from './operationalFlowsSettings.json';
+import plan from './plan.json';
 import webhooks from './webhooks.json';
 import whatsappTemplates from './whatsappTemplates.json';
 import yearInReview from './yearInReview.json';
@@ -89,6 +90,7 @@ export default {
   ...snooze,
   ...teamsSettings,
   ...operationalFlowsSettings,
+  ...plan,
   ...webhooks,
   ...whatsappTemplates,
   ...yearInReview,

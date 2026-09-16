@@ -1,6 +1,8 @@
 import advancedFilters from './advancedFilters.json';
 import agentBots from './agentBots.json';
 import agentMgmt from './agentMgmt.json';
+import aiAgents from './aiAgents.json';
+import aiShadowRuns from './aiShadowRuns.json';
 import attributesMgmt from './attributesMgmt.json';
 import auditLogs from './auditLogs.json';
 import automation from './automation.json';
@@ -43,12 +45,16 @@ import whatsappTemplates from './whatsappTemplates.json';
 import messageTemplatesSettings from './messageTemplatesSettings.json';
 import contentTemplates from './contentTemplates.json';
 import mfa from './mfa.json';
+import plan from './plan.json';
+import webhooks from './webhooks.json';
 import yearInReview from './yearInReview.json';
 
 export default {
   ...advancedFilters,
   ...agentBots,
   ...agentMgmt,
+  ...aiAgents,
+  ...aiShadowRuns,
   ...attributesMgmt,
   ...auditLogs,
   ...automation,
@@ -91,5 +97,7 @@ export default {
   ...messageTemplatesSettings,
   ...contentTemplates,
   ...mfa,
+  ...plan,
+  ...webhooks,
   ...yearInReview,
 };
