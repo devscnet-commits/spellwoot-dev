@@ -242,10 +242,10 @@ onMounted(fetchData);
       <div class="flex items-start justify-between gap-4 flex-wrap mb-4">
         <div>
           <h1 class="text-xl font-semibold text-n-slate-12">
-            Relatório de Leads
+            {{ $t('CRM_REPORTS.LEADS.TITLE') }}
           </h1>
           <p class="text-sm text-n-slate-11 mt-0.5">
-            Visão CRM de leads por resultado, agente, caixa e canal
+            {{ $t('CRM_REPORTS.LEADS.DESCRIPTION') }}
           </p>
         </div>
         <div
@@ -277,7 +277,9 @@ onMounted(fetchData);
           type="date"
           class="border border-n-weak rounded-md px-3 py-1.5 text-sm bg-n-solid-2 text-n-slate-12 focus:outline-none focus:border-n-brand-9"
         />
-        <span class="text-n-slate-11 text-sm">até</span>
+        <span class="text-n-slate-11 text-sm">{{
+          $t('CRM_REPORTS.COMMON.UNTIL')
+        }}</span>
         <input
           v-model="customUntil"
           type="date"
@@ -287,7 +289,7 @@ onMounted(fetchData);
           class="px-4 py-1.5 rounded-md text-xs font-medium bg-n-brand-9 text-white hover:bg-n-brand-10 transition-colors"
           @click="applyCustomRange"
         >
-          Aplicar
+          {{ $t('CRM_REPORTS.COMMON.APPLY') }}
         </button>
       </div>
 
@@ -298,7 +300,7 @@ onMounted(fetchData);
           class="border border-n-weak rounded-md px-3 py-1.5 text-sm bg-n-solid-2 text-n-slate-12 focus:outline-none focus:border-n-brand-9 min-w-[160px] cursor-pointer"
           @change="fetchData"
         >
-          <option value="">Todas as caixas</option>
+          <option value="">{{ $t('CRM_REPORTS.COMMON.ALL_INBOXES') }}</option>
           <option v-for="inbox in inboxes" :key="inbox.id" :value="inbox.id">
             {{ inbox.name }}
           </option>
@@ -308,7 +310,7 @@ onMounted(fetchData);
           class="border border-n-weak rounded-md px-3 py-1.5 text-sm bg-n-solid-2 text-n-slate-12 focus:outline-none focus:border-n-brand-9 min-w-[160px] cursor-pointer"
           @change="fetchData"
         >
-          <option value="">Todas as equipes</option>
+          <option value="">{{ $t('CRM_REPORTS.LEADS.ALL_TEAMS') }}</option>
           <option v-for="team in teams" :key="team.id" :value="team.id">
             {{ team.name }}
           </option>
@@ -318,7 +320,7 @@ onMounted(fetchData);
           class="border border-n-weak rounded-md px-3 py-1.5 text-sm bg-n-solid-2 text-n-slate-12 focus:outline-none focus:border-n-brand-9 min-w-[160px] cursor-pointer"
           @change="fetchData"
         >
-          <option value="">Todos os agentes</option>
+          <option value="">{{ $t('CRM_REPORTS.COMMON.ALL_AGENTS') }}</option>
           <option v-for="agent in agents" :key="agent.id" :value="agent.id">
             {{ agent.name }}
           </option>
@@ -333,7 +335,7 @@ onMounted(fetchData);
         class="flex items-center justify-center gap-2 text-sm text-n-slate-11 py-16"
       >
         <span class="i-lucide-loader-2 w-5 h-5 animate-spin" />
-        Carregando...
+        {{ $t('CRM_REPORTS.COMMON.LOADING') }}
       </div>
 
       <template v-else>
@@ -348,7 +350,7 @@ onMounted(fetchData);
               <span class="i-lucide-users w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Total</span
+                >{{ $t('CRM_REPORTS.LEADS.TOTAL') }}</span
               >
             </div>
             <span class="text-2xl font-bold text-n-slate-12">{{
@@ -363,14 +365,15 @@ onMounted(fetchData);
               <span class="i-lucide-headphones w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Atendidos</span
+                >{{ $t('CRM_REPORTS.LEADS.ATTENDED') }}</span
               >
             </div>
             <span class="text-2xl font-bold text-n-slate-12">{{
               summary.attended || 0
             }}</span>
             <span class="text-xs text-n-slate-10"
-              >{{ funnelPct(summary.attended, summary.total) }}% do total</span
+              >{{ funnelPct(summary.attended, summary.total)
+              }}{{ $t('CRM_REPORTS.COMMON.PCT_OF_TOTAL_SUFFIX') }}</span
             >
           </div>
 
@@ -381,7 +384,7 @@ onMounted(fetchData);
               <span class="i-lucide-circle-check w-4 h-4 text-n-teal-11" />
               <span
                 class="text-xs font-medium text-n-teal-11 uppercase tracking-wide"
-                >Ganhos</span
+                >{{ $t('CRM_REPORTS.LEADS.WON') }}</span
               >
             </div>
             <span class="text-2xl font-bold text-n-teal-11">{{
@@ -396,7 +399,7 @@ onMounted(fetchData);
               <span class="i-lucide-circle-x w-4 h-4 text-n-ruby-11" />
               <span
                 class="text-xs font-medium text-n-ruby-11 uppercase tracking-wide"
-                >Perdidos</span
+                >{{ $t('CRM_REPORTS.LEADS.LOST') }}</span
               >
             </div>
             <span class="text-2xl font-bold text-n-ruby-11">{{
@@ -411,7 +414,7 @@ onMounted(fetchData);
               <span class="i-lucide-clock w-4 h-4 text-n-amber-11" />
               <span
                 class="text-xs font-medium text-n-amber-11 uppercase tracking-wide"
-                >Em Aberto</span
+                >{{ $t('CRM_REPORTS.LEADS.OPEN') }}</span
               >
             </div>
             <span class="text-2xl font-bold text-n-amber-11">{{
@@ -426,7 +429,7 @@ onMounted(fetchData);
               <span class="i-lucide-bot w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Fechados IA</span
+                >{{ $t('CRM_REPORTS.LEADS.CLOSED_BY_AI') }}</span
               >
             </div>
             <span class="text-2xl font-bold text-n-slate-11">{{
@@ -441,7 +444,7 @@ onMounted(fetchData);
               <span class="i-lucide-percent w-4 h-4 text-n-slate-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Conversão</span
+                >{{ $t('CRM_REPORTS.LEADS.CONVERSION') }}</span
               >
             </div>
             <span
@@ -456,9 +459,9 @@ onMounted(fetchData);
             >
               {{ summary.conversion_rate || 0 }}%
             </span>
-            <span class="text-xs text-n-slate-10"
-              >ganhos / (ganhos+perdidos)</span
-            >
+            <span class="text-xs text-n-slate-10">{{
+              $t('CRM_REPORTS.LEADS.CONVERSION_FORMULA')
+            }}</span>
           </div>
 
           <div
@@ -468,7 +471,7 @@ onMounted(fetchData);
               <span class="i-lucide-refresh-cw w-4 h-4 text-n-amber-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Reaberturas</span
+                >{{ $t('CRM_REPORTS.LEADS.REOPENINGS') }}</span
               >
             </div>
             <span class="text-2xl font-bold text-n-slate-12">{{
@@ -484,7 +487,8 @@ onMounted(fetchData);
                     : 'text-n-slate-10'
               "
             >
-              {{ summary.reopen_rate || 0 }}% do total
+              {{ summary.reopen_rate || 0
+              }}{{ $t('CRM_REPORTS.COMMON.PCT_OF_TOTAL_SUFFIX') }}
             </span>
           </div>
 
@@ -496,14 +500,15 @@ onMounted(fetchData);
               <span class="i-lucide-circle-dollar-sign w-4 h-4 text-n-teal-9" />
               <span
                 class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
-                >Receita</span
+                >{{ $t('CRM_REPORTS.LEADS.REVENUE') }}</span
               >
             </div>
             <span class="text-xl font-bold text-n-teal-11 leading-tight">{{
               fmtCurrency(summary.revenue)
             }}</span>
             <span class="text-xs text-n-slate-10"
-              >ticket médio: {{ fmtCurrency(avgTicket) }}</span
+              >{{ $t('CRM_REPORTS.LEADS.AVG_TICKET') }}
+              {{ fmtCurrency(avgTicket) }}</span
             >
           </div>
         </div>
@@ -514,16 +519,20 @@ onMounted(fetchData);
             class="text-sm font-semibold text-n-slate-12 mb-5 flex items-center gap-1.5"
           >
             <span class="i-lucide-filter w-4 h-4 text-n-brand-9" />
-            Funil de Conversão
+            {{ $t('CRM_REPORTS.LEADS.FUNNEL_TITLE') }}
           </h2>
           <div class="flex items-end gap-0 overflow-x-auto pb-1">
             <!-- Step: Recebidos -->
             <div class="flex flex-col items-center gap-2 flex-1 min-w-[100px]">
-              <span class="text-xs text-n-slate-11 font-medium">Recebidos</span>
+              <span class="text-xs text-n-slate-11 font-medium">{{
+                $t('CRM_REPORTS.LEADS.RECEIVED')
+              }}</span>
               <div
                 class="w-full h-20 rounded-t-md bg-n-brand-9/20 border border-n-brand-9/40 flex items-end justify-center"
               >
-                <span class="text-xs font-bold text-n-brand-11 mb-2">100%</span>
+                <span class="text-xs font-bold text-n-brand-11 mb-2">{{
+                  $t('CRM_REPORTS.COMMON.FULL_PERCENT')
+                }}</span>
               </div>
               <span class="text-lg font-bold text-n-slate-12">{{
                 summary.total || 0
@@ -536,7 +545,9 @@ onMounted(fetchData);
 
             <!-- Step: Atendidos -->
             <div class="flex flex-col items-center gap-2 flex-1 min-w-[100px]">
-              <span class="text-xs text-n-slate-11 font-medium">Atendidos</span>
+              <span class="text-xs text-n-slate-11 font-medium">{{
+                $t('CRM_REPORTS.LEADS.ATTENDED')
+              }}</span>
               <div
                 class="w-full rounded-t-md bg-n-amber-9/20 border border-n-amber-9/40 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.attended, summary.total) * 0.8)}px`"
@@ -556,7 +567,9 @@ onMounted(fetchData);
 
             <!-- Step: Ganhos -->
             <div class="flex flex-col items-center gap-2 flex-1 min-w-[100px]">
-              <span class="text-xs text-n-slate-11 font-medium">Ganhos</span>
+              <span class="text-xs text-n-slate-11 font-medium">{{
+                $t('CRM_REPORTS.LEADS.WON')
+              }}</span>
               <div
                 class="w-full rounded-t-md bg-n-teal-9/20 border border-n-teal-9/40 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.won, summary.total) * 0.8)}px`"
@@ -576,7 +589,9 @@ onMounted(fetchData);
 
             <!-- Step: Perdidos -->
             <div class="flex flex-col items-center gap-2 flex-1 min-w-[100px]">
-              <span class="text-xs text-n-slate-11 font-medium">Perdidos</span>
+              <span class="text-xs text-n-slate-11 font-medium">{{
+                $t('CRM_REPORTS.LEADS.LOST')
+              }}</span>
               <div
                 class="w-full rounded-t-md bg-n-ruby-9/20 border border-n-ruby-9/40 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.lost, summary.total) * 0.8)}px`"
@@ -596,7 +611,9 @@ onMounted(fetchData);
 
             <!-- Step: Em Aberto -->
             <div class="flex flex-col items-center gap-2 flex-1 min-w-[100px]">
-              <span class="text-xs text-n-slate-11 font-medium">Em Aberto</span>
+              <span class="text-xs text-n-slate-11 font-medium">{{
+                $t('CRM_REPORTS.LEADS.OPEN')
+              }}</span>
               <div
                 class="w-full rounded-t-md bg-n-amber-9/10 border border-n-amber-9/30 flex items-end justify-center"
                 :style="`height:${Math.max(24, funnelPct(summary.open, summary.total) * 0.8)}px`"
@@ -641,7 +658,7 @@ onMounted(fetchData);
               @click="exportCsv"
             >
               <span class="i-lucide-download w-3.5 h-3.5" />
-              CSV
+              {{ $t('CRM_REPORTS.COMMON.EXPORT_CSV') }}
             </button>
           </div>
 
@@ -650,7 +667,7 @@ onMounted(fetchData);
             v-if="sortedTableData.length === 0"
             class="py-14 text-center text-sm text-n-slate-11"
           >
-            Sem dados para o período e filtros selecionados.
+            {{ $t('CRM_REPORTS.COMMON.NO_DATA_FILTERS') }}
           </div>
 
           <!-- Table -->
@@ -708,7 +725,7 @@ onMounted(fetchData);
                     @click="setSort('revenue')"
                   >
                     <span class="inline-flex items-center gap-1 justify-end">
-                      Receita
+                      {{ $t('CRM_REPORTS.LEADS.REVENUE') }}
                       <span
                         class="w-3 h-3 opacity-60"
                         :class="[sortIcon('revenue')]"

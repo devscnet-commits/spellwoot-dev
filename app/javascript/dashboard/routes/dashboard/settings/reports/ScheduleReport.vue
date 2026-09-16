@@ -187,11 +187,10 @@ onMounted(() => fetchData());
     <!-- Header -->
     <div class="flex flex-col gap-1">
       <h1 class="text-xl font-semibold text-n-slate-12">
-        Relatório de Horários
+        {{ $t('CRM_REPORTS.SCHEDULE.TITLE') }}
       </h1>
       <p class="text-sm text-n-slate-10">
-        Distribuição de conversas, tempos de resposta e atividade por hora do
-        dia
+        {{ $t('CRM_REPORTS.SCHEDULE.DESCRIPTION') }}
       </p>
     </div>
 
@@ -231,7 +230,7 @@ onMounted(() => fetchData());
           class="px-3 py-1.5 rounded-lg text-sm font-medium bg-n-brand-9 text-white"
           @click="applyCustom"
         >
-          Aplicar
+          {{ $t('CRM_REPORTS.COMMON.APPLY') }}
         </button>
       </div>
 
@@ -241,7 +240,7 @@ onMounted(() => fetchData());
           class="text-sm border border-n-weak rounded-lg px-2 py-1.5 bg-n-solid-2 text-n-slate-12"
           @change="fetchData"
         >
-          <option value="">Todas as caixas</option>
+          <option value="">{{ $t('CRM_REPORTS.COMMON.ALL_INBOXES') }}</option>
           <option v-for="i in inboxes" :key="i.id" :value="i.id">
             {{ i.name }}
           </option>
@@ -251,7 +250,7 @@ onMounted(() => fetchData());
           class="text-sm border border-n-weak rounded-lg px-2 py-1.5 bg-n-solid-2 text-n-slate-12"
           @change="fetchData"
         >
-          <option value="">Todos os times</option>
+          <option value="">{{ $t('CRM_REPORTS.SCHEDULE.ALL_TEAMS') }}</option>
           <option v-for="t in teams" :key="t.id" :value="t.id">
             {{ t.name }}
           </option>
@@ -261,7 +260,7 @@ onMounted(() => fetchData());
           class="text-sm border border-n-weak rounded-lg px-2 py-1.5 bg-n-solid-2 text-n-slate-12"
           @change="fetchData"
         >
-          <option value="">Todos os agentes</option>
+          <option value="">{{ $t('CRM_REPORTS.COMMON.ALL_AGENTS') }}</option>
           <option v-for="a in agents" :key="a.id" :value="a.id">
             {{ a.name }}
           </option>
@@ -293,13 +292,13 @@ onMounted(() => fetchData());
       class="flex items-center justify-center py-16 text-n-slate-10"
     >
       <span class="i-lucide-loader-2 animate-spin text-2xl mr-2" />
-      Carregando...
+      {{ $t('CRM_REPORTS.COMMON.LOADING') }}
     </div>
 
     <!-- Volume por hora -->
     <div v-else-if="activeTab === 'volume'" class="flex flex-col gap-4">
       <p class="text-sm text-n-slate-10">
-        Quantidade de conversas iniciadas por hora do dia
+        {{ $t('CRM_REPORTS.SCHEDULE.VOLUME_DESCRIPTION') }}
       </p>
       <div class="flex items-end gap-1 h-48 px-1">
         <div
@@ -310,7 +309,8 @@ onMounted(() => fetchData());
           <span
             v-if="row.total > 0"
             class="text-xs text-n-slate-10 leading-none"
-            >{{ row.total }}</span>
+            >{{ row.total }}</span
+          >
           <div
             class="w-full rounded-t transition-all duration-300"
             :class="heatColor(row.total, maxVolume)"
@@ -332,9 +332,13 @@ onMounted(() => fetchData());
         <div
           class="grid grid-cols-3 px-4 py-2 bg-n-slate-2 border-b border-n-weak text-xs font-medium text-n-slate-11"
         >
-          <span>Horário</span>
-          <span class="text-right">Conversas</span>
-          <span class="text-right">% do total</span>
+          <span>{{ $t('CRM_REPORTS.SCHEDULE.COLUMN_HOUR') }}</span>
+          <span class="text-right">
+            {{ $t('CRM_REPORTS.SCHEDULE.COLUMN_CONVERSATIONS') }}
+          </span>
+          <span class="text-right">
+            {{ $t('CRM_REPORTS.COMMON.COLUMN_PCT_OF_TOTAL') }}
+          </span>
         </div>
         <div class="max-h-72 overflow-y-auto divide-y divide-n-weak/40">
           <div
@@ -361,7 +365,7 @@ onMounted(() => fetchData());
             v-if="byHour.length === 0"
             class="px-4 py-6 text-sm text-n-slate-10 text-center"
           >
-            Nenhum dado no período
+            {{ $t('CRM_REPORTS.COMMON.NO_DATA_PERIOD') }}
           </div>
         </div>
       </div>
@@ -370,7 +374,7 @@ onMounted(() => fetchData());
     <!-- Tempo de resposta por hora -->
     <div v-else-if="activeTab === 'response'" class="flex flex-col gap-4">
       <p class="text-sm text-n-slate-10">
-        Tempo médio de primeira resposta por hora do dia
+        {{ $t('CRM_REPORTS.SCHEDULE.RESPONSE_DESCRIPTION') }}
       </p>
       <div class="flex items-end gap-1 h-48 px-1">
         <div
@@ -381,7 +385,8 @@ onMounted(() => fetchData());
           <span
             v-if="row.avg_seconds > 0"
             class="text-xs text-n-slate-10 leading-none"
-            >{{ fmtDuration(row.avg_seconds) }}</span>
+            >{{ fmtDuration(row.avg_seconds) }}</span
+          >
           <div
             class="w-full rounded-t bg-n-brand-7 transition-all duration-300"
             :style="{
@@ -402,8 +407,10 @@ onMounted(() => fetchData());
         <div
           class="grid grid-cols-2 px-4 py-2 bg-n-slate-2 border-b border-n-weak text-xs font-medium text-n-slate-11"
         >
-          <span>Horário</span>
-          <span class="text-right">Tempo médio 1ª resposta</span>
+          <span>{{ $t('CRM_REPORTS.SCHEDULE.COLUMN_HOUR') }}</span>
+          <span class="text-right">
+            {{ $t('CRM_REPORTS.SCHEDULE.COLUMN_AVG_FIRST_RESPONSE') }}
+          </span>
         </div>
         <div class="max-h-72 overflow-y-auto divide-y divide-n-weak/40">
           <div
@@ -422,7 +429,7 @@ onMounted(() => fetchData());
             v-if="responseByHour.length === 0"
             class="px-4 py-6 text-sm text-n-slate-10 text-center"
           >
-            Nenhum dado no período
+            {{ $t('CRM_REPORTS.COMMON.NO_DATA_PERIOD') }}
           </div>
         </div>
       </div>
@@ -431,13 +438,13 @@ onMounted(() => fetchData());
     <!-- Agente × Hora -->
     <div v-else-if="activeTab === 'agent'" class="flex flex-col gap-4">
       <p class="text-sm text-n-slate-10">
-        Conversas atribuídas por agente e faixa horária
+        {{ $t('CRM_REPORTS.SCHEDULE.AGENT_DESCRIPTION') }}
       </p>
       <div
         v-if="agentNames.length === 0"
         class="px-4 py-8 text-sm text-n-slate-10 text-center"
       >
-        Nenhum dado no período
+        {{ $t('CRM_REPORTS.COMMON.NO_DATA_PERIOD') }}
       </div>
       <div v-else class="overflow-x-auto rounded-xl border border-n-weak">
         <table class="min-w-max w-full text-sm">
@@ -447,7 +454,7 @@ onMounted(() => fetchData());
                 class="sticky left-0 bg-n-slate-2 px-3 py-2 text-left text-xs font-medium text-n-slate-11 cursor-pointer select-none min-w-[140px]"
                 @click="setSort('agent')"
               >
-                Agente
+                {{ $t('CRM_REPORTS.SCHEDULE.COLUMN_AGENT') }}
                 <span
                   v-if="sortKey === 'agent'"
                   :class="
@@ -479,7 +486,7 @@ onMounted(() => fetchData());
                 class="px-3 py-2 text-right text-xs font-medium text-n-slate-11 cursor-pointer select-none"
                 @click="setSort('total')"
               >
-                Total
+                {{ $t('CRM_REPORTS.COMMON.COLUMN_TOTAL') }}
                 <span
                   v-if="sortKey === 'total'"
                   :class="
