@@ -25,7 +25,7 @@ export default {
         ...conversation.routes,
         ...settings.routes,
         ...contactRoutes,
-             ...aiRoutes,
+        ...aiRoutes,
         ...companyRoutes,
         ...searchRoutes,
         ...notificationRoutes,

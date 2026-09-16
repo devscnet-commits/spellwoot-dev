@@ -38,11 +38,11 @@ const props = defineProps({
     required: true,
     validator: value => ['CREATE', 'EDIT'].includes(value),
   },
-  policyInboxes:    { type: Array,   default: () => [] },
-  inboxList:        { type: Array,   default: () => [] },
+  policyInboxes: { type: Array, default: () => [] },
+  inboxList: { type: Array, default: () => [] },
   showInboxSection: { type: Boolean, default: true },
-  isLoading:        { type: Boolean, default: false },
-  isInboxLoading:   { type: Boolean, default: false },
+  isLoading: { type: Boolean, default: false },
+  isInboxLoading: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -58,7 +58,9 @@ const { t } = useI18n();
 const route = useRoute();
 
 const accountId = computed(() => Number(route.params.accountId));
-const isFeatureEnabledonAccount = useMapGetter('accounts/isFeatureEnabledonAccount');
+const isFeatureEnabledonAccount = useMapGetter(
+  'accounts/isFeatureEnabledonAccount'
+);
 const BASE_KEY = 'ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY';
 
 const isCreate = computed(() => props.mode === 'CREATE');
@@ -127,22 +129,24 @@ const dropdownInboxes = computed(() => {
 const toggleInbox = inbox => {
   if (isInboxSelected(inbox)) {
     if (isCreate.value) {
-      localSelectedIds.value = localSelectedIds.value.filter(id => id !== inbox.id);
+      localSelectedIds.value = localSelectedIds.value.filter(
+        id => id !== inbox.id
+      );
     } else {
       emit('deleteInbox', inbox.id);
     }
+  } else if (isCreate.value) {
+    localSelectedIds.value = [...localSelectedIds.value, inbox.id];
   } else {
-    if (isCreate.value) {
-      localSelectedIds.value = [...localSelectedIds.value, inbox.id];
-    } else {
-      emit('addInbox', inbox);
-    }
+    emit('addInbox', inbox);
   }
 };
 
 const removeInbox = inbox => {
   if (isCreate.value) {
-    localSelectedIds.value = localSelectedIds.value.filter(id => id !== inbox.id);
+    localSelectedIds.value = localSelectedIds.value.filter(
+      id => id !== inbox.id
+    );
   } else {
     emit('deleteInbox', inbox.id);
   }
@@ -150,7 +154,14 @@ const removeInbox = inbox => {
 
 // ── Radio options ─────────────────────────────────────────────────────────────
 
-const createOption = (type, key, stateKey, disabled = false, disabledMessage = '', disabledLabel = '') => ({
+const createOption = (
+  type,
+  key,
+  stateKey,
+  disabled = false,
+  disabledMessage = '',
+  disabledLabel = ''
+) => ({
   key,
   label: t(`${BASE_KEY}.FORM.${type}.${key.toUpperCase()}.LABEL`),
   description: t(`${BASE_KEY}.FORM.${type}.${key.toUpperCase()}.DESCRIPTION`),
@@ -161,7 +172,10 @@ const createOption = (type, key, stateKey, disabled = false, disabledMessage = '
 });
 
 const assignmentOrderOptions = computed(() => {
-  const hasAdvancedAssignment = isFeatureEnabledonAccount.value(accountId.value, 'advanced_assignment');
+  const hasAdvancedAssignment = isFeatureEnabledonAccount.value(
+    accountId.value,
+    'advanced_assignment'
+  );
   return OPTIONS.ORDER.map(key => {
     const isBalanced = key === BALANCED;
     const disabled = isBalanced && !hasAdvancedAssignment;
@@ -170,14 +184,20 @@ const assignmentOrderOptions = computed(() => {
       key,
       'assignmentOrder',
       disabled,
-      disabled ? t(`${BASE_KEY}.FORM.ASSIGNMENT_ORDER.BALANCED.PREMIUM_MESSAGE`) : '',
-      disabled ? t(`${BASE_KEY}.FORM.ASSIGNMENT_ORDER.BALANCED.PREMIUM_BADGE`) : ''
+      disabled
+        ? t(`${BASE_KEY}.FORM.ASSIGNMENT_ORDER.BALANCED.PREMIUM_MESSAGE`)
+        : '',
+      disabled
+        ? t(`${BASE_KEY}.FORM.ASSIGNMENT_ORDER.BALANCED.PREMIUM_BADGE`)
+        : ''
     );
   });
 });
 
 const assignmentPriorityOptions = computed(() =>
-  OPTIONS.PRIORITY.map(key => createOption('ASSIGNMENT_PRIORITY', key, 'conversationPriority'))
+  OPTIONS.PRIORITY.map(key =>
+    createOption('ASSIGNMENT_PRIORITY', key, 'conversationPriority')
+  )
 );
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
@@ -232,7 +252,6 @@ defineExpose({ resetForm });
 <template>
   <form @submit.prevent="handleSubmit">
     <div class="flex flex-col gap-4 divide-y divide-n-weak mb-4">
-
       <!-- 1. Nome e descrição -->
       <BaseInfo
         v-model:policy-name="state.name"
@@ -283,7 +302,10 @@ defineExpose({ resetForm });
             </div>
 
             <!-- Loading -->
-            <div v-if="isInboxLoading" class="px-3 py-4 text-sm text-n-slate-10 text-center">
+            <div
+              v-if="isInboxLoading"
+              class="px-3 py-4 text-sm text-n-slate-10 text-center"
+            >
               Carregando caixas de entrada...
             </div>
 
@@ -296,7 +318,9 @@ defineExpose({ resetForm });
                 class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-sm text-n-slate-12 hover:bg-n-alpha-black2 transition-colors"
                 @click="toggleInbox(inbox)"
               >
-                <span class="i-lucide-inbox size-4 text-n-slate-9 flex-shrink-0" />
+                <span
+                  class="i-lucide-inbox size-4 text-n-slate-9 flex-shrink-0"
+                />
                 <span class="flex-1 truncate">{{ inbox.name }}</span>
               </button>
 
@@ -304,7 +328,11 @@ defineExpose({ resetForm });
                 v-if="!dropdownInboxes.length"
                 class="px-3 py-4 text-sm text-n-slate-10 text-center"
               >
-                {{ inboxSearch ? 'Nenhuma caixa encontrada.' : 'Todas as caixas já foram vinculadas.' }}
+                {{
+                  inboxSearch
+                    ? 'Nenhuma caixa encontrada.'
+                    : 'Todas as caixas já foram vinculadas.'
+                }}
               </div>
             </div>
           </div>
@@ -328,9 +356,7 @@ defineExpose({ resetForm });
           </span>
         </div>
 
-        <p v-else class="text-sm text-n-slate-10">
-          Nenhuma caixa vinculada.
-        </p>
+        <p v-else class="text-sm text-n-slate-10">Nenhuma caixa vinculada.</p>
       </div>
 
       <!-- 3. Ordem de atribuição -->
@@ -359,7 +385,9 @@ defineExpose({ resetForm });
         </div>
 
         <!-- 4. Prioridade de atribuição -->
-        <div class="py-4 flex flex-col items-start gap-3 w-full border-t border-n-weak">
+        <div
+          class="py-4 flex flex-col items-start gap-3 w-full border-t border-n-weak"
+        >
           <WithLabel
             :label="t(`${BASE_KEY}.FORM.ASSIGNMENT_PRIORITY.LABEL`)"
             name="conversationPriority"
@@ -405,7 +433,9 @@ defineExpose({ resetForm });
     <Button
       type="submit"
       :label="buttonLabel"
-      :disabled="!validationState.isValid || isLoading || (!isCreate && !isDirty)"
+      :disabled="
+        !validationState.isValid || isLoading || (!isCreate && !isDirty)
+      "
       :is-loading="isLoading"
     />
   </form>

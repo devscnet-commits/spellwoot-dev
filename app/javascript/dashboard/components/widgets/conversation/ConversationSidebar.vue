@@ -53,7 +53,15 @@ const closeContactPanel = () => {
         'md:hidden': activeTab !== 0,
       },
     ]"
-    :style="props.panelWidth ? { width: props.panelWidth + 'px', minWidth: props.panelWidth + 'px', maxWidth: props.panelWidth + 'px' } : {}"
+    :style="
+      props.panelWidth
+        ? {
+            width: props.panelWidth + 'px',
+            minWidth: props.panelWidth + 'px',
+            maxWidth: props.panelWidth + 'px',
+          }
+        : {}
+    "
   >
     <div class="flex flex-1 overflow-auto">
       <ContactPanel

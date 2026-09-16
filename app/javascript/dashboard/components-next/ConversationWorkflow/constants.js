@@ -66,7 +66,8 @@ export const isAttrVisible = (attr, formValues) => {
 
 // Whether a closing requirement applies to the chosen resolution state. "if attribute = value"
 // conditions pass through here: their evaluation is value-based and happens live in the modal.
-const requirementApplies = (condition = {}, canonicalKey, polarity) => {
+const requirementApplies = (condition, canonicalKey, polarity) => {
+  if (!condition) return true;
   if (condition.if) return true;
   if (condition.always) return true;
   const when = condition.when;
@@ -79,7 +80,11 @@ const requirementApplies = (condition = {}, canonicalKey, polarity) => {
 // Maps a closing flow's per-flow requirements to the attribute-definition shape the outcome modal
 // renders, keeping only the ones that apply to the chosen resolution state. "if" conditions are
 // mapped to the conditional rule shape so the modal shows/hides them as the trigger value changes.
-export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => {
+export const flowRequiredAttributes = (
+  flow,
+  canonicalKey,
+  attributeOptions
+) => {
   const requirements = flow?.closing_requirements || [];
   if (!requirements.length) return [];
 
@@ -109,4 +114,3 @@ export const flowRequiredAttributes = (flow, canonicalKey, attributeOptions) => 
     })
     .filter(Boolean);
 };
-

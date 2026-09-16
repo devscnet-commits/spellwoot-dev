@@ -10,14 +10,14 @@ import Breadcrumb from 'dashboard/components-next/breadcrumb/Breadcrumb.vue';
 import SettingsLayout from 'dashboard/routes/dashboard/settings/SettingsLayout.vue';
 import AssignmentPolicyForm from './components/AgentAssignmentPolicyForm.vue';
 
-const route  = useRoute();
+const route = useRoute();
 const router = useRouter();
-const store  = useStore();
-const { t }  = useI18n();
+const store = useStore();
+const { t } = useI18n();
 
-const formRef    = ref(null);
-const uiFlags    = useMapGetter('assignmentPolicies/getUIFlags');
-const inboxes    = useMapGetter('inboxes/getAllInboxes');
+const formRef = ref(null);
+const uiFlags = useMapGetter('assignmentPolicies/getUIFlags');
+const inboxes = useMapGetter('inboxes/getAllInboxes');
 const inboxUiFlags = useMapGetter('inboxes/getUIFlags');
 
 // When coming from inbox settings, pre-select that inbox
@@ -34,7 +34,11 @@ const breadcrumbItems = computed(() => {
         routeName: 'settings_inbox_show',
         params: { inboxId: inboxIdFromQuery.value },
       },
-      { label: t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.HEADER.TITLE') },
+      {
+        label: t(
+          'ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.HEADER.TITLE'
+        ),
+      },
     ];
   }
   return [
@@ -42,21 +46,24 @@ const breadcrumbItems = computed(() => {
       label: t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.INDEX.HEADER.TITLE'),
       routeName: 'agent_assignment_policy_index',
     },
-    { label: t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.HEADER.TITLE') },
+    {
+      label: t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.HEADER.TITLE'),
+    },
   ];
 });
 
-const inboxList = computed(() =>
-  inboxes.value
-    ?.slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(({ name, id, email, phoneNumber, channelType, medium }) => ({
-      name,
-      id,
-      email,
-      phoneNumber,
-      icon: getInboxIconByType(channelType, medium, 'line'),
-    })) || []
+const inboxList = computed(
+  () =>
+    inboxes.value
+      ?.slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(({ name, id, email, phoneNumber, channelType, medium }) => ({
+        name,
+        id,
+        email,
+        phoneNumber,
+        icon: getInboxIconByType(channelType, medium, 'line'),
+      })) || []
 );
 
 const handleBreadcrumbClick = item => {
@@ -73,7 +80,10 @@ const handleSubmit = async formState => {
   try {
     const { inboxIds = [], ...policyData } = formState;
 
-    const policy = await store.dispatch('assignmentPolicies/create', policyData);
+    const policy = await store.dispatch(
+      'assignmentPolicies/create',
+      policyData
+    );
 
     // Link selected inboxes in parallel (new policy, no conflict possible)
     if (inboxIds.length) {
@@ -87,11 +97,15 @@ const handleSubmit = async formState => {
       );
     }
 
-    useAlert(t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.API.SUCCESS_MESSAGE'));
+    useAlert(
+      t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.API.SUCCESS_MESSAGE')
+    );
     formRef.value?.resetForm();
     router.push({ name: 'agent_assignment_policy_index' });
   } catch {
-    useAlert(t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.API.ERROR_MESSAGE'));
+    useAlert(
+      t('ASSIGNMENT_POLICY.AGENT_ASSIGNMENT_POLICY.CREATE.API.ERROR_MESSAGE')
+    );
   }
 };
 

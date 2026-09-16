@@ -24,7 +24,15 @@ const DEFAULT_TIMEZONE = {
   value: 'America/Los_Angeles',
 };
 
-const DAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+const DAY_NAMES = [
+  'Domingo',
+  'Segunda-feira',
+  'Terça-feira',
+  'Quarta-feira',
+  'Quinta-feira',
+  'Sexta-feira',
+  'Sábado',
+];
 
 export default {
   components: {
@@ -59,7 +67,10 @@ export default {
     };
   },
   computed: {
-    ...mapGetters({ uiFlags: 'inboxes/getUIFlags', allInboxes: 'inboxes/getInboxes' }),
+    ...mapGetters({
+      uiFlags: 'inboxes/getUIFlags',
+      allInboxes: 'inboxes/getInboxes',
+    }),
     otherInboxes() {
       return (this.allInboxes || []).filter(item => item.id !== this.inbox.id);
     },
@@ -67,27 +78,36 @@ export default {
       return [...timeZoneOptions()];
     },
     timeZoneValue: {
-      get() { return this.timeZone.value; },
+      get() {
+        return this.timeZone.value;
+      },
       set(value) {
         const match = this.timeZones.find(tz => tz.value === value);
         if (match) this.timeZone = match;
       },
     },
     isRichEditorEnabled() {
-      if (this.isATwilioChannel || this.isATwitterInbox || this.isAFacebookInbox) return false;
+      if (
+        this.isATwilioChannel ||
+        this.isATwitterInbox ||
+        this.isAFacebookInbox
+      )
+        return false;
       return true;
     },
     hasError() {
       if (!this.isBusinessHoursEnabled) return false;
-      return this.daySlots.some(slot =>
-        slot.enabled && slot.periods.some(p => {
-          if (!p.from || !p.to) return true;
-          const toMin = s => {
-            const d = new Date(`1970-01-01 ${s}`);
-            return d.getHours() * 60 + d.getMinutes();
-          };
-          return toMin(p.to) <= toMin(p.from);
-        })
+      return this.daySlots.some(
+        slot =>
+          slot.enabled &&
+          slot.periods.some(p => {
+            if (!p.from || !p.to) return true;
+            const toMin = s => {
+              const d = new Date(`1970-01-01 ${s}`);
+              return d.getHours() * 60 + d.getMinutes();
+            };
+            return toMin(p.to) <= toMin(p.from);
+          })
       );
     },
     inboxStatus() {
@@ -104,16 +124,16 @@ export default {
       if (!this.inboxStatus) return null;
       const s = this.inboxStatus.status;
       const map = {
-        open:     this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.OPEN'),
+        open: this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.OPEN'),
         interval: this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.INTERVAL'),
-        closed:   this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.CLOSED'),
-        holiday:  this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.HOLIDAY'),
+        closed: this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.CLOSED'),
+        holiday: this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.HOLIDAY'),
       };
       return map[s] ?? null;
     },
     statusColor() {
       const s = this.inboxStatus?.status;
-      if (s === 'open')     return 'text-n-teal-9 bg-n-teal-3';
+      if (s === 'open') return 'text-n-teal-9 bg-n-teal-3';
       if (s === 'interval') return 'text-n-amber-9 bg-n-amber-3';
       return 'text-n-ruby-9 bg-n-ruby-3';
     },
@@ -121,9 +141,13 @@ export default {
       const s = this.inboxStatus;
       if (!s) return '';
       if (s.status === 'open' && s.until)
-        return this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.CLOSES_AT', { time: this.formatTime(s.until) });
+        return this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.CLOSES_AT', {
+          time: this.formatTime(s.until),
+        });
       if ((s.status === 'interval' || s.status === 'closed') && s.nextOpen)
-        return this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.OPENS_AT', { time: this.formatTime(s.nextOpen) });
+        return this.$t('INBOX_MGMT.BUSINESS_HOURS.STATUS.OPENS_AT', {
+          time: this.formatTime(s.nextOpen),
+        });
       return '';
     },
     // Serialized snapshot of the savable state, used to detect unsaved changes.
@@ -144,7 +168,9 @@ export default {
     },
   },
   watch: {
-    inbox() { this.setDefaults(); },
+    inbox() {
+      this.setDefaults();
+    },
   },
   mounted() {
     this.setDefaults();
@@ -164,30 +190,41 @@ export default {
       } = this.inbox;
 
       this.isBusinessHoursEnabled = isEnabled;
-      this.outOfOfficeMessage  = outOfOfficeMessage || '';
-      this.intervalMessage     = intervalMessage    || '';
-      this.holidayMessage      = holidayMessage     || '';
-      this.holidays            = holidays           || [];
-      this.exceptions          = exceptions         || [];
-      this.daySlots            = (workingPeriods || []).length ? periodsFromApi(workingPeriods) : defaultDaySlots();
-      this.timeZone            = this.timeZones.find(item => timeZone === item.value) || DEFAULT_TIMEZONE;
-      this.savedSnapshot       = this.currentSnapshot;
+      this.outOfOfficeMessage = outOfOfficeMessage || '';
+      this.intervalMessage = intervalMessage || '';
+      this.holidayMessage = holidayMessage || '';
+      this.holidays = holidays || [];
+      this.exceptions = exceptions || [];
+      this.daySlots = (workingPeriods || []).length
+        ? periodsFromApi(workingPeriods)
+        : defaultDaySlots();
+      this.timeZone =
+        this.timeZones.find(item => timeZone === item.value) ||
+        DEFAULT_TIMEZONE;
+      this.savedSnapshot = this.currentSnapshot;
     },
     onSlotUpdate(day, newSlot) {
-      this.daySlots = this.daySlots.map(s => s.day === day ? newSlot : s);
+      this.daySlots = this.daySlots.map(s => (s.day === day ? newSlot : s));
     },
     onCopyTo({ from, to }) {
       const sourceSlot = this.daySlots.find(s => s.day === from);
       if (!sourceSlot) return;
       this.daySlots = this.daySlots.map(s =>
         to.includes(s.day)
-          ? { ...s, enabled: sourceSlot.enabled, periods: sourceSlot.periods.map(p => ({ ...p })) }
+          ? {
+              ...s,
+              enabled: sourceSlot.enabled,
+              periods: sourceSlot.periods.map(p => ({ ...p })),
+            }
           : s
       );
     },
     formatTime(date) {
       if (!date) return '';
-      return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     },
     async updateInbox() {
       try {
@@ -196,22 +233,25 @@ export default {
           formData: false,
           working_hours_enabled: this.isBusinessHoursEnabled,
           out_of_office_message: this.outOfOfficeMessage,
-          interval_message:      this.intervalMessage,
-          holiday_message:       this.holidayMessage,
-          working_periods:       periodsToApi(this.daySlots),
-          holidays:              this.holidays,
-          exceptions:            this.exceptions,
-          timezone:              this.timeZone.value,
+          interval_message: this.intervalMessage,
+          holiday_message: this.holidayMessage,
+          working_periods: periodsToApi(this.daySlots),
+          holidays: this.holidays,
+          exceptions: this.exceptions,
+          timezone: this.timeZone.value,
           channel: {},
         };
         await this.$store.dispatch('inboxes/updateInbox', payload);
         this.savedSnapshot = this.currentSnapshot;
 
         if (this.replicationScope !== 'this') {
-          const { data } = await InboxesAPI.replicateBusinessHours(this.inbox.id, {
-            scope: this.replicationScope,
-            inboxIds: this.selectedInboxIds,
-          });
+          const { data } = await InboxesAPI.replicateBusinessHours(
+            this.inbox.id,
+            {
+              scope: this.replicationScope,
+              inboxIds: this.selectedInboxIds,
+            }
+          );
           if (data.failed && data.failed.length) {
             useAlert(
               this.$t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.PARTIAL', {
@@ -222,7 +262,9 @@ export default {
             );
           } else {
             useAlert(
-              this.$t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SUCCESS', { count: data.count })
+              this.$t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SUCCESS', {
+                count: data.count,
+              })
             );
           }
         } else {
@@ -261,7 +303,9 @@ export default {
             <span class="size-2 rounded-full bg-current opacity-70" />
             {{ statusLabel }}
           </span>
-          <span v-if="statusSubtext" class="text-body-main text-n-slate-11">{{ statusSubtext }}</span>
+          <span v-if="statusSubtext" class="text-body-main text-n-slate-11">{{
+            statusSubtext
+          }}</span>
         </div>
 
         <!-- Sub-tabs -->
@@ -270,9 +314,11 @@ export default {
             v-for="tab in ['hours', 'holidays', 'exceptions', 'messages']"
             :key="tab"
             class="px-4 py-2 text-body-main font-medium transition-colors border-b-2 -mb-px"
-            :class="activeTab === tab
-              ? 'border-n-blue-9 text-n-blue-9'
-              : 'border-transparent text-n-slate-10 hover:text-n-slate-12'"
+            :class="
+              activeTab === tab
+                ? 'border-n-blue-9 text-n-blue-9'
+                : 'border-transparent text-n-slate-10 hover:text-n-slate-12'
+            "
             @click="activeTab = tab"
           >
             {{ $t(`INBOX_MGMT.BUSINESS_HOURS.TABS.${tab.toUpperCase()}`) }}
@@ -284,7 +330,9 @@ export default {
           <p class="text-body-main text-n-slate-11 -mt-1">
             {{ $t('INBOX_MGMT.BUSINESS_HOURS.HOURS_HINT') }}
           </p>
-          <SettingsFieldSection :label="$t('INBOX_MGMT.BUSINESS_HOURS.TIMEZONE_LABEL')">
+          <SettingsFieldSection
+            :label="$t('INBOX_MGMT.BUSINESS_HOURS.TIMEZONE_LABEL')"
+          >
             <ComboBox
               v-model="timeZoneValue"
               :options="timeZones"
@@ -293,13 +341,15 @@ export default {
             />
           </SettingsFieldSection>
 
-          <div class="flex flex-col rounded-xl outline outline-1 -outline-offset-1 outline-n-weak px-4">
+          <div
+            class="flex flex-col rounded-xl outline outline-1 -outline-offset-1 outline-n-weak px-4"
+          >
             <DayPeriodsRow
               v-for="slot in daySlots"
               :key="slot.day"
+              :day-slot="slot"
               :day-name="DAY_NAMES[slot.day]"
               :day-index="slot.day"
-              :slot="slot"
               @update="newSlot => onSlotUpdate(slot.day, newSlot)"
               @copy-to="onCopyTo"
             />
@@ -313,7 +363,10 @@ export default {
 
         <!-- Tab: Exceções -->
         <template v-else-if="activeTab === 'exceptions'">
-          <ExceptionsTab :exceptions="exceptions" @update="e => (exceptions = e)" />
+          <ExceptionsTab
+            :exceptions="exceptions"
+            @update="e => (exceptions = e)"
+          />
         </template>
 
         <!-- Tab: Mensagens Automáticas -->
@@ -336,10 +389,18 @@ export default {
               v-model="replicationScope"
               class="appearance-none w-full px-3 py-2 pr-10 rounded-lg border border-n-weak bg-n-solid-1 text-body-main text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
             >
-              <option value="this">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}</option>
-              <option value="selected">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}</option>
-              <option value="team">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.TEAM') }}</option>
-              <option value="account">{{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}</option>
+              <option value="this">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.THIS') }}
+              </option>
+              <option value="selected">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.SELECTED') }}
+              </option>
+              <option value="team">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.TEAM') }}
+              </option>
+              <option value="account">
+                {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.ACCOUNT') }}
+              </option>
             </select>
             <span
               class="absolute ltr:right-3 rtl:left-3 top-1/2 -translate-y-1/2 size-4 i-lucide-chevron-down text-n-slate-10 pointer-events-none"
@@ -355,10 +416,18 @@ export default {
               :key="ibx.id"
               class="flex items-center gap-2 cursor-pointer px-1 py-1"
             >
-              <input v-model="selectedInboxIds" type="checkbox" :value="ibx.id" class="m-0" />
+              <input
+                v-model="selectedInboxIds"
+                type="checkbox"
+                :value="ibx.id"
+                class="m-0"
+              />
               <span class="text-body-main text-n-slate-12">{{ ibx.name }}</span>
             </label>
-            <p v-if="!otherInboxes.length" class="text-label-small text-n-slate-10 px-1 py-2">
+            <p
+              v-if="!otherInboxes.length"
+              class="text-label-small text-n-slate-10 px-1 py-2"
+            >
               {{ $t('INBOX_MGMT.BUSINESS_HOURS.REPLICATE.NO_OTHER') }}
             </p>
           </div>
@@ -375,13 +444,17 @@ export default {
       <div class="flex justify-end py-2">
         <NextButton
           type="submit"
-          :label="isDirty
-            ? $t('INBOX_MGMT.BUSINESS_HOURS.UPDATE')
-            : $t('INBOX_MGMT.BUSINESS_HOURS.SAVED')"
+          :label="
+            isDirty
+              ? $t('INBOX_MGMT.BUSINESS_HOURS.UPDATE')
+              : $t('INBOX_MGMT.BUSINESS_HOURS.SAVED')
+          "
           :is-loading="uiFlags.isUpdating"
-          :disabled="hasError
-            || (replicationScope === 'selected' && !selectedInboxIds.length)
-            || (replicationScope === 'this' && !isDirty)"
+          :disabled="
+            hasError ||
+            (replicationScope === 'selected' && !selectedInboxIds.length) ||
+            (replicationScope === 'this' && !isDirty)
+          "
         />
       </div>
     </form>

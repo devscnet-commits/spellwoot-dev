@@ -89,19 +89,21 @@ const handleConfirm = () => {
   const config = { key: props.attribute.value, rule: rule.value };
   if (rule.value === 'conditional') {
     config.condition_field = conditionField.value;
-    config.condition_value =
-      isMultiSelectMode.value && conditionValues.value.length === 1
-        ? conditionValues.value[0]
-        : isMultiSelectMode.value
-          ? [...conditionValues.value]
-          : conditionValues.value[0] || '';
+    const [firstValue = ''] = conditionValues.value;
+    const keepsList =
+      isMultiSelectMode.value && conditionValues.value.length !== 1;
+    config.condition_value = keepsList
+      ? [...conditionValues.value]
+      : firstValue;
   }
   emit('confirm', config);
 };
 </script>
 
 <template>
-  <div class="px-4 py-4 bg-n-solid-1 border-t border-n-weak flex flex-col gap-4">
+  <div
+    class="px-4 py-4 bg-n-solid-1 border-t border-n-weak flex flex-col gap-4"
+  >
     <!-- Header -->
     <p class="text-body-small text-n-slate-11">
       {{
@@ -127,9 +129,13 @@ const handleConfirm = () => {
         <input v-model="rule" type="radio" value="conditional" class="mt-0.5" />
         <div>
           <p class="text-body-para font-medium text-n-slate-12">
-            {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITIONAL') }}
+            {{
+              $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITIONAL')
+            }}
           </p>
-          <p class="text-xs text-n-slate-11">Exigido apenas quando uma condição for atendida</p>
+          <p class="text-xs text-n-slate-11">
+            Exigido apenas quando uma condição for atendida
+          </p>
         </div>
       </label>
     </div>
@@ -138,13 +144,17 @@ const handleConfirm = () => {
     <template v-if="rule === 'conditional'">
       <!-- Field selector -->
       <div class="flex flex-col gap-1.5">
-        <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">Quando o campo</p>
+        <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">
+          Quando o campo
+        </p>
         <select
           v-model="conditionField"
           class="text-body-para text-n-slate-12 bg-n-solid-2 border border-n-weak rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-n-brand-9"
         >
           <option value="" disabled>
-            {{ $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.SELECT_FIELD') }}
+            {{
+              $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.SELECT_FIELD')
+            }}
           </option>
           <optgroup v-if="systemFields.length" label="— Sistema —">
             <option
@@ -155,7 +165,10 @@ const handleConfirm = () => {
               {{ attr.label }}
             </option>
           </optgroup>
-          <optgroup v-if="customFieldOptions.length" label="— Atributos personalizados —">
+          <optgroup
+            v-if="customFieldOptions.length"
+            label="— Atributos personalizados —"
+          >
             <option
               v-for="attr in customFieldOptions"
               :key="attr.value"
@@ -171,11 +184,17 @@ const handleConfirm = () => {
       <div v-if="conditionField" class="flex flex-col gap-2">
         <p class="text-xs font-medium text-n-slate-11 uppercase tracking-wide">
           For igual a
-          <span v-if="isMultiSelectMode" class="normal-case font-normal">(selecione um ou mais)</span>
+          <span
+v-if="isMultiSelectMode" class="normal-case font-normal"
+            >(selecione um ou mais)</span
+          >
         </p>
 
         <!-- Styled chips for LIST / system fields -->
-        <div v-if="isMultiSelectMode && valueOptions" class="flex flex-wrap gap-2">
+        <div
+          v-if="isMultiSelectMode && valueOptions"
+          class="flex flex-wrap gap-2"
+        >
           <button
             v-for="val in valueOptions"
             :key="val"
@@ -201,7 +220,8 @@ const handleConfirm = () => {
           >
             <span
               v-if="valueIcon(val)"
-              :class="[valueIcon(val), 'w-3.5 h-3.5']"
+              class="w-3.5 h-3.5"
+              :class="[valueIcon(val)]"
             />
             <span
               v-else-if="conditionValues.includes(val)"
@@ -218,7 +238,9 @@ const handleConfirm = () => {
           type="text"
           class="text-body-para text-n-slate-12 bg-n-solid-2 border border-n-weak rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-n-brand-9"
           :placeholder="
-            $t('CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITION_VALUE_PLACEHOLDER')
+            $t(
+              'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.RULE.CONDITION_VALUE_PLACEHOLDER'
+            )
           "
           @input="conditionValues = [$event.target.value]"
         />
@@ -229,10 +251,14 @@ const handleConfirm = () => {
         v-if="conditionField && conditionValues.length"
         class="flex items-start gap-2 px-3 py-2 rounded-lg bg-n-slate-2 text-xs text-n-slate-11"
       >
-        <span class="i-lucide-info w-3.5 h-3.5 mt-0.5 shrink-0 text-n-slate-9" />
+        <span
+          class="i-lucide-info w-3.5 h-3.5 mt-0.5 shrink-0 text-n-slate-9"
+        />
         <span>
           Obrigatório quando
-          <strong class="text-n-slate-12">{{ selectedConditionAttr?.label }}</strong>
+          <strong class="text-n-slate-12">{{
+            selectedConditionAttr?.label
+          }}</strong>
           for
           <strong class="text-n-slate-12">
             {{ conditionValues.map(v => valueLabel(v)).join(' ou ') }}

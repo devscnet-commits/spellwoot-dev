@@ -17,10 +17,10 @@ const { t } = useI18n();
 
 const formRef = ref(null);
 
-const uiFlags      = useMapGetter('agentCapacityPolicies/getUIFlags');
-const agentsList   = useMapGetter('agents/getAgents');
-const labelsList   = useMapGetter('labels/getLabels');
-const inboxes      = useMapGetter('inboxes/getAllInboxes');
+const uiFlags = useMapGetter('agentCapacityPolicies/getUIFlags');
+const agentsList = useMapGetter('agents/getAgents');
+const labelsList = useMapGetter('labels/getLabels');
+const inboxes = useMapGetter('inboxes/getAllInboxes');
 const inboxesUiFlags = useMapGetter('inboxes/getUIFlags');
 
 const breadcrumbItems = computed(() => [
@@ -45,17 +45,18 @@ const buildList = items =>
 const allAgents = computed(() => buildList(camelcaseKeys(agentsList.value)));
 const allLabels = computed(() => buildList(labelsList.value));
 
-const allInboxes = computed(() =>
-  inboxes.value
-    ?.slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(({ name, id, email, phoneNumber, channelType, medium }) => ({
-      name,
-      id,
-      email,
-      phoneNumber,
-      icon: getInboxIconByType(channelType, medium, 'line'),
-    })) || []
+const allInboxes = computed(
+  () =>
+    inboxes.value
+      ?.slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(({ name, id, email, phoneNumber, channelType, medium }) => ({
+        name,
+        id,
+        email,
+        phoneNumber,
+        icon: getInboxIconByType(channelType, medium, 'line'),
+      })) || []
 );
 
 const handleBreadcrumbClick = item => {
@@ -65,11 +66,15 @@ const handleBreadcrumbClick = item => {
 const handleSubmit = async formState => {
   try {
     await store.dispatch('agentCapacityPolicies/create', formState);
-    useAlert(t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.SUCCESS_MESSAGE'));
+    useAlert(
+      t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.SUCCESS_MESSAGE')
+    );
     formRef.value?.resetForm();
     router.push({ name: 'agent_capacity_policy_index' });
   } catch {
-    useAlert(t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.ERROR_MESSAGE'));
+    useAlert(
+      t('ASSIGNMENT_POLICY.AGENT_CAPACITY_POLICY.CREATE.API.ERROR_MESSAGE')
+    );
   }
 };
 

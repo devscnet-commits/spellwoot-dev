@@ -9,7 +9,14 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import ChoiceToggle from 'dashboard/components-next/input/ChoiceToggle.vue';
-import { ATTRIBUTE_TYPES, SYSTEM_OUTCOME_FIELD, SYSTEM_CONTACT_EMAIL_FIELD, OUTCOME_TO_SYSTEM_VALUE, contactEmailSystemValue, isAttrVisible } from './constants';
+import {
+  ATTRIBUTE_TYPES,
+  SYSTEM_OUTCOME_FIELD,
+  SYSTEM_CONTACT_EMAIL_FIELD,
+  OUTCOME_TO_SYSTEM_VALUE,
+  contactEmailSystemValue,
+  isAttrVisible,
+} from './constants';
 
 const emit = defineEmits(['submit']);
 

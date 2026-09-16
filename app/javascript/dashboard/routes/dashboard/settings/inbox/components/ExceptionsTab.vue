@@ -56,7 +56,10 @@ function openEdit(idx) {
     name: ex.name || '',
     exception_date: String(ex.exception_date || '').slice(0, 10),
     closed: !!ex.closed,
-    periods: ex.closed || !ex.periods?.length ? blankForm().periods : toUiPeriods(ex.periods),
+    periods:
+      ex.closed || !ex.periods?.length
+        ? blankForm().periods
+        : toUiPeriods(ex.periods),
   };
   showForm.value = true;
 }
@@ -91,14 +94,19 @@ function remove(idx) {
 }
 
 function formatDate(dateStr) {
-  const [y, m, d] = String(dateStr || '').slice(0, 10).split('-');
+  const [y, m, d] = String(dateStr || '')
+    .slice(0, 10)
+    .split('-');
   return d && m && y ? `${d}/${m}/${y}` : dateStr;
 }
 
 function summary(ex) {
   if (ex.closed) return null;
   return (ex.periods || [])
-    .map(p => `${pad(p.start_hour)}:${pad(p.start_minutes)} → ${pad(p.end_hour)}:${pad(p.end_minutes)}`)
+    .map(
+      p =>
+        `${pad(p.start_hour)}:${pad(p.start_minutes)} → ${pad(p.end_hour)}:${pad(p.end_minutes)}`
+    )
     .join(' · ');
 }
 </script>
@@ -122,7 +130,10 @@ function summary(ex) {
         <div class="flex flex-col">
           <span class="text-body-main text-n-slate-12 font-medium">
             {{ formatDate(ex.exception_date) }}
-            <span v-if="ex.name" class="text-n-slate-10 font-normal">· {{ ex.name }}</span>
+            <span
+v-if="ex.name" class="text-n-slate-10 font-normal"
+              >· {{ ex.name }}</span
+            >
           </span>
           <span class="text-label-small text-n-slate-10">
             <span v-if="ex.closed" class="text-n-ruby-9">
@@ -132,10 +143,18 @@ function summary(ex) {
           </span>
         </div>
         <div class="flex items-center gap-2">
-          <button type="button" class="text-n-slate-9 hover:text-n-slate-12 transition-colors" @click="openEdit(idx)">
+          <button
+            type="button"
+            class="text-n-slate-9 hover:text-n-slate-12 transition-colors"
+            @click="openEdit(idx)"
+          >
             <span class="i-lucide-pencil size-4" />
           </button>
-          <button type="button" class="text-n-slate-9 hover:text-n-ruby-9 transition-colors" @click="remove(idx)">
+          <button
+            type="button"
+            class="text-n-slate-9 hover:text-n-ruby-9 transition-colors"
+            @click="remove(idx)"
+          >
             <span class="i-lucide-trash-2 size-4" />
           </button>
         </div>
@@ -157,16 +176,23 @@ function summary(ex) {
     </div>
 
     <!-- Form -->
-    <div v-if="showForm" class="outline outline-1 -outline-offset-1 outline-n-weak rounded-xl p-4 flex flex-col gap-4">
+    <div
+      v-if="showForm"
+      class="outline outline-1 -outline-offset-1 outline-n-weak rounded-xl p-4 flex flex-col gap-4"
+    >
       <p class="text-heading-3 text-n-slate-12 font-medium">
-        {{ editIdx !== null
-          ? $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.EDIT')
-          : $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.ADD') }}
+        {{
+          editIdx !== null
+            ? $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.EDIT')
+            : $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.ADD')
+        }}
       </p>
 
       <div class="flex gap-3">
         <div class="flex flex-col gap-1 flex-1">
-          <label class="text-label-small text-n-slate-11">{{ $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.DATE') }}</label>
+          <label class="text-label-small text-n-slate-11">{{
+            $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.DATE')
+          }}</label>
           <input
             v-model="form.exception_date"
             type="date"
@@ -174,24 +200,36 @@ function summary(ex) {
           />
         </div>
         <div class="flex flex-col gap-1 flex-1">
-          <label class="text-label-small text-n-slate-11">{{ $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.NAME') }}</label>
+          <label class="text-label-small text-n-slate-11">{{
+            $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.NAME')
+          }}</label>
           <input
             v-model="form.name"
             type="text"
             class="border border-n-weak rounded-lg px-3 py-2 text-body-main bg-n-solid-2 text-n-slate-12 focus:outline-none focus:ring-1 focus:ring-n-blue-8"
-            :placeholder="$t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.NAME_PLACEHOLDER')"
+            :placeholder="
+              $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.NAME_PLACEHOLDER')
+            "
           />
         </div>
       </div>
 
       <label class="flex items-center gap-2 cursor-pointer">
         <input v-model="form.closed" type="checkbox" class="m-0" />
-        <span class="text-body-main text-n-slate-12">{{ $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.CLOSED_ALL_DAY') }}</span>
+        <span class="text-body-main text-n-slate-12">{{
+          $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.CLOSED_ALL_DAY')
+        }}</span>
       </label>
 
       <div v-if="!form.closed" class="flex flex-col gap-2">
-        <label class="text-label-small text-n-slate-11">{{ $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.PERIODS') }}</label>
-        <div v-for="(period, idx) in form.periods" :key="idx" class="flex items-center gap-2">
+        <label class="text-label-small text-n-slate-11">{{
+          $t('INBOX_MGMT.BUSINESS_HOURS.EXCEPTIONS.PERIODS')
+        }}</label>
+        <div
+          v-for="(period, idx) in form.periods"
+          :key="idx"
+          class="flex items-center gap-2"
+        >
           <input
             v-model="period.from"
             type="time"
@@ -204,8 +242,8 @@ function summary(ex) {
             class="border border-n-weak rounded-lg px-3 py-2 text-body-main bg-n-solid-2 text-n-slate-12 focus:outline-none focus:ring-1 focus:ring-n-blue-8"
           />
           <button
-            type="button"
             v-if="form.periods.length > 1"
+            type="button"
             class="text-n-slate-10 hover:text-n-ruby-9 transition-colors"
             @click="removePeriod(idx)"
           >
@@ -223,7 +261,11 @@ function summary(ex) {
       </div>
 
       <div class="flex items-center gap-2 justify-end">
-        <button type="button" class="text-body-main text-n-slate-10 hover:text-n-slate-12" @click="showForm = false">
+        <button
+          type="button"
+          class="text-body-main text-n-slate-10 hover:text-n-slate-12"
+          @click="showForm = false"
+        >
           {{ $t('INBOX_MGMT.BUSINESS_HOURS.CANCEL') }}
         </button>
         <NextButton

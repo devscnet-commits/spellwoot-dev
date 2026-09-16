@@ -188,8 +188,16 @@ const resetPassword = async () => {
         <label>
           {{ $t('AGENT_MGMT.EDIT.FORM.AVAILABILITY.LABEL') }}
           <select v-model="agentAvailability">
-            <option v-for="status in availabilityOptions" :key="status" :value="status">
-              {{ $t(`PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.${status.toUpperCase()}`) }}
+            <option
+              v-for="status in availabilityOptions"
+              :key="status"
+              :value="status"
+            >
+              {{
+                $t(
+                  `PROFILE_SETTINGS.FORM.AVAILABILITY.STATUS.${status.toUpperCase()}`
+                )
+              }}
             </option>
           </select>
           <span class="text-xs text-n-slate-11">

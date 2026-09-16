@@ -32,9 +32,7 @@ const ruleLabel = computed(() => {
     const field =
       props.attribute.conditionFieldLabel || props.attribute.condition_field;
     const rawValue = props.attribute.condition_value;
-    const valueStr = Array.isArray(rawValue)
-      ? rawValue.join(' OU ')
-      : rawValue;
+    const valueStr = Array.isArray(rawValue) ? rawValue.join(' OU ') : rawValue;
     return `${field} = ${valueStr}`;
   }
   return null;

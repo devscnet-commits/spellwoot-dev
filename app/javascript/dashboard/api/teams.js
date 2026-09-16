@@ -39,10 +39,13 @@ export class TeamsAPI extends CacheEnabledApiClient {
   }
 
   updateMemberRole({ teamId, userId, role }) {
-    return axios.patch(`${this.url}/${teamId}/team_members/update_member_role`, {
-      user_id: userId,
-      role,
-    });
+    return axios.patch(
+      `${this.url}/${teamId}/team_members/update_member_role`,
+      {
+        user_id: userId,
+        role,
+      }
+    );
   }
 
   getInboxes({ teamId }) {

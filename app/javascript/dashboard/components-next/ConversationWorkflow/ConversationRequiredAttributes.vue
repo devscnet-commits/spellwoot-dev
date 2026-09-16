@@ -91,10 +91,10 @@ const conversationRequiredAttributes = computed(() => {
       const def = attrMap.get(attrConfig.key);
       if (!def) return null;
       const conditionFieldDef = attrConfig.condition_field
-        ? (attrMap.get(attrConfig.condition_field) ||
-            SYSTEM_CONDITION_FIELDS.find(
-              s => s.value === attrConfig.condition_field
-            ))
+        ? attrMap.get(attrConfig.condition_field) ||
+          SYSTEM_CONDITION_FIELDS.find(
+            s => s.value === attrConfig.condition_field
+          )
         : null;
       return {
         ...def,

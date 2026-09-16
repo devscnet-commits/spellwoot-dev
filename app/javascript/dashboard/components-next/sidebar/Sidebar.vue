@@ -653,7 +653,7 @@ const menuItems = computed(() => {
           icon: 'i-lucide-sticker',
           to: accountScopedRoute('stickers_list'),
         },
-        
+
         {
           name: 'Settings Integrations',
           label: t('SIDEBAR.INTEGRATIONS'),

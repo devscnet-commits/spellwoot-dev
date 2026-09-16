@@ -49,7 +49,11 @@ export const actions = {
   update: async ({ commit }, { agentsList, members, teamId }) => {
     commit(SET_TEAM_MEMBERS_UI_FLAG, { isUpdating: true });
     try {
-      const { data } = await TeamsAPI.updateAgents({ agentsList, members, teamId });
+      const { data } = await TeamsAPI.updateAgents({
+        agentsList,
+        members,
+        teamId,
+      });
       commit(ADD_AGENTS_TO_TEAM, { data, teamId });
     } catch (error) {
       throw new Error(error);
