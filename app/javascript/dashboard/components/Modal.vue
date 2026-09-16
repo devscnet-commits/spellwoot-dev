@@ -109,6 +109,12 @@ onMounted(() => {
       @apply max-w-[80%] w-[56.25rem];
     }
 
+    // Wide enough for a two-column body (form + live preview) without the horizontal scrollbar
+    // the 37.5rem default forces: the inner `lg:flex-row` keys off the viewport, not the modal.
+    &.large {
+      @apply max-w-[92%] w-[72rem];
+    }
+
     // .content-box {
     //   @apply h-auto p-0;
     // }

@@ -621,7 +621,11 @@ watch(whatsAppCloudInboxes, () => {
       </div>
     </woot-modal>
 
-    <woot-modal v-model:show="showEditModal" :on-close="closeEditModal">
+    <woot-modal
+      v-model:show="showEditModal"
+      size="large"
+      :on-close="closeEditModal"
+    >
       <EditTemplateModal
         v-if="selectedTemplate"
         :inbox-id="selectedTemplate.sourceInbox.id"
