@@ -22,6 +22,8 @@ const buttons = defineModel({ type: Array, default: () => [] });
 const BUTTON_TEXT_MAX_LENGTH = 25;
 // Meta caps the voice call button's label at 20 characters, unlike every other button.
 const VOICE_CALL_TEXT_MAX_LENGTH = 20;
+// Same cap the backend validator applies to button[:phone_number].
+const PHONE_MAX_LENGTH = 20;
 const textMaxLength = button =>
   button.type === 'VOICE_CALL'
     ? VOICE_CALL_TEXT_MAX_LENGTH
@@ -146,7 +148,7 @@ const removeButton = index => {
             count: textMaxLength(button),
           })
         "
-        :max-length="textMaxLength(button)"
+        :maxlength="textMaxLength(button)"
       />
       <p v-else class="text-caption text-n-slate-10">
         {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIXED_TEXT_HINT') }}
@@ -164,6 +166,7 @@ const removeButton = index => {
         :label="
           t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.PHONE_NUMBER')
         "
+        :maxlength="PHONE_MAX_LENGTH"
       />
 
       <Input
