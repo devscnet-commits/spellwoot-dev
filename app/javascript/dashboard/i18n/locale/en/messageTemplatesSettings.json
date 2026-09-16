@@ -130,7 +130,28 @@
           "AREA_BODY": "corpo dinâmico com variáveis",
           "AREA_FOOTER": "rodapé",
           "AREA_CODE_SAMPLE": "valor de exemplo do código",
-          "AREA_BUTTONS": "até {count} botão de ação ou resposta rápida | até {count} botões de ação ou resposta rápida"
+          "AREA_BUTTONS": "até {count} botão de ação ou resposta rápida | até {count} botões de ação ou resposta rápida",
+          "UTILITY_STANDARD": {
+            "LABEL": "Padrão",
+            "DESCRIPTION": "Envie mensagens sobre uma conta ou o pedido existente."
+          },
+          "UTILITY_FLOWS": {
+            "LABEL": "Flows",
+            "DESCRIPTION": "Envie um formulário para coletar feedback, enviar lembretes ou gerenciar pedidos."
+          },
+          "AUTHENTICATION_STANDARD": {
+            "LABEL": "Código de acesso de uso único",
+            "DESCRIPTION": "Envie códigos para verificar uma transação ou login."
+          },
+          "AREA_HEADER_TEXT_ONLY": "cabeçalho (apenas texto)",
+          "AREA_BUTTON_FLOW": "1 botão Abrir Flow",
+          "AREA_BUTTON_CATALOG": "1 botão Ver catálogo (texto fixo)",
+          "AREA_BUTTON_ORDER_DETAILS": "1 botão de pagamento (texto fixo)",
+          "AREA_BUTTON_COPY_CODE": "1 botão Copiar código",
+          "ORDER_STATUS": {
+            "LABEL": "Status do pedido",
+            "DESCRIPTION": "Envie mensagens para informar os clientes sobre o andamento de pedidos."
+          }
         }
       },
       "STEP_2": {
@@ -201,7 +222,8 @@
             "COPY_CODE": "Copiar código de oferta",
             "CATALOG": "Ver catálogo",
             "FLOW": "Abrir Flow",
-            "ORDER_DETAILS": "Revisar e pagar"
+            "ORDER_DETAILS": "Revisar e pagar",
+            "VOICE_CALL": "Ligar no WhatsApp"
           },
           "FIELDS": {
             "TEXT": "Texto do botão (máx {count} car.)",

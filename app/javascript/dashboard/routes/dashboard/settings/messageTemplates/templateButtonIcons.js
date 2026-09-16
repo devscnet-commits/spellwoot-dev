@@ -5,4 +5,5 @@ export const BUTTON_ICONS = {
   CATALOG: 'i-lucide-shopping-bag',
   FLOW: 'i-lucide-list',
   ORDER_DETAILS: 'i-lucide-receipt',
+  VOICE_CALL: 'i-lucide-phone-call',
 };

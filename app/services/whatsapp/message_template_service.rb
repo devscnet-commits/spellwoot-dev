@@ -117,13 +117,28 @@ class Whatsapp::MessageTemplateService
     rejected_reason
   end
 
+  # sub_category identifies the handful of Meta template types that share the plain
+  # header/body/footer shape but behave differently on send — ORDER_STATUS is the first one we
+  # support. Omitted when blank so every other template's payload stays byte-identical.
   def build_request_body(params)
-    {
+    body = {
       name: params[:name],
       language: params[:language],
       category: params[:category],
       components: build_components(params)
     }
+    body[:sub_category] = params[:sub_category] if params[:sub_category].present?
+    body[:display_format] = 'ORDER_DETAILS' if order_details_template?(params)
+    body
+  end
+
+  # Meta only treats a template as an order details one when the creation payload carries
+  # display_format — the fixed ORDER_DETAILS button alone isn't enough, and without it the template
+  # is created as a plain one with a button that does nothing. Inferred from the button instead of
+  # being passed down from the builder because the validator already forces that button to be the
+  # template's only one (EXCLUSIVE_BUTTON_TYPES), so its presence is unambiguous.
+  def order_details_template?(params)
+    Array(params[:buttons]).any? { |button| button[:type] == 'ORDER_DETAILS' }
   end
 
   def build_components(params)
@@ -192,6 +207,11 @@ class Whatsapp::MessageTemplateService
       { type: 'CATALOG', text: 'View catalog' }
     when 'FLOW'
       build_flow_button(button)
+    when 'VOICE_CALL'
+      # ttl_minutes is optional here — Meta applies its own default (7 days), and leaving it out
+      # keeps one less field the admin can get wrong. Add it if the account ever needs to control
+      # how long the button stays tappable.
+      { type: 'VOICE_CALL', text: button[:text] }
     when 'ORDER_DETAILS'
       # Same as CATALOG — required field, fixed value.
       { type: 'ORDER_DETAILS', text: 'Copy Pix code' }

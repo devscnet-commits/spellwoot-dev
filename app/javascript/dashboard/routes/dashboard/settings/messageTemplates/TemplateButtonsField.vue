@@ -20,6 +20,12 @@ const props = defineProps({
 const buttons = defineModel({ type: Array, default: () => [] });
 
 const BUTTON_TEXT_MAX_LENGTH = 25;
+// Meta caps the voice call button's label at 20 characters, unlike every other button.
+const VOICE_CALL_TEXT_MAX_LENGTH = 20;
+const textMaxLength = button =>
+  button.type === 'VOICE_CALL'
+    ? VOICE_CALL_TEXT_MAX_LENGTH
+    : BUTTON_TEXT_MAX_LENGTH;
 // Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
 // custom one, so there's nothing to let the user edit here.
 const FIXED_TEXT_BUTTON_TYPES = ['CATALOG', 'ORDER_DETAILS'];
@@ -137,10 +143,10 @@ const removeButton = index => {
         v-model="button.text"
         :label="
           t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.TEXT', {
-            count: BUTTON_TEXT_MAX_LENGTH,
+            count: textMaxLength(button),
           })
         "
-        :max-length="BUTTON_TEXT_MAX_LENGTH"
+        :max-length="textMaxLength(button)"
       />
       <p v-else class="text-caption text-n-slate-10">
         {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIXED_TEXT_HINT') }}

@@ -27,30 +27,63 @@ const AUTH_MAX_BUTTONS = 1;
 const CATALOG_MAX_BUTTONS = 1;
 const FLOW_MAX_BUTTONS = 1;
 const ORDER_DETAILS_MAX_BUTTONS = 1;
-const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
+// VOICE_CALL is the "Call request" button Meta lists among the types Utility templates accept: the
+// customer taps it and calls the business inside WhatsApp. Not to be confused with PHONE_NUMBER
+// (regular dialer) nor with the CALL_PERMISSION_REQUEST component, which is the opposite direction
+// — the business asking permission to call the customer. Unlike CATALOG/FLOW/ORDER_DETAILS it isn't
+// exclusive: Meta's own example combines it with a URL button in the same template.
+const BUTTON_TYPES = [
+  'QUICK_REPLY',
+  'URL',
+  'PHONE_NUMBER',
+  'COPY_CODE',
+  'VOICE_CALL',
+];
 const AUTH_BUTTON_TYPES = ['COPY_CODE'];
 const CATALOG_BUTTON_TYPES = ['CATALOG'];
 const FLOW_BUTTON_TYPES = ['FLOW'];
 const ORDER_DETAILS_BUTTON_TYPES = ['ORDER_DETAILS'];
 const AUTH_BODY_TEXT = '{{1}} é o seu código de verificação.';
-const MARKETING_SUBTYPES = [
+// Mirrors the "Selecione o tipo" list WhatsApp Manager shows for each category. The previous
+// version assumed only Marketing had multiple structures and hardcoded Padrão for the other two —
+// Utility actually offers the same list minus Catalog (which is inherently promotional), so its
+// tab only ever showed one of the five types Meta accepts. Authentication really does have a
+// single type, but Meta labels it "Código de acesso de uso único", not "Padrão".
+const SUBTYPES_BY_CATEGORY = {
+  MARKETING: [
+    'STANDARD',
+    'CATALOG',
+    'FLOWS',
+    'ORDER_DETAILS',
+    'CALL_PERMISSION_REQUEST',
+  ],
+  UTILITY: [
+    'STANDARD',
+    'FLOWS',
+    'ORDER_STATUS',
+    'ORDER_DETAILS',
+    'CALL_PERMISSION_REQUEST',
+  ],
+  AUTHENTICATION: ['STANDARD'],
+};
+// Everything listed above is implemented; the flag stays so an unreleased type can be shown as
+// "Em breve" instead of being hidden (Utility's "Status do pedido" is the next one).
+const SELECTABLE_SUBTYPES = [
   'STANDARD',
   'CATALOG',
   'FLOWS',
+  'ORDER_STATUS',
   'ORDER_DETAILS',
   'CALL_PERMISSION_REQUEST',
 ];
-const SELECTABLE_MARKETING_SUBTYPES = [
-  'STANDARD',
-  'CATALOG',
-  'FLOWS',
-  'ORDER_DETAILS',
-  'CALL_PERMISSION_REQUEST',
-];
-// Meta only offers multiple template structures under Marketing — Utility and Authentication
-// templates always use the standard header/body/footer/button layout, so their "type" section
-// just shows Padrão, already selected, for visual consistency with the Marketing tab.
-const SINGLE_STANDARD_SUBTYPE = ['STANDARD'];
+// Meta words the same type differently per category (Padrão and Flows), so the copy is keyed by
+// "<CATEGORY>_<SUBTYPE>" when it differs and falls back to the shared key when it doesn't. Using
+// Marketing's promotional wording under Utility was actively misleading: Utility forbids
+// promotional content, and Meta silently recategorises templates that contain it.
+const SUBTYPE_TEXT_OVERRIDES = {
+  UTILITY: { STANDARD: 'UTILITY_STANDARD', FLOWS: 'UTILITY_FLOWS' },
+  AUTHENTICATION: { STANDARD: 'AUTHENTICATION_STANDARD' },
+};
 const LANGUAGES = [
   { value: 'pt_BR', label: 'Português (Brasil)' },
   { value: 'en_US', label: 'English (US)' },
@@ -159,45 +192,39 @@ const categories = computed(() => [
 
 const isMarketing = computed(() => form.category === 'MARKETING');
 
-const subtypeLabels = computed(() => ({
-  STANDARD: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.STANDARD.LABEL'),
-  CATALOG: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CATALOG.LABEL'),
-  FLOWS: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.FLOWS.LABEL'),
-  ORDER_DETAILS: t(
-    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.ORDER_DETAILS.LABEL'
-  ),
-  CALL_PERMISSION_REQUEST: t(
-    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CALL_PERMISSION_REQUEST.LABEL'
-  ),
-}));
+const subtypeTextKey = id => SUBTYPE_TEXT_OVERRIDES[form.category]?.[id] || id;
 
-const subtypeDescriptions = computed(() => ({
-  STANDARD: t(
-    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.STANDARD.DESCRIPTION'
-  ),
-  CATALOG: t(
-    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CATALOG.DESCRIPTION'
-  ),
-  FLOWS: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.FLOWS.DESCRIPTION'),
-  ORDER_DETAILS: t(
-    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.ORDER_DETAILS.DESCRIPTION'
-  ),
-  CALL_PERMISSION_REQUEST: t(
-    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.CALL_PERMISSION_REQUEST.DESCRIPTION'
-  ),
-}));
+const subtypeText = (id, field) =>
+  t(
+    `MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.${subtypeTextKey(id)}.${field}`
+  );
 
-const categorySubtypeIds = computed(() =>
-  isMarketing.value ? MARKETING_SUBTYPES : SINGLE_STANDARD_SUBTYPE
+const categorySubtypeIds = computed(
+  () => SUBTYPES_BY_CATEGORY[form.category] || ['STANDARD']
 );
 
 const subtypes = computed(() =>
   categorySubtypeIds.value.map(id => ({
     id,
-    label: subtypeLabels.value[id],
-    description: subtypeDescriptions.value[id],
-    comingSoon: !SELECTABLE_MARKETING_SUBTYPES.includes(id),
+    label: subtypeText(id, 'LABEL'),
+    description: subtypeText(id, 'DESCRIPTION'),
+    comingSoon: !SELECTABLE_SUBTYPES.includes(id),
   }))
+);
+
+// Kept as maps (rather than a single "current subtype" string) because the preview sidebar and the
+// confirmation modal both index them by form.subtype. Built from the current category's list, so
+// the copy shown always matches the tab the user is on.
+const subtypeLabels = computed(() =>
+  Object.fromEntries(
+    categorySubtypeIds.value.map(id => [id, subtypeText(id, 'LABEL')])
+  )
+);
+
+const subtypeDescriptions = computed(() =>
+  Object.fromEntries(
+    categorySubtypeIds.value.map(id => [id, subtypeText(id, 'DESCRIPTION')])
+  )
 );
 
 const currentCategoryLabel = computed(
@@ -249,20 +276,28 @@ const buttonTypeLabels = computed(() => ({
   ORDER_DETAILS: t(
     'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.ORDER_DETAILS'
   ),
+  VOICE_CALL: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.VOICE_CALL'
+  ),
 }));
 
 const isAuthentication = computed(() => form.category === 'AUTHENTICATION');
+// Catalog stays Marketing-only — it's inherently promotional and Meta doesn't offer it under
+// Utility. The other three are offered under both, so they key off the subtype alone;
+// SUBTYPES_BY_CATEGORY is what decides where each one can be picked.
 const isCatalog = computed(
   () => isMarketing.value && form.subtype === 'CATALOG'
 );
-const isFlow = computed(() => isMarketing.value && form.subtype === 'FLOWS');
-const isOrderDetails = computed(
-  () => isMarketing.value && form.subtype === 'ORDER_DETAILS'
-);
+const isFlow = computed(() => form.subtype === 'FLOWS');
+const isOrderDetails = computed(() => form.subtype === 'ORDER_DETAILS');
+// Meta's order status template is the leanest shape there is: BODY and an optional FOOTER, no
+// header and no buttons at all. It's also the only subtype identified by `sub_category` on the
+// creation payload rather than by its components.
+const isOrderStatus = computed(() => form.subtype === 'ORDER_STATUS');
 // CALL_PERMISSION_REQUEST is its own template component (a sibling of HEADER/BODY/FOOTER),
 // not a button — it has no BUTTONS section and only allows a TEXT (or no) header.
 const isCallPermissionRequest = computed(
-  () => isMarketing.value && form.subtype === 'CALL_PERMISSION_REQUEST'
+  () => form.subtype === 'CALL_PERMISSION_REQUEST'
 );
 
 const maxButtons = computed(() => {
@@ -271,6 +306,18 @@ const maxButtons = computed(() => {
   if (isFlow.value) return FLOW_MAX_BUTTONS;
   if (isOrderDetails.value) return ORDER_DETAILS_MAX_BUTTONS;
   return MAX_BUTTONS;
+});
+
+// The generic "até N botões de ação ou resposta rápida" was a lie for the exclusive subtypes:
+// Catalog/Flows/Order details each allow exactly one button, of one fixed type, and
+// Authentication's is Meta's OTP button — none of them accept a quick reply. Naming the actual
+// button keeps this panel honest about what the form will let the user build.
+const fixedButtonAreaKey = computed(() => {
+  if (isAuthentication.value) return 'AREA_BUTTON_COPY_CODE';
+  if (isCatalog.value) return 'AREA_BUTTON_CATALOG';
+  if (isFlow.value) return 'AREA_BUTTON_FLOW';
+  if (isOrderDetails.value) return 'AREA_BUTTON_ORDER_DETAILS';
+  return null;
 });
 
 // Derived from the same category/subtype rules that drive the form itself,
@@ -283,16 +330,28 @@ const customizableAreas = computed(() => {
       t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_CODE_SAMPLE')
     );
   } else {
-    areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER'));
+    if (!isOrderStatus.value) {
+      areas.push(
+        t(
+          isCallPermissionRequest.value
+            ? 'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER_TEXT_ONLY'
+            : 'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_HEADER'
+        )
+      );
+    }
     areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_BODY'));
     areas.push(t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_FOOTER'));
   }
-  if (!isCallPermissionRequest.value) {
+  if (!isCallPermissionRequest.value && !isOrderStatus.value) {
     areas.push(
-      t(
-        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_BUTTONS',
-        maxButtons.value
-      )
+      fixedButtonAreaKey.value
+        ? t(
+            `MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.${fixedButtonAreaKey.value}`
+          )
+        : t(
+            'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_1.SUBTYPES.AREA_BUTTONS',
+            maxButtons.value
+          )
     );
   }
   return areas.join(', ');
@@ -320,7 +379,10 @@ const detectedVariables = computed(() => {
 watch(
   () => form.category,
   (newCategory, oldCategory) => {
-    if (newCategory !== 'MARKETING') form.subtype = 'STANDARD';
+    // Marketing and Utility share four of the five types, so switching between them used to throw
+    // the user's choice away. Only reset when the current type doesn't exist in the new category.
+    const allowed = SUBTYPES_BY_CATEGORY[newCategory] || ['STANDARD'];
+    if (!allowed.includes(form.subtype)) form.subtype = 'STANDARD';
 
     if (newCategory === 'AUTHENTICATION') {
       form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
@@ -364,6 +426,13 @@ watch(isOrderDetails, newIsOrderDetails => {
     : form.buttons.filter(button => button.type !== 'ORDER_DETAILS');
 });
 
+watch(isOrderStatus, newIsOrderStatus => {
+  if (!newIsOrderStatus) return;
+
+  form.buttons = [];
+  form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+});
+
 watch(isCallPermissionRequest, newIsCallPermissionRequest => {
   if (!newIsCallPermissionRequest) return;
 
@@ -390,6 +459,7 @@ const buildTemplatePayload = () => ({
   name: form.name,
   category: form.category,
   language: form.language,
+  sub_category: isOrderStatus.value ? 'ORDER_STATUS' : undefined,
   call_permission_request: isCallPermissionRequest.value || undefined,
   header:
     form.header.type === 'NONE'
@@ -711,7 +781,7 @@ const submitTemplate = async () => {
 
             <CardLayout>
               <TemplateHeaderField
-                v-if="!isAuthentication"
+                v-if="!isAuthentication && !isOrderStatus"
                 v-model="form.header"
                 :inbox-id="inboxId"
                 :text-only="isCallPermissionRequest"
@@ -746,7 +816,7 @@ const submitTemplate = async () => {
               />
             </CardLayout>
 
-            <CardLayout v-if="!isCallPermissionRequest">
+            <CardLayout v-if="!isCallPermissionRequest && !isOrderStatus">
               <TemplateButtonsField
                 v-model="form.buttons"
                 :button-type-options="buttonTypeOptions"

@@ -61,21 +61,28 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
            status: :bad_request
   end
 
+  # call_permission_request, flow_id e navigate_screen ficaram de fora desta lista, então o Rails
+  # os descartava antes de chegarem ao service — que sabe montá-los desde sempre
+  # (Whatsapp::MessageTemplateService#call_permission_request_component e #build_flow_button).
+  # Efeito em produção: o subtipo Flows acusava "O ID do Flow do botão é obrigatório" mesmo com o
+  # campo preenchido (Whatsapp::MessageTemplateValidator#button_field_error valida um flow_id que
+  # nunca chegava), e o subtipo Solicitação de permissões para ligação criava um modelo comum, sem
+  # o componente CALL_PERMISSION_REQUEST e sem avisar ninguém.
   def extract_template_params
     params.require(:template).permit(
-      :name, :category, :language, :body, :footer,
+      :name, :category, :language, :body, :footer, :call_permission_request, :sub_category,
       header: [:type, :text, :handle],
       body_sample_values: [],
-      buttons: [:type, :text, :url, :phone_number, :example]
+      buttons: [:type, :text, :url, :phone_number, :example, :flow_id, :navigate_screen]
     ).to_h.deep_symbolize_keys
   end
 
   def extract_update_params
     params.require(:template).permit(
-      :category, :body, :footer,
+      :category, :body, :footer, :call_permission_request, :sub_category,
       header: [:type, :text, :handle],
       body_sample_values: [],
-      buttons: [:type, :text, :url, :phone_number, :example]
+      buttons: [:type, :text, :url, :phone_number, :example, :flow_id, :navigate_screen]
     ).to_h.deep_symbolize_keys
   end
 

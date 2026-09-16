@@ -7,17 +7,25 @@ class Whatsapp::MessageTemplateValidator
   # EXCLUSIVE_BUTTON_TYPES below, since Meta requires each to be the template's only button.
   # call_permission_request (params[:call_permission_request]) isn't a button at all — it's a
   # separate CALL_PERMISSION_REQUEST template component, validated by call_permission_request_error.
-  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS].freeze
+  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS VOICE_CALL].freeze
   EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW ORDER_DETAILS].freeze
   # Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
   # custom one — skip the required-text check for them (button_field_error is a no-op for both).
   FIXED_TEXT_BUTTON_TYPES = %w[CATALOG ORDER_DETAILS].freeze
+  # Meta rejects an unknown sub_category with a generic error, so screen it here to give the user
+  # something actionable instead. ORDER_STATUS is the only one the builder offers today.
+  ALLOWED_SUB_CATEGORIES = %w[ORDER_STATUS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   CALL_PERMISSION_REQUEST_HEADER_TYPES = %w[NONE TEXT].freeze
+  # Meta rejects a VIDEO header on an order details template — only text, image or document (the
+  # document format is what carries a PDF invoice in the header).
+  ORDER_DETAILS_HEADER_TYPES = %w[NONE TEXT IMAGE DOCUMENT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024
   MAX_FOOTER_LENGTH = 60
   MAX_BUTTON_TEXT_LENGTH = 25
+  # Meta caps the voice call button's label at 20, not the 25 every other button gets.
+  MAX_VOICE_CALL_TEXT_LENGTH = 20
   MAX_BUTTON_PHONE_LENGTH = 20
   MAX_BUTTONS = 10
 
@@ -40,6 +48,8 @@ class Whatsapp::MessageTemplateValidator
     @errors ||= [
       (name_error if @require_name),
       category_error,
+      sub_category_error,
+      order_details_header_error,
       header_error,
       body_error,
       footer_error,
@@ -92,6 +102,25 @@ class Whatsapp::MessageTemplateValidator
     return if ALLOWED_CATEGORIES.include?(@params[:category])
 
     "A categoria deve ser uma das seguintes: #{ALLOWED_CATEGORIES.join(', ')}"
+  end
+
+  def order_details_header_error
+    return unless Array(@params[:buttons]).any? { |button| button[:type] == 'ORDER_DETAILS' }
+    return if ORDER_DETAILS_HEADER_TYPES.include?(header_type)
+
+    'O cabeçalho de um modelo de detalhes do pedido deve ser Texto, Imagem ou Documento'
+  end
+
+  def sub_category_error
+    sub_category = @params[:sub_category]
+    return if sub_category.blank?
+    return "O tipo #{sub_category} não é suportado" unless ALLOWED_SUB_CATEGORIES.include?(sub_category)
+
+    'Um modelo de status do pedido deve ter apenas corpo e rodapé, sem cabeçalho e sem botões' if order_status_extra_components?
+  end
+
+  def order_status_extra_components?
+    header_type != 'NONE' || @params[:buttons].present?
   end
 
   def body_error
@@ -153,7 +182,9 @@ class Whatsapp::MessageTemplateValidator
 
     text = button[:text].to_s
     return "O texto do botão é obrigatório para botões do tipo #{type}" if text.blank?
-    return "O texto do botão deve ter no máximo #{MAX_BUTTON_TEXT_LENGTH} caracteres" if text.length > MAX_BUTTON_TEXT_LENGTH
+
+    max_text = type == 'VOICE_CALL' ? MAX_VOICE_CALL_TEXT_LENGTH : MAX_BUTTON_TEXT_LENGTH
+    return "O texto do botão deve ter no máximo #{max_text} caracteres" if text.length > max_text
 
     button_field_error(button)
   end
