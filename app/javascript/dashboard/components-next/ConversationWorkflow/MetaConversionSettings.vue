@@ -289,7 +289,7 @@ const handleSave = async () => {
           {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ON_CLOSE.CURRENCY') }}
         </label>
         <p class="text-body-small text-n-slate-11 mb-0">
-          Moeda padrão das conversões, usada por todos os fluxos.
+          {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CURRENCY_HINT') }}
         </p>
         <input
           v-model="currency"
@@ -311,9 +311,7 @@ const handleSave = async () => {
             {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ENRICHMENT.TITLE') }}
           </p>
           <p class="text-body-small text-n-slate-11 mb-0">
-            Mapeie atributos da conversa para os campos de dados do contato
-            enviados à Meta. Todos os valores são protegidos por hash antes do
-            envio.
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.CUSTOMER_DATA_HINT') }}
           </p>
         </div>
 
@@ -322,7 +320,7 @@ const handleSave = async () => {
           <p
             class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
           >
-            Enviados automaticamente do contato
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.SENT_AUTOMATICALLY') }}
           </p>
           <div class="grid grid-cols-2 gap-2">
             <div
@@ -349,7 +347,7 @@ const handleSave = async () => {
           <p
             class="text-xs font-medium text-n-slate-11 uppercase tracking-wide"
           >
-            Dados adicionais (opcional)
+            {{ $t('CONVERSATION_WORKFLOW.META_CONVERSION.ADDITIONAL_DATA') }}
           </p>
           <div class="grid grid-cols-2 gap-3">
             <div

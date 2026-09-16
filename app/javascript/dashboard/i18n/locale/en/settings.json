@@ -296,7 +296,6 @@
   },
   "SIDEBAR": {
     "PLAN": "Plan",
-    "PLAN": "Plan",
     "STICKERS": "Stickers",
     "NO_ITEMS": "No items",
     "CURRENTLY_VIEWING_ACCOUNT": "Currently viewing:",
@@ -631,6 +630,15 @@
         "CANCEL": "Cancel",
         "LABEL_ALWAYS": "Always required",
         "LABEL_CONDITIONAL": "Required if {field} = {value}"
+      },
+      "RULE_PICKER": {
+        "ALWAYS_HINT": "Sempre exigido ao resolver",
+        "CONDITIONAL_HINT": "Exigido apenas quando uma condição for atendida",
+        "WHEN_FIELD": "Quando o campo",
+        "IS_EQUAL_TO": "For igual a",
+        "MULTI_SELECT_HINT": "(selecione um ou mais)",
+        "SUMMARY_PREFIX": "Obrigatório quando",
+        "SUMMARY_JOINER": "for"
       }
     },
     "LEADS_REPORT": {
@@ -723,7 +731,11 @@
         "GENDER": "Gender (ge)",
         "EXTERNAL_ID": "External ID (external_id)",
         "NOT_MAPPED": "Not mapped"
-      }
+      },
+      "CURRENCY_HINT": "Moeda padrão das conversões, usada por todos os fluxos.",
+      "CUSTOMER_DATA_HINT": "Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Todos os valores são protegidos por hash antes do envio.",
+      "SENT_AUTOMATICALLY": "Enviados automaticamente do contato",
+      "ADDITIONAL_DATA": "Dados adicionais (opcional)"
     }
   },
   "CREATE_ACCOUNT": {
@@ -925,6 +937,13 @@
       "DELETE_POLICY": {
         "SUCCESS_MESSAGE": "Assignment policy deleted successfully",
         "ERROR_MESSAGE": "Failed to delete assignment policy"
+      },
+      "INBOX_SECTION": {
+        "LABEL": "Caixas de entrada vinculadas",
+        "HINT": "Selecione as caixas de entrada que participarão desta política.",
+        "SELECT_PLACEHOLDER": "Selecionar caixas de entrada",
+        "LOADING": "Carregando caixas de entrada...",
+        "EMPTY": "Nenhuma caixa vinculada."
       }
     },
     "AGENT_CAPACITY_POLICY": {
