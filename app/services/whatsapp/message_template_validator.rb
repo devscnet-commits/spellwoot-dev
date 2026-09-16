@@ -17,6 +17,9 @@ class Whatsapp::MessageTemplateValidator
   ALLOWED_SUB_CATEGORIES = %w[ORDER_STATUS].freeze
   ALLOWED_HEADER_TYPES = %w[NONE TEXT IMAGE VIDEO DOCUMENT].freeze
   CALL_PERMISSION_REQUEST_HEADER_TYPES = %w[NONE TEXT].freeze
+  # Meta rejects a VIDEO header on an order details template — only text, image or document (the
+  # document format is what carries a PDF invoice in the header).
+  ORDER_DETAILS_HEADER_TYPES = %w[NONE TEXT IMAGE DOCUMENT].freeze
   MAX_HEADER_TEXT_LENGTH = 60
   MAX_BODY_LENGTH = 1024
   MAX_FOOTER_LENGTH = 60
@@ -44,6 +47,7 @@ class Whatsapp::MessageTemplateValidator
       (name_error if @require_name),
       category_error,
       sub_category_error,
+      order_details_header_error,
       header_error,
       body_error,
       footer_error,
@@ -96,6 +100,13 @@ class Whatsapp::MessageTemplateValidator
     return if ALLOWED_CATEGORIES.include?(@params[:category])
 
     "A categoria deve ser uma das seguintes: #{ALLOWED_CATEGORIES.join(', ')}"
+  end
+
+  def order_details_header_error
+    return unless Array(@params[:buttons]).any? { |button| button[:type] == 'ORDER_DETAILS' }
+    return if ORDER_DETAILS_HEADER_TYPES.include?(header_type)
+
+    'O cabeçalho de um modelo de detalhes do pedido deve ser Texto, Imagem ou Documento'
   end
 
   def sub_category_error

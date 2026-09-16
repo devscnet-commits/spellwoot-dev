@@ -128,7 +128,17 @@ class Whatsapp::MessageTemplateService
       components: build_components(params)
     }
     body[:sub_category] = params[:sub_category] if params[:sub_category].present?
+    body[:display_format] = 'ORDER_DETAILS' if order_details_template?(params)
     body
+  end
+
+  # Meta only treats a template as an order details one when the creation payload carries
+  # display_format — the fixed ORDER_DETAILS button alone isn't enough, and without it the template
+  # is created as a plain one with a button that does nothing. Inferred from the button instead of
+  # being passed down from the builder because the validator already forces that button to be the
+  # template's only one (EXCLUSIVE_BUTTON_TYPES), so its presence is unambiguous.
+  def order_details_template?(params)
+    Array(params[:buttons]).any? { |button| button[:type] == 'ORDER_DETAILS' }
   end
 
   def build_components(params)
