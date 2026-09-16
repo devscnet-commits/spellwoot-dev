@@ -127,6 +127,14 @@ const resolveInboxId = () => {
 
 const inboxId = ref(resolveInboxId());
 
+// The inbox list is fetched by the dashboard, so on a hard refresh straight onto this route it is
+// still empty when setup runs: resolveInboxId finds no match for ?inbox_id and no first inbox to
+// fall back to, leaving inboxId undefined and the submit URL as .../inboxes/undefined/... (404).
+// Nothing re-resolved it afterwards, so the form stayed broken until the user navigated away.
+watch(whatsAppCloudInboxes, () => {
+  if (inboxId.value === undefined) inboxId.value = resolveInboxId();
+});
+
 const inboxAvatarClass = index =>
   INBOX_AVATAR_CLASSES[index % INBOX_AVATAR_CLASSES.length];
 
