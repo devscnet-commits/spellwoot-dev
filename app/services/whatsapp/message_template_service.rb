@@ -207,6 +207,11 @@ class Whatsapp::MessageTemplateService
       { type: 'CATALOG', text: 'View catalog' }
     when 'FLOW'
       build_flow_button(button)
+    when 'VOICE_CALL'
+      # ttl_minutes is optional here — Meta applies its own default (7 days), and leaving it out
+      # keeps one less field the admin can get wrong. Add it if the account ever needs to control
+      # how long the button stays tappable.
+      { type: 'VOICE_CALL', text: button[:text] }
     when 'ORDER_DETAILS'
       # Same as CATALOG — required field, fixed value.
       { type: 'ORDER_DETAILS', text: 'Copy Pix code' }

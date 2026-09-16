@@ -7,7 +7,7 @@ class Whatsapp::MessageTemplateValidator
   # EXCLUSIVE_BUTTON_TYPES below, since Meta requires each to be the template's only button.
   # call_permission_request (params[:call_permission_request]) isn't a button at all — it's a
   # separate CALL_PERMISSION_REQUEST template component, validated by call_permission_request_error.
-  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS].freeze
+  ALLOWED_BUTTON_TYPES = %w[QUICK_REPLY URL PHONE_NUMBER COPY_CODE CATALOG FLOW ORDER_DETAILS VOICE_CALL].freeze
   EXCLUSIVE_BUTTON_TYPES = %w[CATALOG FLOW ORDER_DETAILS].freeze
   # Meta fixes the button text for these two ("View catalog" / "Copy Pix code") and rejects a
   # custom one — skip the required-text check for them (button_field_error is a no-op for both).
@@ -24,6 +24,8 @@ class Whatsapp::MessageTemplateValidator
   MAX_BODY_LENGTH = 1024
   MAX_FOOTER_LENGTH = 60
   MAX_BUTTON_TEXT_LENGTH = 25
+  # Meta caps the voice call button's label at 20, not the 25 every other button gets.
+  MAX_VOICE_CALL_TEXT_LENGTH = 20
   MAX_BUTTON_PHONE_LENGTH = 20
   MAX_BUTTONS = 10
 
@@ -180,7 +182,9 @@ class Whatsapp::MessageTemplateValidator
 
     text = button[:text].to_s
     return "O texto do botão é obrigatório para botões do tipo #{type}" if text.blank?
-    return "O texto do botão deve ter no máximo #{MAX_BUTTON_TEXT_LENGTH} caracteres" if text.length > MAX_BUTTON_TEXT_LENGTH
+
+    max_text = type == 'VOICE_CALL' ? MAX_VOICE_CALL_TEXT_LENGTH : MAX_BUTTON_TEXT_LENGTH
+    return "O texto do botão deve ter no máximo #{max_text} caracteres" if text.length > max_text
 
     button_field_error(button)
   end

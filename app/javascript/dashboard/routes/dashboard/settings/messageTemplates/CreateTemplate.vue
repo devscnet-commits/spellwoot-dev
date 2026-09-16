@@ -27,7 +27,18 @@ const AUTH_MAX_BUTTONS = 1;
 const CATALOG_MAX_BUTTONS = 1;
 const FLOW_MAX_BUTTONS = 1;
 const ORDER_DETAILS_MAX_BUTTONS = 1;
-const BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
+// VOICE_CALL is the "Call request" button Meta lists among the types Utility templates accept: the
+// customer taps it and calls the business inside WhatsApp. Not to be confused with PHONE_NUMBER
+// (regular dialer) nor with the CALL_PERMISSION_REQUEST component, which is the opposite direction
+// — the business asking permission to call the customer. Unlike CATALOG/FLOW/ORDER_DETAILS it isn't
+// exclusive: Meta's own example combines it with a URL button in the same template.
+const BUTTON_TYPES = [
+  'QUICK_REPLY',
+  'URL',
+  'PHONE_NUMBER',
+  'COPY_CODE',
+  'VOICE_CALL',
+];
 const AUTH_BUTTON_TYPES = ['COPY_CODE'];
 const CATALOG_BUTTON_TYPES = ['CATALOG'];
 const FLOW_BUTTON_TYPES = ['FLOW'];
@@ -264,6 +275,9 @@ const buttonTypeLabels = computed(() => ({
   FLOW: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.FLOW'),
   ORDER_DETAILS: t(
     'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.ORDER_DETAILS'
+  ),
+  VOICE_CALL: t(
+    'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.TYPES.VOICE_CALL'
   ),
 }));
 

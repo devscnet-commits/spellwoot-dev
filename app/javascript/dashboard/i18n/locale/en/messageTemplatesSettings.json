@@ -222,7 +222,8 @@
             "COPY_CODE": "Copiar código de oferta",
             "CATALOG": "Ver catálogo",
             "FLOW": "Abrir Flow",
-            "ORDER_DETAILS": "Revisar e pagar"
+            "ORDER_DETAILS": "Revisar e pagar",
+            "VOICE_CALL": "Ligar no WhatsApp"
           },
           "FIELDS": {
             "TEXT": "Texto do botão (máx {count} car.)",
