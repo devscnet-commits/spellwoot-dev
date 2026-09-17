@@ -1,5 +1,6 @@
 class Api::V1::Accounts::WebhooksController < Api::V1::Accounts::BaseController
   before_action :check_authorization
+  before_action :check_webhook_feature, only: [:create]
   before_action :fetch_webhook, only: [:update, :destroy]
 
   def index
@@ -28,5 +29,9 @@ class Api::V1::Accounts::WebhooksController < Api::V1::Accounts::BaseController
 
   def fetch_webhook
     @webhook = Current.account.webhooks.find(params[:id])
+  end
+
+  def check_webhook_feature
+    render json: { error: 'Recurso não disponível no plano atual' }, status: :forbidden unless Current.account.feature_enabled?('webhook_api')
   end
 end
