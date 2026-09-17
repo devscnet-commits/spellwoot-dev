@@ -12,6 +12,9 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
   helper_method :render_vue_component, :settings_open?, :settings_pages
   # authenticiation done via devise : SuperAdmin Model
   before_action :authenticate_super_admin!
+  # Super Admin é uso interno da Conexi — sempre pt_BR, independente do locale do dashboard/conta
+  # (que continua vindo de SwitchLocale). Não mexe no I18n.default_locale do app inteiro.
+  around_action :switch_locale_to_pt_br
 
   # Override this value to specify the number of elements to display at a time
   # on index pages. Defaults to 20.
@@ -44,5 +47,9 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
     flash[:error] = 'Invalid action performed'
     # rubocop:enable Rails/I18nLocaleTexts
     redirect_back(fallback_location: root_path)
+  end
+
+  def switch_locale_to_pt_br(&action)
+    I18n.with_locale(:pt_BR, &action)
   end
 end

@@ -18,7 +18,85 @@
 #available at https://guides.rubyonrails.org/i18n.html.
 pt_BR:
   hello: 'Olá, mundo'
+  # Textos genéricos de tela do Super Admin (botões, mensagens de sucesso, paginação, busca).
+  # Copiado de administrate-0.20.1/config/locales/administrate.pt-BR.yml — a gem só carrega esse
+  # arquivo sob a chave "pt-BR" (hífen), mas o Chatwoot usa "pt_BR" (underscore) como locale ativo
+  # (config/initializers/languages.rb), então essas chaves nunca seriam encontradas sem esta cópia.
+  administrate:
+    actions:
+      confirm: Você tem certeza?
+      destroy: Deletar
+      edit: Editar
+      edit_resource: 'Editar %{name}'
+      show_resource: 'Visualizar %{name}'
+      new_resource: 'Criar %{name}'
+      back: Voltar
+    controller:
+      create:
+        success: '%{resource} foi criado com sucesso.'
+      destroy:
+        success: '%{resource} foi deletado com sucesso.'
+      update:
+        success: '%{resource} foi atualizado com sucesso.'
+    fields:
+      has_many:
+        more: 'Exibindo %{count} de %{total_count}'
+        none: Nenhum
+    form:
+      error: erro
+      errors: '%{pluralized_errors} impediram %{resource_name} de ser gravado:'
+    navigation:
+      back_to_app: Voltar ao aplicativo
+    search:
+      clear: Limpar pesquisa
+      label: 'Pesquisa %{resource}'
   activerecord:
+    models:
+      account:
+        one: Conta
+        other: Contas
+      user:
+        one: Usuário
+        other: Usuários
+      ai_credit_request:
+        one: Solicitação de Créditos
+        other: Solicitações de Créditos
+      access_token:
+        one: Token de Acesso
+        other: Tokens de Acesso
+      installation_config:
+        one: Configuração de Instalação
+        other: Configurações de Instalação
+      agent_bot:
+        one: Bot
+        other: Bots
+      platform_app:
+        one: Aplicativo de Plataforma
+        other: Aplicativos de Plataforma
+      plan:
+        one: Plano
+        other: Planos
+      account_user:
+        one: Usuário da Conta
+        other: Usuários da Conta
+    attributes:
+      plan:
+        id: ID
+        name: Nome
+        slug: Identificador (slug)
+        description: Descrição
+        active: Ativo
+        visible_to_new_subscribers: Visível para novos assinantes
+        courtesy: Cortesia
+        monthly_price_cents: Valor mensal (centavos)
+        annual_price_cents: Valor anual (centavos)
+        setup_fee_cents: Taxa de implantação (centavos)
+        promo_price_cents: Valor promocional (centavos)
+        promo_months_count: Meses com desconto
+        ai_credits_included: Créditos de IA inclusos
+        ai_credit_overage_price_cents: Preço do crédito extra de IA (centavos)
+        created_at: Criado em
+        updated_at: Atualizado em
     errors:
       messages:
         record_invalid: 'A validação falhou: %{errors}'
