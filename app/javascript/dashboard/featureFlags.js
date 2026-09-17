@@ -45,6 +45,9 @@ export const FEATURE_FLAGS = {
   COMPANIES: 'companies',
   ADVANCED_SEARCH: 'advanced_search',
   CONVERSATION_REQUIRED_ATTRIBUTES: 'conversation_required_attributes',
+  CHANNEL_WHATSAPP: 'channel_whatsapp',
+  CHANNEL_API: 'channel_api',
+  WEBHOOK_API: 'webhook_api',
 };
 
 export const PREMIUM_FEATURES = [
@@ -57,4 +60,5 @@ export const PREMIUM_FEATURES = [
   FEATURE_FLAGS.SAML,
   FEATURE_FLAGS.CONVERSATION_REQUIRED_ATTRIBUTES,
   FEATURE_FLAGS.ADVANCED_ASSIGNMENT,
+  FEATURE_FLAGS.WEBHOOK_API,
 ];
