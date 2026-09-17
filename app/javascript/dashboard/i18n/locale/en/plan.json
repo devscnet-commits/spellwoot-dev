@@ -45,6 +45,15 @@
       "ERROR": "Could not send the request. Please try again.",
       "INVALID_AMOUNT": "Enter an amount greater than zero.",
       "PENDING": "You have a pending request for {amount} credits — awaiting approval."
+    },
+    "UPGRADE": {
+      "HEADER": "Available upgrades",
+      "PER_MONTH": "/month",
+      "BUTTON": "Upgrade to {name}",
+      "CONFIRM": "Upgrade to {name} now? This takes effect immediately.",
+      "SUCCESS": "Upgraded to {name}.",
+      "ERROR": "Could not upgrade the plan. Please try again.",
+      "DOWNGRADE_HINT": "Need a smaller plan? Contact our support team."
     }
   }
 }

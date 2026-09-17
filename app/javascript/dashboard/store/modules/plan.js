@@ -6,9 +6,11 @@ export const state = {
   subscription: null,
   limits: [],
   overageCharges: [],
+  availableUpgrades: [],
   uiFlags: {
     isFetching: false,
     isLoading: false,
+    isUpgrading: false,
   },
 };
 
@@ -19,6 +21,7 @@ export const mutations = {
     _state.subscription = data.subscription;
     _state.limits = data.limits;
     _state.overageCharges = data.overage_charges || [];
+    _state.availableUpgrades = data.available_upgrades || [];
   },
 
   SET_UI_LOADING(_state, value) {
@@ -27,6 +30,10 @@ export const mutations = {
 
   SET_UI_FETCHING(_state, value) {
     _state.uiFlags.isFetching = value;
+  },
+
+  SET_UI_UPGRADING(_state, value) {
+    _state.uiFlags.isUpgrading = value;
   },
 };
 
@@ -44,6 +51,17 @@ export const actions = {
         commit('SET_UI_FETCHING', false);
       });
   },
+
+  // Upgrade imediato (Plan::ChangeSubscriptionService#upgrade!, backend recusa downgrade/mesmo
+  // plano). Recarrega os dados do plano ao terminar para refletir o novo plano/limites na tela.
+  upgradePlan({ commit, dispatch }, planSlug) {
+    commit('SET_UI_UPGRADING', true);
+    return AccountPlanAPI.upgrade(planSlug)
+      .then(() => dispatch('fetchPlanData'))
+      .finally(() => {
+        commit('SET_UI_UPGRADING', false);
+      });
+  },
 };
 
 export const getters = {
@@ -52,6 +70,7 @@ export const getters = {
   getSubscription: _state => _state.subscription,
   getLimits: _state => _state.limits,
   getOverageCharges: _state => _state.overageCharges,
+  getAvailableUpgrades: _state => _state.availableUpgrades,
   getUIFlags: _state => _state.uiFlags,
 };
 

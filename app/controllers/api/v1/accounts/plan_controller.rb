@@ -71,8 +71,28 @@ class Api::V1::Accounts::PlanController < Api::V1::Accounts::BaseController
         ends_at: subscription.ends_at
       },
       limits: limits_data,
-      overage_charges: recent_overage_charges
+      overage_charges: recent_overage_charges,
+      available_upgrades: available_upgrades(plan)
     }
+  end
+
+  # Planos comerciais visíveis com rank maior que o atual — únicos elegíveis a upgrade self-service
+  # (Plan::ChangeSubscriptionService#upgrade!). Plano sem rank (courtesy/internal_unlimited) não
+  # oferece upgrade por aqui: nil <=> Integer nunca casa, então current.nil? vira o filtro de fato.
+  def available_upgrades(current_plan)
+    current_rank = current_plan.commercial_rank
+    return [] if current_rank.nil?
+
+    Plan.active.where(visible_to_new_subscribers: true).select do |candidate|
+      candidate.commercial_rank && candidate.commercial_rank > current_rank
+    end.sort_by(&:commercial_rank).map do |candidate|
+      {
+        slug: candidate.slug,
+        name: candidate.name,
+        description: candidate.description,
+        monthly_price_cents: candidate.monthly_price_cents
+      }
+    end
   end
 
   # Histórico recente de cobranças de excedente (só exibição; mais novas primeiro, teto de 12).
