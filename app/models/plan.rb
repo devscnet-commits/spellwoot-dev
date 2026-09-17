@@ -34,7 +34,9 @@ class Plan < ApplicationRecord
     'dashboards_bi' => 'reports',
     'sla_tracking' => 'sla',
     'audit_logs' => 'audit_logs',
-    'ai_copilot' => 'ai_copilot',
+    # ai_copilot reaproveita captain_tasks (rewrite/resumo/sugestão de resposta) — já existe e era
+    # grátis por padrão; decidido na Fase 0 restringir por plano em vez de criar chave nova.
+    'ai_copilot' => 'captain_tasks',
     'conversion_api' => 'conversion_api',
     'webhook_api' => 'webhook_api',
     'custom_llm_api_key' => 'custom_llm_api_key',
@@ -43,8 +45,12 @@ class Plan < ApplicationRecord
     'erp_integration' => 'erp_integration',
     'isp_ready_flows' => 'isp_ready_flows',
     'message_scheduling' => 'message_scheduling',
-    'account_manager' => 'account_manager'
+    'account_manager' => 'account_manager',
+    'api_user_token' => 'api_user_token'
   }.freeze
+  # channel_whatsapp e channel_api NÃO entram aqui: são X em todos os 4 planos comerciais (não variam
+  # por plano, ver Planos_Conexi_v2) — ficam enabled: true por padrão em config/features.yml, mesmo
+  # tratamento de channel_instagram/channel_email hoje.
   MANAGED_FEATURE_KEYS = PLAN_FEATURE_TO_ACCOUNT_FLAG.keys.freeze
 
   has_many :plan_features, dependent: :destroy

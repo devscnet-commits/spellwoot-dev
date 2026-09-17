@@ -42,7 +42,7 @@ namespace :plans do
       monthly_price_cents: 59_790,
       features: %w[
         webchat_channel facebook_channel dashboards_bi conversion_api ai_copilot webhook_api
-        custom_llm_api_key crm_kanban crm_automations message_scheduling
+        custom_llm_api_key crm_kanban crm_automations message_scheduling api_user_token
       ], # off no PLUS: sla_tracking, audit_logs, erp_integration, isp_ready_flows, account_manager
       ai_credits: 1000,
       limits: { 'users' => 10, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }

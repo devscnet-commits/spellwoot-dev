@@ -241,3 +241,48 @@
   display_name: Advanced Assignment
   enabled: false
   premium: true
+- name: conversion_api
+  display_name: API de Conversões
+  enabled: true
+- name: webhook_api
+  display_name: Webhook e API Rest
+  enabled: false
+  premium: true
+- name: custom_llm_api_key
+  display_name: Chave Própria de IA
+  enabled: false
+  premium: true
+- name: crm_kanban
+  display_name: CRM Kanban
+  enabled: false
+  premium: true
+- name: crm_automations
+  display_name: Automações de CRM
+  enabled: false
+  premium: true
+- name: erp_integration
+  display_name: Integração com ERP de ISP
+  enabled: false
+  premium: true
+- name: isp_ready_flows
+  display_name: Fluxos Prontos de ISP
+  enabled: false
+  premium: true
+- name: message_scheduling
+  display_name: Agendamento de Mensagens
+  enabled: false
+  premium: true
+- name: account_manager
+  display_name: Gerente de Conta
+  enabled: false
+  premium: true
+- name: channel_whatsapp
+  display_name: WhatsApp Channel
+  enabled: true
+- name: channel_api
+  display_name: API Channel
+  enabled: true
+- name: api_user_token
+  display_name: Token de Acesso Pessoal (API)
+  enabled: false
+  premium: true
