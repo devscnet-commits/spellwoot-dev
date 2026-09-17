@@ -2,15 +2,22 @@
 #
 # Table name: plans
 #
-#  id                  :bigint           not null, primary key
-#  active              :boolean          default(TRUE), not null
-#  ai_credits_included :integer          default(0), not null
-#  monthly_price_cents :integer
-#  name                :string           not null
-#  setup_fee_cents     :integer
-#  slug                :string           not null
-#  created_at          :datetime         not null
-#  updated_at          :datetime         not null
+#  id                            :bigint           not null, primary key
+#  active                        :boolean          default(TRUE), not null
+#  ai_credit_overage_price_cents :integer
+#  ai_credits_included           :integer          default(0), not null
+#  annual_price_cents            :integer
+#  courtesy                      :boolean          default(FALSE), not null
+#  description                   :text
+#  monthly_price_cents           :integer
+#  name                          :string           not null
+#  promo_months_count            :integer
+#  promo_price_cents             :integer
+#  setup_fee_cents               :integer
+#  slug                          :string           not null
+#  visible_to_new_subscribers    :boolean          default(TRUE), not null
+#  created_at                    :datetime         not null
+#  updated_at                    :datetime         not null
 #
 # Indexes
 #
@@ -76,5 +83,17 @@ class Plan < ApplicationRecord
 
   def setup_fee
     setup_fee_cents && setup_fee_cents / 100.0
+  end
+
+  def annual_price
+    annual_price_cents && annual_price_cents / 100.0
+  end
+
+  def promo_price
+    promo_price_cents && promo_price_cents / 100.0
+  end
+
+  def ai_credit_overage_price
+    ai_credit_overage_price_cents && ai_credit_overage_price_cents / 100.0
   end
 end

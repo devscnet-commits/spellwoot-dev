@@ -1,9 +1,9 @@
-# Seed idempotente do scaffolding de planos (Fase 1). Rodar manualmente:
+# Seed idempotente dos planos comerciais (Fase 1). Rodar manualmente:
 #   rails plans:seed
 #
-# Cria: o plano interno "ilimitado" (todas as features on, todos os limites nil), os planos
-# comerciais START/STANDARD/PRO (SEM valores — preencher com Planos_Conexi_v2) e aponta as 3 contas
-# do grupo para o plano interno, para NÃO serem afetadas pelo rollout.
+# Cria: o plano interno "ilimitado" (uso do grupo — Athena/SCNET/Vale Mais Net, não é oferta
+# comercial), os 4 planos comerciais START/PLUS/PRO+/Enterprise e o plano Cortesia (parceiros/
+# indicadores — setado manualmente, nunca por self-service). Dados conferidos com Planos_Conexi_v2.
 namespace :plans do
   # Chaves canônicas de feature vêm de Plan::MANAGED_FEATURE_KEYS (fonte única, também usada pela
   # ponte Plano->conta). Referenciadas em RUNTIME dentro das tasks (sob :environment); não no corpo
@@ -13,54 +13,77 @@ namespace :plans do
   INTERNAL_SLUG = 'internal_unlimited'.freeze
   # Contas do grupo que recebem o plano interno (match por nome, case-insensitive).
   INTERNAL_ACCOUNT_NAMES = ['Athena', 'SCNET', 'Vale Mais Net'].freeze
+  # Créditos de IA do plano interno: valor simbólico alto, não deve ter limite prático.
+  INTERNAL_AI_CREDITS = 999_999
 
-  # Planos comerciais (Planos_Conexi_v2, Fase 1.1). `features` lista SÓ as features ligadas (as
-  # demais de FEATURE_KEYS entram como enabled=false). `limits` = max_value por chave (0 = zero
-  # permitido; NUNCA nil aqui — nil seria "ilimitado"). overflow_behavior: hard_block em todos.
+  # Preço do crédito extra de IA (recarga), igual nos 3 planos que usam IA integrada — Planos_Conexi_v2,
+  # tabela de cadastro ("Custo créditos adicionais: R$0,07"). Enterprise não usa (chave própria sempre).
+  AI_CREDIT_OVERAGE_PRICE_CENTS = 7
+
+  # Cada plano: slug/name/description, monthly_price_cents (nil = sob consulta), courtesy (flag
+  # manual — nunca visível/self-service), features (lista de MANAGED_FEATURE_KEYS ligadas, ou :all),
+  # ai_credits (créditos mensais inclusos), limits (max_value por LIMIT_KEYS chave; nil = ilimitado;
+  # 0 = zero permitido), limit_overrides (política de excedente por chave; default hard_block).
   #
-  # PREÇO (plans.monthly_price_cents / setup_fee_cents): o schema já tem os campos, mas os valores
-  # da planilha Planos_Conexi_v2 ainda NÃO foram confirmados como oficiais — por isso NÃO populamos
-  # aqui (ficam nil). Quando confirmados, adicionar `monthly_price_cents`/`setup_fee_cents` por plano.
-  COMMERCIAL_PLANS = [
+  # annual_price_cents / promo_price_cents / promo_months_count: colunas já existem, mas os valores
+  # por plano ainda não foram confirmados na planilha — ficam nil até serem informados.
+  PLANS = [
     {
       slug: 'start', name: 'START',
-      features: %w[], # nenhuma feature ligada no START
+      description: 'Plano de entrada: canais essenciais, IA integrada e relatórios.',
+      monthly_price_cents: 34_790,
+      features: %w[dashboards_bi conversion_api],
       ai_credits: 500,
       limits: { 'users' => 3, 'inboxes' => 2, 'ai_agents' => 2, 'crm_pipelines' => 0 }
     },
     {
-      slug: 'standard', name: 'STANDARD',
+      slug: 'plus', name: 'PLUS',
+      description: 'Mais canais, copiloto de IA e CRM em Kanban.',
+      monthly_price_cents: 59_790,
       features: %w[
-        webchat_channel facebook_channel ai_copilot dashboards_bi conversion_api webhook_api
-        sla_tracking crm_kanban crm_automations message_scheduling custom_llm_api_key
-      ], # off no STANDARD: erp_integration, isp_ready_flows, audit_logs, account_manager
+        webchat_channel facebook_channel dashboards_bi conversion_api ai_copilot webhook_api
+        custom_llm_api_key crm_kanban crm_automations message_scheduling
+      ], # off no PLUS: sla_tracking, audit_logs, erp_integration, isp_ready_flows, account_manager
       ai_credits: 1000,
       limits: { 'users' => 10, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }
     },
     {
-      slug: 'pro', name: 'PRO',
-      features: :all, # todas as MANAGED_FEATURE_KEYS ligadas no PRO (expandido em runtime)
+      slug: 'pro_plus', name: 'PRO +',
+      description: 'Integração com ERP de ISP, SLA, auditoria e gerente de conta dedicado.',
+      monthly_price_cents: 99_790,
+      features: :all, # todas as MANAGED_FEATURE_KEYS ligadas
       ai_credits: 1000,
-      limits: { 'users' => 30, 'inboxes' => 20, 'ai_agents' => 10, 'crm_pipelines' => 10 },
-      # Overage pago SÓ em 'users' no PRO ("Atendente adicional"): permite exceder 30 e cobra o
-      # excedente a R$29,90/usuário (Planos_Conexi_v2). inboxes/ai_agents seguem hard_block.
-      # A cobrança de fato é débito da Fase 3 (Stripe/Asaas); aqui só grava a política no limite.
+      limits: { 'users' => 30, 'inboxes' => 30, 'ai_agents' => nil, 'crm_pipelines' => nil },
+      # Overage pago SÓ em 'users' ("Atendente adicional"): permite exceder 30 e cobra o excedente a
+      # R$29,90/usuário (Planos_Conexi_v2). inboxes seguem hard_block; ai_agents/crm_pipelines já são
+      # ilimitados. A cobrança de fato é débito da Fase 3 (Stripe/Asaas); aqui só grava a política.
       limit_overrides: { 'users' => { overflow_behavior: :paid_overage, overage_price_cents: 2990 } }
+    },
+    {
+      slug: 'enterprise', name: 'Enterprise',
+      description: 'Sob consulta: mesma cobertura do PRO+, sem limites de uso, chave de IA própria.',
+      monthly_price_cents: nil, # sob consulta
+      features: :all,
+      ai_credits: 0, # sempre chave própria — não consome crédito da plataforma
+      ai_credit_overage_price_cents: nil, # não aplicável (não usa o sistema de créditos da plataforma)
+      limits: { 'users' => nil, 'inboxes' => nil, 'ai_agents' => nil, 'crm_pipelines' => nil }
+    },
+    {
+      slug: 'courtesy', name: 'Cortesia',
+      description: 'Acesso completo para parceiros/indicadores. Setado manualmente pela SCNET.',
+      monthly_price_cents: 0,
+      courtesy: true,
+      visible: false, # nunca aparece para self-service — só atribuído manualmente
+      features: :all,
+      ai_credits: 0, # sem créditos inclusos — cobrados a parte (recarga dentro da Conexi)
+      limits: { 'users' => nil, 'inboxes' => nil, 'ai_agents' => nil, 'crm_pipelines' => nil }
     }
   ].freeze
-
-  # Créditos de IA por plano (Plan#ai_credits_included; Ai::CreditsRenewalJob reseta
-  # AiCreditBalance#plan_credits para este valor a cada ciclo). START=500, STANDARD=1000, PRO=1000;
-  # interno = valor simbólico alto (não deve ter limite prático). Ver INTERNAL_AI_CREDITS.
-  #
-  # Overage: 'users' no PRO ("Atendente adicional") já é :paid_overage + overage_price_cents 2990
-  # (ver limit_overrides no PRO). A cobrança do excedente em si é débito da Fase 3 (Stripe/Asaas).
-  INTERNAL_AI_CREDITS = 999_999
 
   desc 'Seed idempotente de planos + assinatura interna das 3 contas do grupo'
   task seed: :environment do
     seed_internal_plan
-    seed_commercial_plans
+    seed_plans
     assign_internal_accounts
     puts '[plans:seed] concluído.'
   end
@@ -68,7 +91,8 @@ namespace :plans do
   def seed_internal_plan
     feature_keys = Plan::MANAGED_FEATURE_KEYS
     plan = Plan.find_or_initialize_by(slug: INTERNAL_SLUG)
-    plan.update!(name: 'Interno (ilimitado)', active: true, ai_credits_included: INTERNAL_AI_CREDITS)
+    plan.update!(name: 'Interno (ilimitado)', active: true, visible_to_new_subscribers: false,
+                 ai_credits_included: INTERNAL_AI_CREDITS)
     feature_keys.each do |key|
       feature = plan.plan_features.find_or_initialize_by(key: key)
       feature.update!(enabled: true)
@@ -80,11 +104,20 @@ namespace :plans do
     puts "[plans:seed] plano interno '#{INTERNAL_SLUG}': #{feature_keys.size} features on, #{LIMIT_KEYS.size} limites ilimitados, #{INTERNAL_AI_CREDITS} créditos IA."
   end
 
-  def seed_commercial_plans
+  def seed_plans
     feature_keys = Plan::MANAGED_FEATURE_KEYS
-    COMMERCIAL_PLANS.each do |attrs|
+    PLANS.each do |attrs|
       plan = Plan.find_or_initialize_by(slug: attrs[:slug])
-      plan.update!(name: attrs[:name], active: true, ai_credits_included: attrs[:ai_credits])
+      plan.update!(
+        name: attrs[:name],
+        description: attrs[:description],
+        active: true,
+        visible_to_new_subscribers: attrs.fetch(:visible, true),
+        courtesy: attrs.fetch(:courtesy, false),
+        monthly_price_cents: attrs[:monthly_price_cents],
+        ai_credits_included: attrs[:ai_credits],
+        ai_credit_overage_price_cents: attrs.fetch(:ai_credit_overage_price_cents, AI_CREDIT_OVERAGE_PRICE_CENTS)
+      )
 
       enabled = attrs[:features] == :all ? feature_keys : attrs[:features]
 
@@ -95,7 +128,7 @@ namespace :plans do
       end
 
       # Limites numéricos por chave. hard_block por padrão; limit_overrides ajusta política/preço por
-      # chave (hoje só users no PRO => paid_overage). overage_price_cents nil quando não há override
+      # chave (hoje só users no PRO+ => paid_overage). overage_price_cents nil quando não há override
       # (idempotente: re-run reseta chaves sem override).
       overrides = attrs[:limit_overrides] || {}
       attrs[:limits].each do |key, max_value|
