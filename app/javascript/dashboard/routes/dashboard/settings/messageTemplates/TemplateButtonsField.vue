@@ -408,7 +408,6 @@ const removeButton = index => {
             'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN_HINT'
           )
         "
-        :message-type="button.navigate_screen ? 'info' : 'error'"
       />
     </div>
   </div>

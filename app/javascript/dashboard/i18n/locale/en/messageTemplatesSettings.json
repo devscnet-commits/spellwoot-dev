@@ -249,9 +249,9 @@
             "FLOWS_EMPTY": "Nenhum Flow nesta conta. Crie um no WhatsApp Manager e publique.",
             "FLOWS_NONE_PUBLISHED": "Esta conta tem Flow, mas nenhum publicado. Publique no WhatsApp Manager para poder usar aqui.",
             "FLOWS_ERROR": "Não foi possível carregar os Flows desta conta.",
-            "NAVIGATE_SCREEN_HINT": "Obrigatório: nome exato da tela de entrada do Flow. Preenchido automaticamente quando o Flow é criado aqui.",
+            "NAVIGATE_SCREEN_HINT": "Preenchido sozinho ao criar o Flow aqui.",
             "FLOW_ID_HINT": "ID do Flow já publicado no WhatsApp Manager.",
-            "NAVIGATE_SCREEN": "Tela inicial"
+            "NAVIGATE_SCREEN": "Tela inicial do Flow"
           }
         },
         "PREVIEW": {
