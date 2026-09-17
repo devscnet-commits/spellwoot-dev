@@ -116,6 +116,9 @@ const createFlow = async button => {
     // Entra na lista já selecionável e escolhido: o admin pediu este Flow, não vai querer procurá-lo.
     flows.value = [...flows.value, { ...data.flow, selectable: true }];
     button.flow_id = String(data.flow.id);
+    // A Meta exige navigate_screen e recusa o template sem ele. Como o Flow é nosso, sabemos a
+    // tela de entrada — não faz sentido devolver essa pergunta para quem acabou de criá-lo.
+    if (data.flow.screen_id) button.navigate_screen = data.flow.screen_id;
     isCreatingPanelOpen.value = false;
   } catch (error) {
     createFlowError.value =
@@ -405,6 +408,7 @@ const removeButton = index => {
             'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.NAVIGATE_SCREEN_HINT'
           )
         "
+        :message-type="button.navigate_screen ? 'info' : 'error'"
       />
     </div>
   </div>

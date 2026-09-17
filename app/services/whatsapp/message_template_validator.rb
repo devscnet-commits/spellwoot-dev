@@ -206,8 +206,16 @@ class Whatsapp::MessageTemplateValidator
 
       'O código de exemplo do botão é obrigatório' if button[:example].blank?
     when 'FLOW'
-      'O ID do Flow do botão é obrigatório' if button[:flow_id].blank?
+      flow_button_error(button)
     end
+  end
+
+  # A Meta recusa o template quando o botão FLOW vem sem navigate_screen (code 100, subcode
+  # 2388202), apesar de uma das páginas da documentação dizer que o campo é opcional.
+  def flow_button_error(button)
+    return 'O ID do Flow do botão é obrigatório' if button[:flow_id].blank?
+
+    'A tela inicial do Flow é obrigatória' if button[:navigate_screen].blank?
   end
 
   def phone_number_error(phone_number)
