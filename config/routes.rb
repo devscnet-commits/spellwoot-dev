@@ -142,6 +142,7 @@ Rails.application.routes.draw do
           resource :audit_logs, only: [:show]
           resource :plan, only: [] do
             get :limits
+            post :upgrade
           end
           resources :credit_requests, only: [:index, :create]
           resources :callbacks, only: [] do
@@ -742,6 +743,7 @@ Rails.application.routes.draw do
         post :seed, on: :member
         post :reset_cache, on: :member
       end
+      resources :plans, only: [:index, :show, :edit, :update]
       resources :credit_requests, only: [:index, :show] do
         post :approve, on: :member
         post :reject, on: :member

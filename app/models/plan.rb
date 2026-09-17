@@ -2,15 +2,22 @@
 #
 # Table name: plans
 #
-#  id                  :bigint           not null, primary key
-#  active              :boolean          default(TRUE), not null
-#  ai_credits_included :integer          default(0), not null
-#  monthly_price_cents :integer
-#  name                :string           not null
-#  setup_fee_cents     :integer
-#  slug                :string           not null
-#  created_at          :datetime         not null
-#  updated_at          :datetime         not null
+#  id                            :bigint           not null, primary key
+#  active                        :boolean          default(TRUE), not null
+#  ai_credit_overage_price_cents :integer
+#  ai_credits_included           :integer          default(0), not null
+#  annual_price_cents            :integer
+#  courtesy                      :boolean          default(FALSE), not null
+#  description                   :text
+#  monthly_price_cents           :integer
+#  name                          :string           not null
+#  promo_months_count            :integer
+#  promo_price_cents             :integer
+#  setup_fee_cents               :integer
+#  slug                          :string           not null
+#  visible_to_new_subscribers    :boolean          default(TRUE), not null
+#  created_at                    :datetime         not null
+#  updated_at                    :datetime         not null
 #
 # Indexes
 #
@@ -27,7 +34,9 @@ class Plan < ApplicationRecord
     'dashboards_bi' => 'reports',
     'sla_tracking' => 'sla',
     'audit_logs' => 'audit_logs',
-    'ai_copilot' => 'ai_copilot',
+    # ai_copilot reaproveita captain_tasks (rewrite/resumo/sugestão de resposta) — já existe e era
+    # grátis por padrão; decidido na Fase 0 restringir por plano em vez de criar chave nova.
+    'ai_copilot' => 'captain_tasks',
     'conversion_api' => 'conversion_api',
     'webhook_api' => 'webhook_api',
     'custom_llm_api_key' => 'custom_llm_api_key',
@@ -36,9 +45,17 @@ class Plan < ApplicationRecord
     'erp_integration' => 'erp_integration',
     'isp_ready_flows' => 'isp_ready_flows',
     'message_scheduling' => 'message_scheduling',
-    'account_manager' => 'account_manager'
+    'account_manager' => 'account_manager',
+    'api_user_token' => 'api_user_token'
   }.freeze
+  # channel_whatsapp e channel_api NÃO entram aqui: são X em todos os 4 planos comerciais (não variam
+  # por plano, ver Planos_Conexi_v2) — ficam enabled: true por padrão em config/features.yml, mesmo
+  # tratamento de channel_instagram/channel_email hoje.
   MANAGED_FEATURE_KEYS = PLAN_FEATURE_TO_ACCOUNT_FLAG.keys.freeze
+
+  # Ordem dos planos comerciais para decidir se uma troca é upgrade ou downgrade (Plan::ChangeSubscriptionService).
+  # courtesy/internal_unlimited ficam de fora — não participam de troca self-service, só atribuição manual.
+  COMMERCIAL_RANK = { 'start' => 1, 'plus' => 2, 'pro_plus' => 3, 'enterprise' => 4 }.freeze
 
   has_many :plan_features, dependent: :destroy
   has_many :plan_limits, dependent: :destroy
@@ -76,5 +93,22 @@ class Plan < ApplicationRecord
 
   def setup_fee
     setup_fee_cents && setup_fee_cents / 100.0
+  end
+
+  def annual_price
+    annual_price_cents && annual_price_cents / 100.0
+  end
+
+  def promo_price
+    promo_price_cents && promo_price_cents / 100.0
+  end
+
+  def ai_credit_overage_price
+    ai_credit_overage_price_cents && ai_credit_overage_price_cents / 100.0
+  end
+
+  # nil para courtesy/internal_unlimited — não participam da ordem comercial.
+  def commercial_rank
+    COMMERCIAL_RANK[slug]
   end
 end

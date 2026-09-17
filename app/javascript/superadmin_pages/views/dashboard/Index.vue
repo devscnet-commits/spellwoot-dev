@@ -33,8 +33,14 @@ const chartData = computed(() => {
   return prepareData(props.componentData.chartData);
 });
 
-const { accountsCount, usersCount, inboxesCount, conversationsCount } =
-  props.componentData;
+const {
+  accountsCount,
+  usersCount,
+  inboxesCount,
+  conversationsCount,
+  mrr,
+  activeSubscriptionsCount,
+} = props.componentData;
 </script>
 
 <template>
@@ -62,6 +68,14 @@ const { accountsCount, usersCount, inboxesCount, conversationsCount } =
         <div class="report-card">
           <div class="metric">{{ conversationsCount }}</div>
           <div>{{ 'Conversations' }}</div>
+        </div>
+        <div class="report-card">
+          <div class="metric">{{ mrr }}</div>
+          <div>{{ 'MRR (assinaturas ativas)' }}</div>
+        </div>
+        <div class="report-card">
+          <div class="metric">{{ activeSubscriptionsCount }}</div>
+          <div>{{ 'Assinaturas ativas' }}</div>
         </div>
       </div>
     </section>
