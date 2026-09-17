@@ -5,8 +5,10 @@ import { useStore } from 'vuex';
 import SettingsLayout from '../SettingsLayout.vue';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
+import Button from 'dashboard/components-next/button/Button.vue';
 import CreditRequestButton from './CreditRequestButton.vue';
 import { messageTimestamp } from 'shared/helpers/timeHelper';
+import { useAlert } from 'dashboard/composables';
 
 const { t } = useI18n();
 const store = useStore();
@@ -18,7 +20,25 @@ const aiCreditBalance = computed(
 const subscription = computed(() => store.getters['plan/getSubscription']);
 const limits = computed(() => store.getters['plan/getLimits']);
 const overageCharges = computed(() => store.getters['plan/getOverageCharges']);
+const availableUpgrades = computed(
+  () => store.getters['plan/getAvailableUpgrades']
+);
 const uiFlags = computed(() => store.getters['plan/getUIFlags']);
+
+// Upgrade é imediato e não tem desfazer self-service (Plan::ChangeSubscriptionService) — confirma
+// antes de disparar. Downgrade não tem botão aqui de propósito: não passa pelo upgradePlan.
+const confirmUpgrade = async upgradePlan => {
+  // eslint-disable-next-line no-alert
+  if (!window.confirm(t('PLAN.UPGRADE.CONFIRM', { name: upgradePlan.name }))) {
+    return;
+  }
+  try {
+    await store.dispatch('plan/upgradePlan', upgradePlan.slug);
+    useAlert(t('PLAN.UPGRADE.SUCCESS', { name: upgradePlan.name }));
+  } catch (error) {
+    useAlert(error?.response?.data?.error || t('PLAN.UPGRADE.ERROR'));
+  }
+};
 
 // Preço definido quando pelo menos um dos campos existe (ambos são nullable/provisórios).
 const hasPrice = computed(
@@ -148,6 +168,50 @@ onMounted(() => {
           </div>
           <p v-else class="text-body-small text-n-slate-10">
             {{ $t('PLAN.PRICE_TBD') }}
+          </p>
+        </div>
+
+        <!-- Available Upgrades (só planos com rank maior que o atual — nunca downgrade aqui) -->
+        <div
+          v-if="availableUpgrades.length > 0"
+          class="border border-n-slate-6 rounded-lg p-6 bg-n-surface-1"
+        >
+          <h2 class="text-heading-2 text-n-slate-12 mb-4">
+            {{ $t('PLAN.UPGRADE.HEADER') }}
+          </h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div
+              v-for="upgradePlan in availableUpgrades"
+              :key="upgradePlan.slug"
+              class="border border-n-slate-6 rounded-lg p-4 flex flex-col gap-2"
+            >
+              <p class="text-heading-3 text-n-slate-12">
+                {{ upgradePlan.name }}
+              </p>
+              <p
+                v-if="upgradePlan.description"
+                class="text-body-small text-n-slate-11"
+              >
+                {{ upgradePlan.description }}
+              </p>
+              <p class="text-heading-3 text-n-slate-12 mt-1">
+                {{
+                  upgradePlan.monthly_price_cents != null
+                    ? `${formatCurrency(upgradePlan.monthly_price_cents)}${$t('PLAN.UPGRADE.PER_MONTH')}`
+                    : $t('PLAN.PRICE_TBD')
+                }}
+              </p>
+              <Button
+                size="sm"
+                class="mt-2"
+                :label="$t('PLAN.UPGRADE.BUTTON', { name: upgradePlan.name })"
+                :is-loading="uiFlags.isUpgrading"
+                @click="confirmUpgrade(upgradePlan)"
+              />
+            </div>
+          </div>
+          <p class="text-body-small text-n-slate-10 mt-4">
+            {{ $t('PLAN.UPGRADE.DOWNGRADE_HINT') }}
           </p>
         </div>
 
