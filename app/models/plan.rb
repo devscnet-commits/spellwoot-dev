@@ -53,6 +53,10 @@ class Plan < ApplicationRecord
   # tratamento de channel_instagram/channel_email hoje.
   MANAGED_FEATURE_KEYS = PLAN_FEATURE_TO_ACCOUNT_FLAG.keys.freeze
 
+  # Ordem dos planos comerciais para decidir se uma troca é upgrade ou downgrade (Plan::ChangeSubscriptionService).
+  # courtesy/internal_unlimited ficam de fora — não participam de troca self-service, só atribuição manual.
+  COMMERCIAL_RANK = { 'start' => 1, 'plus' => 2, 'pro_plus' => 3, 'enterprise' => 4 }.freeze
+
   has_many :plan_features, dependent: :destroy
   has_many :plan_limits, dependent: :destroy
   has_many :subscriptions, dependent: :restrict_with_exception
@@ -101,5 +105,10 @@ class Plan < ApplicationRecord
 
   def ai_credit_overage_price
     ai_credit_overage_price_cents && ai_credit_overage_price_cents / 100.0
+  end
+
+  # nil para courtesy/internal_unlimited — não participam da ordem comercial.
+  def commercial_rank
+    COMMERCIAL_RANK[slug]
   end
 end

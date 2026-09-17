@@ -142,6 +142,7 @@ Rails.application.routes.draw do
           resource :audit_logs, only: [:show]
           resource :plan, only: [] do
             get :limits
+            post :upgrade
           end
           resources :credit_requests, only: [:index, :create]
           resources :callbacks, only: [] do

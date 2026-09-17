@@ -1,13 +1,32 @@
 # frozen_string_literal: true
 
 class Api::V1::Accounts::PlanController < Api::V1::Accounts::BaseController
-  before_action :fetch_plan_data
+  before_action :fetch_plan_data, only: [:limits]
+  before_action :ensure_administrator, only: [:upgrade]
 
   def limits
     render json: @plan_data
   end
 
+  # Upgrade self-service: o próprio cliente pode subir de plano, nunca reduzir — ver
+  # Plan::ChangeSubscriptionService#upgrade!. Reduzir plano é feito pelo suporte, não por aqui.
+  def upgrade
+    new_plan = Plan.find_by(slug: params[:plan_slug])
+    return render json: { error: 'Plano não encontrado' }, status: :not_found unless new_plan
+
+    Plan::ChangeSubscriptionService.new(account: current_account, new_plan: new_plan).upgrade!
+    render json: { message: 'Plano atualizado com sucesso' }
+  rescue Plan::ChangeSubscriptionService::Error => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   private
+
+  def ensure_administrator
+    return if Current.account_user&.administrator?
+
+    render json: { error: 'You are not authorized to do this action' }, status: :forbidden
+  end
 
   def fetch_plan_data
     subscription = current_account.subscriptions.current.first
