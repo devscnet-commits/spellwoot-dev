@@ -92,7 +92,9 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false)
+      expect(result).to include(reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false,
+                                 tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [])
+      expect(result[:error_detail]).to match(/HTTP 500/)
       # Auditoria de confiança: sem isto, um erro ANTES do HTTParty.post (ex.: exceção montando o
       # payload) cairia no MESMO rescue e devolveria o MESMO {reply: nil, conversation_id: nil} — o teste
       # passaria "por acidente" sem nunca ter tentado a requisição real. have_requested prova que o
@@ -108,7 +110,11 @@ RSpec.describe Ai::PythonOrchestratorClient do
         conversation: conversation, content: 'oi', agent: agent, mode: 'live'
       )
 
-      expect(result).to eq(reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false)
+      expect(result).to include(reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false,
+                                 tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [])
+      # error_detail some da classe/mensagem real da exceção (varia por lib/versão HTTP) — só
+      # confere que veio preenchido, não o texto exato.
+      expect(result[:error_detail]).to be_present
       # Mesma auditoria: confirma que a requisição foi tentada (e o WebMock a interceptou para simular
       # o timeout), não que o código nunca chegou a discar.
       expect(WebMock).to have_requested(:post, described_class::ORCHESTRATOR_URL)

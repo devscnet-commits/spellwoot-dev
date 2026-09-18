@@ -264,7 +264,7 @@ class Ai::Gateway
     # é um no-op silencioso (text.blank? => return) — o cliente ficava sem resposta E sem handoff. Espelha
     # o force_provider_handoff do antigo caminho decide(). Só ao vivo; em shadow apenas registra o erro.
     if @acts_live && status == 'error'
-      force_provider_handoff(run_record)
+      force_provider_handoff(run_record, error_detail: result[:error_detail])
       return finalize(run_record, 'error')
     end
 
@@ -605,9 +605,16 @@ class Ai::Gateway
     @provider_breaker ||= Ai::ProviderBreaker.new(account: @account, provider: supervisor_provider)
   end
 
-  def force_provider_handoff(run_record, notify: true)
-    action_dispatcher.internal_note('⚠️ Transferido automaticamente: a IA não conseguiu responder por ' \
-                                    'indisponibilidade do provedor de IA (verifique cota/billing).')
+  def force_provider_handoff(run_record, notify: true, error_detail: nil)
+    note = '⚠️ Transferido automaticamente: a IA não conseguiu responder por ' \
+           'indisponibilidade do provedor de IA (verifique cota/billing).'
+    # error_detail vem do HTTP/exceção real (Ai::PythonOrchestratorClient) — nil no skip do circuit
+    # breaker (linha ~139: nenhuma chamada nova aconteceu, não há detalhe pra mostrar). A categoria
+    # 'cota/billing' acima é só a suspeita mais comum; a causa real pode ser outra (nome de modelo
+    # inválido, rate limit, timeout do orquestrador) — por isso o texto TÉCNICO cru vai junto, em vez
+    # de só a categoria genérica.
+    note += "\n\nDetalhe técnico: #{error_detail}" if error_detail.present?
+    action_dispatcher.internal_note(note)
     team_id = handoff_coordinator.human_team_id({})
     input = { 'unassign' => true }
     input['team_id'] = team_id if team_id

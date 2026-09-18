@@ -110,7 +110,8 @@ class Ai::PythonOrchestratorClient
       # orchestrator.TurnFailed): repassado para o Ai::Gateway persistir mesmo assim, senão uma única
       # chamada com falha fazia o turno seguinte abrir uma conversation nova e perder o histórico.
       return { reply: nil, conversation_id: failed_conversation_id(response), byok_fallback: false,
-               confidence: nil, transferred: false, tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [] }
+               confidence: nil, transferred: false, tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [],
+               error_detail: "HTTP #{response.code}: #{response.body.to_s.truncate(300)}" }
     end
 
     parsed = response.parsed_response
@@ -133,7 +134,7 @@ class Ai::PythonOrchestratorClient
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
     { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false,
-      tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [] }
+      tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [], error_detail: "#{e.class}: #{e.message}" }
   end
 
   private
