@@ -720,6 +720,26 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(json['result']['conteudo']).to include('Plano Fibra 500MB: R$ 99,90/mês')
       end
 
+      # "categoria": quando a IA a informa (ex.: cliente pediu "todos os planos"), troca a busca por
+      # similaridade (TOP_K, capada e misturando qualquer kind) pelo catálogo INTEIRO daquele kind —
+      # ver comentário de Ai::PythonOrchestratorClient#knowledge_tool.
+      it 'com "categoria", pede o catálogo completo daquele kind (kinds + list_all)' do
+        allow(Ai::KnowledgeRetriever).to receive(:retrieve)
+          .with(query: 'quero ver todos os planos', account_id: account.id, agent_id: agent.id,
+                kinds: ['produto'], list_all: true)
+          .and_return(['Plano Residencial - 500 MEGA: R$ 99,90', 'Plano Empresarial - 200 MEGA: R$ 99,90'])
+
+        call_tool('consultar_conhecimento',
+                  arguments: { pergunta: 'quero ver todos os planos', categoria: 'produto' })
+
+        expect(response).to have_http_status(:success)
+        json = response.parsed_body
+        expect(json['status']).to eq('executed')
+        expect(json['result']['encontrado']).to be true
+        expect(json['result']['conteudo']).to include('Plano Residencial - 500 MEGA: R$ 99,90',
+                                                        'Plano Empresarial - 200 MEGA: R$ 99,90')
+      end
+
       # Fecha o gap identificado: base vazia devolve uma RESPOSTA que a IA precisa processar (um
       # function_call_output real), nunca um bloco de prompt silenciosamente ausente.
       it 'sem resultado, devolve "encontrado: false" com uma mensagem explícita — nunca silêncio' do

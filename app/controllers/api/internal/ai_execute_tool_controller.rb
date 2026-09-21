@@ -133,11 +133,20 @@ class Api::Internal::AiExecuteToolController < ActionController::API
   # gateiam por live? porque ESCREVEM estado da conversa. Isto fecha o gap de "RAG vazio silencioso": o
   # resultado da busca é sempre um function_call_output que a IA precisa processar, mesmo quando é
   # "nada encontrado" — nunca mais um bloco de prompt que simplesmente não aparece sem avisar ninguém.
+  #
+  # "categoria" (opcional — ver Ai::PythonOrchestratorClient#knowledge_tool): quando a IA a informa,
+  # troca a busca por similaridade (TOP_K, misturando qualquer kind) pelo catálogo INTEIRO daquele kind
+  # (Ai::KnowledgeRetriever list_all/kinds). Sem categoria, comportamento INALTERADO (mesma chamada de
+  # sempre) — retrocompat total com quem já dependia da assinatura antiga.
   def search_knowledge(agent)
     query = arguments['pergunta'].to_s.strip
     return { result: {}, status: 'skipped', error: 'pergunta vazia — nada foi buscado' } if query.blank?
 
-    chunks = Ai::KnowledgeRetriever.retrieve(query: query, account_id: agent.account_id, agent_id: agent.id)
+    retrieval_args = { query: query, account_id: agent.account_id, agent_id: agent.id }
+    categoria = arguments['categoria'].to_s.strip
+    retrieval_args.merge!(kinds: [categoria], list_all: true) if categoria.present?
+
+    chunks = Ai::KnowledgeRetriever.retrieve(**retrieval_args)
     conteudo = chunks.present? ? chunks.join("\n---\n") : 'Nada encontrado na base de conhecimento para essa pergunta.'
     { result: { 'encontrado' => chunks.present?, 'conteudo' => conteudo }, status: 'executed', error: nil }
   rescue StandardError => e

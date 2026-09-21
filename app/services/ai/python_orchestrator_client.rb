@@ -635,8 +635,15 @@ class Ai::PythonOrchestratorClient
   # "consultar_conhecimento" tem que ser uma function tool DE VERDADE, oferecida à OpenAI e chamada NO
   # MEIO do turno (mesmo loop de tool-call que já atende tools reais tipo consultar_periodos) — o
   # resultado da busca precisa voltar pra IA ANTES dela montar a resposta final, não depois. Sem query
-  # pré-configurada nem filtro de tipo — a IA formula a pergunta e decide quando chamar, a partir do
-  # objetivo da etapa + o que o cliente perguntou.
+  # pré-configurada — a IA formula a pergunta e decide quando chamar, a partir do objetivo da etapa e
+  # do que o cliente perguntou. "categoria" (opcional) é a ÚNICA pré-configuração: quando presente,
+  # pula a busca por similaridade (que só devolve os TOP_K trechos mais parecidos, de QUALQUER kind —
+  # ver Ai::KnowledgeRetriever::TOP_K) e devolve o catálogo INTEIRO daquele kind (Ai::KnowledgeRetriever
+  # list_all/small_catalog_chunks, já existia mas nenhum caller real o usava). Achado ao vivo: uma conta
+  # com vários "Produto" (planos) pedia pra IA "mostrar todos os planos" e a busca por similaridade,
+  # competindo com o resto da base (FAQ etc.) e capada em 6 trechos, podia devolver poucos ou nenhum
+  # plano — nenhuma instrução de prompt ("Regras de comportamento" da etapa) resolve isso sozinha,
+  # porque o mecanismo de busca em si nunca listava um kind inteiro.
   #
   # Condicional a #has_knowledge?: oferecer a ferramenta sem NENHUM conhecimento cadastrado só ensina a
   # IA a chamar algo que sempre volta vazio — gasta uma rodada de tool-call à toa e engorda
@@ -661,17 +668,32 @@ class Ai::PythonOrchestratorClient
   def knowledge_tool
     { name: KNOWLEDGE_TOOL,
       description: 'Busca na base de conhecimento oficial da empresa (preços, condições, regras, ' \
-                   'políticas). Use sempre que a pergunta do cliente depender de informação real da ' \
-                   'empresa e você não tiver certeza absoluta. Se não retornar nada relevante, diga ' \
-                   'que vai verificar ou transfira — nunca invente.',
+                   'políticas, produtos/planos). Use sempre que a pergunta do cliente depender de ' \
+                   'informação real da empresa e você não tiver certeza absoluta. Se não retornar ' \
+                   'nada relevante, diga que vai verificar ou transfira — nunca invente.',
       input_schema: {
         type: 'object',
         properties: {
           'pergunta' => { type: 'string',
-                          description: 'A pergunta ou termo de busca, na linguagem do cliente.' }
+                          description: 'A pergunta ou termo de busca, na linguagem do cliente.' },
+          'categoria' => { type: 'string', enum: knowledge_kinds,
+                           description: 'Preencha SÓ quando o cliente pedir para ver TODOS os itens ' \
+                                        'de uma categoria (ex.: "quero ver todos os planos", "me ' \
+                                        'mostra os planos residenciais"). Traz o catálogo COMPLETO ' \
+                                        'dessa categoria, em vez de só os trechos mais parecidos com ' \
+                                        'a pergunta — que podem esconder itens quando há muitos.' }
         },
         required: ['pergunta']
       } }
+  end
+
+  # Kinds com conhecimento ativo nesta conta/agent (mesmo escopo de #has_knowledge?) — só esses viram
+  # opção de "categoria", pra IA nunca informar um valor que não existe de verdade (o que devolveria
+  # um catálogo vazio). Ex.: ["produto", "faq"].
+  def knowledge_kinds
+    @knowledge_kinds ||= Ai::KnowledgeSource.active
+                                            .where(account_id: @agent.account_id, ai_agent_id: [@agent.id, nil])
+                                            .distinct.pluck(:kind)
   end
 
   # Leitura PURA do índice server-tracked (Ai::StateManager#current_step) — não roda track_step, não
