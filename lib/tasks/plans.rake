@@ -164,21 +164,25 @@ namespace :plans do
         feature.update!(enabled: enabled.include?(key))
       end
 
-      # Limites numéricos por chave. hard_block por padrão; limit_overrides ajusta política/preço por
-      # chave (hoje só users no PRO+ => paid_overage). overage_price_cents nil quando não há override
-      # (idempotente: re-run reseta chaves sem override).
-      overrides = attrs[:limit_overrides] || {}
-      attrs[:limits].each do |key, max_value|
-        limit = plan.plan_limits.find_or_initialize_by(key: key)
-        ov = overrides[key] || {}
-        limit.update!(
-          max_value: max_value,
-          overflow_behavior: ov[:overflow_behavior] || :hard_block,
-          overage_price_cents: ov[:overage_price_cents]
-        )
-      end
+      seed_plan_limits(plan, attrs)
 
       puts "[plans:seed] plano '#{attrs[:slug]}': #{enabled.size}/#{feature_keys.size} features on, #{attrs[:ai_credits]} créditos IA, limites #{attrs[:limits]}."
+    end
+  end
+
+  # Limites numéricos por chave. hard_block por padrão; limit_overrides ajusta política/preço por
+  # chave (hoje só users no PRO+ => paid_overage). overage_price_cents nil quando não há override
+  # (idempotente: re-run reseta chaves sem override).
+  def seed_plan_limits(plan, attrs)
+    overrides = attrs[:limit_overrides] || {}
+    attrs[:limits].each do |key, max_value|
+      limit = plan.plan_limits.find_or_initialize_by(key: key)
+      ov = overrides[key] || {}
+      limit.update!(
+        max_value: max_value,
+        overflow_behavior: ov[:overflow_behavior] || :hard_block,
+        overage_price_cents: ov[:overage_price_cents]
+      )
     end
   end
 

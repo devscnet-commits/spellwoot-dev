@@ -394,7 +394,7 @@ class Ai::Gateway
   # constante da classe diretamente (evita NameError se o gem não estiver carregado).
   def timeout_error?(exception)
     ancestors = exception.class.ancestors.filter_map(&:name)
-    (ancestors & TIMEOUT_ERROR_NAMES).any? || exception.message.to_s.downcase.include?('timeout')
+    ancestors.intersect?(TIMEOUT_ERROR_NAMES) || exception.message.to_s.downcase.include?('timeout')
   end
 
   # Cluster de handoff/atribuição extraído do Gateway (Passo 1 da quebra do God object): route IA->IA,

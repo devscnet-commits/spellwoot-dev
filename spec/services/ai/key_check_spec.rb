@@ -184,8 +184,8 @@ RSpec.describe Ai::KeyCheck do
       stub_probe
 
       expect(perform[:model]).to eq('gpt-4o')
-      expect(WebMock).to have_requested(:post, described_class::RESPONSES_URL)
-        .with { |req| JSON.parse(req.body)['model'] == 'gpt-4o' }
+      expect(WebMock).to(have_requested(:post, described_class::RESPONSES_URL)
+        .with { |req| JSON.parse(req.body)['model'] == 'gpt-4o' })
     end
 
     it 'sem modelo no Hub, sonda com o modelo do perfil de operação (o que o turno real usa)' do

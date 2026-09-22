@@ -18,7 +18,9 @@ RSpec.describe 'Ai::Gateway fallback BYOK', type: :model do
     IntegrationSetting.create!(account_id: account.id, provider: 'anthropic', enabled: true,
                                config: { 'apiKey' => 'sk-ant-cliente' }.to_json)
 
-    allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
+    # available_now? só consulta horários quando working_hours_enabled? — desligado, ele responde
+    # true sem stub nenhum. Explícito aqui porque o teste não é sobre horário de atendimento.
+    inbox.update!(working_hours_enabled: false)
     allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
     allow(Ai::Workers::MediaProcessor).to receive(:process).and_return(nil)
     agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
