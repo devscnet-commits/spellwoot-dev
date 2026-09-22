@@ -8,12 +8,13 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
   def show
     effective = IntegrationSettingsService.get_config(Current.account.id, params[:provider], for_display: true)
     setting   = IntegrationSetting.find_by(account_id: Current.account.id, provider: params[:provider])
+    sources   = config_sources(params[:provider], effective)
     render json: {
       provider: params[:provider],
       enabled: setting ? setting.enabled : true,
-      config: mask_sensitive(effective),
+      config: mask_sensitive(effective, sources),
       has_account_config: setting.present?,
-      sources: config_sources(params[:provider], effective),
+      sources: sources,
       # Qual chave os módulos de IA usam DE FATO para esta conta, sem chamar a rede. Um apiKey
       # preenchido no formulário pode ser herdado do global/ENV (a tela mostra a cascata), então a
       # presença do campo nunca disse se a conta roda na própria chave.
@@ -45,11 +46,12 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
   def destroy
     IntegrationSetting.find_by(account_id: Current.account.id, provider: params[:provider])&.destroy
     effective = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
+    sources   = config_sources(params[:provider], effective)
     render json: {
       provider: params[:provider],
       cleared: true,
-      config: mask_sensitive(effective),
-      sources: config_sources(params[:provider], effective)
+      config: mask_sensitive(effective, sources),
+      sources: sources
     }
   end
 
@@ -124,13 +126,25 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
     SENSITIVE_KEYS.include?(key) && value.to_s.include?('*')
   end
 
-  def mask_sensitive(config)
+  def mask_sensitive(config, sources = nil)
     config.each_with_object({}) do |(key, value), masked|
       masked[key] = if SENSITIVE_KEYS.include?(key) && value.present?
-                      "#{value.to_s.first(4)}#{'*' * 20}#{value.to_s.last(3)}"
+                      mask_value(key, value, sources)
                     else
                       value
                     end
     end
+  end
+
+  # O admin do cliente só vê pedaços do PRÓPRIO segredo — ali o prefixo/sufixo servem para ele
+  # reconhecer qual chave cadastrou. Um valor HERDADO do global ou do ENV pertence à plataforma, e
+  # a cascata de exibição entregava os últimos caracteres da chave do servidor a todo tenant que
+  # abrisse a aba. Herdado vira asterisco puro: a tela continua dizendo que existe valor, e o selo
+  # de origem (sources) continua dizendo de onde vem, sem revelar caractere nenhum.
+  # Mantém '*' para o guarda de eco do #update (masked_sensitive?) continuar reconhecendo.
+  def mask_value(key, value, sources)
+    return '*' * 24 if sources && sources[key] != 'account'
+
+    "#{value.to_s.first(4)}#{'*' * 20}#{value.to_s.last(3)}"
   end
 end

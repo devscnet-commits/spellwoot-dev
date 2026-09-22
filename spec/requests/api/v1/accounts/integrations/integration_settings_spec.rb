@@ -5,34 +5,31 @@ RSpec.describe 'Api::V1::Accounts::IntegrationSettings' do
   let(:admin) { create(:user, account: account, role: :administrator) }
 
   describe 'PUT /api/v1/accounts/{account.id}/integration_settings/{provider}' do
-    # BYOK (billing Fase 3): a chave própria é validada com chamada real antes de salvar.
-    context 'com um provider BYOK (anthropic)' do
-      it 'rejeita com 422 quando a chave não passa no teste real' do
-        stub_request(:get, 'https://api.anthropic.com/v1/models').to_return(status: 401)
-
+    # Salvar NÃO chama o provider: o controller só persiste. Quem valida com chamada real é a ação
+    # explícita test_connection (Ai::KeyCheck para openai). Estes exemplos não usam stub de propósito
+    # — com o WebMock barrando a rede, qualquer chamada durante o save estouraria o teste, então a
+    # ausência de erro é a própria prova de que o save não fala com ninguém.
+    context 'when saving a key' do
+      it 'persiste sem chamar o provider' do
         put "/api/v1/accounts/#{account.id}/integration_settings/anthropic",
-            params: { config: { apiKey: 'bad-key' }, enabled: true },
-            headers: admin.create_new_auth_token
-
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body['error']).to match(/inválida ou revogada/)
-        expect(IntegrationSetting.find_by(account_id: account.id, provider: 'anthropic')).to be_nil
-      end
-
-      it 'aceita e persiste quando a chave é válida' do
-        stub_request(:get, 'https://api.anthropic.com/v1/models').to_return(status: 200, body: '{"data":[]}')
-
-        put "/api/v1/accounts/#{account.id}/integration_settings/anthropic",
-            params: { config: { apiKey: 'good-key' }, enabled: true },
+            params: { config: { apiKey: 'qualquer-chave' }, enabled: true },
             headers: admin.create_new_auth_token
 
         expect(response).to have_http_status(:success)
         setting = IntegrationSetting.find_by(account_id: account.id, provider: 'anthropic')
-        expect(setting.config_hash['apiKey']).to eq('good-key')
+        expect(setting.config_hash['apiKey']).to eq('qualquer-chave')
       end
 
-      it 'não valida (nem chama o provider) ao apenas DESATIVAR' do
-        # sem stub: se disparasse a chamada, o WebMock estouraria. enabled=false pula a validação.
+      it 'não devolve a chave em texto puro na resposta do save' do
+        put "/api/v1/accounts/#{account.id}/integration_settings/anthropic",
+            params: { config: { apiKey: 'sk-SEGREDO-do-cliente' }, enabled: true },
+            headers: admin.create_new_auth_token
+
+        expect(response.body).not_to include('sk-SEGREDO-do-cliente')
+        expect(response.parsed_body.dig('config', 'apiKey')).to include('*')
+      end
+
+      it 'persiste a desativação' do
         put "/api/v1/accounts/#{account.id}/integration_settings/anthropic",
             params: { config: { apiKey: 'whatever' }, enabled: false },
             headers: admin.create_new_auth_token
@@ -42,7 +39,7 @@ RSpec.describe 'Api::V1::Accounts::IntegrationSettings' do
       end
     end
 
-    context 'com um provider legado (n8n, fora do BYOK)' do
+    context 'with a legacy provider (n8n, outside BYOK)' do
       it 'salva sem disparar validação externa' do
         # n8n não é BYOK: nenhuma chamada de teste é feita no save (comportamento legado preservado).
         put "/api/v1/accounts/#{account.id}/integration_settings/n8n",
