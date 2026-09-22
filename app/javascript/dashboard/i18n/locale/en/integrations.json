@@ -389,6 +389,9 @@
     },
     "HUB": {
       "LOADING": "Carregando...",
+      "SOON_TITLE": "Disponível em breve.",
+      "SOON_BODY": "O motor de IA ainda executa apenas a OpenAI. Cadastrar uma chave aqui não teria efeito, então o campo fica bloqueado até a ponte deste provedor ficar pronta.",
+      "SOON_BADGE": "Em breve",
       "ENV_MANAGED_TITLE": "Esta instalação utiliza configuração por variáveis de ambiente.",
       "ENV_MANAGED_CREDENTIALS": "As credenciais são gerenciadas pelo servidor.",
       "ENV_MANAGED_FUTURE": "A configuração via interface será disponibilizada em uma versão futura.",

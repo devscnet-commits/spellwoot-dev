@@ -205,6 +205,12 @@ const PROVIDERS = [
   // BYOK (billing Fase 3): chave própria de LLM. Só aparecem para contas com custom_llm_api_key.
   {
     key: 'anthropic',
+    // NÃO é usado AGORA, e por isso não é editável — mas NÃO remova. O motor Python executa só a
+    // OpenAI (orchestrator.py: _build_client monta sempre um client OpenAI; provider chega e é
+    // apenas logado). Salvar uma chave aqui hoje só criaria uma credencial que nada lê — e, pior,
+    // uma que o Rails mandaria para a api.openai.com. Ao construir a ponte com as regras de cada
+    // provedor, RELIGUE removendo o `soon: true` desta definição.
+    soon: true,
     name: 'Anthropic (Claude)',
     description: 'Use sua própria chave da Anthropic para os modelos Claude.',
     icon: 'i-lucide-sparkles',
@@ -222,6 +228,12 @@ const PROVIDERS = [
   },
   {
     key: 'gemini',
+    // NÃO é usado AGORA, e por isso não é editável — mas NÃO remova. O motor Python executa só a
+    // OpenAI (orchestrator.py: _build_client monta sempre um client OpenAI; provider chega e é
+    // apenas logado). Salvar uma chave aqui hoje só criaria uma credencial que nada lê — e, pior,
+    // uma que o Rails mandaria para a api.openai.com. Ao construir a ponte com as regras de cada
+    // provedor, RELIGUE removendo o `soon: true` desta definição.
+    soon: true,
     name: 'Google Gemini',
     description:
       'Use sua própria chave do Google AI Studio para os modelos Gemini.',
@@ -240,6 +252,12 @@ const PROVIDERS = [
   },
   {
     key: 'groq',
+    // NÃO é usado AGORA, e por isso não é editável — mas NÃO remova. O motor Python executa só a
+    // OpenAI (orchestrator.py: _build_client monta sempre um client OpenAI; provider chega e é
+    // apenas logado). Salvar uma chave aqui hoje só criaria uma credencial que nada lê — e, pior,
+    // uma que o Rails mandaria para a api.openai.com. Ao construir a ponte com as regras de cada
+    // provedor, RELIGUE removendo o `soon: true` desta definição.
+    soon: true,
     name: 'Groq',
     description:
       'Use sua própria chave da Groq para inferência de baixa latência.',
@@ -258,6 +276,12 @@ const PROVIDERS = [
   },
   {
     key: 'openrouter',
+    // NÃO é usado AGORA, e por isso não é editável — mas NÃO remova. O motor Python executa só a
+    // OpenAI (orchestrator.py: _build_client monta sempre um client OpenAI; provider chega e é
+    // apenas logado). Salvar uma chave aqui hoje só criaria uma credencial que nada lê — e, pior,
+    // uma que o Rails mandaria para a api.openai.com. Ao construir a ponte com as regras de cada
+    // provedor, RELIGUE removendo o `soon: true` desta definição.
+    soon: true,
     name: 'OpenRouter',
     description:
       'Use sua própria chave do OpenRouter para acessar múltiplos modelos.',
@@ -296,6 +320,12 @@ const SOURCE_LABELS = {
 // stay read-only (credentials from server ENV) until their flows are validated.
 const FORCE_ENV_MANAGED = false;
 const isEnvManaged = provider => FORCE_ENV_MANAGED || provider.managedByEnv;
+
+// Providers cuja ponte ainda não existe no motor: aparecem no catálogo (para o cliente saber que
+// estão no mapa) mas não são configuráveis. Mesmo tratamento que o dropdown de provider do perfil de
+// IA já dá (AiProfileForm.vue, AVAILABLE_PROVIDERS) — aqui faltava, e dava para salvar uma chave que
+// nada consumiria. Remover o `soon: true` do provider é o único passo para religar.
+const isSoon = provider => !!provider.soon;
 
 // State per provider
 const state = reactive(
@@ -358,7 +388,8 @@ const loadProvider = async providerKey => {
 
 onMounted(() => {
   visibleProviders.value.forEach(provider => {
-    if (!isEnvManaged(provider)) loadProvider(provider.key);
+    if (!isEnvManaged(provider) && !isSoon(provider))
+      loadProvider(provider.key);
   });
 });
 
@@ -383,7 +414,7 @@ const toggleOpen = async providerKey => {
   s.open = !s.open;
   const provider = PROVIDERS.find(p => p.key === providerKey);
   // Env-managed providers are read-only — don't hit integration_settings at all.
-  if (s.open && !s.dirty && !isEnvManaged(provider)) {
+  if (s.open && !s.dirty && !isEnvManaged(provider) && !isSoon(provider)) {
     await loadProvider(providerKey);
     if (provider?.syncInstances) loadInstances(providerKey);
   }
@@ -546,6 +577,12 @@ const keyStatusLabel = providerKey => {
 // a configured-but-disabled provider should read "Desativado", not "Configurado".
 const providerBadge = providerKey => {
   const s = state[providerKey];
+  if (isSoon(PROVIDERS.find(p => p.key === providerKey))) {
+    return {
+      label: t('INTEGRATION_SETTINGS.HUB.SOON_BADGE'),
+      class: 'bg-n-slate-3 text-n-slate-11',
+    };
+  }
   const configured = s.sources && Object.keys(s.sources).length;
   if (!configured) return null;
   return s.enabled
@@ -616,6 +653,20 @@ const providerBadge = providerKey => {
           class="text-body-small text-n-slate-11 py-2"
         >
           {{ $t('INTEGRATION_SETTINGS.HUB.LOADING') }}
+        </div>
+
+        <!-- Ponte do provedor ainda não construída: visível, não configurável -->
+        <div
+          v-else-if="isSoon(provider)"
+          class="flex items-start gap-3 px-4 py-3 rounded-lg bg-n-slate-2 border border-n-weak"
+        >
+          <span class="i-lucide-clock w-4 h-4 text-n-slate-9 shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-1 text-body-small text-n-slate-11">
+            <p class="font-medium text-n-slate-12">
+              {{ $t('INTEGRATION_SETTINGS.HUB.SOON_TITLE') }}
+            </p>
+            <p>{{ $t('INTEGRATION_SETTINGS.HUB.SOON_BODY') }}</p>
+          </div>
         </div>
 
         <!-- Managed by environment variables (read-only) -->
