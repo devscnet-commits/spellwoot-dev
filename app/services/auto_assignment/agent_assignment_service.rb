@@ -36,7 +36,12 @@ class AutoAssignment::AgentAssignmentService
     # Hence taking an intersection of online agents and allowed member ids
 
     # the online user ids are string, since its from redis, allowed member ids are integer, since its from active record
-    @allowed_online_agent_ids ||= online_agent_ids & allowed_agent_ids&.map(&:to_s)
+    #
+    # online_agent_ids devolve nil quando ninguém está online, e em Ruby `nil & lista` é o AND lógico
+    # (false), não interseção vazia. find_assignee então chamava .map em false e levantava
+    # NoMethodError, em vez de simplesmente não atribuir — ficou invisível até o log de atribuição
+    # passar a ler essa lista.
+    @allowed_online_agent_ids ||= Array(online_agent_ids) & Array(allowed_agent_ids).map(&:to_s)
   end
 
   def round_robin_manage_service

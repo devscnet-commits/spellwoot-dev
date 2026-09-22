@@ -86,13 +86,20 @@ RSpec.describe Ai::KeyCheck do
       expect(status[:key_preview]).to eq("sk-a#{'*' * 12}nop")
     end
 
-    it 'traz o saldo do plano só quando quem paga é a plataforma' do
+    it 'traz o saldo do plano quando quem paga é a plataforma' do
       AiCreditBalance.create!(account_id: account.id, plan_credits: 7, extra_credits: 3)
 
       expect(status[:credits]).to eq({ total: 10, enforced: true })
+    end
 
+    # A assinatura vem ANTES do saldo de propósito: Subscription, ao ser criada, JÁ cria o
+    # AiCreditBalance e reescreve plan_credits com o ai_credits_included do plano. Por isso aqui é
+    # update, não create — é o que o ciclo real faz.
+    it 'não traz saldo quando a conta roda na própria chave' do
       enable_byok!(account)
       account_row!(key: 'sk-da-conta')
+      account.reload.ai_credit_balance.update!(plan_credits: 7, extra_credits: 3)
+
       expect(status[:credits]).to be_nil
     end
   end

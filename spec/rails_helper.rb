@@ -67,6 +67,11 @@ RSpec.configure do |config|
   config.filter_rails_from_backtrace!
   # arbitrary gems may also be filtered via:
   # config.filter_gems_from_backtrace("gem name")
+  # Em produção quem zera o RequestStore entre requisições é o middleware do gem. Num processo de
+  # teste não há requisição nenhuma, então o plano memoizado pelo FeatureGate vazaria de um exemplo
+  # para o seguinte e deixaria a suíte dependente de ordem.
+  config.before { RequestStore.clear! }
+
   config.include SlackStubs
   config.include FileUploadHelpers
   config.include CsvSpecHelpers
