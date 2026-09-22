@@ -399,7 +399,19 @@
       "SYNCED_INSTANCES": "Instâncias sincronizadas",
       "NO_INSTANCES": "Nenhuma instância sincronizada. Clique em \"Sincronizar Instâncias\" para buscar as instâncias disponíveis.",
       "COLUMN_INSTANCE": "Instância",
-      "COLUMN_NUMBER": "Número"
+      "COLUMN_NUMBER": "Número",
+      "KEY_STATUS": {
+        "CAUSE": {
+          "account_key": "Esta conta usa a própria chave",
+          "feature_disabled": "Chave Própria de IA não liberada no plano",
+          "not_configured": "Sem chave própria cadastrada",
+          "provider_disabled": "Integração desativada nesta conta",
+          "key_missing": "Configuração sem API Key salva"
+        },
+        "ON_PLATFORM_KEY": "usando a chave da plataforma",
+        "NO_KEY_AT_ALL": "e o servidor também não tem chave — a IA não vai responder",
+        "CREDITS": "{count} créditos"
+      }
     }
   },
   "CAPTAIN": {

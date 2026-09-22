@@ -45,6 +45,10 @@ class Ai::KeyCheck
       # Só da chave DA CONTA. A tela é do admin do cliente, não da SCNET: um preview da chave da
       # plataforma entregaria pedaços de um segredo do servidor a todo tenant que abrisse a aba.
       key_preview: account_key.present? ? mask(account_key) : nil,
+      # Sem isto a tela dizia "usando a chave da plataforma" mesmo quando o servidor NÃO tem chave
+      # nenhuma — contradizendo o próprio resultado do teste ("o servidor também não tem chave
+      # configurada") e escondendo que, nesse estado, a IA simplesmente não responde.
+      platform_key_present: platform_key.present?,
       model: model,
       credits: credits_info
     }

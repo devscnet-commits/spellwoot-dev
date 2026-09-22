@@ -548,27 +548,35 @@ const testLevel = providerKey =>
 
 // Resumo permanente de QUAL chave a conta usa — visível sem clicar em "Testar conexão", porque um
 // apiKey preenchido no formulário pode estar herdado do global/servidor.
-const KEY_REASON_LABELS = {
-  account_key: 'Esta conta usa a própria chave',
-  feature_disabled:
-    'Chave Própria de IA não liberada no plano — usando a chave da plataforma',
-  not_configured: 'Sem chave própria cadastrada — usando a chave da plataforma',
-  provider_disabled:
-    'Integração desativada nesta conta — usando a chave da plataforma',
-  key_missing: 'Configuração sem API Key salva — usando a chave da plataforma',
-};
+const KEY_REASONS = [
+  'account_key',
+  'feature_disabled',
+  'not_configured',
+  'provider_disabled',
+  'key_missing',
+];
 
 // Linha única: motivo · modelo · saldo. O saldo só existe quando quem paga é a plataforma (na
 // chave própria o consumo não debita crédito) e some quando a conta não tem balance provisionado.
 const keyStatusLabel = providerKey => {
   const status = state[providerKey].keyStatus;
-  const reason = status && KEY_REASON_LABELS[status.key_reason];
-  if (!reason) return null;
+  if (!status || !KEY_REASONS.includes(status.key_reason)) return null;
 
-  const parts = [reason];
+  const base = 'INTEGRATION_SETTINGS.HUB.KEY_STATUS';
+  const parts = [t(`${base}.CAUSE.${status.key_reason}`)];
+  // CAUSA e CONSEQUÊNCIA separadas: antes o rótulo afirmava "usando a chave da plataforma" mesmo
+  // sem chave nenhuma no servidor — contradizendo o teste ("o servidor também não tem chave
+  // configurada") e escondendo que, nesse estado, a IA simplesmente não responde.
+  if (status.key_source === 'platform') {
+    parts.push(
+      status.platform_key_present === false
+        ? t(`${base}.NO_KEY_AT_ALL`)
+        : t(`${base}.ON_PLATFORM_KEY`)
+    );
+  }
   if (status.model) parts.push(status.model);
   if (status.credits && status.credits.total !== null) {
-    parts.push(`${status.credits.total} créditos`);
+    parts.push(t(`${base}.CREDITS`, { count: status.credits.total }));
   }
   return parts.join(' · ');
 };

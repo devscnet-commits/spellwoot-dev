@@ -405,7 +405,19 @@
       "COLUMN_INSTANCE": "Instance",
       "COLUMN_NUMBER": "Number",
       "COLUMN_STATUS": "Status",
-      "WEBHOOK": "Webhook:"
+      "WEBHOOK": "Webhook:",
+      "KEY_STATUS": {
+        "CAUSE": {
+          "account_key": "This account uses its own key",
+          "feature_disabled": "Own AI Key not included in the plan",
+          "not_configured": "No own key saved",
+          "provider_disabled": "Integration disabled on this account",
+          "key_missing": "Configuration has no API Key saved"
+        },
+        "ON_PLATFORM_KEY": "using the platform key",
+        "NO_KEY_AT_ALL": "and the server has no key either — the AI will not reply",
+        "CREDITS": "{count} credits"
+      }
     }
   },
   "CAPTAIN": {
