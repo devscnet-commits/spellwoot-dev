@@ -340,7 +340,14 @@ const confirmDelete = async () => {
     closeDeleteModal();
     fetchAllTemplates();
   } catch (error) {
-    useAlert(t('MESSAGE_TEMPLATES_MGMT.DELETE.ERROR_MESSAGE'));
+    // A recusa quase sempre vem da Meta, não daqui, e ela explica o motivo: modelo de amostra que
+    // não pode ser excluído, nome em quarentena de 30 dias, permissão do token. O backend já traduz
+    // esse texto (WhatsappTemplateErrorParsing#parse_whatsapp_error); trocá-lo por um genérico
+    // obrigava a abrir o DevTools para descobrir o que houve. Mesmo idioma dos irmãos desta pasta.
+    useAlert(
+      error?.response?.data?.error ||
+        t('MESSAGE_TEMPLATES_MGMT.DELETE.ERROR_MESSAGE')
+    );
   } finally {
     isDeleting.value = false;
   }
