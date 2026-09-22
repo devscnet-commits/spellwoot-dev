@@ -119,6 +119,12 @@
         "SUBMIT_BUTTON": "Create inbox",
         "API": {
           "ERROR_MESSAGE": "We were not able to create a website channel, please try again"
+        },
+        "CHANNEL_WEBHOOK_SECRET": {
+          "LABEL": "Webhook secret",
+          "COPY_SUCCESS": "Webhook secret copied to the clipboard.",
+          "RESET_SUCCESS": "Webhook secret reset successfully.",
+          "RESET_ERROR": "We could not reset the webhook secret."
         }
       },
       "TWILIO": {
@@ -308,7 +314,8 @@
           "AUTH_NOT_COMPLETED": "Authentication not completed. Please restart the process.",
           "SUCCESS_FALLBACK": "WhatsApp Business Account has been successfully configured",
           "MANUAL_FALLBACK": "If your number is already connected to the WhatsApp Business Platform (API), or if you’re a tech provider onboarding your own number, please use the {link} flow",
-          "MANUAL_LINK_TEXT": "manual setup flow"
+          "MANUAL_LINK_TEXT": "manual setup flow",
+          "SDK_LOAD_ERROR": "We could not load the Facebook SDK. Check your connection and try again."
         },
         "API": {
           "ERROR_MESSAGE": "We were not able to save the WhatsApp channel"
@@ -630,7 +637,9 @@
       },
       "LOCK_TO_SINGLE_CONVERSATION": {
         "ENABLED": "Enabled",
-        "DISABLED": "Disabled"
+        "DISABLED": "Disabled",
+        "ENABLED_DESCRIPTION": "All messages from a contact stay in a single conversation.",
+        "DISABLED_DESCRIPTION": "A new conversation is created each time the contact gets in touch."
       },
       "ENABLE_HMAC": {
         "LABEL": "Enable"
@@ -725,7 +734,9 @@
         "CONFIGURED_SUCCESS": "Webhook configured",
         "URL_MISMATCH": "Webhook URL mismatch",
         "ACTION_REQUIRED": "Action required",
-        "REGISTER_BUTTON": "Register webhook"
+        "REGISTER_BUTTON": "Register webhook",
+        "REGISTER_SUCCESS": "Webhook registered successfully.",
+        "REGISTER_ERROR": "We could not register the webhook."
       },
       "VALUES": {
         "TIERS": {
@@ -792,7 +803,8 @@
       "ALLOWED_DOMAINS": {
         "TITLE": "Allowed Domains",
         "SUBTITLE": "Add wildcard or regular domains separated by commas (leave blank to allow all), e.g. *.chatwoot.dev, chatwoot.com.",
-        "PLACEHOLDER": "Enter domains separated by commas (eg: *.chatwoot.dev, chatwoot.com)"
+        "PLACEHOLDER": "Enter domains separated by commas (eg: *.chatwoot.dev, chatwoot.com)",
+        "DESCRIPTION": "Restrict which domains may load this widget."
       },
       "INBOX_AGENTS": "Agents",
       "INBOX_AGENTS_SUB_TEXT": "Add or remove agents from this inbox",
@@ -868,14 +880,27 @@
       "WHATSAPP_TEMPLATES_SYNC_SUBHEADER": "Manually sync message templates from WhatsApp to update your available templates.",
       "WHATSAPP_TEMPLATES_SYNC_BUTTON": "Sync Templates",
       "WHATSAPP_TEMPLATES_SYNC_SUCCESS": "Templates sync initiated successfully. It may take a couple of minutes to update.",
-      "UPDATE_PRE_CHAT_FORM_SETTINGS": "Update Pre Chat Form Settings"
+      "UPDATE_PRE_CHAT_FORM_SETTINGS": "Update Pre Chat Form Settings",
+      "ALLOW_MOBILE_WEBVIEW": {
+        "LABEL": "Allow mobile webviews",
+        "SUBTITLE": "Let the widget load inside mobile app webviews."
+      },
+      "IDENTITY_VALIDATION": {
+        "TITLE": "Identity validation",
+        "DESCRIPTION": "Verify your users' identity with an HMAC signature before starting a conversation.",
+        "SECRET_KEY": "Secret key",
+        "REQUIRE_LABEL": "Require identity validation",
+        "REQUIRE_DESCRIPTION": "Reject conversations that do not carry a valid signature.",
+        "VIEW_DOCS": "View documentation"
+      }
     },
     "HELP_CENTER": {
       "LABEL": "Help Center",
       "PLACEHOLDER": "Select Help Center",
       "SELECT_PLACEHOLDER": "Select Help Center",
       "REMOVE": "Remove Help Center",
-      "SUB_TEXT": "Attach a Help Center with the inbox"
+      "SUB_TEXT": "Attach a Help Center with the inbox",
+      "NONE": "None"
     },
     "AUTO_ASSIGNMENT": {
       "MAX_ASSIGNMENT_LIMIT": "Auto assignment limit",
@@ -1075,7 +1100,8 @@
         "HOLIDAY_TITLE": "Mensagem de feriado",
         "HOLIDAY_HELP": "Sent when a contact starts a conversation on a registered holiday.",
         "HOLIDAY_PLACEHOLDER": "E.g. Today is a holiday. We will be back on the next business day."
-      }
+      },
+      "TEMPLATES": "Templates"
     },
     "IMAP": {
       "TITLE": "IMAP",
@@ -1203,7 +1229,8 @@
         "WIDGET_BUBBLE_TYPE": {
           "STANDARD": "Standard",
           "EXPANDED_BUBBLE": "Expanded Bubble"
-        }
+        },
+        "WIDGET_BUBBLE": "Widget bubble"
       },
       "WIDGET_SCREEN": {
         "DEFAULT": "Default",
@@ -1278,6 +1305,36 @@
       "SUBMIT": "Salvar ordem",
       "SUCCESS": "AI priority updated.",
       "ERROR": "We could not save the AI priority."
-    }
+    },
+    "ASSIGNMENT": {
+      "DESCRIPTION": "Choose how conversations in this inbox are assigned to agents.",
+      "ENABLE_AUTO_ASSIGNMENT": "Enable auto assignment",
+      "CURRENT_BEHAVIOR": "Current behaviour",
+      "DEFAULT_RULES_TITLE": "Default assignment rules",
+      "DEFAULT_RULES_DESCRIPTION": "Without a policy, this inbox follows the rules below.",
+      "DEFAULT_RULE_1": "Conversations are shared evenly between the available agents.",
+      "DEFAULT_RULE_2": "Only agents who are online receive new conversations.",
+      "POLICY_LABEL": "Assignment policy",
+      "DEFAULT_POLICY_DESCRIPTION": "Link a policy to control how conversations are distributed.",
+      "DEFAULT_POLICY_LINKED": "Policy linked to this inbox.",
+      "LINK_EXISTING_POLICY": "Link an existing policy",
+      "CREATE_NEW_POLICY": "Create a new policy",
+      "CUSTOMIZE_POLICY": "Customise policy",
+      "VIEW_ALL_POLICIES": "View all policies",
+      "LINK_SUCCESS": "Policy linked successfully.",
+      "LINK_ERROR": "We could not link the policy.",
+      "METHOD": {
+        "ROUND_ROBIN": "Round robin",
+        "BALANCED": "Balanced by workload"
+      },
+      "PRIORITY": {
+        "LONGEST_WAITING": "Longest waiting first",
+        "EARLIEST_CREATED": "Earliest created first"
+      },
+      "UPGRADE_PROMPT": "Assignment policies are available on a higher plan.",
+      "UPGRADE_TO_BUSINESS": "Upgrade plan"
+    },
+    "CHANNEL_PREFERENCES": "Channel preferences",
+    "WIDGET_FEATURES": "Widget features"
   }
 }

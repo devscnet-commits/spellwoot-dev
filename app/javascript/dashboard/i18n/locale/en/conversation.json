@@ -390,6 +390,24 @@
         "PARTIALLY_FULFILLED": "Partially Fulfilled",
         "UNFULFILLED": "Unfulfilled"
       }
+    },
+    "AI_MEMORY": {
+      "LABEL_CUSTOMER": "About the customer",
+      "LABEL_COLLECTED": "Collected in this conversation",
+      "META": "Updated {time}",
+      "EMPTY": "The AI has not recorded anything about this contact yet."
+    },
+    "HANDOFF_SUMMARY": {
+      "META": "Handed over {time}",
+      "EMPTY": "No handover summary for this conversation.",
+      "REASONS": {
+        "CREDIT_EXHAUSTED": "the account's AI credits ran out",
+        "GENERIC": "the AI handed the conversation over",
+        "KEYWORD": "the customer asked for a human",
+        "LOOP": "the conversation was going in circles",
+        "MODEL_REQUESTED": "the AI decided to transfer",
+        "PROVIDER_UNAVAILABLE": "the AI provider was unavailable"
+      }
     }
   },
   "CONVERSATION_CUSTOM_ATTRIBUTES": {
