@@ -129,12 +129,16 @@ class Ai::ActionDispatcher
   # pré-cheque do Gateway e aqui (leitura stale), o rescue deixa passar — o bloqueio primário é o
   # pré-cheque; deixar 1 resposta a mais é aceitável (não trava uma resposta já enviada).
   #
-  # BYOK (billing Fase 3): conta com chave própria (custom_llm_api_key) NÃO consome aqui — a resposta na
-  # chave do cliente é grátis para a SCNET. O único débito de conta BYOK é o do FALLBACK (chave própria
-  # falhou -> chave da SCNET), cobrado explicitamente no Ai::Gateway. Sem esse gate, um saldo
+  # BYOK (billing Fase 3): conta que roda na PRÓPRIA chave NÃO consome aqui — a resposta na chave do
+  # cliente é grátis para a SCNET. O único débito de conta BYOK é o do FALLBACK (chave própria falhou
+  # -> chave da SCNET), cobrado explicitamente no Ai::Gateway. Sem esse gate, um saldo
   # auto-provisionado num fallback anterior faria toda resposta com chave própria cobrar indevidamente.
+  #
+  # O gate é ter chave própria de verdade, não a feature custom_llm_api_key ligada: conta com a
+  # feature e sem chave cadastrada roda na chave da plataforma e portanto DEVE consumir crédito —
+  # antes ela respondia de graça, e o Ai::Gateway também não a bloqueava por saldo.
   def consume_credit
-    return if @account.feature_enabled?('custom_llm_api_key')
+    return if Ai::ModelRouter.account_byok?(@account.id)
 
     @account.ai_credit_balance&.consume!(1)
   rescue AiCreditBalance::InsufficientCredits => e

@@ -101,6 +101,19 @@ class IntegrationSettingsService
     setting.config_hash.reject { |_, v| v.blank? }
   end
 
+  # Config EXCLUSIVA desta conta, SEM a cascata global/ENV do get_config. É o que o BYOK precisa:
+  # com a cascata, uma conta que nunca cadastrou chave recebia a chave global/ENV do servidor e ela
+  # seguia adiante como se fosse "a chave da conta" (inclusive até o orquestrador Python) — a
+  # plataforma pagava a conversa, o fallback BYOK nunca marcava (a chave global não falha por auth)
+  # e nada distinguia conta com chave própria de conta rodando na chave do servidor.
+  # Integrações (Meta, UazAPI, etc.) seguem usando get_config: lá a herança global é o comportamento
+  # desejado. Aqui, não.
+  def self.account_only_config(account_id, provider)
+    return {} if account_id.blank?
+
+    load_db(account_id, provider)
+  end
+
   def self.sync_uazapi_chatwoot(config, account, user)
     api_url  = config['apiUrl'].to_s.chomp('/')
     token    = config['token']

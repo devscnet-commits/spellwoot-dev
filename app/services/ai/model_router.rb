@@ -757,19 +757,30 @@ class Ai::ModelRouter
     account_provider_key(account_id, provider)
   end
 
-  # Chave própria da conta (Hub: account→global→ENV) para o provider, SÓ se a conta tem a feature
-  # custom_llm_api_key (fail-safe: mesmo que exista uma linha órfã no Hub, sem a feature não é usada).
-  # Também é o ponto que o Gateway consulta para saber se a chamada usou chave própria (fallback).
+  # Chave PRÓPRIA da conta para o provider, SÓ se a conta tem a feature custom_llm_api_key
+  # (fail-safe: mesmo que exista uma linha órfã no Hub, sem a feature não é usada).
+  # Lê SOMENTE a linha desta conta (account_only_config) — a cascata global/ENV do get_config
+  # devolvia a chave do próprio servidor como se fosse da conta, que é como o orquestrador Python
+  # voltou a rodar na chave do backend sem ninguém perceber. Fonte única: todo caminho que precisa
+  # saber "qual chave é desta conta" passa por aqui.
   def self.account_provider_key(account_id, provider)
     return nil if account_id.blank? || !defined?(IntegrationSettingsService)
 
     account = Account.find_by(id: account_id)
     return nil unless account&.feature_enabled?('custom_llm_api_key')
 
-    IntegrationSettingsService.get_config(account_id, provider.to_s)['apiKey'].presence
+    IntegrationSettingsService.account_only_config(account_id, provider.to_s)['apiKey'].presence
   rescue StandardError => e
     Rails.logger.warn "[Ai::ModelRouter] #{provider} key lookup falhou: #{e.class}: #{e.message}"
     nil
+  end
+
+  # A conta roda na PRÓPRIA chave deste provider? É o discriminador de COBRANÇA (Ai::Gateway,
+  # Ai::ActionDispatcher). Antes o discriminador era só a feature custom_llm_api_key estar ligada —
+  # com isso uma conta com a feature e SEM chave nenhuma rodava na chave da plataforma sem consumir
+  # crédito e sem ser bloqueada por saldo: consumo ilimitado e invisível na conta da SCNET.
+  def self.account_byok?(account_id, provider = 'openai')
+    account_provider_key(account_id, provider).present?
   end
 
   # Isolated per-call RubyLLM context (never mutates the global config). Applies an optional HTTP
@@ -787,14 +798,11 @@ class Ai::ModelRouter
     account_key || credential('CAPTAIN_OPEN_AI_API_KEY', 'OPENAI_API_KEY')
   end
 
-  # OpenAI key from the account's "APIs & Credentials" (integrations-hub), resolved account→global→ENV.
+  # Chave OpenAI própria da conta ("APIs & Credentials"), ou nil. Delega ao account_provider_key para
+  # não haver duas regras diferentes de "chave da conta" no mesmo arquivo — os callers daqui já fazem
+  # o fallback explícito para a chave da plataforma.
   def self.account_openai_key(account_id)
-    return nil if account_id.blank? || !defined?(IntegrationSettingsService)
-
-    IntegrationSettingsService.get_config(account_id, 'openai')['apiKey'].presence
-  rescue StandardError => e
-    Rails.logger.warn "[Ai::ModelRouter] openai key lookup falhou: #{e.class}: #{e.message}"
-    nil
+    account_provider_key(account_id, 'openai')
   end
 
   def self.credential(installation_name, env_name)

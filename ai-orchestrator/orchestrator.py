@@ -23,22 +23,31 @@ _client = _build_client(config.OPENAI_API_KEY)
 
 
 @lru_cache(maxsize=64)
-def _account_client(account_api_key: str) -> OpenAI:
-    """Cacheado por chave: antes um OpenAI(...) novo nascia a CADA request BYOK e nunca era fechado —
-    cada um com seu próprio pool httpx, acumulando sockets até esgotar os file descriptors do
-    processo. O SDK é seguro para reuso concorrente; é justamente assim que ele deve ser usado."""
+def _account_client(account_id: int | None, account_api_key: str) -> OpenAI:
+    """Cacheado por (conta, chave): antes um OpenAI(...) novo nascia a CADA request BYOK e nunca era
+    fechado — cada um com seu próprio pool httpx, acumulando sockets até esgotar os file descriptors
+    do processo. O SDK é seguro para reuso concorrente; é justamente assim que ele deve ser usado.
+
+    O account_id entra na chave do cache para que cada tenant tenha o SEU client (e o seu pool de
+    conexões) em vez de contas diferentes compartilharem uma entrada só porque a string da chave
+    coincide. Rotação de chave não precisa de invalidação: a chave nova é outra entrada, e a antiga
+    sai sozinha pelo LRU."""
     return _build_client(account_api_key)
 
 
-def _resolve_client(account_api_key: str | None) -> tuple[OpenAI, bool]:
+def _resolve_client(account_id: int | None, account_api_key: str | None) -> tuple[OpenAI, bool]:
     """BYOK (billing Fase 3): a Rails account pode ter sua própria chave OpenAI configurada
     (Ai::ModelRouter.account_provider_key) — sem isto, TODA conta usava sempre a chave global fixa
     (_client acima), mesmo quando tinha a própria configurada (achado em auditoria 13/08: nenhuma
     linha deste arquivo jamais leu uma chave por-request). Retorna (client, is_account_key); a
     validação de fato só acontece na PRIMEIRA chamada real (ver _call_with_byok_fallback) — uma
-    OpenAI(api_key=...) não bate na rede até o primeiro request."""
+    OpenAI(api_key=...) não bate na rede até o primeiro request.
+
+    Sem account_api_key o turno roda na chave GLOBAL do backend: do lado do Rails isso agora significa
+    que a conta não tem chave própria e portanto consome créditos da plataforma
+    (Ai::ModelRouter.account_byok? -> Ai::Gateway/Ai::ActionDispatcher)."""
     if account_api_key:
-        return _account_client(account_api_key), True
+        return _account_client(account_id, account_api_key), True
     return _client, False
 
 
@@ -472,6 +481,7 @@ def run_conversation(
     ticket_id: int,
     ai_agent_id: int,
     mode: str,
+    account_id: int | None = None,
     system_prompt: str,
     tools_schema: list,
     vector_store_id: str | None,
@@ -529,7 +539,9 @@ def run_conversation(
                                        close_message=close_message, collect_hint=collect_hint,
                                        known_attribute_keys=known_attribute_keys)
 
-    client, using_account_key = _resolve_client(account_api_key)
+    client, using_account_key = _resolve_client(account_id, account_api_key)
+    logger.info("ticket_id=%s account_id=%s chave=%s modelo=%s", ticket_id, account_id,
+                "propria" if using_account_key else "global", resolved_model)
     # A OpenAI Conversation precisa existir ANTES da primeira chamada (ver _ensure_conversation) —
     # conversation_id ausente = primeiro turno do atendimento, cria uma conversation nova.
     conversation_id, client, conv_byok_fallback = _ensure_conversation(client, using_account_key, ticket_id, conversation_id)
