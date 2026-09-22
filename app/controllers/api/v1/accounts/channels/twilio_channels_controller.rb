@@ -3,6 +3,7 @@
 
 class Api::V1::Accounts::Channels::TwilioChannelsController < Api::V1::Accounts::BaseController
   before_action :authorize_request
+  before_action :ensure_channel_in_plan, only: [:create]
 
   def create
     process_create
@@ -45,6 +46,14 @@ class Api::V1::Accounts::Channels::TwilioChannelsController < Api::V1::Accounts:
 
   def medium
     permitted_params[:medium]
+  end
+
+  # Bypass real do allowed_channel_types: este controller cria inbox de WhatsApp ou SMS pelo Twilio
+  # sem passar por lá. Sem esta checagem, o plano bloquearia o canal na tela padrão e o liberaria aqui.
+  def ensure_channel_in_plan
+    return if ChannelAvailability.available?(Current.account, medium)
+
+    render json: { error: ChannelAvailability.unavailable_message(medium) }, status: :forbidden
   end
 
   def build_inbox

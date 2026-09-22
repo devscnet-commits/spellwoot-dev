@@ -414,11 +414,11 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     account_channels_method.create!(permitted_params(channel_type_from_params::EDITABLE_ATTRS)[:channel].except(:type))
   end
 
+  # Antes só whatsapp e api eram checados; os demais entravam sempre, e a tabela de planos era
+  # decorativa para eles. ChannelAvailability aplica a MESMA regra a todos os canais que o plano
+  # diferencia — 'line' segue sem gate por não ter campo no plano.
   def allowed_channel_types
-    types = %w[web_widget api email line telegram whatsapp sms]
-    types -= ['whatsapp'] unless Current.account.feature_enabled?('channel_whatsapp')
-    types -= ['api'] unless Current.account.feature_enabled?('channel_api')
-    types
+    ChannelAvailability.filter(Current.account, %w[web_widget api email line telegram whatsapp sms])
   end
 
   def update_inbox_working_hours

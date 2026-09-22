@@ -123,6 +123,10 @@ class Instagram::CallbacksController < ApplicationController
   end
 
   def create_channel_with_inbox(user_details)
+    # Levantar aqui é seguro: #show tem rescue que manda para a página de erro do OAuth. Sem isto, o
+    # Instagram entraria por fora do plano — a inbox nasce neste callback, não no allowed_channel_types.
+    raise ChannelAvailability.unavailable_message('instagram') unless ChannelAvailability.available?(account, 'instagram')
+
     ActiveRecord::Base.transaction do
       expires_at = Time.current + @long_lived_token_response['expires_in'].seconds
 

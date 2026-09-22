@@ -43,7 +43,12 @@ namespace :plans do
       monthly_price_cents: 34_790,   # R$ 347,90
       annual_price_cents: 333_984,   # R$ 3.339,84 (20% de desconto)
       setup_fee_cents: 500_000,      # R$ 5.000,00 — implantação opcional
-      features: %w[dashboards_bi conversion_api],
+      # Webchat e Facebook ficam de FORA (v2: "—" no START). Os canais que a v2 não diferencia por
+      # plano entram ligados, preservando a disponibilidade de hoje.
+      features: %w[
+        dashboards_bi conversion_api
+        whatsapp_channel instagram_channel email_channel api_channel telegram_channel sms_channel
+      ],
       ai_credits: 500,
       limits: { 'users' => 2, 'inboxes' => 2, 'ai_agents' => 2, 'crm_pipelines' => 0 }
     },
@@ -56,6 +61,7 @@ namespace :plans do
       features: %w[
         webchat_channel facebook_channel dashboards_bi conversion_api ai_copilot webhook_api
         custom_llm_api_key crm_kanban crm_automations message_scheduling api_user_token
+        whatsapp_channel instagram_channel email_channel api_channel telegram_channel sms_channel
       ], # off no PLUS: sla_tracking, audit_logs, erp_integration, isp_ready_flows, account_manager
       ai_credits: 1000,
       limits: { 'users' => 8, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }
