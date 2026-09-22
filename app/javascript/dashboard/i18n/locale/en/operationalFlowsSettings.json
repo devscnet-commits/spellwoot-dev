@@ -19,10 +19,10 @@
       },
       "CONFIRM": {
         "TITLE": "Delete {flowName}?",
-        "MESSAGE": "Tem certeza de que deseja excluir este fluxo de fechamento? Os times e caixas que o utilizam ficarão sem fluxo.",
+        "MESSAGE": "Are you sure you want to delete this closing flow? The teams and inboxes using it will be left without a flow.",
         "YES": "Yes, delete",
         "NO": "Cancel",
-        "PLACE_HOLDER": "Escreva {name} para confirmar"
+        "PLACE_HOLDER": "Type {name} to confirm"
       }
     },
     "FORM": {
@@ -86,14 +86,14 @@
       "USED_BY": {
         "TITLE": "This flow is used by:",
         "MANAGE": "Gerenciar times →",
-        "EMPTY": "Nenhum time usa este fluxo ainda."
+        "EMPTY": "No team uses this flow yet."
       },
       "SAVE": "Save flow",
       "CREATE_SUCCESS": "Closing flow created successfully",
       "UPDATE_SUCCESS": "Closing flow updated successfully",
       "ERROR_MESSAGE": "Could not save the closing flow",
       "REQUIREMENTS": {
-        "LABEL": "Atributos obrigatórios do fluxo",
+        "LABEL": "Required flow attributes",
         "HELP": "Attributes the agent must fill before resolving as one of these states.",
         "SELECT_ATTRIBUTE": "Select an attribute",
         "ALWAYS": "Always required",
@@ -108,12 +108,12 @@
     },
     "TIME_FLOWS": {
       "HEADER": "Times → Fluxo de fechamento",
-      "DESCRIPTION": "O fluxo segue o time da conversa: time atribuído à conversa ou, sem ele, o time do agente que atendeu. Configure aqui qual fluxo cada time usa.",
-      "NONE": "Sem fluxo",
+      "DESCRIPTION": "The flow follows the conversation's team: the team assigned to the conversation or, failing that, the team of the agent who handled it. Set which flow each team uses here.",
+      "NONE": "No flow",
       "INACTIVE": "inativo",
-      "EMPTY": "Nenhum time encontrado.",
+      "EMPTY": "No teams found.",
       "SAVE_SUCCESS": "Fluxo do time atualizado",
-      "SAVE_ERROR": "Não foi possível atualizar o fluxo do time"
+      "SAVE_ERROR": "We could not update the team's flow"
     }
   }
 }

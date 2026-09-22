@@ -46,7 +46,7 @@
     },
     "CHAT_ORIGIN_FILTER_ITEMS": {
       "all": {
-        "TEXT": "Todas"
+        "TEXT": "All"
       },
       "reopened": {
         "TEXT": "Reabertas"
@@ -158,7 +158,7 @@
       "LABEL": "Status"
     },
     "SORT_GROUPS": {
-      "last_activity": "Última atividade",
+      "last_activity": "Last activity",
       "created_at": "Criado em",
       "priority": "Prioridade",
       "waiting_since": "Resposta pendente"

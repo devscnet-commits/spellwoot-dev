@@ -301,9 +301,9 @@
     },
     "REOPENED_TAG": "Reopened",
     "TEAM_CHANGE_WARNING": {
-      "TITLE": "⚠️ Esta conversa já tem resultado de fechamento",
-      "MESSAGE": "O resultado e os atributos preenchidos pertencem ao fluxo do time atual. Ao trocar o time, o fluxo muda e essas informações podem perder o sentido nos relatórios. Se o cliente trouxe um assunto novo, prefira criar uma nova conversa em vez de reaproveitar esta.",
-      "CONFIRM": "Trocar mesmo assim",
+      "TITLE": "⚠️ This conversation already has a closing outcome",
+      "MESSAGE": "The outcome and the attributes filled in belong to the current team's flow. Changing the team changes the flow, and that information may stop making sense in reports. If the customer raised a new subject, prefer creating a new conversation instead of reusing this one.",
+      "CONFIRM": "Change anyway",
       "CANCEL": "Cancelar"
     }
   },
