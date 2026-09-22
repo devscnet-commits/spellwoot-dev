@@ -13,7 +13,11 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
       enabled: setting ? setting.enabled : true,
       config: mask_sensitive(effective),
       has_account_config: setting.present?,
-      sources: config_sources(params[:provider], effective)
+      sources: config_sources(params[:provider], effective),
+      # Qual chave os módulos de IA usam DE FATO para esta conta, sem chamar a rede. Um apiKey
+      # preenchido no formulário pode ser herdado do global/ENV (a tela mostra a cascata), então a
+      # presença do campo nunca disse se a conta roda na própria chave.
+      ai_key_status: ai_key_status(params[:provider])
     }
   end
 
@@ -62,11 +66,20 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
     render json: result, status: status
   end
 
+  # OpenAI passa pelo Ai::KeyCheck: resolve a chave pela MESMA regra do runtime (só a linha desta
+  # conta + feature) e faz uma chamada REAL no endpoint que a IA usa. O caminho genérico lia a
+  # cascata conta→global→ENV e batia em GET /v1/models — dava 200 validando a chave do servidor, e
+  # 200 também para chave sem crédito. Os demais providers seguem no teste genérico.
   def test_connection
-    config = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
-    result = IntegrationSettingsService.test_connection(params[:provider], config)
-    status = result[:ok] ? :ok : :unprocessable_entity
-    render json: result, status: status
+    result = if params[:provider] == Ai::KeyCheck::PROVIDER
+               Ai::KeyCheck.new(account: Current.account).perform
+             else
+               config = IntegrationSettingsService.get_config(Current.account.id, params[:provider])
+               IntegrationSettingsService.test_connection(params[:provider], config)
+             end
+    # 200 SÓ quando a chamada real passou. O front distingue chave da conta de chave da plataforma
+    # pelo :level ('success' / 'warning'), não pelo código HTTP.
+    render json: result, status: result[:ok] ? :ok : :unprocessable_entity
   end
 
   # Admin action: read current ENV vars and persist as global (account_id = nil) config
@@ -79,6 +92,12 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
 
   def check_authorization
     authorize(IntegrationSetting)
+  end
+
+  def ai_key_status(provider)
+    return nil unless provider == Ai::KeyCheck::PROVIDER
+
+    Ai::KeyCheck.new(account: Current.account).status
   end
 
   # Shows which tier (account / global / env) each key is sourced from

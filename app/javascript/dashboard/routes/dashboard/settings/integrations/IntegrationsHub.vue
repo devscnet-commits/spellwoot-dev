@@ -311,6 +311,7 @@ const state = reactive(
         loadingInstances: false,
         clearing: false,
         testResult: null,
+        keyStatus: null,
         syncResult: null,
         instances: [],
         enabled: true,
@@ -345,6 +346,7 @@ const loadProvider = async providerKey => {
     s.enabled = data.enabled ?? true;
     s.config = { ...data.config };
     s.sources = data.sources || {};
+    s.keyStatus = data.ai_key_status || null;
     s.reset = {};
     s.dirty = false;
   } catch {
@@ -463,6 +465,11 @@ const syncInstances = async providerKey => {
   }
 };
 
+// O resultado tem TRÊS estados, não dois: verde só quando a chamada real passou NA CHAVE DESTA
+// CONTA; amarelo quando passou mas na chave da plataforma (a conta não tem chave própria em uso);
+// vermelho quando o provedor recusou. O 'level'/'code' vêm do Ai::KeyCheck — um erro 422 também
+// traz corpo útil (chave inválida x sem crédito x modelo inexistente), por isso o catch lê os
+// mesmos campos em vez de cair numa mensagem genérica.
 const testConnection = async providerKey => {
   const s = state[providerKey];
   s.testing = true;
@@ -474,16 +481,65 @@ const testConnection = async providerKey => {
     );
     s.testResult = {
       ok: true,
+      level: data.level || 'success',
+      code: data.code || null,
       message: data.message || 'Conexão bem-sucedida.',
     };
+    if (data.key_source) s.keyStatus = data;
   } catch (err) {
-    const msg =
-      err?.response?.data?.message ||
-      'Falha na conexão. Verifique as credenciais.';
-    s.testResult = { ok: false, message: msg };
+    const data = err?.response?.data || {};
+    s.testResult = {
+      ok: false,
+      level: data.level || 'error',
+      code: data.code || null,
+      message: data.message || 'Falha na conexão. Verifique as credenciais.',
+    };
+    if (data.key_source) s.keyStatus = data;
   } finally {
     s.testing = false;
   }
+};
+
+const TEST_LEVEL_STYLES = {
+  success: 'bg-n-teal-3 text-n-teal-11',
+  warning: 'bg-n-amber-3 text-n-amber-11',
+  error: 'bg-n-ruby-3 text-n-ruby-11',
+};
+
+const TEST_LEVEL_ICONS = {
+  success: 'i-lucide-circle-check w-4 h-4',
+  warning: 'i-lucide-triangle-alert w-4 h-4',
+  error: 'i-lucide-circle-x w-4 h-4',
+};
+
+const testLevel = providerKey =>
+  state[providerKey].testResult?.level || 'error';
+
+// Resumo permanente de QUAL chave a conta usa — visível sem clicar em "Testar conexão", porque um
+// apiKey preenchido no formulário pode estar herdado do global/servidor.
+const KEY_REASON_LABELS = {
+  account_key: 'Esta conta usa a própria chave',
+  feature_disabled:
+    'Chave Própria de IA não liberada no plano — usando a chave da plataforma',
+  not_configured: 'Sem chave própria cadastrada — usando a chave da plataforma',
+  provider_disabled:
+    'Integração desativada nesta conta — usando a chave da plataforma',
+  key_missing: 'Configuração sem API Key salva — usando a chave da plataforma',
+};
+
+// Linha única: motivo · modelo · saldo. O saldo só existe quando quem paga é a plataforma (na
+// chave própria o consumo não debita crédito) e some quando a conta não tem balance provisionado.
+const keyStatusLabel = providerKey => {
+  const status = state[providerKey].keyStatus;
+  const reason = status && KEY_REASON_LABELS[status.key_reason];
+  if (!reason) return null;
+
+  const parts = [reason];
+  if (status.model) parts.push(status.model);
+  if (status.credits && status.credits.total !== null) {
+    parts.push(`${status.credits.total} créditos`);
+  }
+  return parts.join(' · ');
 };
 
 // Header badge reflects the ON/OFF state, not just whether a config exists:
@@ -827,21 +883,23 @@ const providerBadge = providerKey => {
           <!-- Test result -->
           <div
             v-if="state[provider.key].testResult"
-            class="flex items-center gap-2 px-3 py-2 rounded-lg text-body-small"
-            :class="[
-              state[provider.key].testResult.ok
-                ? 'bg-n-teal-3 text-n-teal-11'
-                : 'bg-n-ruby-3 text-n-ruby-11',
-            ]"
+            class="flex items-start gap-2 px-3 py-2 rounded-lg text-body-small"
+            :class="TEST_LEVEL_STYLES[testLevel(provider.key)]"
           >
             <span
-              :class="
-                state[provider.key].testResult.ok
-                  ? 'i-lucide-circle-check w-4 h-4'
-                  : 'i-lucide-circle-x w-4 h-4'
-              "
+              class="shrink-0 mt-0.5"
+              :class="TEST_LEVEL_ICONS[testLevel(provider.key)]"
             />
             {{ state[provider.key].testResult.message }}
+          </div>
+
+          <!-- Qual chave esta conta usa de fato (sem precisar testar) -->
+          <div
+            v-if="keyStatusLabel(provider.key)"
+            class="flex items-center gap-2 text-body-small text-n-slate-11"
+          >
+            <span class="i-lucide-key-round w-3.5 h-3.5 shrink-0" />
+            <span>{{ keyStatusLabel(provider.key) }}</span>
           </div>
 
           <!-- Action buttons -->
