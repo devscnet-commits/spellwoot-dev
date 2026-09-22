@@ -22,9 +22,18 @@ class SuperAdmin::PlansController < SuperAdmin::ApplicationController
 
   # Um plano recém-criado sem grade é exatamente o que colocou `pro`/`standard` em produção sem
   # feature nenhuma e sem lugar para corrigir. Aqui a grade é gravada junto da criação.
+  #
+  # O resource vem do BLOCO: o create do Administrate trabalha numa variável local e nunca atribui
+  # @requested_resource, então ler `requested_resource` aqui cairia em find_resource(params[:id]) —
+  # e num POST de criação não há :id, o que dá Plan.find(nil) e ActiveRecord::RecordNotFound. O
+  # plano já teria sido inserido, a grade nunca seria gravada e o admin veria um erro.
+  #
+  # A guarda testa a IVAR, não o leitor memoizado: o Administrate só chama o bloco quando salva, então
+  # numa falha de validação a ivar segue nil e `requested_resource` levantaria o mesmo erro, engolindo
+  # o formulário com as mensagens.
   def create
-    super
-    return if requested_resource.blank? || !requested_resource.persisted?
+    super { |resource| @requested_resource = resource }
+    return if @requested_resource.blank?
 
     apply_grids
   end
@@ -58,13 +67,20 @@ class SuperAdmin::PlansController < SuperAdmin::ApplicationController
   # é o que gateia sidebar e rotas, e só era reescrito no after_save da Subscription — sem isto, mudar
   # o plano aqui não mudaria nada na tela do cliente até a próxima renovação.
   # Falha de uma conta não derruba as outras nem o salvamento do plano.
+  # Sincroniza só quem tem ESTE plano como plano ATUAL. Uma conta pode carregar mais de uma assinatura
+  # não-cancelada (o seed usa find_or_initialize_by sem cancelar as anteriores), e "plano atual" é a
+  # mais recente — Subscription.current, a mesma definição que FeatureGate e Plan usam. Varrer toda
+  # assinatura não-cancelada faria editar um plano antigo sobrescrever as flags de um cliente que hoje
+  # está em outro plano.
   def sync_active_accounts
     synced = 0
     Subscription.where(plan_id: requested_resource.id).where.not(status: :canceled)
                 .includes(:account).find_each do |subscription|
-      next if subscription.account.blank?
+      account = subscription.account
+      next if account.blank?
+      next unless account.subscriptions.current.first&.plan_id == requested_resource.id
 
-      requested_resource.sync_features_to!(subscription.account)
+      requested_resource.sync_features_to!(account)
       synced += 1
     rescue StandardError => e
       Rails.logger.error "[SuperAdmin::PlansController] sync conta=#{subscription.account_id}: #{e.class}: #{e.message}"
