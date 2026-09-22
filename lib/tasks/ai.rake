@@ -279,3 +279,71 @@ namespace :ai do
     end
   end
 end
+
+# Auditoria READ-ONLY de GASTO automático: responde "a sombra parou mesmo?" pelo LEDGER, não pela
+# fila. Toda chamada paga grava um Ai::Run (run_type + mode + cost), então contar Ai::Run desde o
+# desligamento é a prova direta — um job pendente no Sidekiq não custa nada, e um gasto pode ter
+# ocorrido por um caminho que ninguém lembrou de procurar na fila.
+#
+#   DESDE='2026-09-20 00:00' bundle exec rails ai:shadow_audit
+#
+# Sem DESDE, usa as últimas 24h.
+module AiShadowAudit
+  # run_types que nascem sozinhos de uma conversa resolvida — são estes que não podem aparecer depois
+  # do desligamento. Os demais (decision live, copilot, prompt_assistant, handoff_summary) só existem
+  # atrás de um ato explícito: a IA atendendo, ou alguém clicando.
+  AUTOMATIC_RUN_TYPES = %w[shadow_eval customer_memory].freeze
+
+  module_function
+
+  def run(desde)
+    runs = Ai::Run.where('ai_runs.created_at > ?', desde)
+    print_switch
+    print_spend(runs, desde)
+    print_suspects(runs)
+    print_config
+  end
+
+  def print_switch
+    puts '== Interruptor =='
+    puts "Ai::ShadowPolicy.enabled? => #{Ai::ShadowPolicy.enabled?}   (esperado: false)"
+    config = InstallationConfig.find_by(name: Ai::ShadowPolicy::CONFIG_NAME)
+    puts "InstallationConfig #{Ai::ShadowPolicy::CONFIG_NAME} => #{config&.value.inspect}"
+    puts "ENV #{Ai::ShadowPolicy::CONFIG_NAME} => #{ENV.fetch(Ai::ShadowPolicy::CONFIG_NAME, nil).inspect}"
+  end
+
+  def print_spend(runs, desde)
+    puts "\n== Gasto registrado desde #{desde} =="
+    totals = runs.group(:run_type, :mode).count
+    return puts('Nenhum Ai::Run no período.') if totals.empty?
+
+    totals.sort_by { |(type, mode), _| [type.to_s, mode.to_s] }.each do |(type, mode), count|
+      cost = runs.where(run_type: type, mode: mode).sum(:cost)
+      flag = AUTOMATIC_RUN_TYPES.include?(type) ? '  <= NÃO deveria acontecer com a sombra desligada' : ''
+      puts format('%<type>-18s mode=%<mode>-10s runs=%<count>-6d custo=%<cost>.4f%<flag>s',
+                  type: type, mode: mode, count: count, cost: cost.to_f, flag: flag)
+    end
+  end
+
+  # O sintoma relatado: conversa SEM nenhum turno de IA (run_type decision) mesmo assim auditada.
+  def print_suspects(runs)
+    puts "\n== Conversas auditadas sem IA envolvida (o sintoma relatado) =="
+    suspeitas = runs.where(run_type: AUTOMATIC_RUN_TYPES).pluck(:conversation_id).compact.uniq
+    sem_ia = suspeitas.reject { |cid| Ai::Run.exists?(conversation_id: cid, run_type: 'decision') }
+    puts "Conversas com auditoria/memória e NENHUM turno de IA: #{sem_ia.size} #{sem_ia.first(20).inspect}"
+  end
+
+  def print_config
+    puts "\n== Configuração que ainda dispara esses caminhos =="
+    puts "Ai::Shadow ativos: #{Ai::Shadow.active.count} (caixas observadas: #{Ai::ShadowInbox.distinct.count(:inbox_id)})"
+    puts "Caixas com IA ativa (habilitam a memória de cliente): #{Ai::AgentInbox.where(active: true).distinct.count(:inbox_id)}"
+    puts "Bindings de IA em modo != live: #{Ai::AgentInbox.where(active: true).where.not(mode: 'live').count}"
+  end
+end
+
+namespace :ai do
+  desc 'Verifica se a sombra (e qualquer gasto automático de IA) realmente parou desde uma data'
+  task shadow_audit: :environment do
+    AiShadowAudit.run(ENV['DESDE'].present? ? Time.zone.parse(ENV.fetch('DESDE')) : 24.hours.ago)
+  end
+end
