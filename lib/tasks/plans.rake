@@ -25,8 +25,14 @@ namespace :plans do
   # ai_credits (créditos mensais inclusos), limits (max_value por chave de Plan::MANAGED_LIMIT_KEYS; nil = ilimitado;
   # 0 = zero permitido), limit_overrides (política de excedente por chave; default hard_block).
   #
-  # annual_price_cents / promo_price_cents / promo_months_count: colunas já existem, mas os valores
-  # por plano ainda não foram confirmados na planilha — ficam nil até serem informados.
+  # annual_price_cents / setup_fee_cents / promo_price_cents / promo_months_count: o seed agora GRAVA
+  # essas colunas, mas as definições abaixo ainda não as trazem — os PDFs v2 dão os valores anuais
+  # (START R$3.339,84 / PLUS R$5.738,88 / PRO+ R$9.587,52) e a implantação (R$5.000, gratuita no
+  # pacote anual de PLUS/PRO+), e eles DIVERGEM do mensal que está aqui (v2: PLUS R$597,80 e PRO+
+  # R$998,70; abaixo: 59_790 e 99_790). Preço é decisão de negócio: não mexo sem confirmação.
+  #
+  # A implantação gratuita no pacote anual não tem onde morar hoje — setup_fee_cents é uma coluna só,
+  # sem distinção por ciclo de cobrança.
   PLANS = [
     {
       slug: 'start', name: 'START',
@@ -86,6 +92,22 @@ namespace :plans do
     seed_plans
     assign_internal_accounts
     puts '[plans:seed] concluído.'
+    puts audit
+  end
+
+  # Trava anti-drift. Roda sozinha (CI/ops) e sai com status 1 quando há divergência: é o que faltava
+  # para `pro`/`standard` terem sido notados — criados fora do seed, nunca configurados, e o sintoma
+  # só apareceu meses depois numa conta que não conseguia usar a própria chave de IA.
+  desc 'Confere o catálogo de planos contra o banco (falha se houver divergência)'
+  task check: :environment do
+    result = audit
+    puts result
+    exit(1) unless result.ok?
+  end
+
+  def audit
+    known = PLANS.map { |attrs| attrs[:slug] } + [INTERNAL_SLUG]
+    Plan::CatalogAudit.new(known_slugs: known)
   end
 
   def seed_internal_plan
@@ -117,6 +139,13 @@ namespace :plans do
         visible_to_new_subscribers: attrs.fetch(:visible, true),
         courtesy: attrs.fetch(:courtesy, false),
         monthly_price_cents: attrs[:monthly_price_cents],
+        # Colunas que os PDFs v2 especificam e o seed nunca gravava — ficam nil enquanto os valores
+        # não forem confirmados (ver o comentário de preços acima). Plumbing pronto: basta preencher
+        # annual_price_cents/setup_fee_cents/promo_* na definição do plano.
+        annual_price_cents: attrs[:annual_price_cents],
+        setup_fee_cents: attrs[:setup_fee_cents],
+        promo_price_cents: attrs[:promo_price_cents],
+        promo_months_count: attrs[:promo_months_count],
         ai_credits_included: attrs[:ai_credits],
         ai_credit_overage_price_cents: attrs.fetch(:ai_credit_overage_price_cents, AI_CREDIT_OVERAGE_PRICE_CENTS)
       )
