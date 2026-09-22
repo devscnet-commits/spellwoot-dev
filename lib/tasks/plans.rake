@@ -2,8 +2,9 @@
 #   rails plans:seed
 #
 # Cria: o plano interno "ilimitado" (uso do grupo — Athena/SCNET/Vale Mais Net, não é oferta
-# comercial), os 4 planos comerciais START/PLUS/PRO+/Enterprise e o plano Cortesia (parceiros/
-# indicadores — setado manualmente, nunca por self-service). Dados conferidos com Planos_Conexi_v2.
+# comercial), os 3 planos comerciais START/PLUS/PRO+ e o plano Cortesia (parceiros/indicadores —
+# setado manualmente, nunca por self-service). Preços, anuidade, implantação e limites de usuários/
+# caixas vêm da tabela Planos_Conexi_v2; Enterprise saiu (não consta na v2).
 namespace :plans do
   # Chaves canônicas de feature E de limite vêm de Plan::MANAGED_FEATURE_KEYS / ::MANAGED_LIMIT_KEYS
   # (fonte única, também usada pela ponte Plano->conta e pela tela do Super Admin). Referenciadas em
@@ -25,38 +26,46 @@ namespace :plans do
   # ai_credits (créditos mensais inclusos), limits (max_value por chave de Plan::MANAGED_LIMIT_KEYS; nil = ilimitado;
   # 0 = zero permitido), limit_overrides (política de excedente por chave; default hard_block).
   #
-  # annual_price_cents / setup_fee_cents / promo_price_cents / promo_months_count: o seed agora GRAVA
-  # essas colunas, mas as definições abaixo ainda não as trazem — os PDFs v2 dão os valores anuais
-  # (START R$3.339,84 / PLUS R$5.738,88 / PRO+ R$9.587,52) e a implantação (R$5.000, gratuita no
-  # pacote anual de PLUS/PRO+), e eles DIVERGEM do mensal que está aqui (v2: PLUS R$597,80 e PRO+
-  # R$998,70; abaixo: 59_790 e 99_790). Preço é decisão de negócio: não mexo sem confirmação.
+  # Preços, anuidade e implantação seguem a tabela Planos_Conexi_v2 (o mensal de PLUS e PRO+ mudou:
+  # era 59_790/99_790, virou 59_780/99_870). promo_price_cents/promo_months_count continuam nil — a
+  # v2 não define promoção por plano.
   #
-  # A implantação gratuita no pacote anual não tem onde morar hoje — setup_fee_cents é uma coluna só,
-  # sem distinção por ciclo de cobrança.
+  # DUAS COISAS QUE A v2 PEDE E O MODELO NÃO SUPORTA:
+  #  - implantação gratuita no pacote ANUAL de PLUS/PRO+: setup_fee_cents é uma coluna só, sem noção
+  #    de ciclo de cobrança, então guarda o valor do pacote mensal;
+  #  - "Usuários adicional: Consulte" no PRO+: o limit_override abaixo cobra excedente automático a
+  #    R$29,90/usuário, o que é o oposto de "fale com o comercial". Mantido como estava até alguém
+  #    decidir — trocar para hard_block mudaria o que a conta pode fazer hoje.
   PLANS = [
     {
       slug: 'start', name: 'START',
       description: 'Plano de entrada: canais essenciais, IA integrada e relatórios.',
-      monthly_price_cents: 34_790,
+      monthly_price_cents: 34_790,   # R$ 347,90
+      annual_price_cents: 333_984,   # R$ 3.339,84 (20% de desconto)
+      setup_fee_cents: 500_000,      # R$ 5.000,00 — implantação opcional
       features: %w[dashboards_bi conversion_api],
       ai_credits: 500,
-      limits: { 'users' => 3, 'inboxes' => 2, 'ai_agents' => 2, 'crm_pipelines' => 0 }
+      limits: { 'users' => 2, 'inboxes' => 2, 'ai_agents' => 2, 'crm_pipelines' => 0 }
     },
     {
       slug: 'plus', name: 'PLUS',
       description: 'Mais canais, copiloto de IA e CRM em Kanban.',
-      monthly_price_cents: 59_790,
+      monthly_price_cents: 59_780,   # R$ 597,80
+      annual_price_cents: 573_888,   # R$ 5.738,88
+      setup_fee_cents: 500_000,      # R$ 5.000,00 no pacote mensal; gratuita no anual (ver nota)
       features: %w[
         webchat_channel facebook_channel dashboards_bi conversion_api ai_copilot webhook_api
         custom_llm_api_key crm_kanban crm_automations message_scheduling api_user_token
       ], # off no PLUS: sla_tracking, audit_logs, erp_integration, isp_ready_flows, account_manager
       ai_credits: 1000,
-      limits: { 'users' => 10, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }
+      limits: { 'users' => 8, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }
     },
     {
       slug: 'pro_plus', name: 'PRO +',
       description: 'Integração com ERP de ISP, SLA, auditoria e gerente de conta dedicado.',
-      monthly_price_cents: 99_790,
+      monthly_price_cents: 99_870,   # R$ 998,70
+      annual_price_cents: 958_752,   # R$ 9.587,52
+      setup_fee_cents: 500_000,      # R$ 5.000,00 no pacote mensal; gratuita no anual (ver nota)
       features: :all, # todas as MANAGED_FEATURE_KEYS ligadas
       ai_credits: 1000,
       limits: { 'users' => 30, 'inboxes' => 30, 'ai_agents' => nil, 'crm_pipelines' => nil },
@@ -64,15 +73,6 @@ namespace :plans do
       # R$29,90/usuário (Planos_Conexi_v2). inboxes seguem hard_block; ai_agents/crm_pipelines já são
       # ilimitados. A cobrança de fato é débito da Fase 3 (Stripe/Asaas); aqui só grava a política.
       limit_overrides: { 'users' => { overflow_behavior: :paid_overage, overage_price_cents: 2990 } }
-    },
-    {
-      slug: 'enterprise', name: 'Enterprise',
-      description: 'Sob consulta: mesma cobertura do PRO+, sem limites de uso, chave de IA própria.',
-      monthly_price_cents: nil, # sob consulta
-      features: :all,
-      ai_credits: 0, # sempre chave própria — não consome crédito da plataforma
-      ai_credit_overage_price_cents: nil, # não aplicável (não usa o sistema de créditos da plataforma)
-      limits: { 'users' => nil, 'inboxes' => nil, 'ai_agents' => nil, 'crm_pipelines' => nil }
     },
     {
       slug: 'courtesy', name: 'Cortesia',

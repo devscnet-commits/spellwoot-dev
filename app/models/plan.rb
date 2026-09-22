@@ -59,7 +59,9 @@ class Plan < ApplicationRecord
 
   # Ordem dos planos comerciais para decidir se uma troca é upgrade ou downgrade (Plan::ChangeSubscriptionService).
   # courtesy/internal_unlimited ficam de fora — não participam de troca self-service, só atribuição manual.
-  COMMERCIAL_RANK = { 'start' => 1, 'plus' => 2, 'pro_plus' => 3, 'enterprise' => 4 }.freeze
+  # Enterprise saiu: a tabela Planos_Conexi_v2 tem três planos comerciais. Um plano que sobre no banco
+  # fora desta lista é apontado por Plan::CatalogAudit ('sem-rank'), não some em silêncio.
+  COMMERCIAL_RANK = { 'start' => 1, 'plus' => 2, 'pro_plus' => 3 }.freeze
 
   has_many :plan_features, dependent: :destroy
   has_many :plan_limits, dependent: :destroy
