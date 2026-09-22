@@ -4,7 +4,7 @@ import logging
 import time
 from functools import lru_cache
 
-from openai import AuthenticationError, OpenAI
+from openai import AuthenticationError, NotFoundError, OpenAI, PermissionDeniedError
 
 import config
 import tools
@@ -49,6 +49,14 @@ def _resolve_client(account_id: int | None, account_api_key: str | None) -> tupl
     if account_api_key:
         return _account_client(account_id, account_api_key), True
     return _client, False
+
+
+# Um conv_... pertence à ORGANIZAÇÃO da chave que o criou. Quando a chave efetiva de uma conta muda
+# (o cliente cadastrou ou rotacionou a própria chave, o BYOK foi ligado/desligado, a camada global do
+# Hub saiu do ar, a chave da plataforma girou), o id guardado no Rails passa a apontar para um objeto
+# de outra org e a OpenAI responde 404/403. Isso NÃO é AuthenticationError, então não caía no fallback
+# BYOK: virava 502 e o cliente ficava sem resposta nenhuma, sem nada no atendimento explicando por quê.
+CONVERSATION_ACCESS_ERRORS = (NotFoundError, PermissionDeniedError)
 
 
 class TurnFailed(Exception):
@@ -539,6 +547,9 @@ def run_conversation(
                                        close_message=close_message, collect_hint=collect_hint,
                                        known_attribute_keys=known_attribute_keys)
 
+    # Herdada de um turno anterior (criada sob a chave vigente NAQUELE momento) ou nova deste turno —
+    # só a herdada pode ter ficado órfã por troca de chave (ver CONVERSATION_ACCESS_ERRORS).
+    reused_conversation = conversation_id is not None
     client, using_account_key = _resolve_client(account_id, account_api_key)
     logger.info("ticket_id=%s account_id=%s chave=%s modelo=%s", ticket_id, account_id,
                 "propria" if using_account_key else "global", resolved_model)
@@ -547,18 +558,42 @@ def run_conversation(
     conversation_id, client, conv_byok_fallback = _ensure_conversation(client, using_account_key, ticket_id, conversation_id)
     using_account_key = using_account_key and not conv_byok_fallback
 
-    try:
-        reply_text, turn_byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage = _run_turn(
+    def _turn(conv_id: str):
+        return _run_turn(
             client=client, using_account_key=using_account_key, ticket_id=ticket_id,
-            ai_agent_id=ai_agent_id, mode=mode, conversation_id=conversation_id,
+            ai_agent_id=ai_agent_id, mode=mode, conversation_id=conv_id,
             instructions=instructions, resolved_model=resolved_model, openai_tools=openai_tools,
             user_input=user_input, image_urls=image_urls, temperature=temperature, provider=provider,
             reply_schema=reply_schema,
         )
+
+    try:
+        turn = _turn(conversation_id)
+    except CONVERSATION_ACCESS_ERRORS as e:
+        # SÓ para uma conversation herdada de um turno anterior (reused_conversation): uma que este
+        # turno acabou de criar não pode estar inacessível, e um 404 nesse caso é outra coisa (modelo
+        # inexistente, por exemplo) que não se resolve criando conversation nova.
+        # O histórico daquele atendimento na OpenAI se perde — ele vive na outra org e é ilegível
+        # daqui — mas o turno é entregue. Perder o histórico é ruim; ficar sem resposta é pior.
+        # O Rails persiste o id novo (run_conversation devolve este), então o próximo turno já segue
+        # na conversation certa: a recuperação acontece UMA vez por troca de chave, não a cada turno.
+        if not reused_conversation:
+            raise TurnFailed(conversation_id) from e
+
+        logger.warning("ticket_id=%s account_id=%s conversation %s inacessível nesta chave (%s) — "
+                       "recomeçando o histórico na chave atual", ticket_id, account_id, conversation_id,
+                       e.__class__.__name__)
+        try:
+            conversation_id = client.conversations.create().id
+            turn = _turn(conversation_id)
+        except Exception as inner:
+            raise TurnFailed(conversation_id) from inner
     except Exception as e:
         # A conversation JÁ existe do lado da OpenAI daqui pra frente — ver TurnFailed: sem levar o id
         # junto do erro, o Rails não persistia nada e o turno seguinte recomeçava do zero.
         raise TurnFailed(conversation_id) from e
+
+    reply_text, turn_byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage = turn
 
     return (reply_text, conversation_id, conv_byok_fallback or turn_byok_fallback, confidence, transferred,
             tokens_in, tokens_out, resolved_model, tool_usage)
