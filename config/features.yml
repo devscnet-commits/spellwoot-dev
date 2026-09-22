@@ -282,6 +282,12 @@
 - name: channel_api
   display_name: API Channel
   enabled: true
+- name: channel_telegram
+  display_name: Telegram Channel
+  enabled: true
+- name: channel_sms
+  display_name: SMS Channel
+  enabled: true
 - name: api_user_token
   display_name: Token de Acesso Pessoal (API)
   enabled: false

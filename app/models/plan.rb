@@ -31,6 +31,15 @@ class Plan < ApplicationRecord
   PLAN_FEATURE_TO_ACCOUNT_FLAG = {
     'webchat_channel' => 'channel_website',
     'facebook_channel' => 'channel_facebook',
+    # Canais da tabela v2 que passaram a ter enforcement de servidor (ChannelAvailability). Entraram
+    # junto com a migration que preenche a grade de todo plano existente: sem ela, sync_features_to!
+    # desligaria o canal em toda conta cujo plano não tivesse a linha — ou seja, em todas.
+    'whatsapp_channel' => 'channel_whatsapp',
+    'instagram_channel' => 'channel_instagram',
+    'email_channel' => 'channel_email',
+    'api_channel' => 'channel_api',
+    'telegram_channel' => 'channel_telegram',
+    'sms_channel' => 'channel_sms',
     'dashboards_bi' => 'reports',
     'sla_tracking' => 'sla',
     'audit_logs' => 'audit_logs',
@@ -48,9 +57,9 @@ class Plan < ApplicationRecord
     'account_manager' => 'account_manager',
     'api_user_token' => 'api_user_token'
   }.freeze
-  # channel_whatsapp e channel_api NÃO entram aqui: são X em todos os 4 planos comerciais (não variam
-  # por plano, ver Planos_Conexi_v2) — ficam enabled: true por padrão em config/features.yml, mesmo
-  # tratamento de channel_instagram/channel_email hoje.
+  # channel_voice/channel_tiktok/channel_twitter e o canal 'line' ficam FORA: a tabela v2 não os
+  # diferencia por plano (Voip aparece na tabela de sistema, mas sem valor definido por plano), e
+  # gerenciar uma chave sem campo no plano criaria um toggle que não corresponde a nada.
   MANAGED_FEATURE_KEYS = PLAN_FEATURE_TO_ACCOUNT_FLAG.keys.freeze
   # Chaves de limite numérico geridas por plano. Vivia solta dentro do namespace de rake em
   # lib/tasks/plans.rake (constante que vazava para Object por acidente do escopo léxico); aqui vira
@@ -59,7 +68,9 @@ class Plan < ApplicationRecord
 
   # Ordem dos planos comerciais para decidir se uma troca é upgrade ou downgrade (Plan::ChangeSubscriptionService).
   # courtesy/internal_unlimited ficam de fora — não participam de troca self-service, só atribuição manual.
-  COMMERCIAL_RANK = { 'start' => 1, 'plus' => 2, 'pro_plus' => 3, 'enterprise' => 4 }.freeze
+  # Enterprise saiu: a tabela Planos_Conexi_v2 tem três planos comerciais. Um plano que sobre no banco
+  # fora desta lista é apontado por Plan::CatalogAudit ('sem-rank'), não some em silêncio.
+  COMMERCIAL_RANK = { 'start' => 1, 'plus' => 2, 'pro_plus' => 3 }.freeze
 
   has_many :plan_features, dependent: :destroy
   has_many :plan_limits, dependent: :destroy

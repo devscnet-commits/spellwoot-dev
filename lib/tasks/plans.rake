@@ -2,8 +2,9 @@
 #   rails plans:seed
 #
 # Cria: o plano interno "ilimitado" (uso do grupo — Athena/SCNET/Vale Mais Net, não é oferta
-# comercial), os 4 planos comerciais START/PLUS/PRO+/Enterprise e o plano Cortesia (parceiros/
-# indicadores — setado manualmente, nunca por self-service). Dados conferidos com Planos_Conexi_v2.
+# comercial), os 3 planos comerciais START/PLUS/PRO+ e o plano Cortesia (parceiros/indicadores —
+# setado manualmente, nunca por self-service). Preços, anuidade, implantação e limites de usuários/
+# caixas vêm da tabela Planos_Conexi_v2; Enterprise saiu (não consta na v2).
 namespace :plans do
   # Chaves canônicas de feature E de limite vêm de Plan::MANAGED_FEATURE_KEYS / ::MANAGED_LIMIT_KEYS
   # (fonte única, também usada pela ponte Plano->conta e pela tela do Super Admin). Referenciadas em
@@ -25,32 +26,52 @@ namespace :plans do
   # ai_credits (créditos mensais inclusos), limits (max_value por chave de Plan::MANAGED_LIMIT_KEYS; nil = ilimitado;
   # 0 = zero permitido), limit_overrides (política de excedente por chave; default hard_block).
   #
-  # annual_price_cents / promo_price_cents / promo_months_count: colunas já existem, mas os valores
-  # por plano ainda não foram confirmados na planilha — ficam nil até serem informados.
+  # Preços, anuidade e implantação seguem a tabela Planos_Conexi_v2 (o mensal de PLUS e PRO+ mudou:
+  # era 59_790/99_790, virou 59_780/99_870). promo_price_cents/promo_months_count continuam nil — a
+  # v2 não define promoção por plano.
+  #
+  # DUAS COISAS QUE A v2 PEDE E O MODELO NÃO SUPORTA:
+  #  - implantação gratuita no pacote ANUAL de PLUS/PRO+: setup_fee_cents é uma coluna só, sem noção
+  #    de ciclo de cobrança, então guarda o valor do pacote mensal;
+  #  - "Usuários adicional: Consulte" no PRO+: o limit_override abaixo cobra excedente automático a
+  #    R$29,90/usuário, o que é o oposto de "fale com o comercial". Mantido como estava até alguém
+  #    decidir — trocar para hard_block mudaria o que a conta pode fazer hoje.
   PLANS = [
     {
       slug: 'start', name: 'START',
       description: 'Plano de entrada: canais essenciais, IA integrada e relatórios.',
-      monthly_price_cents: 34_790,
-      features: %w[dashboards_bi conversion_api],
+      monthly_price_cents: 34_790,   # R$ 347,90
+      annual_price_cents: 333_984,   # R$ 3.339,84 (20% de desconto)
+      setup_fee_cents: 500_000,      # R$ 5.000,00 — implantação opcional
+      # Webchat e Facebook ficam de FORA (v2: "—" no START). Os canais que a v2 não diferencia por
+      # plano entram ligados, preservando a disponibilidade de hoje.
+      features: %w[
+        dashboards_bi conversion_api
+        whatsapp_channel instagram_channel email_channel api_channel telegram_channel sms_channel
+      ],
       ai_credits: 500,
-      limits: { 'users' => 3, 'inboxes' => 2, 'ai_agents' => 2, 'crm_pipelines' => 0 }
+      limits: { 'users' => 2, 'inboxes' => 2, 'ai_agents' => 2, 'crm_pipelines' => 0 }
     },
     {
       slug: 'plus', name: 'PLUS',
       description: 'Mais canais, copiloto de IA e CRM em Kanban.',
-      monthly_price_cents: 59_790,
+      monthly_price_cents: 59_780,   # R$ 597,80
+      annual_price_cents: 573_888,   # R$ 5.738,88
+      setup_fee_cents: 500_000,      # R$ 5.000,00 no pacote mensal; gratuita no anual (ver nota)
       features: %w[
         webchat_channel facebook_channel dashboards_bi conversion_api ai_copilot webhook_api
         custom_llm_api_key crm_kanban crm_automations message_scheduling api_user_token
+        whatsapp_channel instagram_channel email_channel api_channel telegram_channel sms_channel
       ], # off no PLUS: sla_tracking, audit_logs, erp_integration, isp_ready_flows, account_manager
       ai_credits: 1000,
-      limits: { 'users' => 10, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }
+      limits: { 'users' => 8, 'inboxes' => 8, 'ai_agents' => 5, 'crm_pipelines' => 3 }
     },
     {
       slug: 'pro_plus', name: 'PRO +',
       description: 'Integração com ERP de ISP, SLA, auditoria e gerente de conta dedicado.',
-      monthly_price_cents: 99_790,
+      monthly_price_cents: 99_870,   # R$ 998,70
+      annual_price_cents: 958_752,   # R$ 9.587,52
+      setup_fee_cents: 500_000,      # R$ 5.000,00 no pacote mensal; gratuita no anual (ver nota)
       features: :all, # todas as MANAGED_FEATURE_KEYS ligadas
       ai_credits: 1000,
       limits: { 'users' => 30, 'inboxes' => 30, 'ai_agents' => nil, 'crm_pipelines' => nil },
@@ -58,15 +79,6 @@ namespace :plans do
       # R$29,90/usuário (Planos_Conexi_v2). inboxes seguem hard_block; ai_agents/crm_pipelines já são
       # ilimitados. A cobrança de fato é débito da Fase 3 (Stripe/Asaas); aqui só grava a política.
       limit_overrides: { 'users' => { overflow_behavior: :paid_overage, overage_price_cents: 2990 } }
-    },
-    {
-      slug: 'enterprise', name: 'Enterprise',
-      description: 'Sob consulta: mesma cobertura do PRO+, sem limites de uso, chave de IA própria.',
-      monthly_price_cents: nil, # sob consulta
-      features: :all,
-      ai_credits: 0, # sempre chave própria — não consome crédito da plataforma
-      ai_credit_overage_price_cents: nil, # não aplicável (não usa o sistema de créditos da plataforma)
-      limits: { 'users' => nil, 'inboxes' => nil, 'ai_agents' => nil, 'crm_pipelines' => nil }
     },
     {
       slug: 'courtesy', name: 'Cortesia',
@@ -86,6 +98,22 @@ namespace :plans do
     seed_plans
     assign_internal_accounts
     puts '[plans:seed] concluído.'
+    puts audit
+  end
+
+  # Trava anti-drift. Roda sozinha (CI/ops) e sai com status 1 quando há divergência: é o que faltava
+  # para `pro`/`standard` terem sido notados — criados fora do seed, nunca configurados, e o sintoma
+  # só apareceu meses depois numa conta que não conseguia usar a própria chave de IA.
+  desc 'Confere o catálogo de planos contra o banco (falha se houver divergência)'
+  task check: :environment do
+    result = audit
+    puts result
+    exit(1) unless result.ok?
+  end
+
+  def audit
+    known = PLANS.map { |attrs| attrs[:slug] } + [INTERNAL_SLUG]
+    Plan::CatalogAudit.new(known_slugs: known)
   end
 
   def seed_internal_plan
@@ -117,6 +145,13 @@ namespace :plans do
         visible_to_new_subscribers: attrs.fetch(:visible, true),
         courtesy: attrs.fetch(:courtesy, false),
         monthly_price_cents: attrs[:monthly_price_cents],
+        # Colunas que os PDFs v2 especificam e o seed nunca gravava — ficam nil enquanto os valores
+        # não forem confirmados (ver o comentário de preços acima). Plumbing pronto: basta preencher
+        # annual_price_cents/setup_fee_cents/promo_* na definição do plano.
+        annual_price_cents: attrs[:annual_price_cents],
+        setup_fee_cents: attrs[:setup_fee_cents],
+        promo_price_cents: attrs[:promo_price_cents],
+        promo_months_count: attrs[:promo_months_count],
         ai_credits_included: attrs[:ai_credits],
         ai_credit_overage_price_cents: attrs.fetch(:ai_credit_overage_price_cents, AI_CREDIT_OVERAGE_PRICE_CENTS)
       )
