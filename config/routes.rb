@@ -743,7 +743,7 @@ Rails.application.routes.draw do
         post :seed, on: :member
         post :reset_cache, on: :member
       end
-      resources :plans, only: [:index, :show, :edit, :update]
+      resources :plans, only: [:index, :new, :create, :show, :edit, :update]
       resources :credit_requests, only: [:index, :show] do
         post :approve, on: :member
         post :reject, on: :member

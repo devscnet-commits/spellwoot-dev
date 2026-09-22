@@ -4,7 +4,7 @@ class PlanDashboard < Administrate::BaseDashboard
   ATTRIBUTE_TYPES = {
     id: Field::Number,
     name: Field::String,
-    slug: Field::String,
+    slug: PlanSlugField,
     description: Field::Text,
     active: Field::Boolean,
     visible_to_new_subscribers: Field::Boolean,
@@ -51,14 +51,16 @@ class PlanDashboard < Administrate::BaseDashboard
     updated_at
   ].freeze
 
-  # Sem :slug — mudá-lo depois de criado quebraria PLAN_FEATURE_TO_ACCOUNT_FLAG/plans:seed (que
-  # localizam o plano por slug).
+  # :slug aparece no formulário, mas a partial do PlanSlugField só deixa EDITAR na criação — mudá-lo
+  # depois quebraria PLAN_FEATURE_TO_ACCOUNT_FLAG/COMMERCIAL_RANK/plans:seed, que localizam o plano
+  # por slug. O controller reforça: :slug nunca é permitido no update.
   #
   # feature_grid/limit_grid são grades montadas pelo model (Plan#feature_grid/#limit_grid) e gravadas
   # por SuperAdmin::PlansController — as partials usam campos *_tag com nome próprio, FORA do
   # namespace `plan[...]`, então o update do Administrate não as enxerga e não tenta atribuí-las.
   FORM_ATTRIBUTES = %i[
     name
+    slug
     description
     active
     visible_to_new_subscribers

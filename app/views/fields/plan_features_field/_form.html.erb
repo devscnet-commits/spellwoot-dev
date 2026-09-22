@@ -17,6 +17,16 @@
     <% end %>
   </div>
 
+  <label class="flex items-center gap-2 mt-4 p-3 bg-white rounded-lg shadow-sm outline outline-1 outline-n-container">
+    <%= check_box_tag 'plan_unlock_all', '1', false,
+                      class: 'h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-600' %>
+    <span class="text-sm text-slate-700">
+      <strong>Liberar tudo</strong> — plano interno/ilimitado: liga TODAS as features acima (inclusive
+      Chave Própria de IA) e deixa todos os limites ilimitados, igual ao plano
+      <code>internal_unlimited</code> do seed. Sobrepõe as marcações individuais.
+    </span>
+  </label>
+
   <p class="text-xs text-slate-500 mt-3">
     Desmarcado = desligado para as contas deste plano. Funcionalidade que não aparece nesta lista fica
     liberada por padrão para todas as contas. Salvar reaplica a grade nas contas ativas do plano.

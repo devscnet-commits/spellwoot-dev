@@ -1,0 +1,19 @@
+<div class="field-unit__label">
+  <label>Slug</label>
+</div>
+<div class="field-unit__field">
+  <% if field.data.present? %>
+    <p class="text-sm text-slate-700"><code><%= field.data %></code></p>
+    <p class="text-xs text-slate-500 mt-1">
+      O slug não muda depois de criado: o código localiza plano por slug
+      (COMMERCIAL_RANK, plans:seed, PLAN_FEATURE_TO_ACCOUNT_FLAG).
+    </p>
+  <% else %>
+    <%= text_field_tag 'plan_slug', nil, required: true, placeholder: 'ex.: internal_unlimited',
+                       class: 'w-full rounded border-slate-300' %>
+    <p class="text-xs text-slate-500 mt-1">
+      Minúsculas e underline. Só planos comerciais precisam constar em Plan::COMMERCIAL_RANK para
+      participar de upgrade self-service; interno e cortesia ficam de fora por definição.
+    </p>
+  <% end %>
+</div>

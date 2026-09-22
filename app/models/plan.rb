@@ -118,6 +118,17 @@ class Plan < ApplicationRecord
     reload
   end
 
+  # Preset do plano interno/ilimitado: TODAS as features ligadas (inclusive custom_llm_api_key, que é
+  # o que deixa a conta rodar na própria chave pela tela de integrações) e todo limite ilimitado.
+  # Mesmo resultado do seed_internal_plan em lib/tasks/plans.rake, disponível pela tela.
+  def unlock_everything!
+    apply_feature_grid!(MANAGED_FEATURE_KEYS)
+    MANAGED_LIMIT_KEYS.each do |key|
+      plan_limits.find_or_initialize_by(key: key).update!(max_value: nil, overflow_behavior: 'hard_block')
+    end
+    reload
+  end
+
   # max_value em BRANCO = ilimitado (nil), que é a convenção vigente do PlanLimit — 0 continua
   # significando "zero permitido" (é assim que um plano bloqueia pipelines hoje). A tabela de planos
   # v2 propõe 0 = ilimitado; enquanto essa divergência não for decidida, a tela mantém a semântica do
