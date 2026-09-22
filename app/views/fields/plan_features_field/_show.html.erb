@@ -1,0 +1,10 @@
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+  <% field.data.each do |_key, info| %>
+    <div class="flex items-center justify-between p-2 bg-white rounded outline outline-1 outline-n-container">
+      <span class="text-sm text-slate-700"><%= info[:display_name] %></span>
+      <span class="text-sm <%= info[:enabled] ? 'text-green-600' : 'text-slate-400' %>">
+        <%= info[:enabled] ? 'Ligada' : 'Desligada' %>
+      </span>
+    </div>
+  <% end %>
+</div>

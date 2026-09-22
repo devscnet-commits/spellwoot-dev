@@ -5,10 +5,10 @@
 # comercial), os 4 planos comerciais START/PLUS/PRO+/Enterprise e o plano Cortesia (parceiros/
 # indicadores — setado manualmente, nunca por self-service). Dados conferidos com Planos_Conexi_v2.
 namespace :plans do
-  # Chaves canônicas de feature vêm de Plan::MANAGED_FEATURE_KEYS (fonte única, também usada pela
-  # ponte Plano->conta). Referenciadas em RUNTIME dentro das tasks (sob :environment); não no corpo
-  # do namespace, para não acoplar o parse do rake ao autoload do model.
-  LIMIT_KEYS = %w[users inboxes ai_agents crm_pipelines].freeze
+  # Chaves canônicas de feature E de limite vêm de Plan::MANAGED_FEATURE_KEYS / ::MANAGED_LIMIT_KEYS
+  # (fonte única, também usada pela ponte Plano->conta e pela tela do Super Admin). Referenciadas em
+  # RUNTIME dentro das tasks (sob :environment); não no corpo do namespace, para não acoplar o parse
+  # do rake ao autoload do model.
 
   INTERNAL_SLUG = 'internal_unlimited'.freeze
   # Contas do grupo que recebem o plano interno (match por nome, case-insensitive).
@@ -22,7 +22,7 @@ namespace :plans do
 
   # Cada plano: slug/name/description, monthly_price_cents (nil = sob consulta), courtesy (flag
   # manual — nunca visível/self-service), features (lista de MANAGED_FEATURE_KEYS ligadas, ou :all),
-  # ai_credits (créditos mensais inclusos), limits (max_value por LIMIT_KEYS chave; nil = ilimitado;
+  # ai_credits (créditos mensais inclusos), limits (max_value por chave de Plan::MANAGED_LIMIT_KEYS; nil = ilimitado;
   # 0 = zero permitido), limit_overrides (política de excedente por chave; default hard_block).
   #
   # annual_price_cents / promo_price_cents / promo_months_count: colunas já existem, mas os valores
@@ -97,11 +97,13 @@ namespace :plans do
       feature = plan.plan_features.find_or_initialize_by(key: key)
       feature.update!(enabled: true)
     end
-    LIMIT_KEYS.each do |key|
+    Plan::MANAGED_LIMIT_KEYS.each do |key|
       limit = plan.plan_limits.find_or_initialize_by(key: key)
       limit.update!(max_value: nil, overflow_behavior: :hard_block) # nil = ilimitado
     end
-    puts "[plans:seed] plano interno '#{INTERNAL_SLUG}': #{feature_keys.size} features on, #{LIMIT_KEYS.size} limites ilimitados, #{INTERNAL_AI_CREDITS} créditos IA."
+    limites = Plan::MANAGED_LIMIT_KEYS.size
+    puts "[plans:seed] plano interno '#{INTERNAL_SLUG}': #{feature_keys.size} features on, " \
+         "#{limites} limites ilimitados, #{INTERNAL_AI_CREDITS} créditos IA."
   end
 
   def seed_plans

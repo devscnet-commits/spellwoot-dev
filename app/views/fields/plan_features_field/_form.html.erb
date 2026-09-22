@@ -1,0 +1,24 @@
+<div class="field-unit__label">
+  <label>Features do plano</label>
+</div>
+<div class="field-unit__field">
+  <%# Marca que a grade veio no POST: sem isto, "nenhuma marcada" e "formulário sem a grade" chegariam
+      iguais no controller (array ausente) e desligariam tudo por engano. %>
+  <%= hidden_field_tag 'plan_grid_submitted', '1' %>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <% field.data.each do |key, info| %>
+      <label class="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm outline outline-1 outline-n-container">
+        <span class="text-sm text-slate-700"><%= info[:display_name] %></span>
+        <%= check_box_tag 'plan_feature_keys[]', key, info[:enabled],
+                          id: "plan_feature_#{key}",
+                          class: 'h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-600' %>
+      </label>
+    <% end %>
+  </div>
+
+  <p class="text-xs text-slate-500 mt-3">
+    Desmarcado = desligado para as contas deste plano. Funcionalidade que não aparece nesta lista fica
+    liberada por padrão para todas as contas. Salvar reaplica a grade nas contas ativas do plano.
+  </p>
+</div>
