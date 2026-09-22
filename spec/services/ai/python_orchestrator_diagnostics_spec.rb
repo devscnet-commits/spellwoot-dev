@@ -83,6 +83,20 @@ RSpec.describe Ai::PythonOrchestratorDiagnostics do
   end
 
   describe '.direct_call' do
+    # É o único passo do diagnóstico que chama o modelo (turno de sombra pago), então respeita o
+    # interruptor como qualquer outro caminho de sombra. Os demais passos são leitura de banco/Redis.
+    before { enable_shadow! }
+
+    it 'com a sombra DESLIGADA, pula sem tocar no Python (nenhum gasto sem ato explícito)' do
+      allow(Ai::ShadowPolicy).to receive(:enabled?).and_return(false)
+      create(:message, conversation: conversation, account: account, message_type: 'incoming', content: 'oi')
+      Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
+
+      expect(Ai::PythonOrchestratorClient).not_to receive(:process_message)
+
+      expect(described_class.direct_call(conversation)[:skipped]).to include('sombra desligada')
+    end
+
     it 'pula com skipped quando não há mensagem incoming' do
       expect(described_class.direct_call(conversation)).to eq(skipped: 'sem mensagem incoming nesta conversa')
     end

@@ -4,12 +4,15 @@
 # passo dá pra testar direto (RSpec) sem parsear print.
 #
 # READ-ONLY quanto a dado real: a ÚNICA chamada que toca rede/custa tokens é #direct_call, e ela FORÇA
-# mode: 'shadow' — Api::Internal::AiExecuteToolController só muta o banco quando mode == 'live' (ver
+# mode: 'shadow' (por isso respeita o Ai::ShadowPolicy, como qualquer outro caminho de sombra) —
+# Api::Internal::AiExecuteToolController só muta o banco quando mode == 'live' (ver
 # #capture_attribute/#save_memory/#advance_step/#run_capability, todos gateados por #live?) — então
 # mesmo essa chamada não altera nenhuma conversa/contato real, e nunca manda mensagem ao cliente (quem
 # fala com o WhatsApp é Ai::Gateway#action_dispatcher, que este service NUNCA chama — só o
 # Ai::PythonOrchestratorClient é exercitado diretamente).
 module Ai::PythonOrchestratorDiagnostics
+  SHADOW_OFF = 'sombra desligada (Ai::ShadowPolicy) — ligue AI_SHADOW_ENABLED para reproduzir a chamada real'.freeze
+
   module_function
 
   # --- Passo 1: o job (Ai::GatewayRunJob) está sendo enfileirado/processado, ou empacando? -----------
@@ -61,6 +64,12 @@ module Ai::PythonOrchestratorDiagnostics
   # Ai::PythonOrchestratorClient#perform) escondem hoje em produção — devolvemos a exceção CRUA em vez
   # de engolir, é o ponto inteiro deste diagnóstico.
   def direct_call(conversation)
+    # Mesmo sendo disparado à mão por um admin, este é um turno de SOMBRA pago: roda o modelo inteiro
+    # e joga a resposta fora. Com a sombra desligada não existe caminho que gaste sem ato explícito —
+    # ligar o AI_SHADOW_ENABLED é esse ato. Os outros passos do diagnóstico (fila, runs, flags) são
+    # leitura de banco/Redis e seguem valendo com a sombra desligada.
+    return { skipped: SHADOW_OFF } unless Ai::ShadowPolicy.enabled?
+
     message = conversation.messages.incoming.order(:created_at).last
     return { skipped: 'sem mensagem incoming nesta conversa' } if message.nil?
 
