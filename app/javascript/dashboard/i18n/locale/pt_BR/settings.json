@@ -296,18 +296,17 @@
   },
   "SIDEBAR": {
     "PLAN": "Plano",
-    "PLAN": "Plano",
     "AI_AGENTS": "Agentes IA",
     "AI_AGENTS_LIST": "Agentes",
     "AI_KNOWLEDGE": "Conhecimento",
-    "AI_PROFILES": "N\u00edveis de atendimento",
-    "AI_INTEGRATIONS": "Integra\u00e7\u00f5es",
+    "AI_PROFILES": "Níveis de atendimento",
+    "AI_INTEGRATIONS": "Integrações",
     "AI_COSTS": "Custos",
-    "AI_SHADOW_RUNS": "An\u00e1lises com IA",
+    "AI_SHADOW_RUNS": "Análises com IA",
     "STICKERS": "Figurinhas",
     "REPORTS_LEADS": "Leads",
     "REPORTS_MARKETING": "Marketing",
-    "REPORTS_SCHEDULE": "Hor\u00e1rios",
+    "REPORTS_SCHEDULE": "Horários",
     "NO_ITEMS": "Nenhum item",
     "CURRENTLY_VIEWING_ACCOUNT": "Visualização atual:",
     "SWITCH": "Trocar",
@@ -649,6 +648,12 @@
         "AVAILABLE_ON": "O recurso de atributos obrigatórios de conversa está disponível nos planos pagos.",
         "UPGRADE_PROMPT": "Atualize para um plano pago para exigir atributos obrigatórios antes da resolução da conversa.",
         "ASK_ADMIN": "Entre em contato com seu administrador para fazer a atualização."
+      },
+      "RULE_PICKER": {
+        "ALWAYS_HINT": "Sempre exigido ao resolver",
+        "CONDITIONAL_HINT": "Exigido apenas quando uma condição for atendida",
+        "WHEN_FIELD": "Quando o campo",
+        "SUMMARY_PREFIX": "Obrigatório quando"
       }
     },
     "OUTCOME": {
@@ -663,7 +668,9 @@
       "NO_FLOW": "Nenhum fluxo configurado",
       "NO_FLOW_HINT": "Configure um fluxo de fechamento para o time desta conversa em Configurações → Fluxo de Conversa.",
       "PROMPT_RESOLVE": "Antes de finalizar, selecione uma das opções abaixo:",
-      "RESULT_NONE": "Status da conversa pendente"
+      "RESULT_NONE": "Status da conversa pendente",
+      "MARK_NO_RESULT": "Sem resultado",
+      "RESULT_LOCKED": "Reabra a conversa para alterar o resultado"
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
@@ -715,7 +722,17 @@
         "GENDER": "Gênero (ge)",
         "EXTERNAL_ID": "ID externo (external_id)",
         "NOT_MAPPED": "Não mapeado"
-      }
+      },
+      "MASTER_DESCRIPTION": "Liga/desliga geral do envio para a Meta. Desligado, nada é enviado — nem o Lead na chegada, nem as conversões de fechamento. As credenciais ficam em Integrações; o evento e o valor da venda ficam por fluxo → estado (\"Enviar à Meta como\").",
+      "CHECKLIST": {
+        "TITLE": "O que está ativo",
+        "CREDENTIALS_ENV": "Credenciais gerenciadas pelo servidor (variáveis de ambiente)",
+        "FLOWS_ACTIVE": "Conversões de fechamento: {count} fluxo(s) com Meta ativa",
+        "FLOWS_NONE": "Nenhum fluxo com conversão de fechamento ativa (ligue no Fluxo de Fechamento → estado \"Enviar à Meta como\").",
+        "FLOW_NO_EVENT": "Meta ligada, mas nenhum estado enviando"
+      },
+      "CURRENCY_HINT": "Moeda padrão das conversões, usada por todos os fluxos.",
+      "CUSTOMER_DATA_HINT": "Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Todos os valores são protegidos por hash antes do envio."
     },
     "LEADS_REPORT": {
       "TITLE": "Leads",
@@ -847,7 +864,10 @@
             "SUCCESS_MESSAGE": "Caixa de entrada removida da política com sucesso",
             "ERROR_MESSAGE": "Caixa de entrada removida da política com sucesso"
           }
-        }
+        },
+        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "UNSAVED_INDICATOR": "Alterações não salvas",
+        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?"
       },
       "FORM": {
         "NAME": {
@@ -912,6 +932,10 @@
       "DELETE_POLICY": {
         "SUCCESS_MESSAGE": "Política de atribuição excluída com sucesso",
         "ERROR_MESSAGE": "Falha ao excluir a política de atribuição"
+      },
+      "INBOX_SECTION": {
+        "HINT": "Selecione as caixas de entrada que participarão desta política.",
+        "EMPTY": "Nenhuma caixa vinculada."
       }
     },
     "AGENT_CAPACITY_POLICY": {
@@ -974,7 +998,10 @@
             "SUCCESS_MESSAGE": "Limite da caixa de entrada excluído com sucesso",
             "ERROR_MESSAGE": "Falha ao excluir o limite da caixa de entrada"
           }
-        }
+        },
+        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "UNSAVED_INDICATOR": "Alterações não salvas",
+        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?"
       },
       "FORM": {
         "NAME": {

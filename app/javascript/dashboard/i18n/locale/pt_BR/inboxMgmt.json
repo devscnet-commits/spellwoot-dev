@@ -1023,7 +1023,49 @@
         "OPENS": "Abre",
         "CLOSES": "Fecha"
       },
-      "ALL_DAY": "O dia todo"
+      "ALL_DAY": "O dia todo",
+      "COPY_TO": "Copiar para outros dias",
+      "APPLY_TO": "Aplicar para",
+      "TABS": {
+        "HOURS": "Horário Comercial",
+        "EXCEPTIONS": "Exceções",
+        "MESSAGES": "Mensagens Automáticas"
+      },
+      "STATUS": {
+        "CLOSES_AT": "Fecha às {time}",
+        "OPENS_AT": "Abre às {time}"
+      },
+      "LUNCH_BREAK": "Horário de almoço",
+      "HOLIDAYS": {
+        "EMPTY": "Nenhum feriado cadastrado.",
+        "MONTH": "Mês",
+        "ONE_TIME": "Apenas este ano"
+      },
+      "REPLICATE": {
+        "LABEL": "Aplicar para",
+        "THIS": "Apenas esta caixa",
+        "TEAM": "Todas as caixas do time",
+        "ACCOUNT": "Todas as caixas da conta",
+        "NO_OTHER": "Nenhuma outra caixa disponível.",
+        "ACCOUNT_WARNING": "Isso substituirá o horário comercial de todas as outras caixas da conta.",
+        "SUCCESS": "Configuração aplicada a {count} caixa(s).",
+        "PARTIAL": "Configuração aplicada a {count} caixa(s). Não foi possível em {failedCount}: {names}."
+      },
+      "EXCEPTIONS": {
+        "HINT": "Uma exceção tem prioridade sobre o horário padrão e os feriados nessa data.",
+        "EMPTY": "Nenhuma exceção cadastrada.",
+        "ADD": "Adicionar exceção",
+        "EDIT": "Editar exceção",
+        "NAME_PLACEHOLDER": "Ex: Véspera de Natal",
+        "PERIODS": "Períodos de atendimento",
+        "ADD_PERIOD": "Adicionar período"
+      },
+      "MESSAGES": {
+        "OUT_OF_OFFICE_HELP": "Enviada quando o contato entra em atendimento fora do horário comercial.",
+        "INTERVAL_HELP": "Enviada quando o contato entra em atendimento durante o intervalo entre períodos (ex: almoço).",
+        "HOLIDAY_HELP": "Enviada quando o contato entra em atendimento durante um feriado cadastrado.",
+        "HOLIDAY_PLACEHOLDER": "Ex: Hoje é feriado. Retornamos no próximo dia útil."
+      }
     },
     "IMAP": {
       "TITLE": "IMAP",
@@ -1255,6 +1297,16 @@
       "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
       "DELETE_ERROR": "Falha ao remover política de atribuição",
       "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
+    },
+    "AI_PRIORITIES": {
+      "TITLE": "Prioridade entre IAs",
+      "DESC": "Quando mais de uma IA atende esta caixa, apenas uma responde por conversa. A primeira da lista é a padrão; use as setas para reordenar.",
+      "EMPTY": "Nenhuma IA atende esta caixa. Vincule um agente em Agentes IA → agente → Atendimentos e transferências.",
+      "DEFAULT_BADGE": "Padrão",
+      "MODE_SHADOW": "Sombra (só observa)",
+      "TIE_WARNING": "Há empate na prioridade: salve a ordem acima para definir qual IA responde.",
+      "SUCCESS": "Prioridade das IAs atualizada.",
+      "ERROR": "Não foi possível salvar a prioridade das IAs."
     }
   }
 }

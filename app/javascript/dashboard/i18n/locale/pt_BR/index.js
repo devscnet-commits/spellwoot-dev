@@ -39,8 +39,11 @@ import settings from './settings.json';
 import signup from './signup.json';
 import sla from './sla.json';
 import snooze from './snooze.json';
+import stickersMgmt from './stickersMgmt.json';
 import teamsSettings from './teamsSettings.json';
 import operationalFlowsSettings from './operationalFlowsSettings.json';
+import crmReports from './crmReports.json';
+import messageTemplatesSettings from './messageTemplatesSettings.json';
 import plan from './plan.json';
 import webhooks from './webhooks.json';
 import whatsappTemplates from './whatsappTemplates.json';
@@ -88,8 +91,11 @@ export default {
   ...signup,
   ...sla,
   ...snooze,
+  ...stickersMgmt,
   ...teamsSettings,
   ...operationalFlowsSettings,
+  ...crmReports,
+  ...messageTemplatesSettings,
   ...plan,
   ...webhooks,
   ...whatsappTemplates,
