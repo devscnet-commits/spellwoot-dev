@@ -124,7 +124,11 @@
     "PAGINATION": {
       "RESULTS": "Showing {start} to {end} of {total} results",
       "PER_PAGE_TEMPLATE": "{size} / page"
-    }
+    },
+    "CSAT_REPORTS": {
+      "DOWNLOAD_FAILED": "We could not download the CSAT report."
+    },
+    "DOWNLOAD_AGENT_REPORTS": "Download agent reports"
   },
   "AGENT_REPORTS": {
     "HEADER": "Agents Overview",
@@ -440,7 +444,8 @@
         "RATINGS": "Search ratings"
       },
       "AGENTS": {
-        "LABEL": "Agent"
+        "LABEL": "Agent",
+        "PLACEHOLDER": "Select agents"
       },
       "INBOXES": {
         "LABEL": "Inbox"

@@ -389,6 +389,24 @@
         "PARTIALLY_FULFILLED": "Parcialmente Concluído",
         "UNFULFILLED": "Não concluído"
       }
+    },
+    "AI_MEMORY": {
+      "LABEL_CUSTOMER": "Sobre o cliente",
+      "LABEL_COLLECTED": "Coletado nesta conversa",
+      "META": "Atualizado {time}",
+      "EMPTY": "A IA ainda não registrou nada sobre este contato."
+    },
+    "HANDOFF_SUMMARY": {
+      "META": "Transferido {time}",
+      "EMPTY": "Sem resumo de transferência para esta conversa.",
+      "REASONS": {
+        "CREDIT_EXHAUSTED": "os créditos de IA da conta se esgotaram",
+        "GENERIC": "a IA transferiu a conversa",
+        "KEYWORD": "o cliente pediu um humano",
+        "LOOP": "a conversa estava andando em círculos",
+        "MODEL_REQUESTED": "a IA decidiu transferir",
+        "PROVIDER_UNAVAILABLE": "o provedor de IA estava indisponível"
+      }
     }
   },
   "CONVERSATION_CUSTOM_ATTRIBUTES": {

@@ -322,6 +322,12 @@
     "CAPTAIN_PLAYGROUND": "Playground",
     "CAPTAIN_INBOXES": "Inboxes",
     "CAPTAIN_SETTINGS": "Settings",
+    "AI_AGENTS": "AI Agents",
+    "AI_AGENTS_LIST": "Agents",
+    "AI_KNOWLEDGE": "Knowledge Base",
+    "AI_PROFILES": "Operation Profiles",
+    "AI_COSTS": "AI Costs",
+    "AI_SHADOW_RUNS": "AI Analysis",
     "HOME": "Home",
     "AGENTS": "Agents",
     "AGENT_BOTS": "Bots",
@@ -359,7 +365,7 @@
     "REPORTS_BOT": "Bot",
     "REPORTS_LEADS": "Leads",
     "REPORTS_MARKETING": "Marketing",
-    "REPORTS_SCHEDULE": "Horários",
+    "REPORTS_SCHEDULE": "Hours",
     "REPORTS_AGENT": "Agents",
     "REPORTS_LABEL": "Labels",
     "REPORTS_INBOX": "Inbox",
@@ -423,11 +429,15 @@
       "DESCRIPTION": "Enable or disable AI-powered features.",
       "AUDIO_TRANSCRIPTION": {
         "TITLE": "Audio Transcription",
-        "DESCRIPTION": "Automatically convert voice messages and call recordings into searchable text transcripts."
+        "DESCRIPTION": "Automatically convert voice messages and call recordings into searchable text transcripts.",
+        "MODEL_TITLE": "Audio transcription model",
+        "MODEL_DESCRIPTION": "Model used to transcribe voice messages into text."
       },
       "HELP_CENTER_SEARCH": {
         "TITLE": "Help Center Search Indexing",
-        "DESCRIPTION": "Use AI for context aware search inside your help center articles."
+        "DESCRIPTION": "Use AI for context aware search inside your help center articles.",
+        "MODEL_TITLE": "Help center search model",
+        "MODEL_DESCRIPTION": "Model used to search help center articles and suggest answers."
       },
       "LABEL_SUGGESTION": {
         "TITLE": "Label Suggestion",
@@ -632,59 +642,59 @@
         "LABEL_CONDITIONAL": "Required if {field} = {value}"
       },
       "RULE_PICKER": {
-        "ALWAYS_HINT": "Sempre exigido ao resolver",
-        "CONDITIONAL_HINT": "Exigido apenas quando uma condição for atendida",
-        "WHEN_FIELD": "Quando o campo",
+        "ALWAYS_HINT": "Always required on resolve",
+        "CONDITIONAL_HINT": "Required only when a condition is met",
+        "WHEN_FIELD": "When the field",
         "IS_EQUAL_TO": "For igual a",
         "MULTI_SELECT_HINT": "(selecione um ou mais)",
-        "SUMMARY_PREFIX": "Obrigatório quando",
+        "SUMMARY_PREFIX": "Required when",
         "SUMMARY_JOINER": "for"
       }
     },
     "LEADS_REPORT": {
       "TITLE": "Leads",
-      "DESCRIPTION": "Acompanhe o resultado das suas conversas: ganhos, perdidos e fechados pela IA.",
+      "DESCRIPTION": "Track the outcome of your conversations: won, lost and closed by AI.",
       "LOADING": "Carregando...",
       "WON": "Ganho",
       "LOST": "Perdido",
-      "AI_CLOSED": "Fechado pela IA",
+      "AI_CLOSED": "Closed by AI",
       "TOTAL": "Total",
       "OF_TOTAL": "do total"
     },
     "OUTCOME": {
       "MARK_WON": "Marcar como Ganho",
       "MARK_LOST": "Marcar como Perdido",
-      "MARK_NO_RESULT": "Sem resultado",
-      "MODAL_DESCRIPTION": "Preencha os campos abaixo antes de marcar o resultado.",
+      "MARK_NO_RESULT": "No outcome",
+      "MODAL_DESCRIPTION": "Fill in the fields below before marking the outcome.",
       "CONFIRM": "Confirmar",
       "CANCEL": "Cancelar",
-      "NO_FIELDS": "Nenhum campo adicional necessário.",
-      "SUCCESS": "Resultado registrado com sucesso",
-      "ERROR": "Não foi possível registrar o resultado, tente novamente",
-      "PROMPT_RESOLVE": "Antes de resolver, selecione uma das opções abaixo:",
+      "NO_FIELDS": "No additional fields required.",
+      "SUCCESS": "Outcome recorded successfully",
+      "ERROR": "We could not record the outcome, please try again",
+      "PROMPT_RESOLVE": "Before resolving, select one of the options below:",
       "RESULT_WON": "Ganho",
       "RESULT_LOST": "Perdido",
       "RESULT_NONE": "Status da conversa pendente",
       "RESULT_UPDATED": "Resultado atualizado",
-      "RESULT_LOCKED": "Reabra a conversa para alterar o resultado",
+      "RESULT_LOCKED": "Reopen the conversation to change the outcome",
       "RESULT_LABEL": "Resultado",
-      "NO_FLOW": "Nenhum fluxo configurado",
-      "NO_FLOW_HINT": "Configure um fluxo de fechamento para o time desta conversa em Configurações → Fluxo de Conversa."
+      "NO_FLOW": "No flow configured",
+      "NO_FLOW_HINT": "Set up a closing flow for this conversation's team in Settings → Conversation Flow."
     },
     "META_CONVERSION": {
       "TITLE": "Meta Conversions API",
       "DESCRIPTION": "Send conversion events back to Meta to optimize your Click-to-WhatsApp ad campaigns.",
       "MASTER_ON": "Ativado",
       "MASTER_OFF": "Desativado",
-      "MASTER_DESCRIPTION": "Liga/desliga geral do envio para a Meta. Desligado, nada é enviado — nem o Lead na chegada, nem as conversões de fechamento. As credenciais ficam em Integrações; o evento e o valor da venda ficam por fluxo → estado (\"Enviar à Meta como\").",
+      "MASTER_DESCRIPTION": "Master switch for sending to Meta. When off, nothing is sent — neither the Lead on arrival nor the closing conversions. Credentials live in Integrations; the event and the sale value are set per flow → state (\"Send to Meta as\").",
       "CHECKLIST": {
-        "TITLE": "O que está ativo",
-        "CREDENTIALS_ENV": "Credenciais gerenciadas pelo servidor (variáveis de ambiente)",
+        "TITLE": "What is active",
+        "CREDENTIALS_ENV": "Credentials managed by the server (environment variables)",
         "LEAD_ON": "Lead na chegada: ativo",
         "LEAD_OFF": "Lead na chegada: desativado",
-        "FLOWS_ACTIVE": "Conversões de fechamento: {count} fluxo(s) com Meta ativa",
-        "FLOWS_NONE": "Nenhum fluxo com conversão de fechamento ativa (ligue no Fluxo de Fechamento → estado \"Enviar à Meta como\").",
-        "FLOW_NO_EVENT": "Meta ligada, mas nenhum estado enviando"
+        "FLOWS_ACTIVE": "Closing conversions: {count} flow(s) with Meta active",
+        "FLOWS_NONE": "No flow has closing conversion active (turn it on in Closing Flow → state \"Send to Meta as\").",
+        "FLOW_NO_EVENT": "Meta is on, but no state is sending"
       },
       "SAVE_BUTTON": "Save",
       "SAVING": "Saving...",
@@ -732,8 +742,8 @@
         "EXTERNAL_ID": "External ID (external_id)",
         "NOT_MAPPED": "Not mapped"
       },
-      "CURRENCY_HINT": "Moeda padrão das conversões, usada por todos os fluxos.",
-      "CUSTOMER_DATA_HINT": "Mapeie atributos da conversa para os campos de dados do contato enviados à Meta. Todos os valores são protegidos por hash antes do envio.",
+      "CURRENCY_HINT": "Default currency for conversions, used by every flow.",
+      "CUSTOMER_DATA_HINT": "Map conversation attributes to the contact data fields sent to Meta. Every value is hashed before being sent.",
       "SENT_AUTOMATICALLY": "Enviados automaticamente do contato",
       "ADDITIONAL_DATA": "Dados adicionais (opcional)"
     }
@@ -831,11 +841,11 @@
         "HEADER": {
           "TITLE": "Edit assignment policy"
         },
-        "EDIT_BUTTON": "Atualizar política",
-        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "EDIT_BUTTON": "Update policy",
+        "SAVE_CHANGES_BUTTON": "Save changes",
         "SAVED_BUTTON": "Tudo salvo",
-        "UNSAVED_INDICATOR": "Alterações não salvas",
-        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?",
+        "UNSAVED_INDICATOR": "Unsaved changes",
+        "UNSAVED_LEAVE_CONFIRM": "You have unsaved changes. Do you want to leave without saving?",
         "CONFIRM_ADD_INBOX_DIALOG": {
           "TITLE": "Add inbox",
           "DESCRIPTION": "{inboxName} inbox is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",
@@ -940,10 +950,10 @@
       },
       "INBOX_SECTION": {
         "LABEL": "Caixas de entrada vinculadas",
-        "HINT": "Selecione as caixas de entrada que participarão desta política.",
+        "HINT": "Select the inboxes that will take part in this policy.",
         "SELECT_PLACEHOLDER": "Selecionar caixas de entrada",
         "LOADING": "Carregando caixas de entrada...",
-        "EMPTY": "Nenhuma caixa vinculada."
+        "EMPTY": "No inboxes linked."
       }
     },
     "AGENT_CAPACITY_POLICY": {
@@ -972,11 +982,11 @@
         "HEADER": {
           "TITLE": "Edit agent capacity policy"
         },
-        "EDIT_BUTTON": "Atualizar política",
-        "SAVE_CHANGES_BUTTON": "Salvar alterações",
+        "EDIT_BUTTON": "Update policy",
+        "SAVE_CHANGES_BUTTON": "Save changes",
         "SAVED_BUTTON": "Tudo salvo",
-        "UNSAVED_INDICATOR": "Alterações não salvas",
-        "UNSAVED_LEAVE_CONFIRM": "Você possui alterações não salvas. Deseja sair sem salvar?",
+        "UNSAVED_INDICATOR": "Unsaved changes",
+        "UNSAVED_LEAVE_CONFIRM": "You have unsaved changes. Do you want to leave without saving?",
         "CONFIRM_ADD_AGENT_DIALOG": {
           "TITLE": "Add agent",
           "DESCRIPTION": "{agentName} is already linked to another policy. Are you sure you want to link it to this policy? It will be unlinked from the other policy.",

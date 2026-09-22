@@ -1,34 +1,34 @@
 {
   "STICKERS_MGMT": {
     "HEADER": "Figurinhas",
-    "DESCRIPTION": "Guarde figurinhas (stickers) e envie nos atendimentos. Pode subir PNG/JPG/GIF — convertemos automaticamente para o padrão de figurinha (WebP 512×512 transparente). Arquivos .webp são mantidos como estão.",
+    "DESCRIPTION": "Store stickers and send them in conversations. You can upload PNG/JPG/GIF — we convert them automatically to the sticker standard (transparent 512×512 WebP). .webp files are kept as they are.",
     "HEADER_BTN_TXT": "Adicionar figurinha",
     "COUNT": "{n} figurinhas",
     "LOADING": "Carregando figurinhas...",
     "LIST": {
-      "404": "Nenhuma figurinha ainda. Adicione a primeira para usar nos atendimentos."
+      "404": "No stickers yet. Add the first one to use it in conversations."
     },
     "UPLOAD": {
       "SUCCESS": "Figurinha adicionada.",
-      "ERROR": "Não foi possível adicionar a figurinha.",
-      "INVALID_TYPE": "Formato não suportado. Envie .webp, .png, .jpg ou .gif.",
-      "TOO_LARGE": "Arquivo muito grande. O limite é 2 MB."
+      "ERROR": "We could not add the sticker.",
+      "INVALID_TYPE": "Unsupported format. Upload .webp, .png, .jpg or .gif.",
+      "TOO_LARGE": "File too large. The limit is 2 MB."
     },
     "DELETE": {
       "BUTTON_TEXT": "Excluir figurinha",
-      "SUCCESS": "Figurinha excluída.",
-      "ERROR": "Não foi possível excluir a figurinha.",
+      "SUCCESS": "Sticker deleted.",
+      "ERROR": "We could not delete the sticker.",
       "CONFIRM": {
         "TITLE": "Excluir figurinha",
-        "MESSAGE": "Tem certeza que deseja excluir esta figurinha?",
+        "MESSAGE": "Are you sure you want to delete this sticker?",
         "YES": "Sim, excluir",
         "NO": "Cancelar"
       }
     },
     "PICKER": {
       "TITLE": "Figurinhas",
-      "EMPTY": "Nenhuma figurinha. Adicione em Configurações → Figurinhas.",
-      "SEND_ERROR": "Não foi possível enviar a figurinha."
+      "EMPTY": "No stickers. Add them in Settings → Stickers.",
+      "SEND_ERROR": "We could not send the sticker."
     }
   }
 }

@@ -11,7 +11,9 @@
     "LIST": {
       "404": "Não existem agentes associados a esta conta.",
       "EDIT_TEAM": "Editar time",
-      "NONE": "Nenhuma"
+      "NONE": "Nenhuma",
+      "AUTO_ASSIGN_ON": "Atribuição automática ativada",
+      "AUTO_ASSIGN_OFF": "Atribuição automática desativada"
     },
     "CREATE_FLOW": {
       "CREATE": {
@@ -61,6 +63,28 @@
         "TITLE": "Finalizar",
         "ROUTE": "ajustes_times_editar_finalizar",
         "BODY": "Está tudo pronto para começar!"
+      },
+      "INBOXES": {
+        "HINT": "Vincule as caixas de entrada que pertencem a este time. Isso permite replicar configurações e organizar o atendimento por time.",
+        "EMPTY": "Nenhuma caixa de entrada disponível.",
+        "SAVED": "Caixas do time atualizadas com sucesso."
+      },
+      "MEMBERS_SUBTITLE": "Gerencie os agentes deste time. A função é definida no cadastro do agente.",
+      "ADD_TO_CAIXAS": {
+        "TITLE": "Adicionar também nas caixas do time?",
+        "MESSAGE": "{agent} entrou no time. Deseja adicioná-lo também como agente das caixas vinculadas ao time ({inboxes})? Assim ele já atende nessas caixas com o fluxo do time.",
+        "CONFIRM": "Sim, adicionar nas caixas",
+        "SKIP": "Agora não",
+        "SUCCESS": "{agent} adicionado nas caixas do time."
+      },
+      "FILTERS": {
+        "all": "Todos"
+      },
+      "UPDATE_SUCCESS": "Time atualizado com sucesso.",
+      "NO_MEMBERS": "Nenhum integrante vinculado. Adicione agentes a este time.",
+      "NO_AVAILABLE_AGENTS": "Nenhum agente disponível para adicionar.",
+      "AVAILABILITY": {
+        "online": "Disponível"
       }
     },
     "TEAM_FORM": {

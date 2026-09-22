@@ -1,312 +1,312 @@
 {
   "MESSAGE_TEMPLATES_MGMT": {
     "HEADER": "Templates",
-    "HEADER_BTN_TXT": "Novo modelo",
-    "DESCRIPTION": "Crie e gerencie modelos de mensagem do WhatsApp. Todo modelo precisa ser aprovado pela Meta antes de poder ser enviado aos clientes.",
-    "LOADING": "Buscando modelos...",
+    "HEADER_BTN_TXT": "New template",
+    "DESCRIPTION": "Create and manage WhatsApp message templates. Every template must be approved by Meta before it can be sent to customers.",
+    "LOADING": "Fetching templates...",
     "SELECT_INBOX": {
-      "LABEL": "Caixa de entrada do WhatsApp",
-      "PLACEHOLDER": "Selecione uma caixa de entrada"
+      "LABEL": "WhatsApp inbox",
+      "PLACEHOLDER": "Select an inbox"
     },
-    "NO_WHATSAPP_INBOX": "Conecte uma caixa de entrada WhatsApp Cloud API para criar e gerenciar modelos de mensagem.",
-    "NO_INBOX_SELECTED": "Selecione uma caixa de entrada do WhatsApp acima para ver os modelos dela.",
+    "NO_WHATSAPP_INBOX": "Connect a WhatsApp Cloud API inbox to create and manage message templates.",
+    "NO_INBOX_SELECTED": "Select a WhatsApp inbox above to see its templates.",
     "LIST": {
-      "404": "Nenhum modelo encontrado.",
+      "404": "No templates found.",
       "STATS": {
-        "TOTAL": "Total de modelos",
-        "TOTAL_SUBTITLE": "Em {count} caixa de entrada | Em {count} caixas de entrada",
-        "APPROVED": "Aprovados",
-        "APPROVED_SUBTITLE": "Prontos para envio",
-        "PENDING": "Em análise",
-        "PENDING_SUBTITLE": "Aguardando aprovação da Meta"
+        "TOTAL": "Total templates",
+        "TOTAL_SUBTITLE": "In {count} inbox | In {count} inboxes",
+        "APPROVED": "Approved",
+        "APPROVED_SUBTITLE": "Ready to send",
+        "PENDING": "In review",
+        "PENDING_SUBTITLE": "Awaiting Meta approval"
       },
       "GUIDELINE": {
-        "TITLE": "Diretrizes de Qualidade e Entrega Meta WhatsApp Cloud API",
-        "DESCRIPTION": "Mantenha a classificação de qualidade como Alta enviando mensagens relevantes com opt-in explícito. Utilize variáveis personalizadas e botões de ação para melhorar a taxa de resposta."
+        "TITLE": "Meta WhatsApp Cloud API quality and delivery guidelines",
+        "DESCRIPTION": "Keep your quality rating High by sending relevant messages with explicit opt-in. Use custom variables and action buttons to improve your response rate."
       },
-      "SEARCH_PLACEHOLDER": "Pesquisar por nome ou conteúdo...",
+      "SEARCH_PLACEHOLDER": "Search by name or content...",
       "FILTERS": {
-        "INBOX_LABEL": "Caixa",
-        "INBOX_ALL": "Todas",
-        "CATEGORY_LABEL": "Categoria",
-        "CATEGORY_ALL": "Todas",
-        "LANGUAGE_LABEL": "Idioma",
-        "LANGUAGE_ALL": "Todos",
+        "INBOX_LABEL": "Inbox",
+        "INBOX_ALL": "All",
+        "CATEGORY_LABEL": "Category",
+        "CATEGORY_ALL": "All",
+        "LANGUAGE_LABEL": "Language",
+        "LANGUAGE_ALL": "All",
         "STATUS_LABEL": "Status",
-        "STATUS_ALL": "Todos"
+        "STATUS_ALL": "All"
       },
-      "SYNCED_WITH_META": "Sincronizado com WhatsApp Cloud API",
-      "RESULTS_COUNT": "{count} modelo de mensagem exibido | {count} modelos de mensagem exibidos",
-      "BUTTON_COUNT": "{count} botão | {count} botões",
+      "SYNCED_WITH_META": "Synced with WhatsApp Cloud API",
+      "RESULTS_COUNT": "{count} message template shown | {count} message templates shown",
+      "BUTTON_COUNT": "{count} button | {count} buttons",
       "REJECTED_REASON": {
-        "NONE": "Nenhum",
-        "ABUSIVE_CONTENT": "Conteúdo abusivo",
-        "INVALID_FORMAT": "Formato inválido",
-        "SCAM": "Suspeita de golpe",
-        "TAG_CONTENT_MISMATCH": "Categoria não corresponde ao conteúdo",
-        "PROMOTIONAL": "Conteúdo promocional em categoria não permitida",
-        "INCORRECT_CATEGORY": "Categoria incorreta"
+        "NONE": "None",
+        "ABUSIVE_CONTENT": "Abusive content",
+        "INVALID_FORMAT": "Invalid format",
+        "SCAM": "Suspected scam",
+        "TAG_CONTENT_MISMATCH": "Category does not match the content",
+        "PROMOTIONAL": "Promotional content in a category that does not allow it",
+        "INCORRECT_CATEGORY": "Incorrect category"
       },
       "TABLE_HEADER": {
-        "NAME": "Nome",
-        "CATEGORY": "Categoria",
-        "STATUS_QUALITY": "Status / Qualidade",
-        "LANGUAGE": "Idioma",
-        "BLOCK_REASON": "Motivo bloqueio",
-        "ACTIONS": "Ações"
+        "NAME": "Name",
+        "CATEGORY": "Category",
+        "STATUS_QUALITY": "Status / Quality",
+        "LANGUAGE": "Language",
+        "BLOCK_REASON": "Block reason",
+        "ACTIONS": "Actions"
       },
-      "PREVIEW_TITLE": "Prévia do modelo"
+      "PREVIEW_TITLE": "Template preview"
     },
     "STATUS": {
-      "APPROVED": "Aprovado",
-      "PENDING": "Pendente",
-      "REJECTED": "Rejeitado",
-      "PAUSED": "Pausado",
-      "DISABLED": "Desativado"
+      "APPROVED": "Approved",
+      "PENDING": "Pending",
+      "REJECTED": "Rejected",
+      "PAUSED": "Paused",
+      "DISABLED": "Disabled"
     },
     "QUALITY": {
-      "GREEN": "Alta",
-      "YELLOW": "Média",
-      "RED": "Baixa",
-      "UNKNOWN": "Aguardando dados"
+      "GREEN": "High",
+      "YELLOW": "Medium",
+      "RED": "Low",
+      "UNKNOWN": "Awaiting data"
     },
-    "FETCH_ERROR": "Não foi possível buscar os modelos desta caixa de entrada.",
+    "FETCH_ERROR": "We could not fetch the templates for this inbox.",
     "CREATE": {
-      "BACK_BUTTON_LABEL": "Voltar para Templates",
-      "HEADER": "Novo modelo",
+      "BACK_BUTTON_LABEL": "Back to Templates",
+      "HEADER": "New template",
       "STEP_1": {
-        "TITLE": "Escolha uma categoria",
-        "DESCRIPTION": "A categoria determina para que o modelo pode ser usado e como a Meta faz a revisão.",
-        "NEXT_BUTTON": "Próximo: Conteúdo",
-        "META_GUIDELINE": "Diretriz da Meta: Cada categoria possui regras e tarifas distintas na API Cloud do WhatsApp. Mensagens de Marketing exigem opt-in prévio dos destinatários.",
-        "CATEGORY_TITLE": "Categoria do modelo",
-        "CATEGORY_DESCRIPTION": "A categoria determina a finalidade e as tarifas de envio da Meta.",
+        "TITLE": "Choose a category",
+        "DESCRIPTION": "The category determines what the template can be used for and how Meta reviews it.",
+        "NEXT_BUTTON": "Next: Content",
+        "META_GUIDELINE": "Meta guideline: each category has its own rules and pricing on the WhatsApp Cloud API. Marketing messages require prior opt-in from recipients.",
+        "CATEGORY_TITLE": "Template category",
+        "CATEGORY_DESCRIPTION": "The category determines the purpose and Meta's sending rates.",
         "INBOX": {
-          "TITLE": "Caixa de entrada de destino",
-          "DESCRIPTION": "Defina qual caixa de entrada e canal do WhatsApp receberá e poderá enviar este modelo.",
-          "ACTIVE_COUNT": "{count} canal ativo | {count} canais ativos"
+          "TITLE": "Destination inbox",
+          "DESCRIPTION": "Choose which WhatsApp inbox and channel will receive and be able to send this template.",
+          "ACTIVE_COUNT": "{count} active channel | {count} active channels"
         },
         "CATEGORIES": {
           "MARKETING": {
             "LABEL": "Marketing",
-            "DESCRIPTION": "Promoções, ofertas, anúncios e outras mensagens para engajar ou vender aos clientes. Exige opt-in prévio."
+            "DESCRIPTION": "Promotions, offers, announcements and other messages to engage or sell to customers. Requires prior opt-in."
           },
           "UTILITY": {
-            "LABEL": "Utilidade",
-            "DESCRIPTION": "Atualizações de pedido, alertas de conta e outras mensagens não promocionais ligadas a uma ação ou transação específica do cliente."
+            "LABEL": "Utility",
+            "DESCRIPTION": "Order updates, account alerts and other non-promotional messages tied to a specific customer action or transaction."
           },
           "AUTHENTICATION": {
-            "LABEL": "Autenticação",
-            "DESCRIPTION": "Códigos únicos que permitem que os clientes acessem sua conta, como códigos de verificação e senhas de uso único."
+            "LABEL": "Authentication",
+            "DESCRIPTION": "One-time codes that let customers access their account, such as verification codes and one-time passwords."
           }
         },
         "SUBTYPES": {
-          "TITLE": "Selecione o tipo para {category}",
-          "DESCRIPTION": "O tipo determina os campos disponíveis no conteúdo do modelo.",
-          "COMING_SOON": "Em breve",
+          "TITLE": "Select the type for {category}",
+          "DESCRIPTION": "The type determines which fields are available in the template content.",
+          "COMING_SOON": "Coming soon",
           "STANDARD": {
-            "LABEL": "Padrão",
-            "DESCRIPTION": "Envie mensagens com mídia e botões personalizados para engajar seus clientes."
+            "LABEL": "Standard",
+            "DESCRIPTION": "Send messages with media and custom buttons to engage your customers."
           },
           "CATALOG": {
-            "LABEL": "Catálogo",
-            "DESCRIPTION": "Envie mensagens para aumentar as vendas conectando seu catálogo de produtos."
+            "LABEL": "Catalog",
+            "DESCRIPTION": "Send messages that drive sales by connecting your product catalog."
           },
           "FLOWS": {
             "LABEL": "Flows",
-            "DESCRIPTION": "Envie um formulário para coletar interesses dos clientes ou pedidos de horas marcadas ou fazer pesquisas."
+            "DESCRIPTION": "Send a form to collect customer interest, take appointment requests or run surveys."
           },
           "ORDER_DETAILS": {
-            "LABEL": "Detalhes do pedido",
-            "DESCRIPTION": "Envie mensagens que os clientes podem usar para fazer pagamentos para você."
+            "LABEL": "Order details",
+            "DESCRIPTION": "Send messages customers can use to pay you."
           },
           "CALL_PERMISSION_REQUEST": {
-            "LABEL": "Solicitação de permissão para ligação",
-            "DESCRIPTION": "Pergunte aos clientes se você pode ligar para eles no WhatsApp."
+            "LABEL": "Call permission request",
+            "DESCRIPTION": "Ask customers whether you may call them on WhatsApp."
           },
-          "IDEAL_FOR_TITLE": "Este modelo é ideal para",
-          "CUSTOMIZABLE_AREAS_TITLE": "Áreas que você pode personalizar",
-          "AREA_HEADER": "cabeçalho (texto ou mídia)",
-          "AREA_BODY": "corpo dinâmico com variáveis",
-          "AREA_FOOTER": "rodapé",
-          "AREA_CODE_SAMPLE": "valor de exemplo do código",
-          "AREA_BUTTONS": "até {count} botão de ação ou resposta rápida | até {count} botões de ação ou resposta rápida",
+          "IDEAL_FOR_TITLE": "This template is ideal for",
+          "CUSTOMIZABLE_AREAS_TITLE": "Areas you can customize",
+          "AREA_HEADER": "header (text or media)",
+          "AREA_BODY": "dynamic body with variables",
+          "AREA_FOOTER": "footer",
+          "AREA_CODE_SAMPLE": "sample code value",
+          "AREA_BUTTONS": "up to {count} action or quick reply button | up to {count} action or quick reply buttons",
           "UTILITY_STANDARD": {
-            "LABEL": "Padrão",
-            "DESCRIPTION": "Envie mensagens sobre uma conta ou o pedido existente."
+            "LABEL": "Standard",
+            "DESCRIPTION": "Send messages about an account or an existing order."
           },
           "UTILITY_FLOWS": {
             "LABEL": "Flows",
-            "DESCRIPTION": "Envie um formulário para coletar feedback, enviar lembretes ou gerenciar pedidos."
+            "DESCRIPTION": "Send a form to collect feedback, send reminders or manage orders."
           },
           "AUTHENTICATION_STANDARD": {
-            "LABEL": "Código de acesso de uso único",
-            "DESCRIPTION": "Envie códigos para verificar uma transação ou login."
+            "LABEL": "One-time passcode",
+            "DESCRIPTION": "Send codes to verify a transaction or a login."
           },
-          "AREA_HEADER_TEXT_ONLY": "cabeçalho (apenas texto)",
-          "AREA_BUTTON_FLOW": "1 botão Abrir Flow",
-          "AREA_BUTTON_CATALOG": "1 botão Ver catálogo (texto fixo)",
-          "AREA_BUTTON_ORDER_DETAILS": "1 botão de pagamento (texto fixo)",
-          "AREA_BUTTON_COPY_CODE": "1 botão Copiar código",
+          "AREA_HEADER_TEXT_ONLY": "header (text only)",
+          "AREA_BUTTON_FLOW": "1 Open Flow button",
+          "AREA_BUTTON_CATALOG": "1 View catalog button (fixed text)",
+          "AREA_BUTTON_ORDER_DETAILS": "1 payment button (fixed text)",
+          "AREA_BUTTON_COPY_CODE": "1 Copy code button",
           "ORDER_STATUS": {
-            "LABEL": "Status do pedido",
-            "DESCRIPTION": "Envie mensagens para informar os clientes sobre o andamento de pedidos."
+            "LABEL": "Order status",
+            "DESCRIPTION": "Send messages to keep customers informed about the progress of their orders."
           }
         }
       },
       "STEP_2": {
-        "TITLE": "Conteúdo do modelo",
-        "BACK_BUTTON": "Voltar",
-        "SUBMIT_BUTTON": "Enviar modelo",
+        "TITLE": "Template content",
+        "BACK_BUTTON": "Back",
+        "SUBMIT_BUTTON": "Submit template",
         "NAME": {
-          "LABEL": "Nome do modelo",
-          "PLACEHOLDER": "ex: promo_verao_2026",
-          "HINT": "Apenas letras minúsculas, números e underline."
+          "LABEL": "Template name",
+          "PLACEHOLDER": "e.g. summer_promo_2026",
+          "HINT": "Lowercase letters, numbers and underscores only."
         },
         "LANGUAGE": {
-          "LABEL": "Idioma",
-          "PLACEHOLDER": "Selecione um idioma"
+          "LABEL": "Language",
+          "PLACEHOLDER": "Select a language"
         },
         "HEADER": {
-          "TITLE": "Cabeçalho (opcional)",
-          "TYPE_LABEL": "Tipo de cabeçalho",
+          "TITLE": "Header (optional)",
+          "TYPE_LABEL": "Header type",
           "TYPES": {
-            "NONE": "Nenhum",
-            "TEXT": "Texto",
-            "IMAGE": "Imagem",
-            "VIDEO": "Vídeo",
-            "DOCUMENT": "Documento"
+            "NONE": "None",
+            "TEXT": "Text",
+            "IMAGE": "Image",
+            "VIDEO": "Video",
+            "DOCUMENT": "Document"
           },
-          "TEXT_LABEL": "Texto do cabeçalho (máx {count} car.)",
-          "TEXT_PLACEHOLDER": "Texto curto do cabeçalho",
-          "UPLOAD_LABEL": "Enviar arquivo",
-          "REPLACE_LABEL": "Trocar arquivo",
-          "UPLOADING": "Enviando...",
-          "UPLOADED": "Enviado: {name}",
-          "UPLOAD_ERROR": "Não foi possível enviar o arquivo."
+          "TEXT_LABEL": "Header text (max {count} chars)",
+          "TEXT_PLACEHOLDER": "Short header text",
+          "UPLOAD_LABEL": "Upload file",
+          "REPLACE_LABEL": "Replace file",
+          "UPLOADING": "Uploading...",
+          "UPLOADED": "Uploaded: {name}",
+          "UPLOAD_ERROR": "We could not upload the file."
         },
         "BODY": {
-          "LABEL": "Corpo",
-          "PLACEHOLDER": "Escreva sua mensagem. Use {'{'}{'{'}1{'}'}{'}'} , {'{'}{'{'}2{'}'}{'}'} ... para adicionar variáveis.",
-          "ADD_VARIABLE": "Adicionar variável",
-          "AUTH_HINT": "O conteúdo do corpo é definido pela Meta para modelos de Autenticação e não pode ser editado. Apenas o valor de exemplo do código é personalizável.",
+          "LABEL": "Body",
+          "PLACEHOLDER": "Write your message. Use {'{'}{'{'}1{'}'}{'}'} , {'{'}{'{'}2{'}'}{'}'} ... to add variables.",
+          "ADD_VARIABLE": "Add variable",
+          "AUTH_HINT": "Meta defines the body content for Authentication templates and it cannot be edited. Only the sample code value is customizable.",
           "TOOLBAR": {
-            "BOLD": "Negrito",
-            "ITALIC": "Itálico",
-            "STRIKETHROUGH": "Riscado",
-            "CODE": "Monoespaçado",
+            "BOLD": "Bold",
+            "ITALIC": "Italic",
+            "STRIKETHROUGH": "Strikethrough",
+            "CODE": "Monospace",
             "EMOJI": "Emoji"
           }
         },
         "VARIABLES": {
-          "TITLE": "Valores de exemplo das variáveis",
-          "DESCRIPTION": "A Meta usa esses exemplos para revisar seu modelo. Eles não são enviados aos clientes.",
-          "PLACEHOLDER": "Valor de exemplo para {{variable}}"
+          "TITLE": "Sample values for variables",
+          "DESCRIPTION": "Meta uses these samples to review your template. They are not sent to customers.",
+          "PLACEHOLDER": "Sample value for {{variable}}"
         },
         "FOOTER": {
-          "LABEL": "Rodapé",
-          "PLACEHOLDER": "Texto de rodapé (opcional)"
+          "LABEL": "Footer",
+          "PLACEHOLDER": "Footer text (optional)"
         },
         "BUTTONS": {
-          "TITLE": "Botões",
-          "OPTIONAL_BADGE": "Opcional",
-          "DESCRIPTION": "Crie botões que permitam que os clientes respondam à sua mensagem ou realizem uma ação. É possível adicionar até {count} botões.",
-          "ADD_BUTTON": "Adicionar botão",
-          "REMOVE_BUTTON": "Remover botão",
-          "FIXED_TEXT_HINT": "O texto deste botão é definido automaticamente pela Meta e não pode ser alterado.",
-          "MAX_REACHED": "Você atingiu o limite de {count} botões.",
+          "TITLE": "Buttons",
+          "OPTIONAL_BADGE": "Optional",
+          "DESCRIPTION": "Add buttons that let customers reply to your message or take an action. You can add up to {count} buttons.",
+          "ADD_BUTTON": "Add button",
+          "REMOVE_BUTTON": "Remove button",
+          "FIXED_TEXT_HINT": "Meta sets this button's text automatically and it cannot be changed.",
+          "MAX_REACHED": "You have reached the limit of {count} buttons.",
           "TYPES": {
-            "QUICK_REPLY": "Resposta rápida",
-            "URL": "URL do site",
-            "PHONE_NUMBER": "Ligar para número",
-            "COPY_CODE": "Copiar código de oferta",
-            "CATALOG": "Ver catálogo",
-            "FLOW": "Abrir Flow",
-            "ORDER_DETAILS": "Revisar e pagar",
-            "VOICE_CALL": "Ligar no WhatsApp"
+            "QUICK_REPLY": "Quick reply",
+            "URL": "Website URL",
+            "PHONE_NUMBER": "Call phone number",
+            "COPY_CODE": "Copy offer code",
+            "CATALOG": "View catalog",
+            "FLOW": "Open Flow",
+            "ORDER_DETAILS": "Review and pay",
+            "VOICE_CALL": "Call on WhatsApp"
           },
           "FIELDS": {
-            "TEXT": "Texto do botão (máx {count} car.)",
-            "URL": "URL de destino",
-            "PHONE_NUMBER": "Número de telefone",
-            "EXAMPLE_CODE": "Código promocional de amostra",
-            "FLOW_ID": "ID do Flow",
-            "FLOW_CREATE": "Criar um Flow",
-            "FLOW_CREATE_HINT": "Cria e publica um Flow nesta conta, sem sair daqui. Depois você pode editá-lo no WhatsApp Manager.",
-            "FLOW_TEMPLATE": "Modelo de Flow",
+            "TEXT": "Button text (max {count} chars)",
+            "URL": "Destination URL",
+            "PHONE_NUMBER": "Phone number",
+            "EXAMPLE_CODE": "Sample promo code",
+            "FLOW_ID": "Flow ID",
+            "FLOW_CREATE": "Create a Flow",
+            "FLOW_CREATE_HINT": "Creates and publishes a Flow on this account without leaving this page. You can edit it later in WhatsApp Manager.",
+            "FLOW_TEMPLATE": "Flow template",
             "FLOW_TEMPLATES": {
-              "LEAD_CAPTURE": "Captação de lead (nome, telefone, e-mail, interesse)",
-              "APPOINTMENT": "Agendamento (nome, telefone, data, observações)",
-              "SURVEY": "Pesquisa de satisfação (nota e comentário)"
+              "LEAD_CAPTURE": "Lead capture (name, phone, email, interest)",
+              "APPOINTMENT": "Appointment booking (name, phone, date, notes)",
+              "SURVEY": "Satisfaction survey (rating and comment)"
             },
-            "FLOW_NAME": "Nome do Flow",
-            "FLOW_SUBMIT_LABEL": "Texto do botão de envio (opcional)",
-            "FLOW_CREATE_CONFIRM": "Criar e publicar",
-            "FLOW_CREATE_CANCEL": "Cancelar",
-            "FLOW_CREATE_ERROR": "Não foi possível criar o Flow nesta conta.",
-            "FLOW_PLACEHOLDER": "Selecione um Flow publicado",
-            "FLOWS_LOADING": "Carregando Flows...",
-            "FLOWS_EMPTY": "Nenhum Flow nesta conta. Crie um no WhatsApp Manager e publique.",
-            "FLOWS_NONE_PUBLISHED": "Esta conta tem Flow, mas nenhum publicado. Publique no WhatsApp Manager para poder usar aqui.",
-            "FLOWS_ERROR": "Não foi possível carregar os Flows desta conta.",
-            "NAVIGATE_SCREEN_HINT": "Preenchido sozinho ao criar o Flow aqui.",
-            "FLOW_ID_HINT": "ID do Flow já publicado no WhatsApp Manager.",
-            "NAVIGATE_SCREEN": "Tela inicial do Flow"
+            "FLOW_NAME": "Flow name",
+            "FLOW_SUBMIT_LABEL": "Submit button text (optional)",
+            "FLOW_CREATE_CONFIRM": "Create and publish",
+            "FLOW_CREATE_CANCEL": "Cancel",
+            "FLOW_CREATE_ERROR": "We could not create the Flow on this account.",
+            "FLOW_PLACEHOLDER": "Select a published Flow",
+            "FLOWS_LOADING": "Loading Flows...",
+            "FLOWS_EMPTY": "No Flows on this account. Create one in WhatsApp Manager and publish it.",
+            "FLOWS_NONE_PUBLISHED": "This account has Flows, but none published. Publish one in WhatsApp Manager to use it here.",
+            "FLOWS_ERROR": "We could not load the Flows for this account.",
+            "NAVIGATE_SCREEN_HINT": "Filled in automatically when you create the Flow here.",
+            "FLOW_ID_HINT": "ID of a Flow already published in WhatsApp Manager.",
+            "NAVIGATE_SCREEN": "Flow start screen"
           }
         },
         "PREVIEW": {
-          "TITLE": "Prévia em tempo real",
-          "BUSINESS_NAME": "Sua Empresa",
-          "BUSINESS_SUBTITLE": "Conta comercial oficial",
+          "TITLE": "Live preview",
+          "BUSINESS_NAME": "Your Business",
+          "BUSINESS_SUBTITLE": "Official business account",
           "WHATSAPP_BADGE": "WhatsApp",
-          "MEDIA_PLACEHOLDER": "Arquivo de mídia",
-          "BODY_PLACEHOLDER": "Escreva o corpo da mensagem para ver a prévia.",
-          "BUTTON_PLACEHOLDER": "Botão",
-          "LIVE_NOTE_TITLE": "Prévia em tempo real",
-          "LIVE_NOTE_DESCRIPTION": "Todas as alterações no texto, cabeçalho, variáveis e botões são refletidas instantaneamente no celular ao lado."
+          "MEDIA_PLACEHOLDER": "Media file",
+          "BODY_PLACEHOLDER": "Write the message body to see the preview.",
+          "BUTTON_PLACEHOLDER": "Button",
+          "LIVE_NOTE_TITLE": "Live preview",
+          "LIVE_NOTE_DESCRIPTION": "Every change to the text, header, variables and buttons shows up instantly on the phone beside it."
         },
         "VALIDATION": {
-          "NAME_REQUIRED": "O nome é obrigatório",
-          "NAME_FORMAT": "O nome deve conter apenas letras minúsculas, números e underline",
-          "BODY_REQUIRED": "O corpo da mensagem é obrigatório"
+          "NAME_REQUIRED": "Name is required",
+          "NAME_FORMAT": "The name must contain only lowercase letters, numbers and underscores",
+          "BODY_REQUIRED": "The message body is required"
         }
       },
       "CONFIRM": {
-        "TITLE": "Confirmar envio do modelo",
-        "SUBTITLE": "Revise o resumo abaixo antes de submeter o modelo",
-        "DESTINATION_INBOX": "Caixa de entrada de destino",
-        "NAME_LABEL": "Nome do modelo",
-        "CATEGORY_LANGUAGE_LABEL": "Categoria & idioma",
-        "MESSAGE_TEXT_LABEL": "Texto da mensagem",
-        "BUTTONS_LABEL": "Botões ({count})",
+        "TITLE": "Confirm template submission",
+        "SUBTITLE": "Review the summary below before submitting the template",
+        "DESTINATION_INBOX": "Destination inbox",
+        "NAME_LABEL": "Template name",
+        "CATEGORY_LANGUAGE_LABEL": "Category & language",
+        "MESSAGE_TEXT_LABEL": "Message text",
+        "BUTTONS_LABEL": "Buttons ({count})",
         "BUTTON_URL_DETAIL": "URL: {url}",
-        "BUTTON_PHONE_DETAIL": "Telefone: {phone}",
-        "BUTTON_CODE_DETAIL": "Código: {code}",
-        "BACK_BUTTON": "Continuar editando",
-        "CONFIRM_BUTTON": "Confirmar"
+        "BUTTON_PHONE_DETAIL": "Phone: {phone}",
+        "BUTTON_CODE_DETAIL": "Code: {code}",
+        "BACK_BUTTON": "Keep editing",
+        "CONFIRM_BUTTON": "Confirm"
       },
-      "SUCCESS_MESSAGE": "Modelo enviado para aprovação da Meta.",
-      "ERROR_MESSAGE": "Não foi possível enviar o modelo."
+      "SUCCESS_MESSAGE": "Template submitted for Meta approval.",
+      "ERROR_MESSAGE": "We could not submit the template."
     },
     "EDIT": {
-      "TITLE": "Editar {name}",
-      "NOT_EDITABLE": "Só é possível editar modelos aprovados, rejeitados ou pausados",
-      "DESCRIPTION": "Editar substitui todo o conteúdo do modelo e envia de novo para revisão da Meta. Nome, idioma e categoria não podem ser alterados aqui.",
-      "CANCEL_BUTTON": "Cancelar",
-      "SUBMIT_BUTTON": "Salvar alterações",
-      "SUCCESS_MESSAGE": "Modelo atualizado e reenviado para revisão da Meta.",
-      "ERROR_MESSAGE": "Não foi possível atualizar o modelo."
+      "TITLE": "Edit {name}",
+      "NOT_EDITABLE": "Only approved, rejected or paused templates can be edited",
+      "DESCRIPTION": "Editing replaces the template's entire content and submits it to Meta for review again. Name, language and category cannot be changed here.",
+      "CANCEL_BUTTON": "Cancel",
+      "SUBMIT_BUTTON": "Save changes",
+      "SUCCESS_MESSAGE": "Template updated and resubmitted for Meta review.",
+      "ERROR_MESSAGE": "We could not update the template."
     },
     "DELETE": {
-      "TITLE": "Excluir modelo",
+      "TITLE": "Delete template",
       "CONFIRM": {
-        "TITLE": "Excluir este modelo?",
-        "MESSAGE": "Essa ação não pode ser desfeita. Se o modelo estiver aprovado, você não vai poder reutilizar esse nome por 30 dias.",
-        "YES": "Sim, excluir",
-        "NO": "Cancelar"
+        "TITLE": "Delete this template?",
+        "MESSAGE": "This cannot be undone. If the template is approved, you will not be able to reuse this name for 30 days.",
+        "YES": "Yes, delete",
+        "NO": "Cancel"
       },
-      "SUCCESS_MESSAGE": "Modelo excluído.",
-      "ERROR_MESSAGE": "Não foi possível excluir o modelo."
+      "SUCCESS_MESSAGE": "Template deleted.",
+      "ERROR_MESSAGE": "We could not delete the template."
     }
   }
 }

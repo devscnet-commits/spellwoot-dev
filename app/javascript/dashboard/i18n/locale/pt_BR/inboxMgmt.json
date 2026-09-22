@@ -121,12 +121,12 @@
           "ERROR_MESSAGE": "Não conseguimos criar um canal de site, por favor, tente novamente"
         },
         "CHANNEL_WEBHOOK_SECRET": {
-          "LABEL": "Webhook Secret",
+          "LABEL": "Segredo do webhook",
           "COPY": "Copiar secret para área de transferência",
-          "COPY_SUCCESS": "Secret copiado para área de transferência",
+          "COPY_SUCCESS": "Segredo do webhook copiado para a área de transferência.",
           "TOGGLE": "Mostrar/ocultar secret",
-          "RESET_SUCCESS": "Webhook secret regenerado com sucesso",
-          "RESET_ERROR": "Não foi possível regenerar o webhook secret. Tente novamente"
+          "RESET_SUCCESS": "Segredo do webhook redefinido com sucesso.",
+          "RESET_ERROR": "Não foi possível redefinir o segredo do webhook."
         }
       },
       "TWILIO": {
@@ -316,7 +316,8 @@
           "AUTH_NOT_COMPLETED": "Autenticação não concluída. Por favor, reinicie o processo.",
           "SUCCESS_FALLBACK": "A conta do WhatsApp Business foi configurada com sucesso",
           "MANUAL_FALLBACK": "Se o seu número já estiver conectado à Plataforma WhatsApp Business (API) ou se você for um provedor de tecnologia integrando o seu próprio número, use o fluxo de {link}",
-          "MANUAL_LINK_TEXT": "fluxo de configuração manual"
+          "MANUAL_LINK_TEXT": "fluxo de configuração manual",
+          "SDK_LOAD_ERROR": "Não foi possível carregar o SDK do Facebook. Verifique sua conexão e tente novamente."
         },
         "API": {
           "ERROR_MESSAGE": "Não foi possível salvar o canal do WhatsApp"
@@ -598,9 +599,9 @@
     "EDIT": {
       "LOCK_TO_SINGLE_CONVERSATION": {
         "ENABLED": "Ativado",
-        "ENABLED_DESCRIPTION": "Quando um contato enviar mensagem novamente, a conversa anterior será reaberta.",
+        "ENABLED_DESCRIPTION": "Todas as mensagens de um contato ficam em uma única conversa.",
         "DISABLED": "Desativado",
-        "DISABLED_DESCRIPTION": "Uma nova conversa será criada cada vez após a anterior ser resolvida."
+        "DISABLED_DESCRIPTION": "Uma nova conversa é criada a cada vez que o contato entra em contato."
       },
       "API": {
         "SUCCESS_MESSAGE": "Configurações de caixa de entrada atualizadas com sucesso",
@@ -753,6 +754,10 @@
           "SANDBOX": "Sandbox",
           "LIVE": "Em tempo real"
         }
+      },
+      "WEBHOOK": {
+        "REGISTER_SUCCESS": "Webhook registrado com sucesso.",
+        "REGISTER_ERROR": "Não foi possível registrar o webhook."
       }
     },
     "SETTINGS": "Configurações",
@@ -797,19 +802,19 @@
         "TITLE": "Domínios permitidos",
         "SUBTITLE": "Adicione coringa ou domínios separados por vírgula (deixe em branco para permitir todos), ex: *.chatwoot.dev, chatwoot.com.",
         "PLACEHOLDER": "Insira domínios separados por vírgula (ex: *.chatwoot.dev, chatwoot.com)",
-        "DESCRIPTION": "Especifique os domínios onde este widget pode ser incorporado. Deixe em branco para permitir todos os domínios."
+        "DESCRIPTION": "Restrinja quais domínios podem carregar este widget."
       },
       "ALLOW_MOBILE_WEBVIEW": {
-        "LABEL": "Permitir em visualização mobile",
-        "SUBTITLE": "Habilitar o widget em webviews mobile como aplicativos nativos"
+        "LABEL": "Permitir webviews em celulares",
+        "SUBTITLE": "Permite que o widget carregue dentro de webviews de aplicativos móveis."
       },
       "IDENTITY_VALIDATION": {
-        "TITLE": "Validação de Identidade",
-        "DESCRIPTION": "Para validar a identidade do usuário, você pode passar um `identifier_hash` para cada usuário. Você pode gerar um hash HMAC sha256 usando o `identifier` com a chave mostrada aqui.",
+        "TITLE": "Validação de identidade",
+        "DESCRIPTION": "Verifique a identidade dos seus usuários com uma assinatura HMAC antes de iniciar uma conversa.",
         "SECRET_KEY": "Chave secreta",
         "VIEW_DOCS": "Ver documentação",
-        "REQUIRE_LABEL": "Forçar validação de identidade",
-        "REQUIRE_DESCRIPTION": "Se ativado, as solicitações sem o `identifier_hash` serão rejeitadas."
+        "REQUIRE_LABEL": "Exigir validação de identidade",
+        "REQUIRE_DESCRIPTION": "Recusa conversas que não trazem uma assinatura válida."
       },
       "INBOX_AGENTS": "Agentes",
       "INBOX_AGENTS_SUB_TEXT": "Adicionar ou remover agentes dessa caixa de entrada",
@@ -893,7 +898,7 @@
       "SELECT_PLACEHOLDER": "Selecionar Centro de Ajuda",
       "REMOVE": "Remover Centro de Ajuda",
       "SUB_TEXT": "Anexe um Centro de Ajuda com a caixa de entrada",
-      "NONE": "Nenhum"
+      "NONE": "Nenhuma"
     },
     "AUTO_ASSIGNMENT": {
       "MAX_ASSIGNMENT_LIMIT": "Limite de atribuição automática",
@@ -1023,7 +1028,50 @@
         "OPENS": "Abre",
         "CLOSES": "Fecha"
       },
-      "ALL_DAY": "O dia todo"
+      "ALL_DAY": "O dia todo",
+      "COPY_TO": "Copiar para outros dias",
+      "APPLY_TO": "Aplicar para",
+      "TABS": {
+        "HOURS": "Horário Comercial",
+        "EXCEPTIONS": "Exceções",
+        "MESSAGES": "Mensagens Automáticas"
+      },
+      "STATUS": {
+        "CLOSES_AT": "Fecha às {time}",
+        "OPENS_AT": "Abre às {time}"
+      },
+      "LUNCH_BREAK": "Horário de almoço",
+      "HOLIDAYS": {
+        "EMPTY": "Nenhum feriado cadastrado.",
+        "MONTH": "Mês",
+        "ONE_TIME": "Apenas este ano"
+      },
+      "REPLICATE": {
+        "LABEL": "Aplicar para",
+        "THIS": "Apenas esta caixa",
+        "TEAM": "Todas as caixas do time",
+        "ACCOUNT": "Todas as caixas da conta",
+        "NO_OTHER": "Nenhuma outra caixa disponível.",
+        "ACCOUNT_WARNING": "Isso substituirá o horário comercial de todas as outras caixas da conta.",
+        "SUCCESS": "Configuração aplicada a {count} caixa(s).",
+        "PARTIAL": "Configuração aplicada a {count} caixa(s). Não foi possível em {failedCount}: {names}."
+      },
+      "EXCEPTIONS": {
+        "HINT": "Uma exceção tem prioridade sobre o horário padrão e os feriados nessa data.",
+        "EMPTY": "Nenhuma exceção cadastrada.",
+        "ADD": "Adicionar exceção",
+        "EDIT": "Editar exceção",
+        "NAME_PLACEHOLDER": "Ex: Véspera de Natal",
+        "PERIODS": "Períodos de atendimento",
+        "ADD_PERIOD": "Adicionar período"
+      },
+      "MESSAGES": {
+        "OUT_OF_OFFICE_HELP": "Enviada quando o contato entra em atendimento fora do horário comercial.",
+        "INTERVAL_HELP": "Enviada quando o contato entra em atendimento durante o intervalo entre períodos (ex: almoço).",
+        "HOLIDAY_HELP": "Enviada quando o contato entra em atendimento durante um feriado cadastrado.",
+        "HOLIDAY_PLACEHOLDER": "Ex: Hoje é feriado. Retornamos no próximo dia útil."
+      },
+      "TEMPLATES": "Modelos"
     },
     "IMAP": {
       "TITLE": "IMAP",
@@ -1126,7 +1174,7 @@
           "IN_A_DAY": "Em um dia"
         },
         "WIDGET_COLOR_LABEL": "Cor do Widget",
-        "WIDGET_BUBBLE": "Configurações do Balão do Widget",
+        "WIDGET_BUBBLE": "Balão do widget",
         "WIDGET_BUBBLE_POSITION_LABEL": "Posição do Balão do Widget",
         "WIDGET_BUBBLE_TYPE_LABEL": "Tipo de Balão do Widget",
         "WIDGET_BUBBLE_LAUNCHER_TITLE": {
@@ -1207,18 +1255,18 @@
       "TIKTOK": "TikTok",
       "VOICE": "Voz"
     },
-    "WIDGET_FEATURES": "Funcionalidades do Widget",
+    "WIDGET_FEATURES": "Recursos do widget",
     "ASSIGNMENT": {
       "TITLE": "Atribuição de conversa",
-      "DESCRIPTION": "Atribuir automaticamente conversas recebidas a agentes disponíveis com base em políticas de atribuição",
-      "ENABLE_AUTO_ASSIGNMENT": "Ativar atribuição automática de conversa",
-      "DEFAULT_RULES_TITLE": "Regras de atribuição padrão",
-      "DEFAULT_RULES_DESCRIPTION": "Usando o comportamento de atribuição padrão para todas as conversas",
-      "DEFAULT_RULE_1": "Conversas criadas mais cedo primeiro",
-      "DEFAULT_RULE_2": "Distribuição round robin",
+      "DESCRIPTION": "Escolha como as conversas desta caixa são atribuídas aos agentes.",
+      "ENABLE_AUTO_ASSIGNMENT": "Ativar atribuição automática",
+      "DEFAULT_RULES_TITLE": "Regras padrão de atribuição",
+      "DEFAULT_RULES_DESCRIPTION": "Sem uma política, esta caixa segue as regras abaixo.",
+      "DEFAULT_RULE_1": "As conversas são distribuídas igualmente entre os agentes disponíveis.",
+      "DEFAULT_RULE_2": "Apenas agentes online recebem novas conversas.",
       "CUSTOMIZE_WITH_POLICY": "Personalizar com política de atribuição",
       "USING_POLICY": "Usando política de atribuição personalizada para esta caixa de entrada",
-      "CUSTOMIZE_POLICY": "Personalizar com política de atribuição",
+      "CUSTOMIZE_POLICY": "Personalizar política",
       "DELETE_POLICY": "Excluir política",
       "POLICY_LABEL": "Política de atribuição",
       "ASSIGNMENT_ORDER_LABEL": "Ordem de atribuição",
@@ -1228,24 +1276,24 @@
         "INACTIVE": "Inativo"
       },
       "PRIORITY": {
-        "EARLIEST_CREATED": "Criado mais cedo",
-        "LONGEST_WAITING": "Esperando há mais tempo"
+        "EARLIEST_CREATED": "Criada há mais tempo primeiro",
+        "LONGEST_WAITING": "Quem espera há mais tempo primeiro"
       },
       "METHOD": {
-        "ROUND_ROBIN": "Round robin",
-        "BALANCED": "Atribuição balanceada"
+        "ROUND_ROBIN": "Rodízio",
+        "BALANCED": "Equilibrado por carga de trabalho"
       },
-      "UPGRADE_PROMPT": "Políticas de atribuição personalizadas estão disponíveis no plano Business",
-      "UPGRADE_TO_BUSINESS": "Fazer upgrade para Business",
-      "DEFAULT_POLICY_LINKED": "Política padrão vinculada",
-      "DEFAULT_POLICY_DESCRIPTION": "Vincule uma política de atribuição personalizada para definir como as conversas são atribuídas aos agentes nesta caixa de entrada.",
-      "LINK_EXISTING_POLICY": "Vincular política existente",
-      "CREATE_NEW_POLICY": "Criar nova política",
+      "UPGRADE_PROMPT": "As políticas de atribuição estão disponíveis em um plano superior.",
+      "UPGRADE_TO_BUSINESS": "Fazer upgrade do plano",
+      "DEFAULT_POLICY_LINKED": "Política vinculada a esta caixa.",
+      "DEFAULT_POLICY_DESCRIPTION": "Vincule uma política para controlar como as conversas são distribuídas.",
+      "LINK_EXISTING_POLICY": "Vincular uma política existente",
+      "CREATE_NEW_POLICY": "Criar uma nova política",
       "NO_POLICIES": "Nenhuma política de atribuição encontrada",
       "VIEW_ALL_POLICIES": "Ver todas as políticas",
-      "CURRENT_BEHAVIOR": "Usando atualmente o comportamento de atribuição padrão:",
-      "LINK_SUCCESS": "Política de atribuição vinculada com sucesso",
-      "LINK_ERROR": "Falha ao vincular política de atribuição"
+      "CURRENT_BEHAVIOR": "Comportamento atual",
+      "LINK_SUCCESS": "Política vinculada com sucesso.",
+      "LINK_ERROR": "Não foi possível vincular a política."
     },
     "ASSIGNMENT_POLICY": {
       "DELETE_CONFIRM_TITLE": "Excluir política de atribuição?",
@@ -1255,6 +1303,16 @@
       "DELETE_SUCCESS": "Política de atribuição removida com sucesso",
       "DELETE_ERROR": "Falha ao remover política de atribuição",
       "DELETE_PLACE_HOLDER": "Escreva {name} para confirmar"
+    },
+    "AI_PRIORITIES": {
+      "TITLE": "Prioridade entre IAs",
+      "DESC": "Quando mais de uma IA atende esta caixa, apenas uma responde por conversa. A primeira da lista é a padrão; use as setas para reordenar.",
+      "EMPTY": "Nenhuma IA atende esta caixa. Vincule um agente em Agentes IA → agente → Atendimentos e transferências.",
+      "DEFAULT_BADGE": "Padrão",
+      "MODE_SHADOW": "Sombra (só observa)",
+      "TIE_WARNING": "Há empate na prioridade: salve a ordem acima para definir qual IA responde.",
+      "SUCCESS": "Prioridade das IAs atualizada.",
+      "ERROR": "Não foi possível salvar a prioridade das IAs."
     }
   }
 }
