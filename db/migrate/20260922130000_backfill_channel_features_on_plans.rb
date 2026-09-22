@@ -9,7 +9,14 @@
 # não efeito colateral de um deploy.
 class BackfillChannelFeaturesOnPlans < ActiveRecord::Migration[7.1]
   PLAN_KEYS = %w[whatsapp_channel instagram_channel email_channel api_channel telegram_channel sms_channel].freeze
-  ACCOUNT_FLAGS = %w[channel_whatsapp channel_instagram channel_email channel_api channel_telegram channel_sms].freeze
+  # channel_website/channel_facebook JÁ eram chaves de plano, mas nunca tiveram enforcement de
+  # servidor — ChannelAvailability acabou de dar. Uma conta antiga cujo bitmask não traga esses bits
+  # passaria a ser BARRADA de criar webchat/Facebook, onde antes era liberada. Entram no backfill
+  # pelo mesmo motivo das outras: não barrar quem já usa o sistema hoje.
+  ACCOUNT_FLAGS = %w[
+    channel_whatsapp channel_instagram channel_email channel_api channel_telegram channel_sms
+    channel_website channel_facebook
+  ].freeze
 
   def up
     Plan.find_each do |plan|
