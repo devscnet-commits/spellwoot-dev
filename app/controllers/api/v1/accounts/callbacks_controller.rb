@@ -1,14 +1,8 @@
 class Api::V1::Accounts::CallbacksController < Api::V1::Accounts::BaseController
   before_action :inbox, only: [:reauthorize_page]
+  before_action :ensure_channel_in_plan, only: [:register_facebook_page]
 
   def register_facebook_page
-    # O Facebook não passa pelo allowed_channel_types (a inbox nasce aqui, depois do OAuth), então
-    # sem esta checagem o plano barraria o canal na tela padrão e o liberaria por este caminho.
-    unless ChannelAvailability.available?(Current.account, 'facebook')
-      render json: { error: ChannelAvailability.unavailable_message('facebook') }, status: :forbidden
-      return
-    end
-
     user_access_token = params[:user_access_token]
     page_access_token = params[:page_access_token]
     page_id = params[:page_id]
@@ -74,6 +68,14 @@ class Api::V1::Accounts::CallbacksController < Api::V1::Accounts::BaseController
   end
 
   private
+
+  # O Facebook não passa pelo allowed_channel_types (a inbox nasce aqui, depois do OAuth), então sem
+  # esta checagem o plano barraria o canal na tela padrão e o liberaria por este caminho.
+  def ensure_channel_in_plan
+    return if ChannelAvailability.available?(Current.account, 'facebook')
+
+    render json: { error: ChannelAvailability.unavailable_message('facebook') }, status: :forbidden
+  end
 
   def inbox
     @inbox = Current.account.inboxes.find_by(id: params[:inbox_id])

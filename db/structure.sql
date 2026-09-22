@@ -1,12 +1,11 @@
-\restrict pgAN0aRoj3lrJZGkNR6H5UseDWKjNST7nLWzX4all0BfLXCQeLb5ernv6jITIn9
+\restrict S1A03RrtG9ulgpt5jtANuUh85J9RIn6ZU8l9gCvSYoyqivPlZPhw0Etkj1CnjeP
 
--- Dumped from database version 16.13 (Debian 16.13-1.pgdg12+1)
--- Dumped by pg_dump version 17.10
+-- Dumped from database version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
+-- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -416,6 +415,42 @@ ALTER SEQUENCE public.active_storage_variant_records_id_seq OWNED BY public.acti
 
 
 --
+-- Name: agent_assignment_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.agent_assignment_logs (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    inbox_id bigint NOT NULL,
+    conversation_id bigint NOT NULL,
+    eligible_agent_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    available_agent_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    assigned_agent_id bigint,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: agent_assignment_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.agent_assignment_logs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: agent_assignment_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.agent_assignment_logs_id_seq OWNED BY public.agent_assignment_logs.id;
+
+
+--
 -- Name: agent_bot_inboxes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -518,6 +553,38 @@ CREATE SEQUENCE public.agent_capacity_policies_id_seq
 --
 
 ALTER SEQUENCE public.agent_capacity_policies_id_seq OWNED BY public.agent_capacity_policies.id;
+
+
+--
+-- Name: agent_presence_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.agent_presence_snapshots (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    status character varying NOT NULL,
+    recorded_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: agent_presence_snapshots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.agent_presence_snapshots_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: agent_presence_snapshots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.agent_presence_snapshots_id_seq OWNED BY public.agent_presence_snapshots.id;
 
 
 --
@@ -658,7 +725,12 @@ CREATE TABLE public.ai_agents (
     team_id bigint,
     handoff_team_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
     handoff_agent_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
-    fallback_handoff_team_id bigint
+    fallback_handoff_team_id bigint,
+    sla jsonb DEFAULT '{}'::jsonb NOT NULL,
+    transfer_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
+    close_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
+    behavior jsonb DEFAULT '{}'::jsonb NOT NULL,
+    follow_up jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 
@@ -834,47 +906,15 @@ ALTER SEQUENCE public.ai_customer_memories_id_seq OWNED BY public.ai_customer_me
 
 
 --
--- Name: ai_department_inboxes; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.ai_department_inboxes (
-    id bigint NOT NULL,
-    ai_department_id bigint NOT NULL,
-    inbox_id bigint NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
-);
-
-
---
--- Name: ai_department_inboxes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.ai_department_inboxes_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: ai_department_inboxes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.ai_department_inboxes_id_seq OWNED BY public.ai_department_inboxes.id;
-
-
---
 -- Name: ai_department_integrations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.ai_department_integrations (
     id bigint NOT NULL,
-    ai_department_id bigint NOT NULL,
     ai_integration_link_id bigint NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    ai_agent_id bigint NOT NULL
 );
 
 
@@ -895,51 +935,6 @@ CREATE SEQUENCE public.ai_department_integrations_id_seq
 --
 
 ALTER SEQUENCE public.ai_department_integrations_id_seq OWNED BY public.ai_department_integrations.id;
-
-
---
--- Name: ai_departments; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.ai_departments (
-    id bigint NOT NULL,
-    account_id bigint NOT NULL,
-    ai_agent_id bigint NOT NULL,
-    name character varying NOT NULL,
-    objetivo text,
-    status character varying DEFAULT 'active'::character varying NOT NULL,
-    sla jsonb DEFAULT '{}'::jsonb NOT NULL,
-    transfer_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
-    close_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
-    copilot_config jsonb DEFAULT '{}'::jsonb NOT NULL,
-    auto_attendance_config jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    behavior jsonb DEFAULT '{}'::jsonb NOT NULL,
-    follow_up jsonb DEFAULT '{}'::jsonb NOT NULL,
-    instructions text,
-    is_default boolean DEFAULT false NOT NULL,
-    "position" integer DEFAULT 0 NOT NULL
-);
-
-
---
--- Name: ai_departments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.ai_departments_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: ai_departments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.ai_departments_id_seq OWNED BY public.ai_departments.id;
 
 
 --
@@ -1096,14 +1091,16 @@ ALTER SEQUENCE public.ai_knowledge_chunks_id_seq OWNED BY public.ai_knowledge_ch
 CREATE TABLE public.ai_knowledge_sources (
     id bigint NOT NULL,
     account_id bigint NOT NULL,
-    ai_department_id bigint,
     kind character varying DEFAULT 'faq'::character varying NOT NULL,
     title character varying,
     raw text,
     status character varying DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    price character varying
+    price character varying,
+    ai_agent_id bigint,
+    crawl_status character varying,
+    crawl_error text
 );
 
 
@@ -1133,7 +1130,6 @@ ALTER SEQUENCE public.ai_knowledge_sources_id_seq OWNED BY public.ai_knowledge_s
 CREATE TABLE public.ai_lead_variables (
     id bigint NOT NULL,
     account_id bigint NOT NULL,
-    ai_department_id bigint NOT NULL,
     name character varying NOT NULL,
     description text,
     var_type character varying DEFAULT 'texto'::character varying NOT NULL,
@@ -1141,7 +1137,8 @@ CREATE TABLE public.ai_lead_variables (
     visible_in_first_chat boolean DEFAULT false NOT NULL,
     "position" integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    ai_agent_id bigint NOT NULL
 );
 
 
@@ -1210,7 +1207,6 @@ ALTER SEQUENCE public.ai_operation_profiles_id_seq OWNED BY public.ai_operation_
 
 CREATE TABLE public.ai_playbooks (
     id bigint NOT NULL,
-    ai_department_id bigint NOT NULL,
     objetivo text,
     steps jsonb DEFAULT '[]'::jsonb NOT NULL,
     transfer_when jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -1220,7 +1216,8 @@ CREATE TABLE public.ai_playbooks (
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    lock_version integer DEFAULT 0 NOT NULL
+    lock_version integer DEFAULT 0 NOT NULL,
+    ai_agent_id bigint NOT NULL
 );
 
 
@@ -1264,7 +1261,6 @@ CREATE TABLE public.ai_runs (
     status character varying DEFAULT 'recorded'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    ai_department_id bigint,
     inbox_id bigint,
     routing_band character varying,
     worker character varying,
@@ -1368,7 +1364,6 @@ ALTER SEQUENCE public.ai_shadows_id_seq OWNED BY public.ai_shadows.id;
 CREATE TABLE public.ai_tools (
     id bigint NOT NULL,
     account_id bigint NOT NULL,
-    ai_department_id bigint,
     name character varying NOT NULL,
     description text,
     implementation_type character varying DEFAULT 'capability'::character varying NOT NULL,
@@ -1380,7 +1375,8 @@ CREATE TABLE public.ai_tools (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     webhook_config jsonb DEFAULT '{}'::jsonb NOT NULL,
-    required_attributes jsonb DEFAULT '[]'::jsonb NOT NULL
+    required_attributes jsonb DEFAULT '[]'::jsonb NOT NULL,
+    ai_agent_id bigint
 );
 
 
@@ -3493,7 +3489,8 @@ CREATE TABLE public.inboxes (
     interval_message character varying,
     holiday_message character varying,
     operational_flow_id bigint,
-    reopen_window_hours integer DEFAULT 0 NOT NULL
+    reopen_window_hours integer DEFAULT 0 NOT NULL,
+    default_team_id bigint
 );
 
 
@@ -4219,7 +4216,14 @@ CREATE TABLE public.plans (
     updated_at timestamp(6) without time zone NOT NULL,
     ai_credits_included integer DEFAULT 0 NOT NULL,
     monthly_price_cents integer,
-    setup_fee_cents integer
+    setup_fee_cents integer,
+    visible_to_new_subscribers boolean DEFAULT true NOT NULL,
+    courtesy boolean DEFAULT false NOT NULL,
+    description text,
+    annual_price_cents integer,
+    promo_price_cents integer,
+    promo_months_count integer,
+    ai_credit_overage_price_cents integer
 );
 
 
@@ -5097,6 +5101,13 @@ ALTER TABLE ONLY public.active_storage_variant_records ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: agent_assignment_logs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_assignment_logs ALTER COLUMN id SET DEFAULT nextval('public.agent_assignment_logs_id_seq'::regclass);
+
+
+--
 -- Name: agent_bot_inboxes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5115,6 +5126,13 @@ ALTER TABLE ONLY public.agent_bots ALTER COLUMN id SET DEFAULT nextval('public.a
 --
 
 ALTER TABLE ONLY public.agent_capacity_policies ALTER COLUMN id SET DEFAULT nextval('public.agent_capacity_policies_id_seq'::regclass);
+
+
+--
+-- Name: agent_presence_snapshots id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_presence_snapshots ALTER COLUMN id SET DEFAULT nextval('public.agent_presence_snapshots_id_seq'::regclass);
 
 
 --
@@ -5174,24 +5192,10 @@ ALTER TABLE ONLY public.ai_customer_memories ALTER COLUMN id SET DEFAULT nextval
 
 
 --
--- Name: ai_department_inboxes id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_department_inboxes ALTER COLUMN id SET DEFAULT nextval('public.ai_department_inboxes_id_seq'::regclass);
-
-
---
 -- Name: ai_department_integrations id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ai_department_integrations ALTER COLUMN id SET DEFAULT nextval('public.ai_department_integrations_id_seq'::regclass);
-
-
---
--- Name: ai_departments id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_departments ALTER COLUMN id SET DEFAULT nextval('public.ai_departments_id_seq'::regclass);
 
 
 --
@@ -6008,6 +6012,14 @@ ALTER TABLE ONLY public.active_storage_variant_records
 
 
 --
+-- Name: agent_assignment_logs agent_assignment_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_assignment_logs
+    ADD CONSTRAINT agent_assignment_logs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: agent_bot_inboxes agent_bot_inboxes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6029,6 +6041,14 @@ ALTER TABLE ONLY public.agent_bots
 
 ALTER TABLE ONLY public.agent_capacity_policies
     ADD CONSTRAINT agent_capacity_policies_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: agent_presence_snapshots agent_presence_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_presence_snapshots
+    ADD CONSTRAINT agent_presence_snapshots_pkey PRIMARY KEY (id);
 
 
 --
@@ -6096,27 +6116,11 @@ ALTER TABLE ONLY public.ai_customer_memories
 
 
 --
--- Name: ai_department_inboxes ai_department_inboxes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_department_inboxes
-    ADD CONSTRAINT ai_department_inboxes_pkey PRIMARY KEY (id);
-
-
---
 -- Name: ai_department_integrations ai_department_integrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ai_department_integrations
     ADD CONSTRAINT ai_department_integrations_pkey PRIMARY KEY (id);
-
-
---
--- Name: ai_departments ai_departments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_departments
-    ADD CONSTRAINT ai_departments_pkey PRIMARY KEY (id);
 
 
 --
@@ -7027,17 +7031,10 @@ CREATE INDEX conv_acid_inbid_stat_asgnid_idx ON public.conversations USING btree
 
 
 --
--- Name: idx_ai_department_inboxes_unique; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_ai_agent_integrations_unique; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_ai_department_inboxes_unique ON public.ai_department_inboxes USING btree (ai_department_id, inbox_id);
-
-
---
--- Name: idx_ai_dept_integrations_unique; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX idx_ai_dept_integrations_unique ON public.ai_department_integrations USING btree (ai_department_id, ai_integration_link_id);
+CREATE UNIQUE INDEX idx_ai_agent_integrations_unique ON public.ai_department_integrations USING btree (ai_agent_id, ai_integration_link_id);
 
 
 --
@@ -7230,6 +7227,34 @@ CREATE UNIQUE INDEX index_active_storage_variant_records_uniqueness ON public.ac
 
 
 --
+-- Name: index_agent_assignment_logs_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_agent_assignment_logs_on_account_id ON public.agent_assignment_logs USING btree (account_id);
+
+
+--
+-- Name: index_agent_assignment_logs_on_assigned_agent_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_agent_assignment_logs_on_assigned_agent_id ON public.agent_assignment_logs USING btree (assigned_agent_id);
+
+
+--
+-- Name: index_agent_assignment_logs_on_conversation_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_agent_assignment_logs_on_conversation_id ON public.agent_assignment_logs USING btree (conversation_id);
+
+
+--
+-- Name: index_agent_assignment_logs_on_inbox_id_and_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_agent_assignment_logs_on_inbox_id_and_created_at ON public.agent_assignment_logs USING btree (inbox_id, created_at);
+
+
+--
 -- Name: index_agent_bots_on_account_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7241,6 +7266,13 @@ CREATE INDEX index_agent_bots_on_account_id ON public.agent_bots USING btree (ac
 --
 
 CREATE INDEX index_agent_capacity_policies_on_account_id ON public.agent_capacity_policies USING btree (account_id);
+
+
+--
+-- Name: index_agent_presence_snapshots_on_account_user_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_agent_presence_snapshots_on_account_user_time ON public.agent_presence_snapshots USING btree (account_id, user_id, recorded_at);
 
 
 --
@@ -7363,17 +7395,10 @@ CREATE UNIQUE INDEX index_ai_customer_memories_on_contact_id_and_account_id ON p
 
 
 --
--- Name: index_ai_department_inboxes_on_inbox_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_ai_department_integrations_on_ai_agent_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_ai_department_inboxes_on_inbox_id ON public.ai_department_inboxes USING btree (inbox_id);
-
-
---
--- Name: index_ai_departments_on_ai_agent_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_ai_departments_on_ai_agent_id ON public.ai_departments USING btree (ai_agent_id);
+CREATE INDEX index_ai_department_integrations_on_ai_agent_id ON public.ai_department_integrations USING btree (ai_agent_id);
 
 
 --
@@ -7433,17 +7458,17 @@ CREATE INDEX index_ai_knowledge_chunks_on_ai_knowledge_source_id ON public.ai_kn
 
 
 --
--- Name: index_ai_knowledge_sources_on_ai_department_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_ai_knowledge_sources_on_ai_agent_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_ai_knowledge_sources_on_ai_department_id ON public.ai_knowledge_sources USING btree (ai_department_id);
+CREATE INDEX index_ai_knowledge_sources_on_ai_agent_id ON public.ai_knowledge_sources USING btree (ai_agent_id);
 
 
 --
--- Name: index_ai_lead_variables_on_ai_department_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_ai_lead_variables_on_ai_agent_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_ai_lead_variables_on_ai_department_id ON public.ai_lead_variables USING btree (ai_department_id);
+CREATE INDEX index_ai_lead_variables_on_ai_agent_id ON public.ai_lead_variables USING btree (ai_agent_id);
 
 
 --
@@ -7454,10 +7479,10 @@ CREATE INDEX index_ai_operation_profiles_on_account_id ON public.ai_operation_pr
 
 
 --
--- Name: index_ai_playbooks_on_ai_department_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_ai_playbooks_on_ai_agent_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_ai_playbooks_on_ai_department_id ON public.ai_playbooks USING btree (ai_department_id);
+CREATE INDEX index_ai_playbooks_on_ai_agent_id ON public.ai_playbooks USING btree (ai_agent_id);
 
 
 --
@@ -7468,10 +7493,17 @@ CREATE INDEX index_ai_runs_on_account_id ON public.ai_runs USING btree (account_
 
 
 --
--- Name: index_ai_runs_on_ai_department_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_ai_runs_on_account_id_and_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_ai_runs_on_ai_department_id ON public.ai_runs USING btree (ai_department_id);
+CREATE INDEX index_ai_runs_on_account_id_and_created_at ON public.ai_runs USING btree (account_id, created_at);
+
+
+--
+-- Name: index_ai_runs_on_ai_agent_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ai_runs_on_ai_agent_id ON public.ai_runs USING btree (ai_agent_id);
 
 
 --
@@ -7510,10 +7542,10 @@ CREATE INDEX index_ai_shadows_on_account_id ON public.ai_shadows USING btree (ac
 
 
 --
--- Name: index_ai_tools_on_ai_department_id; Type: INDEX; Schema: public; Owner: -
+-- Name: index_ai_tools_on_ai_agent_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_ai_tools_on_ai_department_id ON public.ai_tools USING btree (ai_department_id);
+CREATE INDEX index_ai_tools_on_ai_agent_id ON public.ai_tools USING btree (ai_agent_id);
 
 
 --
@@ -9456,11 +9488,27 @@ CREATE TRIGGER conversations_before_insert_row_tr BEFORE INSERT ON public.conver
 
 
 --
+-- Name: agent_assignment_logs fk_rails_02134bd504; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_assignment_logs
+    ADD CONSTRAINT fk_rails_02134bd504 FOREIGN KEY (conversation_id) REFERENCES public.conversations(id);
+
+
+--
 -- Name: ai_handoff_summaries fk_rails_0861b82b8d; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ai_handoff_summaries
     ADD CONSTRAINT fk_rails_0861b82b8d FOREIGN KEY (ai_run_id) REFERENCES public.ai_runs(id);
+
+
+--
+-- Name: agent_assignment_logs fk_rails_08cf58a0cc; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_assignment_logs
+    ADD CONSTRAINT fk_rails_08cf58a0cc FOREIGN KEY (inbox_id) REFERENCES public.inboxes(id);
 
 
 --
@@ -9509,6 +9557,14 @@ ALTER TABLE ONLY public.agent_schedules
 
 ALTER TABLE ONLY public.ai_credit_requests
     ADD CONSTRAINT fk_rails_2e635b4b99 FOREIGN KEY (approved_by_id) REFERENCES public.users(id);
+
+
+--
+-- Name: agent_assignment_logs fk_rails_30230a2556; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_assignment_logs
+    ADD CONSTRAINT fk_rails_30230a2556 FOREIGN KEY (assigned_agent_id) REFERENCES public.users(id);
 
 
 --
@@ -9656,6 +9712,14 @@ ALTER TABLE ONLY public.plan_features
 
 
 --
+-- Name: agent_presence_snapshots fk_rails_ac7153a52e; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_presence_snapshots
+    ADD CONSTRAINT fk_rails_ac7153a52e FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
 -- Name: operational_flow_reasons fk_rails_b5440aaf33; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9712,6 +9776,14 @@ ALTER TABLE ONLY public.team_inboxes
 
 
 --
+-- Name: agent_assignment_logs fk_rails_db243bdb17; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_assignment_logs
+    ADD CONSTRAINT fk_rails_db243bdb17 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
 -- Name: meta_conversion_events fk_rails_e181862f01; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9728,14 +9800,35 @@ ALTER TABLE ONLY public.subscriptions
 
 
 --
+-- Name: agent_presence_snapshots fk_rails_f2f49d923f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_presence_snapshots
+    ADD CONSTRAINT fk_rails_f2f49d923f FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict pgAN0aRoj3lrJZGkNR6H5UseDWKjNST7nLWzX4all0BfLXCQeLb5ernv6jITIn9
+\unrestrict S1A03RrtG9ulgpt5jtANuUh85J9RIn6ZU8l9gCvSYoyqivPlZPhw0Etkj1CnjeP
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260922130000'),
+('20260922120000'),
+('20260917130000'),
+('20260917120000'),
+('20260904190000'),
+('20260903200000'),
+('20260902180100'),
+('20260902180000'),
+('20260821130000'),
+('20260821120000'),
+('20260819120200'),
+('20260819120100'),
+('20260819120000'),
 ('20260810150000'),
 ('20260731120000'),
 ('20260730130000'),

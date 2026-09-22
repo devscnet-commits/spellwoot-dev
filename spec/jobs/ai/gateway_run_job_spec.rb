@@ -58,7 +58,7 @@ RSpec.describe Ai::GatewayRunJob do
       aggregate_failures do
         expect(ran).to eq([{ agent_id: a_maya.id, mode: 'live' }]) # exatamente UM, o menor id, em live
         expect(tie_event).to be_present
-        expect(tie_event.payload['agent_ids']).to match_array([a_maya.id, a_nova.id])
+        expect(tie_event.payload['agent_ids']).to contain_exactly(a_maya.id, a_nova.id)
         expect(tie_event.payload['chosen_agent_id']).to eq(a_maya.id)
         expect(tie_event.payload['priority']).to eq(1)
       end
@@ -87,7 +87,7 @@ RSpec.describe Ai::GatewayRunJob do
       ran = spy_gateway
       described_class.new.perform(message.id)
 
-      expect(ran).to match_array([{ agent_id: a_live.id, mode: 'live' }, { agent_id: a_shadow.id, mode: 'shadow' }])
+      expect(ran).to contain_exactly({ agent_id: a_live.id, mode: 'live' }, { agent_id: a_shadow.id, mode: 'shadow' })
       expect(tie_event).to be_nil # só 1 live elegível -> sem empate
     end
 

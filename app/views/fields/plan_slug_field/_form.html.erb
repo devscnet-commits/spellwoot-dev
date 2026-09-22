@@ -2,7 +2,10 @@
   <label>Slug</label>
 </div>
 <div class="field-unit__field">
-  <% if field.data.present? %>
+  <%# persisted?, NÃO field.data.present?: num re-render do :new após falha de validação o resource já
+      carrega o slug submetido, e testar o dado viraria o campo em texto — o próximo submit não
+      mandaria plan_slug e o slug se perderia. %>
+  <% if f.object.persisted? %>
     <p class="text-sm text-slate-700"><code><%= field.data %></code></p>
     <p class="text-xs text-slate-500 mt-1">
       O slug não muda depois de criado: o código localiza plano por slug

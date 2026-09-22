@@ -187,6 +187,10 @@
     "TABS": {
       "SHADOWS": "Analistas criados",
       "ANALYSIS": "Analysis"
+    },
+    "UNAVAILABLE": {
+      "TITLE": "AI analysis unavailable",
+      "DESCRIPTION": "This feature has been turned off and no longer analyses new conversations. Previous history has been preserved."
     }
   }
 }

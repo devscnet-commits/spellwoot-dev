@@ -187,6 +187,10 @@
     "TABS": {
       "SHADOWS": "Analistas criados",
       "ANALYSIS": "Análises"
+    },
+    "UNAVAILABLE": {
+      "TITLE": "Análises com IA indisponíveis",
+      "DESCRIPTION": "Este recurso foi desativado e não analisa novas conversas. O histórico anterior foi preservado."
     }
   }
 }

@@ -149,19 +149,22 @@ class Plan < ApplicationRecord
     MANAGED_LIMIT_KEYS.each do |key|
       attrs = rows[key].presence or next
 
-      attrs = attrs.to_h.stringify_keys
-      behavior = attrs['overflow_behavior'].to_s
-      plan_limits.find_or_initialize_by(key: key).update!(
-        max_value: attrs['max_value'].to_s.strip.presence&.to_i,
-        overflow_behavior: PlanLimit.overflow_behaviors.key?(behavior) ? behavior : 'hard_block',
-        overage_price_cents: attrs['overage_price_cents'].to_s.strip.presence&.to_i
-      )
+      write_limit!(key, attrs.to_h.stringify_keys)
     end
     reload
   end
 
   def limit_for(key)
     plan_limits.find { |l| l.key == key.to_s }
+  end
+
+  def write_limit!(key, attrs)
+    behavior = attrs['overflow_behavior'].to_s
+    plan_limits.find_or_initialize_by(key: key).update!(
+      max_value: attrs['max_value'].to_s.strip.presence&.to_i,
+      overflow_behavior: PlanLimit.overflow_behaviors.key?(behavior) ? behavior : 'hard_block',
+      overage_price_cents: attrs['overage_price_cents'].to_s.strip.presence&.to_i
+    )
   end
 
   # Leitura opcional do preço em reais a partir dos *_cents (fonte da verdade). nil = não definido.

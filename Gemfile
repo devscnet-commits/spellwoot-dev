@@ -173,6 +173,13 @@ gem 'faker'
 # Include logrange conditionally in intializer using env variable
 gem 'lograge', '~> 0.14.0', require: false
 
+# FeatureGate memoiza o plano da conta aqui, e ApplicationJob limpa o escopo entre jobs. Até agora o
+# gem só chegava de carona no lograge, que é `require: false` e só carrega quando LOGRAGE_ENABLED
+# está ligado — sem ele a constante não existia e FeatureGate levantava NameError. Declarado direto,
+# o Bundler.require carrega no boot e o railtie do gem instala o middleware que zera o store a cada
+# requisição, que é o que torna a memoização segura.
+gem 'request_store', '~> 1.5'
+
 # worked with microsoft refresh token
 gem 'omniauth-oauth2'
 

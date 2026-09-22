@@ -54,7 +54,10 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
         mock_client.responses.create.side_effect = [resp1, resp2, resp3]
         mock_execute_tool.return_value = {"result": "ok"}
 
-        reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model = (
+        # run_conversation devolve 9 valores desde que resolved_model entrou na tupla; o tool_usage
+        # do fim não é o objeto deste teste, mas precisa ser desempacotado.
+        (reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out,
+         used_model, _tool_usage) = (
             orchestrator.run_conversation(
                 ticket_id=1,
                 ai_agent_id=1,
@@ -321,7 +324,7 @@ class TestCorteDoLoopFechaChamadaPendente:
             mock_client.responses.create.side_effect = pendentes + [final]
             mock_execute_tool.return_value = {"result": "ok"}
 
-            reply_text, _, _, _, _, _, _, _ = orchestrator.run_conversation(
+            reply_text, *_ = orchestrator.run_conversation(
                 ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p",
                 tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None,
                 user_input="oi", conversation_id=None,

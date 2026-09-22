@@ -116,7 +116,7 @@ class Ai::ModelRouter
     end
 
     data = JSON.parse(resp.body)
-    Rails.logger.info "[Ai::ModelRouter#call_responses_api] RESPONSE id=#{data['id'].inspect} output_types=#{(data['output'] || []).map { |o| o['type'] }.inspect}"
+    Rails.logger.info "[Ai::ModelRouter#call_responses_api] RESPONSE id=#{data['id'].inspect} output_types=#{(data['output'] || []).pluck('type').inspect}"
     text = nil
     (data['output'] || []).each do |item|
       next unless item['type'] == 'message'

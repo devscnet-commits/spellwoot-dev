@@ -1,13 +1,20 @@
 require 'rails_helper'
 
-# BYOK (billing Fase 3): quando a chave PRÓPRIA do cliente falha por auth (401), o Gateway aplica a tag
-# 'chave-propria-falhou', refaz a decisão na chave global da SCNET e cobra 1 crédito SCNET desse retry.
+# BYOK (billing Fase 3): quando a chave PRÓPRIA do cliente falha por auth (401), quem refaz o turno na
+# chave global é o orquestrador Python (orchestrator.py) — desde a eliminação do motor legado o retry
+# deixou de ser client-side. Ao Gateway cabe a contrapartida em Rails, que é o que este arquivo cobre:
+# tag 'chave-propria-falhou' de visibilidade, evento decision.byok_fallback e 1 crédito SCNET cobrado
+# pela chamada que teve de usar a chave da plataforma.
 RSpec.describe 'Ai::Gateway fallback BYOK', type: :model do
   let(:account) { create(:account) }
   let(:inbox) { create(:inbox, account: account) }
+  # openai, não anthropic: o discriminador de cobrança (Ai::Gateway#account_byok?) consulta a chave
+  # de openai fixo, porque é o único provider que o orquestrador Python executa hoje. Num perfil de
+  # outro provider a conta seria tratada como sem chave própria e o billing barraria o turno antes de
+  # chegar ao fallback que este arquivo testa.
   let(:profile) do
     Ai::OperationProfile.create!(account_id: account.id, name: 'balanceado',
-                                 supervisor_provider: 'anthropic', supervisor_model: 'claude-3-5-sonnet-latest')
+                                 supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')
   end
   let(:agent) { Ai::Agent.create!(account: account, name: 'Bot', status: 'active', ai_operation_profile_id: profile.id) }
 
@@ -15,27 +22,23 @@ RSpec.describe 'Ai::Gateway fallback BYOK', type: :model do
     account.enable_features!('ai_core')
     enable_byok!(account)
     # Chave própria no Hub -> account_provider_key presente (a 1ª chamada usa a chave do cliente).
-    IntegrationSetting.create!(account_id: account.id, provider: 'anthropic', enabled: true,
-                               config: { 'apiKey' => 'sk-ant-cliente' }.to_json)
+    IntegrationSetting.create!(account_id: account.id, provider: 'openai', enabled: true,
+                               config: { 'apiKey' => 'sk-cliente' }.to_json)
 
-    allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
+    # available_now? só consulta horários quando working_hours_enabled? — desligado, ele responde
+    # true sem stub nenhum. Explícito aqui porque o teste não é sobre horário de atendimento.
+    inbox.update!(working_hours_enabled: false)
     allow(Ai::KnowledgeRetriever).to receive(:retrieve).and_return([])
     allow(Ai::Workers::MediaProcessor).to receive(:process).and_return(nil)
     agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' })
     Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'live', active: true)
 
-    # 1ª decisão (chave própria) falha por auth; o retry (force_global_key) responde normal.
-    allow(Ai::ModelRouter).to receive(:decide) do |**kwargs|
-      if kwargs[:force_global_key]
-        { provider: 'anthropic', model: 'claude-3-5-sonnet-latest',
-          decision: { 'decision' => 'reply', 'reply_text' => 'oi, tudo bem?' },
-          tokens_in: 1, tokens_out: 1, cost: 0.0, latency_ms: 1, status: 'recorded' }
-      else
-        { provider: 'anthropic', model: 'claude-3-5-sonnet-latest',
-          decision: { 'error' => 'RubyLLM::UnauthorizedError: Invalid API key' },
-          tokens_in: 0, tokens_out: 0, cost: 0.0, latency_ms: 1, status: 'error', error_type: 'auth_error' }
-      end
-    end
+    # O Python já tentou a chave da conta, tomou 401 e refez o turno na chave global: devolve a
+    # resposta normalmente, com byok_fallback: true sinalizando que a plataforma pagou este turno.
+    allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(
+      reply: 'oi, tudo bem?', conversation_id: 'conv_byok', byok_fallback: true,
+      confidence: 0.9, transferred: false
+    )
   end
 
   def run_gateway
@@ -52,20 +55,23 @@ RSpec.describe 'Ai::Gateway fallback BYOK', type: :model do
     expect(convo.reload.label_list).to include('chave-propria-falhou')
     expect(Ai::Event.where(conversation_id: convo.id, event_type: 'decision.byok_fallback')).to exist
     expect(Ai::Event.where(conversation_id: convo.id, event_type: 'reply.sent')).to exist
-    # força a chave global no retry (2ª chamada ao ModelRouter)
-    expect(Ai::ModelRouter).to have_received(:decide).with(hash_including(force_global_key: true))
   end
 
+  # Criar a assinatura já cria o saldo (Subscription#initialize_credit_balance), então aqui é update.
   it 'cobra 1 crédito SCNET do retry quando há saldo' do
-    AiCreditBalance.create!(account_id: account.id, plan_credits: 0, extra_credits: 5)
+    account.reload.ai_credit_balance.update!(plan_credits: 0, extra_credits: 5)
 
     run_gateway
 
     expect(account.ai_credit_balance.reload.total).to eq(4) # 1 crédito SCNET consumido no fallback
   end
 
+  # find_or_create_by no #consume_byok_fallback_credit existe para a conta ANTIGA, cuja assinatura é
+  # anterior ao Subscription#initialize_credit_balance e por isso nunca ganhou linha de saldo. É esse
+  # estado que o destroy reproduz — hoje nenhuma assinatura nova nasce sem saldo.
   it 'auto-provisiona um AiCreditBalance zerado quando a conta BYOK ainda não tem um' do
-    expect(account.ai_credit_balance).to be_nil
+    account.reload.ai_credit_balance.destroy!
+    expect(account.reload.ai_credit_balance).to be_nil
 
     convo = run_gateway
 

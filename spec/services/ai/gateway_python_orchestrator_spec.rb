@@ -18,7 +18,9 @@ RSpec.describe Ai::Gateway do
   before do
     account.enable_features!('ai_core')
     agent.update!(behavior: { 'auto_attendance' => true, 'reply_scope' => 'all' }, transfer_rules: transfer_rules)
-    allow_any_instance_of(::Inbox).to receive(:available_now?).and_return(true)
+    # available_now? só consulta horários quando working_hours_enabled? — desligado, ele responde
+    # true sem stub nenhum. Explícito aqui porque o teste não é sobre horário de atendimento.
+    inbox.update!(working_hours_enabled: false)
     allow(Ai::Workers::MediaProcessor).to receive(:process).and_return(nil)
     allow(Ai::PythonOrchestratorClient).to receive(:process_message).and_return(reply: 'Olá!', conversation_id: 'conv_1')
   end
@@ -167,7 +169,8 @@ RSpec.describe Ai::Gateway do
   it 'skip_vision é sempre true no MediaProcessor, pra qualquer agente' do
     deliver
 
-    expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, skip_vision: true)
+    # hash_including: a chamada leva outras kwargs (skip_types) que não são o objeto deste teste.
+    expect(Ai::Workers::MediaProcessor).to have_received(:process).with(anything, anything, hash_including(skip_vision: true))
   end
 
   it 'em modo shadow, não incrementa ai_step_turns (mesmo gate de @acts_live do resto do Gateway)' do
