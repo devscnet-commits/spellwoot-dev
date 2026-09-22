@@ -2,6 +2,7 @@
 # Account-scoped. The `test` action fires a real call through Ai::IntegrationConnector so the user
 # can validate the connection from the UI before using it.
 class Api::V1::Accounts::AiIntegrationLinksController < Api::V1::Accounts::BaseController
+  before_action :check_authorization
   before_action :set_link, only: %i[update destroy test]
 
   def index
@@ -36,6 +37,10 @@ class Api::V1::Accounts::AiIntegrationLinksController < Api::V1::Accounts::BaseC
   end
 
   private
+
+  def check_authorization
+    authorize(::Ai::IntegrationLink)
+  end
 
   def scope
     ::Ai::IntegrationLink.where(account_id: Current.account.id)
