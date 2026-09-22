@@ -1,7 +1,9 @@
 class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::BaseController
+  include SecretMaskingHelper
+
   before_action :check_authorization
 
-  SENSITIVE_KEYS = %w[accessToken apiKey clientSecret refreshToken authToken token].freeze
+  SENSITIVE_KEYS = SecretMaskingHelper::SECRET_KEY_NAMES
 
   # Returns the merged config for the settings form. Uses for_display so a disabled account
   # still sees the values it would use once re-enabled (the runtime callers stay gated).
@@ -145,6 +147,6 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
   def mask_value(key, value, sources)
     return '*' * 24 if sources && sources[key] != 'account'
 
-    "#{value.to_s.first(4)}#{'*' * 20}#{value.to_s.last(3)}"
+    mask_secret(value)
   end
 end
