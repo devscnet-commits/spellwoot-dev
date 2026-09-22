@@ -1,50 +1,50 @@
 {
   "AI_SHADOW_RUNS": {
-    "TITLE": "Validação de Análises — Inteligência da IA",
-    "DESCRIPTION": "Avalie o que a IA acertou, errou ou deixou sem resposta e descubra exatamente o que ajustar: FAQ, instrução, ferramenta ou comportamento.",
+    "TITLE": "Analysis Validation — AI Intelligence",
+    "DESCRIPTION": "Review what the AI got right, got wrong or left unanswered, and find out exactly what to adjust: FAQ, instruction, tool or behaviour.",
     "REFRESH": "Atualizar",
     "LOADING": "Carregando...",
-    "EMPTY": "Nenhuma execução registrada ainda. Crie um analista para começar a avaliar.",
-    "RANGE_TOO_LARGE": "O intervalo escolhido é maior que {days} dias. Selecione um período de no máximo 1 ano para não sobrecarregar o sistema.",
+    "EMPTY": "No runs recorded yet. Create an analyst to start evaluating.",
+    "RANGE_TOO_LARGE": "The range you picked is longer than {days} days. Select a period of at most 1 year so the system is not overloaded.",
     "NONE": "—",
-    "COST_DISCLAIMER": "Os custos exibidos são estimativas do consumo dos modelos de IA. Não incluem impostos, IOF, taxas de câmbio ou outros encargos — portanto podem divergir da fatura final.",
+    "COST_DISCLAIMER": "The costs shown are estimates of AI model usage. They do not include taxes, currency fees or other charges, so they may differ from the final invoice.",
     "FILTERS": {
       "TITLE": "Filtros",
-      "LABEL_PERIOD": "Período",
+      "LABEL_PERIOD": "Period",
       "LABEL_DEPARTMENT": "Fluxo",
       "LABEL_ERROR": "Tipo de erro",
       "LABEL_STATUS": "Status",
       "LABEL_REPLY": "Resposta da IA",
       "LABEL_TOOL": "Ferramenta",
       "LABEL_CONVERSATION": "Conversa",
-      "PERIOD": "Período",
-      "PERIOD_ALL": "Todo o período",
-      "PERIOD_7": "Últimos 7 dias",
-      "PERIOD_30": "Últimos 30 dias",
+      "PERIOD": "Period",
+      "PERIOD_ALL": "All time",
+      "PERIOD_7": "Last 7 days",
+      "PERIOD_30": "Last 30 days",
       "PERIOD_CUSTOM": "Personalizado",
       "FROM": "De",
-      "TO": "Até",
+      "TO": "To",
       "DEPARTMENT": "Fluxo",
-      "DEPARTMENT_ALL": "Todos os fluxos",
+      "DEPARTMENT_ALL": "All flows",
       "ERROR_TYPE": "Tipo de erro",
-      "ERROR_ALL": "Todos os erros",
+      "ERROR_ALL": "All errors",
       "STATUS": "Status",
-      "STATUS_ALL": "Todos os status",
+      "STATUS_ALL": "All statuses",
       "RESPONSE": "Resposta",
-      "HAS_REPLY": "Com resposta",
-      "NO_REPLY": "Sem resposta",
+      "HAS_REPLY": "With reply",
+      "NO_REPLY": "Without reply",
       "TOOL": "Ferramenta",
-      "HAS_TOOL": "Com ferramenta sugerida",
-      "NO_TOOL": "Sem ferramenta",
+      "HAS_TOOL": "With suggested tool",
+      "NO_TOOL": "Without tool",
       "ANY": "Qualquer",
       "CONVERSATION": "Conversa #",
       "CLEAR": "Limpar filtros"
     },
     "KPI": {
-      "EVALUATED": "Execuções avaliadas",
-      "UNANSWERED": "Perguntas sem resposta",
+      "EVALUATED": "Runs evaluated",
+      "UNANSWERED": "Unanswered questions",
       "ERRORS": "Erros",
-      "LOW_CONFIDENCE": "Respostas de baixa confiança",
+      "LOW_CONFIDENCE": "Low confidence replies",
       "TOOLS_SUGGESTED": "Ferramentas sugeridas",
       "TOOLS_MISSING": "Ferramentas ausentes",
       "KNOWLEDGE_GAPS": "Lacunas de conhecimento"
@@ -52,71 +52,71 @@
     "BLOCKS": {
       "SUMMARY": "Resumo executivo",
       "KNOWLEDGE_GAPS": "Lacunas de conhecimento",
-      "INSTRUCTION_FAILS": "Falhas de instrução",
+      "INSTRUCTION_FAILS": "Instruction failures",
       "TOOLS_MISSING": "Ferramentas ausentes",
       "RECURRING_ERRORS": "Erros recorrentes",
-      "BY_DEPARTMENT": "Oportunidades por fluxo",
-      "RUNS": "Execuções detalhadas"
+      "BY_DEPARTMENT": "Opportunities by flow",
+      "RUNS": "Detailed runs"
     },
     "PAGINATION": {
-      "PER_PAGE": "Por página",
+      "PER_PAGE": "Per page",
       "RANGE": "{from}–{to} de {total}",
-      "PAGE": "Página {current} de {total}",
+      "PAGE": "Page {current} of {total}",
       "PREV": "Anterior",
-      "NEXT": "Próxima"
+      "NEXT": "Next"
     },
     "RESOLUTION": {
       "TITLE": "Como a IA resolveu",
-      "knowledge": "Por conhecimento",
-      "instruction": "Por instrução",
-      "tool": "Por ferramenta",
-      "transfer": "Transferência",
+      "knowledge": "By knowledge",
+      "instruction": "By instruction",
+      "tool": "By tool",
+      "transfer": "Transfer",
       "closed": "Encerramento",
-      "unanswered": "Sem resposta",
+      "unanswered": "Unanswered",
       "error": "Erro"
     },
     "INSIGHT": {
-      "EMPTY": "Nenhuma ação sugerida neste recorte. 🎉",
+      "EMPTY": "No suggested actions in this slice. 🎉",
       "FAQ_TITLE": "Vire FAQ / reforce o conhecimento",
-      "FAQ_BODY": "{count} pergunta(s) sem cobertura de conhecimento em {agent}. Crie uma FAQ ou fonte de conhecimento.",
-      "INSTRUCTION_TITLE": "Instrução fraca",
-      "INSTRUCTION_BODY": "{count} resposta(s) de baixa confiança em {agent}. Reforce as instruções do fluxo.",
+      "FAQ_BODY": "{count} question(s) with no knowledge coverage in {agent}. Create a FAQ or a knowledge source.",
+      "INSTRUCTION_TITLE": "Weak instruction",
+      "INSTRUCTION_BODY": "{count} low confidence reply(ies) in {agent}. Strengthen the flow's instructions.",
       "TOOL_TITLE": "Ferramenta ausente",
-      "TOOL_BODY": "A ferramenta \"{tool}\" foi sugerida {count}× em {agent}, mas não está configurada.",
+      "TOOL_BODY": "The tool \"{tool}\" was suggested {count}× in {agent}, but it is not configured.",
       "ERROR_TITLE": "Erro recorrente",
-      "ERROR_BODY": "{error} aconteceu {count}× — precisa de correção estrutural.",
-      "NO_QUESTION": "(sem pergunta registrada)",
-      "NO_EXAMPLES": "Sem exemplos no recorte atual (ajuste os filtros/período)."
+      "ERROR_BODY": "{error} happened {count}× — it needs a structural fix.",
+      "NO_QUESTION": "(no question recorded)",
+      "NO_EXAMPLES": "No examples in the current slice (adjust the filters or period)."
     },
     "DEPT": {
-      "TOTAL": "execuções",
+      "TOTAL": "runs",
       "ERRORS": "erros",
-      "UNANSWERED": "sem resposta"
+      "UNANSWERED": "unanswered"
     },
     "METHODS": {
-      "single": "único fluxo",
+      "single": "single flow",
       "inbox_mapping": "mapeamento da caixa",
-      "classifier": "roteamento automático",
-      "default": "fluxo padrão",
+      "classifier": "automatic routing",
+      "default": "default flow",
       "fallback": "fallback",
-      "manual": "seleção manual"
+      "manual": "manual selection"
     },
     "RUN": {
       "CONVERSATION": "Conversa",
       "VIA": "via",
-      "REPLY": "Resposta que seria enviada",
-      "NO_REPLY": "Nenhuma resposta proposta.",
+      "REPLY": "Reply that would have been sent",
+      "NO_REPLY": "No reply proposed.",
       "TOOL": "Ferramenta",
-      "TOOL_MISSING": "não configurada",
+      "TOOL_MISSING": "not configured",
       "KNOWLEDGE_COUNT": "{count} conhecimentos usados",
-      "CONFIDENCE": "Confiança",
+      "CONFIDENCE": "Confidence",
       "COST_ESTIMATED": "US$ {value} (estimado)",
-      "EMPTY": "Nenhuma execução com os filtros atuais."
+      "EMPTY": "No runs with the current filters."
     },
     "STATUS": {
       "recorded": "Registrado",
       "running": "Em andamento",
-      "no_department": "Sem fluxo",
+      "no_department": "No flow",
       "error": "Erro"
     },
     "ERROR_TYPES": {
@@ -124,20 +124,20 @@
       "provider_error": "Falha no provedor de IA",
       "knowledge_timeout": "Tempo esgotado na busca de conhecimento",
       "tool_failed": "Falha ao executar ferramenta",
-      "guardrail_blocked": "Bloqueado por regra de segurança",
-      "budget_exceeded": "Orçamento excedido",
+      "guardrail_blocked": "Blocked by a safety rule",
+      "budget_exceeded": "Budget exceeded",
       "classification_failed": "Falha ao classificar o fluxo",
-      "unparsed_decision": "Resposta da IA ilegível (não enviada)",
-      "internal_error": "Erro interno (banco/política)",
-      "unknown": "Erro não identificado"
+      "unparsed_decision": "Unreadable AI reply (not sent)",
+      "internal_error": "Internal error (database/policy)",
+      "unknown": "Unidentified error"
     }
   },
   "AI_SHADOWS": {
-    "TITLE": "Análises com IA",
-    "DESCRIPTION": "Observadores de qualidade que auditam os atendimentos (humano e IA) e alimentam a análise.",
+    "TITLE": "AI Analysis",
+    "DESCRIPTION": "Quality observers that audit conversations (human and AI) and feed the analysis.",
     "NEW": "Novo analista",
-    "ANALYSIS": "Ver análise",
-    "EMPTY": "Nenhum analista criado. Crie um analista para auditar seus atendimentos.",
+    "ANALYSIS": "View analysis",
+    "EMPTY": "No analysts created. Create one to audit your conversations.",
     "INBOX_COUNT": "{count} caixas",
     "STATUS": {
       "ACTIVE": "Ativo",
@@ -145,48 +145,48 @@
     },
     "FORM": {
       "NAME": "Nome",
-      "NAME_REQUIRED": "Dê um nome pra esse analista antes de salvar.",
-      "INSTRUCTIONS": "Instruções de avaliação",
-      "INSTRUCTIONS_PLACEHOLDER": "O que o analista deve observar e cobrar nos atendimentos (ex.: ofereceram 2ª via? a resposta foi cordial? houve preço/prazo incorreto?).",
+      "NAME_REQUIRED": "Give this analyst a name before saving.",
+      "INSTRUCTIONS": "Evaluation instructions",
+      "INSTRUCTIONS_PLACEHOLDER": "What the analyst should watch for and hold conversations to (e.g. was a duplicate bill offered? was the reply courteous? was any price or deadline wrong?).",
       "INBOXES": "Caixas observadas",
-      "NO_INBOXES": "Nenhuma caixa nesta conta.",
-      "SCOPE": "O que observar",
+      "NO_INBOXES": "No inboxes on this account.",
+      "SCOPE": "What to observe",
       "OBSERVE_AI": "Atendimentos da IA",
       "OBSERVE_HUMAN": "Atendimentos humanos",
-      "SUGGESTIONS_HINT": "Clique nas sugestões abaixo ou digite direto no campo, para adicionar as instruções de avaliação.",
+      "SUGGESTIONS_HINT": "Click the suggestions below or type straight into the field to add evaluation instructions.",
       "STATUS": "Status",
       "SAVE": "Salvar",
       "CANCEL": "Cancelar"
     },
     "SIGNALS": {
-      "UNANSWERED": "Dúvidas não respondidas",
-      "ERRORS": "Erros / informação incorreta",
-      "LOW_CONFIDENCE": "Baixa confiança",
+      "UNANSWERED": "Unanswered questions",
+      "ERRORS": "Errors / incorrect information",
+      "LOW_CONFIDENCE": "Low confidence",
       "KNOWLEDGE_GAPS": "Conhecimento faltante",
-      "TOOLS_MISSING": "Ferramenta que faltou",
+      "TOOLS_MISSING": "Missing tool",
       "RECURRING": "Temas recorrentes"
     },
     "SUGGESTIONS": {
-      "UNANSWERED": "Aponte dúvidas do cliente que ficaram sem resposta.",
-      "ERRORS": "Sinalize erros ou informações incorretas passadas no atendimento.",
-      "LOW_CONFIDENCE": "Identifique respostas vagas ou dadas com baixa confiança.",
-      "KNOWLEDGE_GAPS": "Aponte assuntos sem cobertura na base de conhecimento.",
-      "TOOLS_MISSING": "Indique quando faltou uma ferramenta ou integração para resolver.",
-      "RECURRING": "Destaque temas ou problemas que se repetem nos atendimentos."
+      "UNANSWERED": "Point out customer questions that went unanswered.",
+      "ERRORS": "Flag errors or incorrect information given during the conversation.",
+      "LOW_CONFIDENCE": "Identify vague replies or ones given with low confidence.",
+      "KNOWLEDGE_GAPS": "Point out subjects with no coverage in the knowledge base.",
+      "TOOLS_MISSING": "Note when a tool or integration was missing to resolve the request.",
+      "RECURRING": "Highlight themes or problems that keep coming up in conversations."
     },
     "SAVED": "Analista salvo.",
-    "DELETED": "Analista excluído.",
+    "DELETED": "Analyst deleted.",
     "ERROR": "Algo deu errado.",
     "DELETE_MODAL": {
       "TITLE": "Excluir analista",
-      "MESSAGE": "Esta ação não pode ser desfeita. Para confirmar, digite o nome \"{name}\" abaixo.",
+      "MESSAGE": "This cannot be undone. To confirm, type the name \"{name}\" below.",
       "CONFIRM": "Excluir",
       "CANCEL": "Cancelar",
-      "PLACEHOLDER": "Digite {name} para confirmar"
+      "PLACEHOLDER": "Type {name} to confirm"
     },
     "TABS": {
       "SHADOWS": "Analistas criados",
-      "ANALYSIS": "Análises"
+      "ANALYSIS": "Analysis"
     }
   }
 }
