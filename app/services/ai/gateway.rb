@@ -29,6 +29,11 @@ class Ai::Gateway
   end
 
   def run
+    # Sombra DESLIGADA por padrão (Ai::ShadowPolicy). Ponto autoritativo: o turno em modo != 'live'
+    # faz a mesma chamada paga ao modelo e só não entrega a resposta, então parar aqui — antes do
+    # Ai::Run e de qualquer processamento de anexo — é o que de fato zera o gasto.
+    return if @mode != 'live' && !Ai::ShadowPolicy.enabled?
+
     run_record = Ai::Run.create!(
       account_id: @account.id, conversation_id: @conversation.id, ai_agent_id: @agent.id,
       inbox_id: @message.inbox_id, run_type: 'decision', mode: @mode, status: 'running'

@@ -46,6 +46,11 @@ class Ai::GatewayRunJob < ApplicationJob
       next if winner && binding.id != winner.id && eligible.include?(binding) # não-vencedor elegível: pula
 
       mode = run_mode(binding, winner, forced, conversation_team_id)
+      # Sombra desligada (Ai::ShadowPolicy): pula sem construir o Gateway. Vale tanto para o binding
+      # marcado 'shadow' quanto para o binding LIVE que perdeu a posse do time — este último era o
+      # caso silencioso, porque ninguém configurou sombra nenhuma: bastava uma IA a mais na caixa.
+      next if mode != 'live' && !Ai::ShadowPolicy.enabled?
+
       Ai::Gateway.new(message: message, agent_inbox: binding, mode: mode, content_override: content_override).run
     end
   end

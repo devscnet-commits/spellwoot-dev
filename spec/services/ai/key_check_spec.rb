@@ -42,14 +42,14 @@ RSpec.describe Ai::KeyCheck do
 
   describe '#status (sem rede)' do
     it 'reconhece a chave própria da conta' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-da-conta-1234567')
 
       expect(status).to include(key_source: 'account', key_reason: 'account_key', account_id: account.id)
     end
 
     it 'sem linha da conta: roda na plataforma e diz que não há chave cadastrada' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
 
       expect(status).to include(key_source: 'platform', key_reason: 'not_configured')
     end
@@ -61,14 +61,14 @@ RSpec.describe Ai::KeyCheck do
     end
 
     it 'linha desativada: não usa a chave e explica que a integração está desligada' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-da-conta', enabled: false)
 
       expect(status).to include(key_source: 'platform', key_reason: 'provider_disabled')
     end
 
     it 'linha salva sem apiKey: distingue de "nunca configurou"' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: nil, model: 'gpt-4o')
 
       expect(status).to include(key_source: 'platform', key_reason: 'key_missing')
@@ -78,7 +78,7 @@ RSpec.describe Ai::KeyCheck do
     # segredo do servidor a todo tenant que abrisse a aba.
     it 'só mostra preview da chave DA CONTA, nunca da plataforma' do
       platform_key!
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
 
       expect(status[:key_preview]).to be_nil
 
@@ -91,7 +91,7 @@ RSpec.describe Ai::KeyCheck do
 
       expect(status[:credits]).to eq({ total: 10, enforced: true })
 
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-da-conta')
       expect(status[:credits]).to be_nil
     end
@@ -103,7 +103,7 @@ RSpec.describe Ai::KeyCheck do
     it 'NÃO usa a linha global do Hub para uma conta sem chave própria' do
       global_row!(key: 'sk-GLOBAL-do-hub')
       platform_key!(key: 'sk-PLATAFORMA')
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       stub_probe
 
       result = perform
@@ -115,7 +115,7 @@ RSpec.describe Ai::KeyCheck do
 
     it 'usa a chave DA CONTA quando ela existe' do
       platform_key!(key: 'sk-PLATAFORMA')
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-da-conta')
       stub_probe
 
@@ -126,7 +126,7 @@ RSpec.describe Ai::KeyCheck do
     end
 
     it 'verde só quando a chamada real passou NA chave da conta' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-da-conta')
       stub_probe
 
@@ -144,7 +144,7 @@ RSpec.describe Ai::KeyCheck do
     end
 
     it 'chave revogada: invalid_key, não uma falha genérica' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-revogada')
       stub_probe(status: 401, body: error_body('Incorrect API key provided', 'invalid_api_key'))
 
@@ -154,7 +154,7 @@ RSpec.describe Ai::KeyCheck do
     # O caso que o GET /v1/models antigo NUNCA pegava: chave válida lista modelos normalmente mesmo
     # sem crédito nenhum, e o teste dava verde enquanto o atendimento real falhava.
     it 'chave válida sem cota: insufficient_quota' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-sem-cota')
       stub_probe(status: 429, body: error_body('You exceeded your current quota', 'insufficient_quota'))
 
@@ -179,7 +179,7 @@ RSpec.describe Ai::KeyCheck do
     end
 
     it 'sonda com o modelo configurado no Hub da conta' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       account_row!(key: 'sk-da-conta', model: 'gpt-4o')
       stub_probe
 

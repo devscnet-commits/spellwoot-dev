@@ -4,6 +4,11 @@ class Ai::ShadowEvalJob < ApplicationJob
   queue_as :low
 
   def perform(conversation_id)
+    # Sombra desligada (Ai::ShadowPolicy). Esta auditoria chama o modelo por conversa RESOLVIDA e, por
+    # desenho, também audita conversa tratada por humano (scope['observe_human']) — era ela que fazia
+    # conversa entre duas pessoas ser processada pela IA.
+    return unless Ai::ShadowPolicy.enabled?
+
     conversation = Conversation.find_by(id: conversation_id)
     return if conversation.blank?
 

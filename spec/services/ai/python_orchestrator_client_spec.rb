@@ -127,7 +127,7 @@ RSpec.describe Ai::PythonOrchestratorClient do
   # feature custom_llm_api_key ligada E uma chave de verdade salva no Hub (Ai::ModelRouter.account_provider_key).
   describe 'BYOK (account_api_key no payload + byok_fallback na resposta)' do
     it 'manda account_api_key quando a conta tem custom_llm_api_key ligado com chave openai configurada' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       allow(Ai::ModelRouter).to receive(:account_provider_key).with(account.id, 'openai').and_return('sk-conta-propria')
       stub_orchestrator
 

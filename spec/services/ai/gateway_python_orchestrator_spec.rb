@@ -171,6 +171,7 @@ RSpec.describe Ai::Gateway do
   end
 
   it 'em modo shadow, não incrementa ai_step_turns (mesmo gate de @acts_live do resto do Gateway)' do
+    enable_shadow!
     shadow_binding = Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'shadow', active: true)
     convo = create(:conversation, account: account, inbox: inbox, status: 'open')
     message = create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming', content: 'oi')
@@ -210,6 +211,7 @@ RSpec.describe Ai::Gateway do
     end
 
     it 'em modo shadow, NÃO cobra crédito mesmo com byok_fallback true (mesmo gate de @acts_live)' do
+      enable_shadow!
       shadow_binding = Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: 'shadow', active: true)
       convo = create(:conversation, account: account, inbox: inbox, status: 'open')
       message = create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming', content: 'oi')

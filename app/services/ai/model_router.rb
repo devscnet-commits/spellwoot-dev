@@ -767,7 +767,13 @@ class Ai::ModelRouter
     return nil if account_id.blank? || !defined?(IntegrationSettingsService)
 
     account = Account.find_by(id: account_id)
-    return nil unless account&.feature_enabled?('custom_llm_api_key')
+    # Lê o PLANO (FeatureGate), não o bitmask da conta. O bitmask é uma PROJEÇÃO do plano, gravada
+    # pelo Plan#sync_features_to! no after_save da Subscription — e o Ai::CreditsRenewalJob faz
+    # subscription.update! na virada do ciclo, o que dispara o sync e DESLIGA toda chave gerenciada
+    # que o plano não tenha. Uma liberação feita à mão na conta funcionava por alguns dias e sumia
+    # sozinha (conta #7 em produção). O plano é a única fonte de verdade; o bitmask segue existindo
+    # só para gatear a UI (sidebar, rotas meta.featureFlag).
+    return nil unless account && FeatureGate.enabled?(account, 'custom_llm_api_key')
 
     IntegrationSettingsService.account_only_config(account_id, provider.to_s)['apiKey'].presence
   rescue StandardError => e

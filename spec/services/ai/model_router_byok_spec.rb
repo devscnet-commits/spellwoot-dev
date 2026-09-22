@@ -11,7 +11,7 @@ RSpec.describe Ai::ModelRouter do
 
   describe '.account_provider_key' do
     it 'usa a chave própria da conta quando a feature custom_llm_api_key está ligada' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       set_hub_key('anthropic', 'sk-ant-conta')
 
       expect(described_class.account_provider_key(account.id, 'anthropic')).to eq('sk-ant-conta')
@@ -24,7 +24,7 @@ RSpec.describe Ai::ModelRouter do
     end
 
     it 'retorna nil quando a conta tem a feature mas não configurou chave' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
 
       expect(described_class.account_provider_key(account.id, 'groq')).to be_nil
     end
@@ -32,7 +32,7 @@ RSpec.describe Ai::ModelRouter do
 
   describe '.byok_key (force_global_key)' do
     it 'ignora a chave da conta quando force_global_key é true (retry pós-falha)' do
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       set_hub_key('gemini', 'gm-conta')
 
       expect(described_class.byok_key(account.id, 'gemini', true)).to be_nil

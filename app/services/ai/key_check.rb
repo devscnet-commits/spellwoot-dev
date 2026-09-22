@@ -45,6 +45,10 @@ class Ai::KeyCheck
       # Só da chave DA CONTA. A tela é do admin do cliente, não da SCNET: um preview da chave da
       # plataforma entregaria pedaços de um segredo do servidor a todo tenant que abrisse a aba.
       key_preview: account_key.present? ? mask(account_key) : nil,
+      # Sem isto a tela dizia "usando a chave da plataforma" mesmo quando o servidor NÃO tem chave
+      # nenhuma — contradizendo o próprio resultado do teste ("o servidor também não tem chave
+      # configurada") e escondendo que, nesse estado, a IA simplesmente não responde.
+      platform_key_present: platform_key.present?,
       model: model,
       credits: credits_info
     }
@@ -78,7 +82,9 @@ class Ai::KeyCheck
   # o que o front precisa para não mostrar "não configurado" quando o caso é outro.
   def key_reason
     return 'account_key' if account_key.present?
-    return 'feature_disabled' unless @account.feature_enabled?('custom_llm_api_key')
+    # Mesma fonte que o runtime (Ai::ModelRouter.account_provider_key): o PLANO, não o bitmask da
+    # conta. Ler fontes diferentes faria a tela afirmar uma coisa e a conversa fazer outra.
+    return 'feature_disabled' unless FeatureGate.enabled?(@account, 'custom_llm_api_key')
 
     setting = IntegrationSetting.find_by(account_id: @account.id, provider: PROVIDER)
     return 'not_configured' if setting.nil?
