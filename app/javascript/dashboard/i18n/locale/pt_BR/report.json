@@ -124,7 +124,11 @@
     "PAGINATION": {
       "RESULTS": "Exibindo {start} — {end} de {total} resultados",
       "PER_PAGE_TEMPLATE": "{size} / página"
-    }
+    },
+    "CSAT_REPORTS": {
+      "DOWNLOAD_FAILED": "Não foi possível baixar o relatório de CSAT."
+    },
+    "DOWNLOAD_AGENT_REPORTS": "Baixar relatórios dos agentes"
   },
   "AGENT_REPORTS": {
     "HEADER": "Visão Geral de Agentes",
@@ -440,7 +444,8 @@
         "RATINGS": "Pesquisar avaliações"
       },
       "AGENTS": {
-        "LABEL": "Agente"
+        "LABEL": "Agente",
+        "PLACEHOLDER": "Selecione os agentes"
       },
       "INBOXES": {
         "LABEL": "Caixa de Entrada"

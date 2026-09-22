@@ -893,5 +893,8 @@
       "NO_CONTENT": "Nenhum conteúdo gerado disponível. Envie um documento PDF para começar.",
       "LOADING": "Carregando conteúdo gerado..."
     }
+  },
+  "PORTAL": {
+    "IFRAME_ERROR": "Não foi possível carregar a prévia do portal."
   }
 }
