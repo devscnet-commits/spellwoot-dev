@@ -4,7 +4,7 @@ class PlanDashboard < Administrate::BaseDashboard
   ATTRIBUTE_TYPES = {
     id: Field::Number,
     name: Field::String,
-    slug: Field::String,
+    slug: PlanSlugField,
     description: Field::Text,
     active: Field::Boolean,
     visible_to_new_subscribers: Field::Boolean,
@@ -16,6 +16,8 @@ class PlanDashboard < Administrate::BaseDashboard
     promo_months_count: Field::Number,
     ai_credits_included: Field::Number,
     ai_credit_overage_price_cents: Field::Number,
+    feature_grid: PlanFeaturesField,
+    limit_grid: PlanLimitsField,
     created_at: Field::DateTime,
     updated_at: Field::DateTime
   }.freeze
@@ -43,18 +45,22 @@ class PlanDashboard < Administrate::BaseDashboard
     promo_months_count
     ai_credits_included
     ai_credit_overage_price_cents
+    feature_grid
+    limit_grid
     created_at
     updated_at
   ].freeze
 
-  # Nota: features/limites por chave (PlanFeature/PlanLimit) não têm tela própria ainda — continuam
-  # geridos via `rails plans:seed`. Adicionar aqui exigiria um Dashboard Administrate pra cada um.
+  # :slug aparece no formulário, mas a partial do PlanSlugField só deixa EDITAR na criação — mudá-lo
+  # depois quebraria PLAN_FEATURE_TO_ACCOUNT_FLAG/COMMERCIAL_RANK/plans:seed, que localizam o plano
+  # por slug. O controller reforça: :slug nunca é permitido no update.
   #
-  # Sem :slug — muda-lo depois de criado quebraria PLAN_FEATURE_TO_ACCOUNT_FLAG/plans:seed (que
-  # localizam o plano por slug). Sem plan_features/plan_limits aqui — essa tela edita os campos do
-  # plano em si; a grade de features/limites por chave continua via `rails plans:seed`.
+  # feature_grid/limit_grid são grades montadas pelo model (Plan#feature_grid/#limit_grid) e gravadas
+  # por SuperAdmin::PlansController — as partials usam campos *_tag com nome próprio, FORA do
+  # namespace `plan[...]`, então o update do Administrate não as enxerga e não tenta atribuí-las.
   FORM_ATTRIBUTES = %i[
     name
+    slug
     description
     active
     visible_to_new_subscribers
@@ -66,6 +72,8 @@ class PlanDashboard < Administrate::BaseDashboard
     promo_months_count
     ai_credits_included
     ai_credit_overage_price_cents
+    feature_grid
+    limit_grid
   ].freeze
 
   COLLECTION_FILTERS = {}.freeze

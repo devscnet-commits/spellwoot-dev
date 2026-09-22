@@ -52,6 +52,10 @@ class Plan < ApplicationRecord
   # por plano, ver Planos_Conexi_v2) — ficam enabled: true por padrão em config/features.yml, mesmo
   # tratamento de channel_instagram/channel_email hoje.
   MANAGED_FEATURE_KEYS = PLAN_FEATURE_TO_ACCOUNT_FLAG.keys.freeze
+  # Chaves de limite numérico geridas por plano. Vivia solta dentro do namespace de rake em
+  # lib/tasks/plans.rake (constante que vazava para Object por acidente do escopo léxico); aqui vira
+  # fonte única, como MANAGED_FEATURE_KEYS — a tela do Super Admin e o seed leem a MESMA lista.
+  MANAGED_LIMIT_KEYS = %w[users inboxes ai_agents crm_pipelines].freeze
 
   # Ordem dos planos comerciais para decidir se uma troca é upgrade ou downgrade (Plan::ChangeSubscriptionService).
   # courtesy/internal_unlimited ficam de fora — não participam de troca self-service, só atribuição manual.
@@ -80,6 +84,69 @@ class Plan < ApplicationRecord
 
   def feature_enabled?(key)
     plan_features.find { |f| f.key == key.to_s }&.enabled || false
+  end
+
+  # --- Grades para a tela do Super Admin -------------------------------------------------------
+  # A tela precisa da lista CANÔNICA, não das linhas que por acaso existem no banco: uma PlanFeature
+  # ausente já significa "desligada" (#feature_enabled? acima), então mostrar só o que existe deixaria
+  # de fora exatamente as features que alguém precisa ligar. Foi assim que `pro`/`standard` chegaram à
+  # produção sem nenhuma feature e ninguém teve onde corrigir.
+  def feature_grid
+    display = SuperAdmin::AccountFeaturesHelper.feature_display_names
+    MANAGED_FEATURE_KEYS.index_with do |key|
+      { display_name: display[PLAN_FEATURE_TO_ACCOUNT_FLAG[key]].presence || key.humanize,
+        enabled: feature_enabled?(key) }
+    end
+  end
+
+  def limit_grid
+    MANAGED_LIMIT_KEYS.index_with do |key|
+      limit = limit_for(key)
+      { max_value: limit&.max_value,
+        overflow_behavior: limit&.overflow_behavior || 'hard_block',
+        overage_price_cents: limit&.overage_price_cents }
+    end
+  end
+
+  # Grava a grade inteira. Chave fora da lista canônica é IGNORADA — a tela não pode inventar feature
+  # que o resto do sistema não conhece (PLAN_FEATURE_TO_ACCOUNT_FLAG não saberia para onde mapear).
+  def apply_feature_grid!(enabled_keys)
+    wanted = Array(enabled_keys).map(&:to_s)
+    MANAGED_FEATURE_KEYS.each do |key|
+      plan_features.find_or_initialize_by(key: key).update!(enabled: wanted.include?(key))
+    end
+    reload
+  end
+
+  # Preset do plano interno/ilimitado: TODAS as features ligadas (inclusive custom_llm_api_key, que é
+  # o que deixa a conta rodar na própria chave pela tela de integrações) e todo limite ilimitado.
+  # Mesmo resultado do seed_internal_plan em lib/tasks/plans.rake, disponível pela tela.
+  def unlock_everything!
+    apply_feature_grid!(MANAGED_FEATURE_KEYS)
+    MANAGED_LIMIT_KEYS.each do |key|
+      plan_limits.find_or_initialize_by(key: key).update!(max_value: nil, overflow_behavior: 'hard_block')
+    end
+    reload
+  end
+
+  # max_value em BRANCO = ilimitado (nil), que é a convenção vigente do PlanLimit — 0 continua
+  # significando "zero permitido" (é assim que um plano bloqueia pipelines hoje). A tabela de planos
+  # v2 propõe 0 = ilimitado; enquanto essa divergência não for decidida, a tela mantém a semântica do
+  # banco e diz isso no rótulo, para ninguém gravar 0 achando que liberou.
+  def apply_limit_grid!(rows)
+    rows = (rows || {}).to_h.stringify_keys
+    MANAGED_LIMIT_KEYS.each do |key|
+      attrs = rows[key].presence or next
+
+      attrs = attrs.to_h.stringify_keys
+      behavior = attrs['overflow_behavior'].to_s
+      plan_limits.find_or_initialize_by(key: key).update!(
+        max_value: attrs['max_value'].to_s.strip.presence&.to_i,
+        overflow_behavior: PlanLimit.overflow_behaviors.key?(behavior) ? behavior : 'hard_block',
+        overage_price_cents: attrs['overage_price_cents'].to_s.strip.presence&.to_i
+      )
+    end
+    reload
   end
 
   def limit_for(key)
