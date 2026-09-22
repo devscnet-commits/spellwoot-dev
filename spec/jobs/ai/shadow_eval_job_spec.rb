@@ -15,6 +15,7 @@ RSpec.describe Ai::ShadowEvalJob do
   end
 
   before do
+    enable_shadow!
     allow(Ai::ModelRouter).to receive(:decide).and_return(model_result)
     create(:message, account: account, inbox: inbox, conversation: conversation,
                      message_type: 'incoming', content: 'Olá, preciso de ajuda')

@@ -78,6 +78,7 @@ RSpec.describe Ai::GatewayRunJob do
     end
 
     it 'shadow EXPLÍCITO continua rodando junto do vencedor live (NÃO é pulado — é o propósito)' do
+      enable_shadow!
       a_live = agent('Maya')
       a_shadow = agent('Sombra')
       binding_for(a_live, mode: 'live', priority: 1)

@@ -71,6 +71,8 @@ RSpec.describe Ai::Gateway do
 
   # === Cenário 1: SHADOW — só registra intenção, zero efeito colateral ================
   context 'shadow (binding observa; nunca responde/age)' do
+    before { enable_shadow! }
+
     it 'records intention only and creates no outgoing message' do
       create_department
       binding = create_binding(mode: 'shadow')
@@ -263,6 +265,7 @@ RSpec.describe Ai::Gateway do
     end
 
     it 'em SHADOW: erro de provedor apenas registra (não transfere nem escreve nota)' do
+      enable_shadow!
       create_department
       binding = create_binding(mode: 'shadow')
       stub_python_error
