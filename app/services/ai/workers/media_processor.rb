@@ -508,11 +508,11 @@ class Ai::Workers::MediaProcessor
     account_openai_key(account_id) || platform_openai_key
   end
 
-  # Chave OpenAI da conta pelo Hub "APIs & Credentials" (account→global→ENV via IntegrationSettings).
+  # Chave OpenAI PRÓPRIA da conta. Delega ao Ai::ModelRouter (fonte única) — antes lia direto do
+  # get_config, cuja cascata account→global→ENV devolvia a chave do servidor como se fosse da conta,
+  # e sem o gate da feature custom_llm_api_key que o resto do BYOK aplica.
   def self.account_openai_key(account_id)
-    return nil if account_id.blank? || !defined?(IntegrationSettingsService)
-
-    IntegrationSettingsService.get_config(account_id, 'openai')['apiKey'].presence
+    Ai::ModelRouter.account_openai_key(account_id)
   rescue StandardError => e
     Rails.logger.warn "[Ai::Workers::MediaProcessor] lookup da chave OpenAI da conta falhou: #{e.class}: #{e.message}"
     nil

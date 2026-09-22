@@ -85,8 +85,6 @@ class IntegrationSettingsService
       test_uazapi(config)
     when 'evolution_api'
       test_evolution_api(config)
-    when 'openai'
-      test_openai(config)
     else
       { ok: false, message: 'Teste de conexão não disponível para este provedor.' }
     end
@@ -99,6 +97,19 @@ class IntegrationSettingsService
     return {} unless setting&.enabled?
 
     setting.config_hash.reject { |_, v| v.blank? }
+  end
+
+  # Config EXCLUSIVA desta conta, SEM a cascata global/ENV do get_config. É o que o BYOK precisa:
+  # com a cascata, uma conta que nunca cadastrou chave recebia a chave global/ENV do servidor e ela
+  # seguia adiante como se fosse "a chave da conta" (inclusive até o orquestrador Python) — a
+  # plataforma pagava a conversa, o fallback BYOK nunca marcava (a chave global não falha por auth)
+  # e nada distinguia conta com chave própria de conta rodando na chave do servidor.
+  # Integrações (Meta, UazAPI, etc.) seguem usando get_config: lá a herança global é o comportamento
+  # desejado. Aqui, não.
+  def self.account_only_config(account_id, provider)
+    return {} if account_id.blank?
+
+    load_db(account_id, provider)
   end
 
   def self.sync_uazapi_chatwoot(config, account, user)
@@ -155,27 +166,6 @@ class IntegrationSettingsService
       { ok: false, message: "#{success.size} ok, #{failed.size} com erro: #{failed.map { |f| f[:instance] }.join(', ')}" }
     else
       { ok: false, message: "Falha em todas as conexões: #{failed.map { |f| "#{f[:instance]}: #{f[:message]}" }.join(' | ')}" }
-    end
-  end
-
-  def self.test_openai(config)
-    api_key = config['apiKey']
-    return { ok: false, message: 'API Key não configurada.' } if api_key.blank?
-
-    response = HTTParty.get('https://api.openai.com/v1/models',
-                            headers: { 'Authorization' => "Bearer #{api_key}" }, timeout: 10)
-    if response.success?
-      model = config['model'].presence
-      known = Array(response.parsed_response['data']).map { |m| m['id'] }
-      if model.present? && known.exclude?(model)
-        { ok: true, message: "Chave válida, mas o modelo \"#{model}\" não foi encontrado na sua conta." }
-      else
-        { ok: true, message: 'Conexão bem-sucedida. Chave válida.' }
-      end
-    elsif response.code == 401
-      { ok: false, message: 'Chave inválida ou revogada (401).' }
-    else
-      { ok: false, message: "Erro #{response.code}: #{response.message}" }
     end
   end
 

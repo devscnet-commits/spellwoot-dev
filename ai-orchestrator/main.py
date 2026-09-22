@@ -23,6 +23,12 @@ app = FastAPI(title="AI Orchestrator")
 
 class ProcessRequest(BaseModel):
     ticket_id: int
+    # Multi-tenant: de QUAL Rails Account é este turno. Identificação, NÃO autorização — quem resolve
+    # a chave continua sendo o Rails (Ai::ModelRouter.account_provider_key), o Python só recebe.
+    # Serve para (a) atribuir consumo/erro à conta certa no log e (b) chavear o cache de client por
+    # tenant em vez de só pela string da chave. Optional: um payload antigo (deploy em andamento,
+    # replay de teste) continua funcionando, só sem atribuição.
+    account_id: Optional[int] = None
     system_prompt: str
     tools_schema: list = []
     vector_store_id: Optional[str] = None
@@ -114,14 +120,15 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     # tools/knowledge, but too big to sit at INFO on every single turn (drowns the short per-turn
     # signal a human is actually scanning for). Bump LOG_LEVEL=DEBUG to bring it back when debugging.
     logger.debug(
-        "ticket_id=%s ai_agent_id=%s payload received:\nsystem_prompt=%s\ntools_schema=%s\nvector_store_id=%s",
-        request.ticket_id, request.ai_agent_id, request.system_prompt,
+        "ticket_id=%s account_id=%s ai_agent_id=%s payload received:\nsystem_prompt=%s\ntools_schema=%s\nvector_store_id=%s",
+        request.ticket_id, request.account_id, request.ai_agent_id, request.system_prompt,
         json.dumps(request.tools_schema, ensure_ascii=False), request.vector_store_id,
     )
 
     try:
         reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model, tool_usage = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
+            account_id=request.account_id,
             ai_agent_id=request.ai_agent_id,
             mode=request.mode,
             system_prompt=request.system_prompt,

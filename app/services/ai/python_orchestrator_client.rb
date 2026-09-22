@@ -153,6 +153,10 @@ class Ai::PythonOrchestratorClient
       # Sent as integers, matching the orchestrator's Pydantic request model (ticket_id/ai_agent_id: int).
       ticket_id: @conversation.id,
       ai_agent_id: @agent.id,
+      # Multi-tenant: de QUAL conta é este turno. O Python não tinha esse dado — não conseguia
+      # atribuir consumo por conta nos logs nem cachear o client por tenant (o cache era indexado só
+      # pela string da chave). Rails segue sendo quem RESOLVE a chave; o account_id é identificação.
+      account_id: @agent.account_id,
       mode: @mode,
       system_prompt: system_prompt,
       tools_schema: tools_schema,
@@ -204,10 +208,16 @@ class Ai::PythonOrchestratorClient
     }
   end
 
-  # Mesma resolução que Ai::Gateway#maybe_byok_fallback (motor legado) já usa: só existe quando a
-  # conta tem a feature custom_llm_api_key ligada E uma chave de verdade salva no Hub pro provider.
+  # Só existe quando a conta tem a feature custom_llm_api_key ligada E uma chave de verdade salva no
+  # Hub NA PRÓPRIA LINHA DA CONTA (Ai::ModelRouter.account_provider_key).
+  #
+  # Fixo em 'openai' de propósito: o orquestrador Python não tem dispatch por provider (orchestrator.py
+  # instancia sempre um client OpenAI). Resolver pelo supervisor_provider do perfil mandava a chave de
+  # OUTRO provider (sk-ant-..., gsk_...) para a api.openai.com — 401 garantido, fallback para a chave
+  # global do backend e ainda 1 crédito de fallback cobrado da conta por um erro que não era dela.
+  # Quando o dispatch por provider existir no Python, volta a ser o provider do perfil.
   def account_api_key
-    Ai::ModelRouter.account_provider_key(@agent.account_id, operation_profile&.supervisor_provider.presence || 'openai')
+    Ai::ModelRouter.account_provider_key(@agent.account_id, 'openai')
   end
 
   def image_url

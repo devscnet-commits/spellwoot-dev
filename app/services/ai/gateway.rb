@@ -401,12 +401,25 @@ class Ai::Gateway
   end
 
   # Saldo de créditos de IA relevante para enforcement (billing Fase 2). nil = NÃO enforça (fail-open):
-  # conta sem balance/plano, ou conta com chave própria (custom_llm_api_key — BYOK). A flag é sempre
-  # false hoje (Fase 3 não implementada); o check é fail-safe, preparado pro futuro.
+  # conta sem balance/plano, ou conta que roda na PRÓPRIA chave (BYOK).
+  #
+  # O discriminador é ter chave própria de verdade (#account_byok?), não a feature custom_llm_api_key
+  # ligada. Com o gate na feature, uma conta com a feature e SEM chave cadastrada rodava na chave da
+  # plataforma, nunca era bloqueada por saldo (aqui) e nunca debitava crédito
+  # (Ai::ActionDispatcher#consume_credit): consumo ilimitado na conta da SCNET, sem rastro.
   def billing_balance
-    return nil if @account.feature_enabled?('custom_llm_api_key')
+    return nil if account_byok?
 
     @account.ai_credit_balance
+  end
+
+  # Memoizado: consultado no pré-cheque de saldo E no aviso de saldo baixo, no mesmo run.
+  # 'openai' fixo — é o único provider que o orquestrador Python executa hoje (ver
+  # Ai::PythonOrchestratorClient#account_api_key).
+  def account_byok?
+    return @account_byok if defined?(@account_byok)
+
+    @account_byok = Ai::ModelRouter.account_byok?(@account.id)
   end
 
   def credit_exhausted?
