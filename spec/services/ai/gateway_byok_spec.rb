@@ -13,7 +13,7 @@ RSpec.describe 'Ai::Gateway fallback BYOK', type: :model do
 
   before do
     account.enable_features!('ai_core')
-    account.enable_features!('custom_llm_api_key')
+    enable_byok!(account)
     # Chave própria no Hub -> account_provider_key presente (a 1ª chamada usa a chave do cliente).
     IntegrationSetting.create!(account_id: account.id, provider: 'anthropic', enabled: true,
                                config: { 'apiKey' => 'sk-ant-cliente' }.to_json)

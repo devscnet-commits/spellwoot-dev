@@ -70,6 +70,7 @@ RSpec.configure do |config|
   config.include SlackStubs
   config.include FileUploadHelpers
   config.include CsvSpecHelpers
+  config.include PlanSpecHelpers
   config.include InstagramSpecHelpers
   config.include Devise::Test::IntegrationHelpers, type: :request
   config.include ActiveSupport::Testing::TimeHelpers

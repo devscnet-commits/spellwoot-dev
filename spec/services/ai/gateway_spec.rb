@@ -139,7 +139,7 @@ RSpec.describe Ai::Gateway do
       create_department
       binding = create_binding(mode: 'live')
       account.create_ai_credit_balance!(plan_credits: 0, extra_credits: 0)
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       IntegrationSetting.create!(account_id: account.id, provider: 'openai', enabled: true,
                                  config: { 'apiKey' => 'sk-da-conta' }.to_json)
       stub_python(reply: 'Respondo com a chave própria')
@@ -150,13 +150,14 @@ RSpec.describe Ai::Gateway do
       expect(event_types(convo)).not_to include('handoff.credit_exhausted')
     end
 
-    # O furo que a regra nova fecha: antes o gate era só a feature estar ligada, então uma conta com a
-    # feature e SEM chave nenhuma rodava na chave da PLATAFORMA sem bloqueio por saldo e sem débito.
-    it 'com custom_llm_api_key ligado mas SEM chave cadastrada, enforça normalmente' do
+    # O furo que a regra nova fecha: antes o gate era só a feature estar ligada, então uma conta cujo
+    # plano libera chave própria mas que não cadastrou nenhuma rodava na chave da PLATAFORMA sem
+    # bloqueio por saldo e sem débito.
+    it 'com o plano liberando chave própria mas SEM chave cadastrada, enforça normalmente' do
       create_department
       binding = create_binding(mode: 'live')
       account.create_ai_credit_balance!(plan_credits: 0, extra_credits: 0)
-      account.enable_features!('custom_llm_api_key')
+      enable_byok!(account)
       stub_python(reply: 'nao deveria responder')
 
       convo = deliver('oi', binding: binding, mode: 'live')

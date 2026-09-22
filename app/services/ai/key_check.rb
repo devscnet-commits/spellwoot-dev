@@ -82,7 +82,9 @@ class Ai::KeyCheck
   # o que o front precisa para não mostrar "não configurado" quando o caso é outro.
   def key_reason
     return 'account_key' if account_key.present?
-    return 'feature_disabled' unless @account.feature_enabled?('custom_llm_api_key')
+    # Mesma fonte que o runtime (Ai::ModelRouter.account_provider_key): o PLANO, não o bitmask da
+    # conta. Ler fontes diferentes faria a tela afirmar uma coisa e a conversa fazer outra.
+    return 'feature_disabled' unless FeatureGate.enabled?(@account, 'custom_llm_api_key')
 
     setting = IntegrationSetting.find_by(account_id: @account.id, provider: PROVIDER)
     return 'not_configured' if setting.nil?
