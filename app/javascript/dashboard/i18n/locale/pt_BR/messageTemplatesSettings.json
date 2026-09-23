@@ -201,7 +201,7 @@
         "VARIABLES": {
           "TITLE": "Valores de exemplo das variáveis",
           "DESCRIPTION": "A Meta usa esses exemplos para revisar seu modelo. Eles não são enviados aos clientes.",
-          "PLACEHOLDER": "Valor de exemplo para {{variable}}"
+          "PLACEHOLDER": "Valor de exemplo para {variable}"
         },
         "FOOTER": {
           "LABEL": "Rodapé",

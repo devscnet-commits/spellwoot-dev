@@ -201,7 +201,7 @@
         "VARIABLES": {
           "TITLE": "Sample values for variables",
           "DESCRIPTION": "Meta uses these samples to review your template. They are not sent to customers.",
-          "PLACEHOLDER": "Sample value for {{variable}}"
+          "PLACEHOLDER": "Sample value for {variable}"
         },
         "FOOTER": {
           "LABEL": "Footer",
