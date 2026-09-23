@@ -3,9 +3,11 @@
 # Table name: account_users
 #
 #  id                       :bigint           not null, primary key
+#  active                   :boolean          default(TRUE), not null
 #  active_at                :datetime
 #  auto_offline             :boolean          default(TRUE), not null
 #  availability             :integer          default("online"), not null
+#  receives_assignments     :boolean          default(TRUE), not null
 #  role                     :integer          default("agent")
 #  created_at               :datetime         not null
 #  updated_at               :datetime         not null
@@ -18,6 +20,7 @@
 # Indexes
 #
 #  index_account_users_on_account_id                (account_id)
+#  index_account_users_on_active                    (active)
 #  index_account_users_on_agent_capacity_policy_id  (agent_capacity_policy_id)
 #  index_account_users_on_custom_role_id            (custom_role_id)
 #  index_account_users_on_user_id                   (user_id)

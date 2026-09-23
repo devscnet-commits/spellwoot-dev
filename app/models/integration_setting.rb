@@ -1,3 +1,24 @@
+# == Schema Information
+#
+# Table name: integration_settings
+#
+#  id         :bigint           not null, primary key
+#  config     :text
+#  enabled    :boolean          default(TRUE), not null
+#  provider   :string           not null
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  account_id :bigint
+#
+# Indexes
+#
+#  index_integration_settings_global_provider             (provider) UNIQUE WHERE (account_id IS NULL)
+#  index_integration_settings_on_account_id_and_provider  (account_id,provider) UNIQUE WHERE (account_id IS NOT NULL)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (account_id => accounts.id)
+#
 class IntegrationSetting < ApplicationRecord
   belongs_to :account, optional: true  # nil = global/system-level setting
 

@@ -11,7 +11,8 @@
 #
 # Indexes
 #
-#  idx_ai_agent_integrations_unique  (ai_agent_id,ai_integration_link_id) UNIQUE
+#  idx_ai_agent_integrations_unique                 (ai_agent_id,ai_integration_link_id) UNIQUE
+#  index_ai_department_integrations_on_ai_agent_id  (ai_agent_id)
 #
 class Ai::DepartmentIntegration < ApplicationRecord
   belongs_to :agent, class_name: 'Ai::Agent', foreign_key: :ai_agent_id

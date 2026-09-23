@@ -6,7 +6,7 @@
 #  auto_resolve_duration :integer
 #  custom_attributes     :jsonb
 #  domain                :string(100)
-#  feature_flags         :bigint           default(0), not null
+#  enabled_feature_keys  :string           default([]), not null, is an Array
 #  internal_attributes   :jsonb            not null
 #  limits                :jsonb
 #  locale                :integer          default("en")
@@ -19,7 +19,8 @@
 #
 # Indexes
 #
-#  index_accounts_on_status  (status)
+#  index_accounts_on_enabled_feature_keys  (enabled_feature_keys) USING gin
+#  index_accounts_on_status                (status)
 #
 
 class Account < ApplicationRecord

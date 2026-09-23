@@ -2,6 +2,29 @@
 # states (closing buttons) available when resolving a conversation, the reasons (motivos) per
 # state, and the attribute requirements that must be satisfied before closing. category is a
 # reporting dimension (sales/support) so support closings never pollute the sales funnel.
+# == Schema Information
+#
+# Table name: operational_flows
+#
+#  id             :bigint           not null, primary key
+#  active         :boolean          default(TRUE), not null
+#  category       :string           default("sales"), not null
+#  meta_enabled   :boolean          default(FALSE), not null
+#  name           :string           not null
+#  require_reason :boolean          default(FALSE), not null
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
+#  account_id     :bigint           not null
+#
+# Indexes
+#
+#  index_operational_flows_on_account_id           (account_id)
+#  index_operational_flows_on_account_id_and_name  (account_id,name) UNIQUE
+#
+# Foreign Keys
+#
+#  fk_rails_...  (account_id => accounts.id)
+#
 class OperationalFlow < ApplicationRecord
   belongs_to :account
   has_many :reasons, class_name: 'OperationalFlowReason', dependent: :destroy, inverse_of: :operational_flow

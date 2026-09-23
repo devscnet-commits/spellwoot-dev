@@ -2,18 +2,18 @@
 #
 # Table name: ai_knowledge_sources
 #
-#  id               :bigint           not null, primary key
-#  crawl_error      :text
-#  crawl_status     :string
-#  kind             :string           default("faq"), not null
-#  price            :string
-#  raw              :text
-#  status           :string           default("active"), not null
-#  title            :string
-#  created_at       :datetime         not null
-#  updated_at       :datetime         not null
-#  account_id       :bigint           not null
-#  ai_agent_id      :bigint
+#  id           :bigint           not null, primary key
+#  crawl_error  :text
+#  crawl_status :string
+#  kind         :string           default("faq"), not null
+#  price        :string
+#  raw          :text
+#  status       :string           default("active"), not null
+#  title        :string
+#  created_at   :datetime         not null
+#  updated_at   :datetime         not null
+#  account_id   :bigint           not null
+#  ai_agent_id  :bigint
 #
 # Indexes
 #
