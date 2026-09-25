@@ -385,6 +385,19 @@ const detectedVariables = computed(() =>
   detectVariables(form.body, form.parameterFormat)
 );
 
+const variableTypeOptions = computed(() => [
+  {
+    value: PARAMETER_FORMATS.POSITIONAL,
+    label: t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.POSITIONAL'
+    ),
+  },
+  {
+    value: PARAMETER_FORMATS.NAMED,
+    label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.NAMED'),
+  },
+]);
+
 watch(
   () => form.category,
   (newCategory, oldCategory) => {
@@ -806,6 +819,30 @@ const submitTemplate = async () => {
             </CardLayout>
 
             <CardLayout>
+              <div v-if="!isAuthentication">
+                <label class="text-body-main text-n-slate-11">
+                  {{
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.LABEL'
+                    )
+                  }}
+                  <span
+                    v-tooltip="
+                      $t(
+                        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.TOOLTIP'
+                      )
+                    "
+                    class="inline-flex align-text-bottom"
+                  >
+                    <Icon icon="i-lucide-info" class="flex-shrink-0 size-4" />
+                  </span>
+                </label>
+                <ComboBox
+                  v-model="form.parameterFormat"
+                  :options="variableTypeOptions"
+                />
+              </div>
+
               <TemplateHeaderField
                 v-if="!isAuthentication && !isOrderStatus"
                 v-model="form.header"
@@ -819,8 +856,7 @@ const submitTemplate = async () => {
                 ref="templateBodyFieldRef"
                 v-model="form.body"
                 v-model:samples="bodySamples"
-                v-model:parameter-format="form.parameterFormat"
-                show-format-selector
+                :parameter-format="form.parameterFormat"
               />
               <TextArea
                 v-else
