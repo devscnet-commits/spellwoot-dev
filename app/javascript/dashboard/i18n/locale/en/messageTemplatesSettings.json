@@ -268,7 +268,8 @@
         "VALIDATION": {
           "NAME_REQUIRED": "Name is required",
           "NAME_FORMAT": "The name must contain only lowercase letters, numbers and underscores",
-          "BODY_REQUIRED": "The message body is required"
+          "BODY_REQUIRED": "The message body is required",
+          "BODY_DANGLING_VARIABLE": "A variable can't start or end the message body — it must sit in the middle of the text"
         }
       },
       "CONFIRM": {

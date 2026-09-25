@@ -142,6 +142,7 @@ const currentStep = ref(1);
 const isSubmitting = ref(false);
 const submitError = ref('');
 const showConfirmModal = ref(false);
+const templateBodyFieldRef = ref(null);
 
 const initialFormState = () => ({
   category: 'MARKETING',
@@ -512,6 +513,15 @@ const requiredFieldErrors = () => {
     errors.push(
       t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_REQUIRED')
     );
+  } else if (
+    !isAuthentication.value &&
+    templateBodyFieldRef.value?.hasDanglingVariable
+  ) {
+    errors.push(
+      t(
+        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_DANGLING_VARIABLE'
+      )
+    );
   }
   return errors;
 };
@@ -797,6 +807,7 @@ const submitTemplate = async () => {
 
               <TemplateBodyField
                 v-if="!isAuthentication"
+                ref="templateBodyFieldRef"
                 v-model="form.body"
                 v-model:samples="bodySamples"
               />

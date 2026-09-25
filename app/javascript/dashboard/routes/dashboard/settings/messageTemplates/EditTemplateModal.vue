@@ -109,7 +109,17 @@ const buildTemplatePayload = () => ({
   })),
 });
 
+const templateBodyFieldRef = ref(null);
+
 const submit = async () => {
+  if (templateBodyFieldRef.value?.hasDanglingVariable) {
+    submitError.value = t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_DANGLING_VARIABLE'
+    );
+    useAlert(submitError.value);
+    return;
+  }
+
   isSubmitting.value = true;
   submitError.value = '';
 
@@ -154,6 +164,7 @@ const submit = async () => {
           />
 
           <TemplateBodyField
+            ref="templateBodyFieldRef"
             v-model="form.body"
             v-model:samples="bodySamples"
           />

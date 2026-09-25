@@ -268,7 +268,8 @@
         "VALIDATION": {
           "NAME_REQUIRED": "O nome é obrigatório",
           "NAME_FORMAT": "O nome deve conter apenas letras minúsculas, números e underline",
-          "BODY_REQUIRED": "O corpo da mensagem é obrigatório"
+          "BODY_REQUIRED": "O corpo da mensagem é obrigatório",
+          "BODY_DANGLING_VARIABLE": "Uma variável não pode ficar no início ou fim do corpo — ela precisa estar no meio do texto"
         }
       },
       "CONFIRM": {

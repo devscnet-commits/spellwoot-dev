@@ -29,6 +29,23 @@ const detectedVariables = computed(() => {
   return numbers.sort((a, b) => a - b);
 });
 
+// Mirrors Whatsapp::MessageTemplateValidator#dangling_variable? — Meta treats a variable as
+// leading/trailing even with punctuation stuck to it (e.g. "...{{2}}." is still rejected).
+const hasDanglingVariable = computed(() => {
+  const value = body.value;
+  return (
+    /^[\p{P}\s]*\{\{\d+\}\}/u.test(value) || /\{\{\d+\}\}[\p{P}\s]*$/u.test(value)
+  );
+});
+
+const bodyErrorMessage = computed(() =>
+  hasDanglingVariable.value
+    ? t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_DANGLING_VARIABLE')
+    : ''
+);
+
+defineExpose({ hasDanglingVariable });
+
 const setCursorAfterEdit = (cursorStart, cursorEnd) => {
   nextTick(() => {
     const el = textAreaRef.value?.getEl();
@@ -96,6 +113,8 @@ const insertEmoji = emoji => {
       :placeholder="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.PLACEHOLDER')"
       :max-length="MAX_BODY_LENGTH"
       show-character-count
+      :message="bodyErrorMessage"
+      :message-type="hasDanglingVariable ? 'error' : 'info'"
     >
       <div class="flex items-center gap-1 pb-2 border-b border-n-weak">
         <Button
