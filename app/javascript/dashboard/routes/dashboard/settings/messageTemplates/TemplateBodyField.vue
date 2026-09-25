@@ -6,6 +6,8 @@ import { vOnClickOutside } from '@vueuse/components';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
+import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import Icon from 'dashboard/components-next/icon/Icon.vue';
 import { wrapSelection, insertAtCursor } from './whatsappMarkdown';
 import {
   PARAMETER_FORMATS,
@@ -22,10 +24,14 @@ const MAX_BODY_LENGTH = 1024;
 const MARKERS = { BOLD: '*', ITALIC: '_', STRIKETHROUGH: '~', CODE: '```' };
 
 const props = defineProps({
-  parameterFormat: {
-    type: String,
-    default: PARAMETER_FORMATS.POSITIONAL,
-  },
+  // Only the create wizard lets the type be chosen — an existing template's format is fixed by
+  // Meta at creation time, so the edit modal keeps the selector hidden.
+  showFormatSelector: { type: Boolean, default: false },
+});
+
+const parameterFormat = defineModel('parameterFormat', {
+  type: String,
+  default: PARAMETER_FORMATS.POSITIONAL,
 });
 
 const { t } = useI18n();
@@ -36,8 +42,19 @@ const samples = defineModel('samples', { type: Object, default: () => ({}) });
 const textAreaRef = ref(null);
 const isEmojiPickerOpen = ref(false);
 
+const variableTypeOptions = computed(() => [
+  {
+    value: PARAMETER_FORMATS.POSITIONAL,
+    label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.POSITIONAL'),
+  },
+  {
+    value: PARAMETER_FORMATS.NAMED,
+    label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.NAMED'),
+  },
+]);
+
 const detectedVariables = computed(() =>
-  detectVariables(body.value, props.parameterFormat)
+  detectVariables(body.value, parameterFormat.value)
 );
 
 const hasDanglingVariable = computed(() => bodyHasDanglingVariable(body.value));
@@ -77,8 +94,8 @@ const insertVariable = () => {
   const el = textAreaRef.value?.getEl();
   if (!el) return;
 
-  const token = nextVariableToken(detectedVariables.value, props.parameterFormat);
-  const isNamed = props.parameterFormat === PARAMETER_FORMATS.NAMED;
+  const token = nextVariableToken(detectedVariables.value, parameterFormat.value);
+  const isNamed = parameterFormat.value === PARAMETER_FORMATS.NAMED;
 
   const { text, cursorStart, cursorEnd } = insertAtCursor(
     body.value,
@@ -186,6 +203,19 @@ const insertEmoji = emoji => {
           />
         </div>
         <div class="w-px h-4 mx-1 bg-n-weak" />
+        <div v-if="showFormatSelector" class="flex items-center gap-1">
+          <span
+            v-tooltip="
+              $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.TOOLTIP')
+            "
+            class="inline-flex align-text-bottom"
+          >
+            <Icon icon="i-lucide-info" class="flex-shrink-0 size-3.5" />
+          </span>
+          <div class="w-32">
+            <ComboBox v-model="parameterFormat" :options="variableTypeOptions" />
+          </div>
+        </div>
         <Button
           :label="$t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.ADD_VARIABLE')"
           icon="i-lucide-plus"
@@ -205,7 +235,7 @@ const insertEmoji = emoji => {
         {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLES.DESCRIPTION') }}
       </p>
       <p
-        v-if="props.parameterFormat === 'NAMED'"
+        v-if="parameterFormat === 'NAMED'"
         class="text-body-main text-n-slate-11"
       >
         {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.NAMED_HINT') }}
