@@ -186,6 +186,15 @@ const handleAddMenuAction = ({ value }) => addButton(value);
 const removeButton = index => {
   buttons.value = buttons.value.filter((_, i) => i !== index);
 };
+
+// Meta allows at most one variable in a URL button, always positional ({{1}}), and only as a
+// suffix at the very end of the URL (not a dynamic domain or middle segment).
+const hasUrlVariable = button => (button.url || '').includes('{{1}}');
+
+const insertUrlVariable = button => {
+  if (hasUrlVariable(button)) return;
+  button.url = `${button.url || ''}{{1}}`;
+};
 </script>
 
 <template>
@@ -271,11 +280,37 @@ const removeButton = index => {
         {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIXED_TEXT_HINT') }}
       </p>
 
-      <Input
-        v-if="button.type === 'URL'"
-        v-model="button.url"
-        :label="t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL')"
-      />
+      <div v-if="button.type === 'URL'" class="space-y-2">
+        <Input
+          v-model="button.url"
+          :label="t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL')"
+        />
+        <Button
+          :label="
+            t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.ADD_URL_VARIABLE')
+          "
+          icon="i-lucide-plus"
+          variant="ghost"
+          color="slate"
+          size="xs"
+          :disabled="hasUrlVariable(button)"
+          @click="insertUrlVariable(button)"
+        />
+        <Input
+          v-if="hasUrlVariable(button)"
+          v-model="button.example"
+          :label="
+            t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL_VARIABLE_SAMPLE_LABEL'
+            )
+          "
+          :placeholder="
+            t(
+              'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BUTTONS.FIELDS.URL_VARIABLE_SAMPLE_PLACEHOLDER'
+            )
+          "
+        />
+      </div>
 
       <Input
         v-if="button.type === 'PHONE_NUMBER'"

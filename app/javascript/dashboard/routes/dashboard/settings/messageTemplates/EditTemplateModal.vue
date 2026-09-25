@@ -91,6 +91,7 @@ const buildTemplatePayload = () => ({
       : {
           type: form.header.type,
           text: form.header.type === 'TEXT' ? form.header.text : undefined,
+          sample: form.header.type === 'TEXT' ? form.header.sample : undefined,
           handle: form.header.type !== 'TEXT' ? form.header.handle : undefined,
         },
   body: form.body,
@@ -171,6 +172,7 @@ const submit = async () => {
             v-model="form.header"
             :inbox-id="inboxId"
             :text-only="isCallPermissionRequest"
+            :parameter-format="parameterFormat"
           />
 
           <TemplateBodyField

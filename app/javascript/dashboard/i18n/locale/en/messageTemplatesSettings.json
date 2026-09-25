@@ -183,7 +183,9 @@
           "REPLACE_LABEL": "Replace file",
           "UPLOADING": "Uploading...",
           "UPLOADED": "Uploaded: {name}",
-          "UPLOAD_ERROR": "We could not upload the file."
+          "UPLOAD_ERROR": "We could not upload the file.",
+          "VARIABLE_SAMPLE_LABEL": "Header variable sample value",
+          "VARIABLE_SAMPLE_PLACEHOLDER": "Sample value"
         },
         "BODY": {
           "LABEL": "Body",
@@ -235,6 +237,9 @@
           "FIELDS": {
             "TEXT": "Button text (max {count} chars)",
             "URL": "Destination URL",
+            "ADD_URL_VARIABLE": "Add variable",
+            "URL_VARIABLE_SAMPLE_LABEL": "Sample URL",
+            "URL_VARIABLE_SAMPLE_PLACEHOLDER": "Full URL, with a real value instead of {'{'}{'{'}1{'}'}{'}'}",
             "PHONE_NUMBER": "Phone number",
             "EXAMPLE_CODE": "Sample promo code",
             "FLOW_ID": "Flow ID",

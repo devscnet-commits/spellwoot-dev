@@ -84,6 +84,25 @@ class Whatsapp::MessageTemplateValidator
     text = header[:text].to_s
     return 'O texto do cabeçalho é obrigatório' if text.blank?
     return "O texto do cabeçalho deve ter no máximo #{MAX_HEADER_TEXT_LENGTH} caracteres" if text.length > MAX_HEADER_TEXT_LENGTH
+
+    header_variable_error(header, text)
+  end
+
+  # Meta allows at most one variable in a header — unlike the body, which allows several — and
+  # it must follow the template's own parameter_format (positional {{1}} or a NAMED token).
+  def header_variable_error(header, text)
+    tokens = text.scan(/\{\{([^{}]*)\}\}/).flatten
+    return if tokens.empty?
+    return 'O cabeçalho pode ter no máximo uma variável' if tokens.size > 1
+
+    token = tokens.first
+    if parameter_format == 'NAMED'
+      return 'O nome da variável do cabeçalho deve começar com letra minúscula e conter apenas letras, números e underline' unless token.match?(NAMED_VARIABLE_REGEX)
+    elsif token != '1'
+      return 'A variável do cabeçalho deve ser {{1}}'
+    end
+
+    'Informe um valor de exemplo para a variável do cabeçalho' if header[:sample].to_s.blank?
   end
 
   def header_media_error(header)
@@ -220,7 +239,7 @@ class Whatsapp::MessageTemplateValidator
   def button_field_error(button)
     case button[:type]
     when 'URL'
-      'A URL do botão é obrigatória' if button[:url].blank?
+      url_button_error(button)
     when 'PHONE_NUMBER'
       phone_number_error(button[:phone_number])
     when 'COPY_CODE'
@@ -230,6 +249,22 @@ class Whatsapp::MessageTemplateValidator
     when 'FLOW'
       flow_button_error(button)
     end
+  end
+
+  # Meta allows at most one variable in a URL button, always positional ({{1}}), and only at the
+  # very end of the URL (a dynamic path suffix, not a dynamic domain or middle segment). The
+  # example must be the full resolved URL, not just the variable's value.
+  def url_button_error(button)
+    url = button[:url].to_s
+    return 'A URL do botão é obrigatória' if url.blank?
+
+    tokens = url.scan(/\{\{([^{}]*)\}\}/).flatten
+    return if tokens.empty?
+    return 'A URL pode ter no máximo uma variável' if tokens.size > 1
+    return 'A variável da URL deve ser {{1}}' unless tokens.first == '1'
+    return 'A variável da URL deve estar no final do endereço' unless url.end_with?('{{1}}')
+
+    'Informe uma URL de exemplo, com um valor real no lugar de {{1}}' if button[:example].blank?
   end
 
   # A Meta recusa o template quando o botão FLOW vem sem navigate_screen (code 100, subcode

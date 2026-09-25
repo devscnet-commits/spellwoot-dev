@@ -150,7 +150,7 @@ const initialFormState = () => ({
   subtype: 'STANDARD',
   name: '',
   language: 'pt_BR',
-  header: { type: 'NONE', text: '', handle: '', fileName: '' },
+  header: { type: 'NONE', text: '', handle: '', fileName: '', sample: '' },
   parameterFormat: PARAMETER_FORMATS.POSITIONAL,
   body: '',
   footer: '',
@@ -407,7 +407,7 @@ watch(
     if (!allowed.includes(form.subtype)) form.subtype = 'STANDARD';
 
     if (newCategory === 'AUTHENTICATION') {
-      form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+      form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
       form.parameterFormat = PARAMETER_FORMATS.POSITIONAL;
       form.body = AUTH_BODY_TEXT;
       form.footer = '';
@@ -417,7 +417,7 @@ watch(
     } else if (oldCategory === 'AUTHENTICATION') {
       // Leaving Authentication: clear the fields it auto-filled (and disabled editing
       // of) so they don't silently carry stale auth content into Marketing/Utility.
-      form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+      form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
       form.body = '';
       form.footer = '';
       form.buttons = [];
@@ -453,7 +453,7 @@ watch(isOrderStatus, newIsOrderStatus => {
   if (!newIsOrderStatus) return;
 
   form.buttons = [];
-  form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+  form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
 });
 
 watch(isCallPermissionRequest, newIsCallPermissionRequest => {
@@ -461,7 +461,7 @@ watch(isCallPermissionRequest, newIsCallPermissionRequest => {
 
   form.buttons = [];
   if (!['NONE', 'TEXT'].includes(form.header.type)) {
-    form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+    form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
   }
 });
 
@@ -490,6 +490,7 @@ const buildTemplatePayload = () => ({
       : {
           type: form.header.type,
           text: form.header.type === 'TEXT' ? form.header.text : undefined,
+          sample: form.header.type === 'TEXT' ? form.header.sample : undefined,
           handle: form.header.type !== 'TEXT' ? form.header.handle : undefined,
         },
   body: form.body,
@@ -847,6 +848,7 @@ const submitTemplate = async () => {
                 v-model="form.header"
                 :inbox-id="inboxId"
                 :text-only="isCallPermissionRequest"
+                :parameter-format="form.parameterFormat"
               />
 
               <TemplateBodyField

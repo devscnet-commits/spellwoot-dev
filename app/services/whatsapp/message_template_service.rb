@@ -226,10 +226,16 @@ class Whatsapp::MessageTemplateService
     return if header.blank? || header[:type].blank? || header[:type] == 'NONE'
 
     if header[:type] == 'TEXT'
-      { type: 'HEADER', format: 'TEXT', text: header[:text] }
+      header_text_component(header)
     else
       { type: 'HEADER', format: header[:type], example: { header_handle: [header[:handle]] } }
     end
+  end
+
+  def header_text_component(header)
+    component = { type: 'HEADER', format: 'TEXT', text: header[:text] }
+    component[:example] = { header_text: [header[:sample]] } if header[:sample].present?
+    component
   end
 
   # Meta auto-generates the body for AUTHENTICATION templates (the code delivery text isn't

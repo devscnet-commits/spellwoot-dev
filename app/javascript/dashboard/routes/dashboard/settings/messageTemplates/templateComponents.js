@@ -6,13 +6,14 @@ export const findComponent = (components, type) =>
   (components || []).find(component => component.type === type);
 
 export const normalizeTemplateHeader = component => {
-  if (!component) return { type: 'NONE', text: '', handle: '', fileName: '' };
+  if (!component) return { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
   if (component.format === 'TEXT') {
     return {
       type: 'TEXT',
       text: component.text || '',
       handle: '',
       fileName: '',
+      sample: component.example?.header_text?.[0] || '',
     };
   }
   return {
@@ -20,6 +21,7 @@ export const normalizeTemplateHeader = component => {
     text: '',
     handle: component.example?.header_handle?.[0] || '',
     fileName: '',
+    sample: '',
   };
 };
 
