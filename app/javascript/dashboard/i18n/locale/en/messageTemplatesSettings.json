@@ -198,6 +198,13 @@
             "EMOJI": "Emoji"
           }
         },
+        "VARIABLE_TYPE": {
+          "LABEL": "Variable type",
+          "TOOLTIP": "Variables are placeholders used to dynamically insert information into your template. You can use a name or a number as a variable. Examples: Name: {'{'}{'{'}order_id{'}'}{'}'} Number: {'{'}{'{'}1{'}'}{'}'}",
+          "POSITIONAL": "Number",
+          "NAMED": "Name",
+          "NAMED_HINT": "Edit each variable's name directly in the text, e.g. {'{'}{'{'}customer_name{'}'}{'}'}."
+        },
         "VARIABLES": {
           "TITLE": "Sample values for variables",
           "DESCRIPTION": "Meta uses these samples to review your template. They are not sent to customers.",

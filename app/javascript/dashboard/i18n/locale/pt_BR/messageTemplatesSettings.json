@@ -198,6 +198,13 @@
             "EMOJI": "Emoji"
           }
         },
+        "VARIABLE_TYPE": {
+          "LABEL": "Tipo de variável",
+          "TOOLTIP": "As variáveis são espaços reservados usados para inserir dinamicamente informações ou dados específicos no seu modelo. Você pode inserir um nome ou número como uma variável. Exemplos: Nome: {'{'}{'{'}order_id{'}'}{'}'} Número: {'{'}{'{'}1{'}'}{'}'}",
+          "POSITIONAL": "Número",
+          "NAMED": "Nome",
+          "NAMED_HINT": "Edite o nome de cada variável diretamente no texto, por exemplo {'{'}{'{'}nome_cliente{'}'}{'}'}."
+        },
         "VARIABLES": {
           "TITLE": "Valores de exemplo das variáveis",
           "DESCRIPTION": "A Meta usa esses exemplos para revisar seu modelo. Eles não são enviados aos clientes.",

@@ -39,11 +39,26 @@ export const normalizeTemplateButton = button => ({
   navigate_screen: button.type === 'FLOW' ? button.navigate_screen || '' : '',
 });
 
+// Meta returns a NAMED template's body samples as body_text_named_params
+// ([{param_name, example}]) instead of the positional body_text ([[...]]) array.
+export const bodySamplesFromComponent = bodyComponent => {
+  const namedParams = bodyComponent?.example?.body_text_named_params;
+  if (namedParams?.length) {
+    return Object.fromEntries(
+      namedParams.map(({ param_name: name, example }) => [name, example])
+    );
+  }
+
+  const positionalValues = bodyComponent?.example?.body_text?.[0] || [];
+  return Object.fromEntries(
+    positionalValues.map((value, index) => [index + 1, value])
+  );
+};
+
 // Builds the props TemplateWhatsAppPreview expects directly from a template's
 // raw `components` array.
 export const templateToPreviewProps = components => {
   const bodyComponent = findComponent(components, 'BODY');
-  const sampleValues = bodyComponent?.example?.body_text?.[0] || [];
 
   return {
     header: normalizeTemplateHeader(findComponent(components, 'HEADER')),
@@ -52,8 +67,6 @@ export const templateToPreviewProps = components => {
     buttons: (findComponent(components, 'BUTTONS')?.buttons || []).map(
       normalizeTemplateButton
     ),
-    samples: Object.fromEntries(
-      sampleValues.map((value, index) => [index + 1, value])
-    ),
+    samples: bodySamplesFromComponent(bodyComponent),
   };
 };

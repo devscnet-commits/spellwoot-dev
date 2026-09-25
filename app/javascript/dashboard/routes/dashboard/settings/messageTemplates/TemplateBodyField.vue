@@ -7,6 +7,12 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import TextArea from 'dashboard/components-next/textarea/TextArea.vue';
 import { wrapSelection, insertAtCursor } from './whatsappMarkdown';
+import {
+  PARAMETER_FORMATS,
+  detectVariables,
+  hasDanglingVariable as bodyHasDanglingVariable,
+  nextVariableToken,
+} from './templateVariables';
 
 const EmojiInput = defineAsyncComponent(
   () => import('shared/components/emoji/EmojiInput.vue')
@@ -14,6 +20,13 @@ const EmojiInput = defineAsyncComponent(
 
 const MAX_BODY_LENGTH = 1024;
 const MARKERS = { BOLD: '*', ITALIC: '_', STRIKETHROUGH: '~', CODE: '```' };
+
+const props = defineProps({
+  parameterFormat: {
+    type: String,
+    default: PARAMETER_FORMATS.POSITIONAL,
+  },
+});
 
 const { t } = useI18n();
 
@@ -23,20 +36,11 @@ const samples = defineModel('samples', { type: Object, default: () => ({}) });
 const textAreaRef = ref(null);
 const isEmojiPickerOpen = ref(false);
 
-const detectedVariables = computed(() => {
-  const matches = body.value.matchAll(/\{\{(\d+)\}\}/g);
-  const numbers = [...new Set([...matches].map(match => Number(match[1])))];
-  return numbers.sort((a, b) => a - b);
-});
+const detectedVariables = computed(() =>
+  detectVariables(body.value, props.parameterFormat)
+);
 
-// Mirrors Whatsapp::MessageTemplateValidator#dangling_variable? — Meta treats a variable as
-// leading/trailing even with punctuation stuck to it (e.g. "...{{2}}." is still rejected).
-const hasDanglingVariable = computed(() => {
-  const value = body.value;
-  return (
-    /^[\p{P}\s]*\{\{\d+\}\}/u.test(value) || /\{\{\d+\}\}[\p{P}\s]*$/u.test(value)
-  );
-});
+const hasDanglingVariable = computed(() => bodyHasDanglingVariable(body.value));
 
 const bodyErrorMessage = computed(() =>
   hasDanglingVariable.value
@@ -73,19 +77,21 @@ const insertVariable = () => {
   const el = textAreaRef.value?.getEl();
   if (!el) return;
 
-  const nextNumber =
-    detectedVariables.value.length > 0
-      ? Math.max(...detectedVariables.value) + 1
-      : 1;
+  const token = nextVariableToken(detectedVariables.value, props.parameterFormat);
+  const isNamed = props.parameterFormat === PARAMETER_FORMATS.NAMED;
 
   const { text, cursorStart, cursorEnd } = insertAtCursor(
     body.value,
     el.selectionStart,
     el.selectionEnd,
-    `{{${nextNumber}}}`
+    `{{${token}}}`
   );
   body.value = text;
-  setCursorAfterEdit(cursorStart, cursorEnd);
+  // Named mode: select the placeholder name (not the braces) so typing right away renames it.
+  setCursorAfterEdit(
+    isNamed ? cursorStart - 2 - String(token).length : cursorStart,
+    isNamed ? cursorEnd - 2 : cursorEnd
+  );
 };
 
 const insertEmoji = emoji => {
@@ -198,14 +204,20 @@ const insertEmoji = emoji => {
       <p class="text-body-main text-n-slate-11">
         {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLES.DESCRIPTION') }}
       </p>
+      <p
+        v-if="props.parameterFormat === 'NAMED'"
+        class="text-body-main text-n-slate-11"
+      >
+        {{ t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.NAMED_HINT') }}
+      </p>
       <Input
-        v-for="number in detectedVariables"
-        :key="number"
-        v-model="samples[number]"
-        :label="`{{${number}}}`"
+        v-for="key in detectedVariables"
+        :key="key"
+        v-model="samples[key]"
+        :label="`{{${key}}}`"
         :placeholder="
           t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLES.PLACEHOLDER', {
-            variable: number,
+            variable: key,
           })
         "
       />

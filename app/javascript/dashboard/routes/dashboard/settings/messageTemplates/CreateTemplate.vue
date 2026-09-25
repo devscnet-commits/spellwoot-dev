@@ -21,6 +21,7 @@ import TemplateButtonsField from './TemplateButtonsField.vue';
 import TemplatePreviewSidebar from './TemplatePreviewSidebar.vue';
 import TemplateSubmitConfirmModal from './TemplateSubmitConfirmModal.vue';
 import { CATEGORY_ICONS } from './templateCategoryIcons';
+import { PARAMETER_FORMATS, detectVariables } from './templateVariables';
 
 const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;
@@ -150,6 +151,7 @@ const initialFormState = () => ({
   name: '',
   language: 'pt_BR',
   header: { type: 'NONE', text: '', handle: '', fileName: '' },
+  parameterFormat: PARAMETER_FORMATS.POSITIONAL,
   body: '',
   footer: '',
   buttons: [],
@@ -379,11 +381,22 @@ const buttonTypeOptions = computed(() => {
   }));
 });
 
-const detectedVariables = computed(() => {
-  const matches = form.body.matchAll(/\{\{(\d+)\}\}/g);
-  const numbers = [...new Set([...matches].map(match => Number(match[1])))];
-  return numbers.sort((a, b) => a - b);
-});
+const detectedVariables = computed(() =>
+  detectVariables(form.body, form.parameterFormat)
+);
+
+const variableTypeOptions = computed(() => [
+  {
+    value: PARAMETER_FORMATS.POSITIONAL,
+    label: t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.POSITIONAL'
+    ),
+  },
+  {
+    value: PARAMETER_FORMATS.NAMED,
+    label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.NAMED'),
+  },
+]);
 
 watch(
   () => form.category,
@@ -395,6 +408,7 @@ watch(
 
     if (newCategory === 'AUTHENTICATION') {
       form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+      form.parameterFormat = PARAMETER_FORMATS.POSITIONAL;
       form.body = AUTH_BODY_TEXT;
       form.footer = '';
       form.buttons = form.buttons
@@ -480,8 +494,14 @@ const buildTemplatePayload = () => ({
         },
   body: form.body,
   footer: form.footer || undefined,
+  parameter_format:
+    form.parameterFormat === PARAMETER_FORMATS.NAMED ? 'NAMED' : undefined,
+  body_variable_names:
+    form.parameterFormat === PARAMETER_FORMATS.NAMED
+      ? detectedVariables.value
+      : undefined,
   body_sample_values: detectedVariables.value.map(
-    number => bodySamples[number] || ''
+    key => bodySamples[key] || ''
   ),
   buttons: form.buttons.map(button => ({
     type: button.type,
@@ -798,6 +818,30 @@ const submitTemplate = async () => {
             </CardLayout>
 
             <CardLayout>
+              <div v-if="!isAuthentication">
+                <label class="text-body-main text-n-slate-11">
+                  {{
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.LABEL'
+                    )
+                  }}
+                  <span
+                    v-tooltip="
+                      $t(
+                        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.TOOLTIP'
+                      )
+                    "
+                    class="inline-flex align-text-bottom"
+                  >
+                    <Icon icon="i-lucide-info" class="flex-shrink-0 size-4" />
+                  </span>
+                </label>
+                <ComboBox
+                  v-model="form.parameterFormat"
+                  :options="variableTypeOptions"
+                />
+              </div>
+
               <TemplateHeaderField
                 v-if="!isAuthentication && !isOrderStatus"
                 v-model="form.header"
@@ -810,6 +854,7 @@ const submitTemplate = async () => {
                 ref="templateBodyFieldRef"
                 v-model="form.body"
                 v-model:samples="bodySamples"
+                :parameter-format="form.parameterFormat"
               />
               <TextArea
                 v-else

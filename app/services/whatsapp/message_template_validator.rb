@@ -28,10 +28,8 @@ class Whatsapp::MessageTemplateValidator
   MAX_VOICE_CALL_TEXT_LENGTH = 20
   MAX_BUTTON_PHONE_LENGTH = 20
   MAX_BUTTONS = 10
-
-  def self.body_variable_numbers(body)
-    body.to_s.scan(/\{\{(\d+)\}\}/).flatten.map(&:to_i).uniq.sort
-  end
+  PARAMETER_FORMATS = %w[POSITIONAL NAMED].freeze
+  NAMED_VARIABLE_REGEX = /\A[a-z][a-z0-9_]*\z/
 
   # require_name: false for edits — Meta's template update endpoint only accepts category and
   # components, the name can't be changed after creation.
@@ -139,16 +137,40 @@ class Whatsapp::MessageTemplateValidator
   # shape with error_subcode 2388299 "Leading or Trailing Params Not Allowed" even though it doesn't
   # literally end the string. Match that by allowing punctuation/whitespace around the variable.
   def dangling_variable?(body)
-    body.match?(/\A[[:punct:]\s]*\{\{\d+\}\}/) || body.match?(/\{\{\d+\}\}[[:punct:]\s]*\z/)
+    body.match?(/\A[[:punct:]\s]*\{\{[a-zA-Z0-9_]+\}\}/) || body.match?(/\{\{[a-zA-Z0-9_]+\}\}[[:punct:]\s]*\z/)
+  end
+
+  def parameter_format
+    PARAMETER_FORMATS.include?(@params[:parameter_format]) ? @params[:parameter_format] : 'POSITIONAL'
   end
 
   def variable_sample_error(body)
-    numbers = self.class.body_variable_numbers(body)
-    return if numbers.empty?
+    tokens = body.scan(/\{\{([^{}]*)\}\}/).flatten.uniq
+    return if tokens.empty?
+
+    parameter_format == 'NAMED' ? named_variable_error(tokens) : positional_variable_error(tokens)
+  end
+
+  def positional_variable_error(tokens)
+    return 'As variáveis devem ser numeradas (ex: {{1}}, {{2}}), não ter nome, para o tipo Número' unless tokens.all? { |token| token.match?(/\A\d+\z/) }
+
+    numbers = tokens.map(&:to_i).sort
     return 'As variáveis devem ser sequenciais a partir de {{1}} (ex: {{1}}, {{2}})' unless numbers == (1..numbers.size).to_a
 
     sample_values = @params[:body_sample_values] || []
     return "Informe um valor de exemplo para cada variável (#{numbers.size} esperado(s))" if sample_values.size != numbers.size
+    return 'Os valores de exemplo não podem ficar em branco' if sample_values.any?(&:blank?)
+  end
+
+  def named_variable_error(tokens)
+    return 'Os nomes das variáveis devem começar com letra minúscula e conter apenas letras, números e underline (ex: {{nome_cliente}})' unless tokens.all? { |token| token.match?(NAMED_VARIABLE_REGEX) }
+
+    names = @params[:body_variable_names] || []
+    return 'Informe o nome de cada variável' if names.size != tokens.size
+    return 'Os nomes das variáveis não correspondem às variáveis usadas no corpo da mensagem' unless names.sort == tokens.sort
+
+    sample_values = @params[:body_sample_values] || []
+    return "Informe um valor de exemplo para cada variável (#{tokens.size} esperado(s))" if sample_values.size != tokens.size
     return 'Os valores de exemplo não podem ficar em branco' if sample_values.any?(&:blank?)
   end
 
