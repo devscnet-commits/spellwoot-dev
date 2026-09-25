@@ -15,7 +15,9 @@ import {
   findComponent,
   normalizeTemplateHeader,
   normalizeTemplateButton,
+  bodySamplesFromComponent,
 } from './templateComponents';
+import { PARAMETER_FORMATS, detectVariables } from './templateVariables';
 
 const props = defineProps({
   inboxId: { type: Number, required: true },
@@ -47,7 +49,11 @@ const form = reactive({
   buttons: (buttonsComponent?.buttons || []).map(normalizeTemplateButton),
 });
 
-const bodySamples = reactive({});
+const bodySamples = reactive(bodySamplesFromComponent(bodyComponent));
+const parameterFormat =
+  props.template.parameter_format === PARAMETER_FORMATS.NAMED
+    ? PARAMETER_FORMATS.NAMED
+    : PARAMETER_FORMATS.POSITIONAL;
 
 const buttonTypeLabels = computed(() => ({
   QUICK_REPLY: t(
@@ -72,11 +78,9 @@ const buttonTypeOptions = computed(() =>
   }))
 );
 
-const detectedVariables = computed(() => {
-  const matches = form.body.matchAll(/\{\{(\d+)\}\}/g);
-  const numbers = [...new Set([...matches].map(match => Number(match[1])))];
-  return numbers.sort((a, b) => a - b);
-});
+const detectedVariables = computed(() =>
+  detectVariables(form.body, parameterFormat)
+);
 
 const buildTemplatePayload = () => ({
   category: props.template.category,
@@ -87,12 +91,19 @@ const buildTemplatePayload = () => ({
       : {
           type: form.header.type,
           text: form.header.type === 'TEXT' ? form.header.text : undefined,
+          sample: form.header.type === 'TEXT' ? form.header.sample : undefined,
           handle: form.header.type !== 'TEXT' ? form.header.handle : undefined,
         },
   body: form.body,
   footer: form.footer || undefined,
+  parameter_format:
+    parameterFormat === PARAMETER_FORMATS.NAMED ? 'NAMED' : undefined,
+  body_variable_names:
+    parameterFormat === PARAMETER_FORMATS.NAMED
+      ? detectedVariables.value
+      : undefined,
   body_sample_values: detectedVariables.value.map(
-    number => bodySamples[number] || ''
+    key => bodySamples[key] || ''
   ),
   buttons: form.buttons.map(button => ({
     type: button.type,
@@ -109,7 +120,17 @@ const buildTemplatePayload = () => ({
   })),
 });
 
+const templateBodyFieldRef = ref(null);
+
 const submit = async () => {
+  if (templateBodyFieldRef.value?.hasDanglingVariable) {
+    submitError.value = t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_DANGLING_VARIABLE'
+    );
+    useAlert(submitError.value);
+    return;
+  }
+
   isSubmitting.value = true;
   submitError.value = '';
 
@@ -151,11 +172,14 @@ const submit = async () => {
             v-model="form.header"
             :inbox-id="inboxId"
             :text-only="isCallPermissionRequest"
+            :parameter-format="parameterFormat"
           />
 
           <TemplateBodyField
+            ref="templateBodyFieldRef"
             v-model="form.body"
             v-model:samples="bodySamples"
+            :parameter-format="parameterFormat"
           />
 
           <TextArea

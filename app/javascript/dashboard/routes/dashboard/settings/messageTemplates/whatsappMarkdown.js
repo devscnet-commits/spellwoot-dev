@@ -35,13 +35,13 @@ const MARKDOWN_RULES = [
   { pattern: /```([^`\n]+)```/g, tag: 'code' },
 ];
 
-// Escapes the raw body text, substitutes {{n}} placeholders with sample
+// Escapes the raw body text, substitutes {{n}} / {{name}} placeholders with sample
 // values, then converts WhatsApp's plain-text markdown into safe HTML for
 // the live preview panel (rendered via v-dompurify-html by the caller).
 export const renderWhatsAppMarkdown = (text, samples = {}) => {
   const withSamples = text.replace(
-    /\{\{(\d+)\}\}/g,
-    (match, number) => samples[number] || match
+    /\{\{([a-zA-Z0-9_]+)\}\}/g,
+    (match, key) => samples[key] || match
   );
 
   let html = escapeHtml(withSamples).replace(/\n/g, '<br>');

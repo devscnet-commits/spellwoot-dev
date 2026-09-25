@@ -109,18 +109,20 @@ class Api::V1::Accounts::MessageTemplatesController < Api::V1::Accounts::BaseCon
   # o componente CALL_PERMISSION_REQUEST e sem avisar ninguém.
   def extract_template_params
     params.require(:template).permit(
-      :name, :category, :language, :body, :footer, :call_permission_request, :sub_category,
-      header: [:type, :text, :handle],
+      :name, :category, :language, :body, :footer, :call_permission_request, :sub_category, :parameter_format,
+      header: [:type, :text, :handle, :sample],
       body_sample_values: [],
+      body_variable_names: [],
       buttons: [:type, :text, :url, :phone_number, :example, :flow_id, :navigate_screen]
     ).to_h.deep_symbolize_keys
   end
 
   def extract_update_params
     params.require(:template).permit(
-      :category, :body, :footer, :call_permission_request, :sub_category,
-      header: [:type, :text, :handle],
+      :category, :body, :footer, :call_permission_request, :sub_category, :parameter_format,
+      header: [:type, :text, :handle, :sample],
       body_sample_values: [],
+      body_variable_names: [],
       buttons: [:type, :text, :url, :phone_number, :example, :flow_id, :navigate_screen]
     ).to_h.deep_symbolize_keys
   end

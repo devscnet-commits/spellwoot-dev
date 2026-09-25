@@ -21,6 +21,7 @@ import TemplateButtonsField from './TemplateButtonsField.vue';
 import TemplatePreviewSidebar from './TemplatePreviewSidebar.vue';
 import TemplateSubmitConfirmModal from './TemplateSubmitConfirmModal.vue';
 import { CATEGORY_ICONS } from './templateCategoryIcons';
+import { PARAMETER_FORMATS, detectVariables } from './templateVariables';
 
 const MAX_BUTTONS = 10;
 const AUTH_MAX_BUTTONS = 1;
@@ -142,13 +143,15 @@ const currentStep = ref(1);
 const isSubmitting = ref(false);
 const submitError = ref('');
 const showConfirmModal = ref(false);
+const templateBodyFieldRef = ref(null);
 
 const initialFormState = () => ({
   category: 'MARKETING',
   subtype: 'STANDARD',
   name: '',
   language: 'pt_BR',
-  header: { type: 'NONE', text: '', handle: '', fileName: '' },
+  header: { type: 'NONE', text: '', handle: '', fileName: '', sample: '' },
+  parameterFormat: PARAMETER_FORMATS.POSITIONAL,
   body: '',
   footer: '',
   buttons: [],
@@ -378,11 +381,22 @@ const buttonTypeOptions = computed(() => {
   }));
 });
 
-const detectedVariables = computed(() => {
-  const matches = form.body.matchAll(/\{\{(\d+)\}\}/g);
-  const numbers = [...new Set([...matches].map(match => Number(match[1])))];
-  return numbers.sort((a, b) => a - b);
-});
+const detectedVariables = computed(() =>
+  detectVariables(form.body, form.parameterFormat)
+);
+
+const variableTypeOptions = computed(() => [
+  {
+    value: PARAMETER_FORMATS.POSITIONAL,
+    label: t(
+      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.POSITIONAL'
+    ),
+  },
+  {
+    value: PARAMETER_FORMATS.NAMED,
+    label: t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.NAMED'),
+  },
+]);
 
 watch(
   () => form.category,
@@ -393,7 +407,8 @@ watch(
     if (!allowed.includes(form.subtype)) form.subtype = 'STANDARD';
 
     if (newCategory === 'AUTHENTICATION') {
-      form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+      form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
+      form.parameterFormat = PARAMETER_FORMATS.POSITIONAL;
       form.body = AUTH_BODY_TEXT;
       form.footer = '';
       form.buttons = form.buttons
@@ -402,7 +417,7 @@ watch(
     } else if (oldCategory === 'AUTHENTICATION') {
       // Leaving Authentication: clear the fields it auto-filled (and disabled editing
       // of) so they don't silently carry stale auth content into Marketing/Utility.
-      form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+      form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
       form.body = '';
       form.footer = '';
       form.buttons = [];
@@ -438,7 +453,7 @@ watch(isOrderStatus, newIsOrderStatus => {
   if (!newIsOrderStatus) return;
 
   form.buttons = [];
-  form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+  form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
 });
 
 watch(isCallPermissionRequest, newIsCallPermissionRequest => {
@@ -446,7 +461,7 @@ watch(isCallPermissionRequest, newIsCallPermissionRequest => {
 
   form.buttons = [];
   if (!['NONE', 'TEXT'].includes(form.header.type)) {
-    form.header = { type: 'NONE', text: '', handle: '', fileName: '' };
+    form.header = { type: 'NONE', text: '', handle: '', fileName: '', sample: '' };
   }
 });
 
@@ -475,12 +490,19 @@ const buildTemplatePayload = () => ({
       : {
           type: form.header.type,
           text: form.header.type === 'TEXT' ? form.header.text : undefined,
+          sample: form.header.type === 'TEXT' ? form.header.sample : undefined,
           handle: form.header.type !== 'TEXT' ? form.header.handle : undefined,
         },
   body: form.body,
   footer: form.footer || undefined,
+  parameter_format:
+    form.parameterFormat === PARAMETER_FORMATS.NAMED ? 'NAMED' : undefined,
+  body_variable_names:
+    form.parameterFormat === PARAMETER_FORMATS.NAMED
+      ? detectedVariables.value
+      : undefined,
   body_sample_values: detectedVariables.value.map(
-    number => bodySamples[number] || ''
+    key => bodySamples[key] || ''
   ),
   buttons: form.buttons.map(button => ({
     type: button.type,
@@ -511,6 +533,15 @@ const requiredFieldErrors = () => {
   if (!isAuthentication.value && !form.body.trim()) {
     errors.push(
       t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_REQUIRED')
+    );
+  } else if (
+    !isAuthentication.value &&
+    templateBodyFieldRef.value?.hasDanglingVariable
+  ) {
+    errors.push(
+      t(
+        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VALIDATION.BODY_DANGLING_VARIABLE'
+      )
     );
   }
   return errors;
@@ -788,17 +819,44 @@ const submitTemplate = async () => {
             </CardLayout>
 
             <CardLayout>
+              <div v-if="!isAuthentication">
+                <label class="text-body-main text-n-slate-11">
+                  {{
+                    $t(
+                      'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.LABEL'
+                    )
+                  }}
+                  <span
+                    v-tooltip="
+                      $t(
+                        'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.VARIABLE_TYPE.TOOLTIP'
+                      )
+                    "
+                    class="inline-flex align-text-bottom"
+                  >
+                    <Icon icon="i-lucide-info" class="flex-shrink-0 size-4" />
+                  </span>
+                </label>
+                <ComboBox
+                  v-model="form.parameterFormat"
+                  :options="variableTypeOptions"
+                />
+              </div>
+
               <TemplateHeaderField
                 v-if="!isAuthentication && !isOrderStatus"
                 v-model="form.header"
                 :inbox-id="inboxId"
                 :text-only="isCallPermissionRequest"
+                :parameter-format="form.parameterFormat"
               />
 
               <TemplateBodyField
                 v-if="!isAuthentication"
+                ref="templateBodyFieldRef"
                 v-model="form.body"
                 v-model:samples="bodySamples"
+                :parameter-format="form.parameterFormat"
               />
               <TextArea
                 v-else

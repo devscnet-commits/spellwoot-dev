@@ -7,10 +7,19 @@ import { useStore } from 'dashboard/composables/store';
 import Input from 'dashboard/components-next/input/Input.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import {
+  PARAMETER_FORMATS,
+  detectVariables,
+  nextVariableToken,
+} from './templateVariables';
 
 const props = defineProps({
   inboxId: { type: Number, required: true },
   textOnly: { type: Boolean, default: false },
+  parameterFormat: {
+    type: String,
+    default: PARAMETER_FORMATS.POSITIONAL,
+  },
 });
 // Same cap the backend validator applies to the header's TEXT component.
 const HEADER_TEXT_MAX_LENGTH = 60;
@@ -24,11 +33,25 @@ const ACCEPT_BY_TYPE = {
 
 const header = defineModel({
   type: Object,
-  default: () => ({ type: 'NONE', text: '', handle: '', fileName: '' }),
+  default: () => ({ type: 'NONE', text: '', handle: '', fileName: '', sample: '' }),
 });
 
 const store = useStore();
 const { t } = useI18n();
+
+// Meta allows at most one variable in a header — unlike the body, which allows several.
+const headerVariables = computed(() =>
+  detectVariables(header.value.text || '', props.parameterFormat)
+);
+const hasHeaderVariable = computed(() => headerVariables.value.length > 0);
+
+const insertHeaderVariable = () => {
+  if (hasHeaderVariable.value) return;
+
+  const token = nextVariableToken([], props.parameterFormat);
+  const text = header.value.text ? `${header.value.text} ` : '';
+  header.value = { ...header.value, text: `${text}{{${token}}}` };
+};
 
 const isUploading = ref(false);
 const uploadError = ref('');
@@ -56,7 +79,7 @@ const isMediaType = computed(() =>
 const acceptAttribute = computed(() => ACCEPT_BY_TYPE[header.value.type] || '');
 
 const setType = type => {
-  header.value = { type, text: '', handle: '', fileName: '' };
+  header.value = { type, text: '', handle: '', fileName: '', sample: '' };
 };
 
 const openFilePicker = () => {
@@ -107,20 +130,45 @@ const onFileSelected = async event => {
       @update:model-value="setType"
     />
 
-    <Input
-      v-if="header.type === 'TEXT'"
-      :model-value="header.text"
-      :label="
-        $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.TEXT_LABEL', {
-          count: HEADER_TEXT_MAX_LENGTH,
-        })
-      "
-      :maxlength="HEADER_TEXT_MAX_LENGTH"
-      :placeholder="
-        $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.TEXT_PLACEHOLDER')
-      "
-      @update:model-value="value => (header = { ...header, text: value })"
-    />
+    <div v-if="header.type === 'TEXT'" class="space-y-2">
+      <Input
+        :model-value="header.text"
+        :label="
+          $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.TEXT_LABEL', {
+            count: HEADER_TEXT_MAX_LENGTH,
+          })
+        "
+        :maxlength="HEADER_TEXT_MAX_LENGTH"
+        :placeholder="
+          $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.TEXT_PLACEHOLDER')
+        "
+        @update:model-value="value => (header = { ...header, text: value })"
+      />
+      <Button
+        :label="
+          $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.BODY.ADD_VARIABLE')
+        "
+        icon="i-lucide-plus"
+        variant="ghost"
+        color="slate"
+        size="xs"
+        :disabled="hasHeaderVariable"
+        @click="insertHeaderVariable"
+      />
+      <Input
+        v-if="hasHeaderVariable"
+        :model-value="header.sample"
+        :label="
+          $t('MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.VARIABLE_SAMPLE_LABEL')
+        "
+        :placeholder="
+          $t(
+            'MESSAGE_TEMPLATES_MGMT.CREATE.STEP_2.HEADER.VARIABLE_SAMPLE_PLACEHOLDER'
+          )
+        "
+        @update:model-value="value => (header = { ...header, sample: value })"
+      />
+    </div>
 
     <div v-if="isMediaType" class="flex items-center gap-3">
       <input

@@ -35,6 +35,15 @@ const isMediaHeader = computed(() =>
 const renderedBody = computed(() =>
   renderWhatsAppMarkdown(props.body, props.samples)
 );
+
+// The header has at most one variable, sampled independently from the body's — substitute it
+// directly instead of going through the shared samples map (which is keyed by body variables).
+const renderedHeaderText = computed(() => {
+  const text = props.header?.text || '';
+  return props.header?.sample
+    ? text.replace(/\{\{[a-zA-Z0-9_]+\}\}/, props.header.sample)
+    : text;
+});
 </script>
 
 <template>
@@ -94,7 +103,7 @@ const renderedBody = computed(() =>
             v-if="header.type === 'TEXT' && header.text"
             class="font-semibold text-n-slate-12"
           >
-            {{ header.text }}
+            {{ renderedHeaderText }}
           </div>
           <div
             v-else-if="isMediaHeader"

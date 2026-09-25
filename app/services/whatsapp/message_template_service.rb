@@ -19,7 +19,7 @@ class Whatsapp::MessageTemplateService
   # anything created after the first page filled up).
   def list_templates
     url = "#{business_account_path}/message_templates"
-    query = { fields: 'id,name,category,status,language,quality_score,components,rejected_reason', limit: 100 }
+    query = { fields: 'id,name,category,status,language,quality_score,components,rejected_reason,parameter_format', limit: 100 }
     templates = []
 
     loop do
@@ -167,7 +167,8 @@ class Whatsapp::MessageTemplateService
       language: template['language'],
       quality: template.dig('quality_score', 'score'),
       components: template['components'],
-      rejected_reason: normalized_rejected_reason(template['rejected_reason'])
+      rejected_reason: normalized_rejected_reason(template['rejected_reason']),
+      parameter_format: template['parameter_format'] || 'POSITIONAL'
     }
   end
 
@@ -190,7 +191,12 @@ class Whatsapp::MessageTemplateService
     }
     body[:sub_category] = params[:sub_category] if params[:sub_category].present?
     body[:display_format] = 'ORDER_DETAILS' if order_details_template?(params)
+    body[:parameter_format] = 'NAMED' if named_parameter_format?(params)
     body
+  end
+
+  def named_parameter_format?(params)
+    params[:parameter_format] == 'NAMED'
   end
 
   # Meta only treats a template as an order details one when the creation payload carries
@@ -220,10 +226,16 @@ class Whatsapp::MessageTemplateService
     return if header.blank? || header[:type].blank? || header[:type] == 'NONE'
 
     if header[:type] == 'TEXT'
-      { type: 'HEADER', format: 'TEXT', text: header[:text] }
+      header_text_component(header)
     else
       { type: 'HEADER', format: header[:type], example: { header_handle: [header[:handle]] } }
     end
+  end
+
+  def header_text_component(header)
+    component = { type: 'HEADER', format: 'TEXT', text: header[:text] }
+    component[:example] = { header_text: [header[:sample]] } if header[:sample].present?
+    component
   end
 
   # Meta auto-generates the body for AUTHENTICATION templates (the code delivery text isn't
@@ -232,9 +244,19 @@ class Whatsapp::MessageTemplateService
     return { type: 'BODY' } if params[:category] == 'AUTHENTICATION'
 
     component = { type: 'BODY', text: params[:body] }
-    sample_values = params[:body_sample_values]
-    component[:example] = { body_text: [sample_values] } if sample_values.present?
+    component[:example] = body_example(params) if params[:body_sample_values].present?
     component
+  end
+
+  # NAMED templates carry their example as [{param_name:, example:}] instead of the positional
+  # nested array — the two shapes aren't interchangeable, Meta rejects a NAMED template whose
+  # example still uses body_text.
+  def body_example(params)
+    return { body_text: [params[:body_sample_values]] } unless named_parameter_format?(params)
+
+    names = params[:body_variable_names] || []
+    values = params[:body_sample_values] || []
+    { body_text_named_params: names.zip(values).map { |name, value| { param_name: name, example: value } } }
   end
 
   # Meta requires a FOOTER component on AUTHENTICATION templates (it's where the code-expiration
