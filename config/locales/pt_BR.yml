@@ -80,6 +80,8 @@ pt_BR:
         one: Usuário da Conta
         other: Usuários da Conta
     attributes:
+      account:
+        subscriptions: Plano
       plan:
         id: ID
         name: Nome
@@ -88,13 +90,13 @@ pt_BR:
         active: Ativo
         visible_to_new_subscribers: Visível para novos assinantes
         courtesy: Cortesia
-        monthly_price_cents: Valor mensal (centavos)
-        annual_price_cents: Valor anual (centavos)
-        setup_fee_cents: Taxa de implantação (centavos)
-        promo_price_cents: Valor promocional (centavos)
+        monthly_price_cents: Valor mensal
+        annual_price_cents: Valor anual
+        setup_fee_cents: Taxa de implantação
+        promo_price_cents: Valor promocional
         promo_months_count: Meses com desconto
         ai_credits_included: Créditos de IA inclusos
-        ai_credit_overage_price_cents: Preço do crédito extra de IA (centavos)
+        ai_credit_overage_price_cents: Preço do crédito extra de IA
         created_at: Criado em
         updated_at: Atualizado em
     errors:

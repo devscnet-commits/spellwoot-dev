@@ -1,4 +1,7 @@
 class SuperAdmin::PlansController < SuperAdmin::ApplicationController
+  # Digitados em reais na tela (MoneyCentsField), gravados em centavos.
+  MONEY_FIELDS = %i[monthly_price_cents annual_price_cents setup_fee_cents promo_price_cents ai_credit_overage_price_cents].freeze
+
   # :slug só na CRIAÇÃO — trocá-lo depois desalinharia PLAN_FEATURE_TO_ACCOUNT_FLAG/COMMERCIAL_RANK/
   # plans:seed, que localizam o plano por slug. A partial do PlanSlugField já vira texto puro num
   # plano existente; aqui é a garantia de servidor.
@@ -17,6 +20,7 @@ class SuperAdmin::PlansController < SuperAdmin::ApplicationController
       :ai_credits_included, :ai_credit_overage_price_cents
     )
     permitted[:slug] = params[:plan_slug].to_s.strip if action_name == 'create'
+    MONEY_FIELDS.each { |key| permitted[key] = MoneyCents.parse(permitted[key]) if permitted.key?(key) }
     permitted
   end
 

@@ -502,3 +502,7 @@ en:
       subject: 'Finish setting up %{custom_domain}'
     ssl_status:
       custom_domain_not_configured: 'Custom domain is not configured'
+  activerecord:
+    attributes:
+      account:
+        subscriptions: Plan

@@ -28,6 +28,13 @@ class SuperAdmin::AccountsController < SuperAdmin::ApplicationController
   #   end
   # end
 
+  def update
+    super
+    return if requested_resource.errors.any? || params[:account_plan_id].blank?
+
+    assign_plan(Plan.find(params[:account_plan_id]))
+  end
+
   # Override `resource_params` if you want to transform the submitted
   # data before it's persisted. For example, the following would turn all
   # empty values into nil values. It uses other APIs such as `resource_class`
@@ -64,6 +71,16 @@ class SuperAdmin::AccountsController < SuperAdmin::ApplicationController
     # rubocop:disable Rails/I18nLocaleTexts
     redirect_back(fallback_location: [namespace, requested_resource], notice: 'Account deletion is in progress.')
     # rubocop:enable Rails/I18nLocaleTexts
+  end
+
+  private
+
+  # Mesmo plano de antes = nada a fazer; recriar a assinatura recarregaria os créditos de IA do plano.
+  def assign_plan(plan)
+    return if requested_resource.subscriptions.current.first&.plan_id == plan.id
+
+    Plan::ChangeSubscriptionService.new(account: requested_resource, new_plan: plan).switch!
+    flash[:notice] = "Conta atualizada. Plano agora: #{plan.name}."
   end
 end
 

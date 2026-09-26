@@ -20,7 +20,7 @@ RSpec.describe 'Super Admin plans', type: :request do
     get "/super_admin/plans/#{plan.id}/edit"
 
     expect(response).to have_http_status(:success)
-    expect(response.body).to include('Somente oficiais (Meta Cloud API)')
+    expect(response.body).to include('Somente oficiais')
     expect(response.body).to include('Caixas de entrada')
     expect(response.body).to include('Permitir e cobrar excedente')
   end
@@ -54,5 +54,30 @@ RSpec.describe 'Super Admin plans', type: :request do
     expect(plan.reload.limit_for('users').max_value).to eq(3)
     expect(plan.limit_for('inboxes').max_value).to be_nil
     expect(plan.limit_for('inboxes').overflow_behavior).to eq('paid_overage')
+  end
+
+  it 'grava os preços digitados em reais como centavos' do
+    patch "/super_admin/plans/#{plan.id}", params: {
+      plan: { name: plan.name, monthly_price_cents: '347,90', setup_fee_cents: '5.000,00', ai_credit_overage_price_cents: '' },
+      plan_grid_submitted: '1',
+      plan_feature_keys: %w[whatsapp_channel],
+      plan_limits: { ai_agents: { max_value: '2', overflow_behavior: 'paid_overage', overage_price_cents: '8,00' } }
+    }
+
+    plan.reload
+    expect(plan.monthly_price_cents).to eq(34_790)
+    expect(plan.setup_fee_cents).to eq(500_000)
+    expect(plan.ai_credit_overage_price_cents).to be_nil
+    expect(plan.limit_for('ai_agents').overage_price_cents).to eq(800)
+  end
+
+  it 'mostra os preços em reais na tela de edição' do
+    plan.update!(monthly_price_cents: 34_790)
+    plan.plan_limits.create!(key: 'users', max_value: 2, overflow_behavior: :paid_overage, overage_price_cents: 800)
+
+    get "/super_admin/plans/#{plan.id}/edit"
+
+    expect(response.body).to include('value="347,90"')
+    expect(response.body).to include('value="8,00"')
   end
 end

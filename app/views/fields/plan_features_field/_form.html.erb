@@ -23,12 +23,12 @@
             <legend class="text-xs text-slate-500 mb-1">Integrações liberadas</legend>
             <label class="flex items-center gap-2 text-sm text-slate-700">
               <%= radio_button_tag 'plan_feature_keys[]', '', !unofficial, id: 'plan_whatsapp_official_only' %>
-              Somente oficiais (Meta Cloud API)
+              Somente oficiais
             </label>
             <label class="flex items-center gap-2 text-sm text-slate-700">
               <%= radio_button_tag 'plan_feature_keys[]', 'whatsapp_unofficial_channel', unofficial,
                                    id: 'plan_whatsapp_all' %>
-              Todas (oficiais + não oficiais, ex.: UazAPI)
+              Todas (oficiais + não oficiais)
             </label>
           </fieldset>
         <% end %>
