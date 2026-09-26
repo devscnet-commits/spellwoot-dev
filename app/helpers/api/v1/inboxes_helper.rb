@@ -112,4 +112,10 @@ module Api::V1::InboxesHelper
 
     render_payment_required('Account limit exceeded. Upgrade to a higher plan')
   end
+
+  # Limite de caixas do PLANO (PlanLimit 'inboxes'). O validate_limit acima é o teto da instalação
+  # (usage_limits do Chatwoot Cloud) e nunca leu o plano — a grade do Super Admin não barrava nada.
+  def validate_plan_inboxes_limit
+    enforce_plan_usage_limit('inboxes', 'Limite de caixas de entrada do seu plano atingido.')
+  end
 end

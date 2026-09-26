@@ -1231,4 +1231,36 @@ RSpec.describe 'Inboxes API', type: :request do
       end
     end
   end
+
+  # O limite "Caixas de entrada" e os canais da grade do plano no Super Admin têm de valer na criação.
+  describe 'plano na criação de caixa de entrada' do
+    let(:web_widget_params) { { name: 'site', channel: { type: 'web_widget', website_url: 'test.com' } } }
+
+    def create_inbox(params)
+      post "/api/v1/accounts/#{account.id}/inboxes", headers: admin.create_new_auth_token, params: params, as: :json
+    end
+
+    it 'bloqueia quando o limite de caixas do plano já foi atingido' do
+      subscribe_account_to_plan(account, features: %w[webchat_channel], limits: { 'inboxes' => 1 })
+      create(:inbox, account: account)
+
+      expect { create_inbox(web_widget_params) }.not_to change(Inbox, :count)
+      expect(response).to have_http_status(:payment_required)
+      expect(response.parsed_body['error']).to eq('Limite de caixas de entrada do seu plano atingido.')
+    end
+
+    it 'libera dentro do limite de caixas do plano' do
+      subscribe_account_to_plan(account, features: %w[webchat_channel], limits: { 'inboxes' => 2 })
+      create(:inbox, account: account)
+
+      expect { create_inbox(web_widget_params) }.to change(Inbox, :count).by(1)
+    end
+
+    it 'não cria canal que o plano não inclui' do
+      subscribe_account_to_plan(account, features: %w[email_channel])
+
+      expect { create_inbox(web_widget_params) }.not_to change(Inbox, :count)
+      expect(response).not_to have_http_status(:success)
+    end
+  end
 end

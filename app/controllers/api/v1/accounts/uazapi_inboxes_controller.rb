@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseController
+  include PlanLimitEnforceable
+
   before_action :check_authorization
   before_action :ensure_unofficial_whatsapp_in_plan
+  before_action :validate_plan_inboxes_limit
 
   def create
     # Validate phone number format (exactly 12 or 13 digits, all numeric)
@@ -72,6 +75,10 @@ class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseContro
 
   def check_authorization
     authorize :inbox, :create?
+  end
+
+  def validate_plan_inboxes_limit
+    enforce_plan_usage_limit('inboxes', 'Limite de caixas de entrada do seu plano atingido.')
   end
 
   def ensure_unofficial_whatsapp_in_plan

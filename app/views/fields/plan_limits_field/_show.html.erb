@@ -1,10 +1,10 @@
 <table class="cell-data__table">
   <tbody>
-    <% field.data.each do |key, info| %>
+    <% field.data.each do |_key, info| %>
       <tr>
-        <td class="pr-4 text-sm text-slate-700"><%= key.humanize %></td>
+        <td class="pr-4 text-sm text-slate-700"><%= info[:label] %></td>
         <td class="pr-4 text-sm"><%= info[:max_value].nil? ? 'Ilimitado' : info[:max_value] %></td>
-        <td class="pr-4 text-sm text-slate-500"><%= info[:overflow_behavior] %></td>
+        <td class="pr-4 text-sm text-slate-500"><%= Plan::OVERFLOW_BEHAVIOR_LABELS[info[:overflow_behavior]] %></td>
         <td class="text-sm text-slate-500">
           <%= info[:overage_price_cents].present? ? "#{info[:overage_price_cents]} centavos" : '—' %>
         </td>

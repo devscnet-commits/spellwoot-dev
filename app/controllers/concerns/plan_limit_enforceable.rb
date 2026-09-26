@@ -7,10 +7,15 @@ module PlanLimitEnforceable
 
   private
 
-  # `current_count` = quantos já existem. Passamos current_count + 1 (o total que resultaria) para
-  # checar se cabe MAIS UM. Sem plano/limite => :allow => não bloqueia.
-  def enforce_plan_limit(key, current_count, message)
-    case FeatureGate.limit_action(Current.account, key, current_count + 1)
+  # Mesmo que enforce_plan_limit, contando o uso atual pela fonte única (Billing::LimitUsage).
+  def enforce_plan_usage_limit(key, message, adding: 1)
+    enforce_plan_limit(key, Billing::LimitUsage.current_count(Current.account, key), message, adding: adding)
+  end
+
+  # `current_count` = quantos já existem; `adding` = quantos a ação cria (1, ou N num convite em
+  # massa). Checa o total que resultaria. Sem plano/limite => :allow => não bloqueia.
+  def enforce_plan_limit(key, current_count, message, adding: 1)
+    case FeatureGate.limit_action(Current.account, key, current_count + adding)
     when :block
       render_payment_required(message)
     # :allow e :allow_with_overage seguem sem bloquear a criação.

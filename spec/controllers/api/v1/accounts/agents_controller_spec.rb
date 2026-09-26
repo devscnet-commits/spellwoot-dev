@@ -213,4 +213,55 @@ RSpec.describe 'Agents API', type: :request do
       end
     end
   end
+
+  # O limite "Usuários" da grade do plano no Super Admin era decorativo: só o teto da instalação
+  # (usage_limits) era checado. Aqui a conta tem 2 usuários (admin + agent) antes de cada chamada.
+  describe 'limite de usuários do plano' do
+    let(:new_agent_params) { { name: 'Novo', email: Faker::Internet.email, role: :agent } }
+
+    it 'bloqueia convite quando o plano já está no limite' do
+      subscribe_account_to_plan(account, limits: { 'users' => 2 })
+
+      post "/api/v1/accounts/#{account.id}/agents", params: new_agent_params, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:payment_required)
+      expect(response.parsed_body['error']).to eq('Limite de usuários do seu plano atingido.')
+    end
+
+    it 'libera convite dentro do limite do plano' do
+      subscribe_account_to_plan(account, limits: { 'users' => 3 })
+
+      post "/api/v1/accounts/#{account.id}/agents", params: new_agent_params, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+    end
+
+    it 'libera sem limite quando o plano deixa em branco (ilimitado)' do
+      subscribe_account_to_plan(account, limits: { 'users' => nil })
+
+      post "/api/v1/accounts/#{account.id}/agents", params: new_agent_params, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+    end
+
+    it 'bloqueia convite em massa que passaria do limite' do
+      subscribe_account_to_plan(account, limits: { 'users' => 3 })
+
+      expect do
+        post "/api/v1/accounts/#{account.id}/agents/bulk_create",
+             params: { emails: %w[a@example.com b@example.com] }, headers: admin.create_new_auth_token
+      end.not_to change(User, :count)
+
+      expect(response).to have_http_status(:payment_required)
+    end
+
+    it 'libera "Permitir e cobrar excedente" mesmo acima do limite' do
+      plan = subscribe_account_to_plan(account, limits: { 'users' => 2 })
+      plan.plan_limits.find_by(key: 'users').update!(overflow_behavior: :paid_overage)
+
+      post "/api/v1/accounts/#{account.id}/agents", params: new_agent_params, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+    end
+  end
 end
