@@ -1,8 +1,11 @@
 class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
+  include PlanLimitEnforceable
+
   before_action :fetch_agent, except: [:create, :index, :bulk_create]
   before_action :check_authorization
   before_action :validate_limit, only: [:create]
   before_action :validate_limit_for_bulk_create, only: [:bulk_create]
+  before_action :validate_plan_users_limit, only: [:create, :bulk_create]
 
   def index
     @agents = agents
@@ -105,6 +108,12 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
 
   def validate_limit
     render_payment_required('Account limit exceeded. Please purchase more licenses') unless can_add_agent?
+  end
+
+  # Limite de usuários do PLANO (PlanLimit 'users'); os dois validates acima são o teto da instalação.
+  def validate_plan_users_limit
+    adding = action_name == 'bulk_create' ? Array(params[:emails]).size : 1
+    enforce_plan_usage_limit('users', 'Limite de usuários do seu plano atingido.', adding: adding)
   end
 
   def available_agent_count
