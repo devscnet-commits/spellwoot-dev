@@ -1,0 +1,9 @@
+<div class="field-unit__label">
+  <%= f.label field.attribute %>
+</div>
+<div class="field-unit__field">
+  <div class="flex items-center gap-2">
+    <span class="text-sm text-slate-500">R$</span>
+    <%= f.text_field field.attribute, value: field.reais, placeholder: '0,00', inputmode: 'decimal' %>
+  </div>
+</div>

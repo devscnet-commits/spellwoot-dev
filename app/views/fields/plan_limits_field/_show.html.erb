@@ -6,7 +6,7 @@
         <td class="pr-4 text-sm"><%= info[:max_value].nil? ? 'Ilimitado' : info[:max_value] %></td>
         <td class="pr-4 text-sm text-slate-500"><%= Plan::OVERFLOW_BEHAVIOR_LABELS[info[:overflow_behavior]] %></td>
         <td class="text-sm text-slate-500">
-          <%= info[:overage_price_cents].present? ? "#{info[:overage_price_cents]} centavos" : '—' %>
+          <%= info[:overage_price_cents].present? ? "R$ #{MoneyCents.format(info[:overage_price_cents])}" : '—' %>
         </td>
       </tr>
     <% end %>

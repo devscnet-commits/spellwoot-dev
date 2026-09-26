@@ -207,7 +207,7 @@ class Plan < ApplicationRecord
     plan_limits.find_or_initialize_by(key: key).update!(
       max_value: attrs['max_value'].to_s.strip.presence&.to_i,
       overflow_behavior: PlanLimit.overflow_behaviors.key?(behavior) ? behavior : 'hard_block',
-      overage_price_cents: attrs['overage_price_cents'].to_s.strip.presence&.to_i
+      overage_price_cents: MoneyCents.parse(attrs['overage_price_cents'])
     )
   end
 

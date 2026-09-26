@@ -19,9 +19,9 @@
                            class: 'w-full mt-1 rounded border-slate-300' %>
           </label>
           <label class="text-xs text-slate-500">
-            Preço do excedente (centavos)
-            <%= number_field_tag "plan_limits[#{key}][overage_price_cents]", info[:overage_price_cents],
-                                 min: 0, class: 'w-full mt-1 rounded border-slate-300' %>
+            Preço por unidade excedente, por mês (R$)
+            <%= text_field_tag "plan_limits[#{key}][overage_price_cents]", MoneyCents.format(info[:overage_price_cents]),
+                               placeholder: '0,00', inputmode: 'decimal', class: 'w-full mt-1 rounded border-slate-300' %>
           </label>
         </div>
       </div>
@@ -30,6 +30,6 @@
 
   <p class="text-xs text-slate-500 mt-3">
     Em branco = ilimitado. <strong>0 significa zero permitido</strong>, não ilimitado — é assim que um
-    plano bloqueia um recurso por completo.
+    plano bloqueia um recurso por completo. "Ao exceder" e o preço só valem quando há um máximo.
   </p>
 </div>
