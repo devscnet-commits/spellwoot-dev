@@ -2,6 +2,7 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
   include SecretMaskingHelper
 
   before_action :check_authorization
+  before_action :ensure_provider_in_plan
 
   SENSITIVE_KEYS = SecretMaskingHelper::SECRET_KEY_NAMES
 
@@ -96,6 +97,13 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
 
   def check_authorization
     authorize(IntegrationSetting)
+  end
+
+  def ensure_provider_in_plan
+    return unless ChannelAvailability::UNOFFICIAL_WHATSAPP_PROVIDERS.include?(params[:provider])
+    return if ChannelAvailability.unofficial_whatsapp_available?(Current.account)
+
+    render json: { error: ChannelAvailability.unofficial_whatsapp_unavailable_message }, status: :forbidden
   end
 
   def ai_key_status(provider)

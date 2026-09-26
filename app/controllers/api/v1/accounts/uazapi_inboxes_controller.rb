@@ -2,6 +2,7 @@
 
 class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseController
   before_action :check_authorization
+  before_action :ensure_unofficial_whatsapp_in_plan
 
   def create
     # Validate phone number format (exactly 12 or 13 digits, all numeric)
@@ -71,6 +72,12 @@ class Api::V1::Accounts::UazapiInboxesController < Api::V1::Accounts::BaseContro
 
   def check_authorization
     authorize :inbox, :create?
+  end
+
+  def ensure_unofficial_whatsapp_in_plan
+    return if ChannelAvailability.unofficial_whatsapp_available?(Current.account)
+
+    render json: { error: ChannelAvailability.unofficial_whatsapp_unavailable_message }, status: :forbidden
   end
 
   def inbox_json(inbox)

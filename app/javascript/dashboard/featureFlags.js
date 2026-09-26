@@ -46,6 +46,7 @@ export const FEATURE_FLAGS = {
   ADVANCED_SEARCH: 'advanced_search',
   CONVERSATION_REQUIRED_ATTRIBUTES: 'conversation_required_attributes',
   CHANNEL_WHATSAPP: 'channel_whatsapp',
+  CHANNEL_WHATSAPP_UNOFFICIAL: 'channel_whatsapp_unofficial',
   CHANNEL_API: 'channel_api',
   WEBHOOK_API: 'webhook_api',
 };

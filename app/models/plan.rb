@@ -35,6 +35,9 @@ class Plan < ApplicationRecord
     # junto com a migration que preenche a grade de todo plano existente: sem ela, sync_features_to!
     # desligaria o canal em toda conta cujo plano não tivesse a linha — ou seja, em todas.
     'whatsapp_channel' => 'channel_whatsapp',
+    # Sub-opção do WhatsApp: provedores não oficiais (UazAPI, Evolution e afins, via QR). Desligada =
+    # plano "só oficiais" (Cloud API e BSPs da Meta). Só vale com whatsapp_channel ligado.
+    'whatsapp_unofficial_channel' => 'channel_whatsapp_unofficial',
     'instagram_channel' => 'channel_instagram',
     'email_channel' => 'channel_email',
     'api_channel' => 'channel_api',
@@ -123,6 +126,7 @@ class Plan < ApplicationRecord
   # que o resto do sistema não conhece (PLAN_FEATURE_TO_ACCOUNT_FLAG não saberia para onde mapear).
   def apply_feature_grid!(enabled_keys)
     wanted = Array(enabled_keys).map(&:to_s)
+    wanted -= ['whatsapp_unofficial_channel'] unless wanted.include?('whatsapp_channel')
     MANAGED_FEATURE_KEYS.each do |key|
       plan_features.find_or_initialize_by(key: key).update!(enabled: wanted.include?(key))
     end

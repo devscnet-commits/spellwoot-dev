@@ -8,12 +8,31 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     <% field.data.each do |key, info| %>
-      <label class="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm outline outline-1 outline-n-container">
-        <span class="text-sm text-slate-700"><%= info[:display_name] %></span>
-        <%= check_box_tag 'plan_feature_keys[]', key, info[:enabled],
-                          id: "plan_feature_#{key}",
-                          class: 'h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-600' %>
-      </label>
+      <%# A sub-opção de WhatsApp não oficial é desenhada dentro do card do WhatsApp, logo abaixo. %>
+      <% next if key == 'whatsapp_unofficial_channel' %>
+      <div class="p-3 bg-white rounded-lg shadow-sm outline outline-1 outline-n-container">
+        <label class="flex items-center justify-between">
+          <span class="text-sm text-slate-700"><%= info[:display_name] %></span>
+          <%= check_box_tag 'plan_feature_keys[]', key, info[:enabled],
+                            id: "plan_feature_#{key}",
+                            class: 'h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-600' %>
+        </label>
+        <% if key == 'whatsapp_channel' %>
+          <% unofficial = field.data.dig('whatsapp_unofficial_channel', :enabled) %>
+          <fieldset class="mt-3 pt-3 border-t border-slate-100 space-y-1">
+            <legend class="text-xs text-slate-500 mb-1">Integrações liberadas</legend>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <%= radio_button_tag 'plan_feature_keys[]', '', !unofficial, id: 'plan_whatsapp_official_only' %>
+              Somente oficiais (Meta Cloud API)
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <%= radio_button_tag 'plan_feature_keys[]', 'whatsapp_unofficial_channel', unofficial,
+                                   id: 'plan_whatsapp_all' %>
+              Todas (oficiais + não oficiais, ex.: UazAPI)
+            </label>
+          </fieldset>
+        <% end %>
+      </div>
     <% end %>
   </div>
 
@@ -30,5 +49,6 @@
   <p class="text-xs text-slate-500 mt-3">
     Desmarcado = desligado para as contas deste plano. Funcionalidade que não aparece nesta lista fica
     liberada por padrão para todas as contas. Salvar reaplica a grade nas contas ativas do plano.
+    A escolha de integrações do WhatsApp só vale com o WhatsApp marcado.
   </p>
 </div>
