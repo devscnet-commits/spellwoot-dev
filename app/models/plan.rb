@@ -69,6 +69,47 @@ class Plan < ApplicationRecord
   # fonte única, como MANAGED_FEATURE_KEYS — a tela do Super Admin e o seed leem a MESMA lista.
   MANAGED_LIMIT_KEYS = %w[users inboxes ai_agents crm_pipelines].freeze
 
+  # Rótulos da tela do Super Admin. Os display_name de config/features.yml são em inglês e servem à
+  # tela de features da CONTA; aqui a grade é do plano comercial, então fala a língua da tabela v2.
+  FEATURE_LABELS = {
+    'webchat_channel' => 'Chat do site (Webchat)',
+    'facebook_channel' => 'Facebook',
+    'whatsapp_channel' => 'WhatsApp',
+    'whatsapp_unofficial_channel' => 'WhatsApp não oficial',
+    'instagram_channel' => 'Instagram',
+    'email_channel' => 'E-mail',
+    'api_channel' => 'Canal API',
+    'telegram_channel' => 'Telegram',
+    'sms_channel' => 'SMS',
+    'dashboards_bi' => 'Relatórios / Dashboards BI',
+    'sla_tracking' => 'SLA',
+    'audit_logs' => 'Logs de auditoria',
+    'ai_copilot' => 'Copiloto de IA',
+    'conversion_api' => 'API de Conversões (Meta)',
+    'webhook_api' => 'Webhooks',
+    'custom_llm_api_key' => 'Chave própria de IA',
+    'crm_kanban' => 'CRM Kanban',
+    'crm_automations' => 'Automações do CRM',
+    'erp_integration' => 'Integração com ERP',
+    'isp_ready_flows' => 'Fluxos prontos para provedores (ISP)',
+    'message_scheduling' => 'Agendamento de mensagens',
+    'account_manager' => 'Gerente de conta',
+    'api_user_token' => 'Token de acesso pessoal (API)'
+  }.freeze
+  LIMIT_LABELS = {
+    'users' => 'Usuários',
+    'inboxes' => 'Caixas de entrada',
+    'ai_agents' => 'Agentes de IA',
+    'crm_pipelines' => 'Pipelines do CRM'
+  }.freeze
+  # soft_warning ainda cai no bloqueio (FeatureGate.limit_action) — o rótulo diz isso para ninguém
+  # escolher "avisar" achando que libera.
+  OVERFLOW_BEHAVIOR_LABELS = {
+    'hard_block' => 'Bloquear',
+    'soft_warning' => 'Avisar (por enquanto também bloqueia)',
+    'paid_overage' => 'Permitir e cobrar excedente'
+  }.freeze
+
   # Ordem dos planos comerciais para decidir se uma troca é upgrade ou downgrade (Plan::ChangeSubscriptionService).
   # courtesy/internal_unlimited ficam de fora — não participam de troca self-service, só atribuição manual.
   # Enterprise saiu: a tabela Planos_Conexi_v2 tem três planos comerciais. Um plano que sobre no banco
@@ -106,17 +147,16 @@ class Plan < ApplicationRecord
   # de fora exatamente as features que alguém precisa ligar. Foi assim que `pro`/`standard` chegaram à
   # produção sem nenhuma feature e ninguém teve onde corrigir.
   def feature_grid
-    display = SuperAdmin::AccountFeaturesHelper.feature_display_names
     MANAGED_FEATURE_KEYS.index_with do |key|
-      { display_name: display[PLAN_FEATURE_TO_ACCOUNT_FLAG[key]].presence || key.humanize,
-        enabled: feature_enabled?(key) }
+      { display_name: FEATURE_LABELS[key] || key.humanize, enabled: feature_enabled?(key) }
     end
   end
 
   def limit_grid
     MANAGED_LIMIT_KEYS.index_with do |key|
       limit = limit_for(key)
-      { max_value: limit&.max_value,
+      { label: LIMIT_LABELS[key] || key.humanize,
+        max_value: limit&.max_value,
         overflow_behavior: limit&.overflow_behavior || 'hard_block',
         overage_price_cents: limit&.overage_price_cents }
     end

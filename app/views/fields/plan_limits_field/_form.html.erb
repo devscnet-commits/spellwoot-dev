@@ -5,7 +5,7 @@
   <div class="grid grid-cols-1 gap-4">
     <% field.data.each do |key, info| %>
       <div class="p-3 bg-white rounded-lg shadow-sm outline outline-1 outline-n-container">
-        <div class="text-sm font-medium text-slate-700 mb-2"><%= key.humanize %></div>
+        <div class="text-sm font-medium text-slate-700 mb-2"><%= info[:label] %></div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="text-xs text-slate-500">
             Máximo (em branco = ilimitado)
@@ -15,7 +15,7 @@
           <label class="text-xs text-slate-500">
             Ao exceder
             <%= select_tag "plan_limits[#{key}][overflow_behavior]",
-                           options_for_select(PlanLimit.overflow_behaviors.keys, info[:overflow_behavior]),
+                           options_for_select(Plan::OVERFLOW_BEHAVIOR_LABELS.invert, info[:overflow_behavior]),
                            class: 'w-full mt-1 rounded border-slate-300' %>
           </label>
           <label class="text-xs text-slate-500">
