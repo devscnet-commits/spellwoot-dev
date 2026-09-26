@@ -43,6 +43,28 @@ RSpec.describe ChannelAvailability do
     end
   end
 
+  describe '.unofficial_whatsapp_available?' do
+    it 'libera quando o plano traz WhatsApp com "Todas"' do
+      subscribe_account_to_plan(account, features: %w[whatsapp_channel whatsapp_unofficial_channel])
+
+      expect(described_class.unofficial_whatsapp_available?(account.reload)).to be(true)
+    end
+
+    it 'barra quando o plano é "Somente oficiais"' do
+      subscribe_account_to_plan(account, features: %w[whatsapp_channel])
+
+      account.reload
+      expect(described_class.available?(account, 'whatsapp')).to be(true)
+      expect(described_class.unofficial_whatsapp_available?(account)).to be(false)
+    end
+
+    it 'barra quando o plano não tem WhatsApp, mesmo com a flag de não oficial' do
+      subscribe_account_to_plan(account, features: %w[whatsapp_unofficial_channel])
+
+      expect(described_class.unofficial_whatsapp_available?(account.reload)).to be(false)
+    end
+  end
+
   it 'toda flag do mapa existe em config/features.yml' do
     conhecidas = SuperAdmin::AccountFeaturesHelper.account_features.pluck('name')
 
