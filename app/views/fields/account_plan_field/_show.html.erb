@@ -1,0 +1,8 @@
+<% if field.plan %>
+  <%= field.plan.name %> <span class="text-slate-500">(<%= field.plan.slug %>)</span>
+  <% if field.subscription.started_at %>
+    <span class="text-slate-500"> — desde <%= l(field.subscription.started_at.to_date) %></span>
+  <% end %>
+<% else %>
+  <span class="text-slate-500">Sem plano</span>
+<% end %>

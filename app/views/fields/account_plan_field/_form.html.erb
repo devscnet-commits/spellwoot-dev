@@ -1,0 +1,17 @@
+<div class="field-unit__label">
+  <label for="account_plan_id">Plano</label>
+</div>
+<div class="field-unit__field">
+  <% if field.resource.persisted? %>
+  <%= select_tag 'account_plan_id',
+                 options_for_select(field.plan_options, field.plan&.id),
+                 include_blank: field.plan ? false : 'Sem plano — escolha um para ativar',
+                 id: 'account_plan_id' %>
+  <p class="text-xs text-slate-500 mt-2">
+    Trocar o plano cria uma assinatura nova e aplica na hora as features e os limites dele nesta conta.
+    Os créditos de IA do plano são recarregados; os créditos extras comprados continuam.
+  </p>
+  <% else %>
+  <p class="text-sm text-slate-500">Crie a conta primeiro; o plano é escolhido na edição.</p>
+  <% end %>
+</div>
