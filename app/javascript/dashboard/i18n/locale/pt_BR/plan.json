@@ -45,6 +45,14 @@
       "ERROR": "Não foi possível enviar a solicitação. Tente novamente.",
       "INVALID_AMOUNT": "Informe uma quantidade maior que zero.",
       "PENDING": "Você tem uma solicitação pendente de {amount} créditos — aguardando aprovação."
+    },
+    "NO_PLAN": {
+      "TITLE": "Nenhum plano ativo",
+      "DESCRIPTION": "Esta conta ainda não tem um plano ativo. Fale com o suporte para ativar um."
+    },
+    "FETCH_ERROR": {
+      "TITLE": "Não foi possível carregar o plano",
+      "DESCRIPTION": "Algo deu errado ao carregar as informações do plano. Tente novamente em alguns minutos."
     }
   }
 }

@@ -279,6 +279,9 @@
 - name: channel_whatsapp
   display_name: WhatsApp Channel
   enabled: true
+- name: channel_whatsapp_unofficial
+  display_name: WhatsApp Channel (unofficial providers)
+  enabled: true
 - name: channel_api
   display_name: API Channel
   enabled: true

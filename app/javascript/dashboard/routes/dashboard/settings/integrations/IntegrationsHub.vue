@@ -73,6 +73,7 @@ const PROVIDERS = [
     description: 'Integração com Evolution API para WhatsApp.',
     icon: 'i-lucide-message-square',
     testable: true,
+    unofficialWhatsapp: true,
     fields: [
       {
         key: 'apiUrl',
@@ -103,6 +104,7 @@ const PROVIDERS = [
     description: 'Integração com UazAPI para WhatsApp.',
     icon: 'i-lucide-smartphone',
     testable: true,
+    unofficialWhatsapp: true,
     syncInstances: true,
     fields: [
       {
@@ -300,13 +302,17 @@ const PROVIDERS = [
   },
 ];
 
-// Os cards BYOK (chave própria de LLM) só aparecem para contas com a feature custom_llm_api_key;
-// os demais providers são sempre exibidos (comportamento anterior inalterado).
+// Os cards BYOK (chave própria de LLM) só aparecem para contas com a feature custom_llm_api_key, e
+// os de WhatsApp não oficial só para planos que liberam channel_whatsapp_unofficial.
+const isEnabled = feature =>
+  isFeatureEnabledonAccount.value(accountId.value, feature);
 const visibleProviders = computed(() =>
   PROVIDERS.filter(
     p =>
-      !p.byok ||
-      isFeatureEnabledonAccount.value(accountId.value, 'custom_llm_api_key')
+      (!p.byok || isEnabled('custom_llm_api_key')) &&
+      (!p.unofficialWhatsapp ||
+        (isEnabled('channel_whatsapp') &&
+          isEnabled('channel_whatsapp_unofficial')))
   )
 );
 

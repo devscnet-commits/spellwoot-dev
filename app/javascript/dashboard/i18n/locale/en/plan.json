@@ -54,6 +54,14 @@
       "SUCCESS": "Upgraded to {name}.",
       "ERROR": "Could not upgrade the plan. Please try again.",
       "DOWNGRADE_HINT": "Need a smaller plan? Contact our support team."
+    },
+    "NO_PLAN": {
+      "TITLE": "No active plan",
+      "DESCRIPTION": "This account doesn't have an active plan yet. Contact support to activate one."
+    },
+    "FETCH_ERROR": {
+      "TITLE": "Couldn't load your plan",
+      "DESCRIPTION": "Something went wrong while loading the plan information. Try again in a few minutes."
     }
   }
 }

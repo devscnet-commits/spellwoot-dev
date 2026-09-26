@@ -24,6 +24,20 @@ class ChannelAvailability
     'instagram' => 'channel_instagram'
   }.freeze
 
+  # Provedores de WhatsApp não oficiais (UazAPI, Evolution) não passam pela criação genérica de canal
+  # — têm rota e tela próprias —, então o gate é chamado direto de lá. Exige também o WhatsApp base:
+  # "não oficial" é uma extensão do módulo WhatsApp, não um módulo à parte.
+  UNOFFICIAL_WHATSAPP_FLAG = 'channel_whatsapp_unofficial'.freeze
+  UNOFFICIAL_WHATSAPP_PROVIDERS = %w[uazapi evolution_api].freeze
+
+  def self.unofficial_whatsapp_available?(account)
+    available?(account, 'whatsapp') && account.feature_enabled?(UNOFFICIAL_WHATSAPP_FLAG)
+  end
+
+  def self.unofficial_whatsapp_unavailable_message
+    'O plano desta conta inclui apenas integrações oficiais do WhatsApp.'
+  end
+
   def self.available?(account, channel_type)
     flag = FEATURE_BY_CHANNEL[channel_type.to_s]
     return true if flag.blank?

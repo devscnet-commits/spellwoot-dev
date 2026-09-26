@@ -7,6 +7,8 @@ export const state = {
   limits: [],
   overageCharges: [],
   availableUpgrades: [],
+  // null | 'no_plan' (conta sem assinatura ativa — API responde 404) | 'unknown'
+  fetchError: null,
   uiFlags: {
     isFetching: false,
     isLoading: false,
@@ -22,6 +24,10 @@ export const mutations = {
     _state.limits = data.limits;
     _state.overageCharges = data.overage_charges || [];
     _state.availableUpgrades = data.available_upgrades || [];
+  },
+
+  SET_FETCH_ERROR(_state, value) {
+    _state.fetchError = value;
   },
 
   SET_UI_LOADING(_state, value) {
@@ -40,12 +46,16 @@ export const mutations = {
 export const actions = {
   fetchPlanData({ commit }) {
     commit('SET_UI_FETCHING', true);
+    commit('SET_FETCH_ERROR', null);
     return AccountPlanAPI.getLimits()
       .then(response => {
         commit('SET_PLAN_DATA', response.data);
       })
-      .catch(() => {
-        // Error handling
+      .catch(error => {
+        commit(
+          'SET_FETCH_ERROR',
+          error?.response?.status === 404 ? 'no_plan' : 'unknown'
+        );
       })
       .finally(() => {
         commit('SET_UI_FETCHING', false);
@@ -72,6 +82,7 @@ export const getters = {
   getOverageCharges: _state => _state.overageCharges,
   getAvailableUpgrades: _state => _state.availableUpgrades,
   getUIFlags: _state => _state.uiFlags,
+  getFetchError: _state => _state.fetchError,
 };
 
 // store/index.js importa este módulo como default (`import plan from './modules/plan'`) e o registra

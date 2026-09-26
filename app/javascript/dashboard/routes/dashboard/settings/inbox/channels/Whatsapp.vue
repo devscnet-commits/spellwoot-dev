@@ -8,10 +8,17 @@ import CloudWhatsapp from './CloudWhatsapp.vue';
 import WhatsappEmbeddedSignup from './WhatsappEmbeddedSignup.vue';
 import UazapiWhatsapp from './UazapiWhatsapp.vue';
 import ChannelSelector from 'dashboard/components/ChannelSelector.vue';
+import { useAccount } from 'dashboard/composables/useAccount';
+import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { isCloudFeatureEnabled } = useAccount();
+
+const unofficialWhatsappEnabled = computed(() =>
+  isCloudFeatureEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_UNOFFICIAL)
+);
 
 const PROVIDER_TYPES = {
   WHATSAPP: 'whatsapp',
@@ -49,12 +56,16 @@ const availableProviders = computed(() => [
     description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.TWILIO_DESC'),
     icon: 'i-woot-twilio',
   },
-  {
-    key: PROVIDER_TYPES.UAZAPI,
-    title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.UAZAPI'),
-    description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.UAZAPI_DESC'),
-    icon: 'i-woot-whatsapp',
-  },
+  ...(unofficialWhatsappEnabled.value
+    ? [
+        {
+          key: PROVIDER_TYPES.UAZAPI,
+          title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.UAZAPI'),
+          description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.UAZAPI_DESC'),
+          icon: 'i-woot-whatsapp',
+        },
+      ]
+    : []),
 ]);
 
 const selectProvider = providerValue => {
@@ -147,7 +158,10 @@ const handleManualLinkClick = () => {
           v-else-if="selectedProvider === PROVIDER_TYPES.THREE_SIXTY_DIALOG"
         />
         <UazapiWhatsapp
-          v-else-if="selectedProvider === PROVIDER_TYPES.UAZAPI"
+          v-else-if="
+            selectedProvider === PROVIDER_TYPES.UAZAPI &&
+            unofficialWhatsappEnabled
+          "
         />
         <CloudWhatsapp v-else />
       </div>

@@ -24,6 +24,7 @@ const availableUpgrades = computed(
   () => store.getters['plan/getAvailableUpgrades']
 );
 const uiFlags = computed(() => store.getters['plan/getUIFlags']);
+const fetchError = computed(() => store.getters['plan/getFetchError']);
 
 // Upgrade é imediato e não tem desfazer self-service (Plan::ChangeSubscriptionService) — confirma
 // antes de disparar. Downgrade não tem botão aqui de propósito: não passa pelo upgradePlan.
@@ -112,6 +113,32 @@ onMounted(() => {
     </template>
     <template #body>
       <div class="flex flex-col gap-6 w-full max-w-4xl">
+        <div
+          v-if="fetchError"
+          class="flex items-start gap-3 border border-n-slate-6 rounded-lg p-6 bg-n-surface-1"
+        >
+          <Icon
+            icon="i-lucide-info"
+            class="flex-shrink-0 mt-0.5 size-5 text-n-slate-11"
+          />
+          <div>
+            <p class="text-heading-3 text-n-slate-12 mb-1">
+              {{
+                fetchError === 'no_plan'
+                  ? $t('PLAN.NO_PLAN.TITLE')
+                  : $t('PLAN.FETCH_ERROR.TITLE')
+              }}
+            </p>
+            <p class="text-body-main text-n-slate-11">
+              {{
+                fetchError === 'no_plan'
+                  ? $t('PLAN.NO_PLAN.DESCRIPTION')
+                  : $t('PLAN.FETCH_ERROR.DESCRIPTION')
+              }}
+            </p>
+          </div>
+        </div>
+
         <!-- Current Plan Card -->
         <div
           v-if="plan"
