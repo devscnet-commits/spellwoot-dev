@@ -1,5 +1,8 @@
 class Api::V1::Accounts::Captain::ScenariosController < Api::V1::Accounts::BaseController
+  include PlanFeatureEnforceable
+
   before_action :current_account
+  before_action -> { enforce_plan_feature('captain_integration', 'Captain não está disponível no seu plano.') }
   before_action -> { check_authorization(Captain::Scenario) }
   before_action :set_assistant
   before_action :set_scenario, only: [:show, :update, :destroy]

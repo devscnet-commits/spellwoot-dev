@@ -7,7 +7,7 @@ import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import CreditRequestButton from './CreditRequestButton.vue';
-import { messageTimestamp } from 'shared/helpers/timeHelper';
+import { format } from 'date-fns';
 import { useAlert } from 'dashboard/composables';
 
 const { t } = useI18n();
@@ -57,8 +57,8 @@ const formatCurrency = cents =>
   }).format((cents || 0) / 100);
 
 const formatCycle = charge =>
-  `${messageTimestamp(charge.cycle_start, 'dd/MM/yy')} – ${messageTimestamp(
-    charge.cycle_end,
+  `${format(new Date(charge.cycle_start), 'dd/MM/yy')} – ${format(
+    new Date(charge.cycle_end),
     'dd/MM/yy'
   )}`;
 
@@ -154,14 +154,15 @@ onMounted(() => {
               </p>
               <p class="text-heading-3 text-n-slate-12">{{ plan.name }}</p>
             </div>
-            <div v-if="subscription" class="text-right">
+            <div
+              v-if="subscription && subscription.next_renewal_at"
+              class="text-right"
+            >
               <p class="text-body-small text-n-slate-11 mb-1">
                 {{ $t('PLAN.NEXT_RENEWAL') }}
               </p>
               <p class="text-heading-3 text-n-slate-12">
-                {{
-                  messageTimestamp(subscription.next_renewal_at, 'MMM dd, yyyy')
-                }}
+                {{ format(new Date(subscription.next_renewal_at), 'MMM dd, yyyy') }}
               </p>
             </div>
           </div>

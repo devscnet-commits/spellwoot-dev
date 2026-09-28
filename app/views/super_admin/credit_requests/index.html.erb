@@ -1,0 +1,45 @@
+<%# Index custom: resource_class real é AiCreditRequest mas as rotas/controller usam "credit_request"
+    (routes.rb: resources :credit_requests). O index padrão do Administrate monta os links de cada
+    linha via rota polimórfica [namespace, resource], que resolve pelo NOME DA CLASSE do resource
+    (ai_credit_request) e não pelo nome do controller — gera super_admin_ai_credit_request_path, que
+    não existe, e quebra a lista inteira com 500. Mesma causa que já forçou o show.html.erb a usar
+    paths explícitos; aqui replica a correção pro index. %>
+
+<% content_for(:title) { "Solicitações de Créditos de IA" } %>
+
+<header class="main-content__header main-content__header--flex" role="banner">
+  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
+</header>
+
+<section class="main-content__body">
+  <% if resources.any? %>
+    <table class="js-collection">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Conta</th>
+          <th>Créditos solicitados</th>
+          <th>Status</th>
+          <th>Solicitado por</th>
+          <th>Criado em</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% resources.each do |resource| %>
+          <tr>
+            <td><%= link_to resource.id, super_admin_credit_request_path(resource) %></td>
+            <td><%= resource.account_id %></td>
+            <td><%= resource.amount_requested %></td>
+            <td><%= resource.status %></td>
+            <td><%= resource.requested_by&.name %></td>
+            <td><%= resource.created_at&.strftime('%d/%m/%Y %H:%M') %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% else %>
+    <p>Nenhuma solicitação de créditos ainda.</p>
+  <% end %>
+</section>
+
+<%= paginate resources %>

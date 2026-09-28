@@ -1,4 +1,7 @@
 class Api::V1::Accounts::SlaPoliciesController < Api::V1::Accounts::EnterpriseAccountsController
+  include PlanFeatureEnforceable
+
+  before_action -> { enforce_plan_feature('sla', 'SLA não está disponível no seu plano.') }
   before_action :fetch_sla, only: [:show, :update, :destroy]
   before_action :check_authorization
 
