@@ -707,7 +707,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
     context 'chamada de "consultar_conhecimento" (RAG agentic — tool real, sempre disponível)' do
       it 'devolve os trechos encontrados, SEM criar Ai::CapabilityExecution' do
         allow(Ai::KnowledgeRetriever).to receive(:retrieve)
-          .with(query: 'quanto custa o plano fibra?', account_id: account.id, agent_id: agent.id)
+          .with(query: 'quanto custa o plano fibra?', account_id: account.id, agent_id: agent.id, raise_errors: true)
           .and_return(['Plano Fibra 500MB: R$ 99,90/mês'])
 
         expect { call_tool('consultar_conhecimento', arguments: { pergunta: 'quanto custa o plano fibra?' }) }
@@ -726,7 +726,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
       it 'com "categoria", pede o catálogo completo daquele kind (kinds + list_all)' do
         allow(Ai::KnowledgeRetriever).to receive(:retrieve)
           .with(query: 'quero ver todos os planos', account_id: account.id, agent_id: agent.id,
-                kinds: ['produto'], list_all: true)
+                kinds: ['produto'], list_all: true, raise_errors: true)
           .and_return(['Plano Residencial - 500 MEGA: R$ 99,90', 'Plano Empresarial - 200 MEGA: R$ 99,90'])
 
         call_tool('consultar_conhecimento',
@@ -751,7 +751,9 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         json = response.parsed_body
         expect(json['status']).to eq('executed')
         expect(json['result']['encontrado']).to be false
-        expect(json['result']['conteudo']).to eq('Nada encontrado na base de conhecimento para essa pergunta.')
+        expect(json['result']['conteudo']).to start_with('Nada encontrado na base de conhecimento para essa pergunta.')
+        # Busca vazia não é motivo para transferir o cliente.
+        expect(json['result']['conteudo']).to include('Não transfira por causa disso')
       end
 
       it 'pergunta vazia/ausente não busca nada' do
@@ -783,7 +785,10 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(response).to have_http_status(:success)
         json = response.parsed_body
         expect(json['status']).to eq('failed')
-        expect(json['error']).to eq('knowledge_timeout')
+        expect(json['error']).to start_with('knowledge_timeout: ')
+        # A IA avisa que volta com a resposta — verdade, porque o Gateway agenda a nova rodada — e não transfere.
+        expect(json['error']).to include('já volta com a resposta')
+        expect(json['error']).to include('não transfira')
       end
 
       it 'erro genérico (não-timeout) na busca: status failed com a categoria "knowledge_search_failed"' do
@@ -794,7 +799,7 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(response).to have_http_status(:success)
         json = response.parsed_body
         expect(json['status']).to eq('failed')
-        expect(json['error']).to eq('knowledge_search_failed')
+        expect(json['error']).to start_with('knowledge_search_failed: ')
       end
     end
 

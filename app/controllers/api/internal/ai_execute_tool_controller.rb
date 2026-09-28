@@ -142,12 +142,12 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     query = arguments['pergunta'].to_s.strip
     return { result: {}, status: 'skipped', error: 'pergunta vazia — nada foi buscado' } if query.blank?
 
-    retrieval_args = { query: query, account_id: agent.account_id, agent_id: agent.id }
+    retrieval_args = { query: query, account_id: agent.account_id, agent_id: agent.id, raise_errors: true }
     categoria = arguments['categoria'].to_s.strip
     retrieval_args.merge!(kinds: [categoria], list_all: true) if categoria.present?
 
     chunks = Ai::KnowledgeRetriever.retrieve(**retrieval_args)
-    conteudo = chunks.present? ? chunks.join("\n---\n") : 'Nada encontrado na base de conhecimento para essa pergunta.'
+    conteudo = chunks.present? ? chunks.join("\n---\n") : KNOWLEDGE_NOT_FOUND_MESSAGE
     { result: { 'encontrado' => chunks.present?, 'conteudo' => conteudo }, status: 'executed', error: nil }
   rescue StandardError => e
     category = knowledge_error_category(e)
@@ -156,8 +156,21 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     # a categoria, só não tinha mais nenhum emissor vivo): sem isso, um timeout/erro na busca virava 500
     # cru pro Python, sem sinal nenhum de PORQUE a ferramenta falhou. Devolve como qualquer outra tool
     # (result/status/error) para a IA poder seguir a conversa em vez de travar o turno inteiro.
-    { result: {}, status: 'failed', error: category }
+    { result: {}, status: 'failed', error: "#{category}: #{KNOWLEDGE_FAILED_MESSAGE}" }
   end
+
+  # O texto que a IA lê é o que ela repete ao cliente. Nenhum dos dois leva a transferir: busca vazia
+  # ou falha técnica não são motivo para tirar o cliente da IA — transferência só quando ele pede ou
+  # pelas regras configuradas no agente. Na falha, "já volto com a resposta" é verdade: o orquestrador
+  # já tentou de novo no próprio turno e, se ainda falhou, o Ai::Gateway agenda uma nova rodada
+  # (Ai::KnowledgeRetryJob) para a IA voltar com a resposta.
+  KNOWLEDGE_NOT_FOUND_MESSAGE = 'Nada encontrado na base de conhecimento para essa pergunta. Não invente: diga ao ' \
+                                'cliente que não encontrou essa informação e siga o atendimento normalmente. Não ' \
+                                'transfira por causa disso.'.freeze
+  KNOWLEDGE_FAILED_MESSAGE = 'a consulta à base de conhecimento está temporariamente indisponível. Não invente a ' \
+                             'resposta e não transfira por causa disso: diga ao cliente que está consultando essa ' \
+                             'informação e que já volta com a resposta — o sistema vai tentar de novo ' \
+                             'automaticamente em instantes.'.freeze
 
   # Nomes de classe (comparados por NOME, não pela constante — Faraday/PG podem não estar carregados
   # neste processo) que denotam timeout/queda de conexão. Mesmo critério de Ai::Gateway#timeout_error?,

@@ -1,6 +1,7 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
@@ -8,6 +9,7 @@ import integrationSettingsAPI from '../../../../api/integrationSettings';
 import providerInstancesAPI from '../../../../api/providerInstances';
 
 const { t } = useI18n();
+const route = useRoute();
 const { accountId } = useAccount();
 const isFeatureEnabledonAccount = useMapGetter(
   'accounts/isFeatureEnabledonAccount'
@@ -399,6 +401,18 @@ onMounted(() => {
   });
 });
 
+// Deep link (?provider=openai), ex.: botão "Usar chave própria" da tela Meu Plano — abre o card
+// daquele provider e rola até ele, em vez de largar o cliente numa lista de integrações.
+onMounted(async () => {
+  const target = route.query.provider;
+  if (!target || !visibleProviders.value.some(p => p.key === target)) return;
+  state[target].open = true;
+  await nextTick();
+  document
+    .getElementById(`provider-${target}`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
 const loadInstances = async providerKey => {
   const s = state[providerKey];
   s.loadingInstances = true;
@@ -618,6 +632,7 @@ const providerBadge = providerKey => {
 
     <div
       v-for="provider in visibleProviders"
+      :id="`provider-${provider.key}`"
       :key="provider.key"
       class="rounded-xl border border-n-weak bg-n-solid-2 overflow-hidden"
     >

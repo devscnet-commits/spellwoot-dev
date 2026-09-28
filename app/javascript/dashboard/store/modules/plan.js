@@ -7,6 +7,7 @@ export const state = {
   limits: [],
   overageCharges: [],
   availableUpgrades: [],
+  aiKey: null,
   // null | 'no_plan' (conta sem assinatura ativa — API responde 404) | 'unknown'
   fetchError: null,
   uiFlags: {
@@ -24,6 +25,7 @@ export const mutations = {
     _state.limits = data.limits;
     _state.overageCharges = data.overage_charges || [];
     _state.availableUpgrades = data.available_upgrades || [];
+    _state.aiKey = data.ai_key || null;
   },
 
   SET_FETCH_ERROR(_state, value) {
@@ -81,6 +83,7 @@ export const getters = {
   getLimits: _state => _state.limits,
   getOverageCharges: _state => _state.overageCharges,
   getAvailableUpgrades: _state => _state.availableUpgrades,
+  getAiKey: _state => _state.aiKey,
   getUIFlags: _state => _state.uiFlags,
   getFetchError: _state => _state.fetchError,
 };

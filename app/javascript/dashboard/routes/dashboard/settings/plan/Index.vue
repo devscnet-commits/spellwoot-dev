@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore } from 'vuex';
+import { useRoute, useRouter } from 'vue-router';
 import SettingsLayout from '../SettingsLayout.vue';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
@@ -12,6 +13,8 @@ import { useAlert } from 'dashboard/composables';
 
 const { t } = useI18n();
 const store = useStore();
+const route = useRoute();
+const router = useRouter();
 
 const plan = computed(() => store.getters['plan/getPlan']);
 const aiCreditBalance = computed(
@@ -25,6 +28,15 @@ const availableUpgrades = computed(
 );
 const uiFlags = computed(() => store.getters['plan/getUIFlags']);
 const fetchError = computed(() => store.getters['plan/getFetchError']);
+const aiKey = computed(() => store.getters['plan/getAiKey']);
+
+const goToOwnKeySetup = () => {
+  router.push({
+    name: 'integrations_hub',
+    params: { accountId: route.params.accountId },
+    query: { provider: 'openai' },
+  });
+};
 
 // Upgrade é imediato e não tem desfazer self-service (Plan::ChangeSubscriptionService) — confirma
 // antes de disparar. Downgrade não tem botão aqui de propósito: não passa pelo upgradePlan.
@@ -277,7 +289,18 @@ onMounted(() => {
                 {{ $t('PLAN.RENEWS_MONTHLY') }}
               </p>
             </div>
-            <div>
+            <div v-if="aiKey?.using_own_key">
+              <p class="text-body-small text-n-slate-11 mb-2">
+                {{ $t('PLAN.OWN_KEY.REPLIES_THIS_CYCLE') }}
+              </p>
+              <p class="text-heading-3 text-n-teal-11">
+                {{ aiKey.replies_this_cycle }}
+              </p>
+              <p class="text-body-small text-n-slate-10 mt-1">
+                {{ $t('PLAN.OWN_KEY.REPLIES_THIS_CYCLE_HINT') }}
+              </p>
+            </div>
+            <div v-else>
               <p class="text-body-small text-n-slate-11 mb-2">
                 {{ $t('PLAN.USED_CREDITS') }}
               </p>
@@ -307,6 +330,47 @@ onMounted(() => {
                 {{ aiCreditBalance.total }}
               </p>
             </div>
+          </div>
+          <div
+            v-if="aiKey?.own_key_allowed"
+            class="flex items-start justify-between gap-4 border-t border-n-slate-4 mt-4 pt-4"
+          >
+            <div class="flex items-start gap-2">
+              <Icon
+                icon="i-lucide-key-round"
+                class="flex-shrink-0 mt-0.5 size-4"
+                :class="
+                  aiKey.using_own_key ? 'text-n-teal-11' : 'text-n-slate-11'
+                "
+              />
+              <div>
+                <p class="text-body-main text-n-slate-12 mb-1">
+                  {{
+                    aiKey.using_own_key
+                      ? $t('PLAN.OWN_KEY.ACTIVE_TITLE')
+                      : $t('PLAN.OWN_KEY.AVAILABLE_TITLE')
+                  }}
+                </p>
+                <p class="text-body-small text-n-slate-11">
+                  {{
+                    aiKey.using_own_key
+                      ? $t('PLAN.OWN_KEY.ACTIVE_DESCRIPTION')
+                      : $t('PLAN.OWN_KEY.AVAILABLE_DESCRIPTION')
+                  }}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              :variant="aiKey.using_own_key ? 'outline' : 'solid'"
+              :label="
+                aiKey.using_own_key
+                  ? $t('PLAN.OWN_KEY.MANAGE')
+                  : $t('PLAN.OWN_KEY.SETUP')
+              "
+              class="flex-shrink-0"
+              @click="goToOwnKeySetup"
+            />
           </div>
           <!-- Solicitar mais créditos (billing Fase 1): vira fila de aprovação da SCNET. -->
           <CreditRequestButton />

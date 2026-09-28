@@ -76,8 +76,31 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
       },
       limits: limits_data,
       overage_charges: recent_overage_charges,
-      available_upgrades: available_upgrades(plan)
+      available_upgrades: available_upgrades(plan),
+      ai_key: ai_key_status(subscription)
     }
+  end
+
+  # Mesmas regras que decidem a cobrança em runtime (Ai::Gateway#billing_balance e
+  # Ai::ActionDispatcher#consume_credit): só leitura de banco, nenhuma chamada ao provedor.
+  def ai_key_status(subscription)
+    {
+      own_key_allowed: FeatureGate.enabled?(current_account, 'custom_llm_api_key'),
+      using_own_key: Ai::ModelRouter.account_byok?(current_account.id),
+      replies_this_cycle: replies_this_cycle(subscription)
+    }
+  end
+
+  # Respostas da IA efetivamente enviadas ao cliente no ciclo atual. Conta o mesmo evento que
+  # Ai::ActionDispatcher#reply grava junto com o débito de crédito ('reply.sent', um por resposta),
+  # então é a mesma base da cobrança — só que em quantidade, não em créditos. Com chave própria é o
+  # único número de uso que existe aqui (o custo em dinheiro fica na conta do cliente no provedor).
+  def replies_this_cycle(subscription)
+    renewal = subscription.next_renewal_at
+    cycle_start = [renewal && (renewal - 1.month), subscription.started_at].compact.max
+    scope = Ai::Event.where(account_id: current_account.id, event_type: 'reply.sent')
+    scope = scope.where(created_at: cycle_start..) if cycle_start
+    scope.count
   end
 
   # Planos comerciais visíveis com rank maior que o atual — únicos elegíveis a upgrade self-service

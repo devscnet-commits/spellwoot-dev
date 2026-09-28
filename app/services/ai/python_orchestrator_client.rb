@@ -40,12 +40,14 @@ class Ai::PythonOrchestratorClient
   end
 
   ORCHESTRATOR_URL = build_orchestrator_url(ENV.fetch('AI_ORCHESTRATOR_URL', 'http://localhost:8000'))
-  # Tem que ser MAIOR que o TURN_BUDGET_SECONDS do orquestrador (default 90s lá), senão o Rails
+  # Tem que ser MAIOR que o TURN_BUDGET_SECONDS do orquestrador (default 150s lá), senão o Rails
   # desiste do POST enquanto o Python ainda está trabalhando: o turno segue rodando do outro lado —
   # salvando dado, avançando etapa, até transferindo sozinho — num turno que, para o cliente, nunca
   # existiu, e o conversation_id daquele atendimento se perde junto (o próximo turno começa uma
   # conversation nova). Configurável para quem ajustar o orçamento do lado Python.
-  TIMEOUT = ENV.fetch('AI_ORCHESTRATOR_TIMEOUT', 120).to_i
+  # 200s: acomoda o orçamento de 150s do Python mais as chamadas que fecham o turno depois dele (a busca de
+  # conhecimento agora é repetida dentro do turno quando falha — o cliente espera mais, mas recebe a resposta).
+  TIMEOUT = ENV.fetch('AI_ORCHESTRATOR_TIMEOUT', 200).to_i
 
   # control tool names — shared with Api::Internal::AiExecuteToolController, which recognizes these
   # by name (not backed by an Ai::Tool row) exactly like Ai::StepCaptureTool's "registrar_*".
@@ -111,7 +113,7 @@ class Ai::PythonOrchestratorClient
       # chamada com falha fazia o turno seguinte abrir uma conversation nova e perder o histórico.
       return { reply: nil, conversation_id: failed_conversation_id(response), byok_fallback: false,
                confidence: nil, transferred: false, tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [],
-               error_detail: "HTTP #{response.code}: #{response.body.to_s.truncate(300)}" }
+               knowledge_failed: false, error_detail: "HTTP #{response.code}: #{response.body.to_s.truncate(300)}" }
     end
 
     parsed = response.parsed_response
@@ -130,11 +132,15 @@ class Ai::PythonOrchestratorClient
       model: parsed['model'].presence,
       # Quebra por ferramenta chamada (achado ao vivo, 21/08, pedido da aba Teste) — [{"tool","tokens_in",
       # "tokens_out"}, ...], ver orchestrator._run_turn. Não soma nada novo em tokens_in/tokens_out acima.
-      tool_calls: Array(parsed['tool_calls']) }
+      tool_calls: Array(parsed['tool_calls']),
+      # A busca de conhecimento falhou mesmo após as novas tentativas do Python: o Ai::Gateway agenda uma
+      # nova rodada (Ai::KnowledgeRetryJob) para a IA voltar com a resposta.
+      knowledge_failed: parsed['knowledge_failed'] == true }
   rescue StandardError => e
     Rails.logger.error "[Ai::PythonOrchestratorClient] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
     { reply: nil, conversation_id: nil, byok_fallback: false, confidence: nil, transferred: false,
-      tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [], error_detail: "#{e.class}: #{e.message}" }
+      tokens_in: 0, tokens_out: 0, model: nil, tool_calls: [], knowledge_failed: false,
+      error_detail: "#{e.class}: #{e.message}" }
   end
 
   private
@@ -677,10 +683,9 @@ class Ai::PythonOrchestratorClient
   # negócio com uma base de conhecimento cadastrada usa a mesma ferramenta e o mesmo texto.
   def knowledge_tool
     { name: KNOWLEDGE_TOOL,
-      description: 'Busca na base de conhecimento oficial da empresa (preços, condições, regras, ' \
-                   'políticas, produtos/planos). Use sempre que a pergunta do cliente depender de ' \
-                   'informação real da empresa e você não tiver certeza absoluta. Se não retornar ' \
-                   'nada relevante, diga que vai verificar ou transfira — nunca invente.',
+      description: 'Busca na base de conhecimento oficial da empresa (preços, condições, regras, políticas, produtos/planos). Use sempre ' \
+                   'que a pergunta do cliente depender de informação real da empresa e você não tiver certeza absoluta. Siga a ' \
+                   'orientação que vier no resultado da busca — nunca invente e nunca transfira só porque a busca não trouxe nada.',
       input_schema: {
         type: 'object',
         properties: {
