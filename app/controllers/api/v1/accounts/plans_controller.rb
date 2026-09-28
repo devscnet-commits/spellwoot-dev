@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Api::V1::Accounts::PlanController < Api::V1::Accounts::BaseController
+class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
   before_action :fetch_plan_data, only: [:limits]
   before_action :ensure_administrator, only: [:upgrade]
 
