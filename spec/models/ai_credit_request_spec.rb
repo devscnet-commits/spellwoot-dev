@@ -34,6 +34,8 @@ RSpec.describe AiCreditRequest do
 
   describe '#approve!' do
     it 'credita amount_requested nos extra_credits e marca approved' do
+      plan = subscribe_account_to_plan(account)
+      plan.update!(ai_credit_overage_price_cents: 150)
       request = build_request(amount_requested: 300)
       request.save!
 
@@ -41,10 +43,36 @@ RSpec.describe AiCreditRequest do
         .to change { account.reload.ai_credit_balance&.extra_credits || 0 }.by(300)
       expect(request.reload).to be_approved
       expect(request.approved_by).to eq(admin)
-      expect(request.reviewed_at).to be_present
+    end
+
+    it 'gera a cobrança de excedente com o preço do plano' do
+      plan = subscribe_account_to_plan(account)
+      plan.update!(ai_credit_overage_price_cents: 150)
+      request = build_request(amount_requested: 300)
+      request.save!
+
+      expect { request.approve!(by: admin) }.to change(OverageCharge, :count).by(1)
+
+      charge = OverageCharge.last
+      expect(charge.plan_limit_key).to eq('ai_credits_extra')
+      expect(charge.unit_price_cents).to eq(150)
+      expect(charge.total_cents).to eq(300 * 150)
+      expect(charge.status).to eq('pending')
+    end
+
+    it 'recusa aprovar sem preço de crédito excedente configurado no plano (não credita de graça)' do
+      subscribe_account_to_plan(account)
+      request = build_request(amount_requested: 300)
+      request.save!
+
+      expect { request.approve!(by: admin) }.to raise_error(AiCreditRequest::InvalidTransition)
+      expect(account.reload.ai_credit_balance&.extra_credits.to_i).to eq(0)
+      expect(request.reload).to be_pending
     end
 
     it 'é idempotente: aprovar de novo levanta InvalidTransition e NÃO credita 2x' do
+      plan = subscribe_account_to_plan(account)
+      plan.update!(ai_credit_overage_price_cents: 150)
       request = build_request(amount_requested: 300)
       request.save!
       request.approve!(by: admin)

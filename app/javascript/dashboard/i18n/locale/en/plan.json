@@ -46,7 +46,8 @@
       "SENT": "Request sent. Our team will review it.",
       "ERROR": "Could not send the request. Please try again.",
       "INVALID_AMOUNT": "Enter an amount greater than zero.",
-      "PENDING": "You have a pending request for {amount} credits — awaiting approval."
+      "PENDING": "You have a pending request for {amount} credits — awaiting approval.",
+      "OVERAGE_LABEL": "Extra AI credits"
     },
     "UPGRADE": {
       "HEADER": "Available upgrades",

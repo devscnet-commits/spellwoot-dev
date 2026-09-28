@@ -46,7 +46,8 @@
       "SENT": "Solicitação enviada. Nossa equipe vai analisar.",
       "ERROR": "Não foi possível enviar a solicitação. Tente novamente.",
       "INVALID_AMOUNT": "Informe uma quantidade maior que zero.",
-      "PENDING": "Você tem uma solicitação pendente de {amount} créditos — aguardando aprovação."
+      "PENDING": "Você tem uma solicitação pendente de {amount} créditos — aguardando aprovação.",
+      "OVERAGE_LABEL": "Créditos de IA extras"
     },
     "UPGRADE": {
       "HEADER": "Upgrades disponíveis",

@@ -28,17 +28,24 @@
 </section>
 
 <% if page.resource.pending? %>
+  <% plan = page.resource.account.subscriptions.current.first&.plan %>
+  <% unit_price_cents = plan&.ai_credit_overage_price_cents %>
   <section class="main-content__body">
     <hr/>
     <h3>Ações</h3>
 
     <div class="pb-3">
-      <p>Aprovar adiciona <strong><%= page.resource.amount_requested %></strong> créditos avulsos (permanentes) à conta <strong>#<%= page.resource.account_id %></strong> e marca a solicitação como aprovada.</p>
+      <p>Aprovar adiciona <strong><%= page.resource.amount_requested %></strong> créditos avulsos (permanentes) à conta <strong>#<%= page.resource.account_id %></strong>, gera uma cobrança de excedente (pendente de fatura) e marca a solicitação como aprovada.</p>
+      <% if unit_price_cents.present? %>
+        <p>Preço configurado no plano: <strong>R$ <%= MoneyCents.format(unit_price_cents) %></strong> por crédito — total a cobrar: <strong>R$ <%= MoneyCents.format(unit_price_cents * page.resource.amount_requested) %></strong>.</p>
+      <% else %>
+        <p class="text-danger"><strong>Este plano não tem preço de crédito excedente configurado.</strong> Aprovar vai falhar até isso ser definido em Planos → <%= plan&.name || "plano da conta" %> → limite de créditos de IA.</p>
+      <% end %>
     </div>
 
     <%= form_with url: approve_super_admin_credit_request_path(page.resource), method: :post, class: "form" do %>
       <div class="form-actions">
-        <%= submit_tag "Aprovar e creditar" %>
+        <%= submit_tag "Aprovar e creditar", disabled: unit_price_cents.blank? %>
       </div>
     <% end %>
 

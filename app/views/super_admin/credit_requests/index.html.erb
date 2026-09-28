@@ -36,7 +36,13 @@
             <td><%= resource.created_at&.strftime('%d/%m/%Y %H:%M') %></td>
             <td>
               <% if resource.pending? %>
-                <%= button_to "Aprovar", approve_super_admin_credit_request_path(resource), method: :post, data: { confirm: "Aprovar e creditar #{resource.amount_requested} créditos na conta ##{resource.account_id}?" } %>
+                <% unit_price_cents = resource.account.subscriptions.current.first&.plan&.ai_credit_overage_price_cents %>
+                <% if unit_price_cents.present? %>
+                  <% total = MoneyCents.format(unit_price_cents * resource.amount_requested) %>
+                  <%= button_to "Aprovar", approve_super_admin_credit_request_path(resource), method: :post, data: { confirm: "Aprovar, creditar #{resource.amount_requested} créditos na conta ##{resource.account_id} e gerar cobrança de R$ #{total}?" } %>
+                <% else %>
+                  <%= link_to "Definir preço p/ aprovar", super_admin_credit_request_path(resource) %>
+                <% end %>
                 <%= button_to "Rejeitar", reject_super_admin_credit_request_path(resource), method: :post, class: "button--danger", data: { confirm: 'Rejeitar esta solicitação?' } %>
               <% else %>
                 <%= link_to "Ver detalhes", super_admin_credit_request_path(resource) %>
