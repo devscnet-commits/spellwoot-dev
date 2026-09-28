@@ -9,6 +9,8 @@
     "AI_CREDITS": "AI Credits",
     "PLAN_CREDITS": "Plan Credits",
     "RENEWS_MONTHLY": "Renews monthly",
+    "USED_CREDITS": "Used this cycle",
+    "USED_CREDITS_HINT": "Since last renewal",
     "EXTRA_CREDITS": "Extra Credits",
     "PURCHASED_SEPARATELY": "Purchased separately",
     "TOTAL_BALANCE": "Total Balance",

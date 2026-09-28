@@ -9,6 +9,8 @@
     "AI_CREDITS": "Créditos de IA",
     "PLAN_CREDITS": "Créditos do Plano",
     "RENEWS_MONTHLY": "Renova mensalmente",
+    "USED_CREDITS": "Usado neste ciclo",
+    "USED_CREDITS_HINT": "Desde a última renovação",
     "EXTRA_CREDITS": "Créditos Extras",
     "PURCHASED_SEPARATELY": "Comprados separadamente",
     "TOTAL_BALANCE": "Saldo Total",
@@ -45,6 +47,15 @@
       "ERROR": "Não foi possível enviar a solicitação. Tente novamente.",
       "INVALID_AMOUNT": "Informe uma quantidade maior que zero.",
       "PENDING": "Você tem uma solicitação pendente de {amount} créditos — aguardando aprovação."
+    },
+    "UPGRADE": {
+      "HEADER": "Upgrades disponíveis",
+      "PER_MONTH": "/mês",
+      "BUTTON": "Fazer upgrade para {name}",
+      "CONFIRM": "Fazer upgrade para {name} agora? Isso vale imediatamente.",
+      "SUCCESS": "Upgrade para {name} feito com sucesso.",
+      "ERROR": "Não foi possível fazer o upgrade do plano. Tente novamente.",
+      "DOWNGRADE_HINT": "Precisa de um plano menor? Fale com nosso suporte."
     },
     "NO_PLAN": {
       "TITLE": "Nenhum plano ativo",
