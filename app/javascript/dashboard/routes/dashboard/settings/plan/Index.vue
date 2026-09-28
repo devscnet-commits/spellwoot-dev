@@ -49,6 +49,17 @@ const hasPrice = computed(
       plan.value.setup_fee_cents != null)
 );
 
+// Usado no ciclo = quanto já saiu de plan_credits desde a última renovação. Cálculo puro sobre o
+// que a API já devolveu (ai_credits_included - saldo atual de plan_credits) — SEM nenhuma requisição
+// nova, nem estimativa: os dois números vêm do mesmo lugar que debita 1 crédito por resposta enviada
+// (Ai::ActionDispatcher#consume_credit), então reflete o gasto real, não uma aproximação.
+const usedThisCycle = computed(() => {
+  if (!plan.value || !aiCreditBalance.value) return 0;
+  const included = plan.value.ai_credits_included || 0;
+  const remaining = aiCreditBalance.value.plan_credits || 0;
+  return Math.max(included - remaining, 0);
+});
+
 // cents -> R$ no formato brasileiro. Só chamado quando o valor não é nil.
 const formatCurrency = cents =>
   new Intl.NumberFormat('pt-BR', {
@@ -162,7 +173,9 @@ onMounted(() => {
                 {{ $t('PLAN.NEXT_RENEWAL') }}
               </p>
               <p class="text-heading-3 text-n-slate-12">
-                {{ format(new Date(subscription.next_renewal_at), 'MMM dd, yyyy') }}
+                {{
+                  format(new Date(subscription.next_renewal_at), 'MMM dd, yyyy')
+                }}
               </p>
             </div>
           </div>
@@ -251,7 +264,7 @@ onMounted(() => {
           <h2 class="text-heading-2 text-n-slate-12 mb-4">
             {{ $t('PLAN.AI_CREDITS') }}
           </h2>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <p class="text-body-small text-n-slate-11 mb-2">
                 {{ $t('PLAN.PLAN_CREDITS') }}
@@ -261,6 +274,17 @@ onMounted(() => {
               </p>
               <p class="text-body-small text-n-slate-10 mt-1">
                 {{ $t('PLAN.RENEWS_MONTHLY') }}
+              </p>
+            </div>
+            <div>
+              <p class="text-body-small text-n-slate-11 mb-2">
+                {{ $t('PLAN.USED_CREDITS') }}
+              </p>
+              <p class="text-heading-3 text-n-amber-11">
+                {{ usedThisCycle }}
+              </p>
+              <p class="text-body-small text-n-slate-10 mt-1">
+                {{ $t('PLAN.USED_CREDITS_HINT') }}
               </p>
             </div>
             <div>
