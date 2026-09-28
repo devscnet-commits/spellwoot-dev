@@ -8,6 +8,41 @@ RSpec.describe 'Super Admin credit requests', type: :request do
     account.ai_credit_requests.create!(requested_by: user, amount_requested: 400, reason: 'preciso')
   end
 
+  describe 'GET /super_admin/credit_requests' do
+    it 'renderiza a lista sem erro (regressão: resource_class AiCreditRequest x rota credit_request)' do
+      sign_in(super_admin, scope: :super_admin)
+      get '/super_admin/credit_requests'
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include(credit_request.account_id.to_s)
+    end
+  end
+
+  describe 'GET /super_admin/credit_requests/:id' do
+    before { sign_in(super_admin, scope: :super_admin) }
+
+    it 'renderiza sem erro quando a conta não tem plano (regressão: mesmo bug de resource_class)' do
+      get "/super_admin/credit_requests/#{credit_request.id}"
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('não tem plano')
+    end
+
+    it 'renderiza com o preço quando o plano tem overage configurado' do
+      plan = subscribe_account_to_plan(account)
+      plan.update!(ai_credit_overage_price_cents: 150)
+
+      get "/super_admin/credit_requests/#{credit_request.id}"
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('Preço configurado no plano')
+    end
+
+    it 'renderiza sem as ações quando a solicitação já foi decidida' do
+      credit_request.update!(status: :rejected)
+
+      get "/super_admin/credit_requests/#{credit_request.id}"
+      expect(response).to have_http_status(:ok)
+    end
+  end
+
   describe 'POST /super_admin/credit_requests/:id/approve' do
     context 'quando autenticado como super admin' do
       before { sign_in(super_admin, scope: :super_admin) }
