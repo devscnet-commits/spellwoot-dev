@@ -677,10 +677,10 @@ class Ai::PythonOrchestratorClient
   # negócio com uma base de conhecimento cadastrada usa a mesma ferramenta e o mesmo texto.
   def knowledge_tool
     { name: KNOWLEDGE_TOOL,
-      description: 'Busca na base de conhecimento oficial da empresa (preços, condições, regras, ' \
-                   'políticas, produtos/planos). Use sempre que a pergunta do cliente depender de ' \
-                   'informação real da empresa e você não tiver certeza absoluta. Se não retornar ' \
-                   'nada relevante, diga que vai verificar ou transfira — nunca invente.',
+      description: 'Busca na base de conhecimento oficial da empresa (preços, condições, regras, políticas, produtos/planos). Use sempre ' \
+                   'que a pergunta do cliente depender de informação real da empresa e você não tiver certeza absoluta. Se não retornar ' \
+                   'nada relevante, diga que não tem essa informação e ofereça transferir para um atendente — nunca invente e nunca ' \
+                   'prometa verificar ou retornar depois.',
       input_schema: {
         type: 'object',
         properties: {

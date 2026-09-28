@@ -79,5 +79,31 @@ RSpec.describe Ai::Embedder do
       allow(ctx).to receive(:embed).and_raise(RubyLLM::RateLimitError.new(nil, '429'))
       expect { described_class.embed('oi') }.to raise_error(Ai::Embedder::TransientError)
     end
+
+    it 'raise_auth_errors: AuthError sobe em vez de virar nil (quem precisa saber que falhou)' do
+      allow(described_class).to receive(:resolve_key).and_return('sk-test')
+      ctx = double('rubyllm_context')
+      allow(RubyLLM).to receive(:context).and_return(ctx)
+      allow(ctx).to receive(:embed).and_raise(RubyLLM::UnauthorizedError.new(nil, 'bad key'))
+      expect { described_class.embed('oi', raise_auth_errors: true) }.to raise_error(Ai::Embedder::AuthError)
+    end
+  end
+
+  describe 'limites de tempo e de tentativas' do
+    before { allow(described_class).to receive(:resolve_key).and_return('sk-test') }
+
+    it 'aplica timeout e max_retries pedidos no contexto do RubyLLM' do
+      config = described_class.new(timeout: 8, max_retries: 1).instance_variable_get(:@context).config
+
+      expect(config.request_timeout).to eq(8)
+      expect(config.max_retries).to eq(1)
+    end
+
+    it 'sem limites pedidos, mantém o padrão do RubyLLM (ingestão em job)' do
+      config = described_class.new.instance_variable_get(:@context).config
+
+      expect(config.request_timeout).to eq(RubyLLM.config.request_timeout)
+      expect(config.max_retries).to eq(RubyLLM.config.max_retries)
+    end
   end
 end

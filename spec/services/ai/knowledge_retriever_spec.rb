@@ -104,4 +104,33 @@ RSpec.describe Ai::KnowledgeRetriever do
       expect(chunks.all? { |c| c.include?('R$') }).to be(true) # só produtos
     end
   end
+
+  describe 'falha na busca: fail-soft por padrão, erro real com raise_errors' do
+    before { chunk(source(kind: 'faq', title: 'F'), 'Como faço para trocar de plano?') }
+
+    it 'por padrão, erro no embedding degrada (ILIKE) e não levanta — Copilot/Tester seguem iguais' do
+      allow(Ai::Embedder).to receive(:embed).and_raise(Ai::Embedder::TransientError, 'Faraday::TimeoutError')
+
+      expect { described_class.retrieve(query: 'trocar de plano', account_id: account.id) }.not_to raise_error
+    end
+
+    it 'com raise_errors, erro no embedding SOBE — "não consegui procurar" não vira "não achei"' do
+      allow(Ai::Embedder).to receive(:embed).and_raise(Ai::Embedder::TransientError, 'Faraday::TimeoutError')
+
+      expect { described_class.retrieve(query: 'trocar de plano', account_id: account.id, raise_errors: true) }
+        .to raise_error(Ai::Embedder::TransientError)
+    end
+
+    it 'embute a pergunta com limite curto de tempo e de tentativas' do
+      allow(Ai::Embedder).to receive(:embed).and_return(nil)
+
+      described_class.retrieve(query: 'trocar de plano', account_id: account.id)
+
+      expect(Ai::Embedder).to have_received(:embed).with(
+        'trocar de plano',
+        timeout: described_class::QUERY_EMBED_TIMEOUT, max_retries: described_class::QUERY_EMBED_RETRIES,
+        raise_auth_errors: false
+      )
+    end
+  end
 end

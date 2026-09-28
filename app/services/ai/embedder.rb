@@ -23,10 +23,12 @@ class Ai::Embedder
 
   DEFAULT_MODEL = (defined?(LlmConstants) ? LlmConstants::DEFAULT_EMBEDDING_MODEL : 'text-embedding-3-small').freeze
 
-  def initialize
+  # timeout/max_retries: nil = padrão do RubyLLM (300s, 3 novas tentativas) — adequado à ingestão em
+  # job. Quem está no meio de um atendimento (Ai::KnowledgeRetriever) passa limites curtos.
+  def initialize(timeout: nil, max_retries: nil)
     @key = self.class.resolve_key
     @model = self.class.resolve_model
-    @context = build_context(@key)
+    @context = build_context(@key, timeout: timeout, max_retries: max_retries)
   end
 
   # Há chave configurada? Sem chave, o caller degrada (grava chunk sem vetor; o RAG cai no ILIKE).
@@ -47,14 +49,17 @@ class Ai::Embedder
     raise TransientError, "#{e.class}: #{e.message}"
   end
 
-  # Atalho one-shot para quem só quer degradar em nil (ex.: o KnowledgeRetriever embutindo a
-  # PERGUNTA): sem chave OU chave inválida => nil. Erro transitório sobe (o caller trata).
-  def self.embed(text)
-    embedder = new
+  # Atalho one-shot (ex.: o KnowledgeRetriever embutindo a PERGUNTA): sem chave => nil. Chave
+  # inválida => nil, a menos que raise_auth_errors (quem precisa distinguir "falhou" de "sem vetor").
+  # Erro transitório sempre sobe (o caller trata).
+  def self.embed(text, timeout: nil, max_retries: nil, raise_auth_errors: false)
+    embedder = new(timeout: timeout, max_retries: max_retries)
     return nil unless embedder.enabled?
 
     embedder.embed(text)
   rescue AuthError => e
+    raise if raise_auth_errors
+
     Rails.logger.warn "[Ai::Embedder] chave inválida/revogada — sem embedding: #{e.message}"
     nil
   end
@@ -81,13 +86,15 @@ class Ai::Embedder
 
   # Contexto ISOLADO do RubyLLM com a chave resolvida (nunca toca a config global). nil quando não
   # há chave — sinaliza "embeddings desligados" para o caller degradar.
-  def build_context(key)
+  def build_context(key, timeout: nil, max_retries: nil)
     return nil if key.blank?
 
     endpoint = self.class.resolve_endpoint
     RubyLLM.context do |c|
       c.openai_api_key = key
       c.openai_api_base = endpoint.chomp('/') if endpoint.present?
+      c.request_timeout = timeout if timeout
+      c.max_retries = max_retries unless max_retries.nil?
     end
   end
 end

@@ -307,7 +307,7 @@ class TestConfianca:
 class TestCorteDoLoopFechaChamadaPendente:
     def _payload(self):
         return {
-            "mensagem_para_cliente": "Vou verificar e já te retorno.",
+            "mensagem_para_cliente": "Não tenho essa informação agora.",
             "dados_coletados": [], "avancar_etapa": False, "transferir_humano": False,
             "encerrar_atendimento": False, "handoff_summary": "", "handoff_target": "", "confianca": 0.4,
         }
@@ -336,7 +336,7 @@ class TestCorteDoLoopFechaChamadaPendente:
         assert ultima["input"][0]["call_id"] == "call_2"
         # ...e SEM tools, pra que a resposta a esta chamada só possa ser o JSON do contrato.
         assert "tools" not in ultima
-        assert reply_text == "Vou verificar e já te retorno."
+        assert reply_text == "Não tenho essa informação agora."
 
     def test_orcamento_de_tempo_estourado_nao_abre_rodada_nova(self):
         # O Rails abandona o POST em AI_ORCHESTRATOR_TIMEOUT e força handoff; sem este corte o Python
@@ -471,3 +471,18 @@ class TestKnownAttributeKeysDePontaAPonta:
         sent = mock_client.responses.create.call_args.kwargs["text"]
         chave = sent["format"]["schema"]["properties"]["dados_coletados"]["items"]["properties"]["chave"]
         assert "enum" not in chave
+
+
+# Resposta vazia/ilegível do modelo: o texto padrão nunca pode ser uma promessa ("já te retorno") —
+# nada no sistema volta sozinho; a IA só age de novo quando o cliente escreve.
+def test_texto_padrao_sem_mensagem_nao_promete_retorno():
+    with patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool:
+        reply_text, confidence, transferred = orchestrator._dispatch_structured_reply(
+            {}, ticket_id=1, ai_agent_id=1, mode="live",
+        )
+
+    assert reply_text == orchestrator.STATIC_FALLBACK_REPLY
+    assert "retorno" not in reply_text.lower()
+    assert confidence is None
+    assert transferred is False
+    mock_execute_tool.assert_not_called()

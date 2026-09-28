@@ -802,6 +802,9 @@ def _truthy(value) -> bool:
     return bool(value)
 
 
+STATIC_FALLBACK_REPLY = "Desculpe, não consegui responder agora. Pode me enviar sua mensagem de novo?"
+
+
 def _dispatch_structured_reply(
     payload: dict, *, ticket_id: int, ai_agent_id: int, mode: str,
 ) -> tuple[str, float | None, bool]:
@@ -849,7 +852,9 @@ def _dispatch_structured_reply(
         confidence = None
     # Same guardrail the old _force_text_reply protected: Ai::ActionDispatcher#reply no-ops on a
     # blank reply (never sends anything) — never send literal silence to the customer.
-    return (reply_text or "Só um instante, já te retorno!"), confidence, transferred
+    # Nunca uma promessa ("já te retorno"): nada no sistema volta sozinho — a IA só age de novo quando
+    # o cliente escreve. Pedir que ele reenvie é o que de fato dispara o próximo turno.
+    return (reply_text or STATIC_FALLBACK_REPLY), confidence, transferred
 
 
 def _post_control_tool(tool_name: str, arguments: dict, *, ticket_id: int, ai_agent_id: int, mode: str) -> None:
