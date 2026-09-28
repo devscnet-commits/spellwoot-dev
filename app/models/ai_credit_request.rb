@@ -44,14 +44,23 @@ class AiCreditRequest < ApplicationRecord
 
   scope :recent_first, -> { order(created_at: :desc) }
 
-  # Aprova: credita amount_requested nos extra_credits (permanentes) da conta e marca approved.
+  # Aprova: credita amount_requested nos extra_credits (permanentes) da conta E registra a cobrança
+  # (OverageCharge pending, mesmo mecanismo/tela que já cobra excedente de limite — Ai::CreditsRenewalJob).
+  # Sem isso, aprovar dava crédito de graça, sem nenhum rastro de cobrança. Exige que o plano tenha um
+  # preço de crédito excedente configurado (Plan#ai_credit_overage_price_cents); sem preço, recusa em
+  # vez de assumir "grátis" silenciosamente — quem aprova decide o preço ajustando o plano, não o código.
   # Atômico; idempotente por guarda (só pending aprova) — evita crédito em dobro num duplo-clique.
   def approve!(by:)
     raise InvalidTransition, 'solicitação não está pendente' unless pending?
 
+    subscription = account.subscriptions.current.first
+    unit_price_cents = subscription&.plan&.ai_credit_overage_price_cents
+    raise InvalidTransition, 'defina o preço do crédito excedente no plano antes de aprovar' if unit_price_cents.blank?
+
     transaction do
       balance = account.ai_credit_balance || account.create_ai_credit_balance!
       balance.credit_extra!(amount_requested)
+      charge_overage!(subscription, unit_price_cents)
       update!(status: :approved, approved_by: by, reviewed_at: Time.current)
     end
     true
@@ -66,6 +75,20 @@ class AiCreditRequest < ApplicationRecord
   end
 
   private
+
+  def charge_overage!(subscription, unit_price_cents)
+    OverageCharge.create!(
+      account: account,
+      subscription: subscription,
+      plan_limit_key: 'ai_credits_extra',
+      cycle_start: Time.current,
+      cycle_end: Time.current,
+      average_excess: amount_requested,
+      unit_price_cents: unit_price_cents,
+      total_cents: (amount_requested * unit_price_cents).round,
+      status: :pending
+    )
+  end
 
   def single_pending_per_account
     return if account_id.blank?

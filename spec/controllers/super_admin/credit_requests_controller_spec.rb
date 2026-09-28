@@ -13,10 +13,21 @@ RSpec.describe 'Super Admin credit requests', type: :request do
       before { sign_in(super_admin, scope: :super_admin) }
 
       it 'credita os extra_credits da conta e marca a solicitação como aprovada' do
+        plan = subscribe_account_to_plan(account)
+        plan.update!(ai_credit_overage_price_cents: 150)
+
         expect { post "/super_admin/credit_requests/#{credit_request.id}/approve" }
           .to change { account.reload.ai_credit_balance&.extra_credits || 0 }.by(400)
 
         expect(credit_request.reload).to be_approved
+        expect(response).to have_http_status(:redirect)
+      end
+
+      it 'não credita e redireciona com erro quando o plano não tem preço de crédito excedente' do
+        expect { post "/super_admin/credit_requests/#{credit_request.id}/approve" }
+          .not_to(change { account.reload.ai_credit_balance&.extra_credits })
+
+        expect(credit_request.reload).to be_pending
         expect(response).to have_http_status(:redirect)
       end
     end

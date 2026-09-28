@@ -101,6 +101,7 @@ const getLimitLabel = key => {
     inboxes: t('PLAN.LIMIT_INBOXES'),
     ai_agents: t('PLAN.LIMIT_AI_AGENTS'),
     crm_pipelines: t('PLAN.LIMIT_CRM_PIPELINES'),
+    ai_credits_extra: t('PLAN.CREDIT_REQUEST.OVERAGE_LABEL'),
   };
   return labelMap[key] || key;
 };
