@@ -4,6 +4,10 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
   before_action :fetch_plan_data, only: [:limits]
   before_action :ensure_administrator, only: [:upgrade]
 
+  # Chaves de limite sem model/contador real ainda (Billing::LimitUsage sempre devolve nil pra
+  # elas) — escondidas da tela em vez de mostrar um "0 / N" que não representa nada de verdade.
+  LIMIT_KEYS_WITHOUT_MODULE = %w[crm_pipelines].freeze
+
   def limits
     render json: @plan_data
   end
@@ -35,9 +39,9 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
     plan = subscription.plan
     ai_credit_balance = current_account.ai_credit_balance
 
-    # current_value por limite via fonte única de contagem (Billing::LimitUsage). Chaves sem fonte
-    # (ex.: crm_pipelines => nil) caem em 0, preservando o contrato atual da API.
-    limits_data = plan.plan_limits.map do |limit|
+    # current_value por limite via fonte única de contagem (Billing::LimitUsage). Chaves sem módulo
+    # real (LIMIT_KEYS_WITHOUT_MODULE) nem entram na lista — ver constante acima.
+    limits_data = plan.plan_limits.reject { |limit| LIMIT_KEYS_WITHOUT_MODULE.include?(limit.key) }.map do |limit|
       current_value = Billing::LimitUsage.current_count(current_account, limit.key) || 0
       {
         key: limit.key,
