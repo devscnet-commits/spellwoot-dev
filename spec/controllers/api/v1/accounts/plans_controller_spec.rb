@@ -54,13 +54,13 @@ RSpec.describe 'Account Plan API', type: :request do
       it 'plano sem chave própria: não permite e não usa' do
         subscribe_account_to_plan(account)
 
-        expect(fetch_ai_key).to eq('own_key_allowed' => false, 'using_own_key' => false)
+        expect(fetch_ai_key).to include('own_key_allowed' => false, 'using_own_key' => false)
       end
 
       it 'plano com chave própria mas sem chave cadastrada: permite, ainda consome créditos' do
         subscribe_account_to_plan(account, features: ['custom_llm_api_key'])
 
-        expect(fetch_ai_key).to eq('own_key_allowed' => true, 'using_own_key' => false)
+        expect(fetch_ai_key).to include('own_key_allowed' => true, 'using_own_key' => false)
       end
 
       it 'plano com chave própria e chave cadastrada: usando a própria chave' do
@@ -68,7 +68,17 @@ RSpec.describe 'Account Plan API', type: :request do
         IntegrationSetting.create!(account_id: account.id, provider: 'openai', enabled: true,
                                    config: { apiKey: 'sk-conta-teste' }.to_json)
 
-        expect(fetch_ai_key).to eq('own_key_allowed' => true, 'using_own_key' => true)
+        expect(fetch_ai_key).to include('own_key_allowed' => true, 'using_own_key' => true)
+      end
+
+      it 'conta as respostas da IA enviadas no ciclo atual (sem chamar o provedor)' do
+        subscribe_account_to_plan(account, features: ['custom_llm_api_key'])
+        2.times { Ai::Event.create!(account_id: account.id, event_type: 'reply.sent') }
+        Ai::Event.create!(account_id: account.id, event_type: 'reply.intended')
+        Ai::Event.create!(account_id: account.id, event_type: 'reply.sent', created_at: 2.days.ago)
+        Ai::Event.create!(account_id: create(:account).id, event_type: 'reply.sent')
+
+        expect(fetch_ai_key['replies_this_cycle']).to eq(2)
       end
 
       it 'chave cadastrada NÃO vale se o plano não permite chave própria' do
@@ -76,7 +86,7 @@ RSpec.describe 'Account Plan API', type: :request do
         IntegrationSetting.create!(account_id: account.id, provider: 'openai', enabled: true,
                                    config: { apiKey: 'sk-conta-teste' }.to_json)
 
-        expect(fetch_ai_key).to eq('own_key_allowed' => false, 'using_own_key' => false)
+        expect(fetch_ai_key).to include('own_key_allowed' => false, 'using_own_key' => false)
       end
     end
 

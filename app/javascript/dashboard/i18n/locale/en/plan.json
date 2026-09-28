@@ -72,7 +72,9 @@
       "ACTIVE_TITLE": "Using your own AI key",
       "ACTIVE_DESCRIPTION": "AI replies use your key and don't consume Conexiia credits. If your key fails, the reply goes through the Conexiia key and consumes 1 credit.",
       "SETUP": "Use my own key",
-      "MANAGE": "Manage key"
+      "MANAGE": "Manage key",
+      "REPLIES_THIS_CYCLE": "AI replies this cycle",
+      "REPLIES_THIS_CYCLE_HINT": "Through your key, billed to your AI provider account"
     }
   }
 }

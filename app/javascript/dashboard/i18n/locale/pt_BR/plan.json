@@ -72,7 +72,9 @@
       "ACTIVE_TITLE": "Usando sua própria chave de IA",
       "ACTIVE_DESCRIPTION": "As respostas da IA usam a sua chave e não consomem créditos Conexiia. Se a sua chave falhar, a resposta sai pela chave Conexiia e consome 1 crédito.",
       "SETUP": "Usar chave própria",
-      "MANAGE": "Gerenciar chave"
+      "MANAGE": "Gerenciar chave",
+      "REPLIES_THIS_CYCLE": "Respostas da IA neste ciclo",
+      "REPLIES_THIS_CYCLE_HINT": "Pela sua chave, cobradas na sua conta do provedor de IA"
     }
   }
 }

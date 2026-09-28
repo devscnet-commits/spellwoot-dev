@@ -289,7 +289,18 @@ onMounted(() => {
                 {{ $t('PLAN.RENEWS_MONTHLY') }}
               </p>
             </div>
-            <div>
+            <div v-if="aiKey?.using_own_key">
+              <p class="text-body-small text-n-slate-11 mb-2">
+                {{ $t('PLAN.OWN_KEY.REPLIES_THIS_CYCLE') }}
+              </p>
+              <p class="text-heading-3 text-n-teal-11">
+                {{ aiKey.replies_this_cycle }}
+              </p>
+              <p class="text-body-small text-n-slate-10 mt-1">
+                {{ $t('PLAN.OWN_KEY.REPLIES_THIS_CYCLE_HINT') }}
+              </p>
+            </div>
+            <div v-else>
               <p class="text-body-small text-n-slate-11 mb-2">
                 {{ $t('PLAN.USED_CREDITS') }}
               </p>
