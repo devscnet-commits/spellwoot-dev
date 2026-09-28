@@ -22,6 +22,7 @@
           <th>Status</th>
           <th>Solicitado por</th>
           <th>Criado em</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -30,9 +31,17 @@
             <td><%= link_to resource.id, super_admin_credit_request_path(resource) %></td>
             <td><%= resource.account_id %></td>
             <td><%= resource.amount_requested %></td>
-            <td><%= resource.status %></td>
+            <td><%= { 'pending' => 'Pendente', 'approved' => 'Aprovada', 'rejected' => 'Rejeitada' }[resource.status] %></td>
             <td><%= resource.requested_by&.name %></td>
             <td><%= resource.created_at&.strftime('%d/%m/%Y %H:%M') %></td>
+            <td>
+              <% if resource.pending? %>
+                <%= button_to "Aprovar", approve_super_admin_credit_request_path(resource), method: :post, data: { confirm: "Aprovar e creditar #{resource.amount_requested} créditos na conta ##{resource.account_id}?" } %>
+                <%= button_to "Rejeitar", reject_super_admin_credit_request_path(resource), method: :post, class: "button--danger", data: { confirm: 'Rejeitar esta solicitação?' } %>
+              <% else %>
+                <%= link_to "Ver detalhes", super_admin_credit_request_path(resource) %>
+              <% end %>
+            </td>
           </tr>
         <% end %>
       </tbody>
