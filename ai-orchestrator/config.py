@@ -26,7 +26,14 @@ OPENAI_MAX_RETRIES = int(os.environ.get("OPENAI_MAX_RETRIES", "1"))
 # AI_ORCHESTRATOR_TIMEOUT e força handoff, enquanto o Python seguia trabalhando num turno que, para o
 # cliente, nunca aconteceu — salvando dado, avançando etapa e até transferindo sozinho. Mantenha
 # SEMPRE menor que o AI_ORCHESTRATOR_TIMEOUT do Rails.
-TURN_BUDGET = float(os.environ.get("TURN_BUDGET_SECONDS", "90"))
+TURN_BUDGET = float(os.environ.get("TURN_BUDGET_SECONDS", "150"))
+
+# Busca de conhecimento (consultar_conhecimento) falhou por timeout/erro técnico: tenta de novo DENTRO
+# do mesmo turno antes de desistir — o cliente está esperando essa resposta. Cada tentativa é uma
+# requisição nova ao Rails (que em produção corta cada requisição no rack-timeout), com espera
+# crescente entre elas (KNOWLEDGE_RETRY_BACKOFF × nº da tentativa).
+KNOWLEDGE_TOOL_ATTEMPTS = int(os.environ.get("KNOWLEDGE_TOOL_ATTEMPTS", "3"))
+KNOWLEDGE_RETRY_BACKOFF = float(os.environ.get("KNOWLEDGE_RETRY_BACKOFF_SECONDS", "2"))
 
 # INFO (default) keeps only the short per-turn signal (reply sent, which tool was called/with what
 # result) — enough to follow along without wading through the full prompt/raw-response dump. Set to

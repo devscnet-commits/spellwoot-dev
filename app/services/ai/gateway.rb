@@ -14,7 +14,10 @@ class Ai::Gateway
   # #notify_admin_budget_exceeded.
   BUDGET_NOTIFY_TTL = 1.day
 
-  def initialize(message:, agent_inbox:, mode: nil, content_override: nil)
+  # knowledge_retry_attempt: > 0 quando este turno é a nova rodada agendada pelo Ai::KnowledgeRetryJob
+  # depois de uma busca de conhecimento que falhou — conta as tentativas para saber quando parar.
+  def initialize(message:, agent_inbox:, mode: nil, content_override: nil, knowledge_retry_attempt: 0)
+    @knowledge_retry_attempt = knowledge_retry_attempt
     @message = message
     @agent_inbox = agent_inbox
     @agent = agent_inbox.agent
@@ -291,7 +294,9 @@ class Ai::Gateway
     # force_stuck_step_handoff: NÃO manda result[:reply] ao cliente (pode ser a própria resposta de
     # baixa confiança, ex.: o bug real do Pinhalzinho — "Atendemos sua cidade!" sem fonte nenhuma) — um
     # humano assume a partir daqui.
-    if @acts_live && !result[:transferred] && low_confidence?(result[:confidence])
+    # Busca de conhecimento falhou: a IA disse que está consultando e vai voltar (nova rodada agendada
+    # abaixo). A confiança baixa aqui vem da falta da informação, não de um motivo para transferir.
+    if @acts_live && !result[:transferred] && !result[:knowledge_failed] && low_confidence?(result[:confidence])
       force_low_confidence_handoff(run_record, result[:confidence])
       return finalize(run_record, 'low_confidence')
     end
@@ -304,6 +309,7 @@ class Ai::Gateway
     # modelo compôs pra avisar da transferência. Achado ao vivo (15/08, ticket 583): "reply.intended"
     # em vez de "reply.sent" — cliente nunca recebeu o aviso, apesar do handoff ter executado certinho.
     action_dispatcher.reply(result[:reply], bypass_handoff: @acts_live)
+    schedule_knowledge_retry(run_record) if @acts_live && result[:knowledge_failed] && !result[:transferred]
     finalize(run_record, status)
   rescue StandardError => e
     error_type = classify_error(e)
@@ -314,6 +320,28 @@ class Ai::Gateway
   end
 
   private
+
+  # A busca de conhecimento falhou mesmo com as novas tentativas do Python e a IA avisou o cliente que
+  # está consultando. O cliente não pode ficar esperando à toa: agenda uma nova rodada para a IA voltar
+  # com a resposta. Esgotadas as rodadas, deixa uma nota interna para a equipe responder — SEM
+  # transferir (transferência só quando o cliente pede ou pelas regras do agente).
+  def schedule_knowledge_retry(run_record)
+    next_attempt = @knowledge_retry_attempt + 1
+    delay = Ai::KnowledgeRetryJob::DELAYS[@knowledge_retry_attempt]
+
+    if delay
+      Ai::KnowledgeRetryJob.set(wait: delay).perform_later(@message.id, @agent_inbox.id, next_attempt)
+      emit(run_record, 'knowledge.retry_scheduled', { attempt: next_attempt, wait_seconds: delay.to_i })
+    else
+      action_dispatcher.internal_note(
+        '⚠️ A IA não conseguiu consultar a base de conhecimento depois de várias tentativas e avisou o ' \
+        "cliente que voltaria com a resposta. O cliente está aguardando sobre: \"#{@message.content.to_s.truncate(300)}\""
+      )
+      emit(run_record, 'knowledge.retry_exhausted', { attempts: @knowledge_retry_attempt })
+    end
+  rescue StandardError => e
+    Rails.logger.error "[Ai::Gateway#schedule_knowledge_retry] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
+  end
 
   # Camada 0 ligada? Opt-in por perfil no MESMO padrão aninhado dos demais workers
   # (worker_overrides['trivial_gate']['mode'] == 'on'). Ausente/qualquer outro valor => OFF (default),

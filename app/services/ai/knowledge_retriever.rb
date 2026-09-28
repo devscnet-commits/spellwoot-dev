@@ -12,11 +12,13 @@ class Ai::KnowledgeRetriever
   # semântico, não "pertence ao kind"). Acima do limite, cai na busca vetorial restrita ao(s) kind(s).
   SMALL_CATALOG_CHAR_LIMIT = 4000
 
-  # Embedding da PERGUNTA acontece no meio do atendimento: sem limite próprio herdava o padrão do
-  # RubyLLM (300s + 3 novas tentativas), enquanto o orquestrador Python desiste da ferramenta em 30s
-  # (RAILS_TOOL_TIMEOUT). Pior caso aqui: 2 × 8s, bem abaixo disso.
-  QUERY_EMBED_TIMEOUT = 8
-  QUERY_EMBED_RETRIES = 1
+  # Embedding da PERGUNTA acontece no meio do atendimento, dentro de uma requisição que o rack-timeout
+  # corta em produção (RACK_TIMEOUT_SERVICE_TIMEOUT, padrão 15s). Sem limite próprio herdava o padrão
+  # do RubyLLM (300s + 3 novas tentativas) e a requisição inteira morria sem resposta. Uma tentativa
+  # de até 10s aqui; as novas tentativas ficam com o orquestrador Python (KNOWLEDGE_TOOL_ATTEMPTS),
+  # cada uma numa requisição nova, então a busca ganha mais tempo no total sem estourar esse corte.
+  QUERY_EMBED_TIMEOUT = 10
+  QUERY_EMBED_RETRIES = 0
 
   # kinds: array opcional de kind de KnowledgeSource (ex.: ['produto']). Sem ele, comportamento
   # INALTERADO (retrocompat p/ Copilot/Tester).

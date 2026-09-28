@@ -145,6 +145,9 @@ MEMORY_TOOL = "salvar_memoria_ia"
 ADVANCE_STEP_TOOL = "avancar_etapa"
 TRANSFER_TOOL = "conversation_transfer"
 RESOLVE_TOOL = "conversation_resolve"
+# Busca na base de conhecimento (Ai::PythonOrchestratorClient::KNOWLEDGE_TOOL) — a única tool real
+# com tratamento próprio aqui: é leitura pura, então pode ser repetida com segurança quando falha.
+KNOWLEDGE_TOOL = "consultar_conhecimento"
 
 # json_schema ESTRITO (não json_object livre): a OpenAI VALIDA a resposta contra este schema antes de
 # devolver — "avancar_etapa": "sim" ou um "dados_coletados" com chave livre vira erro da API, não um
@@ -372,11 +375,50 @@ def _normalize_tool_result(result: dict) -> dict:
     VERDADE; "skipped" (shadow, missing_required_attributes, tool inativa) fica intocado, porque ali
     "error" já é uma mensagem de dado faltando, não uma falha técnica — o modelo já sabe reagir a
     isso pedindo o dado, não avisando "problema técnico"."""
-    status = result.get("status")
-    if status == "failed":
+    if not _is_tool_failure(result):
+        return result
+    if result.get("status") == "failed":
         return {"error": True, "message": result.get("error") or "Falha ao executar a ferramenta."}
-    if status is None and result.get("error"):
-        return {"error": True, "message": result["error"]}
+    return {"error": True, "message": result["error"]}
+
+
+def _is_tool_failure(result: dict) -> bool:
+    """Falha técnica de verdade — ver _normalize_tool_result ("skipped" não é falha)."""
+    status = result.get("status")
+    return status == "failed" or (status is None and bool(result.get("error")))
+
+
+def _execute_tool(*, ticket_id: int, ai_agent_id: int, tool_name: str, arguments: dict, mode: str) -> dict:
+    try:
+        return tools.execute_tool(
+            ticket_id=ticket_id, ai_agent_id=ai_agent_id, tool_name=tool_name, arguments=arguments, mode=mode,
+        )
+    except tools.ToolExecutionError as e:
+        # Fed back to the model as the tool's own output (not raised) so a single failing
+        # tool degrades the turn instead of aborting it — the model can apologize/retry.
+        return {"error": str(e)}
+
+
+def _execute_knowledge_tool(*, ticket_id: int, ai_agent_id: int, arguments: dict, mode: str,
+                            deadline: float) -> dict:
+    """consultar_conhecimento com novas tentativas: o cliente está esperando essa resposta, e uma
+    falha de busca (embedding lento, provedor instável, requisição cortada no Rails) costuma ser
+    passageira. Leitura pura — repetir não tem efeito colateral. Para antes de estourar o orçamento
+    do turno; devolve o último resultado (falha) se nenhuma tentativa deu certo."""
+    result: dict = {}
+    for attempt in range(1, config.KNOWLEDGE_TOOL_ATTEMPTS + 1):
+        result = _execute_tool(ticket_id=ticket_id, ai_agent_id=ai_agent_id, tool_name=KNOWLEDGE_TOOL,
+                               arguments=arguments, mode=mode)
+        if not _is_tool_failure(result):
+            return result
+
+        wait = config.KNOWLEDGE_RETRY_BACKOFF * attempt
+        if attempt == config.KNOWLEDGE_TOOL_ATTEMPTS or time.monotonic() + wait > deadline:
+            break
+        logger.warning("ticket_id=%s %s falhou (tentativa %s/%s): %s — tentando de novo em %ss",
+                       ticket_id, KNOWLEDGE_TOOL, attempt, config.KNOWLEDGE_TOOL_ATTEMPTS,
+                       result.get("error"), wait)
+        time.sleep(wait)
     return result
 
 
@@ -505,14 +547,14 @@ def run_conversation(
     close_when: str | None = None,
     close_message: str | None = None,
     collect_hint: dict | None = None,
-) -> tuple[str, str, bool, float | None, bool, int, int, str, list]:
+) -> tuple[str, str, bool, float | None, bool, int, int, str, list, bool]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
     (text.format=json_schema, strict — _build_reply_schema) — control flow (save/advance/transfer/
     close) is decided by Python from the parsed JSON and dispatched to Rails' webhook, never by which
     tool the model chose to call.
     Real (admin-configured) business tools are still offered as function tools for genuine external
     actions. Always returns (reply_text, conversation_id, byok_fallback, confidence, transferred,
-    tokens_in, tokens_out, resolved_model, tool_usage) — including when parsing fails or
+    tokens_in, tokens_out, resolved_model, tool_usage, knowledge_failed) — including when parsing fails or
     MAX_TOOL_ITERATIONS is hit — so the caller (main.py) never has to special-case a cut-off turn,
     only real transport/API failures.
     confidence is the model's own 0.0-1.0 self-report (None when the payload didn't parse);
@@ -593,10 +635,10 @@ def run_conversation(
         # junto do erro, o Rails não persistia nada e o turno seguinte recomeçava do zero.
         raise TurnFailed(conversation_id) from e
 
-    reply_text, turn_byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage = turn
+    reply_text, turn_byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage, knowledge_failed = turn
 
     return (reply_text, conversation_id, conv_byok_fallback or turn_byok_fallback, confidence, transferred,
-            tokens_in, tokens_out, resolved_model, tool_usage)
+            tokens_in, tokens_out, resolved_model, tool_usage, knowledge_failed)
 
 
 def _run_turn(
@@ -651,6 +693,9 @@ def _run_turn(
     # tool(s) desta rodada. Só usado hoje pelo Ai::Gateway pra exibir na aba Teste (Ai::Run.decision);
     # não afeta tokens_in/tokens_out do turno, que continuam sendo a SOMA de tudo.
     tool_usage: list[dict] = []
+    # A busca de conhecimento falhou mesmo depois das novas tentativas: o Rails agenda uma nova rodada
+    # para a IA voltar com a resposta (Ai::KnowledgeRetryJob), em vez de o cliente ficar esperando.
+    knowledge_failed = False
 
     for _ in range(config.MAX_TOOL_ITERATIONS):
         function_calls = [item for item in response.output if item.type == "function_call"]
@@ -685,18 +730,13 @@ def _run_turn(
             # reconstruir via print de WhatsApp, QUAL tool o modelo decidiu chamar e com quais
             # argumentos, antes da execução em si.
             logger.info("ticket_id=%s tool_chamada=%s arguments=%s", ticket_id, call.name, call.arguments)
-            try:
-                result = tools.execute_tool(
-                    ticket_id=ticket_id,
-                    ai_agent_id=ai_agent_id,
-                    tool_name=call.name,
-                    arguments=arguments,
-                    mode=mode,
-                )
-            except tools.ToolExecutionError as e:
-                # Fed back to the model as the tool's own output (not raised) so a single failing
-                # tool degrades the turn instead of aborting it — the model can apologize/retry.
-                result = {"error": str(e)}
+            if call.name == KNOWLEDGE_TOOL:
+                result = _execute_knowledge_tool(ticket_id=ticket_id, ai_agent_id=ai_agent_id,
+                                                 arguments=arguments, mode=mode, deadline=deadline)
+                knowledge_failed = knowledge_failed or _is_tool_failure(result)
+            else:
+                result = _execute_tool(ticket_id=ticket_id, ai_agent_id=ai_agent_id, tool_name=call.name,
+                                       arguments=arguments, mode=mode)
 
             result = _normalize_tool_result(result)
 
@@ -774,7 +814,7 @@ def _run_turn(
     reply_text, confidence, transferred = _dispatch_structured_reply(
         payload, ticket_id=ticket_id, ai_agent_id=ai_agent_id, mode=mode,
     )
-    return reply_text, byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage
+    return reply_text, byok_fallback, confidence, transferred, tokens_in, tokens_out, tool_usage, knowledge_failed
 
 
 def _parse_structured_reply(text: str | None) -> dict | None:

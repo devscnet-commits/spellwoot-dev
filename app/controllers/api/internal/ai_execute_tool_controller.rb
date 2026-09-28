@@ -159,16 +159,18 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     { result: {}, status: 'failed', error: "#{category}: #{KNOWLEDGE_FAILED_MESSAGE}" }
   end
 
-  # O texto que a IA lê é o que ela repete ao cliente. "Vou verificar e já te retorno" é uma promessa
-  # que nada no sistema cumpre — a IA só age de novo quando o cliente escreve — e era exatamente o
-  # que o atendimento ficava esperando. Por isso a instrução vai junto do próprio resultado.
-  KNOWLEDGE_NOT_FOUND_MESSAGE = 'Nada encontrado na base de conhecimento para essa pergunta. Não prometa ' \
-                                'verificar nem retornar depois: diga ao cliente que não tem essa ' \
-                                'informação e ofereça transferir para um atendente.'.freeze
-  KNOWLEDGE_FAILED_MESSAGE = 'a busca na base de conhecimento falhou agora. Não tente buscar de novo ' \
-                             'neste turno e não prometa verificar nem retornar depois: diga ao cliente ' \
-                             'que não conseguiu consultar essa informação neste momento e ofereça ' \
-                             'transferir para um atendente.'.freeze
+  # O texto que a IA lê é o que ela repete ao cliente. Nenhum dos dois leva a transferir: busca vazia
+  # ou falha técnica não são motivo para tirar o cliente da IA — transferência só quando ele pede ou
+  # pelas regras configuradas no agente. Na falha, "já volto com a resposta" é verdade: o orquestrador
+  # já tentou de novo no próprio turno e, se ainda falhou, o Ai::Gateway agenda uma nova rodada
+  # (Ai::KnowledgeRetryJob) para a IA voltar com a resposta.
+  KNOWLEDGE_NOT_FOUND_MESSAGE = 'Nada encontrado na base de conhecimento para essa pergunta. Não invente: diga ao ' \
+                                'cliente que não encontrou essa informação e siga o atendimento normalmente. Não ' \
+                                'transfira por causa disso.'.freeze
+  KNOWLEDGE_FAILED_MESSAGE = 'a consulta à base de conhecimento está temporariamente indisponível. Não invente a ' \
+                             'resposta e não transfira por causa disso: diga ao cliente que está consultando essa ' \
+                             'informação e que já volta com a resposta — o sistema vai tentar de novo ' \
+                             'automaticamente em instantes.'.freeze
 
   # Nomes de classe (comparados por NOME, não pela constante — Faraday/PG podem não estar carregados
   # neste processo) que denotam timeout/queda de conexão. Mesmo critério de Ai::Gateway#timeout_error?,

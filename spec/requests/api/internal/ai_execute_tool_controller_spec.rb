@@ -752,8 +752,8 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         expect(json['status']).to eq('executed')
         expect(json['result']['encontrado']).to be false
         expect(json['result']['conteudo']).to start_with('Nada encontrado na base de conhecimento para essa pergunta.')
-        # Nunca induz a IA a prometer um retorno que nada no sistema cumpre.
-        expect(json['result']['conteudo']).to include('Não prometa verificar nem retornar depois')
+        # Busca vazia não é motivo para transferir o cliente.
+        expect(json['result']['conteudo']).to include('Não transfira por causa disso')
       end
 
       it 'pergunta vazia/ausente não busca nada' do
@@ -786,7 +786,9 @@ RSpec.describe 'Api::Internal::AiExecuteToolController', type: :request do
         json = response.parsed_body
         expect(json['status']).to eq('failed')
         expect(json['error']).to start_with('knowledge_timeout: ')
-        expect(json['error']).to include('não prometa verificar nem retornar depois')
+        # A IA avisa que volta com a resposta — verdade, porque o Gateway agenda a nova rodada — e não transfere.
+        expect(json['error']).to include('já volta com a resposta')
+        expect(json['error']).to include('não transfira')
       end
 
       it 'erro genérico (não-timeout) na busca: status failed com a categoria "knowledge_search_failed"' do

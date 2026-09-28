@@ -226,4 +226,46 @@ RSpec.describe Ai::Gateway do
       expect(AiCreditBalance.find_by(account_id: account.id)).to be_nil
     end
   end
+
+  # A busca de conhecimento falhou mesmo com as novas tentativas do Python: a IA avisou o cliente que
+  # está consultando. O cliente não pode ser abandonado nem transferido por isso — o Gateway agenda uma
+  # nova rodada para a IA voltar com a resposta.
+  describe 'knowledge_failed (busca de conhecimento falhou no turno)' do
+    let(:transfer_rules) { { 'min_confidence' => 0.5 } }
+
+    before do
+      allow(Ai::PythonOrchestratorClient).to receive(:process_message)
+        .and_return(reply: 'Estou consultando, já volto com a resposta.', conversation_id: 'conv_1',
+                    confidence: 0.2, transferred: false, knowledge_failed: true)
+    end
+
+    it 'entrega o aviso ao cliente, agenda a nova rodada e NÃO transfere (nem por confiança baixa)' do
+      ActiveJob::Base.queue_adapter = :test
+
+      convo = deliver
+
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'reply.sent')).to exist
+      expect(convo.additional_attributes['ai_handoff']).not_to be true
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'handoff.low_confidence')).not_to exist
+      expect(Ai::KnowledgeRetryJob).to have_been_enqueued.with(convo.messages.incoming.last.id, binding.id, 1)
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.retry_scheduled')).to exist
+    end
+
+    it 'esgotadas as rodadas: deixa nota interna para a equipe, sem transferir e sem agendar de novo' do
+      ActiveJob::Base.queue_adapter = :test
+      convo = create(:conversation, account: account, inbox: inbox, status: 'open')
+      message = create(:message, account: account, inbox: inbox, conversation: convo, message_type: 'incoming',
+                                 content: 'quanto custa o plano fibra?')
+
+      described_class.new(message: message, agent_inbox: binding, mode: 'live',
+                          knowledge_retry_attempt: Ai::KnowledgeRetryJob::DELAYS.size).run
+      convo.reload
+
+      expect(Ai::KnowledgeRetryJob).not_to have_been_enqueued
+      expect(convo.additional_attributes['ai_handoff']).not_to be true
+      note = convo.messages.where(private: true).last
+      expect(note.content).to include('quanto custa o plano fibra?')
+      expect(Ai::Event.where(conversation_id: convo.id, event_type: 'knowledge.retry_exhausted')).to exist
+    end
+  end
 end

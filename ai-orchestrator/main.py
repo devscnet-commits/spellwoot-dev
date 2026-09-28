@@ -100,6 +100,9 @@ class ProcessResponse(BaseModel):
     # orchestrator._run_turn). Hoje só consumido pelo Ai::Gateway pra exibir na aba Teste; não afeta
     # tokens_in/tokens_out acima, que continuam sendo a soma de tudo.
     tool_calls: list = []
+    # A busca na base de conhecimento falhou neste turno mesmo após as novas tentativas — Rails agenda
+    # uma nova rodada para a IA voltar com a resposta (Ai::KnowledgeRetryJob) e não transfere por isso.
+    knowledge_failed: bool = False
 
 
 def _authenticate(authorization: Optional[str]) -> None:
@@ -126,7 +129,8 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
     )
 
     try:
-        reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model, tool_usage = orchestrator.run_conversation(
+        (reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out, used_model, tool_usage,
+         knowledge_failed) = orchestrator.run_conversation(
             ticket_id=request.ticket_id,
             account_id=request.account_id,
             ai_agent_id=request.ai_agent_id,
@@ -167,4 +171,5 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
 
     return ProcessResponse(ticket_id=request.ticket_id, reply=reply_text, conversation_id=conversation_id,
                             byok_fallback=byok_fallback, confidence=confidence, transferred=transferred,
-                            tokens_in=tokens_in, tokens_out=tokens_out, model=used_model, tool_calls=tool_usage)
+                            tokens_in=tokens_in, tokens_out=tokens_out, model=used_model, tool_calls=tool_usage,
+                            knowledge_failed=knowledge_failed)

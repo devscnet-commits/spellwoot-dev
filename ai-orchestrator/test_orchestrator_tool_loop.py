@@ -54,10 +54,10 @@ def test_run_conversation_loops_through_two_sequential_tool_calls_before_replyin
         mock_client.responses.create.side_effect = [resp1, resp2, resp3]
         mock_execute_tool.return_value = {"result": "ok"}
 
-        # run_conversation devolve 9 valores desde que resolved_model entrou na tupla; o tool_usage
-        # do fim não é o objeto deste teste, mas precisa ser desempacotado.
+        # run_conversation devolve 10 valores; tool_usage e knowledge_failed do fim não são o objeto
+        # deste teste, mas precisam ser desempacotados.
         (reply_text, conversation_id, byok_fallback, confidence, transferred, tokens_in, tokens_out,
-         used_model, _tool_usage) = (
+         used_model, _tool_usage, _knowledge_failed) = (
             orchestrator.run_conversation(
                 ticket_id=1,
                 ai_agent_id=1,
@@ -486,3 +486,67 @@ def test_texto_padrao_sem_mensagem_nao_promete_retorno():
     assert confidence is None
     assert transferred is False
     mock_execute_tool.assert_not_called()
+
+
+# O cliente está esperando a resposta: falha técnica na busca de conhecimento é tentada de novo dentro
+# do mesmo turno; se ainda assim falhar, o turno avisa o Rails (knowledge_failed) para a IA voltar
+# depois com a resposta. Tool real (com efeito colateral) nunca é repetida.
+class TestNovasTentativasDaBuscaDeConhecimento:
+    FALHA = {"result": {}, "status": "failed", "error": "knowledge_timeout: a consulta falhou"}
+    SUCESSO = {"result": {"encontrado": True, "conteudo": "Plano Fibra: R$ 99"}, "status": "executed", "error": None}
+
+    def _payload(self):
+        return {
+            "mensagem_para_cliente": "ok", "dados_coletados": [], "avancar_etapa": False,
+            "transferir_humano": False, "encerrar_atendimento": False, "handoff_summary": "",
+            "handoff_target": "", "confianca": 0.9,
+        }
+
+    def _run(self, tool_name, execute_side_effect):
+        resp1 = _response("r1", [_function_call(tool_name, {"pergunta": "preço"}, "call_1")])
+        resp2 = _response("r2", [], output_text=json.dumps(self._payload()))
+        with patch.object(orchestrator, "_client") as mock_client, \
+             patch.object(orchestrator.tools, "execute_tool") as mock_execute_tool, \
+             patch.object(orchestrator.time, "sleep") as mock_sleep:
+            mock_client.conversations.create.return_value = SimpleNamespace(id="conv_retry")
+            mock_client.responses.create.side_effect = [resp1, resp2]
+            mock_execute_tool.side_effect = execute_side_effect
+            result = orchestrator.run_conversation(
+                ticket_id=1, ai_agent_id=1, mode="live", system_prompt="p",
+                tools_schema=[KNOWLEDGE_TOOL_SCHEMA], vector_store_id=None, user_input="quanto custa?",
+                conversation_id=None,
+            )
+        sent = json.loads(mock_client.responses.create.call_args_list[1].kwargs["input"][0]["output"])
+        return result, sent, mock_execute_tool, mock_sleep
+
+    def test_falha_passageira_e_repetida_e_o_modelo_recebe_o_resultado(self):
+        result, sent, mock_execute_tool, mock_sleep = self._run(
+            "consultar_conhecimento", [self.FALHA, self.FALHA, self.SUCESSO])
+
+        assert mock_execute_tool.call_count == 3
+        assert mock_sleep.call_count == 2
+        assert sent == self.SUCESSO
+        assert result[-1] is False  # knowledge_failed
+
+    def test_falha_de_transporte_tambem_e_repetida(self):
+        result, sent, mock_execute_tool, _ = self._run(
+            "consultar_conhecimento", [orchestrator.tools.ToolExecutionError("timed out"), self.SUCESSO])
+
+        assert mock_execute_tool.call_count == 2
+        assert sent == self.SUCESSO
+        assert result[-1] is False
+
+    def test_falha_em_todas_as_tentativas_avisa_o_rails(self):
+        attempts = orchestrator.config.KNOWLEDGE_TOOL_ATTEMPTS
+        result, sent, mock_execute_tool, _ = self._run("consultar_conhecimento", [self.FALHA] * attempts)
+
+        assert mock_execute_tool.call_count == attempts
+        assert sent["error"] is True
+        assert result[-1] is True  # knowledge_failed
+
+    def test_tool_real_com_falha_nao_e_repetida(self):
+        result, sent, mock_execute_tool, mock_sleep = self._run("consultar_periodos", [self.FALHA])
+
+        assert mock_execute_tool.call_count == 1
+        mock_sleep.assert_not_called()
+        assert result[-1] is False
