@@ -174,7 +174,7 @@ onMounted(() => {
               </p>
               <p class="text-heading-3 text-n-slate-12">
                 {{
-                  format(new Date(subscription.next_renewal_at), 'MMM dd, yyyy')
+                  format(new Date(subscription.next_renewal_at), 'dd/MM/yyyy')
                 }}
               </p>
             </div>
