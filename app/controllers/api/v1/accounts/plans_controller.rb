@@ -76,7 +76,17 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
       },
       limits: limits_data,
       overage_charges: recent_overage_charges,
-      available_upgrades: available_upgrades(plan)
+      available_upgrades: available_upgrades(plan),
+      ai_key: ai_key_status
+    }
+  end
+
+  # Mesmas regras que decidem a cobrança em runtime (Ai::Gateway#billing_balance e
+  # Ai::ActionDispatcher#consume_credit): só leitura de banco, nenhuma chamada ao provedor.
+  def ai_key_status
+    {
+      own_key_allowed: FeatureGate.enabled?(current_account, 'custom_llm_api_key'),
+      using_own_key: Ai::ModelRouter.account_byok?(current_account.id)
     }
   end
 

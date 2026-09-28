@@ -65,6 +65,14 @@
     "FETCH_ERROR": {
       "TITLE": "Couldn't load your plan",
       "DESCRIPTION": "Something went wrong while loading the plan information. Try again in a few minutes."
+    },
+    "OWN_KEY": {
+      "AVAILABLE_TITLE": "Your plan lets you use your own AI key",
+      "AVAILABLE_DESCRIPTION": "AI replies currently consume the Conexiia credits above. Once you add your key, replies run on your provider account and don't consume credits.",
+      "ACTIVE_TITLE": "Using your own AI key",
+      "ACTIVE_DESCRIPTION": "AI replies use your key and don't consume Conexiia credits. If your key fails, the reply goes through the Conexiia key and consumes 1 credit.",
+      "SETUP": "Use my own key",
+      "MANAGE": "Manage key"
     }
   }
 }

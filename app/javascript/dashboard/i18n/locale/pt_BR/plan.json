@@ -65,6 +65,14 @@
     "FETCH_ERROR": {
       "TITLE": "Não foi possível carregar o plano",
       "DESCRIPTION": "Algo deu errado ao carregar as informações do plano. Tente novamente em alguns minutos."
+    },
+    "OWN_KEY": {
+      "AVAILABLE_TITLE": "Seu plano permite usar sua própria chave de IA",
+      "AVAILABLE_DESCRIPTION": "Hoje as respostas da IA consomem os créditos Conexiia acima. Cadastrando sua chave, as respostas passam a usar a sua conta no provedor e não consomem créditos.",
+      "ACTIVE_TITLE": "Usando sua própria chave de IA",
+      "ACTIVE_DESCRIPTION": "As respostas da IA usam a sua chave e não consomem créditos Conexiia. Se a sua chave falhar, a resposta sai pela chave Conexiia e consome 1 crédito.",
+      "SETUP": "Usar chave própria",
+      "MANAGE": "Gerenciar chave"
     }
   }
 }

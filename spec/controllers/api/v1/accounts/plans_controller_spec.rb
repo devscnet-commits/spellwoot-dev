@@ -45,6 +45,41 @@ RSpec.describe 'Account Plan API', type: :request do
       end
     end
 
+    describe 'ai_key (chave própria x créditos Conexiia)' do
+      def fetch_ai_key
+        get "/api/v1/accounts/#{account.id}/plan/limits", headers: admin.create_new_auth_token, as: :json
+        response.parsed_body['ai_key']
+      end
+
+      it 'plano sem chave própria: não permite e não usa' do
+        subscribe_account_to_plan(account)
+
+        expect(fetch_ai_key).to eq('own_key_allowed' => false, 'using_own_key' => false)
+      end
+
+      it 'plano com chave própria mas sem chave cadastrada: permite, ainda consome créditos' do
+        subscribe_account_to_plan(account, features: ['custom_llm_api_key'])
+
+        expect(fetch_ai_key).to eq('own_key_allowed' => true, 'using_own_key' => false)
+      end
+
+      it 'plano com chave própria e chave cadastrada: usando a própria chave' do
+        subscribe_account_to_plan(account, features: ['custom_llm_api_key'])
+        IntegrationSetting.create!(account_id: account.id, provider: 'openai', enabled: true,
+                                   config: { apiKey: 'sk-conta-teste' }.to_json)
+
+        expect(fetch_ai_key).to eq('own_key_allowed' => true, 'using_own_key' => true)
+      end
+
+      it 'chave cadastrada NÃO vale se o plano não permite chave própria' do
+        subscribe_account_to_plan(account)
+        IntegrationSetting.create!(account_id: account.id, provider: 'openai', enabled: true,
+                                   config: { apiKey: 'sk-conta-teste' }.to_json)
+
+        expect(fetch_ai_key).to eq('own_key_allowed' => false, 'using_own_key' => false)
+      end
+    end
+
     it 'exige autenticação' do
       get "/api/v1/accounts/#{account.id}/plan/limits"
 
