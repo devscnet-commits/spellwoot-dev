@@ -1,8 +1,8 @@
 require 'rails_helper'
 
-# A IA nunca responde grupo de WhatsApp — nem pela integração nativa UazAPI→Chatwoot, que cria o
-# contato do grupo numa inbox API sem passar pelo filtro do Uazapi::IncomingMessageService.
-RSpec.describe Ai::GroupConversation do
+# Grupo de WhatsApp: fica na aba "Grupos", só humanos respondem. A IA nunca responde — nem pela integração
+# nativa UazAPI→Chatwoot, que cria o contato do grupo numa inbox API.
+RSpec.describe Conversations::GroupDetector do
   let(:account) { create(:account) }
   let(:inbox) { create(:inbox, account: account) }
   let(:group_contact) { create(:contact, account: account, identifier: '120363405123456789@g.us') }
@@ -42,6 +42,16 @@ RSpec.describe Ai::GroupConversation do
       conversation = create(:conversation, account: account, inbox: facebook_inbox, contact: contact, contact_inbox: contact_inbox)
 
       expect(described_class.group?(conversation)).to be(false)
+    end
+  end
+
+  describe 'marca na criação da conversa' do
+    it 'conversa de grupo nasce com group_chat' do
+      expect(group_conversation.group_chat).to be(true)
+    end
+
+    it 'conversa com cliente nasce sem group_chat' do
+      expect(customer_conversation.group_chat).to be(false)
     end
   end
 

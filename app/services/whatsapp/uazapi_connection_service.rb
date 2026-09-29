@@ -215,7 +215,7 @@ class Whatsapp::UazapiConnectionService
       access_token: access_token,
       account_id: account.id,
       inbox_id: inbox.id,
-      ignore_groups: true,
+      ignore_groups: false,
       sign_messages: true,
       create_new_conversation: true
     }

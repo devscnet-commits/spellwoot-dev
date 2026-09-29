@@ -1,8 +1,12 @@
+# Grupo de WhatsApp (Conversation#group_chat) não entra nos relatórios de atendimento: tempos de resposta e
+# resolução medem só o atendimento de clientes.
 class ReportingEventListener < BaseListener
   include ReportingEventHelper
 
   def conversation_resolved(event)
     conversation = extract_conversation_and_account(event)[0]
+    return if conversation.group_chat?
+
     event_end_time = event.timestamp
     time_to_resolve = event_end_time.to_i - conversation.created_at.to_i
 
@@ -28,6 +32,8 @@ class ReportingEventListener < BaseListener
   def first_reply_created(event)
     message = extract_message_and_account(event)[0]
     conversation = message.conversation
+    return if conversation.group_chat?
+
     first_response_time = message.created_at.to_i - last_non_human_activity(conversation).to_i
 
     reporting_event = ReportingEvent.new(
@@ -53,7 +59,7 @@ class ReportingEventListener < BaseListener
     conversation = message.conversation
     waiting_since = event.data[:waiting_since]
 
-    return if waiting_since.blank?
+    return if waiting_since.blank? || conversation.group_chat?
 
     # When waiting_since is nil, set reply_time to 0
     reply_time = message.created_at.to_i - waiting_since.to_i
@@ -81,6 +87,8 @@ class ReportingEventListener < BaseListener
     # Best-effort guard: raw report reads count bot handoffs with DISTINCT conversation_id,
     # while rollup counts assume one conversation_bot_handoff event per conversation.
     # That uniqueness is not currently enforced at the database level.
+    return if conversation.group_chat?
+
     bot_handoff_event = ReportingEvent.find_by(conversation_id: conversation.id, name: 'conversation_bot_handoff')
     return if bot_handoff_event.present?
 
@@ -112,6 +120,8 @@ class ReportingEventListener < BaseListener
 
   def conversation_opened(event)
     conversation = extract_conversation_and_account(event)[0]
+    return if conversation.group_chat?
+
     event_end_time = event.timestamp
 
     # Find the most recent resolved event for this conversation
@@ -155,6 +165,8 @@ class ReportingEventListener < BaseListener
 
   def create_captain_inference_event(event, event_name)
     conversation = extract_conversation_and_account(event)[0]
+    return if conversation.group_chat?
+
     time_to_event = event.timestamp.to_i - conversation.created_at.to_i
 
     ReportingEvent.create!(

@@ -21,6 +21,7 @@ class Conversations::EventDataPresenter < SimpleDelegator
       first_reply_created_at: first_reply_created_at,
       priority: priority,
       waiting_since: waiting_since.to_i,
+      group_chat: group_chat,
       **push_timestamps
     }
   end

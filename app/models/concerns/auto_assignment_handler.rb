@@ -61,6 +61,8 @@ module AutoAssignmentHandler
   end
 
   def should_run_auto_assignment?
+    # Grupo de WhatsApp não entra no rodízio: fica na aba "Grupos" e qualquer atendente assume.
+    return false if group_chat?
     return false unless inbox.enable_auto_assignment?
     # Skip auto-assignment outside business hours when working_hours_enabled
     return false if inbox.out_of_office?

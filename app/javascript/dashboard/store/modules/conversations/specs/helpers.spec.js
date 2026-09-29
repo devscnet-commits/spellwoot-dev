@@ -1,7 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { applyRoleFilter } from '../helpers';
+import { applyRoleFilter, applyPageFilters } from '../helpers';
 
 describe('Conversation Helpers', () => {
+  describe('#applyPageFilters — grupos na aba própria', () => {
+    const group = { status: 'open', inbox_id: 1, group_chat: true };
+    const customer = { status: 'open', inbox_id: 1, group_chat: false };
+
+    it('lista normal não mostra grupo', () => {
+      const filters = { status: 'open' };
+      expect(applyPageFilters(group, filters)).toBe(false);
+      expect(applyPageFilters(customer, filters)).toBe(true);
+    });
+
+    it('aba Grupos mostra só grupo', () => {
+      const filters = { status: 'open', conversationType: 'group' };
+      expect(applyPageFilters(group, filters)).toBe(true);
+      expect(applyPageFilters(customer, filters)).toBe(false);
+    });
+
+    it('conversa sem o campo (payload antigo) segue na lista normal', () => {
+      expect(applyPageFilters({ status: 'open' }, { status: 'open' })).toBe(
+        true
+      );
+    });
+  });
+
   describe('#applyRoleFilter', () => {
     // Test data for conversations
     const conversationWithAssignee = {

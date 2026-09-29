@@ -11,6 +11,7 @@
 #  contact_last_seen_at   :datetime
 #  custom_attributes      :jsonb
 #  first_reply_created_at :datetime
+#  group_chat             :boolean          default(FALSE), not null
 #  identifier             :string
 #  last_activity_at       :datetime         not null
 #  priority               :integer
@@ -140,6 +141,7 @@ class Conversation < ApplicationRecord
   belongs_to :result_set_by, class_name: 'User', optional: true
 
   before_save :ensure_snooze_until_reset
+  before_create :mark_group_chat
   before_create :determine_conversation_status
   before_create :ensure_waiting_since
   before_create :assign_default_team_from_inbox
@@ -304,6 +306,12 @@ class Conversation < ApplicationRecord
 
   def ensure_waiting_since
     self.waiting_since = created_at
+  end
+
+  # Grupo de WhatsApp vai para a aba "Grupos": fora da lista de atendimento, da distribuição, do CSAT e dos
+  # relatórios. Marcado antes do after_save da auto-atribuição.
+  def mark_group_chat
+    self.group_chat = Conversations::GroupDetector.detect(self)
   end
 
   # Regra combinada com a Jaqueline (04/09): lead chegou -> tem IA live ou bot vinculado à caixa? Se

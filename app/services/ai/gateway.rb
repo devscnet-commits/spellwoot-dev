@@ -36,8 +36,8 @@ class Ai::Gateway
     # faz a mesma chamada paga ao modelo e só não entrega a resposta, então parar aqui — antes do
     # Ai::Run e de qualquer processamento de anexo — é o que de fato zera o gasto.
     return if @mode != 'live' && !Ai::ShadowPolicy.enabled?
-    # A IA nunca atende grupo — nem gasta turno com ele (ver Ai::GroupConversation).
-    return if Ai::GroupConversation.group?(@conversation)
+    # A IA nunca atende grupo — nem gasta turno com ele (ver Conversations::GroupDetector).
+    return if Conversations::GroupDetector.group?(@conversation)
 
     run_record = Ai::Run.create!(
       account_id: @account.id, conversation_id: @conversation.id, ai_agent_id: @agent.id,

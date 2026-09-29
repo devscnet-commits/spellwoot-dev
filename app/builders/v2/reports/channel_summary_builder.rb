@@ -12,7 +12,7 @@ class V2::Reports::ChannelSummaryBuilder
   def conversations_by_channel_and_status
     account.conversations
            .joins(:inbox)
-           .where(created_at: range)
+           .where(created_at: range, group_chat: false)
            .group('inboxes.channel_type', 'conversations.status')
            .count
            .each_with_object({}) do |((channel_type, status), count), grouped|

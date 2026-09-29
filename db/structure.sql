@@ -1,4 +1,4 @@
-\restrict cWo8cpir54hj63yZhMg405ziMegDgWrHfJ1MLm8Wnbdcw7sMKqtURAhZZ5OJxzu
+\restrict nqo8LABSLna4tQ87uG2xZQXrRcpQ454mORn7vcM3QMVBZ8sB14q474NRue30L1I
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -2903,7 +2903,8 @@ CREATE TABLE public.conversations (
     result_set_by_id bigint,
     closed_by_ai boolean DEFAULT false NOT NULL,
     result_category character varying,
-    result_canonical_key character varying
+    result_canonical_key character varying,
+    group_chat boolean DEFAULT false NOT NULL
 );
 
 
@@ -9811,12 +9812,12 @@ ALTER TABLE ONLY public.agent_presence_snapshots
 -- PostgreSQL database dump complete
 --
 
-\unrestrict cWo8cpir54hj63yZhMg405ziMegDgWrHfJ1MLm8Wnbdcw7sMKqtURAhZZ5OJxzu
+\unrestrict nqo8LABSLna4tQ87uG2xZQXrRcpQ454mORn7vcM3QMVBZ8sB14q474NRue30L1I
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20260929120000'),
+('20260929130000'),
 ('20260926120000'),
 ('20260922130000'),
 ('20260922120000'),

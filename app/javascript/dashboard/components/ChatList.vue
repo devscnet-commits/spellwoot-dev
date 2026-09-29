@@ -61,6 +61,7 @@ import {
   isOnMentionsView,
   isOnParticipatingView,
   isOnUnattendedView,
+  isOnGroupsView,
 } from '../store/modules/conversations/helpers/actionHelpers';
 import {
   getUserPermissions,
@@ -359,6 +360,9 @@ const pageTitle = computed(() => {
   }
   if (props.conversationType === wootConstants.CONVERSATION_TYPE.UNATTENDED) {
     return t('CHAT_LIST.UNATTENDED_HEADING');
+  }
+  if (props.conversationType === wootConstants.CONVERSATION_TYPE.GROUP) {
+    return t('CHAT_LIST.GROUPS_HEADING');
   }
   if (hasActiveFolders.value) {
     return activeFolder.value.name;
@@ -681,6 +685,8 @@ function redirectToConversationList() {
     conversationType = wootConstants.CONVERSATION_TYPE.PARTICIPATING;
   } else if (isOnUnattendedView({ route: { name } })) {
     conversationType = wootConstants.CONVERSATION_TYPE.UNATTENDED;
+  } else if (isOnGroupsView({ route: { name } })) {
+    conversationType = wootConstants.CONVERSATION_TYPE.GROUP;
   }
   router.push(
     conversationListPageURL({

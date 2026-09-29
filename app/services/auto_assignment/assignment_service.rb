@@ -24,7 +24,7 @@ class AutoAssignment::AssignmentService
   # used when an external integration routes a conversation to a team, which can still be
   # pending (e.g. a bot-captured lead) and should reach a human right away regardless.
   def assign_conversation_now(conversation)
-    return false if conversation.assignee_id.present?
+    return false if conversation.assignee_id.present? || conversation.group_chat?
     # The AI owns the conversation until it hands off (ai_handoff), so don't pull a human in
     # underneath it. Same guard as #assignable? — this path skips that predicate on purpose.
     return false if conversation.ai_pending_handoff?
@@ -92,8 +92,9 @@ class AutoAssignment::AssignmentService
   # no agent was available right then (all over the limit, none online), nothing retried them
   # because this scan was open-only. Pending conversations *without* a team stay out — those
   # still belong to the bot.
+  # Grupo de WhatsApp não entra no rodízio: fica na aba "Grupos" e qualquer atendente assume.
   def assignable_scope
-    unassigned = inbox.conversations.unassigned
+    unassigned = inbox.conversations.unassigned.where(group_chat: false)
     unassigned.open.or(unassigned.pending.where.not(team_id: nil))
   end
 

@@ -33,6 +33,11 @@ export const isOnUnattendedView = ({ route: { name: routeName } }) => {
   return UNATTENDED_ROUTES.includes(routeName);
 };
 
+export const isOnGroupsView = ({ route: { name: routeName } }) => {
+  const GROUP_ROUTES = ['conversation_groups', 'conversation_through_groups'];
+  return GROUP_ROUTES.includes(routeName);
+};
+
 export const isOnParticipatingView = ({ route: { name: routeName } }) => {
   const PARTICIPATING_ROUTES = [
     'conversation_participating',

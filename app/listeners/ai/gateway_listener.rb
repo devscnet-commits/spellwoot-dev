@@ -10,7 +10,7 @@ class Ai::GatewayListener < BaseListener
     return unless message.incoming?
     return if message.private?
     return unless message.account&.feature_enabled?('ai_core')
-    return if Ai::GroupConversation.group?(message.conversation)
+    return if Conversations::GroupDetector.group?(message.conversation)
     return unless Ai::AgentInbox.where(inbox_id: message.inbox_id, active: true).exists?
 
     # Message grouping: when a department sets a delay, defer the run so a burst of messages is

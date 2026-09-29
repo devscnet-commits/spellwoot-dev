@@ -16,7 +16,7 @@ class Ai::ReplyPolicy
   # existia ANTES deste turno começar — só o Gateway decide quando é seguro (ver @acts_live).
   def self.allowed?(mode:, agent:, conversation:, bypass_handoff: false)
     return false unless acts_live?(mode, agent)
-    return false if Ai::GroupConversation.group?(conversation)
+    return false if Conversations::GroupDetector.group?(conversation)
     # Convive com o roteamento humano: uma vez que um humano de verdade já respondeu nessa
     # conversa, a IA observa mas NÃO envia (resposta/ferramenta/handoff) — não fala por cima do
     # humano. Shadow segue observando. NÃO usamos assignee_id sozinho aqui — regras de automação
@@ -53,7 +53,7 @@ class Ai::ReplyPolicy
   def self.skip_reason(mode:, agent:, conversation:, bypass_handoff: false)
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, agent)
-    return 'group_conversation' if Ai::GroupConversation.group?(conversation)
+    return 'group_conversation' if Conversations::GroupDetector.group?(conversation)
     return 'human_engaged' if !bypass_handoff && human_engaged?(conversation)
     return 'handed_off' if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
 
