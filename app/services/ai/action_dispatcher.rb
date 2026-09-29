@@ -120,7 +120,10 @@ class Ai::ActionDispatcher
     parts.length > 1 ? parts : [text]
   end
 
+  # Última barreira: nada da IA sai para grupo, venha de onde vier a chamada.
   def send_message(content)
+    return if Ai::GroupConversation.group?(@conversation)
+
     Messages::MessageBuilder.new(nil, @conversation, { content: content, private: false }).perform
   end
 

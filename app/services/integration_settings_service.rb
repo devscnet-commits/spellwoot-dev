@@ -136,7 +136,8 @@ class IntegrationSettingsService
         access_token: access_token,
         account_id: account.id,
         inbox_id: inbox_id,
-        ignore_groups: false,
+        # A IA nunca responde grupo: a UazAPI não empurra mensagem de grupo para o sistema.
+        ignore_groups: true,
         sign_messages: true,
         create_new_conversation: false
       }

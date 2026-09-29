@@ -10,6 +10,7 @@ class Ai::SplitReplyJob < ApplicationJob
   def perform(conversation_id, content)
     conversation = Conversation.find_by(id: conversation_id)
     return if conversation.nil? || content.blank?
+    return if Ai::GroupConversation.group?(conversation)
 
     Messages::MessageBuilder.new(nil, conversation, { content: content, private: false }).perform
   end

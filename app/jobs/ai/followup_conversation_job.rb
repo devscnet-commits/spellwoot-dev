@@ -43,9 +43,9 @@ class Ai::FollowupConversationJob < ApplicationJob
   # ~8 guards possíveis.
   def run(conversation_id)
     conversation = Conversation.find_by(id: conversation_id)
-    if conversation.nil? || ELIGIBLE_STATUSES.exclude?(conversation&.status)
-      return log_skip(conversation_id, 'not_eligible_status', status: conversation&.status)
-    end
+    status = conversation&.status
+    return log_skip(conversation_id, 'not_eligible_status', status: status) if ELIGIBLE_STATUSES.exclude?(status)
+    return log_skip(conversation_id, 'group_conversation') if Ai::GroupConversation.group?(conversation)
     # assignee_id alone isn't "a human took over" — automation rules (e.g. lead distribution for
     # CRM ownership) assign the conversation with no human having actually replied yet, and that
     # shouldn't silence the AI. See Ai::ReplyPolicy#human_engaged? (found live 14/09).
