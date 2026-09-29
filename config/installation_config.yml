@@ -510,6 +510,11 @@
   value: 180
   locked: false
   description: 'Token expiry in days'
+- name: PLAN_UPGRADE_WHATSAPP_NUMBER
+  display_title: 'WhatsApp para upgrade de plano'
+  value:
+  locked: false
+  description: 'Número da Conexiia que recebe os pedidos de upgrade de plano dos clientes, com DDI e DDD (ex.: 5549999999999). Vazio = a tela de plano pede para o cliente falar com o suporte.'
 ## ------ End of Customizations for Customers ------ ##
 
 ## ----- LLM Observability ---- ##

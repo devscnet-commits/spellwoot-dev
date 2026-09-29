@@ -2,7 +2,7 @@ import { actions } from '../../plan';
 import AccountPlanAPI from '../../../../api/account/plan';
 
 vi.mock('../../../../api/account/plan', () => ({
-  default: { getLimits: vi.fn(), upgrade: vi.fn() },
+  default: { getLimits: vi.fn() },
 }));
 
 const commit = vi.fn();

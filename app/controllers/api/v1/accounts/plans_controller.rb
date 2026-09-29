@@ -2,7 +2,6 @@
 
 class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
   before_action :fetch_plan_data, only: [:limits]
-  before_action :ensure_administrator, only: [:upgrade]
 
   # Chaves de limite sem model/contador real ainda (Billing::LimitUsage sempre devolve nil pra
   # elas) — escondidas da tela em vez de mostrar um "0 / N" que não representa nada de verdade.
@@ -12,25 +11,11 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
     render json: @plan_data
   end
 
-  # Upgrade self-service: o próprio cliente pode subir de plano, nunca reduzir — ver
-  # Plan::ChangeSubscriptionService#upgrade!. Reduzir plano é feito pelo suporte, não por aqui.
-  def upgrade
-    new_plan = Plan.find_by(slug: params[:plan_slug])
-    return render json: { error: 'Plano não encontrado' }, status: :not_found unless new_plan
-
-    Plan::ChangeSubscriptionService.new(account: current_account, new_plan: new_plan).upgrade!
-    render json: { message: 'Plano atualizado com sucesso' }
-  rescue Plan::ChangeSubscriptionService::Error => e
-    render json: { error: e.message }, status: :unprocessable_entity
-  end
+  # Não existe troca de plano pelo cliente: o plano só muda depois do pagamento confirmado — hoje pelo
+  # Super Admin, quando houver provedor de pagamento pelo webhook dele. Até lá, o botão de upgrade da
+  # tela leva o cliente ao WhatsApp da Conexiia (upgrade_contact).
 
   private
-
-  def ensure_administrator
-    return if Current.account_user&.administrator?
-
-    render json: { error: 'You are not authorized to do this action' }, status: :forbidden
-  end
 
   def fetch_plan_data
     subscription = current_account.subscriptions.current.first
@@ -77,6 +62,7 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
       limits: limits_data,
       overage_charges: recent_overage_charges,
       available_upgrades: available_upgrades(plan),
+      upgrade_contact: { whatsapp_number: upgrade_whatsapp_number },
       ai_key: ai_key_status(subscription)
     }
   end
@@ -103,8 +89,14 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
     scope.count
   end
 
+  # Número da Conexiia que recebe os pedidos de upgrade (Super Admin → Settings → General). Só dígitos,
+  # que é o que o link wa.me aceita. nil quando não configurado — a tela mostra "fale com o suporte".
+  def upgrade_whatsapp_number
+    GlobalConfigService.load('PLAN_UPGRADE_WHATSAPP_NUMBER', nil).to_s.gsub(/\D/, '').presence
+  end
+
   # Planos comerciais visíveis com rank maior que o atual — únicos elegíveis a upgrade self-service
-  # (Plan::ChangeSubscriptionService#upgrade!). Plano sem rank (courtesy/internal_unlimited) não
+  # (Plan::ChangeSubscriptionService#upgrade!, que roda quando o pagamento é confirmado). Plano sem rank (courtesy/internal_unlimited) não
   # oferece upgrade por aqui: nil <=> Integer nunca casa, então current.nil? vira o filtro de fato.
   def available_upgrades(current_plan)
     current_rank = current_plan.commercial_rank
