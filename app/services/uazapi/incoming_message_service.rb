@@ -84,7 +84,8 @@ class Uazapi::IncomingMessageService
   end
 
   def group_message?(message_data)
-    message_data[:from].to_s.end_with?('@g.us')
+    message_data[:is_group] == true || message_data[:is_group].to_s == 'true' ||
+      [message_data[:from], message_data[:chat_id]].any? { |id| id.to_s.end_with?('@g.us') }
   end
 
   def extract_message_data(params)
@@ -97,6 +98,8 @@ class Uazapi::IncomingMessageService
 
     {
       from: message[:from] || message['from'] || message[:number] || message['number'],
+      chat_id: message[:chatid] || message['chatid'] || message[:chatId] || message['chatId'],
+      is_group: message[:isGroup] || message['isGroup'],
       body: message[:body] || message['body'] || message[:text] || message['text'] || message[:message] || message['message'],
       message_id: message[:id] || message['id'] || message[:messageId] || message['messageId'],
       timestamp: message[:timestamp] || message['timestamp'] || Time.current.to_i,

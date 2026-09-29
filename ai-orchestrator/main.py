@@ -68,6 +68,11 @@ class ProcessRequest(BaseModel):
     close_when: Optional[str] = None
     close_message: Optional[str] = None
     collect_hint: Optional[dict] = None
+    # Times para os quais ESTE agente pode transferir (campos "Transferir para times" + "principal" do
+    # agente — Ai::PythonOrchestratorClient#handoff_team_names). Só vem com 2+ times; vira opção fechada
+    # (enum) de handoff_target no schema. [] = sem escolha (0/1 time: o Rails decide sozinho).
+    handoff_team_names: list[str] = []
+    principal_team_name: Optional[str] = None
 
 
 class ProcessResponse(BaseModel):
@@ -150,6 +155,8 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
             close_when=request.close_when,
             close_message=request.close_message,
             collect_hint=request.collect_hint,
+            handoff_team_names=request.handoff_team_names,
+            principal_team_name=request.principal_team_name,
         )
     except orchestrator.TurnFailed as e:
         # Never leak internals (stack traces, prompts, API errors) to the Rails side — só o

@@ -136,6 +136,7 @@ class IntegrationSettingsService
         access_token: access_token,
         account_id: account.id,
         inbox_id: inbox_id,
+        # Grupos entram na aba "Grupos" (Conversation#group_chat); a IA nunca responde neles.
         ignore_groups: false,
         sign_messages: true,
         create_new_conversation: false

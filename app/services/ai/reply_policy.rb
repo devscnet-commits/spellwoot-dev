@@ -16,19 +16,28 @@ class Ai::ReplyPolicy
   # existia ANTES deste turno começar — só o Gateway decide quando é seguro (ver @acts_live).
   def self.allowed?(mode:, agent:, conversation:, bypass_handoff: false)
     return false unless acts_live?(mode, agent)
-    # Convive com o roteamento humano: uma vez que um humano de verdade já respondeu nessa
-    # conversa, a IA observa mas NÃO envia (resposta/ferramenta/handoff) — não fala por cima do
-    # humano. Shadow segue observando. NÃO usamos assignee_id sozinho aqui — regras de automação
-    # (ex: distribuição de leads pra registrar dono no CRM) atribuem a conversa a um agente sem
-    # nenhum humano ter de fato participado ainda, e isso não deve calar a IA (achado 14/09).
-    return false if !bypass_handoff && human_engaged?(conversation)
-    # Já entregue a um humano (handoff): a IA sai de cena mesmo antes de a atribuição concluir.
-    return false if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
+    return false if Conversations::GroupDetector.group?(conversation)
+    return false if human_control_reason(conversation, bypass_handoff: bypass_handoff, agent: agent)
+    return false if outside_business_hours?(agent.behavior.to_h, conversation)
 
+    attends?(agent, conversation)
+  end
+
+  # Opção do agente "Humanos assumem ao mandar para um time ou atribuir" (behavior.humans_take_over). Ligada
+  # por padrão (chave ausente = ligada): humano atribuído (R3) ou conversa mandada para um time (R4) tiram a
+  # IA. Desligada: atribuição/time por automação não tiram a IA (empresas cuja automação atribui na chegada).
+  def self.humans_take_over?(agent)
+    agent.nil? || agent.behavior.to_h['humans_take_over'] != false
+  end
+
+  # O agente está ligado para esta conversa? Atendimento automático ligado + escopo de resposta (todas, ou
+  # canário com a etiqueta). Também é o que Conversation#ai_assistant_active? usa: IA desligada aqui = a
+  # conversa segue o fluxo normal (time padrão da caixa + distribuição automática).
+  def self.attends?(agent, conversation)
     behavior = agent.behavior.to_h
+    return false if behavior['auto_attendance'] == false
+
     scope = behavior['reply_scope']
-    return false if scope.blank? || scope == 'off'
-    return false if outside_business_hours?(behavior, conversation)
     return true if scope == 'all'
 
     scope == 'canary' && behavior['canary_label'].present? &&
@@ -52,15 +61,36 @@ class Ai::ReplyPolicy
   def self.skip_reason(mode:, agent:, conversation:, bypass_handoff: false)
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, agent)
-    return 'human_engaged' if !bypass_handoff && human_engaged?(conversation)
-    return 'handed_off' if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
+    return 'group_conversation' if Conversations::GroupDetector.group?(conversation)
+    reason = human_control_reason(conversation, bypass_handoff: bypass_handoff, agent: agent)
+    return reason if reason
 
-    behavior = agent.behavior.to_h
-    scope = behavior['reply_scope']
+    scope = agent.behavior.to_h['reply_scope']
     return 'reply_scope_off' if scope.blank? || scope == 'off'
-    return 'outside_business_hours' if outside_business_hours?(behavior, conversation)
+    return 'outside_business_hours' if outside_business_hours?(agent.behavior.to_h, conversation)
 
     'canary_label_absent'
+  end
+
+  # Por que a conversa está nas mãos de humanos (a IA observa, mas NÃO envia), ou nil. Lido do banco na hora
+  # da decisão — não do objeto carregado no início do turno —, porque a atribuição/marcação pode acontecer
+  # entre o enfileiramento e o envio (janela do agrupamento de mensagens).
+  #   ai_disabled_attribute: atributo "desativa_ia" marcado na conversa — vale sempre, até no handoff.
+  #   human_engaged: um humano de verdade já respondeu.
+  #   assigned_to_human: a conversa tem um atendente — atribuído à mão ou pelo sistema (distribuição,
+  #     automação, integração). Humano atribuído = a IA sai, enquanto a opção do agente estiver ligada
+  #     (humans_take_over?, padrão). agent nil (chamada sem agente) aplica a regra.
+  #   handed_off: já entregue aos humanos (handoff da IA, ou conversa mandada para um time — ver
+  #     Conversation#route_to_team!), mesmo antes de a atribuição concluir.
+  def self.human_control_reason(conversation, bypass_handoff: false, agent: nil)
+    assignee_id, additional, custom = ::Conversation.where(id: conversation.id)
+                                                    .pick(:assignee_id, :additional_attributes, :custom_attributes)
+    return 'ai_disabled_attribute' if ActiveModel::Type::Boolean.new.cast(custom.to_h['desativa_ia'])
+    return if bypass_handoff
+    return 'human_engaged' if human_engaged?(conversation)
+    return 'assigned_to_human' if assignee_id.present? && humans_take_over?(agent)
+
+    'handed_off' if additional.to_h['ai_handoff']
   end
 
   # A real Chatwoot agent's outgoing message has sender_type "User" — the AI's own replies go out

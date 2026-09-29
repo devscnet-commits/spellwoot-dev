@@ -97,6 +97,20 @@ describe Whatsapp::IncomingMessageWhatsappCloudService do
       end
     end
 
+    context 'when a mensagem vem de um grupo (group_id)' do
+      it 'não vira conversa privada com o participante' do
+        group_params = params.deep_dup
+        message = group_params[:entry][0][:changes][0][:value][:messages][0]
+        message.merge!(group_id: '120363339858396166', id: 'wamid.GROUP', type: 'text', text: { body: 'oi grupo' })
+        message.delete(:image)
+
+        described_class.new(inbox: whatsapp_channel.inbox, params: group_params).perform
+
+        expect(whatsapp_channel.inbox.conversations.count).to eq(0)
+        expect(whatsapp_channel.inbox.messages.count).to eq(0)
+      end
+    end
+
     context 'when invalid params' do
       it 'will not throw error' do
         described_class.new(inbox: whatsapp_channel.inbox, params: { phone_number: whatsapp_channel.phone_number,

@@ -35,6 +35,10 @@ export const filterByUnattended = (
     : shouldFilter;
 };
 
+// Grupo de WhatsApp tem aba própria: só aparece na aba "Grupos" e fica fora das demais listas.
+export const filterByGroupChat = (shouldFilter, conversationType, groupChat) =>
+  shouldFilter && (conversationType === 'group') === !!groupChat;
+
 export const applyPageFilters = (conversation, filters) => {
   const { inboxId, status, labels = [], teamId, conversationType } = filters;
   const {
@@ -44,6 +48,7 @@ export const applyPageFilters = (conversation, filters) => {
     meta = {},
     first_reply_created_at: firstReplyOn,
     waiting_since: waitingSince,
+    group_chat: groupChat,
   } = conversation;
   const team = meta.team || {};
   const { id: chatTeamId } = team;
@@ -58,6 +63,7 @@ export const applyPageFilters = (conversation, filters) => {
     firstReplyOn,
     waitingSince
   );
+  shouldFilter = filterByGroupChat(shouldFilter, conversationType, groupChat);
 
   return shouldFilter;
 };

@@ -114,7 +114,12 @@ class ConversationFinder
       current_account
     ).perform
     filter_by_conversation_type if params[:conversation_type]
-    @conversations
+    filter_by_group_chat
+  end
+
+  # Grupo de WhatsApp tem aba própria ("Grupos"): só aparece nela e fica fora das demais listas e contadores.
+  def filter_by_group_chat
+    @conversations = @conversations.where(group_chat: params[:conversation_type] == 'group')
   end
 
   def filter_by_assignee_type

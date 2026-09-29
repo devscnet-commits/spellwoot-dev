@@ -265,7 +265,9 @@ def _collect_hint_text(collect_hint: dict) -> str:
 
 def _build_reply_schema(*, transfer_when: str | None, close_when: str | None,
                         close_message: str | None, collect_hint: dict | None,
-                        known_attribute_keys: list[str] | None) -> dict:
+                        known_attribute_keys: list[str] | None,
+                        handoff_team_names: list[str] | None = None,
+                        principal_team_name: str | None = None) -> dict:
     """Monta o schema da resposta pra ESTA chamada — deepcopy do template + description personalizada
     com o texto configurado da conta. Ver comentário em _BASE_REPLY_SCHEMA (pedido do dono da conta,
     19/08).
@@ -310,6 +312,17 @@ def _build_reply_schema(*, transfer_when: str | None, close_when: str | None,
     props[DADOS_KEY]["description"] += _collect_hint_text(collect_hint)
     if known_attribute_keys:
         props[DADOS_KEY]["items"]["properties"]["chave"]["enum"] = known_attribute_keys
+
+    # Destino da transferência vem dos CAMPOS do agente (times marcados + principal), não de texto no
+    # prompt: com 2+ times, handoff_target vira opção fechada — a IA só consegue escolher um time que
+    # existe na lista ("" = não sabe, o Rails manda para o principal). Com 0/1 time não há escolha.
+    if handoff_team_names:
+        desc = ("SÓ quando transferir_humano for true: o time de destino, escolhido pelo assunto do "
+                "atendimento. Deixe vazio (\"\") se não tiver certeza ou se transferir_humano for false")
+        if principal_team_name:
+            desc += f" — vazio vai para o time principal ({principal_team_name})"
+        props[HANDOFF_TARGET_KEY]["description"] = desc + "."
+        props[HANDOFF_TARGET_KEY]["enum"] = ["", *handoff_team_names]
 
     return schema
 
@@ -547,6 +560,8 @@ def run_conversation(
     close_when: str | None = None,
     close_message: str | None = None,
     collect_hint: dict | None = None,
+    handoff_team_names: list[str] | None = None,
+    principal_team_name: str | None = None,
 ) -> tuple[str, str, bool, float | None, bool, int, int, str, list, bool]:
     """Owns the OpenAI Responses API turn. The model's ONLY output is the structured JSON contract
     (text.format=json_schema, strict — _build_reply_schema) — control flow (save/advance/transfer/
@@ -587,7 +602,9 @@ def run_conversation(
     instructions = _build_instructions(system_prompt)
     reply_schema = _build_reply_schema(transfer_when=transfer_when, close_when=close_when,
                                        close_message=close_message, collect_hint=collect_hint,
-                                       known_attribute_keys=known_attribute_keys)
+                                       known_attribute_keys=known_attribute_keys,
+                                       handoff_team_names=handoff_team_names,
+                                       principal_team_name=principal_team_name)
 
     # Herdada de um turno anterior (criada sob a chave vigente NAQUELE momento) ou nova deste turno —
     # só a herdada pode ter ficado órfã por troca de chave (ver CONVERSATION_ACCESS_ERRORS).

@@ -316,11 +316,12 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
   end
 
   def self.configure_chatwoot_integration(instance_token, chatwoot_config, account_id: nil)
+    chatwoot_config = chatwoot_config.to_h.symbolize_keys
     url = "#{base_url(account_id)}/chatwoot/config"
     
     # Log antes de fazer a requisição (sem token sensível)
     log_config = chatwoot_config.dup
-    log_config['access_token'] = "#{log_config['access_token'][0..10]}..." if log_config['access_token'].present?
+    log_config[:access_token] = "#{log_config[:access_token][0..10]}..." if log_config[:access_token].present?
     Rails.logger.info "[UAZAPI] Configuring Chatwoot integration for instance"
     Rails.logger.info "[UAZAPI] URL: #{url}"
     Rails.logger.info "[UAZAPI] Config: #{log_config.to_json}"
@@ -377,7 +378,6 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
       )
 
       Rails.logger.info "[UAZAPI] Chatwoot config GET response code: #{response.code}"
-      Rails.logger.info "[UAZAPI] Chatwoot config GET response body: #{response.body}"
 
       unless response.success?
         Rails.logger.error "[UAZAPI] Failed to get Chatwoot integration status: #{response.body}"

@@ -8,7 +8,7 @@ class V2::Reports::TeamSummaryBuilder < V2::Reports::BaseSummaryBuilder
               :reopened_count, :avg_time_to_reopen
 
   def fetch_conversations_count
-    base = account.conversations.where(created_at: range)
+    base = account.conversations.where(created_at: range, group_chat: false)
     base = permission_scope.scope_conversations(base) if permission_scope
     base.group(:team_id).count
   end

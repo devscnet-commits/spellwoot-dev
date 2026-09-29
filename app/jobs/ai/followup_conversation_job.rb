@@ -43,16 +43,15 @@ class Ai::FollowupConversationJob < ApplicationJob
   # ~8 guards possíveis.
   def run(conversation_id)
     conversation = Conversation.find_by(id: conversation_id)
-    if conversation.nil? || ELIGIBLE_STATUSES.exclude?(conversation&.status)
-      return log_skip(conversation_id, 'not_eligible_status', status: conversation&.status)
-    end
-    # assignee_id alone isn't "a human took over" — automation rules (e.g. lead distribution for
-    # CRM ownership) assign the conversation with no human having actually replied yet, and that
-    # shouldn't silence the AI. See Ai::ReplyPolicy#human_engaged? (found live 14/09).
-    return log_skip(conversation_id, 'human_engaged') if Ai::ReplyPolicy.human_engaged?(conversation)
+    status = conversation&.status
+    return log_skip(conversation_id, 'not_eligible_status', status: status) if ELIGIBLE_STATUSES.exclude?(status)
+    return log_skip(conversation_id, 'group_conversation') if Conversations::GroupDetector.group?(conversation)
 
     binding = resolved_binding(conversation)
     return log_skip(conversation_id, 'no_live_binding') if binding.nil?
+    # Humano no controle (respondeu, atribuído, desativa_ia, handoff) — Ai::ReplyPolicy.human_control_reason.
+    human_skip = Ai::ReplyPolicy.human_control_reason(conversation, agent: binding.agent)
+    return log_skip(conversation_id, human_skip) if human_skip
     unless binding.agent.account&.feature_enabled?('ai_core')
       return log_skip(conversation_id, 'ai_core_disabled', agent_id: binding.agent_id)
     end

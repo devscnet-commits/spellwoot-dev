@@ -400,6 +400,7 @@ class Api::Internal::AiExecuteToolController < ActionController::API
     { result: result[:output], status: 'executed', error: nil }
   rescue StandardError => e
     Rails.logger.error "[Api::Internal::AiExecuteToolController#run_capability] #{key}: #{e.class}: #{e.message}"
+    Ai::ToolFailureNotice.post(conversation: conversation, tool_name: key, error: "#{e.class}: #{e.message}")
     { result: {}, status: 'failed', error: e.message }
   end
 

@@ -13,8 +13,10 @@ class V2::Reports::OutgoingMessagesCountBuilder
 
   private
 
+  # Mensagens de grupo de WhatsApp (Conversation#group_chat) ficam fora dos relatórios.
   def base_messages
     account.messages.outgoing.unscope(:order).where(created_at: range)
+           .where.not(conversation_id: account.conversations.where(group_chat: true).select(:id))
   end
 
   def build_by_agent

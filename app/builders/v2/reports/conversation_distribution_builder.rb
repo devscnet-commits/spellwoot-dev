@@ -19,7 +19,7 @@ class V2::Reports::ConversationDistributionBuilder
   SQL
 
   def base_scope
-    scope = permission_scope.scope_conversations(account.conversations)
+    scope = permission_scope.scope_conversations(account.conversations.where(group_chat: false))
     scope = scope.where('conversations.created_at >= ?', Time.zone.at(params[:since].to_i)) if params[:since].present?
     scope = scope.where('conversations.created_at <= ?', Time.zone.at(params[:until].to_i)) if params[:until].present?
     scope = scope.where(inbox_id: params[:inbox_id])  if params[:inbox_id].present?

@@ -1,6 +1,6 @@
-\restrict S1A03RrtG9ulgpt5jtANuUh85J9RIn6ZU8l9gCvSYoyqivPlZPhw0Etkj1CnjeP
+\restrict nqo8LABSLna4tQ87uG2xZQXrRcpQ454mORn7vcM3QMVBZ8sB14q474NRue30L1I
 
--- Dumped from database version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
+-- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
@@ -2903,7 +2903,8 @@ CREATE TABLE public.conversations (
     result_set_by_id bigint,
     closed_by_ai boolean DEFAULT false NOT NULL,
     result_category character varying,
-    result_canonical_key character varying
+    result_canonical_key character varying,
+    group_chat boolean DEFAULT false NOT NULL
 );
 
 
@@ -9811,11 +9812,12 @@ ALTER TABLE ONLY public.agent_presence_snapshots
 -- PostgreSQL database dump complete
 --
 
-\unrestrict S1A03RrtG9ulgpt5jtANuUh85J9RIn6ZU8l9gCvSYoyqivPlZPhw0Etkj1CnjeP
+\unrestrict nqo8LABSLna4tQ87uG2xZQXrRcpQ454mORn7vcM3QMVBZ8sB14q474NRue30L1I
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260929130000'),
 ('20260926120000'),
 ('20260922130000'),
 ('20260922120000'),

@@ -24,6 +24,7 @@ const isConversationRoute = computed(() => {
     'conversations_through_folders',
     'conversation_through_mentions',
     'conversation_through_unattended',
+    'conversation_through_groups',
     'conversation_through_participating',
     'inbox_view_conversation',
   ];

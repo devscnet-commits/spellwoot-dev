@@ -18,7 +18,7 @@ class V2::Reports::InboxSummaryBuilder < V2::Reports::BaseSummaryBuilder
   end
 
   def fetch_conversations_count
-    base = account.conversations.where(created_at: range)
+    base = account.conversations.where(created_at: range, group_chat: false)
     base = permission_scope.scope_conversations(base) if permission_scope
     base.group(group_by_key).count
   end

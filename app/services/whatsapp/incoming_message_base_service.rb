@@ -26,7 +26,7 @@ class Whatsapp::IncomingMessageBaseService
   def process_messages
     # We don't support reactions & ephemeral message now, we need to skip processing the message
     # if the webhook event is a reaction or an ephermal message or an unsupported message.
-    return if unprocessable_message_type?(message_type)
+    return if ignored_message?
 
     # Multiple webhook events can be received for the same message due to
     # misconfigurations in the Meta business manager account.
@@ -43,6 +43,13 @@ class Whatsapp::IncomingMessageBaseService
       set_conversation
       create_messages
     end
+  end
+
+  # Tipo não suportado, ou mensagem de grupo. Groups API da Meta: mensagem de grupo chega com group_id e
+  # `from` = quem escreveu. Sem suporte a grupo aqui, ela viraria conversa PRIVADA com esse participante (e a
+  # IA responderia no privado dele).
+  def ignored_message?
+    unprocessable_message_type?(message_type) || messages_data.first[:group_id].present?
   end
 
   def process_statuses

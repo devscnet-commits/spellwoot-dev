@@ -23,7 +23,9 @@ class Ai::ToolExecutor
     execute_now
   rescue StandardError => e
     Rails.logger.error "[Ai::ToolExecutor] #{e.class}: #{e.message}"
-    record('failed', error: "#{e.class}: #{e.message}")
+    record('failed', error: "#{e.class}: #{e.message}").tap do |execution|
+      Ai::ToolFailureNotice.post(conversation: @conversation, tool_name: @tool&.name, error: execution.error, execution: execution)
+    end
   end
 
   # Run a previously pending execution after a human approves it.
