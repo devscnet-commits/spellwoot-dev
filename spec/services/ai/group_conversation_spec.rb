@@ -11,19 +11,6 @@ RSpec.describe Ai::GroupConversation do
     create(:conversation, account: account, inbox: inbox, contact: create(:contact, account: account, phone_number: '+5549999990000'))
   end
 
-  describe '.group_id?' do
-    it 'reconhece JID de grupo e id numérico de grupo' do
-      expect(described_class.group_id?('120363405123456789@g.us')).to be(true)
-      expect(described_class.group_id?('+120363405123456789')).to be(true)
-    end
-
-    it 'não confunde telefone nem contato 1:1' do
-      expect(described_class.group_id?('+5549999990000')).to be(false)
-      expect(described_class.group_id?('5549999990000@s.whatsapp.net')).to be(false)
-      expect(described_class.group_id?('')).to be(false)
-    end
-  end
-
   describe '.group?' do
     it 'grupo pelo identifier do contato' do
       expect(described_class.group?(group_conversation)).to be(true)
@@ -37,6 +24,24 @@ RSpec.describe Ai::GroupConversation do
 
     it 'conversa com cliente não é grupo' do
       expect(described_class.group?(customer_conversation)).to be(false)
+    end
+
+    it 'id numérico de grupo (sem @g.us) em inbox UazAPI é grupo' do
+      channel = create(:channel_api, account: account, additional_attributes: { 'uazapi_instance_token' => 'tok' })
+      contact = create(:contact, account: account, identifier: '120363405123456789')
+      conversation = create(:conversation, account: account, inbox: channel.inbox, contact: contact)
+
+      expect(described_class.group?(conversation)).to be(true)
+    end
+
+    it 'Facebook/Instagram: id do cliente com 16–17 dígitos NÃO é grupo' do
+      stub_request(:post, /graph.facebook.com/)
+      facebook_inbox = create(:inbox, account: account, channel: create(:channel_facebook_page, account: account))
+      contact = create(:contact, account: account)
+      contact_inbox = create(:contact_inbox, contact: contact, inbox: facebook_inbox, source_id: '24567891234567890')
+      conversation = create(:conversation, account: account, inbox: facebook_inbox, contact: contact, contact_inbox: contact_inbox)
+
+      expect(described_class.group?(conversation)).to be(false)
     end
   end
 
