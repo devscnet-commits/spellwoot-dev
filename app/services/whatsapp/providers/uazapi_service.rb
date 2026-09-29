@@ -379,7 +379,6 @@ class Whatsapp::Providers::UazapiService < Whatsapp::Providers::BaseService
       )
 
       Rails.logger.info "[UAZAPI] Chatwoot config GET response code: #{response.code}"
-      Rails.logger.info "[UAZAPI] Chatwoot config GET response body: #{response.body}"
 
       unless response.success?
         Rails.logger.error "[UAZAPI] Failed to get Chatwoot integration status: #{response.body}"
