@@ -110,7 +110,7 @@ class Inboxes::MigrateConversationsJob < ApplicationJob
         access_token: access_token,
         account_id: source_inbox.account_id,
         inbox_id: target_inbox.id,
-        ignore_groups: false,
+        ignore_groups: true,
         sign_messages: true,
         create_new_conversation: true
       }

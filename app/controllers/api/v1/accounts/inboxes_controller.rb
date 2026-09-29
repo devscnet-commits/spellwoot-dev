@@ -200,7 +200,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
             access_token: access_token,
             account_id: Current.account.id,
             inbox_id: @inbox.id,
-            ignore_groups: false,
+            ignore_groups: true,
             sign_messages: true,
             create_new_conversation: true
           }
@@ -312,7 +312,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       access_token: access_token,
       account_id: Current.account.id,
       inbox_id: @inbox.id,
-      ignore_groups: false,
+      ignore_groups: true,
       sign_messages: true,
       create_new_conversation: true
     }

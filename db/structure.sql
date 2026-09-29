@@ -1,6 +1,6 @@
-\restrict S1A03RrtG9ulgpt5jtANuUh85J9RIn6ZU8l9gCvSYoyqivPlZPhw0Etkj1CnjeP
+\restrict cWo8cpir54hj63yZhMg405ziMegDgWrHfJ1MLm8Wnbdcw7sMKqtURAhZZ5OJxzu
 
--- Dumped from database version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
+-- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
@@ -9811,11 +9811,12 @@ ALTER TABLE ONLY public.agent_presence_snapshots
 -- PostgreSQL database dump complete
 --
 
-\unrestrict S1A03RrtG9ulgpt5jtANuUh85J9RIn6ZU8l9gCvSYoyqivPlZPhw0Etkj1CnjeP
+\unrestrict cWo8cpir54hj63yZhMg405ziMegDgWrHfJ1MLm8Wnbdcw7sMKqtURAhZZ5OJxzu
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260929120000'),
 ('20260926120000'),
 ('20260922130000'),
 ('20260922120000'),
