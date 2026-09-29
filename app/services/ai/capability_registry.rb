@@ -77,8 +77,15 @@ class Ai::CapabilityRegistry
     attrs = { status: 'open' }
     attrs[:team_id] = input['team_id'] if input['team_id'].present?
     conversation.update!(attrs)
-    conversation.update!(assignee_id: nil) if input['unassign']
+    conversation.update!(assignee_id: nil) if input['unassign'] && !keeps_assignee?(conversation)
     { output: { 'transferred' => true, 'team_id' => conversation.team_id }, rollback_data: { 'previous' => previous } }
+  end
+
+  # Conversa que já tem atendente (membro da caixa) fica com ele no handoff: desatribuir mandava a conversa
+  # de volta para a fila e a distribuição entregava a OUTRA pessoa, atropelando quem já estava nela (achado
+  # ao vivo: Anderson atribuído, handoff da IA desatribuiu e a distribuição passou para a Ingrid).
+  def self.keeps_assignee?(conversation)
+    conversation.assignee_id.present? && conversation.inbox.members.exists?(id: conversation.assignee_id)
   end
 
   def self.conversation_resolve(conversation, _input)

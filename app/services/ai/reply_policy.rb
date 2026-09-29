@@ -17,14 +17,7 @@ class Ai::ReplyPolicy
   def self.allowed?(mode:, agent:, conversation:, bypass_handoff: false)
     return false unless acts_live?(mode, agent)
     return false if Conversations::GroupDetector.group?(conversation)
-    # Convive com o roteamento humano: uma vez que um humano de verdade já respondeu nessa
-    # conversa, a IA observa mas NÃO envia (resposta/ferramenta/handoff) — não fala por cima do
-    # humano. Shadow segue observando. NÃO usamos assignee_id sozinho aqui — regras de automação
-    # (ex: distribuição de leads pra registrar dono no CRM) atribuem a conversa a um agente sem
-    # nenhum humano ter de fato participado ainda, e isso não deve calar a IA (achado 14/09).
-    return false if !bypass_handoff && human_engaged?(conversation)
-    # Já entregue a um humano (handoff): a IA sai de cena mesmo antes de a atribuição concluir.
-    return false if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
+    return false if human_control_reason(conversation, bypass_handoff: bypass_handoff)
 
     behavior = agent.behavior.to_h
     scope = behavior['reply_scope']
@@ -54,8 +47,8 @@ class Ai::ReplyPolicy
     return 'shadow_mode' unless mode == 'live'
     return 'auto_attendance_off' unless acts_live?(mode, agent)
     return 'group_conversation' if Conversations::GroupDetector.group?(conversation)
-    return 'human_engaged' if !bypass_handoff && human_engaged?(conversation)
-    return 'handed_off' if !bypass_handoff && conversation.additional_attributes.to_h['ai_handoff']
+    reason = human_control_reason(conversation, bypass_handoff: bypass_handoff)
+    return reason if reason
 
     behavior = agent.behavior.to_h
     scope = behavior['reply_scope']
@@ -63,6 +56,26 @@ class Ai::ReplyPolicy
     return 'outside_business_hours' if outside_business_hours?(behavior, conversation)
 
     'canary_label_absent'
+  end
+
+  # Por que a conversa está nas mãos de humanos (a IA observa, mas NÃO envia), ou nil. Lido do banco na hora
+  # da decisão — não do objeto carregado no início do turno —, porque a atribuição/marcação pode acontecer
+  # entre o enfileiramento e o envio (janela do agrupamento de mensagens).
+  #   ai_disabled_attribute: atributo "desativa_ia" marcado na conversa — vale sempre, até no handoff.
+  #   human_engaged: um humano de verdade já respondeu.
+  #   assigned_in_panel: um atendente foi atribuído PELO PAINEL (Conversations::AssignmentsController).
+  #     Atribuição por API/automação (n8n, Bitrix — dono do CRM) não conta: ela chega segundos depois do
+  #     lead e calaria a IA em todo lead pago (achado 14/09).
+  #   handed_off: já entregue a um humano (handoff), mesmo antes de a atribuição concluir.
+  def self.human_control_reason(conversation, bypass_handoff: false)
+    assignee_id, additional, custom = ::Conversation.where(id: conversation.id)
+                                                    .pick(:assignee_id, :additional_attributes, :custom_attributes)
+    return 'ai_disabled_attribute' if ActiveModel::Type::Boolean.new.cast(custom.to_h['desativa_ia'])
+    return if bypass_handoff
+    return 'human_engaged' if human_engaged?(conversation)
+    return 'assigned_in_panel' if assignee_id.present? && additional.to_h['ai_panel_assignee_id'] == assignee_id
+
+    'handed_off' if additional.to_h['ai_handoff']
   end
 
   # A real Chatwoot agent's outgoing message has sender_type "User" — the AI's own replies go out

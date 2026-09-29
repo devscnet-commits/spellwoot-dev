@@ -19,7 +19,22 @@ class Api::V1::Accounts::Conversations::AssignmentsController < Api::V1::Account
       assignee_type: params[:assignee_type]
     ).perform
 
+    mark_panel_assignment(resource)
     render_agent(resource)
+  end
+
+  # Atendente atribuído PELO PAINEL assume a conversa: a IA para (Ai::ReplyPolicy.human_control_reason).
+  # Atribuição por API (n8n/Bitrix registrando o dono do CRM) não conta — chega segundos depois de todo lead
+  # e calaria a IA em todos. Gravado direto no jsonb, sem callbacks: não gera outro conversation_updated
+  # (que dispara as automações) e não sobrescreve o que a IA grava em additional_attributes ao mesmo tempo.
+  def mark_panel_assignment(resource)
+    return if authenticate_by_access_token?
+
+    value = resource.is_a?(User) ? resource.id : nil
+    Conversation.where(id: @conversation.id).update_all( # rubocop:disable Rails/SkipsModelValidations
+      ["additional_attributes = jsonb_set(coalesce(additional_attributes, '{}'::jsonb), '{ai_panel_assignee_id}', ?::jsonb)",
+       value.to_json]
+    )
   end
 
   def render_agent(resource)

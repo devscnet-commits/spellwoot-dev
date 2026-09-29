@@ -45,11 +45,10 @@ class Ai::FollowupConversationJob < ApplicationJob
     conversation = Conversation.find_by(id: conversation_id)
     status = conversation&.status
     return log_skip(conversation_id, 'not_eligible_status', status: status) if ELIGIBLE_STATUSES.exclude?(status)
-    return log_skip(conversation_id, 'group_conversation') if Conversations::GroupDetector.group?(conversation)
-    # assignee_id alone isn't "a human took over" — automation rules (e.g. lead distribution for
-    # CRM ownership) assign the conversation with no human having actually replied yet, and that
-    # shouldn't silence the AI. See Ai::ReplyPolicy#human_engaged? (found live 14/09).
-    return log_skip(conversation_id, 'human_engaged') if Ai::ReplyPolicy.human_engaged?(conversation)
+    # Grupo, ou humano no controle (respondeu, foi atribuído pelo painel, desativa_ia marcado, handoff) — ver
+    # Ai::ReplyPolicy.human_control_reason. Atribuição por automação (dono do CRM) sozinha não conta (14/09).
+    human_skip = Conversations::GroupDetector.group?(conversation) ? 'group_conversation' : Ai::ReplyPolicy.human_control_reason(conversation)
+    return log_skip(conversation_id, human_skip) if human_skip
 
     binding = resolved_binding(conversation)
     return log_skip(conversation_id, 'no_live_binding') if binding.nil?
