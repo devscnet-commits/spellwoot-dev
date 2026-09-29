@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
@@ -8,13 +8,15 @@ import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import CreditRequestButton from './CreditRequestButton.vue';
+import UpgradePaymentDialog from './UpgradePaymentDialog.vue';
 import { format } from 'date-fns';
-import { useAlert } from 'dashboard/composables';
+import { useAccount } from 'dashboard/composables/useAccount';
 
 const { t } = useI18n();
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
+const { accountId, currentAccount } = useAccount();
 
 const plan = computed(() => store.getters['plan/getPlan']);
 const aiCreditBalance = computed(
@@ -38,19 +40,17 @@ const goToOwnKeySetup = () => {
   });
 };
 
-// Upgrade é imediato e não tem desfazer self-service (Plan::ChangeSubscriptionService) — confirma
-// antes de disparar. Downgrade não tem botão aqui de propósito: não passa pelo upgradePlan.
-const confirmUpgrade = async upgradePlan => {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(t('PLAN.UPGRADE.CONFIRM', { name: upgradePlan.name }))) {
-    return;
-  }
-  try {
-    await store.dispatch('plan/upgradePlan', upgradePlan.slug);
-    useAlert(t('PLAN.UPGRADE.SUCCESS', { name: upgradePlan.name }));
-  } catch (error) {
-    useAlert(error?.response?.data?.error || t('PLAN.UPGRADE.ERROR'));
-  }
+// O plano não muda por aqui: o upgrade passa pelo pagamento (UpgradePaymentDialog) e só vale quando o
+// pagamento é confirmado. Downgrade não tem botão aqui de propósito — é com o suporte.
+const upgradeWhatsappNumber = computed(
+  () => store.getters['plan/getUpgradeWhatsappNumber']
+);
+const upgradeDialogRef = ref(null);
+const selectedUpgrade = ref(null);
+
+const openUpgrade = upgradePlan => {
+  selectedUpgrade.value = upgradePlan;
+  upgradeDialogRef.value?.open();
 };
 
 // Preço definido quando pelo menos um dos campos existe (ambos são nullable/provisórios).
@@ -259,8 +259,7 @@ onMounted(() => {
                 size="sm"
                 class="mt-2"
                 :label="$t('PLAN.UPGRADE.BUTTON', { name: upgradePlan.name })"
-                :is-loading="uiFlags.isUpgrading"
-                @click="confirmUpgrade(upgradePlan)"
+                @click="openUpgrade(upgradePlan)"
               />
             </div>
           </div>
@@ -268,6 +267,19 @@ onMounted(() => {
             {{ $t('PLAN.UPGRADE.DOWNGRADE_HINT') }}
           </p>
         </div>
+        <UpgradePaymentDialog
+          ref="upgradeDialogRef"
+          :upgrade-plan="selectedUpgrade"
+          :price-label="
+            selectedUpgrade?.monthly_price_cents != null
+              ? `${formatCurrency(selectedUpgrade.monthly_price_cents)}${$t('PLAN.UPGRADE.PER_MONTH')}`
+              : $t('PLAN.PRICE_TBD')
+          "
+          :current-plan-name="plan?.name"
+          :account-id="accountId"
+          :account-name="currentAccount?.name"
+          :whatsapp-number="upgradeWhatsappNumber"
+        />
 
         <!-- AI Credits Card -->
         <div

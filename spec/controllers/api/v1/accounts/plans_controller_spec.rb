@@ -9,7 +9,6 @@ require 'rails_helper'
 RSpec.describe 'Account Plan API', type: :request do
   let(:account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
-  let(:agent) { create(:user, account: account, role: :agent) }
 
   describe 'GET /api/v1/accounts/{account.id}/plan/limits' do
     it 'resolve para o controller certo (regressão do bug de nome singular/plural)' do
@@ -97,37 +96,36 @@ RSpec.describe 'Account Plan API', type: :request do
     end
   end
 
-  describe 'POST /api/v1/accounts/{account.id}/plan/upgrade' do
-    let(:start_plan) { subscribe_account_to_plan(account) }
-    let(:plus) { Plan.create!(name: 'PLUS', slug: "plus-#{SecureRandom.hex(3)}") }
+  # O cliente não troca de plano sozinho: o plano só muda depois do pagamento confirmado (hoje pelo Super
+  # Admin). Antes existia POST /plan/upgrade, que trocava na hora, sem pagamento — pela tela ou direto
+  # pela API.
+  describe 'upgrade sem pagamento' do
+    it 'não existe mais rota para o cliente trocar o próprio plano' do
+      expect { Rails.application.routes.recognize_path("/api/v1/accounts/#{account.id}/plan/upgrade", method: :post) }
+        .to raise_error(ActionController::RoutingError)
+    end
+  end
 
+  describe 'upgrade_contact (WhatsApp da Conexiia para pedidos de upgrade)' do
     before do
-      start_plan.update!(slug: 'start')
-      plus.update!(slug: 'plus')
+      subscribe_account_to_plan(account)
+      GlobalConfig.clear_cache
     end
 
-    it 'admin consegue fazer upgrade self-service' do
-      post "/api/v1/accounts/#{account.id}/plan/upgrade",
-           params: { plan_slug: plus.slug }, headers: admin.create_new_auth_token, as: :json
-
-      expect(response).to have_http_status(:ok)
-      expect(account.reload.subscriptions.current.first.plan).to eq(plus)
+    def fetch_contact
+      get "/api/v1/accounts/#{account.id}/plan/limits", headers: admin.create_new_auth_token, as: :json
+      response.parsed_body['upgrade_contact']
     end
 
-    it 'agente não pode trocar de plano' do
-      post "/api/v1/accounts/#{account.id}/plan/upgrade",
-           params: { plan_slug: plus.slug }, headers: agent.create_new_auth_token, as: :json
+    it 'devolve só os dígitos do número configurado no Super Admin' do
+      InstallationConfig.create!(name: 'PLAN_UPGRADE_WHATSAPP_NUMBER', value: '+55 (49) 99999-0000', locked: false)
+      GlobalConfig.clear_cache
 
-      expect(response).to have_http_status(:forbidden)
+      expect(fetch_contact).to eq('whatsapp_number' => '5549999990000')
     end
 
-    it 'recusa downgrade' do
-      account.subscriptions.current.first.update!(plan: plus)
-
-      post "/api/v1/accounts/#{account.id}/plan/upgrade",
-           params: { plan_slug: start_plan.slug }, headers: admin.create_new_auth_token, as: :json
-
-      expect(response).to have_http_status(:unprocessable_entity)
+    it 'sem número configurado, devolve nil' do
+      expect(fetch_contact).to eq('whatsapp_number' => nil)
     end
   end
 end

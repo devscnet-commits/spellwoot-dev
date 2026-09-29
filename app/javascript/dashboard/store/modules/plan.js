@@ -8,12 +8,13 @@ export const state = {
   overageCharges: [],
   availableUpgrades: [],
   aiKey: null,
+  // Número da Conexiia (só dígitos) que recebe pedidos de upgrade; null = não configurado.
+  upgradeWhatsappNumber: null,
   // null | 'no_plan' (conta sem assinatura ativa — API responde 404) | 'unknown'
   fetchError: null,
   uiFlags: {
     isFetching: false,
     isLoading: false,
-    isUpgrading: false,
   },
 };
 
@@ -26,6 +27,8 @@ export const mutations = {
     _state.overageCharges = data.overage_charges || [];
     _state.availableUpgrades = data.available_upgrades || [];
     _state.aiKey = data.ai_key || null;
+    _state.upgradeWhatsappNumber =
+      data.upgrade_contact?.whatsapp_number || null;
   },
 
   SET_FETCH_ERROR(_state, value) {
@@ -38,10 +41,6 @@ export const mutations = {
 
   SET_UI_FETCHING(_state, value) {
     _state.uiFlags.isFetching = value;
-  },
-
-  SET_UI_UPGRADING(_state, value) {
-    _state.uiFlags.isUpgrading = value;
   },
 };
 
@@ -63,17 +62,6 @@ export const actions = {
         commit('SET_UI_FETCHING', false);
       });
   },
-
-  // Upgrade imediato (Plan::ChangeSubscriptionService#upgrade!, backend recusa downgrade/mesmo
-  // plano). Recarrega os dados do plano ao terminar para refletir o novo plano/limites na tela.
-  upgradePlan({ commit, dispatch }, planSlug) {
-    commit('SET_UI_UPGRADING', true);
-    return AccountPlanAPI.upgrade(planSlug)
-      .then(() => dispatch('fetchPlanData'))
-      .finally(() => {
-        commit('SET_UI_UPGRADING', false);
-      });
-  },
 };
 
 export const getters = {
@@ -84,6 +72,7 @@ export const getters = {
   getOverageCharges: _state => _state.overageCharges,
   getAvailableUpgrades: _state => _state.availableUpgrades,
   getAiKey: _state => _state.aiKey,
+  getUpgradeWhatsappNumber: _state => _state.upgradeWhatsappNumber,
   getUIFlags: _state => _state.uiFlags,
   getFetchError: _state => _state.fetchError,
 };

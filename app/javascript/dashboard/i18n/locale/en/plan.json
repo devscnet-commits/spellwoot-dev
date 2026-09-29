@@ -53,10 +53,17 @@
       "HEADER": "Available upgrades",
       "PER_MONTH": "/month",
       "BUTTON": "Upgrade to {name}",
-      "CONFIRM": "Upgrade to {name} now? This takes effect immediately.",
-      "SUCCESS": "Upgraded to {name}.",
-      "ERROR": "Could not upgrade the plan. Please try again.",
-      "DOWNGRADE_HINT": "Need a smaller plan? Contact our support team."
+      "DOWNGRADE_HINT": "Need a smaller plan? Contact our support team.",
+      "PAYMENT": {
+        "TITLE": "Upgrade to {name}",
+        "METHOD_LABEL": "How would you like to pay?",
+        "PIX": "Pix",
+        "CARD": "Credit card",
+        "WHATSAPP_HINT": "Payment is arranged with our team on WhatsApp. Your plan is updated as soon as the payment is confirmed.",
+        "NO_CONTACT": "To complete the upgrade, contact our support team. Your plan is updated as soon as the payment is confirmed.",
+        "CONTINUE_WHATSAPP": "Continue on WhatsApp"
+      },
+      "WHATSAPP_MESSAGE": "Hi! I'd like to upgrade my plan.\nAccount: #{accountId} — {accountName}\nCurrent plan: {currentPlan}\nDesired plan: {targetPlan}\nPayment method: {paymentMethod}"
     },
     "NO_PLAN": {
       "TITLE": "No active plan",
