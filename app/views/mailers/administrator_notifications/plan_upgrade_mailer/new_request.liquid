@@ -1,0 +1,16 @@
+<p>Olá,</p>
+
+<p>Um cliente pediu <strong>upgrade de plano</strong>. Combine o pagamento com ele e, depois de confirmado, troque o plano no painel super admin.</p>
+
+<p>
+  <strong>Instalação:</strong> {{ meta.instance_url }}<br>
+  <strong>Conta:</strong> #{{ meta.account_id }} — {{ meta.account_name }}<br>
+  <strong>Solicitado por:</strong> {{ meta.requested_by }} ({{ meta.requested_by_email }})<br>
+  <strong>Plano atual:</strong> {{ meta.current_plan }}<br>
+  <strong>Plano desejado:</strong> {{ meta.target_plan }}<br>
+  <strong>Quando:</strong> {{ meta.requested_at }}
+</p>
+
+<p>Conta no painel super admin: <a href="{{ action_url }}">{{ action_url }}</a></p>
+
+<p>— Conexiia</p>

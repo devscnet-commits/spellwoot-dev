@@ -121,11 +121,72 @@ RSpec.describe 'Account Plan API', type: :request do
       InstallationConfig.create!(name: 'PLAN_UPGRADE_WHATSAPP_NUMBER', value: '+55 (49) 99999-0000', locked: false)
       GlobalConfig.clear_cache
 
-      expect(fetch_contact).to eq('whatsapp_number' => '5549999990000')
+      expect(fetch_contact).to include('whatsapp_number' => '5549999990000')
     end
 
     it 'sem número configurado, devolve nil' do
-      expect(fetch_contact).to eq('whatsapp_number' => nil)
+      expect(fetch_contact).to include('whatsapp_number' => nil, 'email_request' => false)
+    end
+  end
+
+  # Sem WhatsApp de upgrade configurado, o cliente ainda consegue pedir: a equipe Conexiia recebe por e-mail.
+  # O plano NÃO muda — só depois do pagamento confirmado, pelo Super Admin.
+  describe 'POST /api/v1/accounts/{account.id}/plan/upgrade_request' do
+    let(:agent) { create(:user, account: account, role: :agent) }
+    let!(:start_plan) { subscribe_account_to_plan(account).tap { |p| p.update!(slug: 'start', name: 'START') } }
+    let!(:plus) { Plan.create!(name: 'PLUS', slug: 'plus', visible_to_new_subscribers: true) }
+
+    def request_upgrade(slug, user: admin)
+      post "/api/v1/accounts/#{account.id}/plan/upgrade_request",
+           params: { plan_slug: slug }, headers: user.create_new_auth_token, as: :json
+    end
+
+    before do
+      ActiveJob::Base.queue_adapter = :test
+      InstallationConfig.create!(name: 'CHATWOOT_INSTANCE_ADMIN_EMAIL', value: 'equipe@conexiia.test', locked: false)
+      GlobalConfig.clear_cache
+    end
+
+    it 'avisa a equipe por e-mail e NÃO muda o plano' do
+      expect { request_upgrade('plus') }
+        .to have_enqueued_mail(AdministratorNotifications::PlanUpgradeMailer, :new_request)
+
+      expect(response).to have_http_status(:ok)
+      expect(account.reload.subscriptions.current.first.plan).to eq(start_plan)
+    end
+
+    it 'recusa plano que não é upgrade disponível para a conta' do
+      request_upgrade('start')
+
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it 'sem e-mail da equipe configurado, avisa que não há contato' do
+      InstallationConfig.find_by(name: 'CHATWOOT_INSTANCE_ADMIN_EMAIL').destroy!
+      GlobalConfig.clear_cache
+
+      request_upgrade('plus')
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body['error']).to eq('no_contact')
+    end
+
+    it 'agente não pode pedir upgrade' do
+      request_upgrade('plus', user: agent)
+
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it 'o e-mail leva conta, plano atual e plano desejado' do
+      mailer = AdministratorNotifications::PlanUpgradeMailer.new
+      allow(AdministratorNotifications::PlanUpgradeMailer).to receive(:new).and_return(mailer)
+      allow(mailer).to receive(:smtp_config_set_or_development?).and_return(true)
+
+      mail = AdministratorNotifications::PlanUpgradeMailer.new_request(account, admin, start_plan, plus)
+
+      expect(mail.to).to eq(['equipe@conexiia.test'])
+      expect(mail.subject).to include("##{account.id}")
+      expect(mail.body.encoded).to include('START', 'PLUS')
     end
   end
 end

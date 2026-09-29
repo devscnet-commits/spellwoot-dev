@@ -56,14 +56,14 @@
       "DOWNGRADE_HINT": "Need a smaller plan? Contact our support team.",
       "PAYMENT": {
         "TITLE": "Upgrade to {name}",
-        "METHOD_LABEL": "How would you like to pay?",
-        "PIX": "Pix",
-        "CARD": "Credit card",
-        "WHATSAPP_HINT": "Payment is arranged with our team on WhatsApp. Your plan is updated as soon as the payment is confirmed.",
-        "NO_CONTACT": "To complete the upgrade, contact our support team. Your plan is updated as soon as the payment is confirmed.",
-        "CONTINUE_WHATSAPP": "Continue on WhatsApp"
+        "INFO": "Online payment isn't available yet. Our team will arrange the payment with you and, once it's confirmed, your plan is updated.",
+        "NO_CONTACT": "To upgrade, contact our support team. Your plan is updated as soon as the payment is confirmed.",
+        "CONTINUE_WHATSAPP": "Talk to Conexiia on WhatsApp",
+        "REQUEST": "Request upgrade",
+        "REQUEST_SENT": "Request sent! Our team will contact you to arrange the payment.",
+        "REQUEST_ERROR": "Couldn't send the request. Please try again."
       },
-      "WHATSAPP_MESSAGE": "Hi! I'd like to upgrade my plan.\nAccount: #{accountId} — {accountName}\nCurrent plan: {currentPlan}\nDesired plan: {targetPlan}\nPayment method: {paymentMethod}"
+      "WHATSAPP_MESSAGE": "Hi! I'd like to upgrade my plan.\nAccount: #{accountId} — {accountName}\nCurrent plan: {currentPlan}\nDesired plan: {targetPlan}"
     },
     "NO_PLAN": {
       "TITLE": "No active plan",

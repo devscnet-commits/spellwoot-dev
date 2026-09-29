@@ -8,8 +8,9 @@ export const state = {
   overageCharges: [],
   availableUpgrades: [],
   aiKey: null,
-  // Número da Conexiia (só dígitos) que recebe pedidos de upgrade; null = não configurado.
-  upgradeWhatsappNumber: null,
+  // Como o cliente pede upgrade: whatsapp_number (só dígitos, null = não configurado) e email_request
+  // (a equipe Conexiia recebe o pedido por e-mail).
+  upgradeContact: {},
   // null | 'no_plan' (conta sem assinatura ativa — API responde 404) | 'unknown'
   fetchError: null,
   uiFlags: {
@@ -27,8 +28,7 @@ export const mutations = {
     _state.overageCharges = data.overage_charges || [];
     _state.availableUpgrades = data.available_upgrades || [];
     _state.aiKey = data.ai_key || null;
-    _state.upgradeWhatsappNumber =
-      data.upgrade_contact?.whatsapp_number || null;
+    _state.upgradeContact = data.upgrade_contact || {};
   },
 
   SET_FETCH_ERROR(_state, value) {
@@ -72,7 +72,7 @@ export const getters = {
   getOverageCharges: _state => _state.overageCharges,
   getAvailableUpgrades: _state => _state.availableUpgrades,
   getAiKey: _state => _state.aiKey,
-  getUpgradeWhatsappNumber: _state => _state.upgradeWhatsappNumber,
+  getUpgradeContact: _state => _state.upgradeContact,
   getUIFlags: _state => _state.uiFlags,
   getFetchError: _state => _state.fetchError,
 };

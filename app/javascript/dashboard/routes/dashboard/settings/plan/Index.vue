@@ -42,9 +42,7 @@ const goToOwnKeySetup = () => {
 
 // O plano não muda por aqui: o upgrade passa pelo pagamento (UpgradePaymentDialog) e só vale quando o
 // pagamento é confirmado. Downgrade não tem botão aqui de propósito — é com o suporte.
-const upgradeWhatsappNumber = computed(
-  () => store.getters['plan/getUpgradeWhatsappNumber']
-);
+const upgradeContact = computed(() => store.getters['plan/getUpgradeContact']);
 const upgradeDialogRef = ref(null);
 const selectedUpgrade = ref(null);
 
@@ -278,7 +276,8 @@ onMounted(() => {
           :current-plan-name="plan?.name"
           :account-id="accountId"
           :account-name="currentAccount?.name"
-          :whatsapp-number="upgradeWhatsappNumber"
+          :whatsapp-number="upgradeContact.whatsapp_number"
+          :email-request="!!upgradeContact.email_request"
         />
 
         <!-- AI Credits Card -->

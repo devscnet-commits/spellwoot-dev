@@ -2,6 +2,7 @@
 
 class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
   before_action :fetch_plan_data, only: [:limits]
+  before_action :ensure_administrator, only: [:upgrade_request]
 
   # Chaves de limite sem model/contador real ainda (Billing::LimitUsage sempre devolve nil pra
   # elas) — escondidas da tela em vez de mostrar um "0 / N" que não representa nada de verdade.
@@ -13,9 +14,33 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
 
   # Não existe troca de plano pelo cliente: o plano só muda depois do pagamento confirmado — hoje pelo
   # Super Admin, quando houver provedor de pagamento pelo webhook dele. Até lá, o botão de upgrade da
-  # tela leva o cliente ao WhatsApp da Conexiia (upgrade_contact).
+  # tela leva o cliente ao WhatsApp da Conexiia (upgrade_contact) ou, sem número configurado, a este
+  # pedido: avisa a equipe Conexiia por e-mail e NÃO muda nada no plano.
+  def upgrade_request
+    subscription = current_account.subscriptions.current.first
+    target = Plan.find_by(slug: params[:plan_slug])
+    unless subscription && target && upgrade_candidate?(subscription.plan, target)
+      return render json: { error: 'Plano indisponível para upgrade' }, status: :unprocessable_entity
+    end
+
+    mailer = AdministratorNotifications::PlanUpgradeMailer
+    return render json: { error: 'no_contact' }, status: :unprocessable_entity unless mailer.contact_configured?
+
+    mailer.new_request(current_account, Current.user, subscription.plan, target).deliver_later
+    head :ok
+  end
 
   private
+
+  def ensure_administrator
+    return if Current.account_user&.administrator?
+
+    render json: { error: 'You are not authorized to do this action' }, status: :forbidden
+  end
+
+  def upgrade_candidate?(current_plan, target)
+    available_upgrades(current_plan).any? { |candidate| candidate[:slug] == target.slug }
+  end
 
   def fetch_plan_data
     subscription = current_account.subscriptions.current.first
@@ -62,7 +87,8 @@ class Api::V1::Accounts::PlansController < Api::V1::Accounts::BaseController
       limits: limits_data,
       overage_charges: recent_overage_charges,
       available_upgrades: available_upgrades(plan),
-      upgrade_contact: { whatsapp_number: upgrade_whatsapp_number },
+      upgrade_contact: { whatsapp_number: upgrade_whatsapp_number,
+                         email_request: AdministratorNotifications::PlanUpgradeMailer.contact_configured? },
       ai_key: ai_key_status(subscription)
     }
   end
