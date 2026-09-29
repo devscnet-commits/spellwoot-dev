@@ -241,10 +241,39 @@ class Conversation < ApplicationRecord
   # A IA é um "agente" próprio: numa caixa com IA live ativa, a conversa pertence à IA até ela
   # fazer o handoff. A auto-atribuição de humanos deve PULAR essas conversas (não pegar na criação)
   # e só agir depois que a IA entregar — o handoff marca additional_attributes['ai_handoff'].
+  # Tem IA de fato atendendo esta conversa? Só quando há IA ao vivo na caixa E ela está ligada para esta
+  # conversa (Ai::ReplyPolicy.attends? — atendimento automático + escopo), sem desativa_ia e sem ser grupo.
+  # IA desligada = fluxo normal: a conversa recebe o time padrão da caixa e entra na distribuição automática
+  # (antes bastava EXISTIR um vínculo ao vivo, mesmo com o atendimento automático desligado, para a conversa
+  # ficar sem time e fora da distribuição).
   def ai_assistant_active?
     return false unless account.feature_enabled?('ai_core')
+    return false if group_chat? || ActiveModel::Type::Boolean.new.cast(custom_attributes.to_h['desativa_ia'])
 
-    Ai::AgentInbox.live.where(inbox_id: inbox_id).exists?
+    ai_attending_agents.any?
+  end
+
+  # Agentes de IA ao vivo na caixa que estão ligados para esta conversa (Ai::ReplyPolicy.attends?).
+  def ai_attending_agents
+    Ai::AgentInbox.live.where(inbox_id: inbox_id).includes(:agent).map(&:agent)
+                  .select { |agent| Ai::ReplyPolicy.attends?(agent, self) }
+  end
+
+  # Mandar para um time / atribuir um humano tira a IA? Sim sem IA atendendo, ou com a opção
+  # "Humanos assumem..." ligada (padrão) em algum agente que atende — ver Ai::ReplyPolicy.humans_take_over?.
+  def humans_take_over?
+    agents = ai_attending_agents
+    agents.empty? || agents.any? { |agent| Ai::ReplyPolicy.humans_take_over?(agent) }
+  end
+
+  # Pessoa ou automação mandou a conversa para um time: é entrega aos humanos — a IA sai e a distribuição
+  # atribui alguém do time (com a opção "Humanos assumem..." do agente ligada, o padrão). O handoff é marcado
+  # no MESMO save do time, antes da auto-atribuição (que respeita ai_pending_handoff?). Os caminhos da própria
+  # IA (Ai::HandoffCoordinator, automação de etapa) não passam aqui.
+  def route_to_team!(new_team_id)
+    attrs = additional_attributes.to_h
+    attrs['ai_handoff'] = true if new_team_id.present? && humans_take_over?
+    update!(team_id: new_team_id, additional_attributes: attrs)
   end
 
   def ai_pending_handoff?

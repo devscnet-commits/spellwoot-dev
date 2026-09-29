@@ -1143,7 +1143,10 @@ RSpec.describe Conversation do
     before { account.enable_features!('ai_core') }
 
     def bind_agent(status:, mode: 'live', active: true)
-      agent = Ai::Agent.create!(account: account, name: 'Maya', status: status, ai_operation_profile_id: profile.id)
+      # reply_scope 'all': a IA responde nesta conversa (Ai::ReplyPolicy.attends?). Sem escopo ela não responde,
+      # e desde a regra R1 a conversa segue o fluxo normal (time padrão + distribuição) — ver teste abaixo.
+      agent = Ai::Agent.create!(account: account, name: 'Maya', status: status, ai_operation_profile_id: profile.id,
+                                behavior: { 'reply_scope' => 'all' })
       Ai::AgentInbox.create!(ai_agent_id: agent.id, inbox_id: inbox.id, mode: mode, active: active)
       agent
     end
@@ -1166,6 +1169,13 @@ RSpec.describe Conversation do
       bind_agent(status: 'active')
       conversation.update!(additional_attributes: { 'ai_handoff' => true })
 
+      expect(conversation.ai_pending_handoff?).to be(false)
+    end
+
+    it 'agente ativo mas SEM escopo de resposta (não responde): fluxo normal, não segura a conversa (R1)' do
+      bind_agent(status: 'active').update!(behavior: {})
+
+      expect(conversation.ai_assistant_active?).to be(false)
       expect(conversation.ai_pending_handoff?).to be(false)
     end
   end

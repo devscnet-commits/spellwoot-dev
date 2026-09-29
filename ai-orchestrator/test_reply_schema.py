@@ -164,3 +164,26 @@ def test_handoff_target_nao_referencia_mais_lista_nas_instructions():
     desc = schema["properties"][orchestrator.HANDOFF_TARGET_KEY]["description"]
 
     assert "nas instructions" not in desc
+
+
+# Destino da transferência vem dos CAMPOS do agente (times marcados + principal), nunca de texto no prompt.
+def test_dois_ou_mais_times_viram_opcao_fechada_de_handoff_target():
+    schema = orchestrator._build_reply_schema(
+        transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None, handoff_team_names=["Mídia Paga", "Financeiro"],
+        principal_team_name="Mídia Paga",
+    )
+    target = schema["properties"][orchestrator.HANDOFF_TARGET_KEY]
+
+    assert target["enum"] == ["", "Mídia Paga", "Financeiro"]
+    assert "time principal (Mídia Paga)" in target["description"]
+    assert "enum" not in orchestrator._BASE_REPLY_SCHEMA["properties"][orchestrator.HANDOFF_TARGET_KEY]
+
+
+def test_sem_lista_de_times_handoff_target_segue_livre():
+    schema = orchestrator._build_reply_schema(
+        transfer_when=None, close_when=None, close_message=None, collect_hint=None,
+        known_attribute_keys=None, handoff_team_names=[],
+    )
+
+    assert "enum" not in schema["properties"][orchestrator.HANDOFF_TARGET_KEY]

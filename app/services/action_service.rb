@@ -42,12 +42,11 @@ class ActionService
 
   def assign_agent(agent_ids = [])
     return @conversation.update!(assignee_id: nil) if agent_ids[0] == 'nil'
-    # An inbox with a live AI agent gets first shot at the conversation — auto-assigning a human
-    # here (e.g. a lead-distribution rule pinning a CRM owner) prematurely pings a human for a
-    # conversation the AI is about to handle. Same gate Conversation#assign_default_team_from_inbox
-    # uses, so automation routing and the inbox's default-team fallback agree on "AI is handling
-    # this" (found live 14/09).
-    return if @conversation.ai_assistant_active?
+
+    # Automação que atribui um humano é entrega aos humanos — a atribuição acontece e a IA sai
+    # (Ai::ReplyPolicy.human_control_reason → assigned_to_human). Com a opção "Humanos assumem..." desligada
+    # no agente, volta o comportamento antigo: a IA na caixa tem prioridade e a atribuição é ignorada (14/09).
+    return if @conversation.ai_assistant_active? && !@conversation.humans_take_over?
 
     agent_ids = [last_responding_agent_id] if agent_ids[0] == 'last_responding_agent'
     return unless agent_belongs_to_inbox?(agent_ids)
@@ -74,7 +73,7 @@ class ActionService
     # if team_id is nil, then it means that the team is being unassigned
     return unless !team_ids[0].nil? && team_belongs_to_account?(team_ids)
 
-    @conversation.update!(team_id: team_ids[0])
+    @conversation.route_to_team!(team_ids[0])
   end
 
   def remove_assigned_agent(_params)

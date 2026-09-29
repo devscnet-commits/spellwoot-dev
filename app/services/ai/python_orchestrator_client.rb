@@ -210,7 +210,11 @@ class Ai::PythonOrchestratorClient
       transfer_when: transfer_when_text,
       close_when: close_when_text,
       close_message: close_message,
-      collect_hint: collect_hint_for_schema
+      collect_hint: collect_hint_for_schema,
+      # Destino da transferência vem dos CAMPOS do agente ("Transferir para times" + principal), não de
+      # texto no prompt: com 2+ times vira opção fechada de handoff_target no schema (orchestrator.py).
+      handoff_team_names: handoff_team_names,
+      principal_team_name: handoff_team_names.present? ? principal_team_name : nil
     }
   end
 
@@ -370,6 +374,20 @@ class Ai::PythonOrchestratorClient
         'BRANCO entre elas (dois \n) no campo "mensagem_para_cliente". Se for algo curto, responda em ' \
         'uma mensagem só, sem quebrar à força.'
     end
+  end
+
+  # Nomes dos times marcados em "Transferir para times", na ordem configurada. Só com 2+ (com 0/1 não há o
+  # que escolher — Ai::HandoffCoordinator#human_team_id resolve sozinho).
+  def handoff_team_names
+    @handoff_team_names ||= begin
+      ids = Array(@agent.handoff_team_ids).map(&:to_i)
+      names = ::Team.where(account_id: @agent.account_id, id: ids).index_by(&:id).values_at(*ids).compact.map(&:name)
+      names.size >= 2 ? names : []
+    end
+  end
+
+  def principal_team_name
+    ::Team.find_by(account_id: @agent.account_id, id: @agent.fallback_handoff_team_id)&.name
   end
 
   # handoff_target_instruction removido (18/08) — ver comentário em #system_prompt (risco assumido).

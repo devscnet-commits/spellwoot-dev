@@ -82,6 +82,9 @@ const form = reactive({
   // (agent.transfer_rules.stuck_handoff_turns). Default 3; 0 = desligado (nunca transfere por trava).
   stuck_handoff_turns: 10,
   // Atendimento
+  // Opção "Humanos assumem" (behavior.humans_take_over): ligada por padrão — conversa mandada para um
+  // time ou atribuída a um humano tira a IA (Ai::ReplyPolicy.humans_take_over?).
+  humans_take_over: true,
   group_delay_seconds: '',
   max_replies: '',
   max_input_chars: '',
@@ -333,6 +336,7 @@ const hydrate = dept => {
     transfer_min_confidence: Number(transferRules.min_confidence) || 0,
     // ?? 3: chave ausente (agente antigo) => default 3; valor 0 explícito é preservado.
     stuck_handoff_turns: Number(transferRules.stuck_handoff_turns ?? 10),
+    humans_take_over: behavior.humans_take_over !== false,
     group_delay_seconds: behavior.grouping?.delay_seconds ?? '',
     max_replies: behavior.max_replies ?? '',
     max_input_chars: behavior.max_input_chars ?? '',
@@ -399,6 +403,7 @@ const buildPayload = () => ({
   ai_agent: {
     behavior: {
       auto_attendance: true,
+      humans_take_over: form.humans_take_over,
       grouping: { delay_seconds: Number(form.group_delay_seconds) || 0 },
       max_replies: Number(form.max_replies) || 0,
       max_input_chars: Number(form.max_input_chars) || 0,
@@ -846,6 +851,21 @@ onMounted(async () => {
           v-if="visibleSections.has('attendance')"
           class="flex flex-col gap-5"
         >
+          <section
+            class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
+          >
+            <h2 class="text-base font-semibold text-n-slate-12">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HUMANS_TAKE_OVER_TITLE') }}
+            </h2>
+            <p class="text-sm text-n-slate-11 mb-0">
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HUMANS_TAKE_OVER_HINT') }}
+            </p>
+            <label class="flex items-center gap-2 text-sm text-n-slate-12">
+              <input v-model="form.humans_take_over" type="checkbox" />
+              {{ $t('AI_DEPARTMENTS.ATTENDANCE.HUMANS_TAKE_OVER_FIELD') }}
+            </label>
+          </section>
+
           <section
             class="rounded-xl border border-n-weak bg-n-solid-2 p-5 flex flex-col gap-3"
           >

@@ -11,6 +11,7 @@ class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
   BEHAVIOR_FIELDS = %w[
     behavior.auto_attendance
     behavior.reply_scope
+    behavior.humans_take_over
     behavior.grouping.delay_seconds
     behavior.max_replies
     behavior.max_input_chars

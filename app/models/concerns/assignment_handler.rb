@@ -22,6 +22,9 @@ module AssignmentHandler
 
   def find_assignee_from_team
     return if team&.allow_auto_assign.blank?
+    # IA atendendo (ainda sem handoff): troca de fila não puxa humano — ver AutoAssignmentHandler. Conversa
+    # mandada para um time por pessoa/automação já vem com ai_handoff (Conversation#route_to_team!).
+    return if ai_pending_handoff?
 
     # V2: AutoAssignment::AssignmentService#filter_agents_by_team already restricts candidates
     # to team members and applies the account's assignment policy (fair distribution limit,

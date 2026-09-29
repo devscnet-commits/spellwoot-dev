@@ -123,7 +123,10 @@ class Ai::HandoffCoordinator
   # configured (a máquina de whitelist), fonte ÚNICA de destino — e give-up e conclusão passam a CONCORDAR.
   # team_id segue só como filtro (e como endereço IA->IA em route_to_ai, que usa o team_id do agente-ALVO).
   def human_team_id(decision)
-    target = decision['handoff_target'].to_s.strip
+    # Um time só marcado: não há o que escolher — ignora o nome que a IA tenha escrito (sem lista, ela deduzia
+    # nomes do prompt, ex.: "vendas finalização", e gerava target_unmatched à toa) e segue o caminho normal
+    # de fallback/configured, que já cai nesse time.
+    target = Array(@agent.handoff_team_ids).size == 1 ? '' : decision['handoff_target'].to_s.strip
     Rails.logger.info "[Ai::HandoffCoordinator] handoff por nome: #{target.inspect}" if target.present?
     matched = match_team_by_name(target)
     return matched if matched
