@@ -6,6 +6,10 @@ class OauthCallbackController < ApplicationController
     )
 
     handle_response
+  rescue CustomExceptions::Plan::LimitExceeded, CustomExceptions::Plan::FeatureUnavailable => e
+    # Trava do plano (limite de caixas / E-mail fora do plano): volta para a tela de e-mail com o aviso,
+    # em vez de cair na tela inicial sem explicação.
+    redirect_to app_new_email_inbox_url(account_id: account.id, error_message: e.message)
   rescue StandardError => e
     ChatwootExceptionTracker.new(e).capture_exception
     redirect_to '/'

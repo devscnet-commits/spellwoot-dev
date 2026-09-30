@@ -211,8 +211,12 @@ export default {
               params: { page: 'new', inbox_id: data.id },
             });
           })
-          .catch(() => {
+          .catch(error => {
             this.isCreating = false;
+            // Ex.: "Limite de caixas de entrada do seu plano atingido."
+            useAlert(
+              error.message || this.$t('INBOX_MGMT.DETAILS.ERROR_FB_AUTH')
+            );
           });
       }
     },

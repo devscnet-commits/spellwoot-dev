@@ -23,6 +23,7 @@ const ERROR_MESSAGES = {
   'business-account-only': 'LOGIN.OAUTH.BUSINESS_ACCOUNTS_ONLY',
   'saml-authentication-failed': 'LOGIN.SAML.API.ERROR_MESSAGE',
   'saml-not-enabled': 'LOGIN.SAML.API.ERROR_MESSAGE',
+  'saml-user-limit': 'LOGIN.SAML.API.USER_LIMIT',
 };
 
 const IMPERSONATION_URL_SEARCH_KEY = 'impersonation';

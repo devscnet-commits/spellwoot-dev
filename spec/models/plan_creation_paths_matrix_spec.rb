@@ -57,12 +57,13 @@ RSpec.describe 'Travas do plano nos demais caminhos de criação', type: :reques
       expect(account.account_users.count).to eq(1)
     end
 
-    it 'primeiro login por SSO/SAML: recusa o vínculo com a conta cheia' do
+    it 'primeiro login por SSO/SAML: recusa o vínculo com a conta cheia sem deixar usuário solto' do
       fill_plan('users', 1)
       auth_hash = { 'provider' => 'saml', 'uid' => 'saml-1', 'info' => { 'email' => 'sso@example.com', 'name' => 'SSO' } }
 
       expect { SamlUserBuilder.new(auth_hash, account.id).perform }.to raise_error(CustomExceptions::Plan::LimitExceeded)
       expect(account.account_users.count).to eq(1)
+      expect(User.from_email('sso@example.com')).to be_nil
     end
 
     it 'cadastro de conta nova: o dono sempre entra (a conta nasce sem plano)' do
@@ -84,7 +85,7 @@ RSpec.describe 'Travas do plano nos demais caminhos de criação', type: :reques
       'Google' => ['https://accounts.google.com/o/oauth2/token', :google_callback_url],
       'Microsoft' => ['https://login.microsoftonline.com/common/oauth2/v2.0/token', :microsoft_callback_url]
     }.each do |provider, (token_url, callback)|
-      it "#{provider}: com o limite cheio não cria caixa nem canal" do
+      it "#{provider}: com o limite cheio não cria caixa e volta para a tela de e-mail com o aviso" do
         fill_inboxes!
         stub_request(:post, token_url).to_return(status: 200, body: token_body.to_json, headers: { 'Content-Type' => 'application/json' })
 
@@ -92,6 +93,9 @@ RSpec.describe 'Travas do plano nos demais caminhos de criação', type: :reques
           get send(callback), params: { code: 'c', state: state }
         end.not_to change(Channel::Email, :count)
         expect(account.inboxes.count).to eq(1)
+        expect(response).to redirect_to(
+          app_new_email_inbox_url(account_id: account.id, error_message: 'Limite de caixas de entrada do seu plano atingido.')
+        )
       end
 
       it "#{provider}: com E-mail fora do plano não cria caixa" do
@@ -101,6 +105,7 @@ RSpec.describe 'Travas do plano nos demais caminhos de criação', type: :reques
         expect do
           get send(callback), params: { code: 'c', state: state }
         end.not_to change(Inbox, :count)
+        expect(response.location).to include('/settings/inboxes/new/email?error_message=')
       end
     end
   end
@@ -193,11 +198,13 @@ RSpec.describe 'Travas do plano nos demais caminhos de criação', type: :reques
       expect(response).to have_http_status(:forbidden)
     end
 
-    it 'limite cheio: não cria caixa nem página' do
+    it 'limite cheio: 402 com o aviso, sem criar caixa nem página' do
       fill_inboxes!
 
       expect { post url, headers: headers, params: params, as: :json }.not_to change(Channel::FacebookPage, :count)
       expect(account.inboxes.count).to eq(1)
+      expect(response).to have_http_status(:payment_required)
+      expect(response.parsed_body['error']).to eq('Limite de caixas de entrada do seu plano atingido.')
     end
   end
 

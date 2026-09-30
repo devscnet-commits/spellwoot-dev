@@ -260,7 +260,8 @@ export const actions = {
       return response.data;
     } catch (error) {
       commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
-      throw new Error(error);
+      // Mantém a mensagem do servidor (ex.: limite de caixas do plano) para a tela mostrar.
+      throw new Error(error?.response?.data?.error || '');
     }
   },
   createWhatsAppEmbeddedSignup: async ({ commit }, params) => {
