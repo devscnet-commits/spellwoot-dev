@@ -41,7 +41,9 @@ RSpec.describe 'Api::V1::Accounts::IntegrationSettings' do
 
     context 'with a legacy provider (n8n, outside BYOK)' do
       it 'salva sem disparar validação externa' do
-        # n8n não é BYOK: nenhuma chamada de teste é feita no save (comportamento legado preservado).
+        # n8n não é BYOK: nenhuma chamada de teste é feita no save (comportamento legado preservado). O host é
+        # resolvido só para conferir que é endereço público (trava de SSRF).
+        allow(Resolv).to receive(:getaddresses).with('n8n.example.com').and_return(['93.184.216.34'])
         put "/api/v1/accounts/#{account.id}/integration_settings/n8n",
             params: { config: { webhookUrl: 'https://n8n.example.com/webhook/x', token: 't' }, enabled: true },
             headers: admin.create_new_auth_token
