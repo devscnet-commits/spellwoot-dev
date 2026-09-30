@@ -9817,6 +9817,7 @@ ALTER TABLE ONLY public.agent_presence_snapshots
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260930120000'),
 ('20260929130000'),
 ('20260926120000'),
 ('20260922130000'),
