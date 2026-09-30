@@ -51,6 +51,12 @@ class Inbox < ApplicationRecord
   include OutOfOffisable
   include AccountCacheRevalidator
   include InboxAgentAvailability
+  include PlanLimited
+  include PlanChannelGated
+
+  # Caixa interna da aba "Teste" dos agentes de IA (Api::V1::Accounts::AiAgentTestConversationsController):
+  # criada pelo sistema, não é caixa do cliente — fica fora da contagem e da trava do plano.
+  AI_TEST_INBOX_NAME = 'Teste de Agentes IA'
 
   # Re-export concern constants so controllers can reference Inbox::*_ATTRS
   OFFISABLE_ATTRS        = OutOfOffisable::OFFISABLE_ATTRS
@@ -67,6 +73,7 @@ class Inbox < ApplicationRecord
   validate :ensure_valid_max_assignment_limit
 
   belongs_to :account
+  plan_limited 'inboxes'
   belongs_to :portal, optional: true
   belongs_to :operational_flow, optional: true
 
@@ -224,6 +231,10 @@ class Inbox < ApplicationRecord
   end
 
   private
+
+  def plan_limit_exempt?
+    name == AI_TEST_INBOX_NAME && channel_type == 'Channel::Api'
+  end
 
   def default_name_for_blank_name
     email? ? display_name_from_email : ''

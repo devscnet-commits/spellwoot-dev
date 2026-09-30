@@ -12,4 +12,11 @@ module PlanFeatureEnforceable
 
     render json: { error: message }, status: :forbidden
   end
+
+  # Para as travas de módulo novas (relatórios, copiloto): só trava conta COM plano — ver Billing::PlanModules.
+  def enforce_plan_module(key, message)
+    return if Billing::PlanModules.allowed?(Current.account, key)
+
+    render json: { error: message }, status: :forbidden
+  end
 end

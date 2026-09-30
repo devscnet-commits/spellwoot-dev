@@ -29,8 +29,10 @@
 
 class AccountUser < ApplicationRecord
   include AvailabilityStatusable
+  include PlanLimited
 
   belongs_to :account
+  plan_limited 'users'
   belongs_to :user
   belongs_to :inviter, class_name: 'User', optional: true
 

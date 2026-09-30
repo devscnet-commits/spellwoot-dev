@@ -45,6 +45,7 @@ class Meta::ConversionsApiService
   private
 
   def trackable?
+    return false unless plan_allows?
     return false unless master_enabled?
     return false if @pixel_id.blank? || @access_token.blank?
     return false if ctwa_clid.blank?
@@ -53,9 +54,16 @@ class Meta::ConversionsApiService
   end
 
   def skip_reason
+    return 'plan_without_conversion_api' unless plan_allows?
     return 'master_disabled' unless master_enabled?
     return 'missing_pixel_or_token' if @pixel_id.blank? || @access_token.blank?
     return 'missing_ctwa_clid' if ctwa_clid.blank?
+  end
+
+  # Módulo "API de Conversões (Meta)" do plano (conversion_api): sem ele nada é enviado à Meta, mesmo com o
+  # interruptor da conta ligado.
+  def plan_allows?
+    Billing::PlanModules.allowed?(@account, 'conversion_api')
   end
 
   # Account-level master switch. When off, nothing is sent to Meta — neither the

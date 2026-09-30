@@ -1,4 +1,8 @@
 class Api::V2::Accounts::LiveReportsController < Api::V1::Accounts::BaseController
+  # Módulo "Relatórios / Dashboards BI" do plano (dashboards_bi -> reports): sem ele a API fica fechada.
+  include PlanFeatureEnforceable
+
+  before_action -> { enforce_plan_module('reports', 'Relatórios não estão incluídos no plano desta conta.') }
   before_action :load_conversations, only: [:conversation_metrics, :grouped_conversation_metrics]
   before_action :set_group_scope, only: [:grouped_conversation_metrics]
 

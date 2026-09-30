@@ -3,6 +3,10 @@ module RequestExceptionHandler
 
   included do
     rescue_from ActiveRecord::RecordInvalid, with: :render_record_invalid
+    # Trava de limite do plano no modelo (PlanLimited): qualquer endpoint que crie além do limite responde 402.
+    rescue_from CustomExceptions::Plan::LimitExceeded, with: :render_plan_limit_exceeded
+    # Canal fora do plano na criação da caixa (PlanChannelGated): 403, mesma resposta dos endpoints de canal.
+    rescue_from CustomExceptions::Plan::FeatureUnavailable, with: :render_plan_feature_unavailable
   end
 
   private
@@ -37,6 +41,16 @@ module RequestExceptionHandler
 
   def render_payment_required(message)
     render json: { error: message }, status: :payment_required
+  end
+
+  def render_plan_limit_exceeded(exception)
+    log_handled_error(exception)
+    render_payment_required(exception.message)
+  end
+
+  def render_plan_feature_unavailable(exception)
+    log_handled_error(exception)
+    render json: { error: exception.message }, status: :forbidden
   end
 
   def render_internal_server_error(message)

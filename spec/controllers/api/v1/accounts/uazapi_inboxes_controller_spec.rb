@@ -47,8 +47,9 @@ RSpec.describe 'UazAPI Inboxes API', type: :request do
   end
 
   it 'recusa quando o limite de caixas do plano já foi atingido' do
-    subscribe_account_to_plan(account, features: %w[whatsapp_channel whatsapp_unofficial_channel], limits: { 'inboxes' => 1 })
+    # A caixa que já existe é anterior ao plano (o plano de teste não tem o canal dela).
     create(:inbox, account: account)
+    subscribe_account_to_plan(account, features: %w[whatsapp_channel whatsapp_unofficial_channel], limits: { 'inboxes' => 1 })
 
     create_uazapi_inbox
 

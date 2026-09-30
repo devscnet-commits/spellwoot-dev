@@ -11,8 +11,10 @@ class FeatureGate
     end
 
     # Retorna o PlanLimit (max_value + overflow_behavior) do plano atual, ou nil se não houver.
-    def limit_for(account, limit_key)
-      current_plan(account)&.limit_for(limit_key)
+    # fresh: true lê o plano direto do banco, sem ler nem gravar o cache por request (travas no modelo — ver
+    # PlanLimited —, que rodam também fora de request: console, jobs, setup de testes).
+    def limit_for(account, limit_key, fresh: false)
+      current_plan(account, fresh: fresh)&.limit_for(limit_key)
     end
 
     # true se `current_count` está DENTRO do limite (<= max_value). max_value nil (ilimitado) ou
@@ -30,8 +32,8 @@ class FeatureGate
     # ou :allow_with_overage (excedeu e paid_overage — cria mesmo assim; a cobrança do excedente é
     # débito da Fase 3). soft_warning ainda não é usado por nenhum PlanLimit; tratado como :block
     # (fallback conservador).
-    def limit_action(account, limit_key, count)
-      limit = limit_for(account, limit_key)
+    def limit_action(account, limit_key, count, fresh: false)
+      limit = limit_for(account, limit_key, fresh: fresh)
       return :allow if limit.nil? || limit.max_value.nil?
       return :allow if count.to_i <= limit.max_value
 
@@ -42,14 +44,18 @@ class FeatureGate
     end
 
     # Plano da subscription atual da conta, memoizado por request.
-    def current_plan(account)
+    def current_plan(account, fresh: false)
       return nil if account.nil?
+      return load_current_plan(account) if fresh
 
       cache = (RequestStore.store[:feature_gate_plans] ||= {})
       return cache[account.id] if cache.key?(account.id)
 
-      cache[account.id] = account.subscriptions.current
-                                 .includes(plan: %i[plan_features plan_limits]).first&.plan
+      cache[account.id] = load_current_plan(account)
+    end
+
+    def load_current_plan(account)
+      account.subscriptions.current.includes(plan: %i[plan_features plan_limits]).first&.plan
     end
   end
 end
