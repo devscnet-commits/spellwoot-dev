@@ -99,7 +99,13 @@ export default {
       currentUser: 'getCurrentUser',
       currentUserId: 'getCurrentUserID',
       globalConfig: 'globalConfig/get',
+      accountId: 'getCurrentAccountId',
+      getAccount: 'accounts/getAccount',
     }),
+    // Plano sem o módulo "Token de acesso pessoal (API)" não mostra o token.
+    isAccessTokenAllowed() {
+      return this.getAccount(this.accountId)?.api_user_token_allowed === true;
+    },
     isMfaEnabled() {
       return parseBoolean(window.chatwootConfig?.isMfaEnabled);
     },
@@ -327,6 +333,7 @@ export default {
       </SectionLayout>
     </Policy>
     <SectionLayout
+      v-if="isAccessTokenAllowed"
       with-border
       :title="$t('PROFILE_SETTINGS.FORM.ACCESS_TOKEN.TITLE')"
       :description="

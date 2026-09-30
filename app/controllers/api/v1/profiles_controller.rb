@@ -38,7 +38,13 @@ class Api::V1::ProfilesController < Api::BaseController
     head :ok
   end
 
+  # O token segue existindo para o próprio painel (upload de anexos, integrações UazAPI); o que o plano sem
+  # "Token de acesso pessoal (API)" tira é o acesso do usuário a ele — tela e regeneração.
   def reset_access_token
+    unless @user.accounts.any? { |account| Billing::PlanModules.allowed?(account, 'api_user_token') }
+      return render json: { error: 'Token de acesso pessoal (API) não está disponível no seu plano.' }, status: :forbidden
+    end
+
     @user.access_token.regenerate_token
     @user.reload
   end

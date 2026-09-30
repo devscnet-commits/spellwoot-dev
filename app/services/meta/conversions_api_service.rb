@@ -11,7 +11,7 @@ class Meta::ConversionsApiService
     meta_config = IntegrationSettingsService.get_config(@conversation.account_id, 'meta')
     @pixel_id = meta_config['pixelId']
     @access_token = meta_config['accessToken']
-    @test_event_code = meta_config.fetch('testEventCode', ENV.fetch('META_TEST_EVENT_CODE', nil))
+    @test_event_code = meta_config['testEventCode']
   end
 
   def self.track_lead(conversation)

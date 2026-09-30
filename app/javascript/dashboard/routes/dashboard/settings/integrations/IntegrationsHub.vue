@@ -473,8 +473,8 @@ const saveProvider = async providerKey => {
   }
 };
 
-// Removes this account's override so the integration falls back to the server/global
-// config — the way out of a bad account-level value without knowing the server secrets.
+// Removes this account's override. Shared servers (UazAPI/Evolution) fall back to the platform
+// config; the other providers are account-only and end up unconfigured.
 const clearAccountConfig = async providerKey => {
   const s = state[providerKey];
   s.clearing = true;
@@ -484,7 +484,11 @@ const clearAccountConfig = async providerKey => {
     if (PROVIDERS.find(p => p.key === providerKey)?.syncInstances) {
       loadInstances(providerKey);
     }
-    useAlert('Configuração da conta removida — usando a do servidor.');
+    useAlert(
+      Object.keys(s.sources).length
+        ? 'Configuração da conta removida — usando a do servidor.'
+        : 'Configuração da conta removida.'
+    );
   } catch {
     useAlert('Não foi possível limpar a configuração da conta.');
   } finally {
