@@ -11,6 +11,7 @@ import { required } from '@vuelidate/validators';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import TextArea from 'next/textarea/TextArea.vue';
 import WhatsappReauthorize from '../channels/whatsapp/Reauthorize.vue';
+import InboxSecretCode from '../components/InboxSecretCode.vue';
 import { sanitizeAllowedDomains } from 'dashboard/helper/URLHelper';
 
 export default {
@@ -23,6 +24,7 @@ export default {
     NextButton,
     TextArea,
     WhatsappReauthorize,
+    InboxSecretCode,
   },
   mixins: [inboxMixin],
   props: {
@@ -39,6 +41,7 @@ export default {
       hmacMandatory: false,
       allowMobileWebview: false,
       whatsAppInboxAPIKey: '',
+      whatsAppAppSecret: '',
       isRequestingReauthorization: false,
       isSyncingTemplates: false,
       allowedDomains: '',
@@ -166,6 +169,24 @@ export default {
         useAlert(this.$t('INBOX_MGMT.EDIT.API.ERROR_MESSAGE'));
       }
     },
+    async updateWhatsAppAppSecret() {
+      try {
+        await this.$store.dispatch('inboxes/updateInbox', {
+          id: this.inbox.id,
+          formData: false,
+          channel: {
+            provider_config: {
+              ...this.inbox.provider_config,
+              app_secret: this.whatsAppAppSecret.trim(),
+            },
+          },
+        });
+        this.whatsAppAppSecret = '';
+        useAlert(this.$t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
+      } catch (error) {
+        useAlert(this.$t('INBOX_MGMT.EDIT.API.ERROR_MESSAGE'));
+      }
+    },
     async handleReconfigure() {
       if (this.$refs.whatsappReauth) {
         await this.$refs.whatsappReauth.requestAuthorization();
@@ -287,7 +308,11 @@ export default {
           <p class="mb-1 text-sm font-medium text-n-slate-12">
             {{ $t('INBOX_MGMT.SETTINGS_POPUP.IDENTITY_VALIDATION.SECRET_KEY') }}
           </p>
-          <woot-code :script="inbox.hmac_token" />
+          <InboxSecretCode
+            :inbox-id="inbox.id"
+            field="hmac_token"
+            :masked-value="inbox.hmac_token"
+          />
           <p class="mt-1.5 text-label-small text-n-slate-11">
             {{ $t('INBOX_MGMT.SETTINGS_POPUP.HMAC_DESCRIPTION') }}
             <a
@@ -322,14 +347,22 @@ export default {
       :label="$t('INBOX_MGMT.SETTINGS_POPUP.INBOX_IDENTIFIER')"
       :help-text="$t('INBOX_MGMT.SETTINGS_POPUP.INBOX_IDENTIFIER_SUB_TEXT')"
     >
-      <woot-code :script="inbox.inbox_identifier" />
+      <InboxSecretCode
+        :inbox-id="inbox.id"
+        field="inbox_identifier"
+        :masked-value="inbox.inbox_identifier"
+      />
     </SettingsFieldSection>
 
     <SettingsFieldSection
       :label="$t('INBOX_MGMT.SETTINGS_POPUP.HMAC_VERIFICATION')"
       :help-text="$t('INBOX_MGMT.SETTINGS_POPUP.HMAC_DESCRIPTION')"
     >
-      <woot-code :script="inbox.hmac_token" />
+      <InboxSecretCode
+        :inbox-id="inbox.id"
+        field="hmac_token"
+        :masked-value="inbox.hmac_token"
+      />
     </SettingsFieldSection>
     <SettingsFieldSection
       :label="$t('INBOX_MGMT.SETTINGS_POPUP.HMAC_MANDATORY_VERIFICATION')"
@@ -402,7 +435,11 @@ export default {
             $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_WEBHOOK_SUBHEADER')
           "
         >
-          <woot-code :script="inbox.provider_config.webhook_verify_token" />
+          <InboxSecretCode
+            :inbox-id="inbox.id"
+            field="webhook_verify_token"
+            :masked-value="inbox.provider_config.webhook_verify_token"
+          />
         </SettingsFieldSection>
         <SettingsFieldSection
           :label="$t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_TITLE')"
@@ -410,7 +447,11 @@ export default {
             $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_SUBHEADER')
           "
         >
-          <woot-code :script="inbox.provider_config.api_key" />
+          <InboxSecretCode
+            :inbox-id="inbox.id"
+            field="api_key"
+            :masked-value="inbox.provider_config.api_key"
+          />
         </SettingsFieldSection>
         <SettingsFieldSection
           :label="$t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_UPDATE_TITLE')"
@@ -434,6 +475,31 @@ export default {
             <NextButton
               :disabled="v$.whatsAppInboxAPIKey.$invalid"
               @click="updateWhatsAppInboxAPIKey"
+            >
+              {{
+                $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_UPDATE_BUTTON')
+              }}
+            </NextButton>
+          </div>
+        </SettingsFieldSection>
+        <SettingsFieldSection
+          :label="$t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_APP_SECRET_TITLE')"
+          :help-text="
+            $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_APP_SECRET_SUBHEADER')
+          "
+        >
+          <div class="flex flex-1 justify-between items-center">
+            <woot-input
+              v-model="whatsAppAppSecret"
+              type="password"
+              class="flex-1 mr-2 [&>input]:!mb-0"
+              :placeholder="
+                $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_APP_SECRET_PLACEHOLDER')
+              "
+            />
+            <NextButton
+              :disabled="!whatsAppAppSecret.trim()"
+              @click="updateWhatsAppAppSecret"
             >
               {{
                 $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_UPDATE_BUTTON')

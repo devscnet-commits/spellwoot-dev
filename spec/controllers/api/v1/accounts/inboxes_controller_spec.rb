@@ -153,13 +153,14 @@ RSpec.describe 'Inboxes API', type: :request do
         let(:twilio_channel) { create(:channel_twilio_sms, account: account, account_sid: 'AC123', auth_token: 'secrettoken') }
         let(:twilio_inbox) { create(:inbox, channel: twilio_channel, account: account) }
 
-        it 'returns auth_token and account_sid for admin' do
+        it 'returns the masked auth_token and the account_sid for admin' do
           get "/api/v1/accounts/#{account.id}/inboxes/#{twilio_inbox.id}",
               headers: admin.create_new_auth_token,
               as: :json
           expect(response).to have_http_status(:success)
           data = JSON.parse(response.body, symbolize_names: true)
-          expect(data[:auth_token]).to eq('secrettoken')
+          # Segredo mascarado na resposta; o valor completo só pelo endpoint de revelar (Inboxes::SecretFields).
+          expect(data[:auth_token]).to eq(SecretMaskingHelper.mask_secret('secrettoken'))
           expect(data[:account_sid]).to eq('AC123')
         end
 

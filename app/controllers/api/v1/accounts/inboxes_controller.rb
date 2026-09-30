@@ -17,6 +17,13 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def show; end
 
+  # GET /inboxes/:id/secret?field=hmac_token — valor completo de UM segredo do canal, só admin (InboxPolicy#secret?).
+  def secret
+    return head :not_found unless Inboxes::SecretFields.known_field?(params[:field].to_s)
+
+    render json: { field: params[:field], value: Inboxes::SecretFields.value(@inbox.channel, params[:field].to_s) }
+  end
+
   # Deprecated: This API will be removed in 2.7.0
   def assignable_agents
     @assignable_agents = @inbox.assignable_agents
@@ -453,6 +460,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def update_channel
+    Inboxes::SecretFields.restore_masked_echo!(@inbox.channel, params[:channel])
     channel_attributes = get_channel_attributes(@inbox.channel_type)
     return if permitted_params(channel_attributes)[:channel].blank?
 

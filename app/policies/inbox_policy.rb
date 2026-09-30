@@ -95,6 +95,11 @@ class InboxPolicy < ApplicationPolicy
     admin?
   end
 
+  # Valor completo de um segredo do canal (a lista só traz mascarado).
+  def secret?
+    admin?
+  end
+
   private
 
   def admin?

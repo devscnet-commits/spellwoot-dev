@@ -8,6 +8,7 @@ import EmptyState from '../../../../components/widgets/EmptyState.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import DuplicateInboxBanner from './channels/instagram/DuplicateInboxBanner.vue';
 import EmailInboxFinish from './channels/emailChannels/EmailInboxFinish.vue';
+import InboxSecretCode from './components/InboxSecretCode.vue';
 import { useInbox } from 'dashboard/composables/useInbox';
 import { INBOX_TYPES } from 'dashboard/helper/inbox';
 
@@ -205,9 +206,11 @@ onMounted(() => {
               )
             }}
           </p>
-          <woot-code
+          <InboxSecretCode
             lang="html"
-            :script="currentInbox.provider_config.webhook_verify_token"
+            :inbox-id="currentInbox.id"
+            field="webhook_verify_token"
+            :masked-value="currentInbox.provider_config.webhook_verify_token"
           />
         </div>
         <div class="w-[50%] max-w-[50%] ml-[25%]">

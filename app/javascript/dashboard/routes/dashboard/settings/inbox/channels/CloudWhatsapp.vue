@@ -22,6 +22,7 @@ export default {
       apiKey: '',
       phoneNumberId: '',
       businessAccountId: '',
+      appSecret: '',
     };
   },
   computed: {
@@ -54,6 +55,10 @@ export default {
                 api_key: this.apiKey,
                 phone_number_id: this.phoneNumberId,
                 business_account_id: this.businessAccountId,
+                // Opcional: com ele o webhook só aceita mensagens assinadas pela Meta.
+                ...(this.appSecret.trim() && {
+                  app_secret: this.appSecret.trim(),
+                }),
               },
             },
           }
@@ -159,6 +164,23 @@ export default {
         />
         <span v-if="v$.apiKey.$error" class="message">
           {{ $t('INBOX_MGMT.ADD.WHATSAPP.API_KEY.ERROR') }}
+        </span>
+      </label>
+    </div>
+
+    <div class="flex-shrink-0 flex-grow-0">
+      <label>
+        <span>
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.APP_SECRET.LABEL') }}
+        </span>
+        <input
+          v-model="appSecret"
+          type="password"
+          autocomplete="off"
+          :placeholder="$t('INBOX_MGMT.ADD.WHATSAPP.APP_SECRET.PLACEHOLDER')"
+        />
+        <span class="help-text">
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.APP_SECRET.HELP') }}
         </span>
       </label>
     </div>

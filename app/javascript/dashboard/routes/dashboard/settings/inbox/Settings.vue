@@ -41,6 +41,7 @@ import SelectInput from 'dashboard/components-next/select/Select.vue';
 import Widget from 'dashboard/modules/widget-preview/components/Widget.vue';
 import AccessToken from 'dashboard/routes/dashboard/settings/profile/AccessToken.vue';
 import { copyTextToClipboard } from 'shared/helpers/clipboard';
+import InboxesAPI from 'dashboard/api/inboxes';
 
 export default {
   components: {
@@ -376,8 +377,10 @@ export default {
     this.fetchSharedData();
   },
   methods: {
-    async copyWebhookSecret(value) {
-      await copyTextToClipboard(value);
+    // A lista de caixas traz o segredo mascarado; copia o valor completo buscado na hora (só admin).
+    async copyWebhookSecret() {
+      const { data } = await InboxesAPI.getSecret(this.inbox.id, 'secret');
+      await copyTextToClipboard(data.value);
       useAlert(
         this.$t(
           'INBOX_MGMT.ADD.WEBSITE_CHANNEL.CHANNEL_WEBHOOK_SECRET.COPY_SUCCESS'
