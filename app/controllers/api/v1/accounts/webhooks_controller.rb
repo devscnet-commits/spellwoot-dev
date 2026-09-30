@@ -32,6 +32,7 @@ class Api::V1::Accounts::WebhooksController < Api::V1::Accounts::BaseController
   end
 
   def check_webhook_feature
-    render json: { error: 'Recurso não disponível no plano atual' }, status: :forbidden unless Current.account.feature_enabled?('webhook_api')
+    # Mesma regra das demais travas de módulo: conta sem plano não é barrada; com plano, segue o módulo Webhooks.
+    render json: { error: 'Recurso não disponível no plano atual' }, status: :forbidden unless Billing::PlanModules.allowed?(Current.account, 'webhook_api')
   end
 end
