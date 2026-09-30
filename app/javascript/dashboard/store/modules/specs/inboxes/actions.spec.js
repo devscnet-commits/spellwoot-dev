@@ -102,6 +102,16 @@ describe('#actions', () => {
         [types.default.SET_INBOXES_UI_FLAG, { isCreating: false }],
       ]);
     });
+    it('keeps the server message (e.g. plan inbox limit) on error', async () => {
+      axios.post.mockRejectedValue({
+        response: {
+          data: { error: 'Limite de caixas de entrada do seu plano atingido.' },
+        },
+      });
+      await expect(actions.createFBChannel({ commit })).rejects.toThrow(
+        'Limite de caixas de entrada do seu plano atingido.'
+      );
+    });
   });
 
   describe('#updateInbox', () => {

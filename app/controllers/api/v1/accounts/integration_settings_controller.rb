@@ -31,7 +31,9 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
       account_id: Current.account.id,
       provider: params[:provider]
     )
-    incoming = config_params.reject { |key, value| value.blank? || masked_sensitive?(key, value) }
+    incoming = incoming_config
+    return render_unsafe_url(incoming) if unsafe_url_key(incoming)
+
     setting.config  = setting.config_hash.merge(incoming).to_json
     setting.enabled = params.fetch(:enabled, true)
     setting.save!
@@ -94,6 +96,22 @@ class Api::V1::Accounts::IntegrationSettingsController < Api::V1::Accounts::Base
   end
 
   private
+
+  # Campos enviados, sem vazios e sem o eco mascarado de segredo já salvo.
+  def incoming_config
+    config_params.reject { |key, value| value.blank? || masked_sensitive?(key, value) }
+  end
+
+  # Endereço digitado pelo cliente vira destino de chamadas do NOSSO servidor: só endereço público (sem
+  # localhost/rede interna/metadados da nuvem), senão o formulário vira porta para a rede interna (SSRF).
+  def unsafe_url_key(incoming)
+    incoming.keys.find { |key| key.to_s.match?(/url\z/i) && !Ai::SafeHttp.public_url?(incoming[key]) }
+  end
+
+  def render_unsafe_url(incoming)
+    render json: { error: "Endereço não permitido em #{unsafe_url_key(incoming)}: use um endereço público (https://...)." },
+           status: :unprocessable_entity
+  end
 
   def check_authorization
     authorize(IntegrationSetting)

@@ -18,6 +18,11 @@ class Inboxes extends CacheEnabledApiClient {
     return 'inbox';
   }
 
+  // Valor completo de um segredo do canal (a lista de caixas só traz mascarado). Só admin.
+  getSecret(inboxId, field) {
+    return axios.get(`${this.url}/${inboxId}/secret`, { params: { field } });
+  }
+
   getCampaigns(inboxId) {
     return axios.get(`${this.url}/${inboxId}/campaigns`);
   }

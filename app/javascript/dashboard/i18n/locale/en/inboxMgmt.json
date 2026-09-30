@@ -281,6 +281,11 @@
           "PLACEHOLDER": "API key",
           "ERROR": "Please enter a valid value."
         },
+        "APP_SECRET": {
+          "LABEL": "App Secret (optional)",
+          "PLACEHOLDER": "Meta app secret",
+          "HELP": "Found in the Meta app under Settings > Basic. When filled, only messages signed by Meta are accepted."
+        },
         "API_CALLBACK": {
           "TITLE": "Callback URL",
           "SUBTITLE": "You have to configure the webhook URL and the verification token in the Facebook Developer portal with the values shown below.",
@@ -859,6 +864,11 @@
       "WHATSAPP_SECTION_UPDATE_TITLE": "Update API Key",
       "WHATSAPP_SECTION_UPDATE_PLACEHOLDER": "Enter the new API Key here",
       "WHATSAPP_SECTION_UPDATE_BUTTON": "Update",
+      "WHATSAPP_APP_SECRET_TITLE": "App Secret",
+      "WHATSAPP_APP_SECRET_SUBHEADER": "Secret of your Meta app (Settings > Basic). When filled, the webhook only accepts messages signed by Meta.",
+      "WHATSAPP_APP_SECRET_PLACEHOLDER": "Enter the App Secret here",
+      "SECRET_REVEAL": "Show full value",
+      "SECRET_REVEAL_ERROR": "Could not load the value. Only administrators can view it.",
       "WHATSAPP_EMBEDDED_SIGNUP_TITLE": "WhatsApp Embedded Signup",
       "WHATSAPP_EMBEDDED_SIGNUP_SUBHEADER": "This inbox is connected through WhatsApp embedded signup.",
       "WHATSAPP_EMBEDDED_SIGNUP_DESCRIPTION": "You can reconfigure this inbox to update your WhatsApp Business settings.",

@@ -283,6 +283,11 @@
           "PLACEHOLDER": "Chave da API",
           "ERROR": "Por favor, insira um valor válido."
         },
+        "APP_SECRET": {
+          "LABEL": "App Secret (opcional)",
+          "PLACEHOLDER": "Chave secreta do app da Meta",
+          "HELP": "Fica no app da Meta em Configurações > Básico. Preenchido, o sistema só aceita mensagens assinadas pela Meta."
+        },
         "API_CALLBACK": {
           "TITLE": "URL de callback",
           "SUBTITLE": "Você deve configurar a URL do webhook e o token de verificação no portal do desenvolvedor do Facebook com os valores mostrados abaixo.",
@@ -869,6 +874,11 @@
       "WHATSAPP_SECTION_UPDATE_TITLE": "Atualizar Chave de API",
       "WHATSAPP_SECTION_UPDATE_PLACEHOLDER": "Digite a nova chave de API aqui",
       "WHATSAPP_SECTION_UPDATE_BUTTON": "Atualizar",
+      "WHATSAPP_APP_SECRET_TITLE": "App Secret",
+      "WHATSAPP_APP_SECRET_SUBHEADER": "Chave secreta do seu app da Meta (Configurações > Básico). Preenchida, o webhook só aceita mensagens assinadas pela Meta.",
+      "WHATSAPP_APP_SECRET_PLACEHOLDER": "Digite o App Secret aqui",
+      "SECRET_REVEAL": "Mostrar valor completo",
+      "SECRET_REVEAL_ERROR": "Não foi possível carregar o valor. Só administradores podem ver.",
       "WHATSAPP_EMBEDDED_SIGNUP_TITLE": "Inscrição incorporada do WhatsApp",
       "WHATSAPP_EMBEDDED_SIGNUP_SUBHEADER": "Esta caixa de entrada está conectada através da inscrição incorporada do WhatsApp.",
       "WHATSAPP_EMBEDDED_SIGNUP_DESCRIPTION": "Você pode reconfigurar esta caixa de entrada para atualizar suas configurações do WhatsApp Business.",

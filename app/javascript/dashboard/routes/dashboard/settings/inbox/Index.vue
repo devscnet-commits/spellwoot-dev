@@ -141,14 +141,8 @@ const openDelete = inbox => {
 };
 
 // Uazapi connection methods
-const isUazapiInbox = inbox => {
-  // Check if it's marked as UazAPI or if it's an API channel with UazAPI attributes
-  return (
-    inbox.is_uazapi === true ||
-    (inbox.channel_type === 'Channel::Api' &&
-      inbox.additional_attributes?.uazapi_instance_token)
-  );
-};
+// O backend não envia o token da instância; is_uazapi diz se a caixa é UazAPI.
+const isUazapiInbox = inbox => inbox.is_uazapi === true;
 
 const isUazapiConnected = inboxId => {
   const statusData = uazapiStatuses[inboxId];

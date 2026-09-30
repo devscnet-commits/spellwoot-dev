@@ -2,19 +2,27 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
   include PlanLimitEnforceable
   before_action :fetch_inbox_for_migrate, only: [:migrate]
-  before_action :fetch_inbox, except: [:index, :create, :migrate, :uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
+  # O detalhe da caixa (show) passa pela autorização: agente só abre as caixas das quais é membro.
+  before_action :fetch_inbox, except: [:index, :create, :migrate, :uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   before_action :validate_plan_inboxes_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show, :health, :uazapi_status, :migrate]
   before_action :validate_whatsapp_cloud_channel, only: [:health, :register_webhook]
-  before_action :fetch_inbox_without_auth, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure, :show]
+  before_action :fetch_inbox_without_auth, only: [:uazapi_status, :uazapi_connect, :uazapi_disconnect, :uazapi_reconfigure]
   def index
     @inboxes = policy_scope(Current.account.inboxes.order_by_name.includes(:channel, { avatar_attachment: [:blob] }))
   end
 
   def show; end
+
+  # GET /inboxes/:id/secret?field=hmac_token — valor completo de UM segredo do canal, só admin (InboxPolicy#secret?).
+  def secret
+    return head :not_found unless Inboxes::SecretFields.known_field?(params[:field].to_s)
+
+    render json: { field: params[:field], value: Inboxes::SecretFields.value(@inbox.channel, params[:field].to_s) }
+  end
 
   # Deprecated: This API will be removed in 2.7.0
   def assignable_agents
@@ -381,7 +389,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def fetch_agent_bot
-    @agent_bot = AgentBot.find(params[:agent_bot]) if params[:agent_bot]
+    # Só robô global (account_id nil) ou desta conta: um id de robô de OUTRA conta ligaria a caixa ao webhook dela.
+    @agent_bot = AgentBot.where(account_id: [nil, Current.account.id]).find(params[:agent_bot]) if params[:agent_bot]
   end
 
   def validate_whatsapp_cloud_channel
@@ -451,6 +460,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def update_channel
+    Inboxes::SecretFields.restore_masked_echo!(@inbox.channel, params[:channel])
     channel_attributes = get_channel_attributes(@inbox.channel_type)
     return if permitted_params(channel_attributes)[:channel].blank?
 

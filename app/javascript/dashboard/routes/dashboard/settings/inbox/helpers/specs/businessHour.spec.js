@@ -102,8 +102,34 @@ describe('#timeSlotParse', () => {
         to: '04:30 AM',
         valid: true,
         openAllDay: false,
+        hasLunchBreak: false,
+        lunchFrom: '',
+        lunchTo: '',
       },
     ]);
+  });
+
+  it('parses the lunch break', () => {
+    const slot = {
+      day_of_week: 1,
+      open_hour: 8,
+      open_minutes: 0,
+      close_hour: 18,
+      close_minutes: 0,
+      closed_all_day: false,
+      open_all_day: false,
+      has_lunch_break: true,
+      lunch_start_hour: 12,
+      lunch_start_minutes: 0,
+      lunch_end_hour: 13,
+      lunch_end_minutes: 30,
+    };
+
+    expect(timeSlotParse([slot])[0]).toMatchObject({
+      hasLunchBreak: true,
+      lunchFrom: '12:00 PM',
+      lunchTo: '01:30 PM',
+    });
   });
 });
 
@@ -126,8 +152,34 @@ describe('#timeSlotTransform', () => {
         close_minutes: 30,
         closed_all_day: false,
         open_all_day: false,
+        has_lunch_break: false,
+        lunch_start_hour: null,
+        lunch_start_minutes: null,
+        lunch_end_hour: null,
+        lunch_end_minutes: null,
       },
     ]);
+  });
+
+  it('transforms the lunch break', () => {
+    const slot = {
+      day: 1,
+      from: '08:00 AM',
+      to: '06:00 PM',
+      valid: true,
+      openAllDay: false,
+      hasLunchBreak: true,
+      lunchFrom: '12:00 PM',
+      lunchTo: '01:30 PM',
+    };
+
+    expect(timeSlotTransform([slot])[0]).toMatchObject({
+      has_lunch_break: true,
+      lunch_start_hour: 12,
+      lunch_start_minutes: 0,
+      lunch_end_hour: 13,
+      lunch_end_minutes: 30,
+    });
   });
 });
 

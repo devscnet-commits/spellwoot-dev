@@ -18,12 +18,14 @@ RSpec.describe ChannelAvailability do
       expect(described_class.available?(account.reload, 'web_widget')).to be(false)
     end
 
-    # Conta sem assinatura não pode ser barrada: é o caso de contas internas/dev, e o bitmask dela
-    # continua no default do config/features.yml.
-    it 'não barra conta sem assinatura' do
-      account.enable_features!('channel_whatsapp')
+    # Conta sem assinatura não pode ser barrada (contas internas/dev e antigas), mesmo com o bitmask sem a
+    # flag do canal — mesma regra da trava do modelo (PlanChannelGated).
+    it 'não barra conta sem assinatura, mesmo sem a flag no bitmask' do
+      account.disable_features!('channel_whatsapp', 'channel_facebook', 'channel_whatsapp_unofficial')
 
       expect(described_class.available?(account, 'whatsapp')).to be(true)
+      expect(described_class.available?(account, 'facebook')).to be(true)
+      expect(described_class.unofficial_whatsapp_available?(account)).to be(true)
     end
 
     it 'canal sem campo no plano (line) passa sempre' do

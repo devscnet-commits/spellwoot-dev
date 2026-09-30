@@ -7,9 +7,13 @@ class SamlUserBuilder
     @saml_settings = AccountSamlSettings.find_by(account_id: account_id)
   end
 
+  # Usuário e vínculo na mesma transação: se o vínculo for recusado (limite de usuários do plano), o usuário
+  # novo não fica criado solto, sem conta.
   def perform
-    @user = find_or_create_user
-    add_user_to_account if @user.persisted?
+    ActiveRecord::Base.transaction do
+      @user = find_or_create_user
+      add_user_to_account if @user.persisted?
+    end
     @user
   end
 

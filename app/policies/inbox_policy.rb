@@ -24,10 +24,6 @@ class InboxPolicy < ApplicationPolicy
     return true if @user.is_a?(AgentBot)
     return true if Current.user&.administrator?
 
-  def migrate?
-      Current.user&.administrator?
-    end
-
     Current.user.assigned_inboxes.include? record
   end
 
@@ -96,6 +92,11 @@ class InboxPolicy < ApplicationPolicy
   end
 
   def migrate?
+    admin?
+  end
+
+  # Valor completo de um segredo do canal (a lista só traz mascarado).
+  def secret?
     admin?
   end
 

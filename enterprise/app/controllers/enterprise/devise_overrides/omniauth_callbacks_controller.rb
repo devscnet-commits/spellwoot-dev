@@ -60,6 +60,8 @@ module Enterprise::DeviseOverrides::OmniauthCallbacksController
     handle_saml_auth_error(relay_state, 'saml-authentication-failed')
   rescue SamlUserBuilder::AuthenticationFailed
     handle_saml_auth_error(relay_state, 'saml-authentication-failed')
+  rescue CustomExceptions::Plan::LimitExceeded
+    handle_saml_auth_error(relay_state, 'saml-user-limit')
   end
 
   def extract_saml_account_id

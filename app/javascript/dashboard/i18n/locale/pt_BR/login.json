@@ -34,7 +34,8 @@
       },
       "SUBMIT": "Continuar com SSO",
       "API": {
-        "ERROR_MESSAGE": "A autenticação SSO falhou. Verifique suas credenciais e tente novamente."
+        "ERROR_MESSAGE": "A autenticação SSO falhou. Verifique suas credenciais e tente novamente.",
+        "USER_LIMIT": "Esta conta atingiu o limite de usuários do plano. Peça a um administrador para liberar uma vaga ou mudar o plano."
       }
     }
   }

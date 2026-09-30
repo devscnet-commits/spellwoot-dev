@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import ForwardToOption from './emailChannels/ForwardToOption.vue';
 import Microsoft from './emailChannels/Microsoft.vue';
 import Google from './emailChannels/Google.vue';
@@ -7,6 +7,7 @@ import ChannelSelector from 'dashboard/components/ChannelSelector.vue';
 import PageHeader from '../../SettingsSubPageHeader.vue';
 
 import { useStoreGetters } from 'dashboard/composables/store';
+import { useAlert } from 'dashboard/composables';
 import { useI18n } from 'vue-i18n';
 
 const provider = ref('');
@@ -46,6 +47,18 @@ const emailProviderList = computed(() => {
     }
     return providerConfig.isEnabled;
   });
+});
+
+// O callback OAuth (Google/Microsoft) volta para cá com error_message quando o plano recusa a caixa
+// (ex.: limite de caixas atingido). Mostra o aviso e limpa a URL para não repetir no reload.
+onMounted(() => {
+  const errorMessage = new URLSearchParams(window.location.search).get(
+    'error_message'
+  );
+  if (!errorMessage) return;
+
+  useAlert(errorMessage);
+  window.history.replaceState({}, document.title, window.location.pathname);
 });
 
 function onClick(emailProvider) {

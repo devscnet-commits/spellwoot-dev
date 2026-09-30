@@ -1,4 +1,6 @@
 require 'ssrf_filter'
+require 'ipaddr'
+require 'resolv'
 
 # Cliente HTTP de saída SEGURO contra SSRF para chamadas cujo destino é controlado por dados do
 # usuário (webhooks de automação/ferramenta, integrações, crawl de site). Roteia TODA requisição
@@ -30,6 +32,29 @@ module Ai::SafeHttp
   # Objeto de retorno compatível com o que os callers já liam do response do HTTParty:
   # `.code` (Integer, ex.: 200) e `.body` (String). Os callers seguem fazendo o parse manual.
   Response = Struct.new(:code, :body)
+
+  # Validação só do destino, sem fazer a requisição: para URLs que o cliente CADASTRA e que o servidor chama
+  # depois por outro cliente HTTP (ex.: endereço do servidor UazAPI/Evolution em APIs & Credenciais). Aceita só
+  # http(s) cujo host resolve apenas para IPs públicos — barra localhost, rede interna, link-local e o endpoint de
+  # metadados da nuvem. Host que não resolve também é barrado.
+  BLOCKED_RANGES = %w[0.0.0.0/8 100.64.0.0/10 192.0.0.0/24 198.18.0.0/15 224.0.0.0/3 ::/128 64:ff9b::/96].map { |r| IPAddr.new(r) }.freeze
+
+  def self.public_url?(url)
+    uri = URI.parse(url.to_s.strip)
+    return false unless %w[http https].include?(uri.scheme) && uri.host.present?
+
+    addresses = Resolv.getaddresses(uri.host)
+    addresses.any? && addresses.all? { |address| public_ip?(IPAddr.new(address)) }
+  rescue URI::InvalidURIError, IPAddr::InvalidAddressError
+    false
+  end
+
+  def self.public_ip?(ip)
+    ip = ip.native if ip.ipv4_mapped?
+    return false if ip.private? || ip.loopback? || ip.link_local?
+
+    BLOCKED_RANGES.none? { |range| range.family == ip.family && range.include?(ip) }
+  end
 
   # Executa a requisição validando o destino contra SSRF.
   #   method  - :get/:post/:put/:patch/:delete/:head
