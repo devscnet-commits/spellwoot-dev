@@ -382,7 +382,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def fetch_agent_bot
-    @agent_bot = AgentBot.find(params[:agent_bot]) if params[:agent_bot]
+    # Só robô global (account_id nil) ou desta conta: um id de robô de OUTRA conta ligaria a caixa ao webhook dela.
+    @agent_bot = AgentBot.where(account_id: [nil, Current.account.id]).find(params[:agent_bot]) if params[:agent_bot]
   end
 
   def validate_whatsapp_cloud_channel

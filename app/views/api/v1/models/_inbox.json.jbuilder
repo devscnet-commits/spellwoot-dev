@@ -125,7 +125,10 @@ if resource.api?
   json.secret resource.channel.try(:secret) if Current.account_user&.administrator?
   json.webhook_url resource.channel.try(:webhook_url)
   json.inbox_identifier resource.channel.try(:identifier)
-  json.additional_attributes resource.channel.try(:additional_attributes)
+  # O token da instância UazAPI controla o WhatsApp da caixa (enviar, desconectar): nunca sai no JSON, nem para
+  # admin — a tela só precisa saber se a caixa é UazAPI.
+  json.additional_attributes resource.channel.try(:additional_attributes).to_h.except('uazapi_instance_token')
+  json.is_uazapi resource.channel.try(:additional_attributes).to_h['uazapi_instance_token'].present?
 end
 
 json.provider resource.channel.try(:provider)
