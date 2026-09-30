@@ -5,10 +5,10 @@
 # não tinham nem flag. Na prática a tabela de planos era decorativa para 7 dos 9 canais: bastava
 # chamar a API para criar um canal que o plano não inclui.
 #
-# Lê o BITMASK da conta, não o plano direto: conta SEM assinatura não pode ser barrada (FeatureGate
-# nega por padrão, e contas internas/dev não têm plano). O bitmask é a projeção do plano
-# (Plan#sync_features_to!) para quem tem assinatura, e o default de config/features.yml para quem não
-# tem — exatamente a semântica desejada aqui.
+# Mesma regra das demais travas de módulo (Billing::PlanModules): conta SEM plano nunca é barrada (contas
+# internas/dev e antigas); conta COM plano segue o bitmask, que é a projeção do plano (Plan#sync_features_to!).
+# Antes lia só o bitmask, e conta sem plano cujo bitmask não tinha a flag (conta criada antes da flag
+# existir) era barrada aqui mas liberada na trava do modelo (PlanChannelGated) — duas regras para o mesmo canal.
 class ChannelAvailability
   # Canal -> flag de conta. Só os canais que a tabela de planos v2 diferencia entram; os demais
   # (line, tiktok, twitter) continuam sem gate — ligá-los sem um campo no plano criaria um toggle
@@ -31,7 +31,7 @@ class ChannelAvailability
   UNOFFICIAL_WHATSAPP_PROVIDERS = %w[uazapi evolution_api].freeze
 
   def self.unofficial_whatsapp_available?(account)
-    available?(account, 'whatsapp') && account.feature_enabled?(UNOFFICIAL_WHATSAPP_FLAG)
+    available?(account, 'whatsapp') && Billing::PlanModules.allowed?(account, UNOFFICIAL_WHATSAPP_FLAG)
   end
 
   def self.unofficial_whatsapp_unavailable_message
@@ -42,7 +42,7 @@ class ChannelAvailability
     flag = FEATURE_BY_CHANNEL[channel_type.to_s]
     return true if flag.blank?
 
-    account.present? && account.feature_enabled?(flag)
+    account.present? && Billing::PlanModules.allowed?(account, flag)
   end
 
   # Só os canais do plano, preservando a ordem recebida.
