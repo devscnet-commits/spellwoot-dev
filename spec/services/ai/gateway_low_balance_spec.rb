@@ -6,7 +6,8 @@ RSpec.describe 'Ai::Gateway aviso de saldo baixo', type: :model do
   include ActiveJob::TestHelper
 
   let(:account) { create(:account) }
-  let(:inbox) { create(:inbox, account: account) }
+  # let!: a caixa existe antes do plano de teste (que não tem canais — PlanChannelGated).
+  let!(:inbox) { create(:inbox, account: account) }
   let(:profile) do
     Ai::OperationProfile.create!(account_id: account.id, name: 'balanceado',
                                  supervisor_provider: 'openai', supervisor_model: 'gpt-4.1-mini')

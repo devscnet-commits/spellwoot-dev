@@ -1,4 +1,9 @@
 class Api::V2::Accounts::SummaryReportsController < Api::V1::Accounts::BaseController
+  # Módulo "Relatórios / Dashboards BI" do plano (dashboards_bi -> reports): sem ele a API de relatórios fica fechada,
+  # não só o menu escondido.
+  include PlanFeatureEnforceable
+
+  before_action -> { enforce_plan_module('reports', 'Relatórios não estão incluídos no plano desta conta.') }
   before_action :check_authorization
   before_action :prepare_builder_params, only: [:agent, :team, :inbox, :label, :channel]
 

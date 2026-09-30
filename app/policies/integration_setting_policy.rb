@@ -12,8 +12,9 @@ class IntegrationSettingPolicy < ApplicationPolicy
     @account_user.administrator?
   end
 
+  # Grava a config GLOBAL (account_id nil), que vale para todas as contas: não é do admin de um cliente.
   def import_from_env?
-    @account_user.administrator?
+    @user.is_a?(SuperAdmin)
   end
 
   def test_connection?

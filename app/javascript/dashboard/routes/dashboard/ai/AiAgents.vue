@@ -137,7 +137,8 @@ const duplicate = async agent => {
     useAlert(t('AI_AGENTS.SAVED'));
     fetchAgents();
   } catch (error) {
-    useAlert(t('AI_AGENTS.ERROR'));
+    // 402 = limite de agentes do plano atingido: mostra o motivo, não um erro genérico.
+    useAlert(error.response?.data?.error || t('AI_AGENTS.ERROR'));
   }
 };
 

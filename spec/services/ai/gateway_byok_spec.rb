@@ -7,7 +7,8 @@ require 'rails_helper'
 # pela chamada que teve de usar a chave da plataforma.
 RSpec.describe 'Ai::Gateway fallback BYOK', type: :model do
   let(:account) { create(:account) }
-  let(:inbox) { create(:inbox, account: account) }
+  # let!: a caixa existe antes do plano de teste (que só tem a chave própria, sem canais — PlanChannelGated).
+  let!(:inbox) { create(:inbox, account: account) }
   # openai, não anthropic: o discriminador de cobrança (Ai::Gateway#account_byok?) consulta a chave
   # de openai fixo, porque é o único provider que o orquestrador Python executa hoje. Num perfil de
   # outro provider a conta seria tratada como sem chave própria e o billing barraria o turno antes de

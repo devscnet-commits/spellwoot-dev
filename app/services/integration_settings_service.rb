@@ -36,8 +36,15 @@ class IntegrationSettingsService
     }
   }.freeze
 
-  # 3-tier resolution: account config → global config → ENV
-  # Each tier fills only keys absent from higher tiers.
+  # Servidores COMPARTILHADOS da plataforma: aqui a herança global/ENV é o comportamento desejado (a conta
+  # usa o servidor UazAPI/Evolution da plataforma sem cadastrar nada). Os demais provedores são do NEGÓCIO
+  # do cliente (Pixel/Token da Meta, Bitrix, n8n, Google, chave de IA): herdar o global mandava os leads de
+  # todo cliente para o Pixel da plataforma (com o Test Event Code dela) e mostrava a config da plataforma
+  # na tela do cliente com o selo "Global". Para esses, só vale o que a própria conta cadastrou.
+  SHARED_PROVIDERS = %w[uazapi evolution_api].freeze
+
+  # 3-tier resolution: account config → global config → ENV (only for SHARED_PROVIDERS; the others are
+  # account-only). Each tier fills only keys absent from higher tiers.
   #
   # An explicit account-level opt-out (a row for this account with enabled=false) turns the
   # provider OFF for the account, even when a global/server config exists — otherwise the
@@ -50,6 +57,8 @@ class IntegrationSettingsService
     end
 
     account_cfg = load_db(account_id, provider)
+    return account_cfg unless SHARED_PROVIDERS.include?(provider)
+
     global_cfg  = load_db(nil, provider)
     env_cfg     = load_env(provider)
 

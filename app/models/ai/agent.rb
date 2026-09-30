@@ -43,6 +43,8 @@
 #  index_ai_agents_on_team_id     (team_id)
 #
 class Ai::Agent < ApplicationRecord
+  include PlanLimited
+
   STAGES = %w[production staging sandbox experimental].freeze
 
   # Campos versionados (histórico + rollback) via Ai::Version polimórfico. São colunas planas, então
@@ -53,6 +55,7 @@ class Ai::Agent < ApplicationRecord
                        ai_operation_profile_id].freeze
 
   belongs_to :account, class_name: '::Account'
+  plan_limited 'ai_agents'
   belongs_to :operation_profile, class_name: 'Ai::OperationProfile',
                                   foreign_key: :ai_operation_profile_id, optional: true
   # Optional routing link: conversations assigned to this team are handled by this agent.

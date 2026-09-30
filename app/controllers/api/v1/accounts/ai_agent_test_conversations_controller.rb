@@ -14,7 +14,7 @@
 class Api::V1::Accounts::AiAgentTestConversationsController < Api::V1::Accounts::BaseController
   before_action :set_agent
 
-  TEST_INBOX_NAME = 'Teste de Agentes IA'.freeze
+  TEST_INBOX_NAME = ::Inbox::AI_TEST_INBOX_NAME
 
   def show
     conversation = current_test_conversation

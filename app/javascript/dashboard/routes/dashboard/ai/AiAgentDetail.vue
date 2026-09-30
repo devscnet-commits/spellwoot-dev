@@ -255,11 +255,12 @@ const saveAgent = async () => {
     resetAgent();
   } catch (error) {
     // Surface the API's validation messages instead of a generic error.
+    // (402 do limite do plano vem em "error", singular.)
     const messages = error.response?.data?.errors;
     useAlert(
       Array.isArray(messages) && messages.length
         ? messages.join('. ')
-        : t('AI_AGENTS.ERROR')
+        : error.response?.data?.error || t('AI_AGENTS.ERROR')
     );
   } finally {
     isSaving.value = false;

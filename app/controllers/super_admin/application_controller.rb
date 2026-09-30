@@ -15,6 +15,11 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
   # Super Admin é uso interno da Conexi — sempre pt_BR, independente do locale do dashboard/conta
   # (que continua vindo de SwitchLocale). Não mexe no I18n.default_locale do app inteiro.
   around_action :switch_locale_to_pt_br
+  # Criar pelo Super Admin também respeita o limite do plano da conta (PlanLimited) — avisa em vez de erro 500.
+  rescue_from CustomExceptions::Plan::LimitExceeded, CustomExceptions::Plan::FeatureUnavailable do |exception|
+    flash[:error] = exception.message
+    redirect_back(fallback_location: root_path)
+  end
 
   # Override this value to specify the number of elements to display at a time
   # on index pages. Defaults to 20.
