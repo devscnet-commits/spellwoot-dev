@@ -295,3 +295,8 @@
   display_name: Token de Acesso Pessoal (API)
   enabled: false
   premium: true
+# Liga/desliga a IA (Agentes IA) da conta. Precisa estar nesta lista: o Super Admin só desenha e
+# preserva ao salvar as flags daqui — fora dela, salvar a conta apagava ai_core e desligava a IA.
+- name: ai_core
+  display_name: AI Core (Agentes IA)
+  enabled: false
