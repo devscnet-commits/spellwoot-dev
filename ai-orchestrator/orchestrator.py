@@ -925,3 +925,68 @@ def _post_control_tool(tool_name: str, arguments: dict, *, ticket_id: int, ai_ag
         # customer — that's the exact silence bug this refactor exists to kill, from a new angle.
         logger.error("ticket_id=%s: control tool webhook failed for %s: %s", ticket_id, tool_name, e)
 
+
+
+# Follow-up do pipeline (Rails: Pipelines::AiFollowupService): UMA mensagem gerada pela IA para retomar
+# uma conversa parada. Desenho de docs/ai-followup-personalization-design.md §3 — o gatilho vai como item
+# role "developer" (não finge que o cliente disse algo), sem ferramentas e com um schema mínimo
+# {message}. Mesma conversation da OpenAI do atendimento: a IA lembra que mandou o follow-up quando o
+# cliente responder.
+FOLLOWUP_SCHEMA = {
+    "type": "object",
+    "properties": {"message": {"type": "string", "description": "Mensagem a enviar ao cliente agora."}},
+    "required": ["message"],
+    "additionalProperties": False,
+}
+
+
+def run_followup(
+    *,
+    ticket_id: int,
+    account_id: int | None,
+    system_prompt: str,
+    instruction: str,
+    conversation_id: str | None,
+    model: str | None = None,
+    temperature: float | None = None,
+    account_api_key: str | None = None,
+) -> tuple[str, str, bool, int, int, str]:
+    """Devolve (message, conversation_id, byok_fallback, tokens_in, tokens_out, resolved_model)."""
+    resolved_model = model or config.OPENAI_MODEL
+    reused_conversation = conversation_id is not None
+    client, using_account_key = _resolve_client(account_id, account_api_key)
+    conversation_id, client, conv_byok_fallback = _ensure_conversation(client, using_account_key, ticket_id, conversation_id)
+    using_account_key = using_account_key and not conv_byok_fallback
+
+    def _kwargs(conv_id: str) -> dict:
+        kwargs = {
+            "model": resolved_model,
+            "conversation": conv_id,
+            "instructions": system_prompt,
+            "input": [{"role": "developer", "content": instruction}],
+            "text": {"format": {"type": "json_schema", "name": "followup_message", "schema": FOLLOWUP_SCHEMA, "strict": True}},
+            "truncation": "auto",
+        }
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        return kwargs
+
+    try:
+        response, client, fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, _kwargs(conversation_id))
+    except CONVERSATION_ACCESS_ERRORS as e:
+        if not reused_conversation:
+            raise TurnFailed(conversation_id) from e
+        try:
+            conversation_id = client.conversations.create().id
+            response, client, fallback = _call_with_byok_fallback(client, using_account_key, ticket_id, _kwargs(conversation_id))
+        except Exception as inner:
+            raise TurnFailed(conversation_id) from inner
+    except Exception as e:
+        raise TurnFailed(conversation_id) from e
+
+    payload = _parse_structured_reply(response.output_text) or {}
+    message = str(payload.get("message") or "").strip()
+    tokens_in = response.usage.input_tokens if response.usage else 0
+    tokens_out = response.usage.output_tokens if response.usage else 0
+    logger.info("ticket_id=%s follow-up gerado chars=%s", ticket_id, len(message))
+    return message, conversation_id, conv_byok_fallback or fallback, tokens_in or 0, tokens_out or 0, resolved_model

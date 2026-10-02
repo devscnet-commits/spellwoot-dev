@@ -2866,6 +2866,42 @@ ALTER SEQUENCE public.conversation_result_events_id_seq OWNED BY public.conversa
 
 
 --
+-- Name: conversation_stage_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conversation_stage_events (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    conversation_id bigint NOT NULL,
+    operational_flow_id bigint NOT NULL,
+    from_stage_id bigint,
+    to_stage_id bigint,
+    user_id bigint,
+    source character varying DEFAULT 'manual'::character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: conversation_stage_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conversation_stage_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conversation_stage_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.conversation_stage_events_id_seq OWNED BY public.conversation_stage_events.id;
+
+
+--
 -- Name: conversations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2904,7 +2940,11 @@ CREATE TABLE public.conversations (
     closed_by_ai boolean DEFAULT false NOT NULL,
     result_category character varying,
     result_canonical_key character varying,
-    group_chat boolean DEFAULT false NOT NULL
+    group_chat boolean DEFAULT false NOT NULL,
+    pipeline_stage_id bigint,
+    pipeline_stage_entered_at timestamp(6) without time zone,
+    temperature integer,
+    pipeline_sla_due_at timestamp(6) without time zone
 );
 
 
@@ -4040,7 +4080,8 @@ CREATE TABLE public.operational_flows (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     category character varying DEFAULT 'sales'::character varying NOT NULL,
-    meta_enabled boolean DEFAULT false NOT NULL
+    meta_enabled boolean DEFAULT false NOT NULL,
+    value_attribute_key character varying
 );
 
 
@@ -4134,6 +4175,84 @@ CREATE SEQUENCE public.overage_snapshots_id_seq
 --
 
 ALTER SEQUENCE public.overage_snapshots_id_seq OWNED BY public.overage_snapshots.id;
+
+
+--
+-- Name: pipeline_automation_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pipeline_automation_runs (
+    id bigint NOT NULL,
+    pipeline_automation_id bigint NOT NULL,
+    conversation_id bigint NOT NULL,
+    anchor_at timestamp(6) without time zone NOT NULL,
+    status character varying DEFAULT 'running'::character varying NOT NULL,
+    error character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: pipeline_automation_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.pipeline_automation_runs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: pipeline_automation_runs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.pipeline_automation_runs_id_seq OWNED BY public.pipeline_automation_runs.id;
+
+
+--
+-- Name: pipeline_automations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pipeline_automations (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    operational_flow_id bigint NOT NULL,
+    resolution_state_id bigint NOT NULL,
+    name character varying NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    kind character varying DEFAULT 'automation'::character varying NOT NULL,
+    trigger_type character varying DEFAULT 'stage_entered'::character varying NOT NULL,
+    delay_minutes integer DEFAULT 0 NOT NULL,
+    inactivity_sender character varying DEFAULT 'any'::character varying NOT NULL,
+    conditions jsonb DEFAULT '[]'::jsonb NOT NULL,
+    match_type character varying DEFAULT 'all'::character varying NOT NULL,
+    actions jsonb DEFAULT '[]'::jsonb NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: pipeline_automations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.pipeline_automations_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: pipeline_automations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.pipeline_automations_id_seq OWNED BY public.pipeline_automations.id;
 
 
 --
@@ -4525,7 +4644,9 @@ CREATE TABLE public.resolution_states (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     meta_event_type character varying,
-    meta_value_attr character varying
+    meta_value_attr character varying,
+    is_default boolean DEFAULT false NOT NULL,
+    color character varying
 );
 
 
@@ -5543,6 +5664,13 @@ ALTER TABLE ONLY public.conversation_result_events ALTER COLUMN id SET DEFAULT n
 
 
 --
+-- Name: conversation_stage_events id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_stage_events ALTER COLUMN id SET DEFAULT nextval('public.conversation_stage_events_id_seq'::regclass);
+
+
+--
 -- Name: conversations id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5778,6 +5906,20 @@ ALTER TABLE ONLY public.overage_charges ALTER COLUMN id SET DEFAULT nextval('pub
 --
 
 ALTER TABLE ONLY public.overage_snapshots ALTER COLUMN id SET DEFAULT nextval('public.overage_snapshots_id_seq'::regclass);
+
+
+--
+-- Name: pipeline_automation_runs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automation_runs ALTER COLUMN id SET DEFAULT nextval('public.pipeline_automation_runs_id_seq'::regclass);
+
+
+--
+-- Name: pipeline_automations id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automations ALTER COLUMN id SET DEFAULT nextval('public.pipeline_automations_id_seq'::regclass);
 
 
 --
@@ -6525,6 +6667,14 @@ ALTER TABLE ONLY public.conversation_result_events
 
 
 --
+-- Name: conversation_stage_events conversation_stage_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_stage_events
+    ADD CONSTRAINT conversation_stage_events_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conversations conversations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6794,6 +6944,22 @@ ALTER TABLE ONLY public.overage_charges
 
 ALTER TABLE ONLY public.overage_snapshots
     ADD CONSTRAINT overage_snapshots_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pipeline_automation_runs pipeline_automation_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automation_runs
+    ADD CONSTRAINT pipeline_automation_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pipeline_automations pipeline_automations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automations
+    ADD CONSTRAINT pipeline_automations_pkey PRIMARY KEY (id);
 
 
 --
@@ -7102,6 +7268,13 @@ CREATE UNIQUE INDEX idx_on_agent_capacity_policy_id_inbox_id_71c7ec4caf ON publi
 
 
 --
+-- Name: idx_pipeline_automation_runs_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_pipeline_automation_runs_unique ON public.pipeline_automation_runs USING btree (pipeline_automation_id, conversation_id, anchor_at);
+
+
+--
 -- Name: idx_provider_instances_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7120,6 +7293,20 @@ CREATE INDEX idx_re_account_team_name_date ON public.reporting_events USING btre
 --
 
 CREATE UNIQUE INDEX idx_resolution_states_flow_canonical ON public.resolution_states USING btree (operational_flow_id, canonical_key);
+
+
+--
+-- Name: idx_stage_events_conversation_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_stage_events_conversation_created ON public.conversation_stage_events USING btree (conversation_id, created_at);
+
+
+--
+-- Name: idx_stage_events_flow_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_stage_events_flow_created ON public.conversation_stage_events USING btree (operational_flow_id, created_at);
 
 
 --
@@ -8222,6 +8409,20 @@ CREATE INDEX index_conversation_result_events_on_conversation_id ON public.conve
 
 
 --
+-- Name: index_conversation_stage_events_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_conversation_stage_events_on_account_id ON public.conversation_stage_events USING btree (account_id);
+
+
+--
+-- Name: index_conversation_stage_events_on_to_stage_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_conversation_stage_events_on_to_stage_id ON public.conversation_stage_events USING btree (to_stage_id);
+
+
+--
 -- Name: index_conversations_on_account_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8296,6 +8497,13 @@ CREATE INDEX index_conversations_on_identifier_and_account_id ON public.conversa
 --
 
 CREATE INDEX index_conversations_on_inbox_id ON public.conversations USING btree (inbox_id);
+
+
+--
+-- Name: index_conversations_on_pipeline_stage_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_conversations_on_pipeline_stage_id ON public.conversations USING btree (pipeline_stage_id);
 
 
 --
@@ -8884,6 +9092,41 @@ CREATE INDEX index_overage_snapshots_on_account_id ON public.overage_snapshots U
 --
 
 CREATE UNIQUE INDEX index_overage_snapshots_unique_daily ON public.overage_snapshots USING btree (account_id, plan_limit_key, snapshot_date);
+
+
+--
+-- Name: index_pipeline_automation_runs_on_conversation_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_pipeline_automation_runs_on_conversation_id ON public.pipeline_automation_runs USING btree (conversation_id);
+
+
+--
+-- Name: index_pipeline_automations_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_pipeline_automations_on_account_id ON public.pipeline_automations USING btree (account_id);
+
+
+--
+-- Name: index_pipeline_automations_on_active_and_trigger_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_pipeline_automations_on_active_and_trigger_type ON public.pipeline_automations USING btree (active, trigger_type);
+
+
+--
+-- Name: index_pipeline_automations_on_operational_flow_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_pipeline_automations_on_operational_flow_id ON public.pipeline_automations USING btree (operational_flow_id);
+
+
+--
+-- Name: index_pipeline_automations_on_resolution_state_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_pipeline_automations_on_resolution_state_id ON public.pipeline_automations USING btree (resolution_state_id);
 
 
 --
@@ -9513,6 +9756,14 @@ ALTER TABLE ONLY public.agent_assignment_logs
 
 
 --
+-- Name: conversation_stage_events fk_rails_0b601adaa9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_stage_events
+    ADD CONSTRAINT fk_rails_0b601adaa9 FOREIGN KEY (to_stage_id) REFERENCES public.resolution_states(id) ON DELETE SET NULL;
+
+
+--
 -- Name: working_periods fk_rails_1206a1c65d; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9553,11 +9804,35 @@ ALTER TABLE ONLY public.agent_schedules
 
 
 --
+-- Name: pipeline_automations fk_rails_1e17640c7f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automations
+    ADD CONSTRAINT fk_rails_1e17640c7f FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conversation_stage_events fk_rails_1f1dc39aea; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_stage_events
+    ADD CONSTRAINT fk_rails_1f1dc39aea FOREIGN KEY (from_stage_id) REFERENCES public.resolution_states(id) ON DELETE SET NULL;
+
+
+--
 -- Name: ai_credit_requests fk_rails_2e635b4b99; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ai_credit_requests
     ADD CONSTRAINT fk_rails_2e635b4b99 FOREIGN KEY (approved_by_id) REFERENCES public.users(id);
+
+
+--
+-- Name: pipeline_automations fk_rails_2e986b8f2d; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automations
+    ADD CONSTRAINT fk_rails_2e986b8f2d FOREIGN KEY (operational_flow_id) REFERENCES public.operational_flows(id) ON DELETE CASCADE;
 
 
 --
@@ -9574,6 +9849,14 @@ ALTER TABLE ONLY public.agent_assignment_logs
 
 ALTER TABLE ONLY public.inbox_exceptions
     ADD CONSTRAINT fk_rails_38c5e693b5 FOREIGN KEY (inbox_id) REFERENCES public.inboxes(id);
+
+
+--
+-- Name: conversation_stage_events fk_rails_3cf1d80455; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_stage_events
+    ADD CONSTRAINT fk_rails_3cf1d80455 FOREIGN KEY (operational_flow_id) REFERENCES public.operational_flows(id) ON DELETE CASCADE;
 
 
 --
@@ -9665,6 +9948,14 @@ ALTER TABLE ONLY public.team_inboxes
 
 
 --
+-- Name: conversation_stage_events fk_rails_84cacc0d22; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_stage_events
+    ADD CONSTRAINT fk_rails_84cacc0d22 FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+
+
+--
 -- Name: ai_handoff_summaries fk_rails_854731489d; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9694,6 +9985,14 @@ ALTER TABLE ONLY public.overage_charges
 
 ALTER TABLE ONLY public.active_storage_variant_records
     ADD CONSTRAINT fk_rails_993965df05 FOREIGN KEY (blob_id) REFERENCES public.active_storage_blobs(id);
+
+
+--
+-- Name: pipeline_automations fk_rails_a02e38d653; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automations
+    ADD CONSTRAINT fk_rails_a02e38d653 FOREIGN KEY (resolution_state_id) REFERENCES public.resolution_states(id) ON DELETE CASCADE;
 
 
 --
@@ -9761,6 +10060,22 @@ ALTER TABLE ONLY public.agent_schedules
 
 
 --
+-- Name: pipeline_automation_runs fk_rails_ce672335bf; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automation_runs
+    ADD CONSTRAINT fk_rails_ce672335bf FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conversations fk_rails_ce756ce6ec; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversations
+    ADD CONSTRAINT fk_rails_ce756ce6ec FOREIGN KEY (pipeline_stage_id) REFERENCES public.resolution_states(id) ON DELETE SET NULL;
+
+
+--
 -- Name: closing_requirements fk_rails_d02c128f41; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9782,6 +10097,14 @@ ALTER TABLE ONLY public.team_inboxes
 
 ALTER TABLE ONLY public.agent_assignment_logs
     ADD CONSTRAINT fk_rails_db243bdb17 FOREIGN KEY (account_id) REFERENCES public.accounts(id);
+
+
+--
+-- Name: conversation_stage_events fk_rails_e043edbcb5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_stage_events
+    ADD CONSTRAINT fk_rails_e043edbcb5 FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --
@@ -9809,6 +10132,14 @@ ALTER TABLE ONLY public.agent_presence_snapshots
 
 
 --
+-- Name: pipeline_automation_runs fk_rails_fb3a6c7af1; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_automation_runs
+    ADD CONSTRAINT fk_rails_fb3a6c7af1 FOREIGN KEY (pipeline_automation_id) REFERENCES public.pipeline_automations(id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -9817,6 +10148,9 @@ ALTER TABLE ONLY public.agent_presence_snapshots
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261002120200'),
+('20261002120100'),
+('20261002120000'),
 ('20260930120000'),
 ('20260929130000'),
 ('20260926120000'),

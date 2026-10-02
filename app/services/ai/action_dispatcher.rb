@@ -85,6 +85,17 @@ class Ai::ActionDispatcher
     emit('reply.failed', { error: "#{e.class}: #{e.message}" })
   end
 
+  # Follow-up do pipeline (Pipelines::AiFollowupService): o admin escolheu ESTE agente para retomar a
+  # conversa naquela etapa, então a entrega não passa pelo gate de atendimento ao vivo da caixa (o agente
+  # de follow-up não precisa estar vinculado a ela). Mesma entrega/quebra e mesmo débito de crédito do reply.
+  def deliver_followup(text)
+    return if text.blank? || Conversations::GroupDetector.group?(@conversation)
+
+    deliver(text)
+    emit('pipeline_followup.sent', { chars: text.length })
+    consume_credit
+  end
+
   # Nota INTERNA (privada) para o atendente humano — não vai para o cliente. Usada no handoff por
   # crédito esgotado (billing Fase 2). Erro é logado sem interromper o handoff.
   def internal_note(text)

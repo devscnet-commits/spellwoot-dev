@@ -180,3 +180,53 @@ def process(request: ProcessRequest, authorization: Optional[str] = Header(None)
                             byok_fallback=byok_fallback, confidence=confidence, transferred=transferred,
                             tokens_in=tokens_in, tokens_out=tokens_out, model=used_model, tool_calls=tool_usage,
                             knowledge_failed=knowledge_failed)
+
+
+class FollowupRequest(BaseModel):
+    ticket_id: int
+    account_id: Optional[int] = None
+    ai_agent_id: int
+    # Persona do agente (Rails: Ai::PythonOrchestratorClient#followup_system_prompt) e o gatilho do
+    # follow-up (prompt da etapa + tempo parado + histórico recente) — ver orchestrator.run_followup.
+    system_prompt: str
+    instruction: str
+    conversation_id: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    account_api_key: Optional[str] = None
+
+
+class FollowupResponse(BaseModel):
+    ticket_id: int
+    message: str
+    conversation_id: str
+    byok_fallback: bool = False
+    tokens_in: int = 0
+    tokens_out: int = 0
+    model: str = ""
+
+
+@app.post("/followup", response_model=FollowupResponse)
+def followup(request: FollowupRequest, authorization: Optional[str] = Header(None)) -> FollowupResponse:
+    _authenticate(authorization)
+    try:
+        message, conversation_id, byok_fallback, tokens_in, tokens_out, used_model = orchestrator.run_followup(
+            ticket_id=request.ticket_id,
+            account_id=request.account_id,
+            system_prompt=request.system_prompt,
+            instruction=request.instruction,
+            conversation_id=request.conversation_id,
+            model=request.model,
+            temperature=request.temperature,
+            account_api_key=request.account_api_key,
+        )
+    except orchestrator.TurnFailed as e:
+        logger.exception("ticket_id=%s ai_agent_id=%s: follow-up failed", request.ticket_id, request.ai_agent_id)
+        raise HTTPException(status_code=502,
+                            detail={"error": "AI processing failed", "conversation_id": e.conversation_id})
+    except Exception:
+        logger.exception("ticket_id=%s ai_agent_id=%s: follow-up failed", request.ticket_id, request.ai_agent_id)
+        raise HTTPException(status_code=502, detail="AI processing failed")
+
+    return FollowupResponse(ticket_id=request.ticket_id, message=message, conversation_id=conversation_id,
+                            byok_fallback=byok_fallback, tokens_in=tokens_in, tokens_out=tokens_out, model=used_model)

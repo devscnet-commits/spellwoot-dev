@@ -82,15 +82,32 @@ class Ai::ReplyPolicy
   #     (humans_take_over?, padrão). agent nil (chamada sem agente) aplica a regra.
   #   handed_off: já entregue aos humanos (handoff da IA, ou conversa mandada para um time — ver
   #     Conversation#route_to_team!), mesmo antes de a atribuição concluir.
+  #   Reativação pelo pipeline (Pipelines::AiReactivationService, "Follow-up IA"): ai_reactivated_at marca o
+  #     momento em que a IA voltou ao atendimento — só mensagens humanas DEPOIS dele contam como
+  #     human_engaged, e o responsável do card (dono do negócio) não tira a IA. O próximo humano que
+  #     falar ou o próximo handoff (ai_handoff) devolve a conversa aos humanos.
   def self.human_control_reason(conversation, bypass_handoff: false, agent: nil)
     assignee_id, additional, custom = ::Conversation.where(id: conversation.id)
                                                     .pick(:assignee_id, :additional_attributes, :custom_attributes)
     return 'ai_disabled_attribute' if ActiveModel::Type::Boolean.new.cast(custom.to_h['desativa_ia'])
     return if bypass_handoff
-    return 'human_engaged' if human_engaged?(conversation)
-    return 'assigned_to_human' if assignee_id.present? && humans_take_over?(agent)
+
+    reactivated_at = reactivated_at(additional)
+    return 'human_engaged' if human_engaged?(conversation, since: reactivated_at)
+    return 'assigned_to_human' if assigned_to_human?(assignee_id, agent, reactivated_at)
 
     'handed_off' if additional.to_h['ai_handoff']
+  end
+
+  def self.assigned_to_human?(assignee_id, agent, reactivated_at)
+    assignee_id.present? && reactivated_at.nil? && humans_take_over?(agent)
+  end
+
+  def self.reactivated_at(additional_attributes)
+    raw = additional_attributes.to_h['ai_reactivated_at']
+    raw.present? ? Time.zone.parse(raw.to_s) : nil
+  rescue ArgumentError
+    nil
   end
 
   # A real Chatwoot agent's outgoing message has sender_type "User" — the AI's own replies go out
@@ -99,8 +116,10 @@ class Ai::ReplyPolicy
   # private: false is essential (same filter as ActionService#last_responding_agent_id): integrations
   # post internal notes as a User — a Bitrix "Negócio registrado" note silenced the AI on every paid
   # lead until this was added (found live 15/09). A note isn't talking to the customer.
-  def self.human_engaged?(conversation)
-    conversation.messages.outgoing.where(sender_type: 'User', private: false).exists?
+  def self.human_engaged?(conversation, since: reactivated_at(conversation.additional_attributes))
+    scope = conversation.messages.outgoing.where(sender_type: 'User', private: false)
+    scope = scope.where('messages.created_at > ?', since) if since
+    scope.exists?
   end
 
   # When the toggle is on, respect the inbox's configured working hours: stay silent when closed.

@@ -2,41 +2,45 @@
 #
 # Table name: conversations
 #
-#  id                     :integer          not null, primary key
-#  additional_attributes  :jsonb
-#  agent_last_seen_at     :datetime
-#  assignee_last_seen_at  :datetime
-#  cached_label_list      :text
-#  closed_by_ai           :boolean          default(FALSE), not null
-#  contact_last_seen_at   :datetime
-#  custom_attributes      :jsonb
-#  first_reply_created_at :datetime
-#  group_chat             :boolean          default(FALSE), not null
-#  identifier             :string
-#  last_activity_at       :datetime         not null
-#  priority               :integer
-#  result                 :integer          default("none"), not null
-#  result_canonical_key   :string
-#  result_category        :string
-#  result_reason          :string
-#  result_set_at          :datetime
-#  snoozed_until          :datetime
-#  status                 :integer          default("open"), not null
-#  uuid                   :uuid             not null
-#  waiting_since          :datetime
-#  created_at             :datetime         not null
-#  updated_at             :datetime         not null
-#  account_id             :integer          not null
-#  assignee_agent_bot_id  :bigint
-#  assignee_id            :integer
-#  campaign_id            :bigint
-#  contact_id             :bigint
-#  contact_inbox_id       :bigint
-#  display_id             :integer          not null
-#  inbox_id               :integer          not null
-#  result_set_by_id       :bigint
-#  sla_policy_id          :bigint
-#  team_id                :bigint
+#  id                        :integer          not null, primary key
+#  additional_attributes     :jsonb
+#  agent_last_seen_at        :datetime
+#  assignee_last_seen_at     :datetime
+#  cached_label_list         :text
+#  closed_by_ai              :boolean          default(FALSE), not null
+#  contact_last_seen_at      :datetime
+#  custom_attributes         :jsonb
+#  first_reply_created_at    :datetime
+#  group_chat                :boolean          default(FALSE), not null
+#  identifier                :string
+#  last_activity_at          :datetime         not null
+#  pipeline_sla_due_at       :datetime
+#  pipeline_stage_entered_at :datetime
+#  priority                  :integer
+#  result                    :integer          default("none"), not null
+#  result_canonical_key      :string
+#  result_category           :string
+#  result_reason             :string
+#  result_set_at             :datetime
+#  snoozed_until             :datetime
+#  status                    :integer          default("open"), not null
+#  temperature               :integer
+#  uuid                      :uuid             not null
+#  waiting_since             :datetime
+#  created_at                :datetime         not null
+#  updated_at                :datetime         not null
+#  account_id                :integer          not null
+#  assignee_agent_bot_id     :bigint
+#  assignee_id               :integer
+#  campaign_id               :bigint
+#  contact_id                :bigint
+#  contact_inbox_id          :bigint
+#  display_id                :integer          not null
+#  inbox_id                  :integer          not null
+#  pipeline_stage_id         :bigint
+#  result_set_by_id          :bigint
+#  sla_policy_id             :bigint
+#  team_id                   :bigint
 #
 # Indexes
 #
@@ -52,12 +56,17 @@
 #  index_conversations_on_id_and_account_id           (account_id,id)
 #  index_conversations_on_identifier_and_account_id   (identifier,account_id)
 #  index_conversations_on_inbox_id                    (inbox_id)
+#  index_conversations_on_pipeline_stage_id           (pipeline_stage_id)
 #  index_conversations_on_priority                    (priority)
 #  index_conversations_on_status_and_account_id       (status,account_id)
 #  index_conversations_on_status_and_priority         (status,priority)
 #  index_conversations_on_team_id                     (team_id)
 #  index_conversations_on_uuid                        (uuid) UNIQUE
 #  index_conversations_on_waiting_since               (waiting_since)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (pipeline_stage_id => resolution_states.id) ON DELETE => nullify
 #
 
 class Conversation < ApplicationRecord
@@ -70,6 +79,7 @@ class Conversation < ApplicationRecord
   include SortHandler
   include PushDataHelper
   include ConversationMuteHelpers
+  include PipelineCardHandler
 
   validates :account_id, presence: true
   validates :inbox_id, presence: true
@@ -85,6 +95,8 @@ class Conversation < ApplicationRecord
   enum priority: { low: 0, medium: 1, high: 2, urgent: 3 }
   # _prefix avoids generating a `Conversation.none` scope that would shadow ActiveRecord's `none`.
   enum result: { none: 0, won: 1, lost: 2 }, _prefix: :result
+  # Lead temperature shown on the pipeline card (Frio/Morno/Quente).
+  enum temperature: { cold: 0, warm: 1, hot: 2 }, _prefix: :temperature
 
   scope :unassigned, -> { where(assignee_id: nil) }
   scope :assigned, -> { where.not(assignee_id: nil) }
@@ -139,6 +151,11 @@ class Conversation < ApplicationRecord
   # "voltava" porque nunca tinha saído do banco).
   has_many :agent_assignment_logs, dependent: :delete_all
   belongs_to :result_set_by, class_name: 'User', optional: true
+  # Kanban card position: the pipeline stage (a resolution state of the conversation's flow).
+  belongs_to :pipeline_stage, class_name: 'ResolutionState', optional: true
+  # NOT NULL foreign keys to conversations as well — delete in-line (see result_events above).
+  has_many :stage_events, class_name: 'ConversationStageEvent', dependent: :delete_all
+  has_many :pipeline_automation_runs, dependent: :delete_all
 
   before_save :ensure_snooze_until_reset
   before_create :mark_group_chat

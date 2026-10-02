@@ -1,7 +1,7 @@
-# A ClosingRequirement makes a custom attribute mandatory before a conversation can be resolved
-# under a given OperationalFlow. The condition decides when it applies: always, keyed on the chosen
-# resolution state (canonical_key/polarity), or keyed on another attribute's value ("required IF
-# attribute = one of these answers").
+# A ClosingRequirement makes a custom attribute mandatory under a given OperationalFlow, both to
+# resolve the conversation and to move its card along the pipeline. The condition decides when it
+# applies: always, keyed on the stage being entered (canonical_key/polarity) and, optionally, on
+# another attribute's value ("required IF attribute = one of these answers").
 # == Schema Information
 #
 # Table name: closing_requirements
@@ -28,21 +28,35 @@ class ClosingRequirement < ApplicationRecord
 
   validates :attribute_key, presence: true, uniqueness: { scope: :operational_flow_id }
 
-  # Whether this requirement applies given the resolution state the agent is closing with and the
+  # Whether this requirement applies given the stage/resolution state being entered and the
   # conversation's custom attributes (used by "if attribute = value" conditions).
   def applies_to?(state, custom_attributes = {})
-    return attribute_value_match?(custom_attributes) if condition['if'].present?
-    return true if condition['always']
-
-    when_clause = condition['when']
-    return true if when_clause.blank?
-    return state&.canonical_key.to_s == when_clause['canonical_key'].to_s if when_clause.key?('canonical_key')
-    return state&.polarity.to_s == when_clause['polarity'].to_s if when_clause.key?('polarity')
-
-    true
+    stage_match?(state) && (condition['if'].blank? || attribute_value_match?(custom_attributes))
   end
 
   private
+
+  # A closing state (won/lost) applies only to itself. An open stage means "from this stage onward":
+  # later open stages and the won columns, never a lost one (losing a deal never asks for its data).
+  def stage_match?(state)
+    when_clause = condition['when']
+    return true if condition['always'] || when_clause.blank?
+    return state&.polarity.to_s == when_clause['polarity'].to_s if when_clause.key?('polarity')
+    return true unless when_clause.key?('canonical_key')
+
+    canonical_key_match?(when_clause['canonical_key'].to_s, state)
+  end
+
+  def canonical_key_match?(key, state)
+    reference = operational_flow.resolution_states.find { |candidate| candidate.canonical_key == key }
+    reference&.stage? ? from_stage_onward?(reference, state) : state&.canonical_key.to_s == key
+  end
+
+  def from_stage_onward?(reference, state)
+    return false if state.nil?
+
+    state.polarity == 'positive' || (state.stage? && state.sort_order >= reference.sort_order)
+  end
 
   def attribute_value_match?(custom_attributes)
     clause = condition['if']

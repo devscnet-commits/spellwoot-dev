@@ -39,6 +39,8 @@ class Team < ApplicationRecord
             presence: { message: I18n.t('errors.validations.presence') },
             uniqueness: { scope: :account_id, case_sensitive: false }
 
+  after_update_commit :backfill_pipeline_cards, if: :saved_change_to_operational_flow_id?
+
   before_validation do
     # Preserve the casing the user typed (e.g. "Mídia Paga"); only trim stray whitespace.
     # Uniqueness stays case-insensitive so "Vendas" and "vendas" still can't coexist.
@@ -101,6 +103,13 @@ class Team < ApplicationRecord
       id: id,
       name: name
     }
+  end
+
+  private
+
+  # The team now follows another flow: its open conversations join that pipeline's board.
+  def backfill_pipeline_cards
+    Pipelines::BackfillJob.perform_later(operational_flow_id) if operational_flow_id.present?
   end
 end
 

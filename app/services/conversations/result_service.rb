@@ -8,8 +8,10 @@ class Conversations::ResultService
   # resolution state's canonical_key (a support "resolved"/positive still aggregates as a win).
   RESULT_BY_POLARITY = { 'positive' => 'won', 'negative' => 'lost', 'neutral' => 'none' }.freeze
 
-  def initialize(conversation:, outcome:, user: nil, reason: nil, ip_address: nil, custom_attributes: nil)
+  # sync_stage: false when the caller moves the pipeline card itself (kanban drag).
+  def initialize(conversation:, outcome:, user: nil, reason: nil, ip_address: nil, custom_attributes: nil, sync_stage: true)
     @conversation = conversation
+    @sync_stage = sync_stage
     @outcome = outcome.to_s
     @user = user
     @reason = reason.presence
@@ -20,6 +22,8 @@ class Conversations::ResultService
     @custom_attributes = custom_attributes
     @flow = @conversation.operational_flow(user)
     @state = @flow&.state_for(@outcome) unless @outcome == AI_CLOSED
+    # Open pipeline stages are not results (cards move between them on the board).
+    @state = nil if @state&.stage?
     @result = compute_result
     @recognized = @state.present? || @outcome.in?(LEGACY_RESULT_BY_OUTCOME.keys)
   end
@@ -32,6 +36,7 @@ class Conversations::ResultService
       @conversation.update!(update_attributes)
       record_event(previous_result)
     end
+    sync_pipeline_stage if @sync_stage
 
     @conversation
   end
@@ -107,6 +112,25 @@ class Conversations::ResultService
     else
       attrs.except('outcome', 'outcome_set_at', 'outcome_label', 'outcome_state_id')
     end
+  end
+
+  # Keeps the kanban card in step with the result picked in the conversation: won/lost moves it to
+  # that column; clearing the result sends it back to the open stage it came from.
+  def sync_pipeline_stage
+    if @state && !@state.stage?
+      return unless @state.operational_flow.pipeline?
+
+      Pipelines::StageMover.new(conversation: @conversation, stage: @state, user: @user, source: 'result').perform
+    elsif !@recognized && @conversation.pipeline_stage && !@conversation.pipeline_stage.stage?
+      Pipelines::StageMover.new(conversation: @conversation, stage: previous_open_stage, user: @user, source: 'result').perform
+    end
+  end
+
+  def previous_open_stage
+    current = @conversation.pipeline_stage
+    last_entry = @conversation.stage_events.where(to_stage_id: current.id).order(created_at: :desc).first
+    from_stage = last_entry&.from_stage
+    from_stage&.stage? ? from_stage : current.operational_flow.default_stage
   end
 
   def record_event(previous_result)

@@ -363,7 +363,23 @@ Rails.application.routes.draw do
             end
           end
 
-          resources :operational_flows
+          resources :operational_flows do
+            resources :pipeline_automations, only: [:index, :create, :update, :destroy], module: :operational_flows do
+              post :simulate, on: :collection
+            end
+          end
+          # CRM kanban: pipelines (closing flows with open stages), their boards and card quick actions.
+          resources :pipelines, only: [:index, :show] do
+            member do
+              get 'stages/:stage_id/cards', action: :stage_cards, as: :stage_cards
+              post :move
+              post :cards
+              get :report
+            end
+          end
+          resources :pipeline_cards, only: [:update] do
+            post :ai_followup, on: :member
+          end
 
           # Assignment V2 Routes
           resources :assignment_policies do

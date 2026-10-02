@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_02_120200) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1083,6 +1083,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
     t.index ["conversation_id"], name: "index_conversation_result_events_on_conversation_id"
   end
 
+  create_table "conversation_stage_events", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "conversation_id", null: false
+    t.bigint "operational_flow_id", null: false
+    t.bigint "from_stage_id"
+    t.bigint "to_stage_id"
+    t.bigint "user_id"
+    t.string "source", default: "manual", null: false
+    t.datetime "created_at", null: false
+    t.index ["account_id"], name: "index_conversation_stage_events_on_account_id"
+    t.index ["conversation_id", "created_at"], name: "idx_stage_events_conversation_created"
+    t.index ["operational_flow_id", "created_at"], name: "idx_stage_events_flow_created"
+    t.index ["to_stage_id"], name: "index_conversation_stage_events_on_to_stage_id"
+  end
+
   create_table "conversations", id: :serial, force: :cascade do |t|
     t.integer "account_id", null: false
     t.integer "inbox_id", null: false
@@ -1118,6 +1133,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
     t.string "result_category"
     t.string "result_canonical_key"
     t.boolean "group_chat", default: false, null: false
+    t.bigint "pipeline_stage_id"
+    t.datetime "pipeline_stage_entered_at"
+    t.integer "temperature"
+    t.datetime "pipeline_sla_due_at"
     t.index ["account_id", "display_id"], name: "index_conversations_on_account_id_and_display_id", unique: true
     t.index ["account_id", "id"], name: "index_conversations_on_id_and_account_id"
     t.index ["account_id", "inbox_id", "status", "assignee_id"], name: "conv_acid_inbid_stat_asgnid_idx"
@@ -1130,6 +1149,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
     t.index ["first_reply_created_at"], name: "index_conversations_on_first_reply_created_at"
     t.index ["identifier", "account_id"], name: "index_conversations_on_identifier_and_account_id"
     t.index ["inbox_id"], name: "index_conversations_on_inbox_id"
+    t.index ["pipeline_stage_id"], name: "index_conversations_on_pipeline_stage_id"
     t.index ["priority"], name: "index_conversations_on_priority"
     t.index ["status", "account_id"], name: "index_conversations_on_status_and_account_id"
     t.index ["status", "priority"], name: "index_conversations_on_status_and_priority"
@@ -1573,6 +1593,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
     t.datetime "updated_at", null: false
     t.string "category", default: "sales", null: false
     t.boolean "meta_enabled", default: false, null: false
+    t.string "value_attribute_key"
     t.index ["account_id", "name"], name: "index_operational_flows_on_account_id_and_name", unique: true
     t.index ["account_id"], name: "index_operational_flows_on_account_id"
   end
@@ -1602,6 +1623,40 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
     t.datetime "updated_at", null: false
     t.index ["account_id", "plan_limit_key", "snapshot_date"], name: "index_overage_snapshots_unique_daily", unique: true
     t.index ["account_id"], name: "index_overage_snapshots_on_account_id"
+  end
+
+  create_table "pipeline_automation_runs", force: :cascade do |t|
+    t.bigint "pipeline_automation_id", null: false
+    t.bigint "conversation_id", null: false
+    t.datetime "anchor_at", null: false
+    t.string "status", default: "running", null: false
+    t.string "error"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["conversation_id"], name: "index_pipeline_automation_runs_on_conversation_id"
+    t.index ["pipeline_automation_id", "conversation_id", "anchor_at"], name: "idx_pipeline_automation_runs_unique", unique: true
+  end
+
+  create_table "pipeline_automations", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "operational_flow_id", null: false
+    t.bigint "resolution_state_id", null: false
+    t.string "name", null: false
+    t.boolean "active", default: true, null: false
+    t.string "kind", default: "automation", null: false
+    t.string "trigger_type", default: "stage_entered", null: false
+    t.integer "delay_minutes", default: 0, null: false
+    t.string "inactivity_sender", default: "any", null: false
+    t.jsonb "conditions", default: [], null: false
+    t.string "match_type", default: "all", null: false
+    t.jsonb "actions", default: [], null: false
+    t.integer "sort_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_pipeline_automations_on_account_id"
+    t.index ["active", "trigger_type"], name: "index_pipeline_automations_on_active_and_trigger_type"
+    t.index ["operational_flow_id"], name: "index_pipeline_automations_on_operational_flow_id"
+    t.index ["resolution_state_id"], name: "index_pipeline_automations_on_resolution_state_id"
   end
 
   create_table "plan_features", force: :cascade do |t|
@@ -1766,6 +1821,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
     t.datetime "updated_at", null: false
     t.string "meta_event_type"
     t.string "meta_value_attr"
+    t.boolean "is_default", default: false, null: false
+    t.string "color"
     t.index ["operational_flow_id", "canonical_key"], name: "idx_resolution_states_flow_canonical", unique: true
     t.index ["operational_flow_id"], name: "index_resolution_states_on_operational_flow_id"
   end
@@ -1992,6 +2049,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
   add_foreign_key "ai_handoff_summaries", "conversations", on_delete: :cascade
   add_foreign_key "closing_requirements", "operational_flows"
   add_foreign_key "conversation_result_events", "conversations"
+  add_foreign_key "conversation_stage_events", "accounts", on_delete: :cascade
+  add_foreign_key "conversation_stage_events", "conversations", on_delete: :cascade
+  add_foreign_key "conversation_stage_events", "operational_flows", on_delete: :cascade
+  add_foreign_key "conversation_stage_events", "resolution_states", column: "from_stage_id", on_delete: :nullify
+  add_foreign_key "conversation_stage_events", "resolution_states", column: "to_stage_id", on_delete: :nullify
+  add_foreign_key "conversations", "resolution_states", column: "pipeline_stage_id", on_delete: :nullify
   add_foreign_key "inbox_exceptions", "inboxes"
   add_foreign_key "inbox_holidays", "inboxes"
   add_foreign_key "inboxes", "portals"
@@ -2004,6 +2067,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_30_120000) do
   add_foreign_key "overage_charges", "accounts"
   add_foreign_key "overage_charges", "subscriptions"
   add_foreign_key "overage_snapshots", "accounts"
+  add_foreign_key "pipeline_automation_runs", "conversations", on_delete: :cascade
+  add_foreign_key "pipeline_automation_runs", "pipeline_automations", on_delete: :cascade
+  add_foreign_key "pipeline_automations", "accounts", on_delete: :cascade
+  add_foreign_key "pipeline_automations", "operational_flows", on_delete: :cascade
+  add_foreign_key "pipeline_automations", "resolution_states", on_delete: :cascade
   add_foreign_key "plan_features", "plans"
   add_foreign_key "plan_limits", "plans"
   add_foreign_key "provider_instances", "accounts"

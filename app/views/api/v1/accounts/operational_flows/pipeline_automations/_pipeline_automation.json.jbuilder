@@ -1,0 +1,12 @@
+json.id automation.id
+json.resolution_state_id automation.resolution_state_id
+json.name automation.name
+json.active automation.active
+json.kind automation.kind
+json.trigger_type automation.trigger_type
+json.delay_minutes automation.delay_minutes
+json.inactivity_sender automation.inactivity_sender
+json.match_type automation.match_type
+json.conditions automation.conditions
+json.actions automation.actions
+json.sort_order automation.sort_order

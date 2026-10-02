@@ -259,6 +259,8 @@ class Ai::HandoffCoordinator
     return if @conversation.additional_attributes.to_h['ai_handoff']
 
     mark_handed_off
+    # IA reativada pelo pipeline sobre um card com responsável: o negócio volta para o dono, sem redistribuir.
+    return if @conversation.assignee_id.present? && Ai::ReplyPolicy.reactivated_at(@conversation.additional_attributes)
 
     # Sem NENHUM time resolvido (nem "Time deste agente", nem allowlist, nem match) e com a caixa tendo
     # membros: NÃO atribuir ninguém em silêncio — nem a atribuição PRIMÁRIA inbox-wide, nem o fallback.

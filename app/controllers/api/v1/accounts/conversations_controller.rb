@@ -286,11 +286,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     Rails.logger.error "[ContactEmailSync] conv=#{@conversation.id} #{e.class}: #{e.message}"
   end
 
-  # Accept the legacy won/lost outcomes plus any canonical_key defined on the resolved closing flow.
+  # Accept the legacy won/lost outcomes plus any closing state of the resolved flow. Open pipeline
+  # stages are not results: cards move between them through the pipeline board.
   def valid_close_outcome?(outcome)
     return true if %w[won lost].include?(outcome)
 
-    @conversation.operational_flow&.state_for(outcome).present?
+    state = @conversation.operational_flow&.state_for(outcome)
+    state.present? && !state.stage?
   end
 
   # Enforce account required-attributes config on the backend when a human agent resolves a

@@ -119,6 +119,11 @@ pt_BR:
     saml_not_available: A autenticação SAML não está disponível nesta instalação.
     inbox_deletetion_response: Seu pedido de exclusão da caixa de entrada será processado dentro de algum tempo.
   errors:
+    pipelines:
+      plan_feature: 'O CRM Kanban não está disponível no seu plano.'
+      automations_plan_feature: 'As automações de CRM não estão disponíveis no seu plano.'
+      no_ai_agent: 'Nenhum agente de IA disponível para fazer o follow-up desta conversa.'
+      ai_unavailable: 'A IA não pode fazer follow-up nesta conversa (IA desativada, grupo ou agente inativo).'
     validations:
       presence: não pode ficar em branco
     webhook:
@@ -322,6 +327,11 @@ pt_BR:
       sla:
         added: '%{user_name} adicionou política de SLA %{sla_name}'
         removed: '%{user_name} removeu a política de SLA %{sla_name}'
+      pipeline:
+        moved: '%{user_name} moveu o card para a etapa %{stage_name}'
+        moved_by_system: 'Card movido para a etapa %{stage_name}'
+        ai_followup: '%{user_name} disparou um follow-up de IA (%{agent_name}); a IA voltou ao atendimento'
+        ai_followup_by_system: 'Follow-up de IA do pipeline enviado (%{agent_name}); a IA voltou ao atendimento'
       linear:
         issue_created: 'Problema linear %{issue_id} foi criado por %{user_name}'
         issue_linked: 'Problema linear %{issue_id} foi vinculado por %{user_name}'

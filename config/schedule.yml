@@ -71,6 +71,14 @@ ai_followup_sweep_job:
   class: 'Ai::FollowupSweepJob'
   queue: scheduled_jobs
 
+# executed every minute
+# pipeline (CRM kanban) stage automations that wait for time: time in stage, inactivity and the AI
+# follow-up cadence. Enqueues one Pipelines::AutomationRunJob per due card.
+pipeline_automation_sweep_job:
+  cron: '*/1 * * * *'
+  class: 'Pipelines::AutomationSweepJob'
+  queue: scheduled_jobs
+
 # executed daily at 0330 UTC
 # LGPD retention: hard-deletes ai_events past Ai::EventsRetentionJob::RETENTION_PERIOD. Nothing
 # scheduled it, so the retention policy the job implements was never actually enforced.

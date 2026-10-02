@@ -4,6 +4,7 @@ json.category flow.category
 json.require_reason flow.require_reason
 json.active flow.active
 json.meta_enabled flow.meta_enabled
+json.value_attribute_key flow.value_attribute_key
 json.inbox_ids flow.inbox_ids
 json.reasons flow.reasons.sort_by(&:position) do |reason|
   json.id reason.id
@@ -18,6 +19,8 @@ json.resolution_states flow.resolution_states do |state|
   json.canonical_key state.canonical_key
   json.display_label state.display_label
   json.polarity state.polarity
+  json.is_default state.is_default
+  json.color state.color
   json.requires_reason state.requires_reason
   json.meta_event_type state.meta_event_type
   json.meta_value_attr state.meta_value_attr

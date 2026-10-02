@@ -283,11 +283,20 @@ class Ai::FollowupConversationJob < ApplicationJob
   # Devolve se um humano ficou de fato atribuído — quem chama grava isso no evento, pra que
   # followup.action nunca mais afirme uma transferência que não aconteceu.
   def assign_to_human(conversation, agent)
+    return hand_back_to_assignee(conversation) if conversation.assignee_id.present?
+
     coordinator = Ai::HandoffCoordinator.new(
       conversation: conversation, account: conversation.account, agent: agent, message: nil
     )
     coordinator.assign_human(coordinator.human_team_id({}), reason: 'followup_timeout')
     conversation.reload.assignee_id.present?
+  end
+
+  # Conversa reativada pelo pipeline com o dono do card mantido: o follow-up acabou sem resposta, então a
+  # IA sai de cena (ai_handoff) e a conversa volta ao responsável — sem redistribuir o negócio.
+  def hand_back_to_assignee(conversation)
+    conversation.update!(additional_attributes: conversation.additional_attributes.to_h.merge('ai_handoff' => true))
+    true
   end
 
   # Proactively hand the turn back to the AI by re-running the Gateway on the customer's
@@ -387,15 +396,21 @@ class Ai::FollowupConversationJob < ApplicationJob
   # Follow-ups already sent in this silence (since the customer's last incoming message).
   def followups_since_incoming(conversation)
     scope = Ai::Event.where(conversation_id: conversation.id, event_type: 'followup.sent')
-    incoming_at = last_incoming_at(conversation)
-    incoming_at ? scope.where('created_at > ?', incoming_at) : scope
+    silence_at = silence_started_at(conversation)
+    silence_at ? scope.where('created_at > ?', silence_at) : scope
   end
 
   # A terminal action already fired in this silence — don't act again.
   def acted?(conversation)
     scope = Ai::Event.where(conversation_id: conversation.id, event_type: 'followup.action')
-    incoming_at = last_incoming_at(conversation)
-    incoming_at ? scope.where('created_at > ?', incoming_at).exists? : scope.exists?
+    silence_at = silence_started_at(conversation)
+    silence_at ? scope.exists?(['created_at > ?', silence_at]) : scope.exists?
+  end
+
+  # Start of the current silence: the customer's last message or, when the pipeline reactivated the
+  # AI after it, the reactivation — a reactivated conversation starts its follow-up attempts over.
+  def silence_started_at(conversation)
+    [last_incoming_at(conversation), Ai::ReplyPolicy.reactivated_at(conversation.additional_attributes)].compact.max
   end
 
   def emit(account_id, conversation_id, type, payload)

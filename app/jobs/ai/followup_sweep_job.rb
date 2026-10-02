@@ -54,10 +54,13 @@ class Ai::FollowupSweepJob < ApplicationJob
     inbox_ids = eligible_inbox_ids
     return Conversation.none if inbox_ids.empty?
 
-    Conversation
-      .where(status: %i[open pending], assignee_id: nil, inbox_id: inbox_ids)
-      .where('conversations.last_activity_at < ?', MIN_QUIET.ago)
-      .select(:id)
+    # Reativadas pelo pipeline ("Follow-up IA") entram mesmo com responsável: o dono do card fica, a IA
+    # retoma — ver Ai::ReplyPolicy.human_control_reason.
+    scope = Conversation.where(status: %i[open pending], inbox_id: inbox_ids)
+    scope.where(assignee_id: nil)
+         .or(scope.where("conversations.additional_attributes ? 'ai_reactivated_at'"))
+         .where('conversations.last_activity_at < ?', MIN_QUIET.ago)
+         .select(:id)
   end
 
   # Inboxes com um binding "live" cuja conta tem o ai_core ligado (mesma porta de entrada do

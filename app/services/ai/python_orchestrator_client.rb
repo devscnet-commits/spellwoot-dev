@@ -48,6 +48,8 @@ class Ai::PythonOrchestratorClient
   # 200s: acomoda o orçamento de 150s do Python mais as chamadas que fecham o turno depois dele (a busca de
   # conhecimento agora é repetida dentro do turno quando falha — o cliente espera mais, mas recebe a resposta).
   TIMEOUT = ENV.fetch('AI_ORCHESTRATOR_TIMEOUT', 200).to_i
+  # Follow-up do pipeline (Pipelines::AiFollowupService): mesma base de URL, rota /followup.
+  FOLLOWUP_URL = ORCHESTRATOR_URL.sub(%r{/process\z}, '/followup')
 
   # control tool names — shared with Api::Internal::AiExecuteToolController, which recognizes these
   # by name (not backed by an Ai::Tool row) exactly like Ai::StepCaptureTool's "registrar_*".
@@ -79,6 +81,13 @@ class Ai::PythonOrchestratorClient
   def self.process_message(conversation:, content:, agent:, mode:, message: nil, force_handoff_notice: false)
     new(conversation: conversation, content: content, agent: agent, mode: mode,
         message: message, force_handoff_notice: force_handoff_notice).perform
+  end
+
+  # Uma mensagem de follow-up gerada pela IA (orchestrator.run_followup): instruction é o gatilho da
+  # etapa (prompt do admin + tempo parado + histórico recente); devolve { message:, conversation_id:,
+  # byok_fallback:, tokens_in:, tokens_out:, model: } — message nil quando a chamada falhou.
+  def self.generate_followup(conversation:, agent:, instruction:)
+    new(conversation: conversation, content: instruction, agent: agent, mode: 'live').followup
   end
 
   def initialize(conversation:, content:, agent:, mode:, message: nil, force_handoff_notice: false)
@@ -143,7 +152,64 @@ class Ai::PythonOrchestratorClient
       error_detail: "#{e.class}: #{e.message}" }
   end
 
+  def followup
+    response = HTTParty.post(
+      FOLLOWUP_URL,
+      headers: { 'Content-Type' => 'application/json', 'Authorization' => "Bearer #{ENV.fetch('INTERNAL_AI_TOKEN', nil)}" },
+      body: followup_payload.to_json,
+      timeout: TIMEOUT
+    )
+    unless response.success?
+      Rails.logger.error "[Ai::PythonOrchestratorClient#followup] ticket_id=#{@conversation.id} HTTP #{response.code}: #{response.body}"
+      return { message: nil, conversation_id: failed_conversation_id(response), error_detail: "HTTP #{response.code}" }
+    end
+
+    followup_result(response.parsed_response)
+  rescue StandardError => e
+    Rails.logger.error "[Ai::PythonOrchestratorClient#followup] ticket_id=#{@conversation&.id} #{e.class}: #{e.message}"
+    { message: nil, conversation_id: nil, error_detail: "#{e.class}: #{e.message}" }
+  end
+
   private
+
+  def followup_result(parsed)
+    { message: parsed['message'].presence, conversation_id: parsed['conversation_id'], byok_fallback: parsed['byok_fallback'] == true,
+      tokens_in: parsed['tokens_in'].to_i, tokens_out: parsed['tokens_out'].to_i, model: parsed['model'].presence }
+  end
+
+  def followup_payload
+    {
+      ticket_id: @conversation.id,
+      account_id: @agent.account_id,
+      ai_agent_id: @agent.id,
+      system_prompt: followup_system_prompt,
+      instruction: @content.to_s,
+      conversation_id: @conversation.additional_attributes&.dig('openai_conversation_id'),
+      model: operation_profile&.supervisor_model,
+      temperature: temperature,
+      account_api_key: account_api_key
+    }
+  end
+
+  # Só a persona do agente e o que já se sabe do cliente: o follow-up é UMA mensagem, as regras de
+  # etapa/captura/transferência de um turno normal não se aplicam.
+  def followup_system_prompt
+    [*followup_persona_lines, collected_facts_block, customer_memory_block].compact_blank.join("\n")
+  end
+
+  def followup_persona_lines
+    identity = if @agent.identify_as == 'ai'
+                 'Você é um assistente virtual (IA) e pode assumir isso se perguntarem.'
+               else
+                 'Aja como um atendente humano da equipe e escreva como uma pessoa real digitando.'
+               end
+    [
+      @agent.base_prompt, identity,
+      (@agent.assistant_personality.present? ? "Personalidade: #{@agent.assistant_personality}." : nil),
+      (@agent.guardrails.present? ? "Regras de segurança (nunca viole): #{@agent.guardrails}." : nil),
+      "Agente de IA: #{@agent.assistant_name.presence || @agent.name}."
+    ]
+  end
 
   # detail do HTTPException que o orquestrador levanta quando o turno falha DEPOIS de a conversation
   # existir. Corpo não-JSON (502 de proxy, timeout do gateway) simplesmente não tem id — devolve nil.

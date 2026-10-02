@@ -1,17 +1,20 @@
-# Validates that the custom attributes required before resolving a conversation are present.
-# Two sources are combined: the per-flow closing_requirements of the conversation's Closing Flow
-# (resolved from the assignment rules / Caixa) and the account-level required attributes, which
-# support conditional rules ("required IF attribute = value", including the system result field).
+# Validates that the custom attributes required before resolving a conversation — or before its
+# card enters a pipeline stage (result = the stage's canonical_key) — are present. Two sources are
+# combined: the per-flow closing_requirements of the conversation's Closing Flow and, except for
+# moves between open stages, the account-level required attributes, which support conditional
+# rules ("required IF attribute = value", including the system result field).
 class Conversations::RequiredAttributesValidator
   SYSTEM_OUTCOME_FIELD = '__resultado_conversa__'.freeze
   SYSTEM_CONTACT_EMAIL_FIELD = '__contato_email__'.freeze
   RESULT_TO_SYSTEM_VALUE = { 'won' => 'ganho', 'lost' => 'perdido' }.freeze
 
-  def initialize(conversation:, custom_attributes: nil, result: nil)
+  def initialize(conversation:, custom_attributes: nil, result: nil, flow: nil)
     @conversation = conversation
     @account = conversation.account
     @custom_attributes = (custom_attributes || conversation.custom_attributes || {}).with_indifferent_access
     @result = (result || conversation.result).to_s
+    @flow = flow
+    @flow_loaded = flow.present?
   end
 
   def valid?
@@ -19,7 +22,9 @@ class Conversations::RequiredAttributesValidator
   end
 
   def missing_keys
-    (flow_missing_keys + account_missing_keys).uniq
+    keys = flow_missing_keys
+    keys += account_missing_keys unless target_state&.stage?
+    keys.uniq
   end
 
   private
@@ -31,12 +36,15 @@ class Conversations::RequiredAttributesValidator
     @flow = @conversation.operational_flow
   end
 
+  def target_state
+    @target_state ||= flow&.state_for(@result)
+  end
+
   def flow_missing_keys
     return [] unless flow
 
-    state = flow.state_for(@result)
     flow.closing_requirements
-        .select { |requirement| requirement.applies_to?(state, @custom_attributes) && blank_value?(requirement.attribute_key) }
+        .select { |requirement| requirement.applies_to?(target_state, @custom_attributes) && blank_value?(requirement.attribute_key) }
         .map(&:attribute_key)
   end
 
