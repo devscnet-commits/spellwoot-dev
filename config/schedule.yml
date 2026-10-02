@@ -62,6 +62,14 @@ agent_presence_snapshot_job:
   class: 'AgentPresenceSnapshotJob'
   queue: scheduled_jobs
 
+# executed every 15 minutes
+# closes (or, in shadow, records the intent for) AI-managed conversations idle past the agent's SLA
+# (agent.sla response_timeout_minutes + on_timeout). Agents without an SLA are skipped.
+ai_sla_sweep_job:
+  cron: '*/15 * * * *'
+  class: 'Ai::SlaSweepJob'
+  queue: scheduled_jobs
+
 # executed every minute
 # the only thing that runs the AI follow-up / close rules: it scans idle conversations an AI still
 # owns and enqueues Ai::FollowupConversationJob per conversation. Delays are configured in minutes
@@ -105,4 +113,11 @@ ai_credits_renewal_job:
 billing_overage_snapshot_job:
   cron: '30 4 * * *'
   class: 'Billing::OverageSnapshotJob'
+  queue: scheduled_jobs
+
+# executed every 15 min — auto-cura de embeddings: reenfileira o ingest de knowledge sources cujos
+# chunks ficaram sem vetor (queda transitória da API/chave). Ver Ai::EmbeddingBackfillJob.
+ai_embedding_backfill_job:
+  cron: '*/15 * * * *'
+  class: 'Ai::EmbeddingBackfillJob'
   queue: scheduled_jobs
