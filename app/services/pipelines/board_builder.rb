@@ -13,14 +13,9 @@ class Pipelines::BoardBuilder
 
   def columns
     stages = @flow.ordered_stages
-    counts = scope.group(:pipeline_stage_id).count
-    values = column_values
-    automations = automation_counts(stages)
-    stages.map do |stage|
-      { stage_id: stage.id, count: counts[stage.id].to_i, total_value: values[stage.id].to_f.round(2),
-        automations_count: automations[[stage.id, 'automation']].to_i, ai_followups_count: automations[[stage.id, 'ai_followup']].to_i,
-        **stage_cards(stage, 1) }
-    end
+    stats = { counts: scope.group(:pipeline_stage_id).count, values: column_values, automations: automation_counts(stages),
+              ai_delays: ai_followup_delays(stages) }
+    stages.map { |stage| column_for(stage, stats) }
   end
 
   def stage_cards(stage, page)
@@ -60,6 +55,19 @@ class Pipelines::BoardBuilder
     matches = base.joins(:contact).where('contacts.name ILIKE :like OR contacts.phone_number ILIKE :like OR contacts.email ILIKE :like', like: like)
     display_id = term.delete('#')
     display_id.match?(/\A\d+\z/) ? matches.or(base.joins(:contact).where(display_id: display_id.to_i)) : matches
+  end
+
+  # ai_followup_delay: minutes of silence after which the stage's AI follow-up starts (the card shows
+  # the "inativo" alert from there on).
+  def column_for(stage, stats)
+    { stage_id: stage.id, count: stats[:counts][stage.id].to_i, total_value: stats[:values][stage.id].to_f.round(2),
+      automations_count: stats[:automations][[stage.id, 'automation']].to_i,
+      ai_followups_count: stats[:automations][[stage.id, 'ai_followup']].to_i,
+      ai_followup_delay: stats[:ai_delays][stage.id], **stage_cards(stage, 1) }
+  end
+
+  def ai_followup_delays(stages)
+    PipelineAutomation.active.where(resolution_state_id: stages.map(&:id), kind: 'ai_followup').group(:resolution_state_id).minimum(:delay_minutes)
   end
 
   def automation_counts(stages)
