@@ -2,6 +2,8 @@
 # playbook estruturado — fusão Departamento -> Agente (19/08): antes eram dois registros (Ai::Agent +
 # Ai::Department, 1:1 na prática), agora é um só. Scoped to the current account; ai_* domain only.
 class Api::V1::Accounts::AiAgentsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   include PlanLimitEnforceable
 
   # Keys inside ai_agents.behavior (jsonb) that make up the "Comportamento" tab and are

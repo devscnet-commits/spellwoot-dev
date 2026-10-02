@@ -4,6 +4,8 @@
 # input/output split adds up. Breakdowns by model / agent / error type, with an optional
 # period window (?days=N) and an optional agent filter (?agent_id=N).
 class Api::V1::Accounts::AiCostsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   def index
     scope = ::Ai::Run.where(account_id: Current.account.id)
     scope = apply_period(scope)

@@ -1,6 +1,8 @@
 # History + rollback for an agent's playbook. Restore re-applies a past snapshot to the
 # active playbook and records the rollback as a new version.
 class Api::V1::Accounts::AiPlaybookVersionsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_agent
 
   def index

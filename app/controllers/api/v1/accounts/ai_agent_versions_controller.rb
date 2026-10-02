@@ -1,6 +1,8 @@
 # History + rollback for an agent's configuration. Listing is read-only; restore re-applies a
 # past snapshot and records the rollback as a new version (so history is never lost).
 class Api::V1::Accounts::AiAgentVersionsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_agent
 
   def index

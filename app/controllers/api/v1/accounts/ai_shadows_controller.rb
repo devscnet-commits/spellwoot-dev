@@ -1,5 +1,7 @@
 # CRUD for Shadows (quality observers). Account-scoped. Inbox links are synced from inbox_ids.
 class Api::V1::Accounts::AiShadowsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_shadow, only: %i[update destroy]
 
   def index

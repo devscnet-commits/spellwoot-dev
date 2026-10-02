@@ -1,6 +1,8 @@
 # Caixas tab (inside the agent "Sobre" section): lists the account's inboxes with the agent's
 # binding mode (live/shadow/none) and syncs them. A `live` binding is what puts the AI on the air.
 class Api::V1::Accounts::AiAgentInboxesController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_agent
 
   def show

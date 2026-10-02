@@ -12,6 +12,8 @@
 # diretamente e síncrono, então a resposta já vem pronta na mesma request (Ai::Gateway em si não
 # olha pra active, só quem enfileira o job olha).
 class Api::V1::Accounts::AiAgentTestConversationsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_agent
 
   TEST_INBOX_NAME = ::Inbox::AI_TEST_INBOX_NAME

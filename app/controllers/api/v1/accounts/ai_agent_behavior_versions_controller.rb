@@ -5,6 +5,8 @@
 # snapshot_fields scope, same versionable record since the fusão Departamento -> Agente (19/08).
 # JSON shape matches ai_agent_versions: { id, version_number, note, created_at }.
 class Api::V1::Accounts::AiAgentBehaviorVersionsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_agent
 
   def index

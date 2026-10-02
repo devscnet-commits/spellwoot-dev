@@ -1,6 +1,8 @@
 # Account-scoped, dev-time prompt/step-instructions assistant. Suggestion-only; nothing is sent to
 # any customer. Uses ::Ai::PromptAssistant (top-level) to avoid namespace collision.
 class Api::V1::Accounts::AiPromptAssistantController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   RATE_LIMIT = 10   # requisições
   RATE_WINDOW = 60  # segundos (janela fixa por conta)
 
