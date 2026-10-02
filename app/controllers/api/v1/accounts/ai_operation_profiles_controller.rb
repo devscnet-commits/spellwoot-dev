@@ -1,6 +1,8 @@
 # CRUD for operation profiles (Econômico/Balanceado/Premium). Provider-agnostic: each points to
 # a supervisor provider + model; workers/budget live in jsonb.
 class Api::V1::Accounts::AiOperationProfilesController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_profile, only: %i[update destroy]
 
   def index

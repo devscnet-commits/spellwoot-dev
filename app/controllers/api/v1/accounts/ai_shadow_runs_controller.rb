@@ -3,6 +3,8 @@
 # the AI resolved (knowledge / instruction / tool / transfer / closed / unanswered / error) and
 # rolls that up into KPIs, diagnostic blocks and actionable insights. Reuses existing data only.
 class Api::V1::Accounts::AiShadowRunsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   LOW_CONFIDENCE = 0.5
   RECURRING_ERROR_MIN = 2
   # Teto de segurança absoluto de linhas carregadas em memória (resumo/insights são em Ruby).

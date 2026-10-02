@@ -3,6 +3,8 @@
 # (Ai::GatewayRunJob). Aqui todos os concorrentes daquela caixa aparecem lado a lado e a ordem é editável
 # de uma vez — e o empate (>=2 no menor priority) fica visível. priority é por (agente, caixa).
 class Api::V1::Accounts::AiInboxAgentPrioritiesController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_inbox
 
   # Lista os agentes que atendem esta caixa (binding ativo), com priority + mode + nome. Ordena por

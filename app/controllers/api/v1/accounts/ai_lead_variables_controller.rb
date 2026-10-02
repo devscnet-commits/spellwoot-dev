@@ -1,5 +1,7 @@
 # CRUD for an agent's lead variables (Instruções tab). Nested under ai_agents.
 class Api::V1::Accounts::AiLeadVariablesController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_agent
   before_action :set_variable, only: %i[update destroy]
 

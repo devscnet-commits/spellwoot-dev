@@ -1,6 +1,8 @@
 # CRUD for an agent's Tools. A Tool wraps a capability (internal) or an integration (external).
 # Nested under ai_agents.
 class Api::V1::Accounts::AiToolsController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_agent
   before_action :set_tool, only: %i[update destroy]
 

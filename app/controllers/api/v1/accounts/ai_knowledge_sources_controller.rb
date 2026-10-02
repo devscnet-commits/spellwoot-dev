@@ -2,6 +2,8 @@
 # Account-level: a single library every agent draws from, ingested once. Reuses the embedding
 # service technically; if unavailable, chunks are stored without vectors (retrieval falls back to text).
 class Api::V1::Accounts::AiKnowledgeSourcesController < Api::V1::Accounts::BaseController
+  # Configuração de IA é só do admin: a tela já exige administrator (ai.routes.js), a API também.
+  before_action :check_admin_authorization?
   before_action :set_source, only: %i[update destroy]
 
   def index
