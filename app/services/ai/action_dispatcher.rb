@@ -68,7 +68,7 @@ class Ai::ActionDispatcher
     end
 
     state = Ai::ReplyPolicy.effective_reply_state(mode: @mode, agent: @agent, conversation: @conversation,
-                                                   bypass_handoff: bypass_handoff)
+                                                  bypass_handoff: bypass_handoff)
     if state == :live
       deliver(text)
       # UMA ÚNICA vez por resposta, mesmo quando vira N mensagens: max_replies conta reply.sent e
@@ -77,7 +77,7 @@ class Ai::ActionDispatcher
       consume_credit
     else
       reason = Ai::ReplyPolicy.skip_reason(mode: @mode, agent: @agent, conversation: @conversation,
-                                            bypass_handoff: bypass_handoff)
+                                           bypass_handoff: bypass_handoff)
       emit('reply.intended', { executed: false, reason: reason })
     end
   rescue StandardError => e
@@ -88,11 +88,11 @@ class Ai::ActionDispatcher
   # Follow-up do pipeline (Pipelines::AiFollowupService): o admin escolheu ESTE agente para retomar a
   # conversa naquela etapa, então a entrega não passa pelo gate de atendimento ao vivo da caixa (o agente
   # de follow-up não precisa estar vinculado a ela). Mesma entrega/quebra e mesmo débito de crédito do reply.
-  def deliver_followup(text)
+  def deliver_followup(text, payload = {})
     return if text.blank? || Conversations::GroupDetector.group?(@conversation)
 
     deliver(text)
-    emit('pipeline_followup.sent', { chars: text.length })
+    emit('pipeline_followup.sent', payload.to_h.merge(chars: text.length))
     consume_credit
   end
 

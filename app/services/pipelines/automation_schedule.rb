@@ -4,8 +4,7 @@
 #                  last message came from the expected side; anchor = start of the current silence
 #                  (the customer's last message or the stage entry), so it runs once per silence
 # Runs that would have been due before the automation existed are skipped: creating a rule never
-# fires it at once on the whole backlog. AI follow-up steps run in order: a step is due only after
-# the previous active step of the stage ran for the same silence.
+# fires it at once on the whole backlog.
 class Pipelines::AutomationSchedule
   Snapshot = Struct.new(:conversation_id, :entered_at, :last_at, :last_incoming, :last_in_at, keyword_init: true)
 
@@ -102,27 +101,12 @@ class Pipelines::AutomationSchedule
     Message.message_types.values_at(:incoming, :outgoing).join(',')
   end
 
-  # Drops what already ran for the same anchor and, for AI follow-up steps, what still waits for the
-  # previous step of the cadence.
+  # Drops what already ran for the same anchor.
   def filter_pending(due)
     return due if due.empty?
 
-    automation_ids = [@automation.id] + previous_ai_step_ids
-    done = PipelineAutomationRun.where(pipeline_automation_id: automation_ids, conversation_id: due.map(&:first))
-                                .pluck(:pipeline_automation_id, :conversation_id, :anchor_at)
-                                .to_set { |automation_id, conversation_id, anchor| [automation_id, conversation_id, anchor.to_i] }
-    due.select do |conversation_id, anchor|
-      done.exclude?([@automation.id, conversation_id, anchor.to_i]) &&
-        previous_ai_step_ids.all? { |step_id| done.include?([step_id, conversation_id, anchor.to_i]) }
-    end
-  end
-
-  def previous_ai_step_ids
-    return [] unless @automation.ai_followup?
-
-    @previous_ai_step_ids ||= PipelineAutomation.active.where(resolution_state_id: @automation.resolution_state_id, kind: 'ai_followup')
-                                                .where('sort_order < :order OR (sort_order = :order AND id < :id)',
-                                                       order: @automation.sort_order, id: @automation.id)
-                                                .pluck(:id)
+    done = PipelineAutomationRun.where(pipeline_automation_id: @automation.id, conversation_id: due.map(&:first))
+                                .pluck(:conversation_id, :anchor_at).to_set { |conversation_id, anchor| [conversation_id, anchor.to_i] }
+    due.reject { |conversation_id, anchor| done.include?([conversation_id, anchor.to_i]) }
   end
 end

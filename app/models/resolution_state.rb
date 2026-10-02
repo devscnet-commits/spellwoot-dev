@@ -34,6 +34,7 @@ class ResolutionState < ApplicationRecord
   belongs_to :operational_flow
   has_many :reasons, class_name: 'OperationalFlowReason', dependent: :nullify, inverse_of: :resolution_state
   has_many :pipeline_automations, dependent: :destroy
+  has_one :ai_followup, class_name: 'PipelineAiFollowup', dependent: :destroy
   has_many :conversations, foreign_key: :pipeline_stage_id, inverse_of: :pipeline_stage, dependent: nil
 
   scope :stages, -> { where(polarity: 'neutral') }

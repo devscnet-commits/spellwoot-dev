@@ -1,7 +1,8 @@
 # A ClosingRequirement makes a custom attribute mandatory under a given OperationalFlow, both to
 # resolve the conversation and to move its card along the pipeline. The condition decides when it
 # applies: always, keyed on the stage being entered (canonical_key/polarity) and, optionally, on
-# another attribute's value ("required IF attribute = one of these answers").
+# another attribute's value ("required IF attribute <operator> value": equal_to / not_equal_to /
+# is_present / is_not_present / greater_than / less_than; equal_to accepts several answers).
 # == Schema Information
 #
 # Table name: closing_requirements
@@ -37,7 +38,7 @@ class ClosingRequirement < ApplicationRecord
   private
 
   # A closing state (won/lost) applies only to itself. An open stage means "from this stage onward":
-  # later open stages and the won columns, never a lost one (losing a deal never asks for its data).
+  # the later open stages and the closing columns (won and lost).
   def stage_match?(state)
     when_clause = condition['when']
     return true if condition['always'] || when_clause.blank?
@@ -55,16 +56,34 @@ class ClosingRequirement < ApplicationRecord
   def from_stage_onward?(reference, state)
     return false if state.nil?
 
-    state.polarity == 'positive' || (state.stage? && state.sort_order >= reference.sort_order)
+    !state.stage? || state.sort_order >= reference.sort_order
   end
 
   def attribute_value_match?(custom_attributes)
     clause = condition['if']
-    values = Array(clause['values']).map(&:to_s)
-    # A half-configured condition (no trigger attribute or no values) never requires the field.
-    return false if clause['attribute_key'].blank? || values.empty?
+    # A half-configured condition (no trigger attribute) never requires the field.
+    return false if clause['attribute_key'].blank?
 
     actual = custom_attributes.with_indifferent_access[clause['attribute_key']]
-    values.include?(actual.to_s)
+    values = Array(clause['values'] || clause['value']).map(&:to_s)
+    operator_match?(clause['operator'].to_s, actual, values)
+  end
+
+  def operator_match?(operator, actual, values)
+    case operator
+    when 'is_present' then actual.to_s.strip.present?
+    when 'is_not_present' then actual.to_s.strip.blank?
+    when 'not_equal_to' then values.any? && values.exclude?(actual.to_s)
+    when 'greater_than', 'less_than' then compare_numbers(operator, actual, values.first)
+    else values.any? && values.include?(actual.to_s)
+    end
+  end
+
+  def compare_numbers(operator, actual, expected)
+    return false if actual.to_s.strip.blank? || expected.to_s.strip.blank?
+
+    left = OperationalFlow.parse_amount(actual)
+    right = OperationalFlow.parse_amount(expected)
+    operator == 'greater_than' ? left > right : left < right
   end
 end

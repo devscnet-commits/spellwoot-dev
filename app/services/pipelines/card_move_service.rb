@@ -1,7 +1,8 @@
-# A card dragged (or added) to a pipeline stage by an agent. The stage's required attributes must be
-# filled first (the values typed in the "Campos obrigatórios da etapa" popup come in custom_attributes);
-# entering the won/lost column sets the conversation result, leaving it for an open stage clears it.
-# The stage's Meta conversion event fires like a manual close does.
+# A card moved to a pipeline stage. By an agent (drag on the board, "Novo negócio"): the stage's
+# required attributes must be filled first (the values typed in the "Campos obrigatórios da etapa"
+# popup come in custom_attributes). By the system (automations, cadence, reopen): no requirement
+# check. Entering the won/lost column sets the conversation result, leaving it for an open stage
+# clears it; the stage's Meta conversion event fires for human moves like a manual close does.
 class Pipelines::CardMoveService
   class MissingAttributes < StandardError
     attr_reader :keys
@@ -12,28 +13,32 @@ class Pipelines::CardMoveService
     end
   end
 
-  def initialize(conversation:, stage:, user:, custom_attributes: nil, ip_address: nil)
+  def initialize(conversation:, stage:, user: nil, custom_attributes: nil, source: 'manual')
     @conversation = conversation
     @stage = stage
-    @user = user
+    @user = user.is_a?(User) ? user : nil
     @attributes = custom_attributes.to_h
-    @ip_address = ip_address
+    @source = source
   end
 
   def perform
     merged = @conversation.custom_attributes.to_h.merge(@attributes)
-    validator = Conversations::RequiredAttributesValidator.new(conversation: @conversation, custom_attributes: merged,
-                                                               result: @stage.canonical_key, flow: @stage.operational_flow)
-    raise MissingAttributes, validator.missing_keys unless validator.valid?
+    check_requirements!(merged) if @source == 'manual'
 
     @conversation.update!(custom_attributes: merged) if @attributes.present?
-    Pipelines::StageMover.new(conversation: @conversation, stage: @stage, user: @user, source: 'manual').perform
+    Pipelines::StageMover.new(conversation: @conversation, stage: @stage, user: @user, source: @source).perform
     sync_result
-    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: @stage.canonical_key, user: @user).perform
+    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: @stage.canonical_key, user: @user).perform if @user
     @conversation
   end
 
   private
+
+  def check_requirements!(merged)
+    validator = Conversations::RequiredAttributesValidator.new(conversation: @conversation, custom_attributes: merged,
+                                                               result: @stage.canonical_key, flow: @stage.operational_flow)
+    raise MissingAttributes, validator.missing_keys unless validator.valid?
+  end
 
   def sync_result
     if !@stage.stage?
@@ -44,7 +49,6 @@ class Pipelines::CardMoveService
   end
 
   def result_service(outcome)
-    Conversations::ResultService.new(conversation: @conversation, outcome: outcome, user: @user, ip_address: @ip_address,
-                                     sync_stage: false)
+    Conversations::ResultService.new(conversation: @conversation, outcome: outcome, user: @user, sync_stage: false)
   end
 end

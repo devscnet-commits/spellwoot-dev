@@ -71,8 +71,7 @@ class Api::V1::Accounts::PipelinesController < Api::V1::Accounts::BaseController
   end
 
   def move_card(conversation)
-    Pipelines::CardMoveService.new(conversation: conversation, stage: @stage, user: Current.user,
-                                   custom_attributes: card_attributes, ip_address: request.ip).perform
+    Pipelines::CardMoveService.new(conversation: conversation, stage: @stage, user: Current.user, custom_attributes: card_attributes).perform
     render json: Pipelines::CardPresenter.new(conversation.reload, @pipeline).as_json
   rescue Pipelines::CardMoveService::MissingAttributes => e
     render_missing_attributes(e.keys)

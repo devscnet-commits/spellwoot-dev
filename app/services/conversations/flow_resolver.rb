@@ -1,7 +1,7 @@
-# Resolves which OperationalFlow (Closing Flow) applies to a conversation. A conversation already
-# on a pipeline board keeps that pipeline's flow. Otherwise teams carry the flow: the
-# conversation's assigned team decides; without a team, the (single) team of the assignee decides;
-# for unassigned conversations, the team of the agent acting right now decides — whoever attends,
+# Resolves which OperationalFlow (Closing Flow / pipeline) applies to a conversation. A conversation
+# already on a pipeline board keeps that pipeline's flow. Otherwise the card owner decides: the
+# (single) team of the assignee carries the flow; without an assignee, the conversation's team; for
+# unassigned, team-less conversations, the team of the agent acting right now — whoever attends,
 # their flow applies. Returns the flow only when it is active.
 class Conversations::FlowResolver
   def initialize(conversation:, user: nil)
@@ -11,8 +11,13 @@ class Conversations::FlowResolver
 
   def flow
     resolved = stage_flow
-    resolved = team_flow || assignee_team_flow || acting_user_team_flow unless resolved&.active
+    resolved = owner_flow || acting_user_team_flow unless resolved&.active
     resolved if resolved&.active
+  end
+
+  # The pipeline the card belongs to by its owner, ignoring the stage it is on now.
+  def owner_flow
+    assignee_team_flow || team_flow
   end
 
   private

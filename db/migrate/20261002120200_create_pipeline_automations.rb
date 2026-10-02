@@ -2,6 +2,7 @@ class CreatePipelineAutomations < ActiveRecord::Migration[7.1]
   def change
     create_automations
     create_runs
+    create_ai_followups
   end
 
   private
@@ -13,8 +14,6 @@ class CreatePipelineAutomations < ActiveRecord::Migration[7.1]
       t.references :resolution_state, null: false, foreign_key: { on_delete: :cascade }
       t.string :name, null: false
       t.boolean :active, null: false, default: true
-      # automation (stage rules) | ai_followup (the stage's AI follow-up cadence, run in order)
-      t.string :kind, null: false, default: 'automation'
       # stage_entered | time_in_stage | inactivity
       t.string :trigger_type, null: false, default: 'stage_entered'
       t.integer :delay_minutes, null: false, default: 0
@@ -46,5 +45,24 @@ class CreatePipelineAutomations < ActiveRecord::Migration[7.1]
 
     add_index :pipeline_automation_runs, %i[pipeline_automation_id conversation_id anchor_at],
               unique: true, name: 'idx_pipeline_automation_runs_unique'
+  end
+
+  # The AI follow-up cadence of a stage, same shape as the AI agent's own follow-up (behaviors per
+  # schedule context, attempts, action when the customer does not answer).
+  def create_ai_followups
+    create_table :pipeline_ai_followups do |t|
+      t.references :account, null: false, foreign_key: { on_delete: :cascade }
+      t.references :operational_flow, null: false, foreign_key: { on_delete: :cascade }
+      t.references :resolution_state, null: false, foreign_key: { on_delete: :cascade }, index: { unique: true }
+      t.boolean :active, null: false, default: true
+      # Silences that started before this never get the cadence (no burst on the backlog).
+      t.datetime :activated_at
+      # Minutes of silence after the last attempt before the no-response action runs.
+      t.integer :inactivity_minutes, null: false, default: 30
+      t.string :close_message
+      t.jsonb :behaviors, null: false, default: []
+
+      t.timestamps
+    end
   end
 end

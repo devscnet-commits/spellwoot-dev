@@ -1,4 +1,4 @@
-# Stage automations and AI follow-up cadences of a pipeline (closing flow).
+# Stage automations of a pipeline (closing flow).
 class Api::V1::Accounts::OperationalFlows::PipelineAutomationsController < Api::V1::Accounts::BaseController
   include PlanFeatureEnforceable
 
@@ -55,7 +55,7 @@ class Api::V1::Accounts::OperationalFlows::PipelineAutomationsController < Api::
 
   def automation_params
     params.require(:pipeline_automation).permit(
-      :resolution_state_id, :name, :active, :kind, :trigger_type, :delay_minutes, :inactivity_sender, :match_type, :sort_order,
+      :resolution_state_id, :name, :active, :trigger_type, :delay_minutes, :inactivity_sender, :match_type, :sort_order,
       conditions: [:attribute, :attribute_key, :operator, :value, { value: [] }],
       actions: [:action_name, { action_params: {} }]
     )

@@ -1625,6 +1625,22 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_120200) do
     t.index ["account_id"], name: "index_overage_snapshots_on_account_id"
   end
 
+  create_table "pipeline_ai_followups", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "operational_flow_id", null: false
+    t.bigint "resolution_state_id", null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "activated_at"
+    t.integer "inactivity_minutes", default: 30, null: false
+    t.string "close_message"
+    t.jsonb "behaviors", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_pipeline_ai_followups_on_account_id"
+    t.index ["operational_flow_id"], name: "index_pipeline_ai_followups_on_operational_flow_id"
+    t.index ["resolution_state_id"], name: "index_pipeline_ai_followups_on_resolution_state_id", unique: true
+  end
+
   create_table "pipeline_automation_runs", force: :cascade do |t|
     t.bigint "pipeline_automation_id", null: false
     t.bigint "conversation_id", null: false
@@ -1643,7 +1659,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_120200) do
     t.bigint "resolution_state_id", null: false
     t.string "name", null: false
     t.boolean "active", default: true, null: false
-    t.string "kind", default: "automation", null: false
     t.string "trigger_type", default: "stage_entered", null: false
     t.integer "delay_minutes", default: 0, null: false
     t.string "inactivity_sender", default: "any", null: false
@@ -2067,6 +2082,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_120200) do
   add_foreign_key "overage_charges", "accounts"
   add_foreign_key "overage_charges", "subscriptions"
   add_foreign_key "overage_snapshots", "accounts"
+  add_foreign_key "pipeline_ai_followups", "accounts", on_delete: :cascade
+  add_foreign_key "pipeline_ai_followups", "operational_flows", on_delete: :cascade
+  add_foreign_key "pipeline_ai_followups", "resolution_states", on_delete: :cascade
   add_foreign_key "pipeline_automation_runs", "conversations", on_delete: :cascade
   add_foreign_key "pipeline_automation_runs", "pipeline_automations", on_delete: :cascade
   add_foreign_key "pipeline_automations", "accounts", on_delete: :cascade

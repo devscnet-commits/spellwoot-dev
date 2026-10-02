@@ -33,6 +33,7 @@ class OperationalFlow < ApplicationRecord
   has_many :resolution_states, -> { order(:sort_order) }, dependent: :destroy, inverse_of: :operational_flow
   has_many :closing_requirements, -> { order(:sort_order) }, dependent: :destroy, inverse_of: :operational_flow
   has_many :pipeline_automations, dependent: :destroy
+  has_many :ai_followups, class_name: 'PipelineAiFollowup', dependent: :destroy
   has_many :stage_events, class_name: 'ConversationStageEvent', dependent: :delete_all
   has_many :inboxes, dependent: :nullify
   has_many :teams, dependent: :nullify

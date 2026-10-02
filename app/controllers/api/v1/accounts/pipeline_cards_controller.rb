@@ -11,8 +11,8 @@ class Api::V1::Accounts::PipelineCardsController < Api::V1::Accounts::BaseContro
     head :ok
   end
 
-  # Uses the agent/prompt given, else the first AI follow-up step of the card's stage, else the AI
-  # agent attending the inbox live. Generation runs in the background.
+  # Uses the agent/prompt given, else the first attempt of the stage's AI follow-up cadence, else the
+  # AI agent attending the inbox live. Generation runs in the background.
   def ai_followup
     agent, prompt = followup_agent_and_prompt
     return render json: { error: I18n.t('errors.pipelines.no_ai_agent') }, status: :unprocessable_entity if agent.nil?
@@ -31,16 +31,10 @@ class Api::V1::Accounts::PipelineCardsController < Api::V1::Accounts::BaseContro
   def followup_agent_and_prompt
     return [account_agents.find_by(id: params[:ai_agent_id]), params[:prompt]] if params[:ai_agent_id].present?
 
-    action = stage_followup_action
-    return [account_agents.find_by(id: action.dig('action_params', 'ai_agent_id')), action.dig('action_params', 'prompt')] if action
+    attempt = PipelineAiFollowup.active.find_by(resolution_state_id: @conversation.pipeline_stage_id)&.first_attempt
+    return [account_agents.find_by(id: attempt[:ai_agent_id]), attempt[:prompt]] if attempt
 
     [inbox_agent, nil]
-  end
-
-  def stage_followup_action
-    step = PipelineAutomation.active.where(resolution_state_id: @conversation.pipeline_stage_id, kind: 'ai_followup')
-                             .order(:sort_order, :id).first
-    step && Array(step.actions).find { |item| item['action_name'] == 'ai_followup' }
   end
 
   def inbox_agent

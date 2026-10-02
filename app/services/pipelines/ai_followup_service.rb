@@ -9,12 +9,13 @@ class Pipelines::AiFollowupService
   HISTORY_SIZE = 20
   DEFAULT_PROMPT = 'Retome a conversa de onde parou, de forma simpática, e convide o cliente a seguir com o atendimento.'.freeze
 
-  def initialize(conversation:, agent:, prompt: nil, user: nil)
+  def initialize(conversation:, agent:, prompt: nil, user: nil, event_payload: {})
     @conversation = conversation
     @agent = agent
     @prompt = prompt.to_s.strip
     @user = user
     @account = conversation.account
+    @event_payload = event_payload
   end
 
   def perform!
@@ -28,7 +29,7 @@ class Pipelines::AiFollowupService
 
     reactivate!
     Ai::ActionDispatcher.new(conversation: @conversation, account: @account, agent: @agent, mode: 'live', acts_live: true,
-                             as_human: @agent.identify_as == 'human').deliver_followup(result[:message])
+                             as_human: @agent.identify_as == 'human').deliver_followup(result[:message], @event_payload)
     create_activity
     result[:message]
   end

@@ -49,25 +49,29 @@ class Pipelines::ActionService < ActionService
     raise "HTTP #{response.code}" unless response.code.between?(200, 299)
   end
 
-  # Opens a new conversation for the same contact in another inbox (channel), optionally with a message.
+  # Opens a new conversation for the same contact in another inbox (channel). A new conversation has
+  # no customer message, so on the official WhatsApp API only a template can open it (template:
+  # { name:, language:, category:, processed_params: }); on every other channel the text goes out as is.
   def pipeline_create_conversation(params)
     inbox = @account.inboxes.find(params[:inbox_id])
-    contact_inbox = ContactInboxBuilder.new(contact: @conversation.contact, inbox: inbox, source_id: uazapi_source_id(inbox)).perform
-    conversation = Conversation.create!(
-      account_id: @account.id, inbox_id: inbox.id, contact_id: @conversation.contact_id, contact_inbox_id: contact_inbox.id,
-      custom_attributes: @conversation.custom_attributes, team_id: @conversation.team_id, assignee_id: @conversation.assignee_id
-    )
-    return if params[:content].blank?
+    template = params[:template].to_h.with_indifferent_access
+    raise ArgumentError, 'template missing' if inbox.channel_type == 'Channel::Whatsapp' && template[:name].blank?
 
-    Messages::MessageBuilder.new(nil, conversation, { content: params[:content], private: false,
-                                                      content_attributes: { pipeline_automation_id: @automation.id } }).perform
+    conversation = open_conversation_for_contact(inbox)
+    return if params[:content].blank? && template[:name].blank?
+
+    message = { content: params[:content].presence || template[:name], private: false,
+                content_attributes: { pipeline_automation_id: @automation.id } }
+    message[:template_params] = template if template[:name].present?
+    Messages::MessageBuilder.new(nil, conversation, message).perform
   end
 
-  # Moves the card to another pipeline: the chosen open stage, or that pipeline's entry stage.
-  def pipeline_change_pipeline(params)
-    flow = @account.operational_flows.find(params[:pipeline_id])
-    stage = params[:stage_id].present? ? flow.resolution_states.stages.find(params[:stage_id]) : flow.default_stage
-    Pipelines::StageMover.new(conversation: @conversation, stage: stage, source: 'automation').perform
+  # Moves the card to a stage of this or another pipeline (the pipeline's entry stage when none is
+  # given). Entering a closing column sets the result like a drag on the board does.
+  def pipeline_move_stage(params)
+    flow = params[:pipeline_id].present? ? @account.operational_flows.find(params[:pipeline_id]) : @automation.operational_flow
+    stage = params[:stage_id].present? ? flow.resolution_states.find(params[:stage_id]) : flow.default_stage
+    Pipelines::CardMoveService.new(conversation: @conversation, stage: stage, source: 'automation').perform
   end
 
   def pipeline_assign_team(params)
@@ -112,11 +116,6 @@ class Pipelines::ActionService < ActionService
     @conversation.update!(temperature: params[:temperature].presence)
   end
 
-  def pipeline_ai_followup(params)
-    agent = Ai::Agent.find_by!(id: params[:ai_agent_id], account_id: @account.id)
-    Pipelines::AiFollowupService.new(conversation: @conversation, agent: agent, prompt: params[:prompt]).perform!
-  end
-
   private
 
   def run_action(name, params)
@@ -127,6 +126,14 @@ class Pipelines::ActionService < ActionService
   rescue StandardError => e
     ChatwootExceptionTracker.new(e, account: @account).capture_exception
     @errors << "#{name}: #{e.message}"
+  end
+
+  def open_conversation_for_contact(inbox)
+    contact_inbox = ContactInboxBuilder.new(contact: @conversation.contact, inbox: inbox, source_id: uazapi_source_id(inbox)).perform
+    Conversation.create!(
+      account_id: @account.id, inbox_id: inbox.id, contact_id: @conversation.contact_id, contact_inbox_id: contact_inbox.id,
+      custom_attributes: @conversation.custom_attributes, team_id: @conversation.team_id, assignee_id: @conversation.assignee_id
+    )
   end
 
   def send_text(content, private_note:)

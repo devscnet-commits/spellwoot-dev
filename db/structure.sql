@@ -1774,6 +1774,66 @@ CREATE SEQUENCE public.camp_dpid_seq_10483
 
 
 --
+-- Name: camp_dpid_seq_4; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_4
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_5; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_5
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_6; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_6
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_7; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_7
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_8; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_8
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: camp_dpid_seq_9766; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2771,6 +2831,66 @@ ALTER SEQUENCE public.contacts_id_seq OWNED BY public.contacts.id;
 --
 
 CREATE SEQUENCE public.conv_dpid_seq_10483
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_4; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_4
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_5; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_5
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_6; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_6
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_7; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_7
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_8; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_8
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -4178,6 +4298,44 @@ ALTER SEQUENCE public.overage_snapshots_id_seq OWNED BY public.overage_snapshots
 
 
 --
+-- Name: pipeline_ai_followups; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pipeline_ai_followups (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    operational_flow_id bigint NOT NULL,
+    resolution_state_id bigint NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    activated_at timestamp(6) without time zone,
+    inactivity_minutes integer DEFAULT 30 NOT NULL,
+    close_message character varying,
+    behaviors jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: pipeline_ai_followups_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.pipeline_ai_followups_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: pipeline_ai_followups_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.pipeline_ai_followups_id_seq OWNED BY public.pipeline_ai_followups.id;
+
+
+--
 -- Name: pipeline_automation_runs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4223,7 +4381,6 @@ CREATE TABLE public.pipeline_automations (
     resolution_state_id bigint NOT NULL,
     name character varying NOT NULL,
     active boolean DEFAULT true NOT NULL,
-    kind character varying DEFAULT 'automation'::character varying NOT NULL,
     trigger_type character varying DEFAULT 'stage_entered'::character varying NOT NULL,
     delay_minutes integer DEFAULT 0 NOT NULL,
     inactivity_sender character varying DEFAULT 'any'::character varying NOT NULL,
@@ -5909,6 +6066,13 @@ ALTER TABLE ONLY public.overage_snapshots ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
+-- Name: pipeline_ai_followups id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_ai_followups ALTER COLUMN id SET DEFAULT nextval('public.pipeline_ai_followups_id_seq'::regclass);
+
+
+--
 -- Name: pipeline_automation_runs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -6944,6 +7108,14 @@ ALTER TABLE ONLY public.overage_charges
 
 ALTER TABLE ONLY public.overage_snapshots
     ADD CONSTRAINT overage_snapshots_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pipeline_ai_followups pipeline_ai_followups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_ai_followups
+    ADD CONSTRAINT pipeline_ai_followups_pkey PRIMARY KEY (id);
 
 
 --
@@ -9095,6 +9267,27 @@ CREATE UNIQUE INDEX index_overage_snapshots_unique_daily ON public.overage_snaps
 
 
 --
+-- Name: index_pipeline_ai_followups_on_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_pipeline_ai_followups_on_account_id ON public.pipeline_ai_followups USING btree (account_id);
+
+
+--
+-- Name: index_pipeline_ai_followups_on_operational_flow_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_pipeline_ai_followups_on_operational_flow_id ON public.pipeline_ai_followups USING btree (operational_flow_id);
+
+
+--
+-- Name: index_pipeline_ai_followups_on_resolution_state_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_pipeline_ai_followups_on_resolution_state_id ON public.pipeline_ai_followups USING btree (resolution_state_id);
+
+
+--
 -- Name: index_pipeline_automation_runs_on_conversation_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9780,6 +9973,14 @@ ALTER TABLE ONLY public.operational_flow_reasons
 
 
 --
+-- Name: pipeline_ai_followups fk_rails_1534feb2ca; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_ai_followups
+    ADD CONSTRAINT fk_rails_1534feb2ca FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
 -- Name: ai_credit_requests fk_rails_17bf5d7955; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10060,6 +10261,14 @@ ALTER TABLE ONLY public.agent_schedules
 
 
 --
+-- Name: pipeline_ai_followups fk_rails_c71e9ac2ff; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_ai_followups
+    ADD CONSTRAINT fk_rails_c71e9ac2ff FOREIGN KEY (operational_flow_id) REFERENCES public.operational_flows(id) ON DELETE CASCADE;
+
+
+--
 -- Name: pipeline_automation_runs fk_rails_ce672335bf; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10137,6 +10346,14 @@ ALTER TABLE ONLY public.agent_presence_snapshots
 
 ALTER TABLE ONLY public.pipeline_automation_runs
     ADD CONSTRAINT fk_rails_fb3a6c7af1 FOREIGN KEY (pipeline_automation_id) REFERENCES public.pipeline_automations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pipeline_ai_followups fk_rails_fd3e3819a8; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pipeline_ai_followups
+    ADD CONSTRAINT fk_rails_fd3e3819a8 FOREIGN KEY (resolution_state_id) REFERENCES public.resolution_states(id) ON DELETE CASCADE;
 
 
 --

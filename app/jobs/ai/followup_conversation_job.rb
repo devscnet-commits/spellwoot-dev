@@ -7,6 +7,8 @@
 # processada por dois jobs ao mesmo tempo (somado aos guards por evento já existentes:
 # followups_since_incoming / acted?).
 class Ai::FollowupConversationJob < ApplicationJob
+  include Ai::FollowupContext
+
   queue_as :low
 
   DEFAULT_INACTIVITY = 30
@@ -43,9 +45,8 @@ class Ai::FollowupConversationJob < ApplicationJob
   # ~8 guards possíveis.
   def run(conversation_id)
     conversation = Conversation.find_by(id: conversation_id)
-    status = conversation&.status
-    return log_skip(conversation_id, 'not_eligible_status', status: status) if ELIGIBLE_STATUSES.exclude?(status)
-    return log_skip(conversation_id, 'group_conversation') if Conversations::GroupDetector.group?(conversation)
+    early_skip = early_skip_reason(conversation)
+    return log_skip(conversation_id, early_skip, status: conversation&.status) if early_skip
 
     binding = resolved_binding(conversation)
     return log_skip(conversation_id, 'no_live_binding') if binding.nil?
@@ -67,6 +68,15 @@ class Ai::FollowupConversationJob < ApplicationJob
     return log_skip(conversation_id, 'inbox_not_found', inbox_id: binding.inbox_id) if inbox.nil?
 
     process(binding, agent, behaviors, fallback, inbox, conversation, agent.account_id)
+  end
+
+  # Status inelegível, grupo, ou card numa etapa com cadência de follow-up do pipeline (a cadência
+  # substitui o follow-up do agente ali — ver Pipelines::AiFollowupRunner).
+  def early_skip_reason(conversation)
+    return 'not_eligible_status' if ELIGIBLE_STATUSES.exclude?(conversation&.status)
+    return 'group_conversation' if Conversations::GroupDetector.group?(conversation)
+
+    'pipeline_cadence' if conversation.pipeline_stage&.ai_followup&.active
   end
 
   # Achado ao vivo (18/08): com MAIS de um agente "live" na MESMA inbox (ex.: duas versões da Maya em
@@ -240,7 +250,7 @@ class Ai::FollowupConversationJob < ApplicationJob
     run_fallback_action(action, agent, inbox, conversation, account_id)
   end
 
-  def run_fallback_action(action, agent, inbox, conversation, account_id)
+  def run_fallback_action(action, agent, _inbox, conversation, account_id)
     case action
     when 'finalize'
       send_close_message(agent, conversation)
@@ -323,51 +333,7 @@ class Ai::FollowupConversationJob < ApplicationJob
          { action: action, via: via, assigned: assigned }.compact)
   end
 
-  # --- Context / business hours ------------------------------------------------
-
-  # Comportamento que vale AGORA. Não há ordem manual: "custom" é mais específico e
-  # tem prioridade sobre os contextos fixos quando ambos coincidem. Empate entre
-  # vários custom/contextos iguais resolve pela ordem de criação (estável).
-  def active_behavior(behaviors, inbox)
-    inside = business_hours_open?(inbox)
-    matching = behaviors.select { |b| behavior_matches?(b, inside, inbox) }
-    matching.min_by { |b| b['context'].to_s == 'custom' ? 0 : 1 }
-  end
-
-  def behavior_matches?(behavior, inside, inbox)
-    case behavior['context'].to_s
-    when 'inbox_hours' then inside
-    when 'outside_hours' then !inside
-    when 'custom' then within_custom_window?(behavior['windows'], inbox)
-    else false
-    end
-  end
-
-  def business_hours_open?(inbox)
-    inbox.respond_to?(:available_now?) ? inbox.available_now? : true
-  rescue StandardError
-    true
-  end
-
-  def within_custom_window?(windows, inbox)
-    return false if windows.blank?
-
-    now = current_hm(inbox)
-    Array(windows).any? do |w|
-      start_at = w['start'].to_s
-      end_at = w['end'].to_s
-      next false if start_at.blank? || end_at.blank?
-
-      start_at <= end_at ? now.between?(start_at, end_at) : (now >= start_at || now <= end_at)
-    end
-  end
-
-  def current_hm(inbox)
-    tz = inbox.respond_to?(:timezone) ? inbox.timezone : nil
-    (tz.present? ? Time.current.in_time_zone(tz) : Time.current).strftime('%H:%M')
-  rescue StandardError
-    Time.current.strftime('%H:%M')
-  end
+  # --- Context / business hours: Ai::FollowupContext (shared with the pipeline cadence) -------
 
   def inactivity_minutes(agent)
     minutes = agent.close_rules.to_h['inactivity_minutes'].to_i

@@ -1,6 +1,7 @@
-# Every minute: finds the cards for which a time-based stage automation (time in stage, inactivity,
-# AI follow-up cadence) became due and enqueues one run per card. Idempotent — the run ledger and the
-# re-check in Pipelines::AutomationRunner keep a card from getting the same automation twice.
+# Every minute: finds the cards for which a time-based stage automation (time in stage, inactivity)
+# became due and enqueues one run per card; also enqueues the AI follow-up cadence of each stage for
+# its open cards (Pipelines::AiFollowupRunner decides whether something is due). Idempotent — the run
+# ledger / the ai_events and the re-checks keep a card from getting the same thing twice.
 class Pipelines::AutomationSweepJob < ApplicationJob
   queue_as :scheduled_jobs
 
@@ -22,6 +23,11 @@ class Pipelines::AutomationSweepJob < ApplicationJob
 
   def sweep
     enabled = Hash.new { |cache, account| cache[account] = account.feature_enabled?('crm_automations') }
+    sweep_automations(enabled)
+    sweep_ai_followups(enabled)
+  end
+
+  def sweep_automations(enabled)
     PipelineAutomation.active.where(trigger_type: %w[time_in_stage inactivity])
                       .includes(:account, :operational_flow).find_each do |automation|
       next unless automation.operational_flow.active && enabled[automation.account]
@@ -31,6 +37,17 @@ class Pipelines::AutomationSweepJob < ApplicationJob
       end
     rescue StandardError => e
       ChatwootExceptionTracker.new(e, account: automation.account).capture_exception
+    end
+  end
+
+  def sweep_ai_followups(enabled)
+    PipelineAiFollowup.active.includes(:account, :operational_flow).find_each do |cadence|
+      next unless cadence.operational_flow.active && enabled[cadence.account] && cadence.account.feature_enabled?('ai_core')
+
+      Conversation.where(pipeline_stage_id: cadence.resolution_state_id, status: %i[open pending], group_chat: false)
+                  .pluck(:id).each { |conversation_id| Pipelines::AiFollowupRunJob.perform_later(cadence.id, conversation_id) }
+    rescue StandardError => e
+      ChatwootExceptionTracker.new(e, account: cadence.account).capture_exception
     end
   end
 end

@@ -367,6 +367,7 @@ Rails.application.routes.draw do
             resources :pipeline_automations, only: [:index, :create, :update, :destroy], module: :operational_flows do
               post :simulate, on: :collection
             end
+            resources :pipeline_ai_followups, only: [:index, :create, :update, :destroy], module: :operational_flows
           end
           # CRM kanban: pipelines (closing flows with open stages), their boards and card quick actions.
           resources :pipelines, only: [:index, :show] do
