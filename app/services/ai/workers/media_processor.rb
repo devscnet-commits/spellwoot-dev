@@ -8,6 +8,11 @@ class Ai::Workers::MediaProcessor
   # Cap defensivo de tamanho da imagem. WhatsApp comprime (geralmente < 2MB); redimensionar com
   # mini_magick/image_processing fica p/ o futuro se algum provider exigir menor.
   MAX_IMAGE_BYTES = 20 * 1024 * 1024
+  # Áudio: 25 MB é o teto da API do Whisper — acima disso a OpenAI recusa, então nem baixamos.
+  MAX_AUDIO_BYTES = 25 * 1024 * 1024
+  # Documento (PDF/docx): 100 MB é o máximo do WhatsApp. A memória já não cresce com o arquivo (cópia em
+  # streaming + pdf-reader lendo do IO); o teto só barra arquivo absurdo (canal API) antes do download.
+  MAX_DOCUMENT_BYTES = 100 * 1024 * 1024
 
   # content_type real do blob -> extensão do tempfile enviado ao Whisper. O WhatsApp/uazapi às vezes
   # entrega opus com filename ".mp3"; nomear o arquivo pelo tipo real evita ambiguidade no multipart.
@@ -95,17 +100,31 @@ class Ai::Workers::MediaProcessor
         max_seconds = limits[:audio_max_seconds].to_i
         next unless max_seconds.positive? && attachment.file.attached?
 
-        seconds = audio_duration_seconds(attachment)
-        return 'audio' if seconds && seconds > max_seconds
+        return 'audio' if audio_over_limit?(attachment, max_seconds)
       when 'file'
         max_chars = limits[:document_max_chars].to_i
         next unless max_chars.positive? && attachment.file.attached?
 
-        text = document(attachment, account_id, profile, conversation_id, skip_vision: true)
-        return 'file' if text && text.length > max_chars
+        return 'file' if document_over_limit?(attachment, max_chars, account_id, profile, conversation_id)
       end
     end
     nil
+  end
+
+  # Acima do teto de bytes não dá pra medir (nem transcrever): com limite configurado, conta como grande demais.
+  def self.audio_over_limit?(attachment, max_seconds)
+    return true if too_big?(attachment, MAX_AUDIO_BYTES, 'áudio')
+
+    seconds = audio_duration_seconds(attachment)
+    seconds.present? && seconds > max_seconds
+  end
+
+  # Mesma regra pro documento: PDF/docx acima do teto conta como grande demais sem baixar.
+  def self.document_over_limit?(attachment, max_chars, account_id, profile, conversation_id)
+    return true if readable_document?(attachment) && too_big?(attachment, MAX_DOCUMENT_BYTES, 'documento')
+
+    text = document(attachment, account_id, profile, conversation_id, skip_vision: true)
+    text.present? && text.length > max_chars
   end
 
   # Duração do áudio em segundos via `ffprobe` (lê só o metadata/header do arquivo, não decodifica o
@@ -113,12 +132,9 @@ class Ai::Workers::MediaProcessor
   # o caller trata como "não sei a duração" e DEIXA PASSAR (fail-open, mesmo espírito do resto deste
   # arquivo: nunca bloqueia o atendimento por uma falha nossa de infra).
   def self.audio_duration_seconds(attachment)
-    Tempfile.create(['ai-audio-probe', audio_extension(attachment)]) do |tmp|
-      tmp.binmode
-      tmp.write(attachment.file.download)
-      tmp.rewind
-      ffprobe_duration(tmp.path)
-    end
+    return nil if too_big?(attachment, MAX_AUDIO_BYTES, 'áudio')
+
+    with_local_copy(attachment, audio_extension(attachment)) { |tmp| ffprobe_duration(tmp.path) }
   rescue StandardError => e
     Rails.logger.warn "[Ai::Workers::MediaProcessor] duração do áudio: #{e.class}: #{e.message}"
     nil
@@ -165,11 +181,9 @@ class Ai::Workers::MediaProcessor
       return nil
     end
 
-    Tempfile.create(['ai-audio', audio_extension(attachment)]) do |tmp|
-      tmp.binmode
-      tmp.write(attachment.file.download)
-      tmp.rewind
+    return nil if too_big?(attachment, MAX_AUDIO_BYTES, 'áudio')
 
+    with_local_copy(attachment, audio_extension(attachment)) do |tmp|
       text = whisper_transcribe(api_key, tmp.path)
       return text.present? ? "[Transcrição do áudio]: #{text}" : nil
     end
@@ -221,10 +235,7 @@ class Ai::Workers::MediaProcessor
       return nil
     end
 
-    if attachment.file.blob.byte_size > MAX_IMAGE_BYTES
-      Rails.logger.warn "[Ai::Workers::MediaProcessor] imagem grande demais (#{attachment.file.blob.byte_size} bytes), OCR pulado"
-      return nil
-    end
+    return nil if too_big?(attachment, MAX_IMAGE_BYTES, 'imagem')
 
     raw = vision_call(provider: provider, model: model, user_message: 'Descreva o conteúdo desta imagem.',
                       account_id: account_id, conversation_id: conversation_id, image: attachment.file)
@@ -276,6 +287,7 @@ class Ai::Workers::MediaProcessor
       Rails.logger.warn '[Ai::Workers::MediaProcessor] documento sem arquivo anexado (download da mídia falhou?), extração pulada'
       return nil
     end
+    return nil if too_big?(attachment, MAX_DOCUMENT_BYTES, 'documento')
 
     content_type = attachment.file.blob.content_type.to_s
     filename = attachment.file.blob.filename.to_s.downcase
@@ -295,17 +307,20 @@ class Ai::Workers::MediaProcessor
   # turno principal, via #pending_vision_images/Ai::PythonOrchestratorClient#document_image_urls, não
   # uma chamada redundante e sem contexto da etapa (ver comentário de #process).
   def self.extract_pdf(attachment, account_id, profile, conversation_id = nil, skip_vision: false)
-    reader = PDF::Reader.new(StringIO.new(attachment.file.download))
-    page_count = reader.page_count
-    pages = reader.pages.first(MAX_DOC_PAGES)
-    text = pages.map { |p| p.text.to_s }.join("\n").strip
+    with_local_copy(attachment, '.pdf') do |pdf|
+      # O IO aberto (não o caminho): com caminho o pdf-reader faz File.binread do arquivo inteiro.
+      reader = PDF::Reader.new(pdf)
+      page_count = reader.page_count
+      pages = reader.pages.first(MAX_DOC_PAGES)
+      text = pages.map { |p| p.text.to_s }.join("\n").strip
 
-    if poor_extraction?(text, pages.size)
-      return nil if skip_vision
+      if poor_extraction?(text, pages.size)
+        return nil if skip_vision
 
-      pdf_via_vision(attachment, account_id, profile, page_count, conversation_id)
-    else
-      pdf_text_result(text, page_count)
+        pdf_via_vision(pdf.path, account_id, profile, page_count, conversation_id)
+      else
+        pdf_text_result(text, page_count)
+      end
     end
   end
 
@@ -361,7 +376,7 @@ class Ai::Workers::MediaProcessor
   # de OCR do perfil (MESMO caminho da imagem — input de imagem que qualquer modelo de visão aceita).
   # Opt-in: sem worker configurado, não roda. Precisa do delegate de rasterização (ghostscript) no
   # container; sem ele, pdf_page_to_png degrada pra nil e caímos no marcador.
-  def self.pdf_via_vision(attachment, account_id, profile, page_count, conversation_id = nil)
+  def self.pdf_via_vision(pdf_path, account_id, profile, page_count, conversation_id = nil)
     provider, model = ocr_worker(profile)
     if model.blank?
       Rails.logger.warn '[Ai::Workers::MediaProcessor] PDF escaneado mas sem worker de OCR configurado, extração pulada'
@@ -369,7 +384,7 @@ class Ai::Workers::MediaProcessor
     end
 
     vision_pages = [page_count, MAX_VISION_PAGES].min
-    texts = pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages, conversation_id)
+    texts = pdf_pages_via_vision(pdf_path, provider, model, account_id, vision_pages, conversation_id)
     return nil if texts.blank?
 
     out = "[Documento (PDF escaneado)]: #{texts.join("\n").strip}"
@@ -378,34 +393,28 @@ class Ai::Workers::MediaProcessor
     "#{out}\n[Documento tem #{page_count} páginas — processadas apenas as primeiras #{vision_pages} via visão]"
   end
 
-  # Rasteriza e processa cada página; devolve os textos (não-vazios) da visão. Isola o PDF num tempfile
-  # p/ o rasterizador. Cada página = 1 chamada de visão independente (o PNG é fechado após uso).
-  def self.pdf_pages_via_vision(attachment, provider, model, account_id, vision_pages, conversation_id = nil)
+  # Rasteriza e processa cada página do PDF já baixado (pdf_path); devolve os textos (não-vazios) da
+  # visão. Cada página = 1 chamada de visão independente (o PNG é fechado após uso).
+  def self.pdf_pages_via_vision(pdf_path, provider, model, account_id, vision_pages, conversation_id = nil)
     texts = []
-    Tempfile.create(['ai-doc', '.pdf']) do |pdf|
-      pdf.binmode
-      pdf.write(attachment.file.download)
-      pdf.rewind
+    (0...vision_pages).each do |i|
+      png = pdf_page_to_png(pdf_path, i)
+      next unless png
 
-      (0...vision_pages).each do |i|
-        png = pdf_page_to_png(pdf.path, i)
-        next unless png
-
-        begin
-          raw = vision_call(
-            provider: provider, model: model,
-            user_message: 'Extraia e descreva o conteúdo desta página de documento.',
-            account_id: account_id, conversation_id: conversation_id, image: png.path
-          )
-          if raw[:status] == 'error'
-            Rails.logger.warn "[Ai::Workers::MediaProcessor] visão (PDF pág #{i}) falhou: #{raw[:error]}"
-          else
-            t = raw[:text].to_s.strip
-            texts << t if t.present?
-          end
-        ensure
-          png.close!
+      begin
+        raw = vision_call(
+          provider: provider, model: model,
+          user_message: 'Extraia e descreva o conteúdo desta página de documento.',
+          account_id: account_id, conversation_id: conversation_id, image: png.path
+        )
+        if raw[:status] == 'error'
+          Rails.logger.warn "[Ai::Workers::MediaProcessor] visão (PDF pág #{i}) falhou: #{raw[:error]}"
+        else
+          t = raw[:text].to_s.strip
+          texts << t if t.present?
         end
+      ensure
+        png.close!
       end
     end
     texts
@@ -428,13 +437,16 @@ class Ai::Workers::MediaProcessor
       content_type = attachment.file.blob.content_type.to_s
       filename = attachment.file.blob.filename.to_s.downcase
       next [] unless pdf?(content_type, filename)
+      next [] if too_big?(attachment, MAX_DOCUMENT_BYTES, 'documento')
 
-      reader = PDF::Reader.new(StringIO.new(attachment.file.download))
-      pages = reader.pages.first(MAX_DOC_PAGES)
-      text = pages.map { |p| p.text.to_s }.join("\n").strip
-      next [] unless poor_extraction?(text, pages.size)
+      with_local_copy(attachment, '.pdf') do |pdf|
+        reader = PDF::Reader.new(pdf)
+        pages = reader.pages.first(MAX_DOC_PAGES)
+        text = pages.map { |p| p.text.to_s }.join("\n").strip
+        next [] unless poor_extraction?(text, pages.size)
 
-      rasterize_for_native_vision(attachment, reader.page_count)
+        rasterize_for_native_vision(pdf.path, reader.page_count)
+      end
     end
   rescue StandardError => e
     Rails.logger.error "[Ai::Workers::MediaProcessor] pending_vision_images: #{e.class}: #{e.message}"
@@ -445,23 +457,17 @@ class Ai::Workers::MediaProcessor
   # formato que um image_url de anexo direto já usa (Ai::PythonOrchestratorClient#image_urls), então
   # orchestrator.py trata os dois exatamente igual (um item "input_image" por URL). Mesmo cap/DPI que
   # #pdf_via_vision usava pro caminho legado.
-  def self.rasterize_for_native_vision(attachment, page_count)
+  def self.rasterize_for_native_vision(pdf_path, page_count)
     vision_pages = [page_count, MAX_VISION_PAGES].min
     images = []
-    Tempfile.create(['ai-doc', '.pdf']) do |pdf|
-      pdf.binmode
-      pdf.write(attachment.file.download)
-      pdf.rewind
+    (0...vision_pages).each do |i|
+      png = pdf_page_to_png(pdf_path, i)
+      next unless png
 
-      (0...vision_pages).each do |i|
-        png = pdf_page_to_png(pdf.path, i)
-        next unless png
-
-        begin
-          images << "data:image/png;base64,#{Base64.strict_encode64(File.binread(png.path))}"
-        ensure
-          png.close!
-        end
+      begin
+        images << "data:image/png;base64,#{Base64.strict_encode64(File.binread(png.path))}"
+      ensure
+        png.close!
       end
     end
     images
@@ -469,10 +475,7 @@ class Ai::Workers::MediaProcessor
 
   # docx: texto dos parágrafos (gem docx = rubyzip + nokogiri). Cap por caracteres.
   def self.extract_docx(attachment)
-    Tempfile.create(['ai-doc', '.docx']) do |tmp|
-      tmp.binmode
-      tmp.write(attachment.file.download)
-      tmp.rewind
+    with_local_copy(attachment, '.docx') do |tmp|
       doc = Docx::Document.open(tmp.path)
       text = doc.paragraphs.map(&:text).reject(&:blank?).join("\n").strip
       return nil if text.blank?
@@ -480,6 +483,36 @@ class Ai::Workers::MediaProcessor
       out = "[Documento (docx)]: #{text.first(MAX_DOC_CHARS)}"
       text.length > MAX_DOC_CHARS ? "#{out}\n#{DOC_TRUNC_NOTE}" : out
     end
+  end
+
+  # Teto de tamanho checado ANTES de baixar (byte_size vem do blob, sem download). true => pula, com log.
+  def self.too_big?(attachment, limit, kind)
+    size = attachment.file.blob.byte_size
+    return false if size <= limit
+
+    Rails.logger.warn "[Ai::Workers::MediaProcessor] #{kind} grande demais (#{size} bytes, teto #{limit}), pulado"
+    true
+  end
+
+  # Cópia local do anexo, baixada em streaming (blob.open grava em disco por blocos — nunca o arquivo
+  # inteiro numa String, como fazia .file.download). Tempfile com a extensão pedida (o Whisper e o
+  # rasterizador olham a extensão), apagado ao fim do bloco. Devolve o valor do bloco.
+  def self.with_local_copy(attachment, extension)
+    Tempfile.create(['ai-media', extension]) do |tmp|
+      tmp.binmode
+      attachment.file.blob.open { |src| IO.copy_stream(src, tmp) }
+      tmp.flush
+      tmp.rewind
+      yield tmp
+    end
+  end
+
+  # PDF ou docx — os únicos tipos que #document lê; os demais nunca foram medidos pelo limite de chars.
+  def self.readable_document?(attachment)
+    blob = attachment.file.blob
+    content_type = blob.content_type.to_s
+    filename = blob.filename.to_s.downcase
+    pdf?(content_type, filename) || docx?(content_type, filename)
   end
 
   def self.pdf?(content_type, filename)
