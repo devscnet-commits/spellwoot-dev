@@ -10,6 +10,7 @@ import ResolveAction from '../../buttons/ResolveAction.vue';
 import ButtonV4 from 'dashboard/components-next/button/Button.vue';
 import DropdownMenu from 'dashboard/components-next/dropdown-menu/DropdownMenu.vue';
 import ConversationResultSelector from 'dashboard/components-next/ConversationWorkflow/ConversationResultSelector.vue';
+import ConversationTemperatureSelector from 'dashboard/components-next/ConversationWorkflow/ConversationTemperatureSelector.vue';
 
 import {
   CMD_MUTE_CONVERSATION,
@@ -93,6 +94,7 @@ onUnmounted(() => {
 
 <template>
   <div class="relative flex items-center gap-2 actions--container">
+    <ConversationTemperatureSelector />
     <ConversationResultSelector />
     <ResolveAction
       :conversation-id="currentChat.id"

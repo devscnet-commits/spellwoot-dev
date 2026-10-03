@@ -28,7 +28,7 @@
     "FORM": {
       "NEW_TITLE": "New closing flow",
       "EDIT_TITLE": "Edit closing flow",
-      "SUBTITLE": "Define the closing buttons and what is required when resolving a conversation.",
+      "SUBTITLE": "Define the pipeline stages, the closing buttons and what is required when moving or resolving a conversation.",
       "NAME": {
         "LABEL": "Flow name",
         "PLACEHOLDER": "e.g., Sales"
@@ -48,8 +48,37 @@
           "support": "Support"
         }
       },
+      "PIPELINE": {
+        "LABEL": "Pipeline stages",
+        "HELP": "Open kanban columns, in the order a deal moves through them. The Won/Lost states below close the funnel.",
+        "EMPTY": "No open stages: this flow works as a closing flow only (Won/Lost).",
+        "STAGE_LABEL": "Stage name",
+        "STAGE_PLACEHOLDER": "e.g., Proposal sent",
+        "COLOR": "Color",
+        "COLORS": {
+          "blue": "Blue",
+          "violet": "Violet",
+          "amber": "Amber",
+          "iris": "Indigo",
+          "teal": "Teal",
+          "ruby": "Ruby",
+          "slate": "Gray"
+        },
+        "DEFAULT": "Entry stage",
+        "DEFAULT_HELP": "New deals enter the pipeline in this stage.",
+        "MOVE_UP": "Move up",
+        "MOVE_DOWN": "Move down",
+        "REMOVE": "Remove stage",
+        "REMOVE_HINT": "When a stage is removed, its cards move to the entry stage.",
+        "ADD": "Add stage",
+        "VALUE_ATTRIBUTE": {
+          "LABEL": "Deal value attribute",
+          "HELP": "Summed per column on the kanban and in the pipeline reports. Conversation attributes of type number, currency or text.",
+          "NONE": "No value attribute"
+        }
+      },
       "STATES": {
-        "LABEL": "Estados do fluxo",
+        "LABEL": "Closing states",
         "DISPLAY_LABEL": "Button label",
         "POLARITY": "Polarity",
         "POLARITY_OPTIONS": {
@@ -94,15 +123,29 @@
       "ERROR_MESSAGE": "Could not save the closing flow",
       "REQUIREMENTS": {
         "LABEL": "Required flow attributes",
-        "HELP": "Attributes the agent must fill before resolving as one of these states.",
+        "HELP": "Attributes the agent must fill before moving a card into a stage or resolving as one of the closing states.",
         "SELECT_ATTRIBUTE": "Select an attribute",
         "ALWAYS": "Always required",
+        "FROM_STAGE": "From stage: {stage}",
         "WHEN_STATE": "Required when: {state}",
         "IF": "Required if...",
+        "IF_HELP": "Only require it when another conversation attribute meets a condition. Combines with the stage chosen above.",
         "IF_FIELD": "When the attribute",
         "IF_FIELD_PLACEHOLDER": "Select the trigger attribute",
+        "IF_OPERATOR": "Condition",
+        "OPERATORS": {
+          "equal_to": "equals",
+          "not_equal_to": "is different from",
+          "is_present": "is not empty",
+          "is_not_present": "is empty",
+          "greater_than": "is greater than",
+          "less_than": "is less than"
+        },
         "IF_VALUES": "Is one of these answers",
+        "IF_VALUE": "Value",
+        "IF_VALUE_PLACEHOLDER": "Type the value to compare",
         "IF_NO_LIST_ATTRS": "No multiple-choice (list) attribute available. Create one under Custom attributes.",
+        "IF_NO_ATTRS": "No conversation attribute available. Create one under Custom attributes.",
         "ADD": "Add requirement"
       }
     },

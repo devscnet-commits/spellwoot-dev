@@ -1,3 +1,5 @@
+import { conditionOperatorMatches } from 'dashboard/components-next/ConversationWorkflow/constants';
+
 // Shared bits of the CRM kanban pages: stage colors, money/duration formatting, lead temperature
 // and the stage requirement rules (mirror of ClosingRequirement#applies_to? on the backend).
 
@@ -58,8 +60,8 @@ export const formatDuration = seconds => {
 export const isBlank = value =>
   value === undefined || value === null || String(value).trim() === '';
 
-// A closing state applies only to itself; an open stage means "from this stage onward" (later open
-// stages and the won column, never a lost one).
+// A closing state applies only to itself; an open stage means "from this stage onward": the later
+// open stages and both closing columns (won and lost).
 export const requirementAppliesToStage = (requirement, stage, stages) => {
   const condition = requirement?.condition || {};
   const when = condition.when;
@@ -70,17 +72,19 @@ export const requirementAppliesToStage = (requirement, stage, stages) => {
   if (!isOpenStage(reference))
     return stage?.canonical_key === when.canonical_key;
   if (!stage) return false;
-  return (
-    stage.polarity === 'positive' ||
-    (isOpenStage(stage) && stage.sort_order >= reference.sort_order)
-  );
+  return !isOpenStage(stage) || stage.sort_order >= reference.sort_order;
 };
 
-// "Obrigatório SE atributo = uma destas respostas".
+// "Obrigatório SE atributo <operador> valor" (same operators as the backend).
 export const requirementConditionMet = (requirement, values) => {
   const clause = requirement?.condition?.if;
   if (!clause) return true;
-  const expected = (clause.values || []).map(String);
-  if (!clause.attribute_key || !expected.length) return false;
-  return expected.includes(String(values?.[clause.attribute_key] ?? ''));
+  if (!clause.attribute_key) return false;
+  const expected =
+    clause.values ?? (clause.value != null ? [clause.value] : []);
+  return conditionOperatorMatches(
+    clause.operator || 'equal_to',
+    values?.[clause.attribute_key],
+    expected
+  );
 };

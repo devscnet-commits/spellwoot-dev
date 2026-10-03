@@ -23,6 +23,14 @@ const formValues = reactive({});
 
 const title = computed(() => pendingOutcome.value?.label || '');
 
+// Currency and percent are typed as free text (decimal keyboard, "1.234,56" accepted by the
+// backend) with a R$ / % adornment next to the input instead of a native number spinner.
+const AMOUNT_ADORNMENT = {
+  [ATTRIBUTE_TYPES.CURRENCY]: { prefix: 'R$', suffix: '' },
+  [ATTRIBUTE_TYPES.PERCENT]: { prefix: '', suffix: '%' },
+};
+const isAmountType = type => type in AMOUNT_ADORNMENT;
+
 // Dynamically show attributes based on current form state
 // formValues includes __resultado_conversa__ for system-field conditions
 const visibleAttributes = computed(() =>
@@ -165,6 +173,36 @@ defineExpose({ open });
             )
           "
         />
+        <div
+          v-else-if="isAmountType(attr.type)"
+          class="flex items-center gap-2 h-10 px-3 rounded-lg bg-n-alpha-black2 outline outline-1 outline-offset-[-1px] focus-within:outline-n-brand"
+          :class="v$[attr.value].$error ? 'outline-n-ruby-8' : 'outline-n-weak'"
+        >
+          <span
+            v-if="AMOUNT_ADORNMENT[attr.type].prefix"
+            class="text-sm text-n-slate-11"
+          >
+            {{ AMOUNT_ADORNMENT[attr.type].prefix }}
+          </span>
+          <input
+            v-model="formValues[attr.value]"
+            type="text"
+            inputmode="decimal"
+            class="reset-base flex-1 min-w-0 !mb-0 p-0 bg-transparent border-0 text-sm text-n-slate-12 placeholder:text-n-slate-10 focus:outline-none"
+            :placeholder="
+              $t(
+                'CONVERSATION_WORKFLOW.REQUIRED_ATTRIBUTES.MODAL.PLACEHOLDERS.NUMBER'
+              )
+            "
+            @blur="v$[attr.value].$touch"
+          />
+          <span
+            v-if="AMOUNT_ADORNMENT[attr.type].suffix"
+            class="text-sm text-n-slate-11"
+          >
+            {{ AMOUNT_ADORNMENT[attr.type].suffix }}
+          </span>
+        </div>
         <Input
           v-else-if="attr.type === ATTRIBUTE_TYPES.DATE"
           v-model="formValues[attr.value]"

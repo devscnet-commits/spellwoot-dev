@@ -71,14 +71,14 @@ const POLARITY_STYLE = {
   neutral: { color: 'slate', icon: 'i-lucide-circle-dot' },
 };
 
-// Resolution states from the resolved closing flow, with a legacy won/lost fallback when the
-// conversation has no flow.
 // Resolution states from the resolved closing flow. No fallback pair: a conversation
 // without a flow shows the "nenhum fluxo configurado" warning and resolves plainly.
+// Open pipeline stages (neutral polarity) are kanban columns, never closing buttons.
 const outcomeStates = computed(() => {
   const states = closingFlow.value?.resolution_states;
   if (!states?.length) return [];
-  return [...states]
+  return states
+    .filter(s => s.polarity !== 'neutral')
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(s => ({
       outcome: s.canonical_key,
@@ -214,7 +214,7 @@ const onCmdResolveConversation = async () => {
   // Without a configured flow there is nothing to pick, so resolve plainly.
   if (!outcomeAlreadySet.value) {
     await fetchClosingFlow();
-    if (!closingFlow.value?.resolution_states?.length) {
+    if (!outcomeStates.value.length) {
       toggleStatus(wootConstants.STATUS_TYPE.RESOLVED);
       return;
     }

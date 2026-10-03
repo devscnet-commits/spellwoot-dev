@@ -398,7 +398,12 @@
     "CAPTAIN_AI": "Captain",
     "CONVERSATION_WORKFLOW": "Conversation Workflow",
     "OPERATIONAL_FLOWS": "Operational Flows",
-    "INTEGRATIONS_HUB": "APIs & Credentials"
+    "INTEGRATIONS_HUB": "APIs & Credentials",
+    "CRM": "CRM",
+    "CRM_KANBAN": "Kanban",
+    "CRM_AUTOMATIONS": "Stage automations",
+    "CRM_AI_FOLLOWUPS": "AI in the pipeline",
+    "CRM_REPORTS": "Pipeline reports"
   },
   "CAPTAIN_SETTINGS": {
     "TITLE": "Captain Settings",

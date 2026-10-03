@@ -342,6 +342,37 @@ const menuItems = computed(() => {
       ],
     },
     {
+      name: 'CRM',
+      label: t('SIDEBAR.CRM'),
+      icon: 'i-lucide-kanban',
+      children: [
+        {
+          name: 'CRM Kanban',
+          label: t('SIDEBAR.CRM_KANBAN'),
+          to: accountScopedRoute('crm_pipeline_index'),
+          activeOn: ['crm_pipeline_index'],
+        },
+        {
+          name: 'CRM Automations',
+          label: t('SIDEBAR.CRM_AUTOMATIONS'),
+          to: accountScopedRoute('crm_automations_index'),
+          activeOn: ['crm_automations_index'],
+        },
+        {
+          name: 'CRM AI Followups',
+          label: t('SIDEBAR.CRM_AI_FOLLOWUPS'),
+          to: accountScopedRoute('crm_ai_followups_index'),
+          activeOn: ['crm_ai_followups_index'],
+        },
+        {
+          name: 'CRM Reports',
+          label: t('SIDEBAR.CRM_REPORTS'),
+          to: accountScopedRoute('crm_pipeline_reports'),
+          activeOn: ['crm_pipeline_reports'],
+        },
+      ],
+    },
+    {
       name: 'Contacts',
       label: t('SIDEBAR.CONTACTS'),
       icon: 'i-lucide-contact',

@@ -28,7 +28,7 @@
     "FORM": {
       "NEW_TITLE": "Novo fluxo de fechamento",
       "EDIT_TITLE": "Editar fluxo de fechamento",
-      "SUBTITLE": "Defina os botões de fechamento e o que é obrigatório ao finalizar uma conversa.",
+      "SUBTITLE": "Defina as etapas do pipeline, os botões de fechamento e o que é obrigatório ao mover ou finalizar uma conversa.",
       "NAME": {
         "LABEL": "Nome do fluxo",
         "PLACEHOLDER": "ex.: Vendas"
@@ -48,8 +48,37 @@
           "support": "Suporte"
         }
       },
+      "PIPELINE": {
+        "LABEL": "Etapas do pipeline",
+        "HELP": "Colunas abertas do kanban, na ordem em que o negócio avança. Os estados Ganho/Perdido abaixo fecham o funil.",
+        "EMPTY": "Nenhuma etapa aberta: este fluxo funciona apenas como fechamento (Ganho/Perdido).",
+        "STAGE_LABEL": "Nome da etapa",
+        "STAGE_PLACEHOLDER": "ex.: Proposta enviada",
+        "COLOR": "Cor",
+        "COLORS": {
+          "blue": "Azul",
+          "violet": "Violeta",
+          "amber": "Âmbar",
+          "iris": "Índigo",
+          "teal": "Verde-água",
+          "ruby": "Rubi",
+          "slate": "Cinza"
+        },
+        "DEFAULT": "Etapa de entrada",
+        "DEFAULT_HELP": "Novos negócios entram no pipeline nesta etapa.",
+        "MOVE_UP": "Mover para cima",
+        "MOVE_DOWN": "Mover para baixo",
+        "REMOVE": "Remover etapa",
+        "REMOVE_HINT": "Ao remover uma etapa, os cards dela vão para a etapa de entrada.",
+        "ADD": "Adicionar etapa",
+        "VALUE_ATTRIBUTE": {
+          "LABEL": "Atributo de valor do negócio",
+          "HELP": "Somado por coluna no kanban e nos relatórios do pipeline. Atributos de conversa do tipo número, moeda ou texto.",
+          "NONE": "Sem atributo de valor"
+        }
+      },
       "STATES": {
-        "LABEL": "Estados do fluxo",
+        "LABEL": "Estados de fechamento",
         "DISPLAY_LABEL": "Rótulo do botão",
         "POLARITY": "Polaridade",
         "POLARITY_OPTIONS": {
@@ -94,15 +123,29 @@
       "ERROR_MESSAGE": "Não foi possível salvar o fluxo de fechamento",
       "REQUIREMENTS": {
         "LABEL": "Atributos obrigatórios do fluxo",
-        "HELP": "Atributos que o agente precisa preencher antes de finalizar como um destes estados.",
+        "HELP": "Atributos que o agente precisa preencher antes de mover o card para uma etapa ou finalizar como um dos estados de fechamento.",
         "SELECT_ATTRIBUTE": "Selecione um atributo",
         "ALWAYS": "Sempre obrigatório",
+        "FROM_STAGE": "A partir da etapa: {stage}",
         "WHEN_STATE": "Obrigatório quando: {state}",
         "IF": "Obrigatório se...",
+        "IF_HELP": "Só exige o atributo quando outro atributo da conversa atender à condição. Pode ser combinado com a etapa escolhida acima.",
         "IF_FIELD": "Quando o atributo",
         "IF_FIELD_PLACEHOLDER": "Selecione o atributo gatilho",
+        "IF_OPERATOR": "Condição",
+        "OPERATORS": {
+          "equal_to": "igual a",
+          "not_equal_to": "diferente de",
+          "is_present": "não está vazio",
+          "is_not_present": "está vazio",
+          "greater_than": "maior que",
+          "less_than": "menor que"
+        },
         "IF_VALUES": "For uma destas respostas",
+        "IF_VALUE": "Valor",
+        "IF_VALUE_PLACEHOLDER": "Digite o valor de comparação",
         "IF_NO_LIST_ATTRS": "Nenhum atributo de múltipla escolha (lista) disponível. Crie um em Atributos personalizados.",
+        "IF_NO_ATTRS": "Nenhum atributo de conversa disponível. Crie um em Atributos personalizados.",
         "ADD": "Adicionar obrigatoriedade"
       }
     },

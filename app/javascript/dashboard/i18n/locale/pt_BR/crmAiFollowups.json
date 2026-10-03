@@ -1,0 +1,126 @@
+{
+  "CRM_AI_FOLLOWUPS": {
+    "HEADER": {
+      "TITLE": "Funcionalidades de IA no Pipeline (Follow-up Automático)",
+      "DESCRIPTION": "Configure sequências de múltiplos follow-ups por etapa com prazos customizados e agentes de IA especializados.",
+      "PIPELINE_LABEL": "Funil:"
+    },
+    "STAGES": {
+      "COUNT": "nenhum follow-up | {count} follow-up | {count} follow-ups"
+    },
+    "EMPTY": {
+      "NO_PIPELINE_TITLE": "Nenhum pipeline configurado",
+      "NO_PIPELINE_DESCRIPTION": "Crie um fluxo de fechamento com etapas para configurar follow-ups de IA em cada uma delas.",
+      "NO_PIPELINE_ACTION": "Configurar fluxos de fechamento",
+      "NO_OPEN_STAGE_TITLE": "Nenhuma etapa aberta neste pipeline",
+      "NO_OPEN_STAGE_DESCRIPTION": "Os follow-ups de IA só rodam enquanto o negócio está em aberto. Adicione uma etapa aberta a este fluxo para configurar uma cadência.",
+      "NO_ATTEMPTS_TITLE": "Nenhum follow-up",
+      "NO_ATTEMPTS_DESCRIPTION": "Adicione o primeiro: a IA escreve para o lead após o tempo de silêncio escolhido neste contexto.",
+      "NO_ATTEMPTS_ACTION": "Adicionar o primeiro follow-up"
+    },
+    "EDITOR": {
+      "TITLE": "Cadência de IA para a etapa: {stage}",
+      "ADD_ATTEMPT": "Adicionar Follow-up",
+      "SAVE": "Salvar Cadência",
+      "ACTIVE": "Ativa",
+      "REMOVE": "Remover cadência",
+      "HINTS": {
+        "REPLACES": "Enquanto o card estiver nesta etapa, esta cadência substitui o follow-up próprio do agente de IA.",
+        "FUTURE_SILENCE": "Vale apenas para silêncios que começarem depois de ela ser salva e ativada.",
+        "RESTART": "Qualquer resposta do cliente reinicia a cadência a partir do primeiro follow-up.",
+        "TAKES_BACK": "Após cada mensagem, a IA retoma a conversa mantendo o responsável pelo card."
+      },
+      "SAVE_SUCCESS": "Cadência salva.",
+      "SAVE_ERROR": "Não foi possível salvar a cadência.",
+      "DELETE_SUCCESS": "Cadência removida.",
+      "DELETE_ERROR": "Não foi possível remover a cadência.",
+      "LOAD_ERROR": "Não foi possível carregar as cadências deste pipeline.",
+      "AGENTS_LOAD_ERROR": "Não foi possível carregar os agentes de IA.",
+      "DELETE_DIALOG": {
+        "TITLE": "Remover cadência?",
+        "DESCRIPTION": "Os follow-ups de IA da etapa \"{stage}\" deixam de rodar e o follow-up próprio do agente de IA volta a valer.",
+        "CONFIRM": "Remover"
+      }
+    },
+    "SCHEDULE": {
+      "TITLE": "Quando esta cadência vale",
+      "HINT": "Cada contexto tem seus próprios follow-ups e ação final. Só os contextos com ao menos um follow-up são salvos.",
+      "CONTEXTS": {
+        "inbox_hours": "Dentro do horário da caixa",
+        "outside_hours": "Fora do horário da caixa",
+        "custom": "Personalizado"
+      },
+      "WINDOWS_TITLE": "Janelas de horário",
+      "WINDOWS_EMPTY": "Nenhuma janela ainda: adicione ao menos uma para a IA saber quando escrever.",
+      "WINDOW_TO": "até",
+      "WINDOW_ADD": "Adicionar janela",
+      "WINDOW_REMOVE": "Remover janela"
+    },
+    "ATTEMPT": {
+      "NUMBER": "#{n}",
+      "DEFAULT_NAME": "{n}º Follow-up",
+      "NAME_PLACEHOLDER": "{n}º Follow-up: ex. Retenção Inicial",
+      "COPY_SUFFIX": "(cópia)",
+      "ACTIVE": "Ativo",
+      "DUPLICATE": "Duplicar follow-up",
+      "REMOVE": "Remover follow-up",
+      "TRIGGER_TITLE": "Gatilho de Inatividade na Conversa",
+      "DELAY_LABEL": "Tempo sem nova troca de mensagens:",
+      "UNITS": {
+        "minutes": "minutos",
+        "hours": "horas",
+        "days": "dias"
+      },
+      "EQUIVALENT": "Equivale a: {minutes} minutos no total",
+      "EQUIVALENT_NEXT": "Equivale a: {minutes} minutos, contados a partir do follow-up anterior",
+      "SENDER_LABEL": "Quem enviou a ÚLTIMA mensagem?",
+      "SENDERS": {
+        "contact": "Cliente enviou última (Empresa não respondeu a tempo)",
+        "agent": "Empresa enviou última (Cliente não respondeu)",
+        "any": "Qualquer um"
+      },
+      "SENDER_INFO": {
+        "contact": "Dispara quando o cliente escreveu por último e a empresa ficou em silêncio pelo tempo acima.",
+        "agent": "Dispara quando a empresa escreveu por último e o cliente ficou em silêncio pelo tempo acima.",
+        "any": "Dispara após o tempo acima de silêncio, independente de quem escreveu por último."
+      },
+      "AGENT_TITLE": "Configuração do Agente & Prompt",
+      "AGENT_LABEL": "Agente de IA:",
+      "AGENT_PLACEHOLDER": "Selecione o agente...",
+      "AGENT_SPECIALTY": "Especialidade do agente:",
+      "AGENTS_EMPTY": "Nenhum agente de IA ativo. Ative um em Agentes IA para usá-lo aqui.",
+      "PROMPT_LABEL": "Instruções do prompt para este follow-up:",
+      "PROMPT_PLACEHOLDER": "Ex.: Relembre o lead da proposta enviada, pergunte se ficou alguma dúvida e ofereça uma ligação.",
+      "PROMPT_HINT": "O agente escreve a mensagem a partir destas instruções e do histórico da conversa.",
+      "NEXT_PILL": "Se o lead continuar sem resposta, avança para o próximo follow-up"
+    },
+    "NO_RESPONSE": {
+      "TITLE": "Se o cliente não responder após a última tentativa",
+      "INACTIVITY_LABEL": "Tempo de inatividade antes da ação (minutos)",
+      "INACTIVITY_HINT": "Contado após o último follow-up. Vale para todos os contextos desta cadência.",
+      "ACTION_LABEL": "Ação",
+      "ACTION_HINT": "Roda uma vez por silêncio; uma resposta do cliente a cancela.",
+      "ACTIONS": {
+        "assign": "Passar para atendente humano",
+        "finalize": "Finalizar conversa",
+        "discard": "Fechar em silêncio",
+        "wait": "Permanecer aguardando",
+        "wait_business_hours": "Aguardar o horário comercial",
+        "move_stage": "Mover card para etapa"
+      },
+      "STAGE_LABEL": "Etapa de destino",
+      "STAGE_PLACEHOLDER": "Selecione a etapa...",
+      "CLOSE_MESSAGE_LABEL": "Mensagem de encerramento",
+      "CLOSE_MESSAGE_PLACEHOLDER": "Ex.: Vamos encerrar esta conversa por enquanto. Quando quiser retomar, é só nos escrever!",
+      "CLOSE_MESSAGE_HINT": "Enviada ao cliente antes de a conversa ser finalizada. Vale para todos os contextos desta cadência."
+    },
+    "ERRORS": {
+      "AGENT_REQUIRED": "Escolha um agente de IA para este follow-up.",
+      "DELAY_REQUIRED": "Informe um tempo de pelo menos 1 minuto.",
+      "WINDOW_REQUIRED": "Preencha o início e o fim de todas as janelas.",
+      "STAGE_REQUIRED": "Escolha a etapa de destino.",
+      "NO_ATTEMPTS": "Adicione pelo menos um follow-up antes de salvar.",
+      "VALIDATION": "Revise os campos destacados antes de salvar."
+    }
+  }
+}

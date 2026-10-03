@@ -1,0 +1,78 @@
+{
+  "CRM_PIPELINE_REPORTS": {
+    "HEADER": {
+      "TITLE": "Pipeline reports",
+      "DESCRIPTION": "Track new deals, wins, losses, conversion by stage and the owners' performance over the period.",
+      "PIPELINE_LABEL": "Pipeline:"
+    },
+    "PERIOD": {
+      "DAYS_7": "7 days",
+      "DAYS_30": "30 days",
+      "DAYS_90": "90 days",
+      "CUSTOM": "Custom",
+      "FROM": "From",
+      "UNTIL": "until",
+      "APPLY": "Apply"
+    },
+    "EMPTY": {
+      "NO_PIPELINE_TITLE": "No pipeline configured",
+      "NO_PIPELINE_DESCRIPTION": "Create a closing flow with stages to follow its results here.",
+      "NO_PIPELINE_ACTION": "Set up closing flows",
+      "NO_DATA": "No data in this period"
+    },
+    "ERROR": {
+      "LOAD": "Could not load the report.",
+      "RETRY": "Try again"
+    },
+    "KPI": {
+      "NEW": "New deals",
+      "WON": "Won",
+      "LOST": "Lost",
+      "WIN_RATE": "Win rate",
+      "WIN_RATE_HINT": "won ÷ (won + lost)",
+      "AVG_CYCLE": "Average cycle",
+      "AVG_CYCLE_HINT": "from entering the pipeline to winning",
+      "OPEN": "Open"
+    },
+    "FUNNEL": {
+      "TITLE": "Conversion funnel",
+      "DESCRIPTION": "Of the deals that entered in the period, how many reached each stage."
+    },
+    "STAGES": {
+      "TITLE": "Stages",
+      "DESCRIPTION": "Cards and value in each stage now, how many entered it in the period and the average time spent there.",
+      "STAGE": "Stage",
+      "CARDS_NOW": "Cards now",
+      "VALUE": "Value",
+      "ENTERED": "Entered in period",
+      "AVG_TIME": "Avg. time in stage",
+      "WON_BADGE": "Won",
+      "LOST_BADGE": "Lost"
+    },
+    "LOSSES": {
+      "TITLE": "Losses by stage",
+      "DESCRIPTION": "The stage the lost deals were in when they were lost.",
+      "UNKNOWN_STAGE": "Removed stage",
+      "COUNT": "{count} deal | {count} deals",
+      "EMPTY": "No losses in this period"
+    },
+    "AGENTS": {
+      "TITLE": "Ranking by owner",
+      "DESCRIPTION": "Wins, closed value, losses and open deals per owner.",
+      "AGENT": "Owner",
+      "UNASSIGNED": "Unassigned",
+      "WON": "Won",
+      "VALUE": "Value",
+      "LOST": "Lost",
+      "OPEN": "Open",
+      "EMPTY": "No deals in this period"
+    },
+    "DAILY": {
+      "TITLE": "Daily evolution",
+      "DESCRIPTION": "New deals, wins and losses per day.",
+      "NEW": "New",
+      "WON": "Won",
+      "LOST": "Lost"
+    }
+  }
+}

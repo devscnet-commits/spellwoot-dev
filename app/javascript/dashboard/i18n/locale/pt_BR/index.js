@@ -43,6 +43,10 @@ import stickersMgmt from './stickersMgmt.json';
 import teamsSettings from './teamsSettings.json';
 import operationalFlowsSettings from './operationalFlowsSettings.json';
 import crmReports from './crmReports.json';
+import crmPipeline from './crmPipeline.json';
+import crmAutomations from './crmAutomations.json';
+import crmAiFollowups from './crmAiFollowups.json';
+import crmPipelineReports from './crmPipelineReports.json';
 import messageTemplatesSettings from './messageTemplatesSettings.json';
 import plan from './plan.json';
 import webhooks from './webhooks.json';
@@ -95,6 +99,10 @@ export default {
   ...teamsSettings,
   ...operationalFlowsSettings,
   ...crmReports,
+  ...crmPipeline,
+  ...crmAutomations,
+  ...crmAiFollowups,
+  ...crmPipelineReports,
   ...messageTemplatesSettings,
   ...plan,
   ...webhooks,

@@ -21,8 +21,9 @@ const baseValues = ref({});
 const values = reactive({});
 const showErrors = ref(false);
 const isSaving = ref(false);
+const isOpen = ref(false);
 // The Dialog emits close for any reason; only a close without a successful save is a cancel.
-const settled = ref(false);
+const settled = ref(true);
 
 const definitionFor = key =>
   props.attributes.find(attribute => attribute.attributeKey === key) || {
@@ -63,10 +64,13 @@ const open = ({ targetStage, requirementsList, currentValues }) => {
   showErrors.value = false;
   isSaving.value = false;
   settled.value = false;
-  dialogRef.value?.open();
+  // Reopened in place when the backend still reports missing keys (showModal twice would throw).
+  if (!isOpen.value) dialogRef.value?.open();
+  isOpen.value = true;
 };
 
 const onClose = () => {
+  isOpen.value = false;
   if (settled.value) return;
   settled.value = true;
   emit('cancel');
@@ -99,7 +103,7 @@ defineExpose({ open, close: finish, stopLoading });
 </script>
 
 <template>
-  <Dialog ref="dialogRef" width="xl" @close="onClose">
+  <Dialog ref="dialogRef" width="xl" @close="onClose" @confirm="submit">
     <div class="flex items-start gap-3 -mt-2">
       <span
         class="flex items-center justify-center size-10 shrink-0 rounded-xl border border-n-amber-7 bg-n-amber-3 text-n-amber-11"
@@ -137,15 +141,17 @@ defineExpose({ open, close: finish, stopLoading });
         <Button
           variant="ghost"
           color="slate"
+          type="button"
           :label="$t('CRM_PIPELINE.REQUIREMENTS.CANCEL')"
           @click="cancel"
         />
         <Button
           icon="i-lucide-arrow-right"
           trailing-icon
+          type="submit"
           :label="$t('CRM_PIPELINE.REQUIREMENTS.SAVE_AND_MOVE')"
           :is-loading="isSaving"
-          @click="submit"
+          :disabled="isSaving"
         />
       </div>
     </template>

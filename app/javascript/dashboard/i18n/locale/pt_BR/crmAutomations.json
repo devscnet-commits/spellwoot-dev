@@ -1,0 +1,260 @@
+{
+  "CRM_AUTOMATIONS": {
+    "HEADER": {
+      "TITLE": "Automações por Etapa do Pipeline",
+      "DESCRIPTION": "Configure disparos imediatos, atraso programado, inatividade com distinção cliente/empresa, webhooks e ações no CRM.",
+      "PIPELINE_LABEL": "Funil:"
+    },
+    "EMPTY": {
+      "NO_PIPELINES_TITLE": "Nenhum funil configurado",
+      "NO_PIPELINES_DESCRIPTION": "Crie um fluxo de fechamento com etapas para automatizar ações em cada etapa do pipeline.",
+      "NO_PIPELINES_ACTION": "Configurar fluxos de fechamento",
+      "NO_STAGE": "Selecione uma etapa acima para ver suas regras.",
+      "NO_RULES": "Nenhuma regra nesta etapa ainda.",
+      "NO_RULES_HINT": "Crie a primeira automação para esta etapa.",
+      "NO_SELECTION_TITLE": "Nenhuma regra selecionada",
+      "NO_SELECTION_DESCRIPTION": "Escolha uma regra na lista ao lado ou crie uma nova automação para esta etapa."
+    },
+    "LIST": {
+      "TITLE": "Regras na Etapa ({count})",
+      "NEW": "Nova Automação",
+      "ACTIONS_COUNT": "{count} ação | {count} ações",
+      "ACTIVE_TOGGLE": "Ativar ou desativar a regra",
+      "DELETE": "Excluir regra",
+      "INACTIVE": "(Inativa)"
+    },
+    "SUMMARY": {
+      "STAGE_ENTERED": "Imediato ao entrar",
+      "TIME_IN_STAGE": "Após {time} na etapa",
+      "INACTIVITY": "Inatividade {time} ({sender})",
+      "SENDERS": {
+        "agent": "cliente não respondeu",
+        "contact": "empresa não respondeu",
+        "any": "qualquer um"
+      },
+      "MINUTES": "{count} min",
+      "HOURS": "{count}h",
+      "DAYS": "{count} dia | {count} dias"
+    },
+    "EDITOR": {
+      "NEW_TITLE": "Nova automação",
+      "EDIT_TITLE": "Editar automação",
+      "NAME_LABEL": "Nome da Automação",
+      "NAME_PLACEHOLDER": "Ex.: Boas-vindas ao entrar na etapa",
+      "SIMULATE": "Simular Regra",
+      "SAVE": "Salvar Regra",
+      "SIMULATION_RESULT": "{matched} de {total} cards na etapa passariam",
+      "SIMULATION_SAMPLES": "Exemplos:",
+      "SIMULATION_NONE": "Nenhum card da etapa passaria nas condições atuais.",
+      "SIMULATION_EMPTY_STAGE": "Não há cards nesta etapa para simular.",
+      "SIMULATION_ERROR": "Não foi possível simular a regra.",
+      "SAVE_ERROR": "Não foi possível salvar a regra.",
+      "FIX_ERRORS": "Corrija os campos destacados antes de salvar.",
+      "ERRORS": {
+        "NAME": "Informe o nome da automação."
+      }
+    },
+    "TRIGGER": {
+      "TITLE": "1. Categoria do Gatilho de Execução",
+      "TYPES": {
+        "stage_entered": {
+          "TITLE": "Ao Entrar na Etapa",
+          "DESCRIPTION": "Executa imediatamente quando o card entra nesta etapa."
+        },
+        "time_in_stage": {
+          "TITLE": "Após um Período",
+          "DESCRIPTION": "Executa depois de um tempo programado desde a entrada na etapa."
+        },
+        "inactivity": {
+          "TITLE": "Inatividade na Conversa",
+          "DESCRIPTION": "Executa quando a conversa fica sem novas mensagens por um tempo."
+        }
+      },
+      "DELAY_LABEL": "Executar após delay de:",
+      "INACTIVITY_LABEL": "Tempo sem nova troca de mensagens:",
+      "UNITS": {
+        "minutes": "minutos",
+        "hours": "horas",
+        "days": "dias"
+      },
+      "SENDER_LABEL": "Quem enviou a ÚLTIMA mensagem?",
+      "SENDERS": {
+        "agent": "Empresa enviou última mensagem (Cliente não respondeu)",
+        "contact": "Cliente enviou última mensagem (Empresa não respondeu)",
+        "any": "Qualquer um"
+      },
+      "ERRORS": {
+        "DELAY": "Informe um tempo maior que zero."
+      }
+    },
+    "CONDITIONS": {
+      "TITLE": "2. Regras de Condicionais para Execução",
+      "LOGIC_LABEL": "Lógica:",
+      "MATCH_ALL": "TODAS as condições (E)",
+      "MATCH_ANY": "QUALQUER condição (OU)",
+      "ADD": "Adicionar Condição",
+      "EMPTY": "Sem condições: a regra vale para todos os cards da etapa.",
+      "ATTRIBUTES": {
+        "label": "Etiqueta",
+        "priority": "Prioridade",
+        "team_id": "Time responsável",
+        "assignee_id": "Pessoa responsável",
+        "custom_attribute": "Campo personalizado",
+        "sla": "SLA",
+        "temperature": "Temperatura do lead",
+        "status": "Status da conversa"
+      },
+      "CUSTOM_ATTRIBUTE_PLACEHOLDER": "Selecione o campo...",
+      "OPERATORS": {
+        "equal_to": "igual a",
+        "not_equal_to": "diferente",
+        "is_not_present": "vazio",
+        "is_present": "não está vazio",
+        "greater_than": "maior que",
+        "less_than": "menor que"
+      },
+      "VALUE_PLACEHOLDER": "Valor",
+      "SELECT_PLACEHOLDER": "Selecione...",
+      "VALUES": {
+        "PRIORITY": {
+          "urgent": "Urgente",
+          "high": "Alta",
+          "medium": "Média",
+          "low": "Baixa"
+        },
+        "SLA": {
+          "breached": "Atrasado",
+          "on_time": "No prazo",
+          "none": "Sem SLA"
+        },
+        "TEMPERATURE": {
+          "hot": "Quente",
+          "warm": "Morno",
+          "cold": "Frio"
+        },
+        "STATUS": {
+          "open": "Aberta",
+          "pending": "Pendente",
+          "resolved": "Resolvida",
+          "snoozed": "Adiada"
+        }
+      },
+      "REMOVE": "Remover condição",
+      "ERRORS": {
+        "ATTRIBUTE": "Escolha o atributo.",
+        "ATTRIBUTE_KEY": "Escolha o campo personalizado.",
+        "VALUE": "Informe o valor da condição."
+      }
+    },
+    "ACTIONS": {
+      "TITLE": "3. Ações a Executar na Etapa ({stage})",
+      "ADD": "Adicionar Ação",
+      "EMPTY": "Nenhuma ação ainda. Adicione pelo menos uma ação para a regra executar.",
+      "ORDER_HINT": "As ações executam na ordem em que aparecem.",
+      "MOVE_UP": "Mover para cima",
+      "MOVE_DOWN": "Mover para baixo",
+      "REMOVE": "Remover ação",
+      "NAMES": {
+        "send_message": "Enviar mensagem",
+        "add_private_note": "Adicionar nota privada",
+        "send_template": "Enviar template WhatsApp",
+        "send_webhook": "Disparar webhook",
+        "create_conversation": "Criar conversa em outro canal",
+        "move_stage": "Mover card para etapa",
+        "assign_team": "Alterar equipe responsável",
+        "assign_agent": "Alterar responsável",
+        "change_priority": "Alterar prioridade",
+        "add_label": "Adicionar etiqueta",
+        "remove_label": "Remover etiqueta",
+        "add_sla": "Adicionar/Atualizar SLA",
+        "remove_sla": "Remover SLA",
+        "change_status": "Alterar status da conversa",
+        "change_temperature": "Alterar temperatura"
+      },
+      "FIELDS": {
+        "CONTENT_LABEL": "Mensagem",
+        "CONTENT_PLACEHOLDER": "Texto enviado ao cliente...",
+        "NOTE_LABEL": "Nota privada",
+        "NOTE_PLACEHOLDER": "Texto visível apenas para a equipe...",
+        "INBOX_LABEL": "Caixa de entrada",
+        "INBOX_PLACEHOLDER": "Selecione a caixa...",
+        "WHATSAPP_INBOX_LABEL": "Caixa WhatsApp (API oficial)",
+        "NO_WHATSAPP_INBOXES": "Nenhuma caixa WhatsApp oficial encontrada nesta conta.",
+        "TEMPLATE_LABEL": "Template",
+        "TEMPLATE_PLACEHOLDER": "Selecione o template...",
+        "TEMPLATE_META": "{name} ({language} · {category})",
+        "NO_TEMPLATES": "Nenhum template aprovado disponível nesta caixa.",
+        "TEMPLATE_PARAMS": "Variáveis do template",
+        "TEMPLATE_PARAM_LABEL": "Variável {key}",
+        "TEMPLATE_PARAM_PLACEHOLDER": "Valor da variável {key}",
+        "TEMPLATE_PREVIEW": "Prévia",
+        "OPTIONAL_TEXT_LABEL": "Texto adicional (opcional)",
+        "OPTIONAL_TEXT_PLACEHOLDER": "Texto registrado no histórico junto ao template...",
+        "TEMPLATE_REQUIRED_HINT": "Caixa WhatsApp oficial: uma nova conversa só pode ser aberta com um template aprovado.",
+        "URL_LABEL": "URL do webhook",
+        "URL_PLACEHOLDER": "https://seusistema.com/webhook",
+        "URL_HINT": "Apenas URLs públicas (http:// ou https://) são aceitas. Os dados do lead são enviados em JSON.",
+        "PIPELINE_LABEL": "Funil",
+        "STAGE_LABEL": "Etapa de destino",
+        "STAGE_ENTRY": "Etapa inicial do funil",
+        "TEAM_LABEL": "Time",
+        "TEAM_REMOVE": "Remover time",
+        "AGENT_LABEL": "Responsável",
+        "AGENT_REMOVE": "Remover responsável (sem atribuição)",
+        "PRIORITY_LABEL": "Prioridade",
+        "PRIORITIES": {
+          "urgent": "Urgente",
+          "high": "Alta",
+          "medium": "Média",
+          "low": "Baixa",
+          "remove": "Remover prioridade"
+        },
+        "LABELS_LABEL": "Etiquetas",
+        "LABELS_PLACEHOLDER": "Selecione as etiquetas...",
+        "LABELS_SEARCH": "Buscar etiqueta...",
+        "LABELS_EMPTY": "Nenhuma etiqueta encontrada.",
+        "SLA_MINUTES_LABEL": "Tempo Limite em Minutos",
+        "SLA_HINT": "Prazo do card nesta etapa; substitui um prazo anterior e é removido ao sair da etapa.",
+        "REMOVE_SLA_HINT": "Remove o prazo (SLA) do card. Não há campos adicionais.",
+        "STATUS_LABEL": "Novo status",
+        "STATUSES": {
+          "open": "Aberta",
+          "pending": "Pendente",
+          "resolved": "Resolvida",
+          "snoozed": "Adiada"
+        },
+        "TEMPERATURE_LABEL": "Temperatura",
+        "TEMPERATURES": {
+          "hot": "Quente",
+          "warm": "Morno",
+          "cold": "Frio",
+          "remove": "Remover temperatura"
+        }
+      },
+      "ERRORS": {
+        "ACTIONS": "Adicione pelo menos uma ação.",
+        "CONTENT": "Informe a mensagem.",
+        "INBOX": "Escolha a caixa de entrada.",
+        "TEMPLATE": "Escolha o template.",
+        "TEMPLATE_PARAMS": "Preencha todas as variáveis do template.",
+        "URL": "Informe uma URL começando com http:// ou https://.",
+        "LABELS": "Escolha pelo menos uma etiqueta.",
+        "MINUTES": "Informe um tempo em minutos maior que zero.",
+        "STATUS": "Escolha o status."
+      }
+    },
+    "DELETE": {
+      "TITLE": "Excluir automação",
+      "DESCRIPTION": "A regra \"{name}\" será excluída. Essa ação não pode ser desfeita.",
+      "CONFIRM": "Excluir",
+      "CANCEL": "Cancelar"
+    },
+    "ALERTS": {
+      "LOAD_ERROR": "Não foi possível carregar as automações.",
+      "SAVE_SUCCESS": "Regra salva com sucesso.",
+      "DELETE_SUCCESS": "Regra excluída.",
+      "DELETE_ERROR": "Não foi possível excluir a regra.",
+      "ACTIVE_ERROR": "Não foi possível alterar o status da regra."
+    }
+  }
+}

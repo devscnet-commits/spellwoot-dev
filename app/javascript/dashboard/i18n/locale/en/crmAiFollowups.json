@@ -1,0 +1,126 @@
+{
+  "CRM_AI_FOLLOWUPS": {
+    "HEADER": {
+      "TITLE": "AI features in the pipeline (automatic follow-up)",
+      "DESCRIPTION": "Set up sequences of multiple follow-ups per stage with custom delays and specialized AI agents.",
+      "PIPELINE_LABEL": "Pipeline:"
+    },
+    "STAGES": {
+      "COUNT": "no follow-ups | {count} follow-up | {count} follow-ups"
+    },
+    "EMPTY": {
+      "NO_PIPELINE_TITLE": "No pipeline configured",
+      "NO_PIPELINE_DESCRIPTION": "Create a closing flow with stages to set up AI follow-ups for each one.",
+      "NO_PIPELINE_ACTION": "Set up closing flows",
+      "NO_OPEN_STAGE_TITLE": "No open stage in this pipeline",
+      "NO_OPEN_STAGE_DESCRIPTION": "AI follow-ups only run while the deal is open. Add an open stage to this flow to set up a cadence.",
+      "NO_ATTEMPTS_TITLE": "No follow-ups",
+      "NO_ATTEMPTS_DESCRIPTION": "Add the first one: the AI writes to the lead after the chosen time of silence in this context.",
+      "NO_ATTEMPTS_ACTION": "Add the first follow-up"
+    },
+    "EDITOR": {
+      "TITLE": "AI cadence for the stage: {stage}",
+      "ADD_ATTEMPT": "Add follow-up",
+      "SAVE": "Save cadence",
+      "ACTIVE": "Active",
+      "REMOVE": "Remove cadence",
+      "HINTS": {
+        "REPLACES": "While the card is in this stage, this cadence replaces the AI agent's own follow-up.",
+        "FUTURE_SILENCE": "It only applies to silences that start after it is saved and activated.",
+        "RESTART": "Any customer reply restarts the cadence from the first follow-up.",
+        "TAKES_BACK": "After each message the AI takes the conversation back, keeping the card owner."
+      },
+      "SAVE_SUCCESS": "Cadence saved.",
+      "SAVE_ERROR": "Could not save the cadence.",
+      "DELETE_SUCCESS": "Cadence removed.",
+      "DELETE_ERROR": "Could not remove the cadence.",
+      "LOAD_ERROR": "Could not load the cadences of this pipeline.",
+      "AGENTS_LOAD_ERROR": "Could not load the AI agents.",
+      "DELETE_DIALOG": {
+        "TITLE": "Remove cadence?",
+        "DESCRIPTION": "The AI follow-ups of the stage \"{stage}\" stop running and the AI agent's own follow-up applies again.",
+        "CONFIRM": "Remove"
+      }
+    },
+    "SCHEDULE": {
+      "TITLE": "When this cadence applies",
+      "HINT": "Each context has its own follow-ups and final action. Only contexts with at least one follow-up are saved.",
+      "CONTEXTS": {
+        "inbox_hours": "Within inbox hours",
+        "outside_hours": "Outside inbox hours",
+        "custom": "Custom"
+      },
+      "WINDOWS_TITLE": "Time windows",
+      "WINDOWS_EMPTY": "No window yet: add at least one so the AI knows when to write.",
+      "WINDOW_TO": "to",
+      "WINDOW_ADD": "Add window",
+      "WINDOW_REMOVE": "Remove window"
+    },
+    "ATTEMPT": {
+      "NUMBER": "#{n}",
+      "DEFAULT_NAME": "Follow-up {n}",
+      "NAME_PLACEHOLDER": "Follow-up {n}: e.g. initial retention",
+      "COPY_SUFFIX": "(copy)",
+      "ACTIVE": "Active",
+      "DUPLICATE": "Duplicate follow-up",
+      "REMOVE": "Remove follow-up",
+      "TRIGGER_TITLE": "Conversation inactivity trigger",
+      "DELAY_LABEL": "Time without new message exchange:",
+      "UNITS": {
+        "minutes": "minutes",
+        "hours": "hours",
+        "days": "days"
+      },
+      "EQUIVALENT": "Equals: {minutes} minutes in total",
+      "EQUIVALENT_NEXT": "Equals: {minutes} minutes, counted from the previous follow-up",
+      "SENDER_LABEL": "Who sent the LAST message?",
+      "SENDERS": {
+        "contact": "Customer sent the last one (company did not reply in time)",
+        "agent": "Company sent the last one (customer did not reply)",
+        "any": "Anyone"
+      },
+      "SENDER_INFO": {
+        "contact": "Fires when the customer wrote last and the company stayed silent for the time above.",
+        "agent": "Fires when the company wrote last and the customer stayed silent for the time above.",
+        "any": "Fires after the time above of silence, whoever wrote last."
+      },
+      "AGENT_TITLE": "Agent & prompt setup",
+      "AGENT_LABEL": "AI agent:",
+      "AGENT_PLACEHOLDER": "Select the agent...",
+      "AGENT_SPECIALTY": "Agent specialty:",
+      "AGENTS_EMPTY": "No active AI agent. Activate one in AI Agents to use it here.",
+      "PROMPT_LABEL": "Prompt instructions for this follow-up:",
+      "PROMPT_PLACEHOLDER": "E.g. Remind the lead of the proposal sent, ask if there are open questions and offer a call.",
+      "PROMPT_HINT": "The agent writes the message from these instructions and the conversation history.",
+      "NEXT_PILL": "If the lead still does not reply, moves on to the next follow-up"
+    },
+    "NO_RESPONSE": {
+      "TITLE": "If the customer does not reply after the last attempt",
+      "INACTIVITY_LABEL": "Inactivity time before the action (minutes)",
+      "INACTIVITY_HINT": "Counted after the last follow-up. Shared by every context of this cadence.",
+      "ACTION_LABEL": "Action",
+      "ACTION_HINT": "Runs once per silence; a customer reply cancels it.",
+      "ACTIONS": {
+        "assign": "Hand over to a human agent",
+        "finalize": "Finalize the conversation",
+        "discard": "Close silently",
+        "wait": "Keep waiting",
+        "wait_business_hours": "Wait for business hours",
+        "move_stage": "Move card to stage"
+      },
+      "STAGE_LABEL": "Destination stage",
+      "STAGE_PLACEHOLDER": "Select the stage...",
+      "CLOSE_MESSAGE_LABEL": "Closing message",
+      "CLOSE_MESSAGE_PLACEHOLDER": "E.g. We are closing this conversation for now. Whenever you want to pick it up, just write to us!",
+      "CLOSE_MESSAGE_HINT": "Sent to the customer before the conversation is finalized. Shared by every context of this cadence."
+    },
+    "ERRORS": {
+      "AGENT_REQUIRED": "Choose an AI agent for this follow-up.",
+      "DELAY_REQUIRED": "Enter a time of at least 1 minute.",
+      "WINDOW_REQUIRED": "Fill in the start and end of every window.",
+      "STAGE_REQUIRED": "Choose the destination stage.",
+      "NO_ATTEMPTS": "Add at least one follow-up before saving.",
+      "VALIDATION": "Review the highlighted fields before saving."
+    }
+  }
+}

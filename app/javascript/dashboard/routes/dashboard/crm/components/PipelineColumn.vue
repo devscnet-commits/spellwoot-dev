@@ -108,12 +108,12 @@ const onChange = event => {
             }}
           </span>
           <span
-            v-if="column.ai_followups_count"
+            v-if="column.has_ai_followup"
             v-tooltip.top="$t('CRM_PIPELINE.BOARD.AI_TOOLTIP')"
             class="flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-md border border-n-iris-6 text-n-iris-11"
           >
             <span class="i-lucide-sparkles size-3" />
-            {{ column.ai_followups_count }}
+            {{ $t('CRM_PIPELINE.BOARD.AI_BADGE') }}
           </span>
         </div>
       </div>
@@ -139,15 +139,27 @@ const onChange = event => {
             @ai-followup="emit('aiFollowup', element)"
           />
         </template>
+        <template #footer>
+          <p
+            v-if="!column.cards.length"
+            class="py-6 mb-0 text-xs text-center text-n-slate-10 border border-dashed border-n-weak rounded-xl"
+          >
+            {{ $t('CRM_PIPELINE.BOARD.EMPTY_COLUMN') }}
+          </p>
+        </template>
       </Draggable>
       <button
         v-if="column.has_more"
         type="button"
-        class="w-full py-1.5 text-xs text-n-slate-11 rounded-lg hover:bg-n-alpha-2"
+        class="w-full py-1.5 text-xs text-n-slate-11 rounded-lg hover:bg-n-alpha-2 disabled:opacity-60"
         :disabled="isLoadingMore"
         @click="emit('loadMore')"
       >
-        {{ $t('CRM_PIPELINE.BOARD.LOAD_MORE') }}
+        {{
+          isLoadingMore
+            ? $t('CRM_PIPELINE.BOARD.LOADING_MORE')
+            : $t('CRM_PIPELINE.BOARD.LOAD_MORE')
+        }}
       </button>
     </div>
 

@@ -144,11 +144,13 @@ const showNoFlowWarning = computed(
   () => flowLoaded.value && !hasFlow.value && !outcome.value
 );
 
+// Open pipeline stages (neutral polarity) are kanban columns, never a conversation result.
 const resultOptions = computed(() => {
   const states = closingFlow.value?.resolution_states;
   if (!states?.length) return [NONE_OPTION];
   return [
-    ...[...states]
+    ...states
+      .filter(s => s.polarity !== 'neutral')
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(s => ({
         key: s.canonical_key,

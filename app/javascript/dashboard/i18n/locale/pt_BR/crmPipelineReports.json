@@ -1,0 +1,78 @@
+{
+  "CRM_PIPELINE_REPORTS": {
+    "HEADER": {
+      "TITLE": "Relatórios do Pipeline",
+      "DESCRIPTION": "Acompanhe novos negócios, ganhos, perdas, a conversão por etapa e o desempenho dos responsáveis no período.",
+      "PIPELINE_LABEL": "Funil:"
+    },
+    "PERIOD": {
+      "DAYS_7": "7 dias",
+      "DAYS_30": "30 dias",
+      "DAYS_90": "90 dias",
+      "CUSTOM": "Personalizado",
+      "FROM": "De",
+      "UNTIL": "até",
+      "APPLY": "Aplicar"
+    },
+    "EMPTY": {
+      "NO_PIPELINE_TITLE": "Nenhum pipeline configurado",
+      "NO_PIPELINE_DESCRIPTION": "Crie um fluxo de fechamento com etapas para acompanhar os resultados dele aqui.",
+      "NO_PIPELINE_ACTION": "Configurar fluxos de fechamento",
+      "NO_DATA": "Sem dados no período"
+    },
+    "ERROR": {
+      "LOAD": "Não foi possível carregar o relatório.",
+      "RETRY": "Tentar novamente"
+    },
+    "KPI": {
+      "NEW": "Novos negócios",
+      "WON": "Ganhos",
+      "LOST": "Perdidos",
+      "WIN_RATE": "Taxa de ganho",
+      "WIN_RATE_HINT": "ganhos ÷ (ganhos + perdidos)",
+      "AVG_CYCLE": "Ciclo médio",
+      "AVG_CYCLE_HINT": "da entrada no funil até o ganho",
+      "OPEN": "Em aberto"
+    },
+    "FUNNEL": {
+      "TITLE": "Funil de conversão",
+      "DESCRIPTION": "Dos negócios que entraram no período, quantos chegaram a cada etapa."
+    },
+    "STAGES": {
+      "TITLE": "Etapas",
+      "DESCRIPTION": "Cards e valor em cada etapa agora, quantos entraram nela no período e o tempo médio de permanência.",
+      "STAGE": "Etapa",
+      "CARDS_NOW": "Cards agora",
+      "VALUE": "Valor",
+      "ENTERED": "Entraram no período",
+      "AVG_TIME": "Tempo médio na etapa",
+      "WON_BADGE": "Ganho",
+      "LOST_BADGE": "Perdido"
+    },
+    "LOSSES": {
+      "TITLE": "Perdas por etapa",
+      "DESCRIPTION": "Em qual etapa os negócios estavam quando foram perdidos.",
+      "UNKNOWN_STAGE": "Etapa removida",
+      "COUNT": "{count} negócio | {count} negócios",
+      "EMPTY": "Nenhuma perda no período"
+    },
+    "AGENTS": {
+      "TITLE": "Ranking por responsável",
+      "DESCRIPTION": "Ganhos, valor fechado, perdas e negócios em aberto por responsável.",
+      "AGENT": "Responsável",
+      "UNASSIGNED": "Sem responsável",
+      "WON": "Ganhos",
+      "VALUE": "Valor",
+      "LOST": "Perdidos",
+      "OPEN": "Em aberto",
+      "EMPTY": "Nenhum negócio no período"
+    },
+    "DAILY": {
+      "TITLE": "Evolução diária",
+      "DESCRIPTION": "Novos negócios, ganhos e perdas por dia.",
+      "NEW": "Novos",
+      "WON": "Ganhos",
+      "LOST": "Perdidos"
+    }
+  }
+}

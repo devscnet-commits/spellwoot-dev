@@ -40,6 +40,14 @@ const placeholders = computed(() => ({
 
 const getPlaceholder = type => placeholders.value[type] || '';
 
+// Currency and percent are typed as free text (decimal keyboard, "1.234,56" accepted by the
+// backend) with a R$ / % adornment next to the input instead of a native number spinner.
+const AMOUNT_ADORNMENT = {
+  [ATTRIBUTE_TYPES.CURRENCY]: { prefix: 'R$', suffix: '' },
+  [ATTRIBUTE_TYPES.PERCENT]: { prefix: '', suffix: '%' },
+};
+const isAmountType = type => type in AMOUNT_ADORNMENT;
+
 // Compute which attributes should be visible given current form state
 // formValues may include __resultado_conversa__ injected from context
 const visibleAttributes = computed(() =>
@@ -283,6 +291,42 @@ defineExpose({ open, close });
             :message-type="v$[attribute.value].$error ? 'error' : 'info'"
             @blur="v$[attribute.value].$touch"
           />
+        </template>
+
+        <template v-else-if="isAmountType(attribute.type)">
+          <div
+            class="flex items-center gap-2 h-10 px-3 rounded-lg bg-n-alpha-black2 outline outline-1 outline-offset-[-1px] focus-within:outline-n-brand"
+            :class="
+              v$[attribute.value].$error ? 'outline-n-ruby-8' : 'outline-n-weak'
+            "
+          >
+            <span
+              v-if="AMOUNT_ADORNMENT[attribute.type].prefix"
+              class="text-sm text-n-slate-11"
+            >
+              {{ AMOUNT_ADORNMENT[attribute.type].prefix }}
+            </span>
+            <input
+              v-model="formValues[attribute.value]"
+              type="text"
+              inputmode="decimal"
+              class="reset-base flex-1 min-w-0 !mb-0 p-0 bg-transparent border-0 text-sm text-n-slate-12 placeholder:text-n-slate-10 focus:outline-none"
+              :placeholder="getPlaceholder(ATTRIBUTE_TYPES.NUMBER)"
+              @blur="v$[attribute.value].$touch"
+            />
+            <span
+              v-if="AMOUNT_ADORNMENT[attribute.type].suffix"
+              class="text-sm text-n-slate-11"
+            >
+              {{ AMOUNT_ADORNMENT[attribute.type].suffix }}
+            </span>
+          </div>
+          <p
+            v-if="getErrorMessage(attribute.value)"
+            class="mb-0 text-label-small text-n-ruby-9"
+          >
+            {{ getErrorMessage(attribute.value) }}
+          </p>
         </template>
 
         <template v-else-if="attribute.type === ATTRIBUTE_TYPES.LINK">

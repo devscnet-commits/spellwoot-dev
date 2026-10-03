@@ -1,0 +1,260 @@
+{
+  "CRM_AUTOMATIONS": {
+    "HEADER": {
+      "TITLE": "Pipeline Stage Automations",
+      "DESCRIPTION": "Set up immediate triggers, scheduled delays, inactivity with customer/company distinction, webhooks and CRM actions.",
+      "PIPELINE_LABEL": "Pipeline:"
+    },
+    "EMPTY": {
+      "NO_PIPELINES_TITLE": "No pipeline configured",
+      "NO_PIPELINES_DESCRIPTION": "Create a closing flow with stages to automate actions on each pipeline stage.",
+      "NO_PIPELINES_ACTION": "Set up closing flows",
+      "NO_STAGE": "Select a stage above to see its rules.",
+      "NO_RULES": "No rules in this stage yet.",
+      "NO_RULES_HINT": "Create the first automation for this stage.",
+      "NO_SELECTION_TITLE": "No rule selected",
+      "NO_SELECTION_DESCRIPTION": "Pick a rule from the list or create a new automation for this stage."
+    },
+    "LIST": {
+      "TITLE": "Rules in Stage ({count})",
+      "NEW": "New Automation",
+      "ACTIONS_COUNT": "{count} action | {count} actions",
+      "ACTIVE_TOGGLE": "Enable or disable the rule",
+      "DELETE": "Delete rule",
+      "INACTIVE": "(Inactive)"
+    },
+    "SUMMARY": {
+      "STAGE_ENTERED": "Immediately on entering",
+      "TIME_IN_STAGE": "After {time} in stage",
+      "INACTIVITY": "Inactivity {time} ({sender})",
+      "SENDERS": {
+        "agent": "customer did not reply",
+        "contact": "company did not reply",
+        "any": "anyone"
+      },
+      "MINUTES": "{count} min",
+      "HOURS": "{count}h",
+      "DAYS": "{count} day | {count} days"
+    },
+    "EDITOR": {
+      "NEW_TITLE": "New automation",
+      "EDIT_TITLE": "Edit automation",
+      "NAME_LABEL": "Automation Name",
+      "NAME_PLACEHOLDER": "E.g.: Welcome on entering the stage",
+      "SIMULATE": "Simulate Rule",
+      "SAVE": "Save Rule",
+      "SIMULATION_RESULT": "{matched} of {total} cards in the stage would pass",
+      "SIMULATION_SAMPLES": "Examples:",
+      "SIMULATION_NONE": "No card in the stage would pass the current conditions.",
+      "SIMULATION_EMPTY_STAGE": "There are no cards in this stage to simulate.",
+      "SIMULATION_ERROR": "Could not simulate the rule.",
+      "SAVE_ERROR": "Could not save the rule.",
+      "FIX_ERRORS": "Fix the highlighted fields before saving.",
+      "ERRORS": {
+        "NAME": "Enter the automation name."
+      }
+    },
+    "TRIGGER": {
+      "TITLE": "1. Execution Trigger Category",
+      "TYPES": {
+        "stage_entered": {
+          "TITLE": "On Entering the Stage",
+          "DESCRIPTION": "Runs immediately when the card enters this stage."
+        },
+        "time_in_stage": {
+          "TITLE": "After a Period",
+          "DESCRIPTION": "Runs after a scheduled time since entering the stage."
+        },
+        "inactivity": {
+          "TITLE": "Conversation Inactivity",
+          "DESCRIPTION": "Runs when the conversation has no new messages for a while."
+        }
+      },
+      "DELAY_LABEL": "Run after a delay of:",
+      "INACTIVITY_LABEL": "Time without new messages:",
+      "UNITS": {
+        "minutes": "minutes",
+        "hours": "hours",
+        "days": "days"
+      },
+      "SENDER_LABEL": "Who sent the LAST message?",
+      "SENDERS": {
+        "agent": "Company sent the last message (Customer did not reply)",
+        "contact": "Customer sent the last message (Company did not reply)",
+        "any": "Anyone"
+      },
+      "ERRORS": {
+        "DELAY": "Enter a time greater than zero."
+      }
+    },
+    "CONDITIONS": {
+      "TITLE": "2. Conditional Rules for Execution",
+      "LOGIC_LABEL": "Logic:",
+      "MATCH_ALL": "ALL conditions (AND)",
+      "MATCH_ANY": "ANY condition (OR)",
+      "ADD": "Add Condition",
+      "EMPTY": "No conditions: the rule applies to every card in the stage.",
+      "ATTRIBUTES": {
+        "label": "Label",
+        "priority": "Priority",
+        "team_id": "Assigned team",
+        "assignee_id": "Assigned agent",
+        "custom_attribute": "Custom attribute",
+        "sla": "SLA",
+        "temperature": "Lead temperature",
+        "status": "Conversation status"
+      },
+      "CUSTOM_ATTRIBUTE_PLACEHOLDER": "Select the attribute...",
+      "OPERATORS": {
+        "equal_to": "equal to",
+        "not_equal_to": "not equal to",
+        "is_not_present": "is empty",
+        "is_present": "is not empty",
+        "greater_than": "greater than",
+        "less_than": "less than"
+      },
+      "VALUE_PLACEHOLDER": "Value",
+      "SELECT_PLACEHOLDER": "Select...",
+      "VALUES": {
+        "PRIORITY": {
+          "urgent": "Urgent",
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        },
+        "SLA": {
+          "breached": "Breached",
+          "on_time": "On time",
+          "none": "No SLA"
+        },
+        "TEMPERATURE": {
+          "hot": "Hot",
+          "warm": "Warm",
+          "cold": "Cold"
+        },
+        "STATUS": {
+          "open": "Open",
+          "pending": "Pending",
+          "resolved": "Resolved",
+          "snoozed": "Snoozed"
+        }
+      },
+      "REMOVE": "Remove condition",
+      "ERRORS": {
+        "ATTRIBUTE": "Choose the attribute.",
+        "ATTRIBUTE_KEY": "Choose the custom attribute.",
+        "VALUE": "Enter the condition value."
+      }
+    },
+    "ACTIONS": {
+      "TITLE": "3. Actions to Run in Stage ({stage})",
+      "ADD": "Add Action",
+      "EMPTY": "No actions yet. Add at least one action for the rule to run.",
+      "ORDER_HINT": "Actions run in the order they appear.",
+      "MOVE_UP": "Move up",
+      "MOVE_DOWN": "Move down",
+      "REMOVE": "Remove action",
+      "NAMES": {
+        "send_message": "Send message",
+        "add_private_note": "Add private note",
+        "send_template": "Send WhatsApp template",
+        "send_webhook": "Trigger webhook",
+        "create_conversation": "Create conversation in another channel",
+        "move_stage": "Move card to stage",
+        "assign_team": "Change assigned team",
+        "assign_agent": "Change assignee",
+        "change_priority": "Change priority",
+        "add_label": "Add label",
+        "remove_label": "Remove label",
+        "add_sla": "Add/Update SLA",
+        "remove_sla": "Remove SLA",
+        "change_status": "Change conversation status",
+        "change_temperature": "Change temperature"
+      },
+      "FIELDS": {
+        "CONTENT_LABEL": "Message",
+        "CONTENT_PLACEHOLDER": "Text sent to the customer...",
+        "NOTE_LABEL": "Private note",
+        "NOTE_PLACEHOLDER": "Text visible only to the team...",
+        "INBOX_LABEL": "Inbox",
+        "INBOX_PLACEHOLDER": "Select the inbox...",
+        "WHATSAPP_INBOX_LABEL": "WhatsApp inbox (official API)",
+        "NO_WHATSAPP_INBOXES": "No official WhatsApp inbox found in this account.",
+        "TEMPLATE_LABEL": "Template",
+        "TEMPLATE_PLACEHOLDER": "Select the template...",
+        "TEMPLATE_META": "{name} ({language} · {category})",
+        "NO_TEMPLATES": "No approved template available in this inbox.",
+        "TEMPLATE_PARAMS": "Template variables",
+        "TEMPLATE_PARAM_LABEL": "Variable {key}",
+        "TEMPLATE_PARAM_PLACEHOLDER": "Value of variable {key}",
+        "TEMPLATE_PREVIEW": "Preview",
+        "OPTIONAL_TEXT_LABEL": "Additional text (optional)",
+        "OPTIONAL_TEXT_PLACEHOLDER": "Text recorded in the history along with the template...",
+        "TEMPLATE_REQUIRED_HINT": "Official WhatsApp inbox: a new conversation can only be opened with an approved template.",
+        "URL_LABEL": "Webhook URL",
+        "URL_PLACEHOLDER": "https://yoursystem.com/webhook",
+        "URL_HINT": "Only public URLs (http:// or https://) are accepted. Lead data is sent as JSON.",
+        "PIPELINE_LABEL": "Pipeline",
+        "STAGE_LABEL": "Target stage",
+        "STAGE_ENTRY": "Pipeline entry stage",
+        "TEAM_LABEL": "Team",
+        "TEAM_REMOVE": "Remove team",
+        "AGENT_LABEL": "Assignee",
+        "AGENT_REMOVE": "Remove assignee (unassigned)",
+        "PRIORITY_LABEL": "Priority",
+        "PRIORITIES": {
+          "urgent": "Urgent",
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low",
+          "remove": "Remove priority"
+        },
+        "LABELS_LABEL": "Labels",
+        "LABELS_PLACEHOLDER": "Select the labels...",
+        "LABELS_SEARCH": "Search label...",
+        "LABELS_EMPTY": "No label found.",
+        "SLA_MINUTES_LABEL": "Time Limit in Minutes",
+        "SLA_HINT": "Deadline of the card in this stage; replaces a previous one and is cleared on leaving the stage.",
+        "REMOVE_SLA_HINT": "Removes the card's deadline (SLA). No additional fields.",
+        "STATUS_LABEL": "New status",
+        "STATUSES": {
+          "open": "Open",
+          "pending": "Pending",
+          "resolved": "Resolved",
+          "snoozed": "Snoozed"
+        },
+        "TEMPERATURE_LABEL": "Temperature",
+        "TEMPERATURES": {
+          "hot": "Hot",
+          "warm": "Warm",
+          "cold": "Cold",
+          "remove": "Remove temperature"
+        }
+      },
+      "ERRORS": {
+        "ACTIONS": "Add at least one action.",
+        "CONTENT": "Enter the message.",
+        "INBOX": "Choose the inbox.",
+        "TEMPLATE": "Choose the template.",
+        "TEMPLATE_PARAMS": "Fill in every template variable.",
+        "URL": "Enter a URL starting with http:// or https://.",
+        "LABELS": "Choose at least one label.",
+        "MINUTES": "Enter a time in minutes greater than zero.",
+        "STATUS": "Choose the status."
+      }
+    },
+    "DELETE": {
+      "TITLE": "Delete automation",
+      "DESCRIPTION": "The rule \"{name}\" will be deleted. This cannot be undone.",
+      "CONFIRM": "Delete",
+      "CANCEL": "Cancel"
+    },
+    "ALERTS": {
+      "LOAD_ERROR": "Could not load the automations.",
+      "SAVE_SUCCESS": "Rule saved successfully.",
+      "DELETE_SUCCESS": "Rule deleted.",
+      "DELETE_ERROR": "Could not delete the rule.",
+      "ACTIVE_ERROR": "Could not change the rule status."
+    }
+  }
+}

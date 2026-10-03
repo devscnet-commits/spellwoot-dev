@@ -9,6 +9,12 @@ import Switch from 'dashboard/components-next/switch/Switch.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 import FlowSelect from './FlowSelect.vue';
+import { CONDITION_OPERATORS } from 'dashboard/components-next/ConversationWorkflow/constants';
+import {
+  STAGE_COLORS,
+  STAGE_DOT_CLASS,
+  stageColor,
+} from 'dashboard/routes/dashboard/crm/helpers';
 
 const store = useStore();
 const route = useRoute();
@@ -32,6 +38,7 @@ const CATEGORIES = ['sales', 'support'];
 const POLARITY_BY_CANONICAL = { won: 'positive', lost: 'negative' };
 const statePolarity = state =>
   POLARITY_BY_CANONICAL[state.canonical_key] || state.polarity || 'neutral';
+const isOpenStage = state => statePolarity(state) === 'neutral';
 const POLARITY_BADGE_CLASS = {
   positive: 'text-n-teal-11 bg-n-teal-3',
   negative: 'text-n-ruby-11 bg-n-ruby-3',
@@ -69,11 +76,12 @@ const metaEventOptions = computed(() => [
   })),
 ]);
 
-// Purchase value must be numeric-ish: offer number/text attributes only.
+// Deal / Purchase value must be numeric-ish: number and currency attributes, plus text for
+// legacy "R$ 1.234,56" fields (the backend parses that format).
 const valueAttributeOptions = computed(() =>
   (conversationAttributes.value || [])
     .filter(attribute =>
-      ['number', 'text'].includes(attribute.attributeDisplayType)
+      ['number', 'currency', 'text'].includes(attribute.attributeDisplayType)
     )
     .map(attribute => ({
       value: attribute.attributeKey,
@@ -81,10 +89,13 @@ const valueAttributeOptions = computed(() =>
     }))
 );
 
-const metaAttributeOptions = computed(() =>
+// Every conversation attribute, with the bits the "if" clause editor needs (type + list options).
+const attributeOptions = computed(() =>
   (conversationAttributes.value || []).map(attribute => ({
     value: attribute.attributeKey,
     label: attribute.attributeDisplayName,
+    type: attribute.attributeDisplayType,
+    attributeValues: attribute.attributeValues || [],
   }))
 );
 
@@ -110,6 +121,11 @@ const name = ref('');
 const category = ref('sales');
 const active = ref(true);
 const metaEnabled = ref(false);
+const valueAttributeKey = ref('');
+// Open kanban stages (polarity neutral) in board order; exactly one is the entry stage.
+const stages = ref([]);
+const removedStageIds = ref([]);
+// Closing states (won/lost), always after the open stages.
 const states = ref(defaultStates());
 const removedReasonIds = ref([]);
 const requirements = ref([]);
@@ -117,62 +133,156 @@ const removedRequirementIds = ref([]);
 const isSaving = ref(false);
 const isLoading = ref(false);
 
-// A requirement's `when` is 'always', a resolution state's canonical_key, or 'if'
-// (required only when a trigger attribute holds one of the selected answers).
+// ---- Pipeline stages -----------------------------------------------------------------------
+
+const KEY_SUFFIX_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+// canonical_key is immutable server-side, so a new stage gets it once from the label it was
+// created with: ascii slug + random suffix (two stages may share a name, keys never collide).
+const canonicalKeyFor = label => {
+  const slug = label
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const suffix = Array.from(
+    { length: 4 },
+    () => KEY_SUFFIX_CHARS[Math.floor(Math.random() * KEY_SUFFIX_CHARS.length)]
+  ).join('');
+  return `${slug || 'etapa'}_${suffix}`;
+};
+
+const addStage = () => {
+  stages.value.push({
+    canonical_key: '',
+    display_label: '',
+    color: STAGE_COLORS[stages.value.length % STAGE_COLORS.length],
+    is_default: stages.value.length === 0,
+  });
+};
+
+// The key is fixed when the user leaves the label field for the first time; renaming later
+// changes only display_label, exactly like the won/lost states.
+const ensureStageKey = stage => {
+  if (!stage.canonical_key && stage.display_label.trim()) {
+    stage.canonical_key = canonicalKeyFor(stage.display_label);
+  }
+};
+
+const setDefaultStage = index => {
+  stages.value.forEach((stage, i) => {
+    stage.is_default = i === index;
+  });
+};
+
+const moveStage = (index, delta) => {
+  const target = index + delta;
+  if (target < 0 || target >= stages.value.length) return;
+  const list = stages.value;
+  [list[index], list[target]] = [list[target], list[index]];
+};
+
+const removeStage = index => {
+  const [removed] = stages.value.splice(index, 1);
+  if (removed.id) removedStageIds.value.push(removed.id);
+  if (removed.is_default && stages.value.length) {
+    stages.value[0].is_default = true;
+  }
+  // Requirements anchored on the removed stage fall back to "always".
+  requirements.value.forEach(requirement => {
+    if (requirement.when === removed.canonical_key) requirement.when = 'always';
+  });
+};
+
+// ---- Requirements ---------------------------------------------------------------------------
+
+const OPERATORS_WITHOUT_VALUE = ['is_present', 'is_not_present'];
+
+// A requirement's `when` is 'always' or a state's canonical_key (open stage = from that stage
+// onward, closing state = that state only). Old rows with only an `if` clause are "always".
 const conditionToWhen = condition => {
-  if (condition?.if) return 'if';
   if (condition?.always) return 'always';
   return condition?.when?.canonical_key || 'always';
 };
-const buildCondition = requirement => {
-  if (requirement.when === 'if') {
-    return {
-      if: {
-        attribute_key: requirement.condition_field,
-        values: requirement.condition_values,
-      },
-    };
-  }
-  if (requirement.when === 'always') return { always: true };
-  return { when: { canonical_key: requirement.when } };
+
+const triggerAttributeFor = key =>
+  attributeOptions.value.find(option => option.value === key);
+
+// Equal/not equal on a list attribute picks among its options; everything else types a value.
+const usesOptionList = requirement =>
+  triggerAttributeFor(requirement.condition_field)?.type === 'list' &&
+  ['equal_to', 'not_equal_to'].includes(requirement.condition_operator);
+
+const needsValue = requirement =>
+  !OPERATORS_WITHOUT_VALUE.includes(requirement.condition_operator);
+
+const conditionValuesOf = requirement => {
+  if (!needsValue(requirement)) return [];
+  if (usesOptionList(requirement)) return requirement.condition_values;
+  const value = String(requirement.condition_values[0] ?? '').trim();
+  return value ? [value] : [];
 };
 
-// Condition choices: "always", one per resolution state, and "required if attribute = answer".
+const buildCondition = requirement => {
+  const condition =
+    requirement.when === 'always'
+      ? { always: true }
+      : { when: { canonical_key: requirement.when } };
+  if (requirement.has_condition && requirement.condition_field) {
+    condition.if = {
+      attribute_key: requirement.condition_field,
+      operator: requirement.condition_operator,
+      values: conditionValuesOf(requirement),
+    };
+  }
+  return condition;
+};
+
+// "Obrigatório quando": always, from each open stage onward, or one closing state only.
 const conditionOptions = computed(() => [
   {
     value: 'always',
     label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.ALWAYS'),
   },
+  ...stages.value
+    .filter(stage => stage.canonical_key)
+    .map(stage => ({
+      value: stage.canonical_key,
+      label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.FROM_STAGE', {
+        stage: stage.display_label,
+      }),
+    })),
   ...states.value.map(state => ({
     value: state.canonical_key,
     label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.WHEN_STATE', {
       state: state.display_label,
     }),
   })),
-  {
-    value: 'if',
-    label: t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF'),
-  },
 ]);
 
-// Trigger attributes for "if" conditions: multiple-choice (list) attributes only.
-const listAttributeOptions = computed(() =>
-  (conversationAttributes.value || [])
-    .filter(attribute => attribute.attributeDisplayType === 'list')
-    .map(attribute => ({
-      value: attribute.attributeKey,
-      label: attribute.attributeDisplayName,
-      attributeValues: attribute.attributeValues || [],
-    }))
+const operatorOptions = computed(() =>
+  CONDITION_OPERATORS.map(operator => ({
+    value: operator,
+    label: t(
+      `OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.OPERATORS.${operator}`
+    ),
+  }))
 );
 
-const triggerValuesFor = key =>
-  listAttributeOptions.value.find(option => option.value === key)
-    ?.attributeValues || [];
+const triggerValuesFor = key => triggerAttributeFor(key)?.attributeValues || [];
 
 // Changing the trigger attribute invalidates the previously selected answers.
 const onTriggerFieldChange = requirement => {
   requirement.condition_values = [];
+};
+
+// Switching between "pick options" and "type a value" leaves stale values behind; clear them.
+const setOperator = (requirement, operator) => {
+  const wasOptionList = usesOptionList(requirement);
+  requirement.condition_operator = operator;
+  if (usesOptionList(requirement) !== wasOptionList) {
+    requirement.condition_values = [];
+  }
 };
 
 const populate = flow => {
@@ -181,33 +291,52 @@ const populate = flow => {
   category.value = flow.category || 'sales';
   active.value = flow.active ?? true;
   metaEnabled.value = !!flow.meta_enabled;
+  valueAttributeKey.value = flow.value_attribute_key || '';
 
   // Motivos (reasons) were removed from the editor; purge any leftovers on save so
   // old flows stop demanding a reason at closing time.
   removedReasonIds.value = (flow.reasons || []).map(r => r.id).filter(Boolean);
 
-  const apiStates = (flow.resolution_states || []).sort(
-    (a, b) => a.sort_order - b.sort_order
-  );
-  states.value = (apiStates.length ? apiStates : defaultStates()).map(s => ({
+  const apiStates = (flow.resolution_states || [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order);
+  stages.value = apiStates.filter(isOpenStage).map((s, index) => ({
     id: s.id,
     canonical_key: s.canonical_key,
     display_label: s.display_label,
-    polarity: s.polarity || 'neutral',
-    meta_event_type: s.meta_event_type || '',
-    meta_value_attr: s.meta_value_attr || '',
+    color: stageColor(s, index),
+    is_default: !!s.is_default,
   }));
+  const closingStates = apiStates.filter(s => !isOpenStage(s));
+  states.value = (closingStates.length ? closingStates : defaultStates()).map(
+    s => ({
+      id: s.id,
+      canonical_key: s.canonical_key,
+      display_label: s.display_label,
+      polarity: s.polarity || 'neutral',
+      meta_event_type: s.meta_event_type || '',
+      meta_value_attr: s.meta_value_attr || '',
+    })
+  );
 
   requirements.value = (flow.closing_requirements || [])
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map(r => ({
-      id: r.id,
-      attribute_key: r.attribute_key,
-      when: conditionToWhen(r.condition),
-      condition_field: r.condition?.if?.attribute_key || '',
-      condition_values: [...(r.condition?.if?.values || [])],
-    }));
+    .map(r => {
+      const clause = r.condition?.if;
+      // Rows saved before operators existed are "equal to"; a single legacy `value` becomes values[].
+      const values =
+        clause?.values || (clause?.value != null ? [clause.value] : []);
+      return {
+        id: r.id,
+        attribute_key: r.attribute_key,
+        when: conditionToWhen(r.condition),
+        has_condition: !!clause?.attribute_key,
+        condition_field: clause?.attribute_key || '',
+        condition_operator: clause?.operator || 'equal_to',
+        condition_values: values.map(String),
+      };
+    });
 };
 
 onMounted(async () => {
@@ -222,18 +351,38 @@ onMounted(async () => {
   }
 });
 
-const buildStatesAttributes = () =>
-  states.value.map((state, sortOrder) => ({
-    ...(state.id ? { id: state.id } : {}),
-    canonical_key: state.canonical_key,
-    display_label: state.display_label.trim(),
-    polarity:
-      POLARITY_BY_CANONICAL[state.canonical_key] || state.polarity || 'neutral',
-    requires_reason: false,
-    meta_event_type: state.meta_event_type || null,
-    meta_value_attr: state.meta_value_attr || null,
-    sort_order: sortOrder,
-  }));
+// Kanban order: open stages first (list order), then the won and the lost columns.
+const buildStatesAttributes = () => {
+  const rows = [
+    ...stages.value.map(stage => ({
+      ...(stage.id ? { id: stage.id } : {}),
+      canonical_key:
+        stage.canonical_key || canonicalKeyFor(stage.display_label),
+      display_label: stage.display_label.trim(),
+      polarity: 'neutral',
+      color: stage.color,
+      is_default: stage.is_default,
+      requires_reason: false,
+      meta_event_type: null,
+      meta_value_attr: null,
+    })),
+    ...states.value.map(state => ({
+      ...(state.id ? { id: state.id } : {}),
+      canonical_key: state.canonical_key,
+      display_label: state.display_label.trim(),
+      polarity:
+        POLARITY_BY_CANONICAL[state.canonical_key] ||
+        state.polarity ||
+        'neutral',
+      is_default: false,
+      requires_reason: false,
+      meta_event_type: state.meta_event_type || null,
+      meta_value_attr: state.meta_value_attr || null,
+    })),
+  ].map((state, sortOrder) => ({ ...state, sort_order: sortOrder }));
+  removedStageIds.value.forEach(id => rows.push({ id, _destroy: true }));
+  return rows;
+};
 
 const buildReasonsAttributes = () =>
   removedReasonIds.value.map(id => ({ id, _destroy: true }));
@@ -242,7 +391,9 @@ const addRequirement = () => {
   requirements.value.push({
     attribute_key: '',
     when: 'always',
+    has_condition: false,
     condition_field: '',
+    condition_operator: 'equal_to',
     condition_values: [],
   });
 };
@@ -277,11 +428,6 @@ const buildRequirementsAttributes = () => {
   const rows = [];
   requirements.value.forEach((requirement, sortOrder) => {
     if (!requirement.attribute_key) return;
-    if (
-      requirement.when === 'if' &&
-      (!requirement.condition_field || !requirement.condition_values.length)
-    )
-      return;
     rows.push({
       ...(requirement.id ? { id: requirement.id } : {}),
       attribute_key: requirement.attribute_key,
@@ -295,7 +441,8 @@ const buildRequirementsAttributes = () => {
 
 const isValid = computed(
   () =>
-    name.value.trim() && states.value.every(s => s.display_label.trim().length)
+    name.value.trim() &&
+    [...stages.value, ...states.value].every(s => s.display_label.trim().length)
 );
 
 const save = async () => {
@@ -307,6 +454,7 @@ const save = async () => {
     require_reason: false,
     active: active.value,
     meta_enabled: metaEnabled.value,
+    value_attribute_key: valueAttributeKey.value || null,
     resolution_states_attributes: buildStatesAttributes(),
     reasons_attributes: buildReasonsAttributes(),
     closing_requirements_attributes: buildRequirementsAttributes(),
@@ -399,6 +547,172 @@ const save = async () => {
           </span>
         </div>
         <Switch v-model="metaEnabled" />
+      </div>
+
+      <!-- Open pipeline stages: the kanban columns before Ganho/Perdido -->
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          <h3 class="text-lg font-medium text-n-slate-12">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.LABEL') }}
+          </h3>
+          <p class="text-sm text-n-slate-11">
+            {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.HELP') }}
+          </p>
+        </div>
+
+        <p
+          v-if="!stages.length"
+          class="text-sm text-n-slate-11 rounded-lg border border-dashed border-n-weak p-3"
+        >
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.EMPTY') }}
+        </p>
+
+        <div
+          v-for="(stage, index) in stages"
+          :key="stage.id || stage.canonical_key || `new-${index}`"
+          class="flex flex-col gap-3 border border-n-weak rounded-xl p-4"
+        >
+          <div class="flex items-end gap-2">
+            <div class="flex flex-col">
+              <Button
+                ghost
+                slate
+                xs
+                icon="i-lucide-chevron-up"
+                :disabled="index === 0"
+                :title="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.MOVE_UP')"
+                @click="moveStage(index, -1)"
+              />
+              <Button
+                ghost
+                slate
+                xs
+                icon="i-lucide-chevron-down"
+                :disabled="index === stages.length - 1"
+                :title="
+                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.MOVE_DOWN')
+                "
+                @click="moveStage(index, 1)"
+              />
+            </div>
+            <div class="flex flex-col gap-1 flex-1">
+              <label class="text-sm font-medium text-n-slate-11">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.STAGE_LABEL') }}
+              </label>
+              <div class="flex items-center gap-2">
+                <span
+                  class="size-3 rounded-full shrink-0"
+                  :class="STAGE_DOT_CLASS[stage.color]"
+                />
+                <input
+                  v-model="stage.display_label"
+                  type="text"
+                  :placeholder="
+                    $t(
+                      'OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.STAGE_PLACEHOLDER'
+                    )
+                  "
+                  class="w-full px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-1 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                  @blur="ensureStageKey(stage)"
+                />
+              </div>
+            </div>
+            <Button
+              icon="i-woot-bin"
+              slate
+              sm
+              class="hover:enabled:text-n-ruby-11 hover:enabled:bg-n-ruby-2"
+              :title="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.REMOVE')"
+              @click="removeStage(index)"
+            />
+          </div>
+
+          <div
+            class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-n-slate-11">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.COLOR') }}
+              </span>
+              <button
+                v-for="color in STAGE_COLORS"
+                :key="color"
+                type="button"
+                class="size-5 rounded-full ring-offset-2 ring-offset-n-background transition-opacity"
+                :class="[
+                  STAGE_DOT_CLASS[color],
+                  stage.color === color
+                    ? 'ring-2 ring-n-slate-12'
+                    : 'opacity-50 hover:opacity-100',
+                ]"
+                :title="
+                  $t(`OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.COLORS.${color}`)
+                "
+                @click="stage.color = color"
+              />
+            </div>
+            <label
+              class="flex items-center gap-2 text-sm text-n-slate-12 cursor-pointer"
+              :title="
+                $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.DEFAULT_HELP')
+              "
+            >
+              <input
+                type="radio"
+                name="default-stage"
+                class="m-0"
+                :checked="stage.is_default"
+                @change="setDefaultStage(index)"
+              />
+              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.DEFAULT') }}
+            </label>
+          </div>
+        </div>
+
+        <p v-if="stages.length" class="text-sm text-n-slate-11">
+          {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.REMOVE_HINT') }}
+        </p>
+        <Button
+          faded
+          slate
+          size="sm"
+          icon="i-lucide-plus"
+          :label="$t('OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.ADD')"
+          @click="addStage"
+        />
+
+        <div class="flex flex-col gap-1 mt-2">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{
+              $t(
+                'OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.VALUE_ATTRIBUTE.LABEL'
+              )
+            }}
+          </label>
+          <p class="text-sm text-n-slate-11">
+            {{
+              $t(
+                'OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.VALUE_ATTRIBUTE.HELP'
+              )
+            }}
+          </p>
+          <FlowSelect v-model="valueAttributeKey">
+            <option value="">
+              {{
+                $t(
+                  'OPERATIONAL_FLOWS_SETTINGS.FORM.PIPELINE.VALUE_ATTRIBUTE.NONE'
+                )
+              }}
+            </option>
+            <option
+              v-for="option in valueAttributeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </FlowSelect>
+        </div>
       </div>
 
       <div class="flex flex-col gap-3">
@@ -514,8 +828,8 @@ const save = async () => {
         </div>
         <div
           v-for="(requirement, index) in requirements"
-          :key="index"
-          class="flex flex-col gap-2"
+          :key="requirement.id || `new-${index}`"
+          class="flex flex-col gap-2 border border-n-weak rounded-xl p-4"
         >
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
             <FlowSelect v-model="requirement.attribute_key" class="flex-1">
@@ -527,14 +841,14 @@ const save = async () => {
                 }}
               </option>
               <option
-                v-for="option in metaAttributeOptions"
+                v-for="option in attributeOptions"
                 :key="option.value"
                 :value="option.value"
               >
                 {{ option.label }}
               </option>
             </FlowSelect>
-            <FlowSelect v-model="requirement.when" class="sm:w-56">
+            <FlowSelect v-model="requirement.when" class="sm:w-64">
               <option
                 v-for="option in conditionOptions"
                 :key="option.value"
@@ -552,65 +866,124 @@ const save = async () => {
             />
           </div>
 
-          <!-- "Obrigatório se": trigger attribute + the answers that activate the requirement -->
+          <!-- "Obrigatório se": independent of the stage choice, gates the requirement on another
+               attribute's value (trigger attribute + operator + value(s)) -->
+          <div class="flex items-center justify-between gap-3 pt-1">
+            <div class="flex flex-col">
+              <span class="text-sm font-medium text-n-slate-12">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF') }}
+              </span>
+              <span class="text-sm text-n-slate-11">
+                {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_HELP') }}
+              </span>
+            </div>
+            <Switch v-model="requirement.has_condition" />
+          </div>
+
           <div
-            v-if="requirement.when === 'if'"
-            class="flex flex-col gap-2 rounded-lg border border-n-weak bg-n-solid-1 p-3 sm:ml-4"
+            v-if="requirement.has_condition"
+            class="flex flex-col gap-2 rounded-lg border border-n-weak bg-n-solid-1 p-3"
           >
-            <label class="text-sm font-medium text-n-slate-11">
-              {{ $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD') }}
-            </label>
-            <FlowSelect
-              v-model="requirement.condition_field"
-              select-class="bg-n-solid-2"
-              @change="onTriggerFieldChange(requirement)"
-            >
-              <option value="" disabled>
-                {{
-                  $t(
-                    'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD_PLACEHOLDER'
-                  )
-                }}
-              </option>
-              <option
-                v-for="option in listAttributeOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </FlowSelect>
-            <p
-              v-if="!listAttributeOptions.length"
-              class="text-sm text-n-amber-11"
-            >
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <div class="flex flex-col gap-1 flex-1">
+                <label class="text-sm font-medium text-n-slate-11">
+                  {{
+                    $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD')
+                  }}
+                </label>
+                <FlowSelect
+                  v-model="requirement.condition_field"
+                  select-class="bg-n-solid-2"
+                  @change="onTriggerFieldChange(requirement)"
+                >
+                  <option value="" disabled>
+                    {{
+                      $t(
+                        'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_FIELD_PLACEHOLDER'
+                      )
+                    }}
+                  </option>
+                  <option
+                    v-for="option in attributeOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </FlowSelect>
+              </div>
+              <div class="flex flex-col gap-1 sm:w-56">
+                <label class="text-sm font-medium text-n-slate-11">
+                  {{
+                    $t(
+                      'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_OPERATOR'
+                    )
+                  }}
+                </label>
+                <FlowSelect
+                  :model-value="requirement.condition_operator"
+                  select-class="bg-n-solid-2"
+                  @update:model-value="setOperator(requirement, $event)"
+                >
+                  <option
+                    v-for="option in operatorOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </FlowSelect>
+              </div>
+            </div>
+            <p v-if="!attributeOptions.length" class="text-sm text-n-amber-11">
               {{
-                $t(
-                  'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_NO_LIST_ATTRS'
-                )
+                $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_NO_ATTRS')
               }}
             </p>
 
-            <template v-if="requirement.condition_field">
-              <label class="text-sm font-medium text-n-slate-11 mt-1">
-                {{
-                  $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUES')
-                }}
-              </label>
-              <div class="flex flex-wrap gap-x-4 gap-y-1.5">
-                <label
-                  v-for="value in triggerValuesFor(requirement.condition_field)"
-                  :key="value"
-                  class="flex items-center gap-1.5 text-sm text-n-slate-12 cursor-pointer"
-                >
-                  <input
-                    v-model="requirement.condition_values"
-                    type="checkbox"
-                    :value="value"
-                    class="m-0"
-                  />
-                  {{ value }}
+            <template
+              v-if="requirement.condition_field && needsValue(requirement)"
+            >
+              <template v-if="usesOptionList(requirement)">
+                <label class="text-sm font-medium text-n-slate-11 mt-1">
+                  {{
+                    $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUES')
+                  }}
                 </label>
+                <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+                  <label
+                    v-for="value in triggerValuesFor(
+                      requirement.condition_field
+                    )"
+                    :key="value"
+                    class="flex items-center gap-1.5 text-sm text-n-slate-12 cursor-pointer"
+                  >
+                    <input
+                      v-model="requirement.condition_values"
+                      type="checkbox"
+                      :value="value"
+                      class="m-0"
+                    />
+                    {{ value }}
+                  </label>
+                </div>
+              </template>
+              <div v-else class="flex flex-col gap-1">
+                <label class="text-sm font-medium text-n-slate-11 mt-1">
+                  {{
+                    $t('OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUE')
+                  }}
+                </label>
+                <input
+                  v-model="requirement.condition_values[0]"
+                  type="text"
+                  :placeholder="
+                    $t(
+                      'OPERATIONAL_FLOWS_SETTINGS.FORM.REQUIREMENTS.IF_VALUE_PLACEHOLDER'
+                    )
+                  "
+                  class="w-full px-3 py-2.5 rounded-lg border border-n-weak bg-n-solid-2 text-sm text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand"
+                />
               </div>
             </template>
           </div>
