@@ -70,5 +70,8 @@ json.priority conversation.priority
 json.waiting_since conversation.waiting_since.to_i.to_i
 json.group_chat conversation.group_chat
 json.sla_policy_id conversation.sla_policy_id
+# CRM kanban: lead temperature and the pipeline stage the card is on.
+json.temperature conversation.temperature
+json.pipeline_stage_id conversation.pipeline_stage_id
 json.campaign_id conversation.campaign_id
 json.partial! 'enterprise/api/v1/conversations/partials/conversation', conversation: conversation if ChatwootApp.enterprise?

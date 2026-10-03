@@ -14,6 +14,8 @@ class CreatePipelineAutomations < ActiveRecord::Migration[7.1]
       t.references :resolution_state, null: false, foreign_key: { on_delete: :cascade }
       t.string :name, null: false
       t.boolean :active, null: false, default: true
+      # Entries/silences that started before this never fire the rule (no burst on the backlog).
+      t.datetime :activated_at
       # stage_entered | time_in_stage | inactivity
       t.string :trigger_type, null: false, default: 'stage_entered'
       t.integer :delay_minutes, null: false, default: 0

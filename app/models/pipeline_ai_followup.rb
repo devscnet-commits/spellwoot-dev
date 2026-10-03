@@ -61,6 +61,16 @@ class PipelineAiFollowup < ApplicationRecord
     Array(behaviors).map { |behavior| behavior.to_h.with_indifferent_access }
   end
 
+  # Shortest silence (minutes) after which something of this cadence can be due — the sweep only
+  # looks at cards quiet for at least that long.
+  def min_quiet_minutes
+    delays = normalized_behaviors.flat_map do |behavior|
+      first = Array(behavior[:attempts]).map { |attempt| attempt.to_h.with_indifferent_access }.find { |attempt| attempt[:active] != false }
+      first ? first[:delay_minutes].to_i : inactivity_minutes.to_i
+    end
+    [delays.min || inactivity_minutes.to_i, 1].max
+  end
+
   # The first attempt of the cadence: what the card's manual "Follow-up IA" button and the inactivity
   # alert use.
   def first_attempt

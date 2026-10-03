@@ -54,10 +54,13 @@ class ResolutionState < ApplicationRecord
 
   private
 
-  # Removing a stage keeps its cards on the board: they go to the pipeline's entry stage.
+  # Removing an open stage keeps its cards on the board: they go to the entry stage (or the first
+  # remaining open stage) as a fresh entry. Removing a closing column takes its cards off the board.
   def move_cards_to_default_stage
-    target = operational_flow.resolution_states.stages.where(is_default: true).where.not(id: id).first
-    conversations.update_all(pipeline_stage_id: target&.id) # rubocop:disable Rails/SkipsModelValidations
+    others = operational_flow.resolution_states.stages.where.not(id: id).order(is_default: :desc, sort_order: :asc)
+    target = stage? ? others.first : nil
+    conversations.update_all(pipeline_stage_id: target&.id, pipeline_stage_entered_at: (target && Time.current), # rubocop:disable Rails/SkipsModelValidations
+                             pipeline_sla_due_at: nil)
   end
 
   # canonical_key is immutable once persisted to keep historical results meaningful.

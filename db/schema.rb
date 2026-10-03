@@ -1659,6 +1659,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_02_120200) do
     t.bigint "resolution_state_id", null: false
     t.string "name", null: false
     t.boolean "active", default: true, null: false
+    t.datetime "activated_at"
     t.string "trigger_type", default: "stage_entered", null: false
     t.integer "delay_minutes", default: 0, null: false
     t.string "inactivity_sender", default: "any", null: false

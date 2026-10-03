@@ -4,9 +4,12 @@
 class Pipelines::AutoEnterJob < ApplicationJob
   queue_as :low
 
-  def perform(conversation_id)
+  # owner_changed: false for a brand-new conversation — one created from the board ("Novo negócio")
+  # is already on the stage its creator picked and stays there.
+  def perform(conversation_id, owner_changed: true)
     conversation = Conversation.find_by(id: conversation_id)
     return if conversation.nil? || closed_card?(conversation)
+    return if conversation.pipeline_stage_id.present? && !owner_changed
 
     flow = target_flow(conversation)
     Pipelines::StageMover.new(conversation: conversation, stage: flow.default_stage, source: 'auto').perform if flow

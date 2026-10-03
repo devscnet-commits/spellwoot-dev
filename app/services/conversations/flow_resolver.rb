@@ -38,9 +38,12 @@ class Conversations::FlowResolver
     team_flow_for(@user)
   end
 
+  # The user's team carrying a flow: the conversation's team when the user belongs to it, else the
+  # first (by id) of their teams that has one.
   def team_flow_for(user)
     return nil unless user.is_a?(User)
 
-    user.teams.where(account_id: @conversation.account_id).order(:id).first&.operational_flow
+    teams = user.teams.where(account_id: @conversation.account_id).where.not(operational_flow_id: nil).order(:id).to_a
+    (teams.find { |team| team.id == @conversation.team_id } || teams.first)&.operational_flow
   end
 end

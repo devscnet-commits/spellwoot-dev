@@ -11,6 +11,7 @@
 #
 #  id                  :bigint           not null, primary key
 #  actions             :jsonb            not null
+#  activated_at        :datetime
 #  active              :boolean          default(TRUE), not null
 #  conditions          :jsonb            not null
 #  delay_minutes       :integer          default(0), not null
@@ -61,6 +62,7 @@ class PipelineAutomation < ApplicationRecord
   validate :known_actions
 
   before_validation :inherit_flow_from_stage
+  before_save :stamp_activation
 
   scope :active, -> { where(active: true) }
 
@@ -69,6 +71,11 @@ class PipelineAutomation < ApplicationRecord
   def inherit_flow_from_stage
     self.operational_flow_id ||= resolution_state&.operational_flow_id
     self.account_id ||= operational_flow&.account_id
+  end
+
+  # Turning a rule on (or creating it on) marks the moment: only what happens after it counts.
+  def stamp_activation
+    self.activated_at = Time.current if active && (activated_at.nil? || active_changed?)
   end
 
   def stage_belongs_to_flow

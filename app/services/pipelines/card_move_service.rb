@@ -25,10 +25,14 @@ class Pipelines::CardMoveService
     merged = @conversation.custom_attributes.to_h.merge(@attributes)
     check_requirements!(merged) if @source == 'manual'
 
-    @conversation.update!(custom_attributes: merged) if @attributes.present?
-    Pipelines::StageMover.new(conversation: @conversation, stage: @stage, user: @user, source: @source).perform
-    sync_result
-    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: @stage.canonical_key, user: @user).perform if @user
+    moved = false
+    # One commit: the card never lands in a closing column with the result left unset (and vice versa).
+    ActiveRecord::Base.transaction do
+      @conversation.update!(custom_attributes: merged) if @attributes.present?
+      moved = Pipelines::StageMover.new(conversation: @conversation, stage: @stage, user: @user, source: @source).perform
+      sync_result if moved
+    end
+    Meta::HandleCloseEventService.new(conversation: @conversation, outcome: @stage.canonical_key, user: @user).perform if moved && @user
     @conversation
   end
 

@@ -1762,10 +1762,106 @@ ALTER SEQUENCE public.calls_id_seq OWNED BY public.calls.id;
 
 
 --
+-- Name: camp_dpid_seq_10; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_10
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: camp_dpid_seq_10483; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.camp_dpid_seq_10483
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_11; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_11
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_12; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_12
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_13; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_13
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_14; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_14
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_15; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_15
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_16; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_16
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_17; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_17
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1826,6 +1922,18 @@ CREATE SEQUENCE public.camp_dpid_seq_7
 --
 
 CREATE SEQUENCE public.camp_dpid_seq_8
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: camp_dpid_seq_9; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.camp_dpid_seq_9
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2827,10 +2935,106 @@ ALTER SEQUENCE public.contacts_id_seq OWNED BY public.contacts.id;
 
 
 --
+-- Name: conv_dpid_seq_10; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_10
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: conv_dpid_seq_10483; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.conv_dpid_seq_10483
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_11; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_11
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_12; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_12
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_13; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_13
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_14; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_14
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_15; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_15
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_16; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_16
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_17; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_17
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2891,6 +3095,18 @@ CREATE SEQUENCE public.conv_dpid_seq_7
 --
 
 CREATE SEQUENCE public.conv_dpid_seq_8
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conv_dpid_seq_9; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conv_dpid_seq_9
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -4381,6 +4597,7 @@ CREATE TABLE public.pipeline_automations (
     resolution_state_id bigint NOT NULL,
     name character varying NOT NULL,
     active boolean DEFAULT true NOT NULL,
+    activated_at timestamp(6) without time zone,
     trigger_type character varying DEFAULT 'stage_entered'::character varying NOT NULL,
     delay_minutes integer DEFAULT 0 NOT NULL,
     inactivity_sender character varying DEFAULT 'any'::character varying NOT NULL,

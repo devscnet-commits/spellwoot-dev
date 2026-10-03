@@ -22,7 +22,7 @@ module PipelineCardHandler
   def enqueue_pipeline_sync
     return if group_chat?
 
-    Pipelines::AutoEnterJob.perform_later(id) if pipeline_owner_changed?
+    Pipelines::AutoEnterJob.perform_later(id, owner_changed: !previously_new_record?) if pipeline_owner_changed?
     Pipelines::ReopenJob.perform_later(id) if pipeline_reopened?
   end
 
@@ -32,7 +32,8 @@ module PipelineCardHandler
     previously_new_record? || saved_change_to_team_id? || saved_change_to_assignee_id?
   end
 
+  # Only a resolved conversation that opens again (reopen window / agent reopening it).
   def pipeline_reopened?
-    saved_change_to_status? && open? && pipeline_stage_id.present?
+    saved_change_to_status? && open? && pipeline_stage_id.present? && status_before_last_save == 'resolved'
   end
 end

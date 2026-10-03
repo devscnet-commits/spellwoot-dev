@@ -24,6 +24,6 @@ class Pipelines::BackfillJob < ApplicationJob
 
     scope = flow.account.conversations.where(pipeline_stage_id: nil, group_chat: false, status: %i[open pending snoozed])
     member_ids = TeamMember.where(team_id: team_ids).select(:user_id)
-    scope.where(team_id: team_ids).or(scope.where(team_id: nil, assignee_id: member_ids))
+    scope.where(team_id: team_ids).or(scope.where(assignee_id: member_ids))
   end
 end

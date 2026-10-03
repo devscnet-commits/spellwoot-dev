@@ -45,6 +45,7 @@ class Pipelines::AutomationSweepJob < ApplicationJob
       next unless cadence.operational_flow.active && enabled[cadence.account] && cadence.account.feature_enabled?('ai_core')
 
       Conversation.where(pipeline_stage_id: cadence.resolution_state_id, status: %i[open pending], group_chat: false)
+                  .where('conversations.last_activity_at < ?', cadence.min_quiet_minutes.minutes.ago)
                   .pluck(:id).each { |conversation_id| Pipelines::AiFollowupRunJob.perform_later(cadence.id, conversation_id) }
     rescue StandardError => e
       ChatwootExceptionTracker.new(e, account: cadence.account).capture_exception

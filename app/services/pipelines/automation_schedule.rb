@@ -3,8 +3,8 @@
 #   inactivity     due delay_minutes after the last message (or the stage entry, if later), when the
 #                  last message came from the expected side; anchor = start of the current silence
 #                  (the customer's last message or the stage entry), so it runs once per silence
-# Runs that would have been due before the automation existed are skipped: creating a rule never
-# fires it at once on the whole backlog.
+# Entries/silences that started before the automation was (re)activated are skipped: creating or
+# re-enabling a rule never fires it at once on the whole backlog.
 class Pipelines::AutomationSchedule
   Snapshot = Struct.new(:conversation_id, :entered_at, :last_at, :last_incoming, :last_in_at, keyword_init: true)
 
@@ -26,7 +26,7 @@ class Pipelines::AutomationSchedule
 
   # Re-check for one card right before running (a message may have arrived since the sweep).
   def due_anchor(conversation)
-    snapshot = snapshots(Conversation.where(id: conversation.id)).first
+    snapshot = snapshots(base_scope.where(id: conversation.id)).first
     snapshot && anchor_for(snapshot)
   end
 
@@ -47,17 +47,16 @@ class Pipelines::AutomationSchedule
     return time_in_stage_anchor(snapshot) unless inactivity?
 
     silence_from = [snapshot.last_at, snapshot.entered_at].compact.max
-    return unless sender_match?(snapshot) && due?(silence_from + @delay)
-
-    [snapshot.last_in_at, snapshot.entered_at].compact.max
+    anchor = [snapshot.last_in_at, snapshot.entered_at].compact.max
+    anchor if sender_match?(snapshot) && due?(anchor, silence_from + @delay)
   end
 
   def time_in_stage_anchor(snapshot)
-    snapshot.entered_at if due?(snapshot.entered_at + @delay)
+    snapshot.entered_at if due?(snapshot.entered_at, snapshot.entered_at + @delay)
   end
 
-  def due?(due_at)
-    due_at.between?(@automation.created_at, Time.current)
+  def due?(anchor, due_at)
+    anchor >= @automation.activated_at && due_at <= Time.current
   end
 
   def sender_match?(snapshot)

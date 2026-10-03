@@ -3,6 +3,10 @@
 # action is { action_name:, action_params: { ... } } and runs isolated, so one failure never blocks
 # the next. Returns the list of errors ("action: message").
 class Pipelines::ActionService < ActionService
+  # Two rules moving a card back and forth would loop forever; past this many automated moves in an
+  # hour the move is refused (and recorded as the run's error).
+  MAX_AUTOMATED_MOVES_PER_HOUR = 10
+
   def initialize(automation, conversation)
     super(conversation)
     @automation = automation
@@ -31,15 +35,7 @@ class Pipelines::ActionService < ActionService
 
   # WhatsApp template (processed_params: { body: { '1' => 'value' } }), with the rendered text as content.
   def pipeline_send_template(params)
-    template = params[:template].to_h.with_indifferent_access
-    raise ArgumentError, 'template missing' if template[:name].blank?
-
-    Messages::MessageBuilder.new(nil, @conversation, {
-                                   content: params[:content].presence || template[:name],
-                                   private: false,
-                                   template_params: template,
-                                   content_attributes: { pipeline_automation_id: @automation.id }
-                                 }).perform
+    send_template_or_text(@conversation, params[:template].to_h.with_indifferent_access, params[:content])
   end
 
   # POSTs the lead (conversation, contact, custom attributes, pipeline/stage, deal value) as JSON.
@@ -54,21 +50,22 @@ class Pipelines::ActionService < ActionService
   # { name:, language:, category:, processed_params: }); on every other channel the text goes out as is.
   def pipeline_create_conversation(params)
     inbox = @account.inboxes.find(params[:inbox_id])
-    template = params[:template].to_h.with_indifferent_access
-    raise ArgumentError, 'template missing' if inbox.channel_type == 'Channel::Whatsapp' && template[:name].blank?
+    # The contact already has an open conversation there: nothing to open (also what keeps a rule on
+    # the entry stage from spawning conversations endlessly).
+    return if inbox.conversations.exists?(contact_id: @conversation.contact_id, status: %i[open pending])
 
     conversation = open_conversation_for_contact(inbox)
+    template = params[:template].to_h.with_indifferent_access
     return if params[:content].blank? && template[:name].blank?
 
-    message = { content: params[:content].presence || template[:name], private: false,
-                content_attributes: { pipeline_automation_id: @automation.id } }
-    message[:template_params] = template if template[:name].present?
-    Messages::MessageBuilder.new(nil, conversation, message).perform
+    send_template_or_text(conversation, template, params[:content])
   end
 
   # Moves the card to a stage of this or another pipeline (the pipeline's entry stage when none is
   # given). Entering a closing column sets the result like a drag on the board does.
   def pipeline_move_stage(params)
+    raise ArgumentError, 'too many automated moves' if automated_moves_last_hour >= MAX_AUTOMATED_MOVES_PER_HOUR
+
     flow = params[:pipeline_id].present? ? @account.operational_flows.find(params[:pipeline_id]) : @automation.operational_flow
     stage = params[:stage_id].present? ? flow.resolution_states.find(params[:stage_id]) : flow.default_stage
     Pipelines::CardMoveService.new(conversation: @conversation, stage: stage, source: 'automation').perform
@@ -128,12 +125,29 @@ class Pipelines::ActionService < ActionService
     @errors << "#{name}: #{e.message}"
   end
 
+  def automated_moves_last_hour
+    @conversation.stage_events.where(source: 'automation').where('created_at > ?', 1.hour.ago).count
+  end
+
   def open_conversation_for_contact(inbox)
     contact_inbox = ContactInboxBuilder.new(contact: @conversation.contact, inbox: inbox, source_id: uazapi_source_id(inbox)).perform
     Conversation.create!(
       account_id: @account.id, inbox_id: inbox.id, contact_id: @conversation.contact_id, contact_inbox_id: contact_inbox.id,
       custom_attributes: @conversation.custom_attributes, team_id: @conversation.team_id, assignee_id: @conversation.assignee_id
     )
+  end
+
+  # Official WhatsApp (Channel::Whatsapp) needs an approved template outside the customer service
+  # window — a new conversation always is — so there the template is required and the text is only
+  # its rendered copy; every other channel sends the text itself and ignores the template.
+  def send_template_or_text(conversation, template, content)
+    official = conversation.inbox.channel_type == 'Channel::Whatsapp'
+    raise ArgumentError, 'template missing' if official && template[:name].blank?
+    raise ArgumentError, 'message is empty' if !official && content.blank?
+
+    message = { content: content.presence || template[:name], private: false, content_attributes: { pipeline_automation_id: @automation.id } }
+    message[:template_params] = template if official
+    Messages::MessageBuilder.new(nil, conversation, message).perform
   end
 
   def send_text(content, private_note:)

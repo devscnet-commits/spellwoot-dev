@@ -96,8 +96,10 @@ class OperationalFlow < ApplicationRecord
     stages = resolution_states.stages.order(:sort_order, :id).to_a
     return if stages.empty?
 
-    default = stages.find(&:is_default) || stages.first
+    flagged = stages.select(&:is_default)
+    default = flagged.max_by(&:updated_at) || stages.first
     resolution_states.where(id: stages.map(&:id)).update_all(['is_default = (id = ?)', default.id]) # rubocop:disable Rails/SkipsModelValidations
+    resolution_states.reset
   end
 
   # Open conversations of the teams following this flow join the board at the entry stage.
