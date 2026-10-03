@@ -22,7 +22,7 @@ class Pipelines::BackfillJob < ApplicationJob
     team_ids = flow.teams.pluck(:id)
     return Conversation.none if team_ids.empty?
 
-    scope = flow.account.conversations.where(pipeline_stage_id: nil, group_chat: false, status: %i[open pending snoozed])
+    scope = flow.account.conversations.where(pipeline_stage_id: nil, group_chat: false, result: :none, status: %i[open pending snoozed])
     member_ids = TeamMember.where(team_id: team_ids).select(:user_id)
     scope.where(team_id: team_ids).or(scope.where(assignee_id: member_ids))
   end

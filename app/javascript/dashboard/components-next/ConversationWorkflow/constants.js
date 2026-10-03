@@ -69,6 +69,8 @@ export const parseAmount = raw => {
   if (typeof raw === 'number') return raw;
   let text = String(raw ?? '').replace(/[^\d,.-]/g, '');
   if (text.includes(',')) text = text.replace(/\./g, '').replace(',', '.');
+  // "1.500" written the Brazilian way: a thousands separator, not one and a half.
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(text)) text = text.replace(/\./g, '');
   return Number.parseFloat(text) || 0;
 };
 

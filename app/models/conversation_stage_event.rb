@@ -32,6 +32,11 @@
 #
 class ConversationStageEvent < ApplicationRecord
   SOURCES = %w[manual result automation auto backfill].freeze
+  AUTOMATED_SOURCES = %w[automation auto].freeze
+  # Two rules moving a card back and forth (directly, or through owner changes that pull it into
+  # another pipeline) would loop forever; past this many automated moves in an hour the next one
+  # is refused.
+  MAX_AUTOMATED_MOVES_PER_HOUR = 10
 
   belongs_to :account
   belongs_to :conversation
@@ -41,6 +46,10 @@ class ConversationStageEvent < ApplicationRecord
   belongs_to :user, optional: true
 
   validates :source, inclusion: { in: SOURCES }
+
+  def self.automated_moves_exhausted?(conversation)
+    conversation.stage_events.where(source: AUTOMATED_SOURCES).where('created_at > ?', 1.hour.ago).count >= MAX_AUTOMATED_MOVES_PER_HOUR
+  end
 
   # The move's side effects run only once it is committed (the caller may wrap the move in a
   # transaction). A backfill puts an existing backlog on the board silently: no activity line and

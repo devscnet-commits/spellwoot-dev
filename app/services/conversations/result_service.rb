@@ -115,13 +115,14 @@ class Conversations::ResultService
   end
 
   # Keeps the kanban card in step with the result picked in the conversation: won/lost moves it to
-  # that column; clearing the result sends it back to the open stage it came from.
+  # that column; clearing the result (by hand or by the AI closing the conversation) sends it back
+  # to the open stage it came from.
   def sync_pipeline_stage
     if @state && !@state.stage?
       return unless @state.operational_flow.pipeline?
 
       Pipelines::StageMover.new(conversation: @conversation, stage: @state, user: @user, source: 'result').perform
-    elsif !@recognized && @conversation.pipeline_stage && !@conversation.pipeline_stage.stage?
+    elsif @result == 'none' && @conversation.pipeline_stage && !@conversation.pipeline_stage.stage?
       Pipelines::StageMover.new(conversation: @conversation, stage: previous_open_stage, user: @user, source: 'result').perform
     end
   end

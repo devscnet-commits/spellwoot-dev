@@ -78,7 +78,12 @@ class OperationalFlow < ApplicationRecord
     return raw.to_f if raw.is_a?(Numeric)
 
     text = raw.to_s.gsub(/[^\d,.-]/, '')
-    text = text.delete('.').tr(',', '.') if text.include?(',')
+    if text.include?(',')
+      text = text.delete('.').tr(',', '.')
+    elsif text.match?(/\A-?\d{1,3}(\.\d{3})+\z/)
+      # "1.500" written the Brazilian way: a thousands separator, not one and a half.
+      text = text.delete('.')
+    end
     text.to_f
   end
 

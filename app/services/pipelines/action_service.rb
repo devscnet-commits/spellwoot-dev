@@ -3,10 +3,6 @@
 # action is { action_name:, action_params: { ... } } and runs isolated, so one failure never blocks
 # the next. Returns the list of errors ("action: message").
 class Pipelines::ActionService < ActionService
-  # Two rules moving a card back and forth would loop forever; past this many automated moves in an
-  # hour the move is refused (and recorded as the run's error).
-  MAX_AUTOMATED_MOVES_PER_HOUR = 10
-
   def initialize(automation, conversation)
     super(conversation)
     @automation = automation
@@ -64,7 +60,8 @@ class Pipelines::ActionService < ActionService
   # Moves the card to a stage of this or another pipeline (the pipeline's entry stage when none is
   # given). Entering a closing column sets the result like a drag on the board does.
   def pipeline_move_stage(params)
-    raise ArgumentError, 'too many automated moves' if automated_moves_last_hour >= MAX_AUTOMATED_MOVES_PER_HOUR
+    # Refused past the hourly limit (recorded as the run's error).
+    raise ArgumentError, 'too many automated moves' if ConversationStageEvent.automated_moves_exhausted?(@conversation)
 
     flow = params[:pipeline_id].present? ? @account.operational_flows.find(params[:pipeline_id]) : @automation.operational_flow
     stage = params[:stage_id].present? ? flow.resolution_states.find(params[:stage_id]) : flow.default_stage
@@ -123,10 +120,6 @@ class Pipelines::ActionService < ActionService
   rescue StandardError => e
     ChatwootExceptionTracker.new(e, account: @account).capture_exception
     @errors << "#{name}: #{e.message}"
-  end
-
-  def automated_moves_last_hour
-    @conversation.stage_events.where(source: 'automation').where('created_at > ?', 1.hour.ago).count
   end
 
   def open_conversation_for_contact(inbox)

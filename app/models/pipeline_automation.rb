@@ -64,6 +64,8 @@ class PipelineAutomation < ApplicationRecord
   before_validation :inherit_flow_from_stage
   before_save :stamp_activation
 
+  TRIGGER_ATTRIBUTES = %w[trigger_type inactivity_sender resolution_state_id].freeze
+
   scope :active, -> { where(active: true) }
 
   private
@@ -74,8 +76,13 @@ class PipelineAutomation < ApplicationRecord
   end
 
   # Turning a rule on (or creating it on) marks the moment: only what happens after it counts.
+  # Changing what it reacts to (trigger, who was silent, stage) is a new rule for the same reason,
+  # so the backlog that already matches it is not hit in one burst.
   def stamp_activation
-    self.activated_at = Time.current if active && (activated_at.nil? || active_changed?)
+    return unless active
+    return unless activated_at.nil? || active_changed? || changed.intersect?(TRIGGER_ATTRIBUTES)
+
+    self.activated_at = Time.current
   end
 
   def stage_belongs_to_flow

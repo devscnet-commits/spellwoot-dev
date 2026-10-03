@@ -8,19 +8,22 @@ class Pipelines::AutoEnterJob < ApplicationJob
   # is already on the stage its creator picked and stays there.
   def perform(conversation_id, owner_changed: true)
     conversation = Conversation.find_by(id: conversation_id)
-    return if conversation.nil? || closed_card?(conversation)
+    return if conversation.nil? || decided?(conversation)
     return if conversation.pipeline_stage_id.present? && !owner_changed
 
     flow = target_flow(conversation)
-    Pipelines::StageMover.new(conversation: conversation, stage: flow.default_stage, source: 'auto').perform if flow
+    return if flow.nil? || ConversationStageEvent.automated_moves_exhausted?(conversation)
+
+    Pipelines::StageMover.new(conversation: conversation, stage: flow.default_stage, source: 'auto').perform
   end
 
   private
 
-  # A won/lost card stays where it is whoever takes the conversation.
-  def closed_card?(conversation)
+  # A won/lost card stays where it is whoever takes the conversation, and a lead already decided
+  # (result set, card or not) does not start over in an entry stage.
+  def decided?(conversation)
     stage = conversation.pipeline_stage
-    stage.present? && !stage.stage?
+    (stage.present? && !stage.stage?) || !conversation.result_none?
   end
 
   # The owner's pipeline, when it is one and the card is not already on it.
