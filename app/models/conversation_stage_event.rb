@@ -41,4 +41,36 @@ class ConversationStageEvent < ApplicationRecord
   belongs_to :user, optional: true
 
   validates :source, inclusion: { in: SOURCES }
+
+  # The move's side effects run only once it is committed (the caller may wrap the move in a
+  # transaction). A backfill puts an existing backlog on the board silently: no activity line and
+  # no burst of "on enter" automations.
+  after_create_commit :announce_move, unless: :backfill?
+
+  private
+
+  def backfill?
+    source == 'backfill'
+  end
+
+  def announce_move
+    create_activity
+    Pipelines::StageEnteredJob.perform_later(conversation_id, to_stage_id) if to_stage_id.present?
+  end
+
+  def create_activity
+    stage_name = to_stage&.display_label
+    return if stage_name.blank?
+
+    content = I18n.with_locale(account.locale) do
+      if user
+        I18n.t('conversations.activity.pipeline.moved', user_name: user.name, stage_name: stage_name)
+      else
+        I18n.t('conversations.activity.pipeline.moved_by_system', stage_name: stage_name)
+      end
+    end
+    ::Conversations::ActivityMessageJob.perform_later(
+      conversation, { account_id: account_id, inbox_id: conversation.inbox_id, message_type: :activity, content: content }
+    )
+  end
 end

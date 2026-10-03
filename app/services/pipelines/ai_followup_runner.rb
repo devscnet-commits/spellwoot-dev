@@ -134,9 +134,17 @@ class Pipelines::AiFollowupRunner
     action = behavior[:no_response_action].presence || 'assign'
     return log_skip('waiting_business_hours') if action == 'wait_business_hours' && !business_hours_open?(@conversation.inbox)
 
+    record_action(action, behavior)
+  end
+
+  def record_action(action, behavior)
     run_action(action, behavior)
     emit(ACTION_EVENT, { cadence_id: @cadence.id, action: action })
     Rails.logger.info "[Pipelines::AiFollowupRunner] conv=#{@conversation.id} cadence=#{@cadence.id} action=#{action}"
+  rescue StandardError => e
+    # Recorded so the next sweeps back off (RETRY_AFTER_FAILURE) instead of retrying every minute.
+    emit(FAILED_EVENT, { cadence_id: @cadence.id, action: action, reason: e.message })
+    raise
   end
 
   def run_action(action, behavior)

@@ -12,7 +12,7 @@ class Pipelines::BackfillJob < ApplicationJob
     candidates(flow).find_each do |conversation|
       next unless Conversations::FlowResolver.new(conversation: conversation).flow&.id == flow.id
 
-      Pipelines::StageMover.new(conversation: conversation, stage: stage, source: 'backfill', run_automations: false).perform
+      Pipelines::StageMover.new(conversation: conversation, stage: stage, source: 'backfill').perform
     end
   end
 
